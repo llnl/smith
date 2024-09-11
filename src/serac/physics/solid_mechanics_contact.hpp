@@ -122,7 +122,7 @@ public:
       // tracking strategy
       // See https://github.com/mfem/mfem/issues/3531
       mfem::Vector r_blk(r, 0, displacement_.Size());
-      r_blk                       = res;
+      r_blk = res;
       mfem::Vector uPlusShapeDisp(u.Size());
       uPlusShapeDisp = u;
       uPlusShapeDisp += shape_displacement_;
