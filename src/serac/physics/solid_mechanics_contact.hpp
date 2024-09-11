@@ -123,8 +123,10 @@ public:
       // See https://github.com/mfem/mfem/issues/3531
       mfem::Vector r_blk(r, 0, displacement_.Size());
       r_blk                       = res;
-      mfem::Vector uPlusShapeDisp = u;
+      mfem::Vector uPlusShapeDisp(u.Size());
+      uPlusShapeDisp = u;
       uPlusShapeDisp += shape_displacement_;
+
       contact_.residualFunction(uPlusShapeDisp, r);
       r_blk.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
     };
@@ -143,7 +145,8 @@ public:
                                           *parameters_[parameter_indices].state...);
             J_             = assemble(drdu);
 
-            mfem::Vector uPlusShapeDisp = u;
+            mfem::Vector uPlusShapeDisp(u.Size());
+            uPlusShapeDisp = u;
             uPlusShapeDisp += shape_displacement_;
 
             // create block operator holding jacobian contributions
@@ -182,7 +185,8 @@ public:
                                           *parameters_[parameter_indices].state...);
             J_             = assemble(drdu);
 
-            mfem::Vector uPlusShapeDisp = u;
+            mfem::Vector uPlusShapeDisp(u.Size());
+            uPlusShapeDisp = u;
             uPlusShapeDisp += shape_displacement_;
 
             // get 11-block holding jacobian contributions
