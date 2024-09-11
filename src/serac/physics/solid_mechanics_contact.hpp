@@ -125,7 +125,7 @@ public:
       r_blk = res;
       mfem::Vector uPlusShapeDisp(u.Size());
       uPlusShapeDisp = u;
-      uPlusShapeDisp += shape_displacement_;
+      uPlusShapeDisp.Add(1.0, shape_displacement_);
 
       contact_.residualFunction(uPlusShapeDisp, r);
       r_blk.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
@@ -147,7 +147,7 @@ public:
 
             mfem::Vector uPlusShapeDisp(u.Size());
             uPlusShapeDisp = u;
-            uPlusShapeDisp += shape_displacement_;
+            uPlusShapeDisp.Add(1.0, shape_displacement_);
 
             // create block operator holding jacobian contributions
             J_constraint_ = contact_.jacobianFunction(J_.release());
@@ -187,7 +187,7 @@ public:
 
             mfem::Vector uPlusShapeDisp(u.Size());
             uPlusShapeDisp = u;
-            uPlusShapeDisp += shape_displacement_;
+            uPlusShapeDisp.Add(1.0, shape_displacement_);
 
             // get 11-block holding jacobian contributions
             auto block_J         = contact_.jacobianFunction(J_.release());
