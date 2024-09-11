@@ -15,10 +15,9 @@ namespace detail {
 void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, mfem::HypreParMatrix* k_mat,
                        mfem::HypreParVector& disp_adjoint_load_vector, mfem::HypreParVector& velo_adjoint_load_vector,
                        mfem::HypreParVector& accel_adjoint_load_vector, mfem::HypreParVector& adjoint_displacement_,
-                       mfem::HypreParVector& implicit_sensitivity_displacement_start_of_step_,
-                       mfem::HypreParVector& implicit_sensitivity_velocity_start_of_step_,
-                       BoundaryConditionManager& bcs_,
-                       mfem::Solver& lin_solver)
+                       mfem::HypreParVector&     implicit_sensitivity_displacement_start_of_step_,
+                       mfem::HypreParVector&     implicit_sensitivity_velocity_start_of_step_,
+                       BoundaryConditionManager& bcs_, mfem::Solver& lin_solver)
 {
   // there are hard-coded here for now
   static constexpr double beta  = 0.25;

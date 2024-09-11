@@ -56,8 +56,8 @@ void computeStepAdjointLoad(const FiniteElementState& displacement, FiniteElemen
 
 using SolidMechT = serac::SolidMechanicsContact<p, dim>;
 
-std::unique_ptr<SolidMechT> createContactSolver(
-    const NonlinearSolverOptions& nonlinear_opts, const TimesteppingOptions& dyn_opts, const SolidMaterial& mat)
+std::unique_ptr<SolidMechT> createContactSolver(const NonlinearSolverOptions& nonlinear_opts,
+                                                const TimesteppingOptions& dyn_opts, const SolidMaterial& mat)
 {
   static int iter = 0;
 
@@ -67,17 +67,20 @@ std::unique_ptr<SolidMechT> createContactSolver(
   solid->setMaterial(mat);
 
   solid->setDisplacementBCs({2}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) { disp = 0.0; });
-  solid->setDisplacementBCs({4}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) { disp = 0.0; disp[1] = -0.1; });
+  solid->setDisplacementBCs({4}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) {
+    disp    = 0.0;
+    disp[1] = -0.1;
+  });
 
-  auto   contact_type = serac::ContactEnforcement::Penalty;
+  auto   contact_type   = serac::ContactEnforcement::Penalty;
   double element_length = 1.0;
-  double penalty      = 105.1 * mat.K / element_length;
+  double penalty        = 105.1 * mat.K / element_length;
 
   serac::ContactOptions contact_options{.method      = serac::ContactMethod::SingleMortar,
                                         .enforcement = contact_type,
                                         .type        = serac::ContactType::Frictionless,
                                         .penalty     = penalty};
-  auto contact_interaction_id = 0;
+  auto                  contact_interaction_id = 0;
   solid->addContactInteraction(contact_interaction_id, {3}, {5}, contact_options);
 
   solid->completeSetup();
@@ -95,8 +98,7 @@ double computeSolidMechanicsQoi(BasePhysics& solid_solver, const TimeSteppingInf
   return computeStepQoi(solid_solver.state("displacement"));
 }
 
-auto computeContactQoiSensitivities(
-    BasePhysics& solid_solver, const TimeSteppingInfo& ts_info)
+auto computeContactQoiSensitivities(BasePhysics& solid_solver, const TimeSteppingInfo& ts_info)
 {
   EXPECT_EQ(0, solid_solver.cycle());
 
@@ -116,7 +118,6 @@ auto computeContactQoiSensitivities(
   return std::make_tuple(qoi, shape_sensitivity);
 }
 
-
 double computeSolidMechanicsQoiAdjustingShape(SolidMechanics<p, dim>& solid_solver, const TimeSteppingInfo& ts_info,
                                               const FiniteElementState& shape_derivative_direction, double pertubation)
 {
@@ -128,7 +129,6 @@ double computeSolidMechanicsQoiAdjustingShape(SolidMechanics<p, dim>& solid_solv
   return computeSolidMechanicsQoi(solid_solver, ts_info);
 }
 
-
 struct ContactSensitivityFixture : public ::testing::Test {
   void SetUp() override
   {
@@ -137,9 +137,9 @@ struct ContactSensitivityFixture : public ::testing::Test {
     std::string filename = std::string(SERAC_REPO_DIR) + "/data/meshes/contact_two_blocks.g";
     mesh                 = &StateManager::setMesh(mesh::refineAndDistribute(buildMeshFromFile(filename), 0), mesh_tag);
 
-    mat.density          = 1.0;
-    mat.K                = 1.0;
-    mat.G                = 0.1;
+    mat.density = 1.0;
+    mat.K       = 1.0;
+    mat.G       = 0.1;
   }
 
   void fillDirection(FiniteElementState& direction) const
@@ -156,14 +156,13 @@ struct ContactSensitivityFixture : public ::testing::Test {
   NonlinearSolverOptions nonlinear_opts{.relative_tol = 1.0e-10, .absolute_tol = 1.0e-12};
 
   bool                dispBc = true;
-  TimesteppingOptions dyn_opts{.timestepper        = TimestepMethod::QuasiStatic};
+  TimesteppingOptions dyn_opts{.timestepper = TimestepMethod::QuasiStatic};
 
   SolidMaterial    mat;
   TimeSteppingInfo tsInfo;
 
   static constexpr double eps = 2e-7;
 };
-
 
 TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjectiveAndGradient)
 {
@@ -183,7 +182,6 @@ TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjec
   EXPECT_EQ(directional_deriv1, directional_deriv2);
 }
 
-
 TEST_F(ContactSensitivityFixture, QuasiStaticShapeSensitivities)
 {
   auto solid_solver                  = createContactSolver(nonlinear_opts, dyn_opts, mat);
@@ -195,10 +193,10 @@ TEST_F(ContactSensitivityFixture, QuasiStaticShapeSensitivities)
 
   double qoi_plus = computeSolidMechanicsQoiAdjustingShape(*solid_solver, tsInfo, derivative_direction, eps);
 
-  double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
+  double directional_deriv    = innerProduct(derivative_direction, shape_sensitivity);
   double directional_deriv_fd = (qoi_plus - qoi_base) / eps;
   // std::cout << "qoi, derivs = " << qoi_base << " " << directional_deriv << " " << directional_deriv_fd << std::endl;
-  EXPECT_NEAR(directional_deriv, directional_deriv_fd, 0.2); // These are very large tolerances
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, 0.2);  // These are very large tolerances
 }
 
 }  // namespace serac

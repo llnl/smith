@@ -36,10 +36,9 @@ namespace detail {
 void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, mfem::HypreParMatrix* k_mat,
                        mfem::HypreParVector& disp_adjoint_load_vector, mfem::HypreParVector& velo_adjoint_load_vector,
                        mfem::HypreParVector& accel_adjoint_load_vector, mfem::HypreParVector& adjoint_displacement_,
-                       mfem::HypreParVector& implicit_sensitivity_displacement_start_of_step_,
-                       mfem::HypreParVector& implicit_sensitivity_velocity_start_of_step_,
-                       BoundaryConditionManager& bcs_,
-                       mfem::Solver& lin_solver);
+                       mfem::HypreParVector&     implicit_sensitivity_displacement_start_of_step_,
+                       mfem::HypreParVector&     implicit_sensitivity_velocity_start_of_step_,
+                       BoundaryConditionManager& bcs_, mfem::Solver& lin_solver);
 }  // namespace detail
 
 /**
@@ -1220,7 +1219,7 @@ public:
             add(1.0, u_, c0_, d2u_dt2, predicted_displacement_);
 
             // K := dR/du
-            auto K = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_,
+            auto                                  K = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_,
                                                          differentiate_wrt(predicted_displacement_), d2u_dt2,
                                                          *parameters_[parameter_indices].state...));
             std::unique_ptr<mfem::HypreParMatrix> k_mat(assemble(K));
@@ -1541,7 +1540,6 @@ protected:
 
   /// serac::Functional that is used to calculate the residual and its derivatives
   std::unique_ptr<ShapeAwareFunctional<shape_trial, test(trial, trial, parameter_space...)>> residual_;
-
 
   /// mfem::Operator that calculates the residual after applying essential boundary conditions
   std::unique_ptr<mfem_ext::StdFunctionOperator> residual_with_bcs_;
