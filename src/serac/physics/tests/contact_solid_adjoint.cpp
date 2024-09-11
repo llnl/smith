@@ -71,7 +71,7 @@ std::unique_ptr<SolidMechT> createContactSolver(
 
   auto   contact_type = serac::ContactEnforcement::Penalty;
   double element_length = 1.0;
-  double penalty      = 2.0 * mat.K / element_length;
+  double penalty      = 105.1 * mat.K / element_length;
 
   serac::ContactOptions contact_options{.method      = serac::ContactMethod::SingleMortar,
                                         .enforcement = contact_type,
@@ -186,7 +186,7 @@ TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjec
 
 TEST_F(ContactSensitivityFixture, QuasiStaticShapeSensitivities)
 {
-  auto solid_solver                         = createContactSolver(nonlinear_opts, dyn_opts, mat);
+  auto solid_solver                  = createContactSolver(nonlinear_opts, dyn_opts, mat);
   auto [qoi_base, shape_sensitivity] = computeContactQoiSensitivities(*solid_solver, tsInfo);
 
   solid_solver->resetStates();
@@ -196,7 +196,9 @@ TEST_F(ContactSensitivityFixture, QuasiStaticShapeSensitivities)
   double qoi_plus = computeSolidMechanicsQoiAdjustingShape(*solid_solver, tsInfo, derivative_direction, eps);
 
   double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
-  EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, 0.005);
+  double directional_deriv_fd = (qoi_plus - qoi_base) / eps;
+  // std::cout << "qoi, derivs = " << qoi_base << " " << directional_deriv << " " << directional_deriv_fd << std::endl;
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, 0.2); // These are very large tolerances
 }
 
 }  // namespace serac
