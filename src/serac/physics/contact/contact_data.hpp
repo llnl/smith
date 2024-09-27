@@ -133,7 +133,7 @@ public:
    *
    * @note This method calls update() to compute residual and Jacobian contributions based on the current configuration
    */
-  void residualFunction(const mfem::Vector& u, mfem::Vector& r);
+  void residualFunction(const mfem::Vector& u_shape, const mfem::Vector& u, mfem::Vector& r);
 
   /**
    * @brief Computes the Jacobian including contact terms, given the non-contact Jacobian terms
@@ -163,7 +163,7 @@ public:
    *
    * @param u Current displacement dof values
    */
-  void setDisplacements(const mfem::Vector& u);
+  void setDisplacements(const mfem::Vector& u_shape, const mfem::Vector& u);
 
   /**
    * @brief Have there been contact interactions added?
