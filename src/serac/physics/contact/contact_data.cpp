@@ -377,7 +377,7 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
   return std::make_unique<mfem::BlockOperator>(jacobian_offsets_);
 }
 
-void ContactData::residualFunction([[maybe_unused]] const mfem::Vector& u, [[maybe_unused]] mfem::Vector& r) {}
+void ContactData::residualFunction([[maybe_unused]] const mfem::Vector& u_shape, [[maybe_unused]] const mfem::Vector& u, [[maybe_unused]] mfem::Vector& r) {}
 
 std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(mfem::HypreParMatrix* orig_J) const
 {
