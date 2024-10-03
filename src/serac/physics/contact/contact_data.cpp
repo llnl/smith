@@ -394,7 +394,10 @@ std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(mfem::HyprePa
 
 void ContactData::setPressures([[maybe_unused]] const mfem::Vector& true_pressures) const {}
 
-void ContactData::setDisplacements([[maybe_unused]] const mfem::Vector& u_shape, [[maybe_unused]] const mfem::Vector& true_displacement) {}
+void ContactData::setDisplacements([[maybe_unused]] const mfem::Vector& u_shape,
+                                   [[maybe_unused]] const mfem::Vector& true_displacement)
+{
+}
 
 #endif
 
