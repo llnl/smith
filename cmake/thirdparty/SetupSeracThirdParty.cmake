@@ -19,7 +19,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # CUDA
     #------------------------------------------------------------------------------
-    if(SERAC_ENABLE_CUDA)
+    if(ENABLE_CUDA)
         # Manually set includes as system includes
         foreach(_target cuda_runtime cuda)
             get_target_property(_dirs ${_target} INTERFACE_INCLUDE_DIRECTORIES)
@@ -36,17 +36,6 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
     include(CMakeFindDependencyMacro)
-
-    #------------------------------------------------------------------------------
-    # Create global variable to toggle between GPU targets
-    #------------------------------------------------------------------------------
-    if(SERAC_ENABLE_CUDA)
-        set(serac_device_depends blt::cuda CACHE STRING "" FORCE)
-    elseif(SERAC_ENABLE_HIP)
-        set(serac_device_depends blt::hip CACHE STRING "" FORCE)
-    else()
-        set(serac_device_depends "" CACHE STRING "" FORCE)
-    endif()
 
     #------------------------------------------------------------------------------
     # Camp
@@ -217,27 +206,27 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         #### MFEM "Use" Options
 
         # Assumes that we have AMGX if we have CUDA
-        set(MFEM_USE_AMGX ${SERAC_ENABLE_CUDA} CACHE BOOL "")
+        set(MFEM_USE_AMGX ${ENABLE_CUDA} CACHE BOOL "")
         set(MFEM_USE_CALIPER ${CALIPER_FOUND} CACHE BOOL "")
         # We don't use MFEM's Conduit/Axom support
         set(MFEM_USE_CONDUIT OFF CACHE BOOL "")
-        set(MFEM_USE_CUDA ${SERAC_ENABLE_CUDA} CACHE BOOL "")
+        set(MFEM_USE_CUDA ${ENABLE_CUDA} CACHE BOOL "")
         set(MFEM_USE_LAPACK ON CACHE BOOL "")
         # mfem+mpi requires metis
-        set(MFEM_USE_METIS ${SERAC_ENABLE_MPI} CACHE BOOL "")
-        set(MFEM_USE_METIS_5 ${SERAC_ENABLE_MPI} CACHE BOOL "")
-        set(MFEM_USE_MPI ${SERAC_ENABLE_MPI} CACHE BOOL "")
+        set(MFEM_USE_METIS ${ENABLE_MPI} CACHE BOOL "")
+        set(MFEM_USE_METIS_5 ${ENABLE_MPI} CACHE BOOL "")
+        set(MFEM_USE_MPI ${ENABLE_MPI} CACHE BOOL "")
         if(NETCDF_DIR)
             serac_assert_is_directory(DIR_VARIABLE NETCDF_DIR)
             set(MFEM_USE_NETCDF ON CACHE BOOL "")
         endif()
         # mfem+mpi also needs parmetis
-        if(SERAC_ENABLE_MPI)
+        if(ENABLE_MPI)
             serac_assert_is_directory(DIR_VARIABLE PARMETIS_DIR)
             # Slightly different naming convention
             set(ParMETIS_DIR ${PARMETIS_DIR} CACHE PATH "")
         endif()
-        set(MFEM_USE_OPENMP ${SERAC_ENABLE_OPENMP} CACHE BOOL "")
+        set(MFEM_USE_OPENMP ${ENABLE_OPENMP} CACHE BOOL "")
 
         if(PETSC_DIR)
             set(MFEM_USE_PETSC ON CACHE BOOL "")
@@ -259,7 +248,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
             serac_assert_is_directory(DIR_VARIABLE SUPERLUDIST_DIR)
             # MFEM uses a slightly different naming convention
             set(SuperLUDist_DIR ${SUPERLUDIST_DIR} CACHE PATH "")
-            set(MFEM_USE_SUPERLU ${SERAC_ENABLE_MPI} CACHE BOOL "")
+            set(MFEM_USE_SUPERLU ${ENABLE_MPI} CACHE BOOL "")
         endif()
         if(STRUMPACK_DIR)
             serac_assert_is_directory(DIR_VARIABLE STRUMPACK_DIR)
@@ -440,7 +429,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
             target_link_libraries(sidre PUBLIC STRUMPACK::strumpack)
         endif()
 
-        if(SERAC_ENABLE_OPENMP)
+        if(ENABLE_OPENMP)
             target_link_libraries(core INTERFACE blt::openmp)
         endif()
 
@@ -472,8 +461,8 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         set(ENABLE_FORTRAN OFF CACHE BOOL "" FORCE)
         # Otherwise we use the submodule
         message(STATUS "Using Tribol submodule")
-        set(BUILD_REDECOMP ${SERAC_ENABLE_MPI} CACHE BOOL "")
-        set(TRIBOL_USE_MPI ${SERAC_ENABLE_MPI} CACHE BOOL "")
+        set(BUILD_REDECOMP ${ENABLE_MPI} CACHE BOOL "")
+        set(TRIBOL_USE_MPI ${ENABLE_MPI} CACHE BOOL "")
         set(TRIBOL_ENABLE_TESTS OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_EXAMPLES OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_DOCS OFF CACHE BOOL "")
@@ -605,7 +594,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         # Should this logic be in the Caliper CMake package?
         # If CMake version doesn't support CUDAToolkit the libraries
         # are just "baked in"
-        if(SERAC_ENABLE_CUDA)
+        if(ENABLE_CUDA)
             if(CMAKE_VERSION VERSION_LESS 3.17)
                 message(FATAL_ERROR "Serac+Caliper+CUDA requires CMake > 3.17.")
             else()
