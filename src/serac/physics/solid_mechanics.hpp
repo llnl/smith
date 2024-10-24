@@ -39,7 +39,7 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
                        mfem::HypreParVector& implicit_sensitivity_displacement_start_of_step_,
                        mfem::HypreParVector& implicit_sensitivity_velocity_start_of_step_,
                        mfem::HypreParVector& adjoint_essential, BoundaryConditionManager& bcs_,
-                       mfem::Solver& lin_solver);
+                       mfem::Solver& lin_solver, bool symmetrize);
 }  // namespace detail
 
 /**
@@ -883,7 +883,19 @@ public:
 
       auto stress = material_(state, du_dX, params...);
 
+<<<<<<< HEAD
       return serac::tuple{material_.density * d2u_dt2, stress};
+=======
+      auto dx_dX = 0.0 * du_dX + I;
+
+      if (geom_nonlin_ == GeometricNonlinearities::On) {
+        dx_dX += du_dX;
+      }
+
+      auto flux = dot(stress); // * det(dx_dX);
+
+      return serac::tuple{material_.density * d2u_dt2, flux};
+>>>>>>> 70e5a3aa8 (Add option to symmetrize the linear system from the physics side.)
     }
   };
 
@@ -1161,8 +1173,15 @@ public:
                                         *parameters_[parameter_indices].state...);
           J_.reset();
           J_ = assemble(drdu);
+
+          if (symmetrize) {
+            auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+            J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
+          }
+
           J_e_.reset();
           J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
+
           return *J_;
         });
   }
@@ -1230,6 +1249,12 @@ public:
             // J = M + c0 * K
             J_.reset();
             J_.reset(mfem::Add(1.0, *m_mat, c0_, *k_mat));
+
+            if (symmetrize) {
+              auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+              J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
+            }
+
             J_e_.reset();
             J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
 
@@ -1407,6 +1432,9 @@ public:
       J_ = assemble(drdu);
 
       auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+      if (symmetrize) {
+        J_T  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
+      }
 
       J_e_.reset();
       J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_T);
@@ -1447,7 +1475,7 @@ public:
       solid_mechanics::detail::adjoint_integrate(
           dt_n_to_np1, dt_np1_to_np2, m_mat.get(), k_mat.get(), displacement_adjoint_load_, velocity_adjoint_load_,
           acceleration_adjoint_load_, adjoint_displacement_, implicit_sensitivity_displacement_start_of_step_,
-          implicit_sensitivity_velocity_start_of_step_, reactions_adjoint_bcs_, bcs_, lin_solver);
+          implicit_sensitivity_velocity_start_of_step_, reactions_adjoint_bcs_, bcs_, lin_solver, symmetrize);
     }
 
     time_end_step_ = time_;
@@ -1757,6 +1785,12 @@ protected:
                                     *parameters_[parameter_indices].previous_state...);
       J_.reset();
       J_ = assemble(drdu);
+
+      if (symmetrize) {
+        auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+        J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
+      }
+
       J_e_.reset();
       J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
 

@@ -772,8 +772,8 @@ public:
           happyAboutTrSize = true;
           if (print_options.iterations) {
             printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
-            trResults.cg_iterations_count =
-                0;  // zero this output so it doesn't look like the linesearch is doing cg iterations
+            // zero this output so it doesn't look like the linesearch is doing cg iterations
+            trResults.cg_iterations_count = 0;
           }
           break;
         }
@@ -786,7 +786,7 @@ public:
           if (print_options.iterations || print_options.warnings) {
             mfem::out << "Found a positive model objective increase.  Debug if you see this.\n";
           }
-          rho = realImprove / -modelImprove;
+          rho = 0.0; //realImprove / -modelImprove;
         }
 
         // std::cout << "rho , stuff = " << rho << " " << settings.eta3 << std::endl;
