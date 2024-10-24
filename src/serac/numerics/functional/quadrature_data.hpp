@@ -99,6 +99,11 @@ class ArrayView<serac::Empty, 2, MemorySpace::Dynamic> {
 }  // namespace axom
 
 namespace serac {
+  namespace detail {
+    static constexpr std::array qdata_geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE, mfem::Geometry::SQUARE,
+                                      mfem::Geometry::TETRAHEDRON, mfem::Geometry::CUBE};
+    static constexpr std::array<std::string_view, 5> qdata_geometry_names = {"Segment", "Triangle", "Square", "Tetrahedron", "Cube"};
+  }
 
 /**
  * @brief A class for storing and access user-defined types at quadrature points
@@ -122,10 +127,7 @@ struct QuadratureData {
    */
   QuadratureData(geom_array_t elements, geom_array_t qpts_per_element, T value = T{})
   {
-    constexpr std::array geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE, mfem::Geometry::SQUARE,
-                                       mfem::Geometry::TETRAHEDRON, mfem::Geometry::CUBE};
-
-    for (auto geom : geometries) {
+    for (auto geom : detail::qdata_geometries) {
       if (elements[uint32_t(geom)] > 0) {
         data[geom] = axom::Array<T, 2>(elements[uint32_t(geom)], qpts_per_element[uint32_t(geom)]);
         data[geom].fill(value);
