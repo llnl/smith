@@ -1315,7 +1315,7 @@ public:
     }
 
     if (is_quasistatic_) {
-      quasiStaticSolve(dt);
+      quasiStaticSolve(dt, 0.0, 1.0);
     } else {
       // The current ode interface tracks 2 times, one internally which we have a handle to via time_,
       // and one here via the step interface.
@@ -1664,16 +1664,35 @@ protected:
       }...};
 
   /// @brief Solve the Quasi-static Newton system
-  virtual void quasiStaticSolve(double dt)
+  virtual void quasiStaticSolve(double dt, double a, double b)
   {
-    // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
-    // throughout.
-    warmStartDisplacement(dt);
-    time_ += dt;
+    if (b < 1e-5) {
+      std::cout << "Too many boundary condition cutbacks, try increasing the number of load steps " << std::endl;
+      return;
+    }
 
-    // this method is essentially equivalent to the 1-liner
-    // u += dot(inv(J), dot(J_elim[:, dofs], (U(t + dt) - u)[dofs]));
-    nonlin_solver_->solve(displacement_);
+    bool solver_success = true;
+    try {
+      // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
+      // throughout.
+      if (a==0.0) time_ += dt;
+      warmStartDisplacement(dt, b);
+      nonlin_solver_->solve(displacement_);
+    } catch (const std::exception& e) {
+      std::cout << "caught: " << e.what() << std::endl;
+      displacement_ -= du_;
+      solver_success = false;
+      quasiStaticSolve(dt, 1.0, 0.5*b);
+      quasiStaticSolve(dt, 1.0, 1.0);
+    }
+
+    if (solver_success) {
+      if (b==1.0) {
+        std::cout << "final solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+      } else {
+        std::cout << "substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+      }
+    } 
   }
 
   /**
@@ -1771,14 +1790,16 @@ protected:
    nonlinear solvers will ensure positive definiteness at equilibrium. *Once any parameter is changed, it is no longer
    certain to be positive definite, which will cause issues for many types linear solvers.
    */
-  void warmStartDisplacement(double dt)
+  void warmStartDisplacement(double dt, double displacement_scale_factor)
   {
     SERAC_MARK_FUNCTION;
+
+    std::cout << "Solving with displacement factor = " << displacement_scale_factor << std::endl;
 
     du_ = 0.0;
     for (auto& bc : bcs_.essentials()) {
       // apply the future boundary conditions, but use the most recent Jacobians stiffness.
-      bc.setDofs(du_, time_ + dt);
+      bc.setDofs(du_, time_);
     }
 
     auto& constrained_dofs = bcs_.allEssentialTrueDofs();
@@ -1787,13 +1808,15 @@ protected:
       du_[j] -= displacement_(j);
     }
 
+    du_ *= displacement_scale_factor;
+
     if (use_warm_start_) {
       // Update the linearized Jacobian matrix
-      auto r = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
+      auto r = (*residual_)(time_, shape_displacement_, displacement_, acceleration_,
                             *parameters_[parameter_indices].state...);
 
       // use the most recently evaluated Jacobian
-      auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
+      auto [_, drdu] = (*residual_)(time_ - dt, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
                                     *parameters_[parameter_indices].previous_state...);
       J_.reset();
       J_ = assemble(drdu);
@@ -1817,7 +1840,6 @@ protected:
       auto& lin_solver = nonlin_solver_->linearSolver();
 
       lin_solver.SetOperator(*J_);
-
       lin_solver.Mult(r, du_);
     }
 
