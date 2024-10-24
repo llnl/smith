@@ -39,7 +39,7 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
                        mfem::HypreParVector& implicit_sensitivity_displacement_start_of_step_,
                        mfem::HypreParVector& implicit_sensitivity_velocity_start_of_step_,
                        mfem::HypreParVector& adjoint_essential, BoundaryConditionManager& bcs_,
-                       mfem::Solver& lin_solver, bool symmetrize);
+                       mfem::Solver& lin_solver);
 }  // namespace detail
 
 /**
@@ -883,19 +883,7 @@ public:
 
       auto stress = material_(state, du_dX, params...);
 
-<<<<<<< HEAD
       return serac::tuple{material_.density * d2u_dt2, stress};
-=======
-      auto dx_dX = 0.0 * du_dX + I;
-
-      if (geom_nonlin_ == GeometricNonlinearities::On) {
-        dx_dX += du_dX;
-      }
-
-      auto flux = dot(stress); // * det(dx_dX);
-
-      return serac::tuple{material_.density * d2u_dt2, flux};
->>>>>>> 70e5a3aa8 (Add option to symmetrize the linear system from the physics side.)
     }
   };
 
@@ -1174,11 +1162,6 @@ public:
           J_.reset();
           J_ = assemble(drdu);
 
-          if (symmetrize) {
-            auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-            J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
-          }
-
           J_e_.reset();
           J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
 
@@ -1250,11 +1233,6 @@ public:
             J_.reset();
             J_.reset(mfem::Add(1.0, *m_mat, c0_, *k_mat));
 
-            if (symmetrize) {
-              auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-              J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
-            }
-
             J_e_.reset();
             J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
 
@@ -1307,7 +1285,7 @@ public:
     }
 
     if (is_quasistatic_) {
-      quasiStaticSolve(dt);
+      quasiStaticSolve(dt, 0.0, 1.0);
     } else {
       // The current ode interface tracks 2 times, one internally which we have a handle to via time_,
       // and one here via the step interface.
@@ -1432,9 +1410,6 @@ public:
       J_ = assemble(drdu);
 
       auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-      if (symmetrize) {
-        J_T  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
-      }
 
       J_e_.reset();
       J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_T);
@@ -1475,7 +1450,7 @@ public:
       solid_mechanics::detail::adjoint_integrate(
           dt_n_to_np1, dt_np1_to_np2, m_mat.get(), k_mat.get(), displacement_adjoint_load_, velocity_adjoint_load_,
           acceleration_adjoint_load_, adjoint_displacement_, implicit_sensitivity_displacement_start_of_step_,
-          implicit_sensitivity_velocity_start_of_step_, reactions_adjoint_bcs_, bcs_, lin_solver, symmetrize);
+          implicit_sensitivity_velocity_start_of_step_, reactions_adjoint_bcs_, bcs_, lin_solver);
     }
 
     time_end_step_ = time_;
@@ -1652,16 +1627,35 @@ protected:
       }...};
 
   /// @brief Solve the Quasi-static Newton system
-  virtual void quasiStaticSolve(double dt)
+  virtual void quasiStaticSolve(double dt, double a, double b)
   {
-    // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
-    // throughout.
-    warmStartDisplacement(dt);
-    time_ += dt;
+    if (b < 1e-5) {
+      std::cout << "Too many boundary condition cutbacks, try increasing the number of load steps " << std::endl;
+      return;
+    }
 
-    // this method is essentially equivalent to the 1-liner
-    // u += dot(inv(J), dot(J_elim[:, dofs], (U(t + dt) - u)[dofs]));
-    nonlin_solver_->solve(displacement_);
+    bool solver_success = true;
+    try {
+      // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
+      // throughout.
+      if (a==0.0) time_ += dt;
+      warmStartDisplacement(dt, b);
+      nonlin_solver_->solve(displacement_);
+    } catch (const std::exception& e) {
+      std::cout << "caught: " << e.what() << std::endl;
+      displacement_ -= du_;
+      solver_success = false;
+      quasiStaticSolve(dt, 1.0, 0.5*b);
+      quasiStaticSolve(dt, 1.0, 1.0);
+    }
+
+    if (solver_success) {
+      if (b==1.0) {
+        std::cout << "final solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+      } else {
+        std::cout << "substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+      }
+    } 
   }
 
   /**
@@ -1759,14 +1753,16 @@ protected:
    nonlinear solvers will ensure positive definiteness at equilibrium. *Once any parameter is changed, it is no longer
    certain to be positive definite, which will cause issues for many types linear solvers.
    */
-  void warmStartDisplacement(double dt)
+  void warmStartDisplacement(double dt, double displacement_scale_factor)
   {
     SERAC_MARK_FUNCTION;
+
+    std::cout << "Solving with displacement factor = " << displacement_scale_factor << std::endl;
 
     du_ = 0.0;
     for (auto& bc : bcs_.essentials()) {
       // apply the future boundary conditions, but use the most recent Jacobians stiffness.
-      bc.setDofs(du_, time_ + dt);
+      bc.setDofs(du_, time_);
     }
 
     auto& constrained_dofs = bcs_.allEssentialTrueDofs();
@@ -1775,21 +1771,18 @@ protected:
       du_[j] -= displacement_(j);
     }
 
+    du_ *= displacement_scale_factor;
+
     if (use_warm_start_) {
       // Update the linearized Jacobian matrix
-      auto r = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
+      auto r = (*residual_)(time_, shape_displacement_, displacement_, acceleration_,
                             *parameters_[parameter_indices].state...);
 
       // use the most recently evaluated Jacobian
-      auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
+      auto [_, drdu] = (*residual_)(time_ - dt, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
                                     *parameters_[parameter_indices].previous_state...);
       J_.reset();
       J_ = assemble(drdu);
-
-      if (symmetrize) {
-        auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-        J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
-      }
 
       J_e_.reset();
       J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
@@ -1805,7 +1798,6 @@ protected:
       auto& lin_solver = nonlin_solver_->linearSolver();
 
       lin_solver.SetOperator(*J_);
-
       lin_solver.Mult(r, du_);
     }
 

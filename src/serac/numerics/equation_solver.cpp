@@ -19,6 +19,18 @@
 
 namespace serac {
 
+class SolveException : public std::exception {
+public:
+    SolveException(const std::string& message) : msg(message) {}
+
+    const char* what() const noexcept override {
+        return msg.c_str();
+    }
+
+private:
+    std::string msg;
+};
+
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
 class NewtonSolver : public mfem::NewtonSolver {
 protected:
@@ -110,6 +122,7 @@ public:
       if (norm != norm) {
         mfem::out << "Initial residual for Newton iteration is undefined/nan." << std::endl;
         mfem::out << "Newton: No convergence!\n";
+        throw SolveException("Initial residual for Newton iteration is undefined/nan.");
         return;
       }
 
@@ -196,8 +209,13 @@ public:
     if (print_options.summary || (!converged && print_options.warnings) || print_options.first_and_last) {
       mfem::out << "Newton: Number of iterations: " << final_iter << '\n' << "   ||r|| = " << final_norm << '\n';
     }
+
     if (!converged && (print_options.summary || print_options.warnings)) {
       mfem::out << "Newton: No convergence!\n";
+    }
+
+    if (!converged) {
+      throw SolveException("Newton algorithm failed to converge.");
     }
   }
 };
@@ -644,7 +662,7 @@ public:
           mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
           mfem::out << ", x_incr = " << std::setw(13) << trResults.d.Norml2();
         } else {
-          mfem::out << ", norm goal = " << std::setw(13) << norm_goal << "\n";
+          mfem::out << ", norm goal = " << std::setw(13) << norm_goal;
         }
         mfem::out << '\n';
       }
@@ -652,6 +670,7 @@ public:
       if (norm != norm) {
         mfem::out << "Initial residual for trust-region iteration is undefined/nan." << std::endl;
         mfem::out << "Newton: No convergence!\n";
+        throw SolveException("Initial residual for trust-region iteration is undefined/nan.");
         return;
       }
 
@@ -744,7 +763,7 @@ public:
           solveTheSubspaceProblem(trResults.d, hess_vec_func, ds, H_ds, r, tr_size, num_leftmost);
         }
 
-        static constexpr double roundOffTol = 0.0;  // 1e-14;
+        static constexpr double roundOffTol = 1e-15;
 
         hess_vec_func(trResults.d, trResults.H_d);
         double dHd            = Dot(trResults.d, trResults.H_d);
@@ -757,7 +776,6 @@ public:
         try {
           normPred    = computeResidual(x_pred, r_pred);
           double obj1 = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
-
           realObjective = obj1;
         } catch (const std::exception&) {
           realObjective = std::numeric_limits<double>::max();
@@ -830,9 +848,14 @@ public:
     final_iter = it;
     final_norm = norm;
 
+    if (!converged) {
+      throw SolveException("Trust-region algorithm failed to converge.");
+    }
+
     if (print_options.summary || (!converged && print_options.warnings) || print_options.first_and_last) {
       mfem::out << "Newton: Number of iterations: " << final_iter << '\n' << "   ||r|| = " << final_norm << '\n';
     }
+
     if (!converged && (print_options.summary || print_options.warnings)) {
       mfem::out << "Newton: No convergence!\n";
     }
