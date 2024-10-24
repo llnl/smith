@@ -18,7 +18,7 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
                        mfem::HypreParVector& implicit_sensitivity_displacement_start_of_step_,
                        mfem::HypreParVector& implicit_sensitivity_velocity_start_of_step_,
                        mfem::HypreParVector& adjoint_essential, BoundaryConditionManager& bcs_,
-                       mfem::Solver& lin_solver)
+                       mfem::Solver& lin_solver, bool symmetrize)
 {
   // there are hard-coded here for now
   static constexpr double beta  = 0.25;
@@ -35,6 +35,10 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
   // J = M + c0 * K
   auto J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(1.0, *m_mat, fac3 * dt_n * dt_n, *k_mat));
   auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+
+  if (symmetrize) {
+    J_T  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
+  }
 
   // recall that temperature_adjoint_load_vector and d_temperature_dt_adjoint_load_vector were already multiplied by
   // -1 above
