@@ -100,7 +100,7 @@ class ArrayView<serac::Empty, 2, MemorySpace::Dynamic> {
 
 namespace serac {
   namespace detail {
-    constexpr std::array qdata_geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE, mfem::Geometry::SQUARE,
+    constexpr std::array<mfem::Geometry::Type, 5> qdata_geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE, mfem::Geometry::SQUARE,
                                       mfem::Geometry::TETRAHEDRON, mfem::Geometry::CUBE};
     constexpr std::array<std::string_view, 5> qdata_geometry_names = {"Segment", "Triangle", "Square", "Tetrahedron", "Cube"};
   }
