@@ -114,10 +114,9 @@ class StateManager {
       for (std::size_t i = 0; i < detail::qdata_geometries.size(); ++i) {
         auto geom      = detail::qdata_geometries[i];
         auto geom_data = qdata[geom];
-        if (geom_data.size() > 0) {
+        if (!isEmptyType(geom_data)) {
           auto               geom_name = detail::qdata_geometry_names[i];
           axom::sidre::View* geom_view = qdata_group->createView(std::string(geom_name));
-          // geom_data[0].size() is not right here, since it could be a tensor and/or a double or nothing
           axom::sidre::IndexType shape[2] = {geom_data.size(), sizeof(geom_data[0])};
           geom_view->setExternalDataPtr(axom::sidre::CHAR8_STR_ID, 2, shape, geom_data);
         }

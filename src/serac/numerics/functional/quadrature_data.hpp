@@ -42,6 +42,34 @@ struct Nothing {};
  */
 struct Empty {};
 
+/**
+ * @brief Checks at compile time if the StateType is of type Empty
+ *
+ * @tparam StateType Type to be checked if is of type Empty
+ *
+ * @return true if StateType is of type Empty
+ */
+template <typename StateType>
+bool isEmptyType()
+{
+    if(std::is_same_v<typename StateType::State, Empty>) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Checks the passed in variable is of type Empty
+ *
+ * @tparam StateType Type to be checked if is of type Empty
+ *
+ * @return true if StateType is of type Empty
+ */
+template <typename StateType>
+bool isEmptyType(const StateType&) {
+    return isEmptyType<std::decay_t<StateType>>();
+}
+
 template <typename T>
 struct QuadratureData;
 
