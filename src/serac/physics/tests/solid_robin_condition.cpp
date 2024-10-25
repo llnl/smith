@@ -47,16 +47,14 @@ void functional_solid_test_robin_condition()
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  // _solver_params_start
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
-                                                  .relative_tol = 1.0e-12,
-                                                  .absolute_tol = 1.0e-12,
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
+                                                  .relative_tol   = 1.0e-12,
+                                                  .absolute_tol   = 1.0e-12,
                                                   .max_iterations = 5000,
                                                   .print_level = 1};
 
   SolidMechanics<p, dim> solid_solver(nonlinear_options, solid_mechanics::default_linear_options,
                                       solid_mechanics::default_quasistatic_options, "solid_mechanics", mesh_tag);
-  // _solver_params_end
 
   solid_mechanics::LinearIsotropic mat{
       1.0,  // mass density
