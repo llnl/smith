@@ -118,8 +118,8 @@ class StateManager {
           auto geom_name = detail::qdata_geometry_names[i];
           axom::sidre::View* geom_view = qdata_group->createView(std::string(geom_name));
           // geom_data[0].size() is not right here, since it could be a tensor and/or a double or nothing
-          axom::sidre::IndexType shape[2] = {geom_data.size(), geom_data[0].size()};
-          geom_view->setExternalDataPtr(axom::sidre::DOUBLE_ID, 2, shape, geom_data);
+          axom::sidre::IndexType shape[2] = {geom_data.size(), sizeof(geom_data[0])};
+          geom_view->setExternalDataPtr(axom::sidre::CHAR8_STR_ID, 2, shape, geom_data);
         }
       }
     } else {
