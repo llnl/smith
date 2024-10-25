@@ -120,8 +120,10 @@ public:
       }
 
       if (norm != norm) {
-        mfem::out << "Initial residual for Newton iteration is undefined/nan." << std::endl;
-        mfem::out << "Newton: No convergence!\n";
+        if (print_options.first_and_last) {
+          mfem::out << "Initial residual for Newton iteration is undefined/nan." << std::endl;
+          mfem::out << "Newton: No convergence!\n";
+        }
         throw SolveException("Initial residual for Newton iteration is undefined/nan.");
         return;
       }
@@ -664,12 +666,14 @@ public:
         } else {
           mfem::out << ", norm goal = " << std::setw(13) << norm_goal;
         }
-        mfem::out << '\n';
+        mfem::out << " :: ";
       }
 
       if (norm != norm) {
-        mfem::out << "Initial residual for trust-region iteration is undefined/nan." << std::endl;
-        mfem::out << "Newton: No convergence!\n";
+        if (print_options.first_and_last) {
+          mfem::out << "Initial residual for trust-region iteration is undefined/nan." << std::endl;
+          mfem::out << "Newton: No convergence!\n";
+        }
         throw SolveException("Initial residual for trust-region iteration is undefined/nan.");
         return;
       }
