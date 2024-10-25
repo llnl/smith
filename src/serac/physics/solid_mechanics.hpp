@@ -27,6 +27,15 @@
 
 namespace serac {
 
+inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K, const FiniteElementState& x, int iters)
+{
+  mfem::HypreParMatrix* H = K.get();
+  hypre_ParCSRMatrix * Hhypre = static_cast<hypre_ParCSRMatrix *>(*H);
+  double Hfronorm;
+  hypre_ParCSRMatrixNormFro(Hhypre, &Hfronorm);
+  return Hfronorm;
+}
+
 namespace solid_mechanics {
 
 namespace detail {
@@ -874,9 +883,7 @@ public:
         dx_dX += du_dX;
       }
 
-      auto flux = dot(stress); // * det(dx_dX);
-
-      return serac::tuple{material_.density * d2u_dt2, flux};
+      return serac::tuple{material_.density * d2u_dt2, stress};
     }
   };
 
@@ -1182,6 +1189,14 @@ public:
           J_.reset();
           J_ = assemble(drdu);
 
+          //auto Jt =  std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+          //Jt  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, -0.5, *Jt));
+          //double n1 = matrixNorm(J_, displacement_, 10);
+          //double n2 = matrixNorm(Jt, displacement_, 10);
+          //if (mpi_rank_==0) {
+          //  std::cout << "approx norms = " << n1 << ", " << n2 << " :: ";
+          //}
+          
           if (symmetrize) {
             auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
             J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
@@ -1641,7 +1656,7 @@ protected:
   GeometricNonlinearities geom_nonlin_;
 
   /// @brief A flag denoting whether to symmetrize linear operators passed to the solvers
-  bool symmetrize = true;
+  bool symmetrize = false; //true;
 
   /// @brief A flag denoting whether to compute the warm start for improved robustness
   bool use_warm_start_;
@@ -1664,9 +1679,9 @@ protected:
       }...};
 
   /// @brief Solve the Quasi-static Newton system
-  virtual void quasiStaticSolve(double dt, double a, double b)
+  virtual void quasiStaticSolve(double dt, double a, double b, int level=0)
   {
-    if (b < 1e-5) {
+    if (level >= 6) {
       std::cout << "Too many boundary condition cutbacks, try increasing the number of load steps " << std::endl;
       return;
     }
@@ -1679,18 +1694,18 @@ protected:
       warmStartDisplacement(dt, b);
       nonlin_solver_->solve(displacement_);
     } catch (const std::exception& e) {
-      std::cout << "caught: " << e.what() << std::endl;
+      if (mpi_rank_==0) mfem::out << "caught: " << e.what() << std::endl;
       displacement_ -= du_;
       solver_success = false;
-      quasiStaticSolve(dt, 1.0, 0.5*b);
-      quasiStaticSolve(dt, 1.0, 1.0);
+      quasiStaticSolve(dt, 1.0, 0.5*b, level+1);
+      quasiStaticSolve(dt, 1.0, 1.0, level+1);
     }
 
     if (solver_success) {
       if (b==1.0) {
-        std::cout << "final solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+        if (mpi_rank_==0) mfem::out << "final solve succeeded for time " << time_ << " dt = " << dt << std::endl;
       } else {
-        std::cout << "substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+        if (mpi_rank_==0) mfem::out << "substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
       }
     } 
   }
@@ -1794,7 +1809,7 @@ protected:
   {
     SERAC_MARK_FUNCTION;
 
-    std::cout << "Solving with displacement factor = " << displacement_scale_factor << std::endl;
+    if (mpi_rank_==0) mfem::out << "Solving with displacement factor = " << displacement_scale_factor << std::endl;
 
     du_ = 0.0;
     for (auto& bc : bcs_.essentials()) {
