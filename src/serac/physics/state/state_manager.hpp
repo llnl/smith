@@ -106,16 +106,16 @@ class StateManager {
   void storeQuadratureData(const std::string& mesh_tag, std::shared_ptr<QuadratureData<T>> qdata)
   {
     SLIC_ERROR_ROOT_IF(!ds_, "Serac's data store was not initialized - call StateManager::initialize first");
-    axom::sidre::Group* root = ds_->getRoot();
+    axom::sidre::Group* root        = ds_->getRoot();
     axom::sidre::Group* qdata_group = root->createGroup(mesh_tag + "_qdata");
 
-    if(!is_restart_) {
+    if (!is_restart_) {
       // Why is axom::IndexType a signed int? this seems wrong....
       for (std::size_t i = 0; i < detail::qdata_geometries.size(); ++i) {
-        auto geom = detail::qdata_geometries[i];
+        auto geom      = detail::qdata_geometries[i];
         auto geom_data = qdata[geom];
         if (geom_data.size() > 0) {
-          auto geom_name = detail::qdata_geometry_names[i];
+          auto               geom_name = detail::qdata_geometry_names[i];
           axom::sidre::View* geom_view = qdata_group->createView(std::string(geom_name));
           // geom_data[0].size() is not right here, since it could be a tensor and/or a double or nothing
           axom::sidre::IndexType shape[2] = {geom_data.size(), sizeof(geom_data[0])};

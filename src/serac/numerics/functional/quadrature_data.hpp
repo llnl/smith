@@ -99,11 +99,13 @@ class ArrayView<serac::Empty, 2, MemorySpace::Dynamic> {
 }  // namespace axom
 
 namespace serac {
-  namespace detail {
-    constexpr std::array<mfem::Geometry::Type, 5> qdata_geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE, mfem::Geometry::SQUARE,
-                                      mfem::Geometry::TETRAHEDRON, mfem::Geometry::CUBE};
-    constexpr std::array<std::string_view, 5> qdata_geometry_names = {"Segment", "Triangle", "Square", "Tetrahedron", "Cube"};
-  }
+namespace detail {
+constexpr std::array<mfem::Geometry::Type, 5> qdata_geometries     = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE,
+                                                                      mfem::Geometry::SQUARE, mfem::Geometry::TETRAHEDRON,
+                                                                      mfem::Geometry::CUBE};
+constexpr std::array<std::string_view, 5>     qdata_geometry_names = {"Segment", "Triangle", "Square", "Tetrahedron",
+                                                                      "Cube"};
+}  // namespace detail
 
 /**
  * @brief A class for storing and access user-defined types at quadrature points
