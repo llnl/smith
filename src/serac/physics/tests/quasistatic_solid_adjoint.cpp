@@ -17,6 +17,7 @@
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/serac_config.hpp"
+#include "serac/infrastructure/terminator.hpp"
 
 struct ParameterizedLinearIsotropicSolid {
   using State = ::serac::Empty;  ///< this material has no internal variables
@@ -243,12 +244,9 @@ TEST(quasistatic, finiteDifference)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-  std::cout << std::setprecision(16);
+  serac::initialize(argc, argv);
   int result = RUN_ALL_TESTS();
-  MPI_Finalize();
+  serac::exitGracefully(result);
 
   return result;
 }

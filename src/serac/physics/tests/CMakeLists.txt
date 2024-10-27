@@ -18,6 +18,7 @@ set(physics_serial_test_sources
     dynamic_solid_adjoint.cpp
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
+    solid_multi_material.cpp
     )
 
 serac_add_tests(SOURCES       ${physics_serial_test_sources}

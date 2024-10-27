@@ -214,7 +214,7 @@ public:
    * @param dual_name The name of the Finite Element State dual (reaction adjoint load) solution to retrieve
    * @return The named adjoint Finite Element State
    */
-  virtual const FiniteElementDual& dualAdjoint(const std::string& dual_name) const
+  virtual const FiniteElementState& dualAdjoint(const std::string& dual_name) const
   {
     SLIC_ERROR_ROOT(axom::fmt::format(
         "dualAdjoint '{}' requested from physics module '{}' which does not support duals", dual_name, name_));
@@ -339,58 +339,6 @@ public:
   }
 
   /**
-   * @brief computes and sets the adjoint load due to reaction load sensitivities
-   *
-   * @param dual_name Name for the physics and residual specific dual (reactions)
-   * @param reaction_direction A FiniteElementState which specifies how the reactions dofs are weighted for the reaction
-   * qoi
-   */
-  virtual void computeDualAdjointLoad(const std::string& dual_name, const serac::FiniteElementState& reaction_direction)
-  {
-    (void)reaction_direction;
-    SLIC_ERROR_ROOT(axom::fmt::format("computeDualAdjointLoad not enabled in physics module {}, dual name {} requested",
-                                      name_, dual_name));
-  }
-
-  /**
-   * @brief computes the partial sensitivity of the dual (reaction) loads in specified direction with respect to
-   * parameter
-   *
-   * @param reaction_direction A FiniteElementState which specifies how the reactions dofs are weighted for the reaction
-   * qoi
-   * @param parameter_index the index of the parameter
-   * @return reaction sensitivity field
-   *
-   * @pre `computeDualAdjointLoad' for the desired dual (reaction) and `reverseAdjointTimestep` must be called before
-   * this
-   */
-  virtual const serac::FiniteElementDual& computeDualSensitivity(const serac::FiniteElementState& reaction_direction,
-                                                                 size_t                           parameter_index)
-  {
-    (void)reaction_direction;
-    SLIC_ERROR_ROOT(axom::fmt::format("computeDualSensitivity not enabled in physics module {}", name_));
-    return *parameters_[parameter_index].sensitivity;
-  };
-
-  /**
-   * @brief computes the partial sensitivity of the reaction loads (in specified direction) with respect to shape
-   *
-   * @param reaction_direction A FiniteElementState which specifies how the reactions dofs are weighted for the reaction
-   * qoi
-   * @return reaction sensitivity field
-   *
-   * @pre `computeDualAdjointLoad' for the desired dual (reaction) and `reverseAdjointTimestep` must be called before
-   * this
-   */
-  virtual const serac::FiniteElementDual& computeDualShapeSensitivity(
-      const serac::FiniteElementState& reaction_direction)
-  {
-    (void)reaction_direction;
-    SLIC_ERROR_ROOT(axom::fmt::format("computeDualShapeSensitivity not enabled in physics module {}", name_));
-    return *shape_displacement_sensitivity_;
-  };
-
-  /**
    * @brief Compute the implicit sensitivity of the quantity of interest with respect to the initial condition fields
    *
    * @return Fields states corresponding to the sensitivities with respect to the initial condition fields
@@ -422,6 +370,15 @@ public:
   }
 
   /**
+   * @brief Set the dual loads (dirichlet values) for the adjoint reverse timestep solve
+   * This must be called after setAdjointLoad
+   */
+  virtual void setDualAdjointBcs(std::unordered_map<std::string, const serac::FiniteElementState&>)
+  {
+    SLIC_ERROR_ROOT(axom::fmt::format("Adjoint analysis not defined for physics module {}", name_));
+  }
+
+  /**
    * @brief Solve the adjoint reverse timestep problem
    * @pre It is expected that the forward analysis is complete and the current states are valid
    * @pre It is expected that the adjoint load has already been set in setAdjointLoad
@@ -443,11 +400,26 @@ public:
    * @brief Accessor for getting a single named finite element state primal solution from the physics modules at a given
    * checkpointed cycle index
    *
-   * @param cycle The cycle to retrieve state from
    * @param state_name The name of the state to retrieve (e.g. "temperature", "displacement")
+   * @param cycle The cycle to retrieve state from
    * @return The named primal Finite Element State
    */
   FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle) const;
+
+  /**
+   * @brief Accessor for getting a single named finite element dual solution from the physics modules at a given
+   * checkpointed cycle index
+   *
+   * @param state_name The name of the state to retrieve (e.g. "reaction")
+   * @param cycle The cycle to retrieve state from
+   * @return The named Finite Element Dual
+   */
+  virtual FiniteElementDual loadCheckpointedDual([[maybe_unused]] const std::string& state_name,
+                                                 [[maybe_unused]] int                cycle) const
+  {
+    SLIC_ERROR_ROOT(axom::fmt::format("loadCheckpointedDual not enabled in physics module {}", name_));
+    return *duals_[0];
+  }
 
   /**
    * @brief Get a timestep increment which has been previously checkpointed at the give cycle
@@ -550,7 +522,7 @@ protected:
   /**
    * @brief List of adjoint finite element duals associated with this physics module
    */
-  std::vector<const serac::FiniteElementDual*> dual_adjoints_;
+  std::vector<const serac::FiniteElementState*> dual_adjoints_;
 
   /// @brief The information needed for the physics parameters stored as Finite Element State fields
   struct ParameterInfo {

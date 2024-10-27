@@ -18,6 +18,7 @@
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/serac_config.hpp"
+#include "serac/infrastructure/terminator.hpp"
 
 namespace serac {
 
@@ -30,7 +31,8 @@ const std::string mesh_tag       = "mesh";
 const std::string physics_prefix = "solid";
 
 using SolidMaterial = solid_mechanics::ParameterizedNeoHookeanSolid;
-auto geoNonlinear   = GeometricNonlinearities::On;
+// using SolidMaterial = solid_mechanics::ParameterizedLinearIsotropicSolid;
+auto geoNonlinear = GeometricNonlinearities::Off;
 
 constexpr double boundary_disp       = 0.013;
 constexpr double shear_modulus_value = 1.0;
@@ -101,12 +103,15 @@ FiniteElementState createReactionDirection(const BasePhysics& solid_solver, int 
 
 double computeSolidMechanicsQoi(BasePhysics& solid_solver)
 {
-  solid_solver.advanceTimestep(0.0);
+  solid_solver.resetStates();
+  solid_solver.advanceTimestep(0.1);
 
-  const FiniteElementDual& reactions = solid_solver.dual("reactions");
+  const FiniteElementDual& reactions          = solid_solver.dual("reactions");
+  auto                     reactionDirections = createReactionDirection(solid_solver, 0);
+  // reactionDirections = solid_solver.dual("reactions");
 
-  auto reactionDirections = createReactionDirection(solid_solver, 0);
-  return innerProduct(reactions, reactionDirections);
+  const FiniteElementState& displacements = solid_solver.state("displacement");
+  return innerProduct(reactions, reactionDirections) + 0.05 * innerProduct(displacements, displacements);
 }
 
 auto computeSolidMechanicsQoiSensitivities(BasePhysics& solid_solver)
@@ -119,16 +124,18 @@ auto computeSolidMechanicsQoiSensitivities(BasePhysics& solid_solver)
   FiniteElementDual shear_modulus_sensitivity(StateManager::mesh(mesh_tag), H1<p>{}, "shear modulus sensitivity");
   shear_modulus_sensitivity = 0.0;
 
-  auto reactionDirections = createReactionDirection(solid_solver, 0);
+  auto reaction_adjoint_load = createReactionDirection(solid_solver, 0);
 
-  solid_solver.computeDualAdjointLoad(solid_solver.dualNames()[0], reactionDirections);
+  FiniteElementDual displacement_adjoint_load(solid_solver.state("displacement").space(), "displacement_adjoint_load");
+  displacement_adjoint_load = solid_solver.state("displacement");
+  displacement_adjoint_load *= 0.1;
+
+  solid_solver.setAdjointLoad({{"displacement", displacement_adjoint_load}});
+  solid_solver.setDualAdjointBcs({{"reactions", reaction_adjoint_load}});
   solid_solver.reverseAdjointTimestep();
 
   shear_modulus_sensitivity += solid_solver.computeTimestepSensitivity(0);
-  shear_modulus_sensitivity += solid_solver.computeDualSensitivity(reactionDirections, 0);
-
   shape_sensitivity += solid_solver.computeTimestepShapeSensitivity();
-  shape_sensitivity += solid_solver.computeDualShapeSensitivity(reactionDirections);
 
   return std::make_tuple(qoi, shear_modulus_sensitivity, shape_sensitivity);
 }
@@ -177,7 +184,6 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
   void fillDirection(FiniteElementState& direction) const
   {
     auto sz = direction.Size();
-    std::cout << "sizes = " << sz << std::endl;
     for (int i = 0; i < sz; ++i) {
       direction(i) = -1.2 + 2.02 * (double(i) / sz);
     }
@@ -207,7 +213,6 @@ TEST_F(SolidMechanicsSensitivityFixture, ReactionShapeSensitivities)
   double qoi_plus          = computeSolidMechanicsQoiAdjustingShape(*solid_solver, derivative_direction, eps);
   double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
 
-  EXPECT_NEAR(qoi_base, -0.35, 1e-14);
   EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, eps);
 }
 
@@ -223,7 +228,6 @@ TEST_F(SolidMechanicsSensitivityFixture, ReactionParameterSensitivities)
   double qoi_plus          = computeSolidMechanicsQoiAdjustingShearModulus(*solid_solver, derivative_direction, eps);
   double directional_deriv = innerProduct(derivative_direction, shear_modulus_sensitivity);
 
-  EXPECT_NEAR(qoi_base, -0.35, 1e-14);
   EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, eps);
 }
 
@@ -232,12 +236,8 @@ TEST_F(SolidMechanicsSensitivityFixture, ReactionParameterSensitivities)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-  std::cout << std::setprecision(16);
+  serac::initialize(argc, argv);
   int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
+  serac::exitGracefully(result);
   return result;
 }
