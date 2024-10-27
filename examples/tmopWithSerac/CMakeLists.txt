@@ -10,7 +10,7 @@ blt_add_executable( NAME        tmop_with_serac
                     DEPENDS_ON  serac_physics serac_mesh serac_functional
                     )
 blt_add_executable( NAME        tmop_single_element
-                    SOURCES     single_element.cpp
+                    SOURCES     tmop_single_element.cpp
                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                     DEPENDS_ON  serac_physics serac_mesh serac_functional
                     )
