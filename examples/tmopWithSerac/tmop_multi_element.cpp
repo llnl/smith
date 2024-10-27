@@ -104,13 +104,13 @@ int main(int argc, char* argv[])
     };
 
     const serac::NonlinearSolverOptions nonlin_opts = {
-        .nonlin_solver = ::serac::NonlinearSolver::Newton,
-        // .nonlin_solver  = serac::NonlinearSolver::TrustRegion,
+        //.nonlin_solver = ::serac::NonlinearSolver::Newton,
+        .nonlin_solver  = serac::NonlinearSolver::TrustRegion,
         // .nonlin_solver  = serac::NonlinearSolver::NewtonLineSearch,
         .relative_tol   = 1.0e-8,
         .absolute_tol   = 1.0e-10,
         // .min_iterations = 1, 
-        .max_iterations = 20, // 2000
+        .max_iterations = 1000, // 2000
         // .max_line_search_iterations = 20, //0
         .print_level    = 1
     };
