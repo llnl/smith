@@ -27,7 +27,9 @@
 
 namespace serac {
 
-inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K, const FiniteElementState& x, int iters)
+static constexpr bool debug_matrix_symmetry = false;
+
+inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 {
   mfem::HypreParMatrix* H = K.get();
   hypre_ParCSRMatrix * Hhypre = static_cast<hypre_ParCSRMatrix *>(*H);
@@ -883,7 +885,8 @@ public:
         dx_dX += du_dX;
       }
 
-      return serac::tuple{material_.density * d2u_dt2, stress};
+      auto flux = dot(stress, transpose(inv(dx_dX))) * det(dx_dX);
+      return serac::tuple{material_.density * d2u_dt2, flux};
     }
   };
 
@@ -1189,13 +1192,15 @@ public:
           J_.reset();
           J_ = assemble(drdu);
 
-          //auto Jt =  std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-          //Jt  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, -0.5, *Jt));
-          //double n1 = matrixNorm(J_, displacement_, 10);
-          //double n2 = matrixNorm(Jt, displacement_, 10);
-          //if (mpi_rank_==0) {
-          //  std::cout << "approx norms = " << n1 << ", " << n2 << " :: ";
-          //}
+          if constexpr (debug_matrix_symmetry) {
+            auto Jt =  std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+            Jt  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, -0.5, *Jt));
+            double n1 = matrixNorm(J_);
+            double n2 = matrixNorm(Jt);
+            if (mpi_rank_==0) {
+              std::cout << "matrix norm of J = " << n1 << ", matrix norm of skew(J) = " << n2 << std::endl;
+            }
+          }
           
           if (symmetrize) {
             auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
@@ -1682,7 +1687,8 @@ protected:
   virtual void quasiStaticSolve(double dt, double a, double b, int level=0)
   {
     if (level >= 6) {
-      std::cout << "Too many boundary condition cutbacks, try increasing the number of load steps " << std::endl;
+
+      if (mpi_rank_==0) std::cout << "Too many boundary condition cutbacks, accepting solution even though there may be issues. Try increasing the number of load steps " << std::endl;
       return;
     }
 
@@ -1694,7 +1700,7 @@ protected:
       warmStartDisplacement(dt, b);
       nonlin_solver_->solve(displacement_);
     } catch (const std::exception& e) {
-      if (mpi_rank_==0) mfem::out << "caught: " << e.what() << std::endl;
+      if (mpi_rank_==0) mfem::out << "caught nonlinear solver exception: " << e.what() << std::endl;
       displacement_ -= du_;
       solver_success = false;
       quasiStaticSolve(dt, 1.0, 0.5*b, level+1);
@@ -1703,7 +1709,7 @@ protected:
 
     if (solver_success) {
       if (b==1.0) {
-        if (mpi_rank_==0) mfem::out << "final solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+        if (mpi_rank_==0) mfem::out << "SolidMechanics solve succeeded for time " << time_ << " dt = " << dt << std::endl;
       } else {
         if (mpi_rank_==0) mfem::out << "substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
       }
@@ -1808,8 +1814,6 @@ protected:
   void warmStartDisplacement(double dt, double displacement_scale_factor)
   {
     SERAC_MARK_FUNCTION;
-
-    if (mpi_rank_==0) mfem::out << "Solving with displacement factor = " << displacement_scale_factor << std::endl;
 
     du_ = 0.0;
     for (auto& bc : bcs_.essentials()) {
