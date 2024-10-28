@@ -37,7 +37,7 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
   auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
 
   if (symmetrize) {
-    J_T  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
+    J_T = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
   }
 
   // recall that temperature_adjoint_load_vector and d_temperature_dt_adjoint_load_vector were already multiplied by

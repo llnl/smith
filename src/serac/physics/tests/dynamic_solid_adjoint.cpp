@@ -39,7 +39,7 @@ struct TimeSteppingInfo {
 };
 
 constexpr double disp_target   = -0.34;
-constexpr double boundary_disp = 0.013; //0.17; //0.013;
+constexpr double boundary_disp = 0.013;  // 0.17; //0.013;
 
 constexpr double initial_interior_disp = 0.03;
 constexpr double initial_interior_velo = 0.04;
@@ -102,10 +102,9 @@ std::unique_ptr<SolidMechanics<p, dim>> createNonlinearSolidMechanicsSolver(
   */
   const LinearSolverOptions linear_options = {.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 
-  auto solid =
-      std::make_unique<SolidMechanics<p, dim>>(nonlinear_opts, linear_options, dyn_opts,
-                                               geoNonlinear, physics_prefix + std::to_string(iter++), mesh_tag, std::vector<std::string>{},
-                                               0, 0.0, false, false); //false);
+  auto solid = std::make_unique<SolidMechanics<p, dim>>(nonlinear_opts, linear_options, dyn_opts, geoNonlinear,
+                                                        physics_prefix + std::to_string(iter++), mesh_tag,
+                                                        std::vector<std::string>{}, 0, 0.0, false, false);  // false);
   solid->setMaterial(mat);
   solid->setDisplacementBCs(
       {1}, [](const mfem::Vector&, double t, mfem::Vector& disp) { disp = (1.0 + 10 * t) * boundary_disp; });
@@ -258,7 +257,11 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
   axom::sidre::DataStore dataStore;
   mfem::ParMesh*         mesh;
 
-  NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1.0e-14, .absolute_tol = 5.0e-15, .max_iterations=50, .print_level=0};
+  NonlinearSolverOptions nonlinear_opts{.nonlin_solver  = NonlinearSolver::TrustRegion,
+                                        .relative_tol   = 1.0e-14,
+                                        .absolute_tol   = 5.0e-15,
+                                        .max_iterations = 50,
+                                        .print_level    = 0};
 
   bool                dispBc = true;
   TimesteppingOptions dyn_opts{.timestepper        = TimestepMethod::Newmark,

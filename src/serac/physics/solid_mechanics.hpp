@@ -31,9 +31,9 @@ static constexpr bool debug_matrix_symmetry = false;
 
 inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 {
-  mfem::HypreParMatrix* H = K.get();
-  hypre_ParCSRMatrix * Hhypre = static_cast<hypre_ParCSRMatrix *>(*H);
-  double Hfronorm;
+  mfem::HypreParMatrix* H      = K.get();
+  hypre_ParCSRMatrix*   Hhypre = static_cast<hypre_ParCSRMatrix*>(*H);
+  double                Hfronorm;
   hypre_ParCSRMatrixNormFro(Hhypre, &Hfronorm);
   return Hfronorm;
 }
@@ -1193,18 +1193,18 @@ public:
           J_ = assemble(drdu);
 
           if constexpr (debug_matrix_symmetry) {
-            auto Jt =  std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-            Jt  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, -0.5, *Jt));
+            auto Jt   = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+            Jt        = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, -0.5, *Jt));
             double n1 = matrixNorm(J_);
             double n2 = matrixNorm(Jt);
-            if (mpi_rank_==0) {
+            if (mpi_rank_ == 0) {
               std::cout << "matrix norm of J = " << n1 << ", matrix norm of skew(J) = " << n2 << std::endl;
             }
           }
-          
+
           if (symmetrize) {
             auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-            J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
+            J_       = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
           }
 
           J_e_.reset();
@@ -1280,7 +1280,7 @@ public:
 
             if (symmetrize) {
               auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-              J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
+              J_       = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
             }
 
             J_e_.reset();
@@ -1459,7 +1459,7 @@ public:
 
       auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
       if (symmetrize) {
-        J_T  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
+        J_T = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
       }
 
       J_e_.reset();
@@ -1661,7 +1661,7 @@ protected:
   GeometricNonlinearities geom_nonlin_;
 
   /// @brief A flag denoting whether to symmetrize linear operators passed to the solvers
-  bool symmetrize = false; //true;
+  bool symmetrize = false;  // true;
 
   /// @brief A flag denoting whether to compute the warm start for improved robustness
   bool use_warm_start_;
@@ -1684,11 +1684,13 @@ protected:
       }...};
 
   /// @brief Solve the Quasi-static Newton system
-  virtual void quasiStaticSolve(double dt, double a, double b, int level=0)
+  virtual void quasiStaticSolve(double dt, double a, double b, int level = 0)
   {
     if (level >= 6) {
-
-      if (mpi_rank_==0) std::cout << "Too many boundary condition cutbacks, accepting solution even though there may be issues. Try increasing the number of load steps " << std::endl;
+      if (mpi_rank_ == 0)
+        std::cout << "Too many boundary condition cutbacks, accepting solution even though there may be issues. Try "
+                     "increasing the number of load steps "
+                  << std::endl;
       return;
     }
 
@@ -1696,24 +1698,25 @@ protected:
     try {
       // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
       // throughout.
-      if (a==0.0) time_ += dt;
+      if (a == 0.0) time_ += dt;
       warmStartDisplacement(dt, b);
       nonlin_solver_->solve(displacement_);
     } catch (const std::exception& e) {
-      if (mpi_rank_==0) mfem::out << "caught nonlinear solver exception: " << e.what() << std::endl;
+      if (mpi_rank_ == 0) mfem::out << "caught nonlinear solver exception: " << e.what() << std::endl;
       displacement_ -= du_;
       solver_success = false;
-      quasiStaticSolve(dt, 1.0, 0.5*b, level+1);
-      quasiStaticSolve(dt, 1.0, 1.0, level+1);
+      quasiStaticSolve(dt, 1.0, 0.5 * b, level + 1);
+      quasiStaticSolve(dt, 1.0, 1.0, level + 1);
     }
 
     if (solver_success) {
-      if (b==1.0) {
-        if (mpi_rank_==0) mfem::out << "SolidMechanics solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+      if (b == 1.0) {
+        if (mpi_rank_ == 0)
+          mfem::out << "SolidMechanics solve succeeded for time " << time_ << " dt = " << dt << std::endl;
       } else {
-        if (mpi_rank_==0) mfem::out << "substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+        if (mpi_rank_ == 0) mfem::out << "substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
       }
-    } 
+    }
   }
 
   /**
@@ -1842,7 +1845,7 @@ protected:
 
       if (symmetrize) {
         auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-        J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
+        J_       = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(0.5, *J_, 0.5, *J_T));
       }
 
       J_e_.reset();
