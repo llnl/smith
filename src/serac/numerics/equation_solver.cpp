@@ -21,14 +21,12 @@ namespace serac {
 
 class SolveException : public std::exception {
 public:
-    SolveException(const std::string& message) : msg(message) {}
+  SolveException(const std::string& message) : msg(message) {}
 
-    const char* what() const noexcept override {
-        return msg.c_str();
-    }
+  const char* what() const noexcept override { return msg.c_str(); }
 
 private:
-    std::string msg;
+  std::string msg;
 };
 
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
@@ -808,7 +806,7 @@ public:
           if (print_options.iterations || print_options.warnings) {
             mfem::out << "Found a positive model objective increase.  Debug if you see this.\n";
           }
-          rho = 0.0; //realImprove / -modelImprove;
+          rho = 0.0;  // realImprove / -modelImprove;
         }
 
         // std::cout << "rho , stuff = " << rho << " " << settings.eta3 << std::endl;
