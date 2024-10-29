@@ -363,10 +363,12 @@ std::unordered_map<std::string, FiniteElementState> BasePhysics::getCheckpointed
 
   if (checkpoint_to_disk_) {
     for (const auto& state_name : stateNames()) {
-      previous_states_map.emplace(state_name, state(state_name));
       previous_states_ptrs.emplace_back(const_cast<FiniteElementState*>(&state(state_name)));
     }
     StateManager::loadCheckpointedStates(cycle_to_load, previous_states_ptrs);
+    for (const auto& state_name : stateNames()) {
+      previous_states_map.emplace(state_name, state(state_name));
+    }
     return previous_states_map;
   } else {
     for (const auto& state_name : stateNames()) {
