@@ -110,7 +110,6 @@ class StateManager {
     axom::sidre::Group* qdata_group = root->createGroup(mesh_tag + "_qdata");
 
     if (!is_restart_) {
-      // Why is axom::IndexType a signed int? this seems wrong....
       for (std::size_t i = 0; i < detail::qdata_geometries.size(); ++i) {
         auto geom      = detail::qdata_geometries[i];
         auto geom_data = qdata[geom];
