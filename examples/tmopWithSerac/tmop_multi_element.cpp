@@ -4,11 +4,22 @@
 #include <serac/infrastructure/terminator.hpp>
 #include <serac/numerics/functional/domain.hpp>
 #include <serac/numerics/functional/functional.hpp>
-#include <serac/physics/state/state_manager.hpp>
 #include <serac/numerics/equation_solver.hpp>
 #include <serac/numerics/solver_config.hpp>
 #include <serac/numerics/stdfunction_operator.hpp>
+#include <serac/physics/state/state_manager.hpp>
+#include <serac/physics/boundary_conditions/boundary_condition_manager.hpp>
 #include "serac/mesh/mesh_utils.hpp"
+
+
+inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
+{
+    mfem::HypreParMatrix* H = K.get();
+    hypre_ParCSRMatrix * Hhypre = static_cast<hypre_ParCSRMatrix *>(*H);
+    double Hfronorm;
+    hypre_ParCSRMatrixNormFro(Hhypre, &Hfronorm);
+    return Hfronorm;
+}
 
 
 // _main_init_start
@@ -43,25 +54,23 @@ int main(int argc, char* argv[])
 
     residual.AddDomainIntegral(serac::Dimension<DIM>{}, serac::DependsOn<0>{},
         [=](double /*t*/, auto position, auto displacement) {
-            // x = X + u
-            auto [X, dXdxi] = position;
-            auto du_dX = serac::get<1>(displacement);
+            auto [y, dy_dxi] = position;
+            auto du_dy = serac::get<1>(displacement);
 
-            // auto mu = 0.5 * (serac::inner(Tmat, Tmat) / abs(serac::det(Tmat))) - 1.0;
-            // triangular correction = [ 1, -1/sqrt(3); 0, 2/sqrt(3)]
-            serac::mat2 WInvMat = {{{1.0, -0.5773502691896258}, 
-                                    {0.0,  1.1547005383792517}}};
-            // serac::mat2 WInvMat = serac::DenseIdentity<2>();
+            // triangular correction
+            serac::mat2 dX_dxi{{{1.0, 0.5},
+                                {0.0, 0.5*std::sqrt(3)}}};
+            
+            serac::mat2 dxi_dX = serac::inv(dX_dxi);
 
-            // Jacobian from parent element to the physical space (i.e., dx_dxi)
-            auto Amat = dXdxi + serac::dot(du_dX, dXdxi);
+            auto dy_dX = serac::dot(dy_dxi, dxi_dX);
+            auto dx_dy = serac::DenseIdentity<DIM>() + du_dy;
+            auto F = serac::dot(dx_dy, dy_dX);
+            auto detF = serac::det(F);
+            auto invFT = serac::transpose(serac::inv(F));
+            auto P = 1/(detF)*(F - 0.5*serac::inner(F, F)*invFT);
 
-            // Target matrix (updated Jacobian, Tmat or T)
-            auto T = serac::dot(Amat, WInvMat);
-
-            auto detT = serac::det(T);
-            auto B = serac::dot(T, serac::transpose(T));
-            auto stress = 1/(detT*detT)*(B - 0.5*serac::inner(T, T)*serac::DenseIdentity<DIM>());
+            auto stress = (1/serac::det(dy_dX))*serac::dot(P, serac::transpose(dy_dX));
 
             auto source = serac::zero{};
             return ::serac::tuple{source, stress};  /// N*source + DN*flux
@@ -71,6 +80,10 @@ int main(int argc, char* argv[])
 
     // It would be a good idea to put Dirichlet boundary conditions on this problem.
     // I would constrain each edge of the rectangle in the normal direction.
+    // serac::BoundaryConditionManager bc_manager(pmesh);
+    // left_disp_bdr_coef = std::make_shared<mfem::VectorFunctionCoefficient>(DIM, disp)
+    // bc_manager.addEssential({0}, serac::GeneralCoefficient ess_bdr_coef,
+    //                 mfem::ParFiniteElementSpace& space, const std::optional<int> component = {})
     mfem::Array<int> constrained_dofs;
 
     std::unique_ptr<mfem::HypreParMatrix> dresidualdu;
@@ -118,6 +131,15 @@ int main(int argc, char* argv[])
     serac::EquationSolver eq_solver(nonlin_opts, lin_opts, pmesh.GetComm());
     eq_solver.setOperator(residual_opr);
     eq_solver.solve(node_disp_computed);
+
+    // Check stiffness matrix symmetry
+    double norm_K = matrixNorm(dresidualdu);
+    std::unique_ptr<mfem::HypreParMatrix> K_skew = std::make_unique<mfem::HypreParMatrix>(*dresidualdu);
+    K_skew->Add(-1.0, *(dresidualdu->Transpose()));
+    *K_skew *= 0.5;
+    double norm_K_skew = matrixNorm(K_skew);
+    std::cout << "K norm         = " << norm_K << "\n"
+              << "skew part norm = " << norm_K_skew << std::endl;
 
     mfem::ParGridFunction nodeSolGF(&node_disp_computed.space());
     nodeSolGF.SetFromTrueDofs(node_disp_computed);
