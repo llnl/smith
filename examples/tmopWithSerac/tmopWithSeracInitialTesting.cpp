@@ -64,6 +64,11 @@ int main(int argc, char* argv[])
   pmesh.EnsureNodes();
   pmesh.ExchangeFaceNbrData();
 
+  // ::mfem::FiniteElementCollection *fec = new ::mfem::H1_FECollection(1, DIM);
+  // ::std::shared_ptr<::mfem::ParFiniteElementSpace> pfespace
+  //     = ::std::make_shared<::mfem::ParFiniteElementSpace>(&pmesh, fec, DIM);
+  // pmesh.SetNodalFESpace(pfespace.get());
+
   using shapeFES = serac::H1<ORDER, DIM>;
 
   // Create finite element space for design parameters, and register it with LiDO DataManager
@@ -269,4 +274,6 @@ nodeSolGF.Print();
   pd.SetCycle(1);
   pd.SetTime(1);
   pd.Save();
+
+// delete fec;
 }
