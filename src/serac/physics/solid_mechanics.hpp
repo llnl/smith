@@ -182,7 +182,7 @@ public:
         implicit_sensitivity_displacement_start_of_step_(displacement_.space(), "total_deriv_wrt_displacement."),
         implicit_sensitivity_velocity_start_of_step_(displacement_.space(), "total_deriv_wrt_velocity."),
         reactions_(StateManager::newDual(H1<order, dim>{}, detail::addPrefix(physics_name, "reactions"), mesh_tag_)),
-        reactions_adjoint_load_(reactions_.space(), "reactions_shape_sensitivity"),
+        reactions_adjoint_bcs_(reactions_.space(), "reactions_shape_sensitivity"),
         nonlin_solver_(std::move(solver)),
         ode2_(displacement_.space().TrueVSize(),
               {.time = time_, .c0 = c0_, .c1 = c1_, .u = u_, .du_dt = v_, .d2u_dt2 = acceleration_}, *nonlin_solver_,
@@ -216,7 +216,7 @@ public:
 
     adjoints_.push_back(&adjoint_displacement_);
     duals_.push_back(&reactions_);
-    dual_adjoints_.push_back(&reactions_adjoint_load_);
+    dual_adjoints_.push_back(&reactions_adjoint_bcs_);
 
     // Create a pack of the primal field and parameter finite element spaces
     mfem::ParFiniteElementSpace* test_space  = &displacement_.space();
@@ -385,7 +385,8 @@ public:
     implicit_sensitivity_displacement_start_of_step_ = 0.0;
     implicit_sensitivity_velocity_start_of_step_     = 0.0;
 
-    reactions_ = 0.0;
+    reactions_             = 0.0;
+    reactions_adjoint_bcs_ = 0.0;
 
     u_                      = 0.0;
     v_                      = 0.0;
@@ -415,12 +416,14 @@ public:
    *
    * @tparam T the type to be created at each quadrature point
    * @param initial_state the value to be broadcast to each quadrature point
+   * @param optional_domain restricts the quadrature buffer to the given domain
    * @return std::shared_ptr< QuadratureData<T> >
    */
   template <typename T>
-  qdata_type<T> createQuadratureDataBuffer(T initial_state)
+  qdata_type<T> createQuadratureDataBuffer(T initial_state, const std::optional<Domain>& optional_domain = std::nullopt)
   {
-    return StateManager::newQuadratureDataBuffer(mesh_tag_, order, dim, initial_state);
+    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
+    return StateManager::newQuadratureDataBuffer(domain, order, dim, initial_state);
   }
 
   /**
@@ -753,15 +756,40 @@ public:
   }
 
   /// @overload
-  const FiniteElementDual& dualAdjoint(const std::string& dual_name) const override
+  const FiniteElementState& dualAdjoint(const std::string& dual_name) const override
   {
     if (dual_name == "reactions") {
-      return reactions_adjoint_load_;
+      return reactions_adjoint_bcs_;
     }
 
     SLIC_ERROR_ROOT(axom::fmt::format(
         "dualAdjoint '{}' requested from solid mechanics module '{}', but it doesn't exist", dual_name, name_));
-    return reactions_adjoint_load_;
+    return reactions_adjoint_bcs_;
+  }
+
+  /// @overload
+  FiniteElementDual loadCheckpointedDual(const std::string& dual_name, int cycle) const override
+  {
+    if (dual_name == "reactions") {
+      auto checkpointed_sol = getCheckpointedStates(cycle);
+
+      FiniteElementDual reactions(reactions_.space(), "reactions_tmp");
+
+      if (is_quasistatic_) {
+        reactions = (*residual_)(time_, shape_displacement_, checkpointed_sol.at("displacement"), acceleration_,
+                                 *parameters_[parameter_indices].state...);
+      } else {
+        reactions = (*residual_)(time_, shape_displacement_, checkpointed_sol.at("displacement"),
+                                 checkpointed_sol.at("acceleration"), *parameters_[parameter_indices].state...);
+      }
+
+      return reactions;
+    }
+
+    SLIC_ERROR_ROOT(
+        axom::fmt::format("loadCheckpointedDual '{}' requested from solid mechanics module '{}', but it doesn't exist",
+                          dual_name, name_));
+    return reactions_;
   }
 
   /**
@@ -869,6 +897,7 @@ public:
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
    * 3>`)
    *
+   * @param domain The subdomain which will use this material. Must be a domain of elements.
    * @param qdata the buffer of material internal variables at each quadrature point
    *
    * @pre MaterialType must have a public member variable `density`
@@ -877,7 +906,7 @@ public:
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename MaterialType, typename StateType = Empty>
-  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material,
+  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material, const Domain& domain,
                    qdata_type<StateType> qdata = EmptyQData)
   {
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
@@ -890,14 +919,30 @@ public:
                                                              // fact that the displacement, acceleration, and shape
                                                              // fields are always-on and come first, so the `n`th
                                                              // parameter will actually be argument `n + NUM_STATE_VARS`
-        std::move(material_functor), mesh_, qdata);
+        std::move(material_functor), domain, qdata);
+  }
+
+  /// @overload
+  template <int... active_parameters, typename MaterialType, typename StateType = Empty>
+  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material,
+                   qdata_type<StateType> qdata = EmptyQData)
+  {
+    setMaterial(DependsOn<active_parameters...>{}, material, EntireDomain(mesh_), qdata);
+  }
+
+  /// @overload
+  template <typename MaterialType, typename StateType = Empty>
+  void setMaterial(const MaterialType& material, const Domain& domain,
+                   std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
+  {
+    setMaterial(DependsOn<>{}, material, domain, qdata);
   }
 
   /// @overload
   template <typename MaterialType, typename StateType = Empty>
   void setMaterial(const MaterialType& material, std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
-    setMaterial(DependsOn<>{}, material, qdata);
+    setMaterial(DependsOn<>{}, material, EntireDomain(mesh_), qdata);
   }
 
   /**
@@ -1134,8 +1179,10 @@ public:
           SERAC_MARK_FUNCTION;
           auto [r, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(u), acceleration_,
                                         *parameters_[parameter_indices].state...);
-          J_             = assemble(drdu);
-          J_e_           = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
+          J_.reset();
+          J_ = assemble(drdu);
+          J_e_.reset();
+          J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
           return *J_;
         });
   }
@@ -1201,7 +1248,9 @@ public:
             std::unique_ptr<mfem::HypreParMatrix> m_mat(assemble(M));
 
             // J = M + c0 * K
+            J_.reset();
             J_.reset(mfem::Add(1.0, *m_mat, c0_, *k_mat));
+            J_e_.reset();
             J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
 
             return *J_;
@@ -1316,9 +1365,11 @@ public:
 
     SLIC_ERROR_ROOT_IF(disp_adjoint_load == loads.end(), "Adjoint load for \"displacement\" not found.");
 
-    displacement_adjoint_load_ = disp_adjoint_load->second;
-    // Add the sign correction to move the term to the RHS
-    displacement_adjoint_load_ *= -1.0;
+    if (disp_adjoint_load != loads.end()) {
+      displacement_adjoint_load_ = disp_adjoint_load->second;
+      // Add the sign correction to move the term to the RHS
+      displacement_adjoint_load_ *= -1.0;
+    }
 
     auto velo_adjoint_load = loads.find("velocity");
 
@@ -1337,14 +1388,24 @@ public:
     }
   }
 
+  virtual void setDualAdjointBcs(std::unordered_map<std::string, const serac::FiniteElementState&> bcs) override
+  {
+    SLIC_ERROR_ROOT_IF(bcs.size() == 0, "Adjoint load container size must be greater than 0 in the solid mechanics.");
+
+    auto reaction_adjoint_load = bcs.find("reactions");
+
+    SLIC_ERROR_ROOT_IF(reaction_adjoint_load == bcs.end(), "Adjoint load for \"reaction\" not found.");
+
+    if (reaction_adjoint_load != bcs.end()) {
+      reactions_adjoint_bcs_ = reaction_adjoint_load->second;
+    }
+  }
+
   /// @overload
   void reverseAdjointTimestep() override
   {
+    SERAC_MARK_FUNCTION;
     auto& lin_solver = nonlin_solver_->linearSolver();
-
-    // By default, use a homogeneous essential boundary condition
-    mfem::HypreParVector adjoint_essential(displacement_adjoint_load_);
-    adjoint_essential = 0.0;
 
     SLIC_ERROR_ROOT_IF(cycle_ <= min_cycle_,
                        "Maximum number of adjoint timesteps exceeded! The number of adjoint timesteps must equal the "
@@ -1352,20 +1413,30 @@ public:
 
     cycle_--;  // cycle is now at n \in [0,N-1]
 
-    double       dt_np1_to_np2     = getCheckpointedTimestep(cycle_ + 1);
-    const double dt_n_to_np1       = getCheckpointedTimestep(cycle_);
-    auto         end_step_solution = getCheckpointedStates(cycle_ + 1);
+    double       dt_np1_to_np2 = getCheckpointedTimestep(cycle_ + 1);
+    const double dt_n_to_np1   = getCheckpointedTimestep(cycle_);
+
+    auto end_step_solution = getCheckpointedStates(cycle_ + 1);
 
     displacement_ = end_step_solution.at("displacement");
 
     if (is_quasistatic_) {
       auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
                                     *parameters_[parameter_indices].state...);
-      auto jacobian  = assemble(drdu);
-      auto J_T       = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
+      J_.reset();
+      J_ = assemble(drdu);
 
-      for (const auto& bc : bcs_.essentials()) {
-        bc.apply(*J_T, displacement_adjoint_load_, adjoint_essential);
+      auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+
+      J_e_.reset();
+      J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_T);
+
+      auto& constrained_dofs = bcs_.allEssentialTrueDofs();
+
+      mfem::EliminateBC(*J_T, *J_e_, constrained_dofs, reactions_adjoint_bcs_, displacement_adjoint_load_);
+      for (int i = 0; i < constrained_dofs.Size(); i++) {
+        int j                         = constrained_dofs[i];
+        displacement_adjoint_load_[j] = reactions_adjoint_bcs_[j];
       }
 
       lin_solver.SetOperator(*J_T);
@@ -1396,7 +1467,7 @@ public:
       solid_mechanics::detail::adjoint_integrate(
           dt_n_to_np1, dt_np1_to_np2, m_mat.get(), k_mat.get(), displacement_adjoint_load_, velocity_adjoint_load_,
           acceleration_adjoint_load_, adjoint_displacement_, implicit_sensitivity_displacement_start_of_step_,
-          implicit_sensitivity_velocity_start_of_step_, adjoint_essential, bcs_, lin_solver);
+          implicit_sensitivity_velocity_start_of_step_, reactions_adjoint_bcs_, bcs_, lin_solver);
     }
 
     time_end_step_ = time_;
@@ -1462,47 +1533,6 @@ public:
   /// @brief getter for nodal forces (before zeroing-out essential dofs)
   const serac::FiniteElementDual& reactions() const { return reactions_; };
 
-  /// @overload
-  void computeDualAdjointLoad(const std::string&               dual_name,
-                              const serac::FiniteElementState& reaction_direction) override
-  {
-    SLIC_ERROR_ROOT_IF(dual_name != "reactions", "Solid mechanics has reactions as its only dual");
-
-    auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
-                                  *parameters_[parameter_indices].state...);
-    std::unique_ptr<mfem::HypreParMatrix> jacobian = assemble(drdu);
-    reactions_adjoint_load_                        = 0.0;
-    jacobian->MultTranspose(reaction_direction, reactions_adjoint_load_);
-    setAdjointLoad({{"displacement", reactions_adjoint_load_}});
-  }
-
-  /// @overload
-  const serac::FiniteElementDual& computeDualSensitivity(const serac::FiniteElementState& reaction_direction,
-                                                         size_t                           parameter_field) override
-  {
-    SLIC_ASSERT_MSG(parameter_field < sizeof...(parameter_indices),
-                    axom::fmt::format("Invalid parameter index '{}' requested for reaction sensitivity."));
-
-    auto drdparam     = serac::get<DERIVATIVE>(d_residual_d_[parameter_field](time_end_step_));
-    auto drdparam_mat = assemble(drdparam);
-
-    drdparam_mat->MultTranspose(reaction_direction, *parameters_[parameter_field].sensitivity);
-
-    return *parameters_[parameter_field].sensitivity;
-  };
-
-  /// @overload
-  const serac::FiniteElementDual& computeDualShapeSensitivity(
-      const serac::FiniteElementState& reaction_direction) override
-  {
-    auto drdshape =
-        serac::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(shape_displacement_), displacement_,
-                                            acceleration_, *parameters_[parameter_indices].state...));
-    auto drdshape_mat = assemble(drdshape);
-    drdshape_mat->MultTranspose(reaction_direction, *shape_displacement_sensitivity_);
-    return *shape_displacement_sensitivity_;
-  };
-
 protected:
   /// The compile-time finite element trial space for displacement and velocity (H1 of order p)
   using trial = H1<order, dim>;
@@ -1546,7 +1576,7 @@ protected:
   FiniteElementDual reactions_;
 
   /// sensitivity of qoi with respect to reaction forces
-  FiniteElementDual reactions_adjoint_load_;
+  FiniteElementState reactions_adjoint_bcs_;
 
   /// serac::Functional that is used to calculate the residual and its derivatives
   std::unique_ptr<ShapeAwareFunctional<shape_trial, test(trial, trial, parameter_space...)>> residual_;
@@ -1748,8 +1778,10 @@ protected:
       // use the most recently evaluated Jacobian
       auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
                                     *parameters_[parameter_indices].previous_state...);
-      J_             = assemble(drdu);
-      J_e_           = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
+      J_.reset();
+      J_ = assemble(drdu);
+      J_e_.reset();
+      J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
 
       r *= -1.0;
 

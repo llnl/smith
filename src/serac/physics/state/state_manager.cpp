@@ -93,6 +93,7 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
 
 void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteElementState*> states_to_load)
 {
+  SERAC_MARK_FUNCTION;
   mfem::ParMesh* meshPtr   = &(*states_to_load.begin())->mesh();
   std::string    mesh_name = collectionID(meshPtr);
 
@@ -212,6 +213,7 @@ FiniteElementDual StateManager::newDual(const mfem::ParFiniteElementSpace& space
 
 void StateManager::save(const double t, const int cycle, const std::string& mesh_tag)
 {
+  SERAC_MARK_FUNCTION;
   SLIC_ERROR_ROOT_IF(!ds_, "Serac's data store was not initialized - call StateManager::initialize first");
   SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag '{}' not found in the data store", mesh_tag));
   auto&       datacoll  = datacolls_.at(mesh_tag);

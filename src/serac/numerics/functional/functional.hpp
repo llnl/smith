@@ -301,7 +301,7 @@ public:
 
   /// @overload
   template <int dim, int... args, typename lambda, typename qpt_data_type = Nothing>
-  void AddDomainIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, Domain& domain,
+  void AddDomainIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, const Domain& domain,
                          std::shared_ptr<QuadratureData<qpt_data_type>> qdata = NoQData)
   {
     if (domain.mesh_.GetNE() == 0) return;
