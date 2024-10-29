@@ -54,18 +54,18 @@ int main(int argc, char* argv[])
 
     residual.AddDomainIntegral(serac::Dimension<DIM>{}, serac::DependsOn<0>{},
         [=](double /*t*/, auto position, auto displacement) {
-            auto [y, dy_dxi] = position;
             auto du_dy = serac::get<1>(displacement);
+            auto dx_dy = serac::DenseIdentity<DIM>() + du_dy;
 
             // triangular correction
+            auto [_, dy_dxi] = position;
             serac::mat2 dX_dxi{{{1.0, 0.5},
                                 {0.0, 0.5*std::sqrt(3)}}};
             
             serac::mat2 dxi_dX = serac::inv(dX_dxi);
-
             auto dy_dX = serac::dot(dy_dxi, dxi_dX);
-            auto dx_dy = serac::DenseIdentity<DIM>() + du_dy;
             auto F = serac::dot(dx_dy, dy_dX);
+            
             auto detF = serac::det(F);
             auto invFT = serac::transpose(serac::inv(F));
             auto P = 1/(detF)*(F - 0.5*serac::inner(F, F)*invFT);
