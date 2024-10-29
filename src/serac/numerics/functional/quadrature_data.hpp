@@ -52,10 +52,10 @@ struct Empty {};
 template <typename StateType>
 bool isEmptyType()
 {
-    if(std::is_same_v<typename StateType::State, Empty>) {
-        return true;
-    }
-    return false;
+  if (std::is_same_v<typename StateType::State, Empty>) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -66,8 +66,9 @@ bool isEmptyType()
  * @return true if StateType is of type Empty
  */
 template <typename StateType>
-bool isEmptyType(const StateType&) {
-    return isEmptyType<std::decay_t<StateType>>();
+bool isEmptyType(const StateType&)
+{
+  return isEmptyType<std::decay_t<StateType>>();
 }
 
 template <typename T>
@@ -172,7 +173,7 @@ struct QuadratureData {
   axom::ArrayView<T, 2> operator[](mfem::Geometry::Type geom) { return axom::ArrayView<T, 2>(data.at(geom)); }
 
   /// @brief a 3D array indexed by (which geometry, which element, which quadrature point)
-  std::map<mfem::Geometry::Type, axom::Array<T, 2> > data;
+  std::map<mfem::Geometry::Type, axom::Array<T, 2>> data;
 };
 
 /// @cond
@@ -200,7 +201,7 @@ struct QuadratureData<Empty> {
 /// @endcond
 
 /// these values exist to serve as default arguments for materials without material state
-extern std::shared_ptr<QuadratureData<Nothing> > NoQData;
-extern std::shared_ptr<QuadratureData<Empty> > EmptyQData;
+extern std::shared_ptr<QuadratureData<Nothing>> NoQData;
+extern std::shared_ptr<QuadratureData<Empty>>   EmptyQData;
 
 }  // namespace serac

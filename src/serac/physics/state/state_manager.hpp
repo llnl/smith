@@ -115,9 +115,9 @@ class StateManager {
         auto geom      = detail::qdata_geometries[i];
         auto geom_data = qdata[geom];
         if (!isEmptyType(geom_data)) {
-          auto               geom_name = detail::qdata_geometry_names[i];
-          axom::sidre::View* geom_view = qdata_group->createView(std::string(geom_name));
-          axom::sidre::IndexType shape[2] = {geom_data.size(), sizeof(geom_data[0])};
+          auto                   geom_name = detail::qdata_geometry_names[i];
+          axom::sidre::View*     geom_view = qdata_group->createView(std::string(geom_name));
+          axom::sidre::IndexType shape[2]  = {geom_data.size(), sizeof(geom_data[0])};
           geom_view->setExternalDataPtr(axom::sidre::CHAR8_STR_ID, 2, shape, geom_data);
         }
       }
