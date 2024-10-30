@@ -11,7 +11,12 @@
 #include <serac/physics/boundary_conditions/boundary_condition_manager.hpp>
 #include "serac/mesh/mesh_utils.hpp"
 
+#include <functional>
 
+
+/**
+ * Compute Frobenius norm of an mfem HypreParMatrix
+ */
 inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 {
     mfem::HypreParMatrix* H = K.get();
@@ -22,7 +27,6 @@ inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 }
 
 
-// _main_init_start
 int main(int argc, char* argv[])
 {
     // Initialize Serac
@@ -34,16 +38,18 @@ int main(int argc, char* argv[])
     constexpr int ORDER {1};
     constexpr int DIM {2};
 
+    // create mesh
     constexpr double LENGTH = 8.0;
-    constexpr double WIDTH = 1.0;
+    constexpr double WIDTH = 8.0;
     constexpr int serial_refinement = 0;
     constexpr int parallel_refinement = 0;
     auto mesh = serac::mesh::refineAndDistribute(
-        mfem::Mesh::MakeCartesian2D(8, 2, mfem::Element::TRIANGLE, true, LENGTH, WIDTH), 
+        mfem::Mesh::MakeCartesian2D(8, 8, mfem::Element::TRIANGLE, true, LENGTH, WIDTH), 
         serial_refinement, parallel_refinement);
     std::string mesh_tag{"mesh"};
     auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
+    // instantiate solution field
     using FunctionSpace = serac::H1<ORDER, DIM>;
     serac::FiniteElementState node_disp_computed(pmesh, FunctionSpace{}, "shape_displacement");
     node_disp_computed = 0.0;
@@ -52,6 +58,7 @@ int main(int argc, char* argv[])
     serac::Functional<FunctionSpace(FunctionSpace)> residual(
         &node_disp_computed.space(), {&node_disp_computed.space()}); // shape, solution, and residual FESs
 
+    // Define residual of problem
     residual.AddDomainIntegral(serac::Dimension<DIM>{}, serac::DependsOn<0>{},
         [=](double /*t*/, auto position, auto displacement) {
             auto du_dy = serac::get<1>(displacement);
@@ -70,6 +77,7 @@ int main(int argc, char* argv[])
             auto invFT = serac::transpose(serac::inv(F));
             auto P = 1/(detF)*(F - 0.5*serac::inner(F, F)*invFT);
 
+            // Push stress forward from initial configuration to relaxed
             auto stress = (1/serac::det(dy_dX))*serac::dot(P, serac::transpose(dy_dX));
 
             auto source = serac::zero{};
@@ -78,13 +86,16 @@ int main(int argc, char* argv[])
         pmesh
     );
 
-    // It would be a good idea to put Dirichlet boundary conditions on this problem.
-    // I would constrain each edge of the rectangle in the normal direction.
-    // serac::BoundaryConditionManager bc_manager(pmesh);
-    // left_disp_bdr_coef = std::make_shared<mfem::VectorFunctionCoefficient>(DIM, disp)
-    // bc_manager.addEssential({0}, serac::GeneralCoefficient ess_bdr_coef,
-    //                 mfem::ParFiniteElementSpace& space, const std::optional<int> component = {})
-    mfem::Array<int> constrained_dofs;
+    // Dirichlet bondary conditions
+    serac::BoundaryConditionManager bc_manager(pmesh);
+    // constrain displacements normal to boundary
+    auto zero_function = [](const mfem::Vector&) {
+        return 0.0;
+    };
+    auto ess_bdr_coef = std::make_shared<mfem::FunctionCoefficient>(zero_function);
+    bc_manager.addEssential({1, 3}, ess_bdr_coef, node_disp_computed.space(), 1);
+    bc_manager.addEssential({2, 4}, ess_bdr_coef, node_disp_computed.space(), 0);
+    mfem::Array<int> constrained_dofs = bc_manager.allEssentialTrueDofs();
 
     std::unique_ptr<mfem::HypreParMatrix> dresidualdu;
 
@@ -95,13 +106,14 @@ int main(int argc, char* argv[])
             double dummy_time = 1.0;
             const mfem::Vector res = residual(dummy_time, u);
             r = res;
-            //r.SetSubVector(constrained_dofs, 0.0);
+            r.SetSubVector(constrained_dofs, 0.0);
+
         },
         [&constrained_dofs, &residual, &dresidualdu](const mfem::Vector& u) -> mfem::Operator& {
             double dummy_time = 1.0;
             auto [val, dr_du] = residual(dummy_time, serac::differentiate_wrt(u));
             dresidualdu       = assemble(dr_du);
-            //dresidualdu->EliminateBC(constrained_dofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
+            dresidualdu->EliminateBC(constrained_dofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
             return *dresidualdu;
         }
     );
