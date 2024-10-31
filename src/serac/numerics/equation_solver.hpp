@@ -21,10 +21,10 @@
 #include "serac/numerics/petsc_solvers.hpp"
 
 namespace mfem {
-  class Solver;
-  class NewtonSolver;
-  class vector;
-}
+class Solver;
+class NewtonSolver;
+class vector;
+}  // namespace mfem
 
 namespace serac {
 

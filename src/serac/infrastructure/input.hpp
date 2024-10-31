@@ -20,10 +20,10 @@
 #include "axom/sidre.hpp"
 
 namespace mfem {
-  class Vector;
-  class Coefficient;
-  class VectorCoefficient;
-}
+class Vector;
+class Coefficient;
+class VectorCoefficient;
+}  // namespace mfem
 
 /**
  * @brief The input related helper functions and objects

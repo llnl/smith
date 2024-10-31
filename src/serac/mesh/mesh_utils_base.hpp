@@ -19,9 +19,9 @@
 #include "serac/infrastructure/input.hpp"
 
 namespace mfem {
-  class Mesh;
-  class ParMesh;
-}
+class Mesh;
+class ParMesh;
+}  // namespace mfem
 
 namespace serac {
 

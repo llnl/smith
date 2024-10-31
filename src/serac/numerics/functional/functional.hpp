@@ -565,7 +565,6 @@ private:
       return df_;
     }
 
-
     /// @brief syntactic sugar:  df_dx.Mult(dx, df)  <=>  mfem::Vector df = df_dx(dx);
     const mfem::Vector& operator()(const mfem::Vector& dx) const
     {
