@@ -14,7 +14,7 @@
 #pragma once
 
 #include "serac/physics/materials/thermal_material_input.hpp"
-#include "serac/physics/common.hpp"
+#include "serac/numerics/odes.hpp"
 
 namespace serac {
 

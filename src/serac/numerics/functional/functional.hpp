@@ -444,7 +444,7 @@ public:
    *  at most one of which may be of the type `differentiate_wrt_this(mfem::Vector)`
    */
   template <uint32_t wrt, typename... T>
-  typename operator_paren_return<wrt>::type operator()(DifferentiateWRT<wrt>, double t, const T&... args)
+  typename operator_paren_return<wrt>::type operator()(DifferentiateWRT<wrt>, double t, const T&... args) const
   {
     const mfem::Vector* input_T[] = {&static_cast<const mfem::Vector&>(args)...};
 
@@ -499,7 +499,7 @@ public:
 
   /// @overload
   template <typename... T>
-  auto operator()(double t, const T&... args)
+  auto operator()(double t, const T&... args) const
   {
     constexpr int num_differentiated_arguments = (std::is_same_v<T, differentiate_wrt_this> + ...);
     static_assert(num_differentiated_arguments <= 1,
@@ -560,6 +560,14 @@ private:
 
     /// @brief syntactic sugar:  df_dx.Mult(dx, df)  <=>  mfem::Vector df = df_dx(dx);
     mfem::Vector& operator()(const mfem::Vector& dx)
+    {
+      form_.ActionOfGradient(dx, df_, which_argument);
+      return df_;
+    }
+
+
+    /// @brief syntactic sugar:  df_dx.Mult(dx, df)  <=>  mfem::Vector df = df_dx(dx);
+    const mfem::Vector& operator()(const mfem::Vector& dx) const
     {
       form_.ActionOfGradient(dx, df_, which_argument);
       return df_;

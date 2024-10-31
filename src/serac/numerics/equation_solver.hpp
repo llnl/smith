@@ -16,11 +16,15 @@
 #include <optional>
 #include <variant>
 
-#include "mfem.hpp"
-
 #include "serac/infrastructure/input.hpp"
 #include "serac/numerics/solver_config.hpp"
 #include "serac/numerics/petsc_solvers.hpp"
+
+namespace mfem {
+  class Solver;
+  class NewtonSolver;
+  class vector;
+}
 
 namespace serac {
 

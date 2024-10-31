@@ -13,8 +13,6 @@
 #pragma once
 
 #include <variant>
-
-#include "mfem.hpp"
 #include "axom/fmt.hpp"
 
 namespace serac {

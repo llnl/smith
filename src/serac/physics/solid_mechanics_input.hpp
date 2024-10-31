@@ -15,6 +15,7 @@
 
 #include "serac/physics/materials/solid_material_input.hpp"
 #include "serac/physics/common.hpp"
+#include "serac/numerics/odes.hpp"
 
 namespace serac {
 

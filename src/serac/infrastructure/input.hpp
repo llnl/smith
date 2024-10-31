@@ -16,9 +16,14 @@
 #include <variant>
 #include <optional>
 
-#include "mfem.hpp"
 #include "axom/inlet.hpp"
 #include "axom/sidre.hpp"
+
+namespace mfem {
+  class Vector;
+  class Coefficient;
+  class VectorCoefficient;
+}
 
 /**
  * @brief The input related helper functions and objects
