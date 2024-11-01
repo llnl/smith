@@ -16,6 +16,13 @@ blt_add_executable( NAME        tmop_multi_element
                     DEPENDS_ON  serac_physics serac_mesh serac_functional
                     )
 
+blt_add_executable( NAME        tmop_shape_aware
+                    SOURCES     tmop_shape_aware.cpp
+                    OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                    DEPENDS_ON  serac_physics serac_mesh serac_functional
+                    )
+
+
 if(SERAC_ENABLE_TESTS)
     blt_add_test(NAME          tmop_with_serac
                 COMMAND        tmop_with_serac
