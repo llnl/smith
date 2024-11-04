@@ -99,24 +99,54 @@ class StateManager {
    * @brief Store a pre-constructed Quadrature Data in the state manager
    *
    * @tparam T the type to be created at each quadrature point
-   * @param mesh_tag The tag for the stored mesh used to store the quadrature data
+   * @param mesh_tag The tag for the stored mesh used to locate the datacollection
    * @param qdata The quadrature data to store
    */
   template <typename T>
-  void storeQuadratureData(const std::string& mesh_tag, std::shared_ptr<QuadratureData<T>> qdata)
+  static void storeQuadratureData(const std::string& mesh_tag, std::shared_ptr<QuadratureData<T>> qdata)
   {
     SLIC_ERROR_ROOT_IF(!ds_, "Serac's data store was not initialized - call StateManager::initialize first");
-    axom::sidre::Group* root        = ds_->getRoot();
-    axom::sidre::Group* qdata_group = root->createGroup(mesh_tag + "_qdata");
+    SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag),
+                       axom::fmt::format("Serac's state manager does not have a mesh with given tag '{}'", mesh_tag));
+    
+    // TODO: make the interface through MFEMSidreDataCollection, something like this:
+    auto& datacoll = datacolls_.at(mesh_tag);
+    // datacoll.AddExternalNamedBuffer(axom::sidre::CHAR8_STR_ID, 2, shape, geom_data.data()).
+    
+    // TODO: remove this when the above interface is there
+    axom::sidre::Group* bp_group = datacoll.GetBPGroup(); //mesh_datacoll
+    bp_group->createViewString("just_work_stupid_thing", "like_really");
+    axom::sidre::Group* qdatas_group = bp_group->createGroup("quadraturedatas");
+    SLIC_INFO(axom::fmt::format("~~~~~ {}", qdatas_group->getPathName()));
 
     if (!is_restart_) {
       for (std::size_t i = 0; i < detail::qdata_geometries.size(); ++i) {
-        auto geom      = detail::qdata_geometries[i];
-        auto geom_data = qdata[geom];
-        auto                   geom_name = detail::qdata_geometry_names[i];
-        axom::sidre::View*     geom_view = qdata_group->createView(std::string(geom_name));
-        axom::sidre::IndexType shape[2]  = {geom_data.size(), sizeof(geom_data[0])};
-        geom_view->setExternalDataPtr(axom::sidre::CHAR8_STR_ID, 2, shape, geom_data);
+        auto                   geom_type = detail::qdata_geometries[i];
+        if ((*qdata).data.find(geom_type) != (*qdata).data.end()) {
+          auto                   geom_name = detail::qdata_geometry_names[i];
+          SLIC_INFO(axom::fmt::format("~~~~~~~~~~~~~ {}", geom_name));
+          auto                   geom_data = (*qdata)[geom_type];
+          auto                   num_qdatas = static_cast<axom::IndexType>(geom_data.size());
+          SLIC_ERROR_ROOT_IF(num_qdatas == 0, "Number of QuadratureData's should be more than 0 at this point.");
+          auto                  qdata_size = static_cast<axom::IndexType>(sizeof(geom_data[0]));
+          axom::sidre::IndexType shape[2]  = {num_qdatas, qdata_size};
+          SLIC_INFO(axom::fmt::format("~~~~~~~~~~~~~ Shape {},{}", shape[0], shape[1]));
+
+          axom::sidre::Group*     geom_group = qdatas_group->createGroup(std::string(geom_name));
+          axom::sidre::View*      shape_view = geom_group->createViewAndAllocate("shape", axom::sidre::detail::SidreTT<axom::IndexType>::id, 2);
+          axom::IndexType* shape_data = shape_view->getData();
+          shape_data[0] = shape[0];
+          shape_data[1] = shape[1];
+
+          SLIC_ERROR_ROOT_IF(geom_data.data() == nullptr, "QuadratureData Array cannot be null!");
+          //axom::sidre::View*      data_view = geom_group->createView("data");
+          //data_view->setExternalDataPtr(axom::sidre::UINT8_ID, 2, shape, geom_data.data());
+          axom::sidre::View* data_view = geom_group->createViewAndAllocate("data", axom::sidre::UINT8_ID, shape[0] * shape[1]);
+          std::uint8_t* data = data_view->getData();
+          memcpy(data, geom_data.data(), static_cast<std::size_t>(shape[0] * shape[1]));
+          data[0] = 55;
+
+        }
       }
     } else {
       SLIC_ERROR_ROOT("restarts are not enabled yet here...");
@@ -127,6 +157,7 @@ class StateManager {
    * @brief Create a shared ptr to a quadrature data buffer for the given material type
    *
    * @tparam T the type to be created at each quadrature point
+   * @param mesh_tag The tag for the stored mesh used to locate the datacollection
    * @param domain The spatial domain over which to allocate the quadrature data
    * @param order The order of the discretization of the primal fields
    * @param dim The spatial dimension of the mesh
@@ -134,8 +165,8 @@ class StateManager {
    * @return shared pointer to quadrature data buffer
    */
   template <typename T>
-  static std::shared_ptr<QuadratureData<T>> newQuadratureDataBuffer(const Domain& domain, int order, int dim,
-                                                                    T initial_state)
+  static std::shared_ptr<QuadratureData<T>> newQuadratureDataBuffer(const std::string& mesh_tag, const Domain& domain,
+                                                                    int order, int dim, T initial_state)
   {
     int Q = order + 1;
 
@@ -153,7 +184,9 @@ class StateManager {
       qpts_per_elem[size_t(geom)] = uint32_t(num_quadrature_points(geom, Q));
     }
 
-    return std::make_shared<QuadratureData<T>>(elems, qpts_per_elem, initial_state);
+    auto qdata = std::make_shared<QuadratureData<T>>(elems, qpts_per_elem, initial_state);
+    storeQuadratureData<T>(mesh_tag, qdata);
+    return qdata;
   }
 
   /**
