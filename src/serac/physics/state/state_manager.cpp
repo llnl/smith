@@ -20,10 +20,10 @@ std::string StateManager::output_dir_ = "";
 std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_states_;
 std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_duals_;
 
-double StateManager::newDataCollection(const std::string& name, const std::optional<int> cycle_to_load)
+double StateManager::newDataCollection(const std::string& mesh_tag, const std::optional<int> cycle_to_load)
 {
   SLIC_ERROR_ROOT_IF(!ds_, "Cannot construct a DataCollection without a DataStore");
-  std::string coll_name = name + "_datacoll";
+  std::string coll_name = getCollectionName(mesh_tag);
 
   auto global_grp = ds_->getRoot()->createGroup(coll_name + "_global");
   auto bp_index_grp = global_grp->createGroup("blueprint_index/" + coll_name);
@@ -31,7 +31,7 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
 
   // Needs to be configured to own the mesh data so all mesh data is saved to datastore/output file
   constexpr bool owns_mesh_data = true;
-  auto [iter, _] = datacolls_.emplace(std::piecewise_construct, std::forward_as_tuple(name),
+  auto [iter, _] = datacolls_.emplace(std::piecewise_construct, std::forward_as_tuple(mesh_tag),
                                       std::forward_as_tuple(coll_name, bp_index_grp, domain_grp, owns_mesh_data));
   auto& datacoll = iter->second;
   datacoll.SetComm(MPI_COMM_WORLD);
@@ -50,13 +50,45 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
     datacoll.UpdateStateFromDS();
     datacoll.UpdateMeshAndFieldsFromDS();
 
+<<<<<<< HEAD
     checkMesh(mesh(name));
+=======
+    // Functional needs the nodal grid function and neighbor data in the mesh
+
+    // Determine if the existing nodal grid function is discontinuous. This
+    // indicates that the mesh is periodic and the new nodal grid function must also
+    // be discontinuous.
+    bool is_discontinuous = false;
+    auto nodes            = mesh(mesh_tag).GetNodes();
+    if (nodes) {
+      is_discontinuous = nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS;
+      SLIC_WARNING_ROOT_IF(
+          is_discontinuous,
+          "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 fields and "
+          "has not been thoroughly tested. Proceed at your own risk.");
+    }
+
+    // This mfem call ensures the mesh contains an H1 grid function describing nodal
+    // cordinates. The parameters do the following:
+    // 1. Sets the order of the mesh to  p = 1
+    // 2. Uses the existing continuity of the mesh finite element space (periodic meshes are discontinuous)
+    // 3. Uses the spatial dimension as the mesh dimension (i.e. it is not a lower dimension manifold)
+    // 4. Uses the ordering set by serac::ordering
+    mesh(mesh_tag).SetCurvature(1, is_discontinuous, -1, serac::ordering);
+>>>>>>> 9f6833b64 (rename variable to be consistent with rest of class)
 
     // Sidre will destruct the nodal grid function instead of the mesh
-    mesh(name).SetNodesOwner(false);
+    mesh(mesh_tag).SetNodesOwner(false);
 
+<<<<<<< HEAD
+=======
+    // Generate the face neighbor information in the mesh. This is needed by the face restriction
+    // operators used by Functional
+    mesh(mesh_tag).ExchangeFaceNbrData();
+
+>>>>>>> 9f6833b64 (rename variable to be consistent with rest of class)
     // Construct and store the shape displacement fields and sensitivities associated with this mesh
-    constructShapeFields(name);
+    constructShapeFields(mesh_tag);
 
   } else {
     datacoll.SetCycle(0);   // Iteration counter
@@ -69,10 +101,15 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
 void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteElementState*> states_to_load)
 {
   SERAC_MARK_FUNCTION;
+<<<<<<< HEAD
   const mfem::ParMesh* meshPtr = &(*states_to_load.begin())->mesh();
   std::string mesh_name = collectionID(meshPtr);
+=======
+  mfem::ParMesh* meshPtr   = &(*states_to_load.begin())->mesh();
+  std::string    mesh_tag = collectionID(meshPtr);
+>>>>>>> 9f6833b64 (rename variable to be consistent with rest of class)
 
-  std::string coll_name = mesh_name + "_datacoll";
+  std::string coll_name = getCollectionName(mesh_tag);
 
   axom::sidre::MFEMSidreDataCollection previous_datacoll(coll_name);
 
@@ -82,7 +119,7 @@ void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteE
 
   for (auto state : states_to_load) {
     meshPtr = &state->mesh();
-    SLIC_ERROR_ROOT_IF(collectionID(meshPtr) != mesh_name,
+    SLIC_ERROR_ROOT_IF(collectionID(meshPtr) != mesh_tag,
                        "Loading FiniteElementStates from two different meshes at one time is not allowed.");
     mfem::ParGridFunction* datacoll_owned_grid_function = previous_datacoll.GetParField(state->name());
 

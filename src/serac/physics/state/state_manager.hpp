@@ -364,11 +364,21 @@ class StateManager {
  private:
   /**
    * @brief Creates a new datacollection based on a registered mesh
-   * @param[in] name The name of the new datacollection
+   * @param[in] mesh_tag The mesh name used to name the new datacollection
    * @param[in] cycle_to_load What cycle to load the DataCollection from, if applicable
    * @return The time from specified restart cycle. Otherwise zero.
    */
-  static double newDataCollection(const std::string& name, const std::optional<int> cycle_to_load = {});
+  static double newDataCollection(const std::string& mesh_tag, const std::optional<int> cycle_to_load = {});
+
+  /**
+   * @brief Returns the name of the data collection's name for a given mesh_tag
+   * @param[in] mesh_tag The mesh name used to name the new datacollection
+   * @return The name of the data collection for the given mesh_tag
+   */
+  static std::string getCollectionName(const std::string& mesh_tag)
+  {
+     return mesh_tag + "_datacoll";
+  }
 
   /**
    * @brief Construct the shape displacement field for the requested mesh
