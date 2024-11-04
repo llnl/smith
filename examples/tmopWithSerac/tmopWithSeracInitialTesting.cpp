@@ -79,17 +79,17 @@ int main(int argc, char* argv[])
 
   // Define the types for the test and trial spaces using the function arguments
   using test_space  = serac::H1<ORDER, DIM>;
-  using trial_space = serac::H1<ORDER, DIM>;
+  using trial_space = serac::H1<ORDER, DIM>; 
 
   // Construct the new functional object using the known test and trial spaces
   serac::Functional<test_space(trial_space)> residual(
                 shape_fes.get(), {shape_fes.get()}); // shape, solution, and residual FESs
 
-  residual.AddDomainIntegral(
+  residual.AddDomainIntegral( 
     serac::Dimension<DIM>{}, serac::DependsOn<0>{},
     [=](double /*t*/, auto position, auto nodeDisp) {
       // x = X + u
-      auto [X, dXdxi] = position;
+      auto [_, dXdxi] = position;
       auto du_dX = serac::get<1>(nodeDisp);
 #ifdef TWO_DIM_SETUP
       // auto mu = 0.5 * (serac::inner(Tmat, Tmat) / abs(serac::det(Tmat))) - 1.0;
@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
       // dTmat/dx = dAmat/dx * WInvMat
 
       // Jacobian from reference to the physical/current space (i.e., dx_dxi)
-      auto Amat = dXdxi + serac::dot(du_dX, dXdxi);
+      auto Amat = dXdxi + serac::dot(du_dX, dXdxi); // (I + du/dX) * dX/dxi
 
       // Target matrix (updated Jacobian, Tmat or T)
       auto Tmat = serac::dot(Amat, WInvMat);
@@ -121,7 +121,8 @@ int main(int argc, char* argv[])
       // compute flux contribution
       // auto flux     = serac::dot(dmudTmat, WInvMat) * serac::det(serac::inv(WInvMat)); // dTmatdx * WInvMat;
       // auto flux     = dTmatdx * WInvMat; //  dmudTmat; 
-      auto flux     = dmudTmat * WInvMat * serac::det(serac::inv(WInvMat));
+      // auto flux     = dmudTmat * WInvMat * serac::det(serac::inv(WInvMat));
+      auto flux     = (1.0/serac::det(dXdxi*WInvMat)) * serac::dot(dmudTmat, serac::transpose(dXdxi*WInvMat));
       
       ///// alternative mu (004, mu = serac::inner(Tmat, Tmat) - 2 * serac::det(Tmat); )
       // auto flux     = 2.0 * (Tmat - invTransTmat*serac::det(Tmat)) * serac::det(I + du_dX);
@@ -264,7 +265,7 @@ dresidualdu->EliminateBC(constrainedDofs, mfem::Operator::DiagonalPolicy::DIAG_O
 
   mfem::ParGridFunction nodeSolGF(shape_fes.get());
   nodeSolGF.SetFromTrueDofs(node_disp_computed);
-nodeSolGF.Print();
+// nodeSolGF.Print();
 #ifdef TWO_DIM_SETUP
   auto pd = mfem::ParaViewDataCollection("sol_mesh_morphing_serac_2D", &pmesh);
 #else

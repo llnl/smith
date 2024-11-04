@@ -13,5 +13,5 @@ blt_add_executable( NAME        simple_conduction_without_input_file
 if(SERAC_ENABLE_TESTS)
     blt_add_test(NAME          simple_conduction_without_input_file
                  COMMAND       simple_conduction_without_input_file
-                 NUM_MPI_TASKS 1 )
+                 NUM_MPI_TASKS 1 )     
 endif()
