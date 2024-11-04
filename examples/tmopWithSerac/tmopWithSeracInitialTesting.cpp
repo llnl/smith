@@ -95,6 +95,7 @@ int main(int argc, char* argv[])
       // auto mu = 0.5 * (serac::inner(Tmat, Tmat) / abs(serac::det(Tmat))) - 1.0;
       // triangular correction = [ 1, -1/sqrt(3); 0, -2/sqrt(3)]
       serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
+      // serac::mat2 WInvMat = {{{1.0, -1.0/std::sqrt(3.0)}, {0.0, -2.0/std::sqrt(3.0)}}};
       // serac::mat2 WInvMat = {{{0.0, 1.0}, {1.0, 0.0}}};
 
       // Need to compute dmu/dTmat : dTmat/dx, with mu = mu(Tmat)
@@ -115,14 +116,8 @@ int main(int argc, char* argv[])
       if (serac::det(Tmat) <= 0.0) {  scale = 0.0; }
       auto dmudTmat = scale * (0.5 * TmatInnerTmat * invTransTmat - Tmat);
 
-      // compute dTmatdx
-      // auto dTmatdx  = serac::dot(dmudTmat, WInvMat);
-
       // compute flux contribution
-      // auto flux     = serac::dot(dmudTmat, WInvMat) * serac::det(serac::inv(WInvMat)); // dTmatdx * WInvMat;
-      // auto flux     = dTmatdx * WInvMat; //  dmudTmat; 
-      // auto flux     = dmudTmat * WInvMat * serac::det(serac::inv(WInvMat));
-      auto flux     = (1.0/serac::det(dXdxi*WInvMat)) * serac::dot(dmudTmat, serac::transpose(dXdxi*WInvMat));
+      auto flux = (1.0/serac::det(dXdxi*WInvMat)) * serac::dot(dmudTmat, serac::transpose(dXdxi*WInvMat));
       
       ///// alternative mu (004, mu = serac::inner(Tmat, Tmat) - 2 * serac::det(Tmat); )
       // auto flux     = 2.0 * (Tmat - invTransTmat*serac::det(Tmat)) * serac::det(I + du_dX);
@@ -148,8 +143,8 @@ int main(int argc, char* argv[])
   );
 
   // Circle/cylinder geometry
-  auto omega = 0.0e1;
-  auto radius = 1.015;
+  auto omega = 1.0e1;
+  auto radius = 1.15;
   auto x0 = 0.0;
   auto y0 = 0.0;
 
@@ -165,7 +160,13 @@ int main(int argc, char* argv[])
       auto dphi = 0.0*x; // dphidx*dxdu
       dphi[0] = (x[0] - x0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
       dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
+
       return 2.0 * omega * phiVal * dphi;
+
+      // serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
+      // auto boundaryFlux = (1.0/serac::det(dXdxi*WInvMat)) * serac::dot(dXdxi*WInvMat, 2.0 * omega * phiVal * dphi);
+      // auto boundaryFlux = serac::dot(dXdxi, 2.0 * omega * phiVal * dphi);
+      // return boundaryFlux;
     },
     radial_boundary // whole_boundary
   );
@@ -217,7 +218,7 @@ for(auto iDof=0; iDof<4; iDof ++){
       r.SetSubVector(constrainedDofs, 0.0);
 #endif
 ////////////////////////////////////////
-r.SetSubVector(constrainedDofs, 0.0); 
+// r.SetSubVector(constrainedDofs, 0.0); 
 ////////////////////////////////////////
     },
 #ifdef ONE_ELEM_TEST
@@ -233,7 +234,7 @@ r.SetSubVector(constrainedDofs, 0.0);
       dresidualdu->EliminateBC(constrainedDofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
 #endif
 ////////////////////////////////////////
-dresidualdu->EliminateBC(constrainedDofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);  
+// dresidualdu->EliminateBC(constrainedDofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);  
 ////////////////////////////////////////  
       return *dresidualdu;
     }
