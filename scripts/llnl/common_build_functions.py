@@ -713,3 +713,27 @@ def convertSecondsToReadableTime(seconds):
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     return "%d:%02d:%02d" % (h, m, s)
+
+
+def get_host_config_path(repo_dir, host_config):
+    # First try with where uberenv generates host-configs.
+    host_config_path = os.path.join(repo_dir, host_config)
+    if not os.path.isfile(host_config_path):
+        print("[INFO: Looking for host_config at %s]" % host_config_path)
+        print("[WARNING: Spack generated host-config not found, trying with predefined]")
+
+        # Then look into project predefined host-configs.
+        host_config_path = os.path.join(repo_dir, "host-configs", host_config)
+        if not os.path.isfile(host_config_path):
+            print("[INFO: Looking for host_config at %s]" % host_config_path)
+            print("[WARNING: Predefined host-config not found, trying with Docker]")
+
+            # Otherwise look into project predefined Docker host-configs.
+            host_config_path = os.path.join(repo_dir, "host-configs", "docker", host_config)
+            if not os.path.isfile(host_config_path):
+                print("[INFO: Looking for host_config at %s]" % host_config_path)
+                print("[WARNING: Predefined Docker host-config not found]")
+                print("[ERROR: Could not find any host-configs in any known path. Try giving fully qualified path.]")
+                sys.exit(1)
+
+    return host_config_path

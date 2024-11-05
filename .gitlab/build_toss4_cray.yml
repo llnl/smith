@@ -25,25 +25,34 @@
     # LC version of pip is ancient
     - if [[ $(python3 -c 'import pip; print(pip.__version__ < "19.3")') == "True" ]]; then python3 -m pip install --user --upgrade pip; fi
 
+.benchmarks_build_on_toss4_cray:
+  extends: [.benchmarks_build_script, .on_toss4_cray, .benchmarks_workflow]
+  needs: []
+
 
 ####
 # Build jobs
 
 # Only run integration tests on one spec
-#toss4_cray-clang_17_0_0-src:
-#  variables:
-#    COMPILER: "clang@17.0.0"
-#    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
-#    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
-#    ALLOC_NODES: "1"
-#    ALLOC_TIME: "30"
-#  extends: .src_build_on_toss4_cray
+toss4_cray-clang_17_0_0-src:
+ variables:
+   COMPILER: "clang@17.0.0"
+   HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
+   EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
+   ALLOC_NODES: "1"
+   ALLOC_TIME: "30"
+ extends: .src_build_on_toss4_cray
 
 toss4_cray-clang_17_0_0-full:
   variables:
-    COMPILER: "clang@17.0.0"
-    SPEC: "--spec=%${COMPILER}"
     ALLOC_NODES: "1"
     ALLOC_TIME: "45"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
   extends: .full_build_on_toss4_cray
+
+toss4_cray-clang_17_0_0-benchmarks:
+  variables:
+    COMPILER: "clang@17.0.0"
+    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "120"
+  extends: .benchmarks_build_on_toss4_cray

@@ -37,6 +37,10 @@
   extends: [.full_build_script, .on_blueos, .full_workflow]
   needs: []
 
+.benchmarks_build_on_blueos:
+  extends: [.benchmarks_build_script, .on_blueos, .benchmarks_workflow]
+  needs: []
+
 ####
 # Build jobs
 blueos-clang_10_0_1-src:
@@ -58,3 +62,11 @@ blueos-clang_10_0_1-full:
     ALLOC_NODES: "1"
     ALLOC_TIME: "55"
   extends: [.full_build_on_blueos, .with_cuda]
+
+blueos-clang_10_0_1-benchmarks:
+  variables:
+    COMPILER: "clang@10.0.1"
+    HOST_CONFIG: "lassen-blueos_3_ppc64le_ib_p9-${COMPILER}_cuda.cmake"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "120"
+  extends: [.benchmarks_build_on_blueos, .with_cuda]

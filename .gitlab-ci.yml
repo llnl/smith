@@ -17,13 +17,20 @@ variables:
 .run_update_uberenv: &run_update_uberenv |
   [[ -n "${UPDATE_UBERENV}" ]] && ./scripts/gitlab/update-uberenv.sh "${UPDATE_UBERENV}"
 
+# Run src build each push
 .src_workflow:
   rules:
-    - if: '$FULL_BUILD != "ON"'
+    - if: $SERAC_CI_WORKFLOW_TYPE != "full" && $SERAC_CI_WORKFLOW_TYPE != "benchmarks"
 
+# Run full build as a nightly scheduled pipeline
 .full_workflow:
   rules:
-    - if: '$FULL_BUILD == "ON"'
+    - if: $SERAC_CI_WORKFLOW_TYPE == "full"
+
+# Run benchmarks build as a weekly scheduled pipeline
+.benchmarks_workflow:
+  rules:
+    - if: $SERAC_CI_WORKFLOW_TYPE == "benchmarks"
 
 ####
 # Templates
@@ -66,10 +73,27 @@ variables:
     reports:
       junit: ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_serac_build_and_test_*/build-*/junit.xml
 
+
+.benchmarks_build_script:
+  script:
+    # Builds src, runs benchmarks, and stores Caliper files in shared location
+    - echo -e "section_start:$(date +%s):benchmarks_build\r\e[0K
+      Benchmarks Build ${CI_PROJECT_NAME}"
+    - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py
+    - echo -e "section_end:$(date +%s):benchmarks_build\r\e[0K"
+  artifacts:
+    expire_in: 2 weeks
+    when: always
+    paths:
+      - _serac_build_and_test_*/output.log*.txt
+      - _serac_build_and_test_*/build-*/output.log*.txt
+      - _serac_build_and_test_*/build-*/*.cali
+
 # This is where jobs are included for each system
 include:
   - local: .gitlab/build_blueos.yml
   - local: .gitlab/build_toss4.yml
-  - local: .gitlab/build_toss4_cray.yml
+  # Disabling cray until all developers have access to the tioga machine
+  # - local: .gitlab/build_toss4_cray.yml
   - project: 'lc-templates/id_tokens'
     file: 'id_tokens.yml'

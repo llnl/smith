@@ -136,6 +136,8 @@ files:
 - `SPOT CZ <https://lc.llnl.gov/spot2>`_
 - `SPOT RZ <https://rzlc.llnl.gov/spot2>`_
 
+The shared Caliper files for Serac are located here: https://lc.llnl.gov/spot2/?sf=/usr/WS2/smithdev/califiles
+
 .. note::
   There is a bug in SPOT where if you remove Caliper files from a directory, they still show up on SPOT - if you've
   visualized them previously. The current workaround is by removing the ``llnl.gov`` site cache manually.
