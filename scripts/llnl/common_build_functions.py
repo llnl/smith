@@ -306,28 +306,32 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
                         output_file = tst_output_file,
                         print_output = report_to_stdout,
                         echo=True)
+
+        # Convert CTest output to JUnit, do not overwrite previous res
+        print("[Checking to see if xsltproc exists...]")
+        test_xsltproc_res = shell_exec("xsltproc --version", echo=True)
+        if test_xsltproc_res != 0:
+            print("[WARNING: xsltproc does not exist skipping JUnit conversion]")
+        else:
+            junit_file = pjoin(build_dir, "junit.xml")
+            xsl_file = pjoin(get_blt_dir(), "tests/ctest-to-junit.xsl")
+            ctest_file = pjoin(build_dir, "Testing/*/Test.xml")
+
+            print("[Converting CTest XML to JUnit XML]")
+            convert_cmd  = "xsltproc -o {0} {1} {2}".format(junit_file, xsl_file, ctest_file)
+            convert_res = shell_exec(convert_cmd, echo=True)
+            if convert_res != 0:
+                print("[WARNING: Converting to JUnit failed.]")
+
+        if res != 0:
+            print("[ERROR: Tests for host-config: %s failed]\n" % host_config)
+            return res
     else:
+        # Copy dummy .xml file to avoid Azure CI warning when not running tests
+        dummy_ctest_src = pjoin(get_repo_dir(), "scripts/azure-pipelines/DummyTest.xml")
+        dummy_ctest_dst = pjoin(build_dir, "Test.xml")
+        shutil.copy(dummy_ctest_src, dummy_ctest_dst)
         print("[skipping unit tests]")
-
-    # Convert CTest output to JUnit, do not overwrite previous res
-    print("[Checking to see if xsltproc exists...]")
-    test_xsltproc_res = shell_exec("xsltproc --version", echo=True)
-    if test_xsltproc_res != 0:
-        print("[WARNING: xsltproc does not exist skipping JUnit conversion]")
-    else:
-        junit_file = pjoin(build_dir, "junit.xml")
-        xsl_file = pjoin(get_blt_dir(), "tests/ctest-to-junit.xsl")
-        ctest_file = pjoin(build_dir, "Testing/*/Test.xml")
-
-        print("[Converting CTest XML to JUnit XML]")
-        convert_cmd  = "xsltproc -o {0} {1} {2}".format(junit_file, xsl_file, ctest_file)
-        convert_res = shell_exec(convert_cmd, echo=True)
-        if convert_res != 0:
-            print("[WARNING: Converting to JUnit failed.]")
-
-    if res != 0:
-        print("[ERROR: Tests for host-config: %s failed]\n" % host_config)
-        return res
 
     # build the docs
     docs_output_file = pjoin(build_dir,"output.log.make.docs.txt")
