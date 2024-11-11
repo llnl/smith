@@ -12,7 +12,6 @@
  */
 
 #include "mfem.hpp"
-// #include "admfem.hpp"
 
 #include <serac/infrastructure/terminator.hpp>
 #include <serac/numerics/functional/functional.hpp>
@@ -35,6 +34,8 @@
 // #define ONE_ELEM_TEST
 #undef ONE_ELEM_TEST
 
+#define CUBOID_LSF
+// #undef CUBOID_LSF
 //////////////////////////////////////////////
 //////////////////////////////////////////////
 struct CircleLSF { 
@@ -82,7 +83,6 @@ struct CuboidLSF {
 };
 //////////////////////////////////////////////
 //////////////////////////////////////////////
-
 // Define your level set function as a class
 template <typename T1, typename T2, typename T3>
 class LevelSetFunction
@@ -114,7 +114,7 @@ private:
     T1 centerY;    // Y-coordinate of the center
 };
 //////////////////////////////////////////////
-
+//////////////////////////////////////////////
 
 // _main_init_start
 int main(int argc, char* argv[])
@@ -151,11 +151,6 @@ int main(int argc, char* argv[])
   pmesh.EnsureNodes();
   pmesh.ExchangeFaceNbrData();
 
-  // ::mfem::FiniteElementCollection *fec = new ::mfem::H1_FECollection(1, DIM);
-  // ::std::shared_ptr<::mfem::ParFiniteElementSpace> pfespace
-  //     = ::std::make_shared<::mfem::ParFiniteElementSpace>(&pmesh, fec, DIM);
-  // pmesh.SetNodalFESpace(pfespace.get());
-
   using shapeFES = serac::H1<ORDER, DIM>;
 
   // Create finite element space for design parameters, and register it with LiDO DataManager
@@ -184,7 +179,6 @@ int main(int argc, char* argv[])
       serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
       // serac::mat2 WInvMat = {{{1.0, -1.0/std::sqrt(3.0)}, {0.0, -2.0/std::sqrt(3.0)}}};
       // serac::mat2 WInvMat = {{{0.0, 1.0}, {1.0, 0.0}}};
-
       // Need to compute dmu/dTmat : dTmat/dx, with mu = mu(Tmat)
       // Tmat = Amat * WInvMat; WInvMat -> constant
       // dmu/dTmat is mu specific
@@ -205,9 +199,6 @@ int main(int argc, char* argv[])
 
       // compute flux contribution
       auto flux = (1.0/serac::det(dXdxi*WInvMat)) * serac::dot(dmudTmat, serac::transpose(dXdxi*WInvMat));
-      
-      ///// alternative mu (004, mu = serac::inner(Tmat, Tmat) - 2 * serac::det(Tmat); )
-      // auto flux     = 2.0 * (Tmat - invTransTmat*serac::det(Tmat)) * serac::det(I + du_dX);
 #else
       // auto mu = (serac::squared_norm(J) / (3 * pow(serac::det(J), 2.0 / 3.0))) - 1.0; // serac::dot(J, J)
       using std::pow;
@@ -242,15 +233,15 @@ int main(int argc, char* argv[])
       auto [X, dXdxi] = position;
       auto u = serac::get<0>(nodeDisp);
       auto x = X + u;
-
-      // auto phi_value = CircleLSF{x0, y0, radius};
-      // auto phiVal = phi_value.SDF(x);
-      // auto dphi = phi_value.GRAD(x);
-
+#ifdef CUBOID_LSF
       auto phi_value = CuboidLSF{x0, y0, 0.8*radius, 10};
       auto phiVal = phi_value.SDF(x);
       auto dphi = phi_value.GRAD(x);
-
+#else
+      auto phi_value = CircleLSF{x0, y0, radius};
+      auto phiVal = phi_value.SDF(x);
+      auto dphi = phi_value.GRAD(x);
+#endif
       return 2.0 * omega * phiVal * dphi;
     },
     radial_boundary // whole_boundary
@@ -302,9 +293,6 @@ for(auto iDof=0; iDof<4; iDof ++){
 #ifdef ONE_ELEM_TEST
       r.SetSubVector(constrainedDofs, 0.0);
 #endif
-////////////////////////////////////////
-// r.SetSubVector(constrainedDofs, 0.0); 
-////////////////////////////////////////
     },
 #ifdef ONE_ELEM_TEST
     [&constrainedDofs, &residual, &dresidualdu](const mfem::Vector& u) -> mfem::Operator& {
@@ -318,9 +306,6 @@ for(auto iDof=0; iDof<4; iDof ++){
 #ifdef ONE_ELEM_TEST
       dresidualdu->EliminateBC(constrainedDofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
 #endif
-////////////////////////////////////////
-// dresidualdu->EliminateBC(constrainedDofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);  
-////////////////////////////////////////  
       return *dresidualdu;
     }
   );
@@ -361,6 +346,4 @@ for(auto iDof=0; iDof<4; iDof ++){
   pd.SetCycle(1);
   pd.SetTime(1);
   pd.Save();
-
-// delete fec;
 }
