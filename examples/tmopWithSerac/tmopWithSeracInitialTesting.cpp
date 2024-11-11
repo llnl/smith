@@ -37,21 +37,6 @@
 
 //////////////////////////////////////////////
 //////////////////////////////////////////////
-// struct Box { 
-//   vec2 min;
-//   vec2 max; 
-
-//   template < typename T >
-//   T SDF(const tensor<T, 2> & p) const {
-//     constexpr T zero{};
-//     auto center = (min + max) * 0.5;
-//     auto halfwidths = (max - min) * 0.5;
-//     auto q = impl::abs(p - center) - halfwidths;
-//     return impl::norm(impl::max(q, zero)) + impl::min(impl::max(q), zero);
-//   }
-// };
-//////////////////////////////////////////////
-//////////////////////////////////////////////
 struct CircleLSF { 
   double x0;
   double y0; 
@@ -59,17 +44,40 @@ struct CircleLSF {
 
   template < typename T >
   T SDF(const serac::tensor<T, 2> & x) const {
-using std::pow;
-return pow(pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), 0.5) - radius;
+    using std::pow;
+    return pow(pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), 0.5) - radius;
   }
 
   template < typename T >
   serac::tensor<T, 2> GRAD(const serac::tensor<T, 2> & x) const{
-using std::pow;
-auto dphi = 0.0*x;
-      dphi[0] = (x[0] - x0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
-      dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
-return dphi;
+    using std::pow;
+    auto dphi = 0.0*x;
+    dphi[0] = (x[0] - x0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
+    dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
+    return dphi;
+  }
+};
+//////////////////////////////////////////////
+//////////////////////////////////////////////
+struct CuboidLSF { 
+  double x0;
+  double y0; 
+  double radius; 
+  double exponent; 
+
+  template < typename T >
+  T SDF(const serac::tensor<T, 2> & x) const {
+    using std::pow;
+    return pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent) - radius;
+  }
+
+  template < typename T >
+  serac::tensor<T, 2> GRAD(const serac::tensor<T, 2> & x) const{
+    using std::pow;
+    auto dphi = 0.0*x;
+    dphi[0] = (x[0] - x0)* pow( pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
+    dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
+    return dphi;
   }
 };
 //////////////////////////////////////////////
@@ -134,6 +142,11 @@ int main(int argc, char* argv[])
 #endif
 
   auto mesh = serac::buildMeshFromFile(inputFilename);
+
+  int num_ref = 0;
+  for (int i=0; i<num_ref; i++) {mesh.UniformRefinement();}
+  numElements *= static_cast<int>(std::pow(4,num_ref));
+
   auto pmesh = ::mfem::ParMesh(MPI_COMM_WORLD, mesh);
   pmesh.EnsureNodes();
   pmesh.ExchangeFaceNbrData();
@@ -229,33 +242,16 @@ int main(int argc, char* argv[])
       auto [X, dXdxi] = position;
       auto u = serac::get<0>(nodeDisp);
       auto x = X + u;
-      // auto phiVal = pow(pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), 0.5) - radius;
-      // auto dphidXVal = (x[0] + x[1] - 2.0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
-      // auto dphi = 0.0*x; // dphidx*dxdu
-      // dphi[0] = (x[0] - x0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
-      // dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
 
-// LevelSetFunction<auto, auto, auto> lsf(x0, y0, radius);
-// mfem::Vector point(2);
-// point[0] = 0.5; // x-coordinate
-// point[1] = 0.5; // y-coordinate
-// auto phiValTemp = lsf.Eval(point);
-// auto dphiValTemp = lsf.CalculateGradient(point);
-// std::cout<<".... phiValTemp = "<<phiValTemp<<std::endl;
-// std::cout<<".... dphiValTemp = "<<dphiValTemp<<std::endl;
-///////////////////////////
-auto phi_value = CircleLSF{x0, y0, radius};
-auto phiVal = phi_value.SDF(x);
-auto dphi = phi_value.GRAD(x);
-// der_phi_value = DerivCircleLSF(x0, y0, radius);
-// std::cout<<".... phiValTemp = "<<phi_value.SDF(x)<<std::endl;
-///////////////////////////
+      // auto phi_value = CircleLSF{x0, y0, radius};
+      // auto phiVal = phi_value.SDF(x);
+      // auto dphi = phi_value.GRAD(x);
+
+      auto phi_value = CuboidLSF{x0, y0, 0.8*radius, 10};
+      auto phiVal = phi_value.SDF(x);
+      auto dphi = phi_value.GRAD(x);
+
       return 2.0 * omega * phiVal * dphi;
-
-      // serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
-      // auto boundaryFlux = (1.0/serac::det(dXdxi*WInvMat)) * serac::dot(dXdxi*WInvMat, 2.0 * omega * phiVal * dphi);
-      // auto boundaryFlux = serac::dot(dXdxi, 2.0 * omega * phiVal * dphi);
-      // return boundaryFlux;
     },
     radial_boundary // whole_boundary
   );
@@ -345,7 +341,7 @@ for(auto iDof=0; iDof<4; iDof ++){
                                               .relative_tol   = 1.0e-8,
                                               .absolute_tol   = 1.0e-10,
                                               // .min_iterations = 1, 
-                                              .max_iterations = 20, // 2000
+                                              .max_iterations = 500, // 20, // 2000
                                               // .max_line_search_iterations = 20, //0
                                               .print_level    = 1};
 
