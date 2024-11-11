@@ -12,6 +12,7 @@
  */
 
 #include "mfem.hpp"
+// #include "admfem.hpp"
 
 #include <serac/infrastructure/terminator.hpp>
 #include <serac/numerics/functional/functional.hpp>
@@ -33,6 +34,79 @@
 
 // #define ONE_ELEM_TEST
 #undef ONE_ELEM_TEST
+
+//////////////////////////////////////////////
+//////////////////////////////////////////////
+// struct Box { 
+//   vec2 min;
+//   vec2 max; 
+
+//   template < typename T >
+//   T SDF(const tensor<T, 2> & p) const {
+//     constexpr T zero{};
+//     auto center = (min + max) * 0.5;
+//     auto halfwidths = (max - min) * 0.5;
+//     auto q = impl::abs(p - center) - halfwidths;
+//     return impl::norm(impl::max(q, zero)) + impl::min(impl::max(q), zero);
+//   }
+// };
+//////////////////////////////////////////////
+//////////////////////////////////////////////
+struct CircleLSF { 
+  double x0;
+  double y0; 
+  double radius; 
+
+  template < typename T >
+  T SDF(const serac::tensor<T, 2> & x) const {
+using std::pow;
+return pow(pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), 0.5) - radius;
+  }
+
+  template < typename T >
+  serac::tensor<T, 2> GRAD(const serac::tensor<T, 2> & x) const{
+using std::pow;
+auto dphi = 0.0*x;
+      dphi[0] = (x[0] - x0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
+      dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
+return dphi;
+  }
+};
+//////////////////////////////////////////////
+//////////////////////////////////////////////
+
+// Define your level set function as a class
+template <typename T1, typename T2, typename T3>
+class LevelSetFunction
+{
+public:
+    // Constructor to initialize parameters
+    LevelSetFunction(T1 &cx, T1 &cy, T1 &r ) 
+        : centerX(cx), centerY(cy), radius(r) {}
+
+    // Override the value method to define your level set function
+    void Eval(T2 &x, T1 &value)
+    {
+        auto phiVal = pow(pow(x[0]-centerX, 2.0) + pow(x[1]-centerY, 2.0), 0.5) - radius;
+        value = phiVal; // Level set function value
+    }
+
+    // Method to calculate the gradient (derivative) at a given point
+    T3 CalculateGradient(T1 &x)
+    {
+        auto dphi = 0.0*x; // dphidx*dxdu
+        dphi[0] = (x[0] - centerX)* pow( pow(x[0]-centerX, 2.0) + pow(x[1]-centerY, 2.0), -0.5);
+        dphi[1] = (x[1] - centerY)* pow( pow(x[0]-centerX, 2.0) + pow(x[1]-centerY, 2.0), -0.5);
+        return dphi;
+    }
+
+private:
+    T1 radius;      // Radius of the circle
+    T1 centerX;    // X-coordinate of the center
+    T1 centerY;    // Y-coordinate of the center
+};
+//////////////////////////////////////////////
+
 
 // _main_init_start
 int main(int argc, char* argv[])
@@ -155,12 +229,27 @@ int main(int argc, char* argv[])
       auto [X, dXdxi] = position;
       auto u = serac::get<0>(nodeDisp);
       auto x = X + u;
-      auto phiVal = pow(pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), 0.5) - radius;
+      // auto phiVal = pow(pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), 0.5) - radius;
       // auto dphidXVal = (x[0] + x[1] - 2.0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
-      auto dphi = 0.0*x; // dphidx*dxdu
-      dphi[0] = (x[0] - x0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
-      dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
+      // auto dphi = 0.0*x; // dphidx*dxdu
+      // dphi[0] = (x[0] - x0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
+      // dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
 
+// LevelSetFunction<auto, auto, auto> lsf(x0, y0, radius);
+// mfem::Vector point(2);
+// point[0] = 0.5; // x-coordinate
+// point[1] = 0.5; // y-coordinate
+// auto phiValTemp = lsf.Eval(point);
+// auto dphiValTemp = lsf.CalculateGradient(point);
+// std::cout<<".... phiValTemp = "<<phiValTemp<<std::endl;
+// std::cout<<".... dphiValTemp = "<<dphiValTemp<<std::endl;
+///////////////////////////
+auto phi_value = CircleLSF{x0, y0, radius};
+auto phiVal = phi_value.SDF(x);
+auto dphi = phi_value.GRAD(x);
+// der_phi_value = DerivCircleLSF(x0, y0, radius);
+// std::cout<<".... phiValTemp = "<<phi_value.SDF(x)<<std::endl;
+///////////////////////////
       return 2.0 * omega * phiVal * dphi;
 
       // serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
