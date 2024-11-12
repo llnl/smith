@@ -10,7 +10,9 @@
 #include "serac/numerics/functional/quadrature_data.hpp"
 #include "serac/numerics/functional/function_signature.hpp"
 #include "serac/numerics/functional/differentiate_wrt.hpp"
+#ifdef SERAC_USE_RAJA
 #include "RAJA/RAJA.hpp"
+#endif
 
 #include <array>
 #include <cstdint>

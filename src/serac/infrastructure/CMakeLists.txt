@@ -41,7 +41,7 @@ set(infrastructure_sources
     terminator.cpp
     )
 
-set(infrastructure_depends axom::inlet axom::fmt axom::cli11 mfem ${serac_device_depends})
+set(infrastructure_depends axom::inlet axom::fmt axom::cli11 camp mfem ${serac_device_depends})
 blt_list_append(TO infrastructure_depends ELEMENTS tribol IF TRIBOL_FOUND)
 blt_list_append(TO infrastructure_depends ELEMENTS caliper adiak::adiak IF SERAC_ENABLE_PROFILING)
 list(APPEND infrastructure_depends blt::mpi)
