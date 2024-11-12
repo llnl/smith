@@ -213,7 +213,7 @@ std::vector<Array2D<int> > geom_local_face_dofs(int p)
   return output;
 }
 
-#ifdef SERAC_USE_RAJA
+#ifdef SERAC_USE_UMPIRE
 axom::Array<DoF, 2, axom::MemorySpace::Host>
 #else
 axom::Array<DoF, 2>
@@ -271,14 +271,14 @@ GetElementRestriction(const mfem::FiniteElementSpace* fes, mfem::Geometry::Type 
   }
 
   if (n == 0) {
-#ifdef SERAC_USE_RAJA
+#ifdef SERAC_USE_UMPIRE
     return axom::Array<DoF, 2, axom::MemorySpace::Host>{};
 #else
     return axom::Array<DoF, 2>{};
 #endif
   } else {
     uint64_t dofs_per_elem = elem_dofs.size() / n;
-#ifdef SERAC_USE_RAJA
+#ifdef SERAC_USE_UMPIRE
     axom::Array<DoF, 2, axom::MemorySpace::Host> output(n, dofs_per_elem);
 #else
     axom::Array<DoF, 2> output(n, dofs_per_elem);
@@ -288,7 +288,7 @@ GetElementRestriction(const mfem::FiniteElementSpace* fes, mfem::Geometry::Type 
   }
 }
 
-#ifdef SERAC_USE_RAJA
+#ifdef SERAC_USE_UMPIRE
 axom::Array<DoF, 2, axom::MemorySpace::Host>
 #else
 axom::Array<DoF, 2>
@@ -394,14 +394,14 @@ GetFaceDofs(const mfem::FiniteElementSpace* fes, mfem::Geometry::Type face_geom,
   delete face_to_elem;
 
   if (n == 0) {
-#ifdef SERAC_USE_RAJA
+#ifdef SERAC_USE_UMPIRE
     return axom::Array<DoF, 2, axom::MemorySpace::Host>{};
 #else
     return axom::Array<DoF, 2>{};
 #endif
   } else {
     uint64_t dofs_per_face = face_dofs.size() / n;
-#ifdef SERAC_USE_RAJA
+#ifdef SERAC_USE_UMPIRE
     axom::Array<DoF, 2, axom::MemorySpace::Host> output(n, dofs_per_face);
 #else
     axom::Array<DoF, 2> output(n, dofs_per_face);

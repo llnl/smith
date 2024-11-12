@@ -74,7 +74,7 @@ std::ostream& operator<<(std::ostream& out, serac::SignedIndex i)
  * @param filename the name of the output file
  */
 template <typename T>
-#ifdef SERAC_USE_RAJA
+#ifdef SERAC_USE_UMPIRE
 void write_to_file(axom::Array<T, 2, axom::MemorySpace::Host> arr, std::string filename)
 #else
 void write_to_file(axom::Array<T, 2> arr, std::string filename)
@@ -101,7 +101,7 @@ void write_to_file(axom::Array<T, 2> arr, std::string filename)
  * @param filename the name of the output file
  */
 template <typename T>
-#ifdef SERAC_USE_RAJA
+#ifdef SERAC_USE_UMPIRE
 void write_to_file(axom::Array<T, 3, axom::MemorySpace::Host> arr, std::string filename)
 #else
 void write_to_file(axom::Array<T, 3> arr, std::string filename)
