@@ -397,6 +397,13 @@ public:
   virtual void outputStateToDisk(std::optional<std::string> paraview_output_dir = {}) const;
 
   /**
+   * @brief load checkpointed states from disk into states array
+   *
+   * @param cycle The cycle to retrieve state from
+   */
+  void loadCheckpointedStatesFromDisk(int cycle);
+
+  /**
    * @brief Accessor for getting a single named finite element state primal solution from the physics modules at a given
    * checkpointed cycle index
    *
@@ -404,7 +411,7 @@ public:
    * @param cycle The cycle to retrieve state from
    * @return The named primal Finite Element State
    */
-  FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle) const;
+  FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle);
 
   /**
    * @brief Accessor for getting a single named finite element dual solution from the physics modules at a given
@@ -415,7 +422,7 @@ public:
    * @return The named Finite Element Dual
    */
   virtual FiniteElementDual loadCheckpointedDual([[maybe_unused]] const std::string& state_name,
-                                                 [[maybe_unused]] int                cycle) const
+                                                 [[maybe_unused]] int                cycle)
   {
     SLIC_ERROR_ROOT(axom::fmt::format("loadCheckpointedDual not enabled in physics module {}", name_));
     return *duals_[0];
@@ -486,7 +493,7 @@ protected:
    * @param cycle The cycle to retrieve state from
    * @return A map containing the primal field names and their associated FiniteElementStates at the requested cycle
    */
-  std::unordered_map<std::string, FiniteElementState> getCheckpointedStates(int cycle) const;
+  std::unordered_map<std::string, FiniteElementState> getCheckpointedStates(int cycle);
 
   /// @brief Name of the physics module
   std::string name_ = {};

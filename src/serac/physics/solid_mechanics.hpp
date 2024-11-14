@@ -762,7 +762,7 @@ public:
   }
 
   /// @overload
-  FiniteElementDual loadCheckpointedDual(const std::string& dual_name, int cycle) const override
+  FiniteElementDual loadCheckpointedDual(const std::string& dual_name, int cycle) override
   {
     if (dual_name == "reactions") {
       auto checkpointed_sol = getCheckpointedStates(cycle);
