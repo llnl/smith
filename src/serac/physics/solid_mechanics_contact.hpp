@@ -50,14 +50,17 @@ public:
    * @param parameter_names A vector of the names of the requested parameter fields
    * @param cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param time The simulation time to initialize the physics module to
+   * @param checkpoint_to_disk Flag to save the transient states on disk instead of memory for transient adjoint solver
+   * @param use_warm_start Flag to turn on or off the displacement warm start predictor which helps robustness for
+   * large deformation problems
    */
   SolidMechanicsContact(const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
                         const serac::TimesteppingOptions timestepping_opts, const std::string& physics_name,
                         std::string mesh_tag, std::vector<std::string> parameter_names = {}, int cycle = 0,
-                        double time = 0.0)
+                        double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
       : SolidMechanicsContact(
             std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time)
+            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start)
   {
   }
 
@@ -71,12 +74,16 @@ public:
    * @param parameter_names A vector of the names of the requested parameter fields
    * @param cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param time The simulation time to initialize the physics module to
+   * @param checkpoint_to_disk Flag to save the transient states on disk instead of memory for transient adjoint solver
+   * @param use_warm_start Flag to turn on or off the displacement warm start predictor which helps robustness for
+   * large deformation problems
    */
   SolidMechanicsContact(std::unique_ptr<serac::EquationSolver> solver,
                         const serac::TimesteppingOptions timestepping_opts, const std::string& physics_name,
                         std::string mesh_tag, std::vector<std::string> parameter_names = {}, int cycle = 0,
-                        double time = 0.0)
-      : SolidMechanicsBase(std::move(solver), timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time),
+                        double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
+      : SolidMechanicsBase(std::move(solver), timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time,
+                           checkpoint_to_disk, use_warm_start),
         contact_(mesh_),
         forces_(StateManager::newDual(displacement_.space(), detail::addPrefix(physics_name, "contact_forces")))
   {
@@ -108,10 +115,10 @@ public:
   {
     auto residual_fn = [this](const mfem::Vector& u, mfem::Vector& r) {
       const mfem::Vector u_blk(const_cast<mfem::Vector&>(u), 0, displacement_.Size());
-      const mfem::Vector res = (*residual_)(ode_time_point_, shape_displacement_, u_blk, acceleration_,
-                                            *parameters_[parameter_indices].state...);
+      const mfem::Vector res =
+          (*residual_)(time_, shape_displacement_, u_blk, acceleration_, *parameters_[parameter_indices].state...);
 
-      // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
+      // NOTE this copy is required as the sundials solvers do not allow move assignments because of their memory
       // tracking strategy
       // See https://github.com/mfem/mfem/issues/3531
       mfem::Vector r_blk(r, 0, displacement_.Size());
@@ -130,12 +137,12 @@ public:
           // gradient of residual function
           [this](const mfem::Vector& u) -> mfem::Operator& {
             const mfem::Vector u_blk(const_cast<mfem::Vector&>(u), 0, displacement_.Size());
-            auto [r, drdu] = (*residual_)(ode_time_point_, shape_displacement_, differentiate_wrt(u_blk), acceleration_,
+            auto [r, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(u_blk), acceleration_,
                                           *parameters_[parameter_indices].state...);
             J_             = assemble(drdu);
 
             // create block operator holding jacobian contributions
-            J_constraint_ = contact_.jacobianFunction(u, J_.release());
+            J_constraint_ = contact_.jacobianFunction(J_.release());
 
             // take ownership of blocks
             J_constraint_->owns_blocks = false;
@@ -166,12 +173,12 @@ public:
       // mfem::HypreParMatrix
       return std::make_unique<mfem_ext::StdFunctionOperator>(
           displacement_.space().TrueVSize(), residual_fn, [this](const mfem::Vector& u) -> mfem::Operator& {
-            auto [r, drdu] = (*residual_)(ode_time_point_, shape_displacement_, differentiate_wrt(u), acceleration_,
+            auto [r, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(u), acceleration_,
                                           *parameters_[parameter_indices].state...);
             J_             = assemble(drdu);
 
             // get 11-block holding jacobian contributions
-            auto block_J         = contact_.jacobianFunction(u, J_.release());
+            auto block_J         = contact_.jacobianFunction(J_.release());
             block_J->owns_blocks = false;
             J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 
@@ -216,23 +223,11 @@ protected:
   /// @brief Solve the Quasi-static Newton system
   void quasiStaticSolve(double dt) override
   {
-    // we can use the base class method if we don't have Lagrange multipliers
-    if (!contact_.haveLagrangeMultipliers()) {
-      SolidMechanicsBase::quasiStaticSolve(dt);
-      contact_.update(cycle_, ode_time_point_, dt);
-      forces_.SetVector(contact_.forces(), 0);
-      return;
-    }
-
-    // this method is essentially equivalent to the 1-liner
-    // u += dot(inv(J), dot(J_elim[:, dofs], (U(t + dt) - u)[dofs]));
-    // warm start for contact needs to include the previous stiffness terms associated with contact
+    // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
+    // throughout. warm start for contact needs to include the previous stiffness terms associated with contact
     // otherwise the system will interpenetrate instantly on warm-starting.
-    warmStartDisplacement(dt);
-
+    warmStartDisplacementContact(dt);
     time_ += dt;
-    // Set the ODE time point for the time-varying loads in quasi-static problems
-    ode_time_point_ = time_;
 
     // In general, the solution vector is a stacked (block) vector:
     //  | displacement     |
@@ -246,8 +241,133 @@ protected:
     nonlin_solver_->solve(augmented_solution);
     displacement_.Set(1.0, mfem::Vector(augmented_solution, 0, displacement_.Size()));
     contact_.setPressures(mfem::Vector(augmented_solution, displacement_.Size(), contact_.numPressureDofs()));
-    contact_.update(cycle_, ode_time_point_, dt);
+    contact_.update(cycle_, time_, dt);
     forces_.SetVector(contact_.forces(), 0);
+  }
+
+  /**
+   * @brief Sets the Dirichlet BCs for the current time and computes an initial guess for parameters and displacement
+   *
+   * @note
+   * We want to solve
+   *\f$
+   *r(u_{n+1}, p_{n+1}, U_{n+1}, t_{n+1}) = 0
+   *\f$
+   *for $u_{n+1}$, given new values of parameters, essential b.c.s and time. The problem is that if we use $u_n$ as the
+   initial guess for this new solve, most nonlinear solver algorithms will start off by linearizing at (or near) the
+   initial guess. But, if the essential boundary conditions change by an amount on the order of the mesh size, then it's
+   possible to invert elements and make that linearization point inadmissible (either because it converges slowly or
+   that the inverted elements crash the program). *So, we need a better initial guess. This "warm start" generates a
+   guess by linear extrapolation from the previous known solution:
+
+   *\f$
+   *0 = r(u_{n+1}, p_{n+1}, U_{n+1}, t_{n+1}) \approx {r(u_n, p_n, U_n, t_n)} +  \frac{dr_n}{du} \Delta u +
+   \frac{dr_n}{dp} \Delta p + \frac{dr_n}{dU} \Delta U + \frac{dr_n}{dt} \Delta t
+   *\f$
+   *If we assume that suddenly changing p and t will not lead to inverted elements, we can simplify the approximation to
+   *\f$
+   *0 = r(u_{n+1}, p_{n+1}, U_{n+1}, t_{n+1}) \approx r(u_n, p_{n+1}, U_n, t_{n+1}) +  \frac{dr_n}{du} \Delta u +
+   \frac{dr_n}{dU} \Delta U
+   *\f$
+   *Move all the known terms to the rhs and solve for \f$\Delta u\f$,
+   *\f$
+   *\Delta u = - \bigg(  \frac{dr_n}{du} \bigg)^{-1} \bigg( r(u_n, p_{n+1}, U_n, t_{n+1}) + \frac{dr_n}{dU} \Delta U
+   \bigg)
+   *\f$
+   *It is especially important to use the previously solved Jacobian in problems with material instabilities, as good
+   nonlinear solvers will ensure positive definiteness at equilibrium. *Once any parameter is changed, it is no longer
+   certain to be positive definite, which will cause issues for many types linear solvers.
+   */
+  void warmStartDisplacementContact(double dt)
+  {
+    SERAC_MARK_FUNCTION;
+
+    du_ = 0.0;
+    for (auto& bc : bcs_.essentials()) {
+      // apply the future boundary conditions, but use the most recent Jacobians stiffness.
+      bc.setDofs(du_, time_ + dt);
+    }
+
+    auto& constrained_dofs = bcs_.allEssentialTrueDofs();
+    for (int i = 0; i < constrained_dofs.Size(); i++) {
+      int j = constrained_dofs[i];
+      du_[j] -= displacement_(j);
+    }
+
+    if (use_warm_start_) {
+      // use the most recently evaluated Jacobian
+      auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
+                                    *parameters_[parameter_indices].previous_state...);
+      J_.reset();
+      J_ = assemble(drdu);
+
+      contact_.update(cycle_, time_, dt);
+      if (contact_.haveLagrangeMultipliers()) {
+        J_offsets_    = mfem::Array<int>({0, displacement_.Size(), displacement_.Size() + contact_.numPressureDofs()});
+        J_constraint_ = contact_.jacobianFunction(J_.release());
+
+        // take ownership of blocks
+        J_constraint_->owns_blocks = false;
+        J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(0, 0)));
+        J_12_ =
+            std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(0, 1)));
+        J_21_ =
+            std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(1, 0)));
+        J_22_ =
+            std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(1, 1)));
+
+        J_e_.reset();
+        J_e_    = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
+        J_e_21_ = std::unique_ptr<mfem::HypreParMatrix>(J_21_->EliminateCols(bcs_.allEssentialTrueDofs()));
+        J_12_->EliminateRows(bcs_.allEssentialTrueDofs());
+
+        J_operator_ = J_constraint_.get();
+      } else {
+        // get 11-block holding jacobian contributions
+        auto block_J         = contact_.jacobianFunction(J_.release());
+        block_J->owns_blocks = false;
+        J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
+
+        J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
+
+        J_operator_ = J_.get();
+      }
+
+      // Update the linearized Jacobian matrix
+      mfem::Vector augmented_residual(displacement_.space().TrueVSize() + contact_.numPressureDofs());
+      augmented_residual     = 0.0;
+      const mfem::Vector res = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
+                                            *parameters_[parameter_indices].state...);
+
+      // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
+      // tracking strategy
+      // See https://github.com/mfem/mfem/issues/3531
+      mfem::Vector r(augmented_residual, 0, displacement_.space().TrueVSize());
+      r = res;
+      r += contact_.forces();
+
+      augmented_residual *= -1.0;
+
+      mfem::Vector augmented_solution(displacement_.space().TrueVSize() + contact_.numPressureDofs());
+      augmented_solution = 0.0;
+      mfem::Vector du(augmented_solution, 0, displacement_.space().TrueVSize());
+      du = du_;
+      mfem::EliminateBC(*J_, *J_e_, constrained_dofs, du, r);
+      for (int i = 0; i < constrained_dofs.Size(); i++) {
+        int j = constrained_dofs[i];
+        r[j]  = du[j];
+      }
+
+      auto& lin_solver = nonlin_solver_->linearSolver();
+
+      lin_solver.SetOperator(*J_operator_);
+
+      lin_solver.Mult(augmented_residual, augmented_solution);
+
+      du_ = du;
+    }
+
+    displacement_ += du_;
   }
 
   using BasePhysics::bcs_;
@@ -268,10 +388,9 @@ protected:
   using SolidMechanicsBase::J_;
   using SolidMechanicsBase::J_e_;
   using SolidMechanicsBase::nonlin_solver_;
-  using SolidMechanicsBase::ode_time_point_;
   using SolidMechanicsBase::residual_;
   using SolidMechanicsBase::residual_with_bcs_;
-  using SolidMechanicsBase::warmStartDisplacement;
+  using SolidMechanicsBase::use_warm_start_;
 
   /// Pointer to the Jacobian operator (J_ if no Lagrange multiplier contact, J_constraint_ otherwise)
   mfem::Operator* J_operator_;

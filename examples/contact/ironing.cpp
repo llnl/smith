@@ -86,12 +86,13 @@ int main(int argc, char* argv[])
     u = 0.0;
   });
   solid_solver.setDisplacementBCs({12}, [](const mfem::Vector&, double t, mfem::Vector& u) {
+    constexpr double init_steps = 2.0;
     u.SetSize(dim);
     u = 0.0;
-    if (t <= 2.0 + 1.0e-12) {
-      u[2] = -t * 0.15;
+    if (t <= init_steps + 1.0e-12) {
+      u[2] = -t * 0.3 / init_steps;
     } else {
-      u[0] = -(t - 2.0) * 0.25;
+      u[0] = -(t - init_steps) * 0.25;
       u[2] = -0.3;
     }
   });

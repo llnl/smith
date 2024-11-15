@@ -78,6 +78,8 @@ public:
    * @brief Get the contact constraint residual (i.e. nodal forces) from all contact interactions
    *
    * @return Nodal contact forces on the true DOFs
+   *
+   * @pre update() must be called with the current configuration so the force contributions are up-to-date
    */
   FiniteElementDual forces() const;
 
@@ -101,6 +103,8 @@ public:
    *
    * @param [in] zero_inactive Sets inactive t-dofs to zero gap
    * @return Nodal gap true degrees of freedom on each contact interaction (merged into one mfem::HypreParVector)
+   *
+   * @pre update() must be called with the current configuration so the gap values are up-to-date
    */
   mfem::HypreParVector mergedGaps(bool zero_inactive = false) const;
 
@@ -124,17 +128,22 @@ public:
    * @param [in] u Solution vector ([displacement; pressure] block vector)
    * @param [in,out] r Residual vector ([force; gap] block vector); takes in initialized residual force vector and adds
    * contact contributions
+   *
+   * @pre The current coordinates must be up-to-date
+   *
+   * @note This method calls update() to compute residual and Jacobian contributions based on the current configuration
    */
   void residualFunction(const mfem::Vector& u, mfem::Vector& r);
 
   /**
    * @brief Computes the Jacobian including contact terms, given the non-contact Jacobian terms
    *
-   * @param u Solution vector ([displacement; pressure] block vector)
    * @param orig_J The non-contact terms of the Jacobian, not including essential boundary conditions
    * @return Jacobian with contact terms, not including essential boundary conditions
+   *
+   * @pre update() must be called with the current configuration so the Jacobian contributions are up-to-date
    */
-  std::unique_ptr<mfem::BlockOperator> jacobianFunction(const mfem::Vector& u, mfem::HypreParMatrix* orig_J) const;
+  std::unique_ptr<mfem::BlockOperator> jacobianFunction(mfem::HypreParMatrix* orig_J) const;
 
   /**
    * @brief Set the pressure field

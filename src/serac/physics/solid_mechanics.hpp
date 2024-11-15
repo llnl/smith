@@ -466,6 +466,27 @@ public:
    * @param[in] disp The vector function containing the set displacement values
    * @param[in] component The component to set the displacment on
    *
+   * For the displacement function, the argument is the input position, the second argument is the time, and the output
+   * is the value of the component of the displacement.
+   *
+   * @note This method must be called prior to completeSetup()
+   */
+  void setDisplacementBCs(const std::set<int>& disp_bdr, std::function<double(const mfem::Vector&, double)> disp,
+                          int component)
+  {
+    // Project the coefficient onto the grid function
+    component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(disp);
+
+    bcs_.addEssential(disp_bdr, component_disp_bdr_coef_, displacement_.space(), component);
+  }
+
+  /**
+   * @brief Set the displacement essential boundary conditions on a single component
+   *
+   * @param[in] disp_bdr The set of boundary attributes to set the displacement on
+   * @param[in] disp The vector function containing the set displacement values
+   * @param[in] component The component to set the displacment on
+   *
    * For the displacement function, the argument is the input position and the output is the value of the component of
    * the displacement.
    *

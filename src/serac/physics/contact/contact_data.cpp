@@ -253,14 +253,8 @@ void ContactData::residualFunction(const mfem::Vector& u, mfem::Vector& r)
   g_blk.Set(1.0, mergedGaps(true));
 }
 
-std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(const mfem::Vector&   u,
-                                                                   mfem::HypreParMatrix* orig_J) const
+std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(mfem::HypreParMatrix* orig_J) const
 {
-  // u_const should not change in this method; const cast is to create vector views which are used to compute the
-  // (non-contact) Jacobian
-  auto&              u_const = const_cast<mfem::Vector&>(u);
-  const mfem::Vector u_blk(u_const, 0, reference_nodes_->ParFESpace()->GetTrueVSize());
-
   auto J_contact = mergedJacobian();
   if (J_contact->IsZeroBlock(0, 0)) {
     J_contact->SetBlock(0, 0, orig_J);
@@ -381,14 +375,8 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
 
 void ContactData::residualFunction([[maybe_unused]] const mfem::Vector& u, [[maybe_unused]] mfem::Vector& r) {}
 
-std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(const mfem::Vector&   u,
-                                                                   mfem::HypreParMatrix* orig_J) const
+std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(mfem::HypreParMatrix* orig_J) const
 {
-  // u_const should not change in this method; const cast is to create vector views which are used to compute the
-  // (non-contact) Jacobian
-  auto&              u_const = const_cast<mfem::Vector&>(u);
-  const mfem::Vector u_blk(u_const, 0, reference_nodes_->ParFESpace()->GetTrueVSize());
-
   auto J_contact = mergedJacobian();
   if (J_contact->IsZeroBlock(0, 0)) {
     J_contact->SetBlock(0, 0, orig_J);
