@@ -84,8 +84,7 @@ void write_to_file(const ArrayT& arr_orig, std::string filename)
   const auto& arr = arr_orig;
 #endif
 
-  if constexpr(ArrayT::Dims == 2)
-  {
+  if constexpr (ArrayT::Dims == 2) {
     for (axom::IndexType i = 0; i < arr.shape()[0]; i++) {
       outfile << "{";
       for (axom::IndexType j = 0; j < arr.shape()[1]; j++) {
@@ -94,7 +93,8 @@ void write_to_file(const ArrayT& arr_orig, std::string filename)
       }
       outfile << "}\n";
     }
-  } else if constexpr(ArrayT::Dims == 3) {
+  }
+  if constexpr (ArrayT::Dims == 3) {
     outfile << std::setprecision(16);
 
     for (axom::IndexType i = 0; i < arr.shape()[0]; i++) {
