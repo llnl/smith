@@ -334,7 +334,7 @@ public:
     check_for_missing_nodal_gridfunc(domain);
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
-    integrals_.push_back(MakeBoundaryIntegral<signature, Q, dim>(EntireBoundary<dim>(domain), integrand,
+    integrals_.push_back(MakeBoundaryIntegral<signature, Q, dim>(EntireBoundary<dim + 1>(domain), integrand,
                                                                  std::vector<uint32_t>{args...}));
   }
 

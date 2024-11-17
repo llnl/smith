@@ -93,7 +93,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   }
 
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-  solid_solver.addBodyForce(force, EntireDomain(pmesh));
+  solid_solver.addBodyForce(force, EntireDomain<dim>(pmesh));
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -246,7 +246,7 @@ void finite_difference_shape_test(LoadingType load)
     }
 
     solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-    solid_solver.addBodyForce(force, EntireDomain(pmesh));
+    solid_solver.addBodyForce(force, EntireDomain<dim>(pmesh));
   } else if (load == LoadingType::Pressure) {
     solid_solver.setPressure(
         [](auto& X, double) {
@@ -255,7 +255,7 @@ void finite_difference_shape_test(LoadingType load)
           }
           return 0.0;
         },
-        EntireBoundary(pmesh));
+        EntireBoundary<dim>(pmesh));
   } else if (load == LoadingType::Traction) {
     solid_solver.setTraction(
         [](auto& X, auto, double) {
@@ -266,7 +266,7 @@ void finite_difference_shape_test(LoadingType load)
           }
           return traction;
         },
-        EntireBoundary(pmesh));
+        EntireBoundary<dim>(pmesh));
   }
 
   // Finalize the data structures

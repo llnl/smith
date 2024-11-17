@@ -138,7 +138,7 @@ struct Domain {
 template <int dim>
 Domain EntireDomain(const mfem::Mesh& mesh)
 {
-  auto tautological_predicate = [](std::vector<tensor<double, dim>>, int) { return true; };
+  auto tautological_predicate = [](std::vector<tensor<double, dim>>, int) -> bool { return true; };
   return Domain::ofElements(mesh, tautological_predicate);
 }
 
@@ -146,7 +146,7 @@ Domain EntireDomain(const mfem::Mesh& mesh)
 template <int dim>
 Domain EntireBoundary(const mfem::Mesh& mesh)
 {
-  auto tautological_predicate = [](std::vector<tensor<double, dim>>, int) { return true; };
+  auto tautological_predicate = [](std::vector<tensor<double, dim>>, int) -> bool { return true; };
   return Domain::ofBoundaryElements(mesh, tautological_predicate);
 }
 

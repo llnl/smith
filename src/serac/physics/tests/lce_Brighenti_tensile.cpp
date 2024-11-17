@@ -136,7 +136,7 @@ TEST(LiquidCrystalElastomer, Brighenti)
       [&loadVal, ly](auto x, auto /*n*/, auto /*t*/) {
         return tensor<double, 3>{0, loadVal * (x[1] > 0.99 * ly), 0};
       },
-      EntireBoundary(pmesh));
+      EntireBoundary<dim>(pmesh));
 
   solid_solver.setDisplacement(ini_displacement);
 

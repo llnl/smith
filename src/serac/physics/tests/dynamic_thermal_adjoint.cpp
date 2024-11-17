@@ -85,7 +85,7 @@ std::unique_ptr<ParametrizedHeatTransferT> createParameterizedHeatTransfer(
   thermal->setTemperature([](const mfem::Vector&, double) { return 0.0; });
   thermal->setTemperatureBCs({1}, [](const mfem::Vector&, double) { return 0.0; });
   thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; },
-                     EntireDomain(StateManager::mesh(mesh_tag)));
+                     EntireDomain<dim>(StateManager::mesh(mesh_tag)));
   thermal->completeSetup();
   return thermal;
 }

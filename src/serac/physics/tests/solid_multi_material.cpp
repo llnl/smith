@@ -87,7 +87,7 @@ TEST(Solid, MultiMaterial)
     return average(coords)[0] < 0.5 * L;
   };
   Domain left  = Domain::ofElements(pmesh, is_in_left);
-  Domain right = EntireDomain(pmesh) - left;
+  Domain right = EntireDomain<dim>(pmesh) - left;
 
   solid.setMaterial(mat_left, left);
   solid.setMaterial(mat_right, right);
@@ -192,7 +192,7 @@ TEST(Solid, MultiMaterialWithState)
     return average(coords)[0] < 0.5 * L;
   };
   Domain left  = Domain::ofElements(pmesh, is_in_left);
-  Domain right = EntireDomain(pmesh) - left;
+  Domain right = EntireDomain<dim>(pmesh) - left;
 
   using Hardening     = solid_mechanics::LinearHardening;
   using MaterialRight = solid_mechanics::J2SmallStrain<Hardening>;

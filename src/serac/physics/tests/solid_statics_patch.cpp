@@ -191,7 +191,7 @@ public:
       return dot(P, n0);
     };
 
-    sf.setTraction(traction, EntireBoundary(sf.mesh()));
+    sf.setTraction(traction, EntireBoundary<dim>(sf.mesh()));
 
     auto bf = [=](auto X, auto) {
       auto X_val = get_value(X);
@@ -206,7 +206,7 @@ public:
       return divP;
     };
 
-    sf.addBodyForce(DependsOn<>{}, bf, EntireDomain(sf.mesh()));
+    sf.addBodyForce(DependsOn<>{}, bf, EntireDomain<dim>(sf.mesh()));
 
   }
 

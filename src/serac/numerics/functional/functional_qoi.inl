@@ -210,7 +210,7 @@ public:
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
     integrals_.push_back(
-        MakeBoundaryIntegral<signature, Q, dim>(EntireBoundary<dim>(mesh), integrand, std::vector<uint32_t>{args...}));
+        MakeBoundaryIntegral<signature, Q, dim>(EntireBoundary<dim + 1>(mesh), integrand, std::vector<uint32_t>{args...}));
   }
 
   /// @overload

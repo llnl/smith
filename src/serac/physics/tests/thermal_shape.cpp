@@ -96,7 +96,7 @@ TEST(HeatTransfer, MoveShape)
 
     thermal_solver.setMaterial(mat);
 
-    thermal_solver.setSource(source, EntireDomain(StateManager::mesh(mesh_tag)));
+    thermal_solver.setSource(source, EntireDomain<dim>(StateManager::mesh(mesh_tag)));
 
     // Finalize the data structures
     thermal_solver.completeSetup();
@@ -140,7 +140,7 @@ TEST(HeatTransfer, MoveShape)
 
     thermal_solver_no_shape.setMaterial(mat);
 
-    thermal_solver_no_shape.setSource(source, EntireDomain(StateManager::mesh(pure_mesh_tag)));
+    thermal_solver_no_shape.setSource(source, EntireDomain<dim>(StateManager::mesh(pure_mesh_tag)));
 
     // Finalize the data structures
     thermal_solver_no_shape.completeSetup();

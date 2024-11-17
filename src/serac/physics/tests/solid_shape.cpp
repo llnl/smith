@@ -122,7 +122,7 @@ void shape_test()
 
     solid_solver.setMaterial(mat);
 
-    solid_solver.addBodyForce(force, EntireDomain(StateManager::mesh(mesh_tag)));
+    solid_solver.addBodyForce(force, EntireDomain<dim>(StateManager::mesh(mesh_tag)));
 
     // Finalize the data structures
     solid_solver.completeSetup();
@@ -169,7 +169,7 @@ void shape_test()
 
     solid_solver_no_shape.setMaterial(mat);
 
-    solid_solver_no_shape.addBodyForce(force, EntireDomain(StateManager::mesh(new_mesh_tag)));
+    solid_solver_no_shape.addBodyForce(force, EntireDomain<dim>(StateManager::mesh(new_mesh_tag)));
 
     // Finalize the data structures
     solid_solver_no_shape.completeSetup();

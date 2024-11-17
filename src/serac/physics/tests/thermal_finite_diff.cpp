@@ -78,11 +78,11 @@ TEST(Thermal, FiniteDifference)
 
   // Define a constant source term
   heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source, EntireDomain(pmesh));
+  thermal_solver.setSource(source, EntireDomain<dim>(pmesh));
 
   // Set the flux term to zero for testing code paths
   heat_transfer::ConstantFlux flux_bc{0.0};
-  thermal_solver.setFluxBCs(flux_bc, EntireBoundary(pmesh));
+  thermal_solver.setFluxBCs(flux_bc, EntireBoundary<dim>(pmesh));
 
   // Finalize the data structures
   thermal_solver.completeSetup();
@@ -205,7 +205,7 @@ TEST(HeatTransfer, FiniteDifferenceShape)
   thermal_solver.setTemperature(one);
 
   heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source, EntireDomain(pmesh));
+  thermal_solver.setSource(source, EntireDomain<dim>(pmesh));
 
   // Finalize the data structures
   thermal_solver.completeSetup();
