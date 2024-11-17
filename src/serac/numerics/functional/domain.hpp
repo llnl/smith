@@ -163,7 +163,7 @@ Domain operator-(const Domain& a, const Domain& b);
 template <int dim>
 inline auto by_attr(int value)
 {
-  return [value](std::vector<tensor<double, dim> >, int attr) { return attr == value; };
+  return [value](std::vector<tensor<double, dim>>, int attr) { return attr == value; };
 }
 
 }  // namespace serac

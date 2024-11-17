@@ -295,8 +295,8 @@ public:
     check_for_missing_nodal_gridfunc(domain);
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
-    integrals_.push_back(
-        MakeDomainIntegral<signature, Q, dim>(EntireDomain<dim>(domain), integrand, qdata, std::vector<uint32_t>{args...}));
+    integrals_.push_back(MakeDomainIntegral<signature, Q, dim>(EntireDomain<dim>(domain), integrand, qdata,
+                                                               std::vector<uint32_t>{args...}));
   }
 
   /// @overload
@@ -334,8 +334,8 @@ public:
     check_for_missing_nodal_gridfunc(domain);
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
-    integrals_.push_back(
-        MakeBoundaryIntegral<signature, Q, dim>(EntireBoundary<dim>(domain), integrand, std::vector<uint32_t>{args...}));
+    integrals_.push_back(MakeBoundaryIntegral<signature, Q, dim>(EntireBoundary<dim>(domain), integrand,
+                                                                 std::vector<uint32_t>{args...}));
   }
 
   /// @overload
