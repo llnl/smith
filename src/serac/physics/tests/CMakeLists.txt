@@ -44,8 +44,8 @@ set(physics_parallel_test_sources
 blt_list_append(TO physics_parallel_test_sources 
                 ELEMENTS 
                     contact_patch.cpp
-                    contact_patch_tied.cpp
                     contact_beam.cpp
+                    contact_solid_adjoint.cpp
                 IF TRIBOL_FOUND)
 
 serac_add_tests(SOURCES       ${physics_parallel_test_sources}

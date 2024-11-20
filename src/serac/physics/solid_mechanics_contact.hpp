@@ -369,6 +369,55 @@ protected:
 
     displacement_ += du_;
   }
+  
+  /// @brief Solve the Quasi-static Newton system
+  void quasiStaticAdjointSolve(double /*dt*/) override
+  {
+    SLIC_ERROR_ROOT_IF(contact_.haveLagrangeMultipliers(), "Lagrange multiplier contact does not currently support sensitivities/adjoints.");
+
+    printf("in adjoint contact solve\n");
+
+    // By default, use a homogeneous essential boundary condition
+    mfem::HypreParVector adjoint_essential(displacement_adjoint_load_);
+    adjoint_essential = 0.0;
+    
+    auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
+                                    *parameters_[parameter_indices].state...);
+    auto jacobian  = assemble(drdu);
+
+    auto block_J = contact_.jacobianFunction(jacobian.release());
+    block_J->owns_blocks = false;
+    jacobian = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
+
+    auto J_T       = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
+
+    for (const auto& bc : bcs_.essentials()) {
+      bc.apply(*J_T, displacement_adjoint_load_, adjoint_essential);
+    }
+
+    auto& lin_solver = nonlin_solver_->linearSolver();
+    lin_solver.SetOperator(*J_T);
+    lin_solver.Mult(displacement_adjoint_load_, adjoint_displacement_);
+  }
+
+    /// @overload
+  FiniteElementDual& computeTimestepShapeSensitivity() override
+  {
+    printf("printing contact shape sensitivity\n");
+    auto drdshape =
+        serac::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(shape_displacement_), displacement_,
+                                            acceleration_, *parameters_[parameter_indices].state...));
+
+    auto drdshape_mat = assemble(drdshape);
+
+    auto block_J = contact_.jacobianFunction(drdshape_mat.release());
+    block_J->owns_blocks = false;
+    drdshape_mat = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
+
+    drdshape_mat->MultTranspose(adjoint_displacement_, *shape_displacement_sensitivity_);
+
+    return *shape_displacement_sensitivity_;
+  }
 
   using BasePhysics::bcs_;
   using BasePhysics::cycle_;
@@ -378,12 +427,15 @@ protected:
   using BasePhysics::name_;
   using BasePhysics::parameters_;
   using BasePhysics::shape_displacement_;
+  using BasePhysics::shape_displacement_sensitivity_;
   using BasePhysics::states_;
   using BasePhysics::time_;
   using SolidMechanicsBase::acceleration_;
   using SolidMechanicsBase::d_residual_d_;
   using SolidMechanicsBase::DERIVATIVE;
   using SolidMechanicsBase::displacement_;
+  using SolidMechanicsBase::adjoint_displacement_;
+  using SolidMechanicsBase::displacement_adjoint_load_;
   using SolidMechanicsBase::du_;
   using SolidMechanicsBase::J_;
   using SolidMechanicsBase::J_e_;
@@ -391,6 +443,8 @@ protected:
   using SolidMechanicsBase::residual_;
   using SolidMechanicsBase::residual_with_bcs_;
   using SolidMechanicsBase::use_warm_start_;
+  using SolidMechanicsBase::warmStartDisplacement;
+  using SolidMechanicsBase::time_end_step_;
 
   /// Pointer to the Jacobian operator (J_ if no Lagrange multiplier contact, J_constraint_ otherwise)
   mfem::Operator* J_operator_;
