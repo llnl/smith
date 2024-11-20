@@ -121,10 +121,6 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
     dfdp_blocks(0, static_cast<int>(i)) = nullptr;
   }
 
-  // EBC: We need to track whether any Lagrange multipliers are active so the call to mfem::HypreParMatrixFromBlocks()
-  // doesn't fail.
-  bool active_lagrange_mults = false;
-
   for (size_t i{0}; i < interactions_.size(); ++i) {
     // this is the BlockOperator for one of the contact interactions
     auto interaction_J         = interactions_[i].jacobian();
@@ -153,55 +149,46 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
       auto dfdp = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 1));
       SLIC_ERROR_ROOT_IF(!dgdu, "Only HypreParMatrix constraint matrix blocks are currently supported.");
       SLIC_ERROR_ROOT_IF(!dfdp, "Only HypreParMatrix constraint matrix blocks are currently supported.");
-      // if all of the dofs are inactive, then don't bother with these blocks
+      // zero out rows and cols not in the active set
       auto inactive_dofs = interactions_[i].inactiveDofs();
-      if (inactive_dofs.Size() < interactions_[i].pressureSpace().GetTrueVSize()) {
-        // zero out rows and cols not in the active set
-        dgdu->EliminateRows(inactive_dofs);
-        dfdp->EliminateCols(inactive_dofs);
-        if (interactions_[i].getContactOptions().enforcement == ContactEnforcement::Penalty) {
-          // compute contribution to df_(contact)/dx (the 0, 0 block) for penalty
-          std::unique_ptr<mfem::HypreParMatrix> BTB(mfem::ParMult(dfdp, dgdu, true));
-          delete &interaction_J->GetBlock(1, 0);
-          delete &interaction_J->GetBlock(0, 1);
-          if (block_J->IsZeroBlock(0, 0)) {
-            mfem::Vector penalty(reference_nodes_->ParFESpace()->GetTrueVSize());
-            penalty = interactions_[i].getContactOptions().penalty;
-            BTB->ScaleRows(penalty);
-            block_J->SetBlock(0, 0, BTB.release());
-          } else {
-            block_J->SetBlock(0, 0,
-                              mfem::Add(1.0, static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(0, 0)),
-                                        interactions_[i].getContactOptions().penalty, *BTB));
-          }
-        } else  // enforcement == ContactEnforcement::LagrangeMultiplier
-        {
-          // compute contribution to off-diagonal blocks for Lagrange multiplier
-          dgdu_blocks(static_cast<int>(i), 0) = dgdu;
-          dfdp_blocks(0, static_cast<int>(i)) = dfdp;
-          active_lagrange_mults               = true;
-        }
-        if (!interaction_J->IsZeroBlock(1, 1)) {
-          // we track our own active set, so get rid of the tribol inactive dof block
-          delete &interaction_J->GetBlock(1, 1);
-        }
-      } else {
+      dgdu->EliminateRows(inactive_dofs);
+      dfdp->EliminateCols(inactive_dofs);
+      if (interactions_[i].getContactOptions().enforcement == ContactEnforcement::Penalty) {
+        // compute contribution to df_(contact)/dx (the 0, 0 block) for penalty
+        std::unique_ptr<mfem::HypreParMatrix> BTB(mfem::ParMult(dfdp, dgdu, true));
         delete &interaction_J->GetBlock(1, 0);
         delete &interaction_J->GetBlock(0, 1);
+        if (block_J->IsZeroBlock(0, 0)) {
+          mfem::Vector penalty(reference_nodes_->ParFESpace()->GetTrueVSize());
+          penalty = interactions_[i].getContactOptions().penalty;
+          BTB->ScaleRows(penalty);
+          block_J->SetBlock(0, 0, BTB.release());
+        } else {
+          block_J->SetBlock(0, 0,
+                            mfem::Add(1.0, static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(0, 0)),
+                                      interactions_[i].getContactOptions().penalty, *BTB));
+        }
+      } else  // enforcement == ContactEnforcement::LagrangeMultiplier
+      {
+        // compute contribution to off-diagonal blocks for Lagrange multiplier
+        dgdu_blocks(static_cast<int>(i), 0) = dgdu;
+        dfdp_blocks(0, static_cast<int>(i)) = dfdp;
+      }
+      if (!interaction_J->IsZeroBlock(1, 1)) {
+        // we track our own active set, so get rid of the tribol inactive dof block
+        delete &interaction_J->GetBlock(1, 1);
       }
     }
   }
   if (haveLagrangeMultipliers()) {
-    if (active_lagrange_mults) {
-      // merge all of the contributions from all of the contact interactions
-      block_J->SetBlock(1, 0, mfem::HypreParMatrixFromBlocks(dgdu_blocks));
-      // store the transpose explicitly (rather than as a TransposeOperator) for solvers that need HypreParMatrixs
-      block_J->SetBlock(0, 1, mfem::HypreParMatrixFromBlocks(dfdp_blocks));
-      // explicitly delete the blocks
-      for (size_t i{0}; i < interactions_.size(); ++i) {
-        delete dgdu_blocks(static_cast<int>(i), 0);
-        delete dfdp_blocks(0, static_cast<int>(i));
-      }
+    // merge all of the contributions from all of the contact interactions
+    block_J->SetBlock(1, 0, mfem::HypreParMatrixFromBlocks(dgdu_blocks));
+    // store the transpose explicitly (rather than as a TransposeOperator) for solvers that need HypreParMatrixs
+    block_J->SetBlock(0, 1, mfem::HypreParMatrixFromBlocks(dfdp_blocks));
+    // explicitly delete the blocks
+    for (size_t i{0}; i < interactions_.size(); ++i) {
+      delete dgdu_blocks(static_cast<int>(i), 0);
+      delete dfdp_blocks(0, static_cast<int>(i));
     }
     // build I_(inactive): a diagonal matrix with ones on inactive dofs and zeros elsewhere
     mfem::Array<const mfem::Array<int>*> inactive_tdofs_vector(static_cast<int>(interactions_.size()));
