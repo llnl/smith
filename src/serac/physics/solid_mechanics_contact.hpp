@@ -148,32 +148,22 @@ public:
             J_constraint_->owns_blocks = false;
             J_                         = std::unique_ptr<mfem::HypreParMatrix>(
                 static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(0, 0)));
-            if (!J_constraint_->IsZeroBlock(0, 1)) {
-              J_12_ = std::unique_ptr<mfem::HypreParMatrix>(
-                  static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(0, 1)));
-            }
-            if (!J_constraint_->IsZeroBlock(1, 0)) {
-              J_21_ = std::unique_ptr<mfem::HypreParMatrix>(
-                  static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(1, 0)));
-            }
+            J_12_ = std::unique_ptr<mfem::HypreParMatrix>(
+                static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(0, 1)));
+            J_21_ = std::unique_ptr<mfem::HypreParMatrix>(
+                static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(1, 0)));
             J_22_ = std::unique_ptr<mfem::HypreParMatrix>(
                 static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(1, 1)));
 
             // eliminate bcs and compute eliminated blocks
             J_e_    = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
-            if (!J_constraint_->IsZeroBlock(1, 0)) {
-              J_e_21_ = std::unique_ptr<mfem::HypreParMatrix>(J_21_->EliminateCols(bcs_.allEssentialTrueDofs()));
-            }
-            if (!J_constraint_->IsZeroBlock(0, 1)) {
-              J_12_->EliminateRows(bcs_.allEssentialTrueDofs());
-            }
+            J_e_21_ = std::unique_ptr<mfem::HypreParMatrix>(J_21_->EliminateCols(bcs_.allEssentialTrueDofs()));
+            J_12_->EliminateRows(bcs_.allEssentialTrueDofs());
 
             // create block operator for constraints
             J_constraint_e_ = std::make_unique<mfem::BlockOperator>(J_offsets_);
             J_constraint_e_->SetBlock(0, 0, J_e_.get());
-            if (!J_constraint_->IsZeroBlock(1, 0)) {
-              J_constraint_e_->SetBlock(1, 0, J_e_21_.get());
-            }
+            J_constraint_e_->SetBlock(1, 0, J_e_21_.get());
 
             // temp debug prints begin
             mfem::SparseMatrix J11_sparse;
@@ -184,25 +174,21 @@ public:
             J11_dense.PrintMatlab(dense11_mat);
             dense11_mat.close();
 
-            if (!J_constraint_->IsZeroBlock(0, 1)) {
-              mfem::SparseMatrix J12_sparse;
-              J_12_->MergeDiagAndOffd(J12_sparse);
-              mfem::DenseMatrix J12_dense;
-              J12_sparse.ToDenseMatrix(J12_dense);
-              std::ofstream dense12_mat("dense_J12.mat");
-              J12_dense.PrintMatlab(dense12_mat);
-              dense12_mat.close();
-            }
+            mfem::SparseMatrix J12_sparse;
+            J_12_->MergeDiagAndOffd(J12_sparse);
+            mfem::DenseMatrix J12_dense;
+            J12_sparse.ToDenseMatrix(J12_dense);
+            std::ofstream dense12_mat("dense_J12.mat");
+            J12_dense.PrintMatlab(dense12_mat);
+            dense12_mat.close();
 
-            if (!J_constraint_->IsZeroBlock(1, 0)) {
-              mfem::SparseMatrix J21_sparse;
-              J_21_->MergeDiagAndOffd(J21_sparse);
-              mfem::DenseMatrix J21_dense;
-              J21_sparse.ToDenseMatrix(J21_dense);
-              std::ofstream dense21_mat("dense_J21.mat");
-              J21_dense.PrintMatlab(dense21_mat);
-              dense21_mat.close();
-            }
+            mfem::SparseMatrix J21_sparse;
+            J_21_->MergeDiagAndOffd(J21_sparse);
+            mfem::DenseMatrix J21_dense;
+            J21_sparse.ToDenseMatrix(J21_dense);
+            std::ofstream dense21_mat("dense_J21.mat");
+            J21_dense.PrintMatlab(dense21_mat);
+            dense21_mat.close();
 
             mfem::SparseMatrix J22_sparse;
             J_22_->MergeDiagAndOffd(J22_sparse);
@@ -357,27 +343,17 @@ protected:
         // take ownership of blocks
         J_constraint_->owns_blocks = false;
         J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(0, 0)));
-        // this can be null if all dofs are inactive
-        if (!J_constraint_->IsZeroBlock(0, 1)) {
-          J_12_ =
-              std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(0, 1)));
-        }
-        // this can be null if all dofs are inactive
-        if (!J_constraint_->IsZeroBlock(1, 0)) {
-          J_21_ =
-              std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(1, 0)));
-        }
+        J_12_ =
+            std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(0, 1)));
+        J_21_ =
+            std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(1, 0)));
         J_22_ =
             std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(1, 1)));
 
         J_e_.reset();
         J_e_    = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
-        if (!J_constraint_->IsZeroBlock(1, 0)) {
-          J_e_21_ = std::unique_ptr<mfem::HypreParMatrix>(J_21_->EliminateCols(bcs_.allEssentialTrueDofs()));
-        }
-        if (!J_constraint_->IsZeroBlock(0, 1)) {
-          J_12_->EliminateRows(bcs_.allEssentialTrueDofs());
-        }
+        J_e_21_ = std::unique_ptr<mfem::HypreParMatrix>(J_21_->EliminateCols(bcs_.allEssentialTrueDofs()));
+        J_12_->EliminateRows(bcs_.allEssentialTrueDofs());
 
         J_operator_ = J_constraint_.get();
       } else {

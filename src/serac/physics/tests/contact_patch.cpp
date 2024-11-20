@@ -10,6 +10,8 @@
 #include <set>
 #include <string>
 
+#include "tribol/interface/tribol.hpp"
+
 #include "axom/slic/core/SimpleLogger.hpp"
 #include <gtest/gtest.h>
 #include "mfem.hpp"
@@ -92,6 +94,9 @@ TEST_P(ContactTest, patch)
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {4}, {5}, contact_options);
+#ifdef TRIBOL_USE_ENZYME
+  tribol::enableEnzyme(0, true);
+#endif
 
   // Finalize the data structures
   solid_solver.completeSetup();
