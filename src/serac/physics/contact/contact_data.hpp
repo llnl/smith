@@ -75,6 +75,12 @@ public:
   void update(int cycle, double time, double& dt);
 
   /**
+   * @brief Updates the positions, forces, and Jacobian contributions associated with contact
+   *
+   */
+  void reset();
+
+  /**
    * @brief Get the contact constraint residual (i.e. nodal forces) from all contact interactions
    *
    * @return Nodal contact forces on the true DOFs

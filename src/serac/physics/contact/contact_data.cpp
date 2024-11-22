@@ -41,6 +41,15 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
   }
 }
 
+void ContactData::reset()
+{
+  for (auto& interaction : interactions_) {
+    FiniteElementState zero = interaction.pressure();
+    zero = 0.0;
+    interaction.setPressure(zero);
+  }
+}
+
 void ContactData::update(int cycle, double time, double& dt)
 {
   cycle_ = cycle;
@@ -240,6 +249,7 @@ void ContactData::residualFunction(const mfem::Vector& u_shape, const mfem::Vect
   mfem::Vector g_blk(r, disp_size, numPressureDofs());
 
   setDisplacements(u_shape, u_blk);
+
   // we need to call update first to update gaps
   update(cycle_, time_, dt_);
   // with updated gaps, we can update pressure for contact interactions with penalty enforcement

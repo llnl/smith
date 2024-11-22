@@ -110,6 +110,17 @@ public:
     duals_.push_back(&forces_);
   }
 
+  /// @overload
+  void resetStates(int cycle = 0, double time = 0.0) override
+  {
+    SolidMechanicsBase::resetStates(cycle, time);
+    forces_ = 0.0;
+    contact_.setDisplacements(shape_displacement_, displacement_);
+    contact_.reset();
+    double dt = 0.0;
+    contact_.update(cycle, time, dt);
+  }
+
   /// @brief Build the quasi-static operator corresponding to the total Lagrangian formulation
   std::unique_ptr<mfem_ext::StdFunctionOperator> buildQuasistaticOperator() override
   {
@@ -121,7 +132,7 @@ public:
       // NOTE this copy is required as the sundials solvers do not allow move assignments because of their memory
       // tracking strategy
       // See https://github.com/mfem/mfem/issues/3531
-      mfem::Vector r_blk(r, 0, displacement_.Size());
+      mfem::Vector r_blk(r, 0, displacement_.space().TrueVSize());
       r_blk = res;
 
       contact_.residualFunction(shape_displacement_, u, r);
@@ -178,6 +189,7 @@ public:
                                           *parameters_[parameter_indices].state...);
             J_             = assemble(drdu);
 
+            //contact_.setDisplacements(u_shape, u_blk);
             // get 11-block holding jacobian contributions
             auto block_J         = contact_.jacobianFunction(J_.release());
             block_J->owns_blocks = false;
@@ -296,13 +308,30 @@ protected:
     }
 
     if (use_warm_start_) {
+
+      // Update the system residual
+      mfem::Vector augmented_residual(displacement_.space().TrueVSize() + contact_.numPressureDofs());
+      augmented_residual     = 0.0;
+      const mfem::Vector res = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
+                                            *parameters_[parameter_indices].state...);
+
+      contact_.setPressures(mfem::Vector(augmented_residual, displacement_.Size(), contact_.numPressureDofs()));
+      contact_.update(cycle_, time_, dt);
+      // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
+      // tracking strategy
+      // See https://github.com/mfem/mfem/issues/3531
+      mfem::Vector r_blk(augmented_residual, 0, displacement_.space().TrueVSize());
+      r_blk = res;
+
+      contact_.residualFunction(shape_displacement_, displacement_, augmented_residual);
+      r_blk.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
+
       // use the most recently evaluated Jacobian
       auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
                                     *parameters_[parameter_indices].previous_state...);
       J_.reset();
       J_ = assemble(drdu);
 
-      contact_.update(cycle_, time_, dt);
       if (contact_.haveLagrangeMultipliers()) {
         J_offsets_    = mfem::Array<int>({0, displacement_.Size(), displacement_.Size() + contact_.numPressureDofs()});
         J_constraint_ = contact_.jacobianFunction(J_.release());
@@ -334,29 +363,16 @@ protected:
         J_operator_ = J_.get();
       }
 
-      // Update the linearized Jacobian matrix
-      mfem::Vector augmented_residual(displacement_.space().TrueVSize() + contact_.numPressureDofs());
-      augmented_residual     = 0.0;
-      const mfem::Vector res = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
-                                            *parameters_[parameter_indices].state...);
-
-      // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
-      // tracking strategy
-      // See https://github.com/mfem/mfem/issues/3531
-      mfem::Vector r(augmented_residual, 0, displacement_.space().TrueVSize());
-      r = res;
-      r += contact_.forces();
-
       augmented_residual *= -1.0;
 
       mfem::Vector augmented_solution(displacement_.space().TrueVSize() + contact_.numPressureDofs());
       augmented_solution = 0.0;
       mfem::Vector du(augmented_solution, 0, displacement_.space().TrueVSize());
       du = du_;
-      mfem::EliminateBC(*J_, *J_e_, constrained_dofs, du, r);
+      mfem::EliminateBC(*J_, *J_e_, constrained_dofs, du, r_blk);
       for (int i = 0; i < constrained_dofs.Size(); i++) {
         int j = constrained_dofs[i];
-        r[j]  = du[j];
+        r_blk[j]  = du[j];
       }
 
       auto& lin_solver = nonlin_solver_->linearSolver();

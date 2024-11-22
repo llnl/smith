@@ -63,7 +63,7 @@ std::unique_ptr<SolidMechT> createContactSolver(const NonlinearSolverOptions& no
 
   auto solid =
       std::make_unique<SolidMechT>(nonlinear_opts, solid_mechanics::direct_linear_options, dyn_opts,
-                                   physics_prefix + std::to_string(iter++), mesh_tag);
+                                   physics_prefix + std::to_string(iter++), mesh_tag, std::vector<std::string>{}, 0, 0.0, false, true);
   solid->setMaterial(mat);
 
   solid->setDisplacementBCs({2}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) { disp = 0.0; });
@@ -168,14 +168,13 @@ TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjec
 {
   auto solid_solver               = createContactSolver(nonlinear_opts, dyn_opts, mat);
   auto [qoi1, shape_sensitivity1] = computeContactQoiSensitivities(*solid_solver, tsInfo);
-
-  solid_solver->resetStates();
-  FiniteElementState derivative_direction(shape_sensitivity1.space(), "derivative_direction");
-  fillDirection(derivative_direction);
-
   auto [qoi2, shape_sensitivity2] = computeContactQoiSensitivities(*solid_solver, tsInfo);
 
   EXPECT_EQ(qoi1, qoi2);
+  
+  solid_solver->resetStates();
+  FiniteElementState derivative_direction(shape_sensitivity1.space(), "derivative_direction");
+  fillDirection(derivative_direction);
 
   double directional_deriv1 = innerProduct(derivative_direction, shape_sensitivity1);
   double directional_deriv2 = innerProduct(derivative_direction, shape_sensitivity2);
