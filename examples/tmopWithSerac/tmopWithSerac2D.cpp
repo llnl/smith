@@ -28,36 +28,6 @@
 #include <functional>
 #include <mfem/linalg/tensor.hpp>
 
-#define TWO_DIM_SETUP
-// #undef TWO_DIM_SETUP
-
-// #define ONE_ELEM_TEST
-#undef ONE_ELEM_TEST
-
-#define CUBOID_LSF
-// #undef CUBOID_LSF
-//////////////////////////////////////////////
-//////////////////////////////////////////////
-struct CircleLSF { 
-  double x0;
-  double y0; 
-  double radius; 
-
-  template < typename T >
-  T SDF(const serac::tensor<T, 2> & x) const {
-    using std::pow;
-    return pow(pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), 0.5) - radius;
-  }
-
-  template < typename T >
-  serac::tensor<T, 2> GRAD(const serac::tensor<T, 2> & x) const{
-    using std::pow;
-    auto dphi = 0.0*x;
-    dphi[0] = (x[0] - x0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
-    dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, 2.0) + pow(x[1]-y0, 2.0), -0.5);
-    return dphi;
-  }
-};
 //////////////////////////////////////////////
 //////////////////////////////////////////////
 struct CuboidLSF2D { 
@@ -83,37 +53,7 @@ struct CuboidLSF2D {
 };
 //////////////////////////////////////////////
 //////////////////////////////////////////////
-struct CuboidLSF3D { 
-  double x0;
-  double y0; 
-  // double z0; 
-  double radius; 
-  double exponent; 
 
-  template < typename T >
-  T SDF(const serac::tensor<T, 3> & x) const {
-    using std::pow;
-    // return pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent) + pow(x[2]-z0, exponent), 1.0/exponent) - radius;
-    return pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent) - radius;
-  }
-
-  template < typename T >
-  serac::tensor<T, 3> GRAD(const serac::tensor<T, 3> & x) const{
-    using std::pow;
-    auto dphi = 0.0*x;
-
-    // dphi[0] = (x[0] - x0)* pow( pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent) + pow(x[2]-z0, exponent), 1.0/exponent-1);
-    // dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent) + pow(x[2]-z0, exponent), 1.0/exponent-1);
-    // dphi[2] = (x[2] - z0)* pow( pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent) + pow(x[2]-z0, exponent), 1.0/exponent-1);
-
-    dphi[0] = (x[0] - x0)* pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
-    dphi[1] = (x[1] - y0)* pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
-    // dphi[2] = (x[2] - z0)* pow( pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
-    return dphi;
-  }
-};
-//////////////////////////////////////////////
-//////////////////////////////////////////////
 // Define your level set function as a class
 template <typename T1, typename T2, typename T3>
 class LevelSetFunction
@@ -157,22 +97,9 @@ int main(int argc, char* argv[])
   
   // Define the spatial dimension of the problem and the type of finite elements used.
   static constexpr int ORDER {1};
-#ifdef TWO_DIM_SETUP
   static constexpr int DIM {2};
   auto inputFilename = "../../data/meshes/circleTriMesh.g";
   int numElements = 285;
-#ifdef ONE_ELEM_TEST  
-  // inputFilename = "../../data/meshes/oneElemTriEquiMesh.g";
-  inputFilename = "../../data/meshes/oneElemTriRectMesh.g";
-  numElements = 1;
-#endif  
-#else
-  static constexpr int DIM {3};
-  // auto inputFilename = "../../data/meshes/cylOneElemThickness.g";
-  // int numElements = 354;
-  auto inputFilename = "../../data/meshes/cylOneElemThicknessTets.g";
-  int numElements = 9280;
-#endif
 
   auto mesh = serac::buildMeshFromFile(inputFilename);
 
@@ -210,7 +137,6 @@ int main(int argc, char* argv[])
       // Jacobian from reference to the physical/current space (i.e., dx_dxi)
       auto Amat = dXdxi + serac::dot(du_dX, dXdxi); // (I + du/dX) * dX/dxi
 
-#ifdef TWO_DIM_SETUP
       // auto mu = 0.5 * (serac::inner(Tmat, Tmat) / abs(serac::det(Tmat))) - 1.0;
       // triangular correction = [ 1, -1/sqrt(3); 0, -2/sqrt(3)]
       serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
@@ -233,32 +159,6 @@ int main(int argc, char* argv[])
 
       // compute flux contribution
       auto flux = (1.0/serac::det(dXdxi*WInvMat)) * serac::dot(dmudTmat, serac::transpose(dXdxi*WInvMat));
-#else
-      // triangular correction
-      serac::mat3 WInvMat = {{{1.00000, -0.577350, -0.408248}, {0, 1.15470, -0.408248}, {0, 0, 1.22474}}};
-      // serac::mat3 WInvMat = {{{1.0, 0.0, 0.0}, {0, 1.0, 0.0}, {0.0, 0.0, 1.0}}};
-
-      // Target matrix (updated Jacobian, Tmat or T)
-      auto Tmat = serac::dot(Amat, WInvMat);
-
-      // auto mu = (serac::squared_norm(J) / (3 * pow(serac::det(J), 2.0 / 3.0))) - 1.0; // serac::dot(J, J)
-      using std::pow;
-      // auto J = dXdxi + serac::dot(du_dX, dXdxi);
-      // auto TmatdotTmat = serac::squared_norm(Tmat); // serac::dot(TmatdotTmat, TmatdotTmat)
-      auto TmatInnerTmat = serac::inner(Tmat, Tmat);
-      auto invTmatT = serac::inv(serac::transpose(Tmat));
-      auto scale = (2.0 / (3.0 * pow(serac::det(Tmat), 2.0 / 3.0) ));
-      if (serac::det(Tmat) <= 0.0)
-      {
-        scale = 0.0;
-      }
-      // static constexpr auto I = serac::DenseIdentity<DIM>();
-      // auto flux       = scale * (J - (JJ/3.0) * invTmatT) * serac::det(I + du_dX);
-      auto dmudTmat       = scale * (Tmat - (TmatInnerTmat/3.0) * invTmatT);
-
-      // compute flux contribution
-      auto flux = (1.0/serac::det(dXdxi*WInvMat)) * serac::dot(dmudTmat, serac::transpose(dXdxi*WInvMat));
-#endif
       auto source     = serac::zero{};
       return ::serac::tuple{source, flux};  /// N*source + DN*flux
     },
@@ -266,8 +166,8 @@ int main(int argc, char* argv[])
   );
 
   // Circle/cylinder geometry
-  auto omega = 0.0e1;
-  auto radius = 1.15;
+  auto omega = 1.0e1;
+  auto radius = 0.75;
   auto x0 = 0.0;
   auto y0 = 0.0;
 
@@ -278,20 +178,9 @@ int main(int argc, char* argv[])
       auto [X, dXdxi] = position;
       auto u = serac::get<0>(nodeDisp);
       auto x = X + u;
-#ifdef CUBOID_LSF
-#ifdef TWO_DIM_SETUP
-      auto phi_value = CuboidLSF2D{x0, y0, 0.8*radius, 10};
-#else
-      // auto z0 = 0.0;
-      auto phi_value = CuboidLSF3D{x0, y0, 1.0*radius, 2};
-#endif
+      auto phi_value = CuboidLSF2D{x0, y0, 1.0*radius, 2};
       auto phiVal = phi_value.SDF(x);
       auto dphi = phi_value.GRAD(x);
-#else
-      auto phi_value = CircleLSF{x0, y0, radius};
-      auto phiVal = phi_value.SDF(x);
-      auto dphi = phi_value.GRAD(x);
-#endif
       return 2.0 * omega * phiVal * dphi;
     },
     radial_boundary // whole_boundary
@@ -299,27 +188,10 @@ int main(int argc, char* argv[])
 
   int totNumDofs = shape_fes->TrueVSize();
 
-#ifdef TWO_DIM_SETUP
-#ifdef ONE_ELEM_TEST
-// Constrain half of the dofs in the one element triangular mesh setup
-mfem::Array<int> constrainedDofs(4);
-for(auto iDof=0; iDof<4; iDof ++){
-  constrainedDofs[iDof] = iDof;
-}
-#else
-  mfem::Array<int> ess_tdof_list, ess_bdr(mesh.bdr_attributes.Max());
-  ess_bdr = 0;
-  ess_bdr[0] = 1;
-  mfem::Array<int> constrainedDofs;
-  shape_fes->GetEssentialTrueDofs(ess_bdr, constrainedDofs);
-#endif
-#else
   // Get dofs in z direction for all elements (pseudo 2D problem)
   mfem::Array<int> ess_tdof_list, ess_bdr(mesh.bdr_attributes.Max());
   ess_bdr = 0;
-#ifdef TWO_DIM_SETUP
-  ess_bdr[1] = 1;
-  ess_bdr[2] = 1;
+  ess_bdr[0] = 1;
   shape_fes->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
   mfem::Array<int> constrainedDofs(totNumDofs/DIM);
   int counter = 0;
@@ -327,86 +199,25 @@ for(auto iDof=0; iDof<4; iDof ++){
     constrainedDofs[counter] = ess_tdof_list[iDof];
     counter++;
   }
-#else
-// ess_bdr[0] = 1;
-  ess_bdr[1] = 1;
-  ess_bdr[2] = 1;
-  shape_fes->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
-
-  // mfem::Array<int> ess_tdof_list_2, ess_bdr_2(mesh.bdr_attributes.Max());
-  // ess_bdr_2[0] = 1;
-  // shape_fes->GetEssentialTrueDofs(ess_bdr, ess_tdof_list_2);
-  // int totNumDofs2 = ess_tdof_list_2.Size();
-
-  // mfem::Array<int> constrainedDofs(ess_tdof_list.Size() + ess_tdof_list_2.Size());
-// std::cout<<".......... 1 ..........."<<std::endl;
-  mfem::Array<int> constrainedDofs(ess_tdof_list.Size());
-  int counter = 0;
-  for(auto iDof=DIM-1; iDof<totNumDofs; iDof += DIM){
-    constrainedDofs[counter] = ess_tdof_list[iDof];
-    counter++;
-  }
-
-// std::cout<<".......... 2 ..........."<<std::endl;
-std::cout<<".......... counter ........... "<<counter<<std::endl;
-// exit(0);
-
-  // for(int iDof=0; iDof<counter; iDof++){
-// std::cout<<".......... 3a ..........."<<std::endl;
-    // constrainedDofs[iDof] = ess_tdof_list[(DIM-1)+iDof*DIM];
-// std::cout<<".......... iDof ..........."<< iDof <<std::endl;
-// std::cout<<".......... (DIM-1)+iDof*DIM ..........."<< (DIM-1)+iDof*DIM <<std::endl;
-  // }
-// std::cout<<"... constrainedDofs.Size() = "<<constrainedDofs.Size()<<std::endl;
-// std::cout<<"... ess_tdof_list.Size() = "<<ess_tdof_list.Size()<<std::endl;
-// std::cout<<"... totNumDofs = "<<totNumDofs<<std::endl;
-// std::cout<<"... counter = "<<counter<<std::endl;
-// exit(0);
-  // for(auto iDof=0; iDof<ess_tdof_list_2.Size(); iDof ++){
-  //   constrainedDofs[counter] = ess_tdof_list_2[iDof];
-  //   counter++;
-  // }
-#endif
-#endif
 
   // wrap residual and provide Jacobian
   serac::mfem_ext::StdFunctionOperator residual_opr(
     totNumDofs,
-#ifdef ONE_ELEM_TEST
-    [&constrainedDofs, &residual](const mfem::Vector& u, mfem::Vector& r) {
-#else
     // [&residual](const mfem::Vector& u, mfem::Vector& r) {
     [&constrainedDofs, &residual](const mfem::Vector& u, mfem::Vector& r) {
-#endif
       double dummy_time = 1.0;
       const mfem::Vector res = residual(dummy_time, u);
       r = res;
-#ifdef ONE_ELEM_TEST
-      r.SetSubVector(constrainedDofs, 0.0);
-#endif
-#ifndef TWO_DIM_SETUP
-      r.SetSubVector(constrainedDofs, 0.0);
-#endif
     },
-#ifdef ONE_ELEM_TEST
-    [&constrainedDofs, &residual, &dresidualdu](const mfem::Vector& u) -> mfem::Operator& {
-#else
     // [&residual, &dresidualdu](const mfem::Vector& u) -> mfem::Operator& {      
     [&constrainedDofs, &residual, &dresidualdu](const mfem::Vector& u) -> mfem::Operator& {
-#endif
       double dummy_time = 1.0;
       auto [val, dr_du] = residual(dummy_time, serac::differentiate_wrt(u));
       dresidualdu       = assemble(dr_du);
-#ifdef ONE_ELEM_TEST
-      dresidualdu->EliminateBC(constrainedDofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
-#endif
-#ifndef TWO_DIM_SETUP
-      dresidualdu->EliminateBC(constrainedDofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
-#endif
       return *dresidualdu;
     }
   );
-std::cout<<".......... 1 ..........."<<std::endl;
+
   const serac::LinearSolverOptions lin_opts = {
                                         .linear_solver = ::serac::LinearSolver::CG,
                                         // .linear_solver  = serac::LinearSolver::Strumpack,
@@ -429,18 +240,12 @@ std::cout<<".......... 1 ..........."<<std::endl;
 
   serac::EquationSolver eq_solver(nonlin_opts, lin_opts, pmesh.GetComm());
   eq_solver.setOperator(residual_opr);
-std::cout<<".......... 2 ..........."<<std::endl;  
   eq_solver.solve(node_disp_computed);
-std::cout<<".......... 3 ..........."<<std::endl;
 
   mfem::ParGridFunction nodeSolGF(shape_fes.get());
   nodeSolGF.SetFromTrueDofs(node_disp_computed);
-// nodeSolGF.Print();
-#ifdef TWO_DIM_SETUP
+
   auto pd = mfem::ParaViewDataCollection("sol_mesh_morphing_serac_2D", &pmesh);
-#else
-  auto pd = mfem::ParaViewDataCollection("sol_mesh_morphing_serac_3D", &pmesh);
-#endif
   pd.RegisterField("solution", &nodeSolGF);
   pd.SetCycle(1);
   pd.SetTime(1);
