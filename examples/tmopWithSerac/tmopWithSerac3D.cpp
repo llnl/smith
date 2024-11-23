@@ -109,7 +109,7 @@ int main(int argc, char* argv[])
   // auto inputFilename = "../../data/meshes/cylOneElemThickness.g";
   // int numElements = 354;
   auto inputFilename = "../../data/meshes/cylOneElemThicknessTets.g";
-  int numElements = 9280;
+  int numElements = 2485;// 9280;
 
   auto mesh = serac::buildMeshFromFile(inputFilename);
 
@@ -159,18 +159,21 @@ int main(int argc, char* argv[])
       // auto J = dXdxi + serac::dot(du_dX, dXdxi);
       // auto TmatdotTmat = serac::squared_norm(Tmat); // serac::dot(TmatdotTmat, TmatdotTmat)
       auto TmatInnerTmat = serac::inner(Tmat, Tmat);
-      auto invTmatT = serac::inv(serac::transpose(Tmat));
+      auto invTransTmat = serac::inv(serac::transpose(Tmat));
       auto scale = (2.0 / (3.0 * pow(serac::det(Tmat), 2.0 / 3.0) ));
       if (serac::det(Tmat) <= 0.0)
       {
         scale = 0.0;
+// std::cout<<".......... warning ........... "<<std::endl;
       }
+
       // static constexpr auto I = serac::DenseIdentity<DIM>();
-      // auto flux       = scale * (J - (JJ/3.0) * invTmatT) * serac::det(I + du_dX);
-      auto dmudTmat       = scale * (Tmat - (TmatInnerTmat/3.0) * invTmatT);
+      // auto flux       = scale * (J - (JJ/3.0) * invTransTmat) * serac::det(I + du_dX);
+      auto dmudTmat = scale * (Tmat - (TmatInnerTmat/3.0) * invTransTmat);
 
       // compute flux contribution
       auto flux = (1.0/serac::det(dXdxi*WInvMat)) * serac::dot(dmudTmat, serac::transpose(dXdxi*WInvMat));
+
       auto source     = serac::zero{};
       return ::serac::tuple{source, flux};  /// N*source + DN*flux
     },
@@ -178,8 +181,8 @@ int main(int argc, char* argv[])
   );
 
   // Circle/cylinder geometry
-  auto omega = 0.0e1;
-  auto radius = 1.15;
+  auto omega = 1.0e4;
+  auto radius = 0.85;
   auto x0 = 0.0;
   auto y0 = 0.0;
 
@@ -194,7 +197,17 @@ int main(int argc, char* argv[])
       auto phi_value = CuboidLSF3D{x0, y0, 1.0*radius, 2};
       auto phiVal = phi_value.SDF(x);
       auto dphi = phi_value.GRAD(x);
-      return 2.0 * omega * phiVal * dphi;
+      // return 2.0 * omega * phiVal * dphi;
+
+      // serac::mat3 WInvMat = {{{1.00000, -0.577350, -0.408248}, {0, 1.15470, -0.408248}, {0, 0, 1.22474}}};
+      serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
+// std::cout<<"... dXdxi = "<<dXdxi<<std::endl;
+// std::cout<<"... dphi = "<<dphi<<std::endl;
+// std::cout<<"... WInvMat = "<<WInvMat<<std::endl;
+// std::cout<<"... serac::transpose(WInvMat*WInvMat) = "<<serac::transpose(dXdxi*WInvMat)<<std::endl;
+// std::cout<<"... serac::dot(dphi, serac::transpose(WInvMat*dXdxi)) = "<<serac::dot(dphi, serac::transpose(WInvMat*dXdxi))<<std::endl;
+// exit(0);
+      return 2.0 * omega * phiVal * serac::dot(dphi, serac::transpose(WInvMat*dXdxi));
     },
     radial_boundary // whole_boundary
   );
@@ -215,16 +228,18 @@ int main(int argc, char* argv[])
   // int totNumDofs2 = ess_tdof_list_2.Size();
 
   // mfem::Array<int> constrainedDofs(ess_tdof_list.Size() + ess_tdof_list_2.Size());
-// std::cout<<".......... 1 ..........."<<std::endl;
+// std::cout<<"....................."<<std::endl;
   mfem::Array<int> constrainedDofs(ess_tdof_list.Size());
   int counter = 0;
-  for(auto iDof=DIM-1; iDof<totNumDofs; iDof += DIM){
+  for(auto iDof=DIM-1; iDof<ess_tdof_list.Size(); iDof += DIM){
     constrainedDofs[counter] = ess_tdof_list[iDof];
     counter++;
   }
-
+constrainedDofs.SetSize(counter);
 // std::cout<<".......... 2 ..........."<<std::endl;
-std::cout<<".......... counter ........... "<<counter<<std::endl;
+// std::cout<<".......... totNumDofs = "<<totNumDofs<<std::endl;
+// std::cout<<".......... ess_tdof_list.Size() = "<<ess_tdof_list.Size()<<std::endl;
+// std::cout<<".......... counter = "<<counter<<std::endl;
 // exit(0);
 
   // for(int iDof=0; iDof<counter; iDof++){
@@ -286,7 +301,6 @@ std::cout<<".......... counter ........... "<<counter<<std::endl;
   serac::EquationSolver eq_solver(nonlin_opts, lin_opts, pmesh.GetComm());
   eq_solver.setOperator(residual_opr);
   eq_solver.solve(node_disp_computed);
-std::cout<<".......... 1 ..........."<<std::endl;
 
   mfem::ParGridFunction nodeSolGF(shape_fes.get());
   nodeSolGF.SetFromTrueDofs(node_disp_computed);
