@@ -142,10 +142,10 @@ int main(int argc, char* argv[])
     [=](double /*t*/, auto position, auto nodeDisp) {
       // x = X + u
       auto [_, dXdxi] = position;
-      auto du_dX = serac::get<1>(nodeDisp);
+      auto dudX = serac::get<1>(nodeDisp);
       
       // Jacobian from reference to the physical/current space (i.e., dx_dxi)
-      auto Amat = dXdxi + serac::dot(du_dX, dXdxi); // (I + du/dX) * dX/dxi
+      auto Amat = dXdxi + serac::dot(dudX, dXdxi); // (I + du/dX) * dX/dxi
 
       // triangular correction
       serac::mat3 WInvMat = {{{1.00000, -0.577350, -0.408248}, {0, 1.15470, -0.408248}, {0, 0, 1.22474}}};
@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
 
       // auto mu = (serac::squared_norm(J) / (3 * pow(serac::det(J), 2.0 / 3.0))) - 1.0; // serac::dot(J, J)
       using std::pow;
-      // auto J = dXdxi + serac::dot(du_dX, dXdxi);
+      // auto J = dXdxi + serac::dot(dudX, dXdxi);
       // auto TmatdotTmat = serac::squared_norm(Tmat); // serac::dot(TmatdotTmat, TmatdotTmat)
       auto TmatInnerTmat = serac::inner(Tmat, Tmat);
       auto invTransTmat = serac::inv(serac::transpose(Tmat));
@@ -168,7 +168,7 @@ int main(int argc, char* argv[])
       }
 
       // static constexpr auto I = serac::DenseIdentity<DIM>();
-      // auto flux       = scale * (J - (JJ/3.0) * invTransTmat) * serac::det(I + du_dX);
+      // auto flux       = scale * (J - (JJ/3.0) * invTransTmat) * serac::det(I + dudX);
       auto dmudTmat = scale * (Tmat - (TmatInnerTmat/3.0) * invTransTmat);
 
       // compute flux contribution
@@ -191,23 +191,34 @@ int main(int argc, char* argv[])
     serac::Dimension<DIM - 1>{}, serac::DependsOn<0>{},
     [=](double /*t*/, auto position, auto nodeDisp) {
       auto [X, dXdxi] = position;
-      auto u = serac::get<0>(nodeDisp);
+      // auto u = serac::get<0>(nodeDisp);
+      auto [u, dudX] = nodeDisp;
       auto x = X + u;
       // auto z0 = 0.0;
       auto phi_value = CuboidLSF3D{x0, y0, 1.0*radius, 2};
       auto phiVal = phi_value.SDF(x);
       auto dphi = phi_value.GRAD(x);
-      // return 2.0 * omega * phiVal * dphi;
+
+      return 2.0 * omega * phiVal * dphi;
+      // auto dxdxi = dXdxi + dot(serac::transpose(dudX), dXdxi);
+      // auto dA = norm(cross(dXdxi));
+      // auto da = norm(cross(dxdxi));
+      // auto area_correction = da / dA;
+      // return 2.0 * omega * phiVal * dphi * area_correction;
 
       // serac::mat3 WInvMat = {{{1.00000, -0.577350, -0.408248}, {0, 1.15470, -0.408248}, {0, 0, 1.22474}}};
-      serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
+//       serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
 // std::cout<<"... dXdxi = "<<dXdxi<<std::endl;
 // std::cout<<"... dphi = "<<dphi<<std::endl;
 // std::cout<<"... WInvMat = "<<WInvMat<<std::endl;
-// std::cout<<"... serac::transpose(WInvMat*WInvMat) = "<<serac::transpose(dXdxi*WInvMat)<<std::endl;
-// std::cout<<"... serac::dot(dphi, serac::transpose(WInvMat*dXdxi)) = "<<serac::dot(dphi, serac::transpose(WInvMat*dXdxi))<<std::endl;
+// std::cout<<"... serac::transpose(dXdxi*WInvMat) = "<<serac::transpose(dXdxi*WInvMat)<<std::endl;
+// // std::cout<<"... serac::transpose(dXdxi*WInvMat)*dphi = "<<serac::transpose(dXdxi*WInvMat) * dphi<<std::endl;
+// std::cout<<"... serac::transpose(dXdxi*WInvMat)*dphi = "<<serac::dot(serac::transpose(dXdxi*WInvMat), dphi)<<std::endl;
+// // std::cout<<"... serac::dot(dphi, serac::transpose(WInvMat*dXdxi)) = "<<serac::dot(dphi, serac::transpose(WInvMat*dXdxi))<<std::endl;
+// // std::cout<<"... serac::dot(dphi, serac::transpose(WInvMat*dXdxi)) = "<<serac::dot(serac::transpose(WInvMat*dXdxi), serac::transpose(dphi))<<std::endl;
 // exit(0);
-      return 2.0 * omega * phiVal * serac::dot(dphi, serac::transpose(WInvMat*dXdxi));
+      // return 2.0 * omega * phiVal * serac::dot(dphi, serac::transpose(WInvMat*dXdxi));
+      // return 2.0 * omega * phiVal * dphi;
     },
     radial_boundary // whole_boundary
   );
