@@ -30,6 +30,30 @@
 
 //////////////////////////////////////////////
 //////////////////////////////////////////////
+
+inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
+{
+  mfem::HypreParMatrix* H = K.get();
+  hypre_ParCSRMatrix * Hhypre = static_cast<hypre_ParCSRMatrix *>(*H);
+  double Hfronorm;
+  hypre_ParCSRMatrixNormFro(Hhypre, &Hfronorm);
+  return Hfronorm;
+}
+ 
+inline double skewMatrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
+{
+  auto K_T = std::unique_ptr<mfem::HypreParMatrix>(K->Transpose());
+  K_T->Add(-1.0, *K);
+  (*K_T) *= 0.5;
+  mfem::HypreParMatrix* H = K_T.get();
+  hypre_ParCSRMatrix * Hhypre = static_cast<hypre_ParCSRMatrix *>(*H);
+  double Hfronorm;
+  hypre_ParCSRMatrixNormFro(Hhypre, &Hfronorm);
+  return Hfronorm;
+}
+
+//////////////////////////////////////////////
+//////////////////////////////////////////////
 struct CuboidLSF3D { 
   double x0;
   double y0; 
@@ -181,7 +205,7 @@ int main(int argc, char* argv[])
   );
 
   // Circle/cylinder geometry
-  auto omega = 1.0e4;
+  auto omega = 1.0e6;
   auto radius = 0.85;
   auto x0 = 0.0;
   auto y0 = 0.0;
@@ -285,6 +309,10 @@ constrainedDofs.SetSize(counter);
       auto [val, dr_du] = residual(dummy_time, serac::differentiate_wrt(u));
       dresidualdu       = assemble(dr_du);
       dresidualdu->EliminateBC(constrainedDofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
+
+// double asymmetryError = skewMatrixNorm(dresidualdu) / matrixNorm(dresidualdu);
+// std::cout<<"... asymmetryError = "<<asymmetryError<<std::endl;
+// exit(0);
       return *dresidualdu;
     }
   );
