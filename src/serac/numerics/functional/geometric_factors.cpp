@@ -76,7 +76,7 @@ GeometricFactors::GeometricFactors(const Domain& d, int q, mfem::Geometry::Type 
   int qpts_per_elem = num_quadrature_points(g, q);
 
   elements = d.get(g);
-  
+
   num_elements = elements.size();
 
   X = mfem::Vector(int(num_elements) * qpts_per_elem * spatial_dim);

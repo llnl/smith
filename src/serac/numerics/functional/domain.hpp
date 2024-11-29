@@ -19,8 +19,7 @@ namespace serac {
  * This region can be an entire mesh or some subset of its elements
  */
 class Domain {
- public:
-
+public:
   /// @brief enum describing what kind of elements are included in a Domain
   enum Type
   {
@@ -122,7 +121,7 @@ class Domain {
   mfem::Array<int> dof_list(mfem::FiniteElementSpace* fes) const;
 
   /** @brief Add an element to the domain
-   * 
+   *
    * Prefer to use the factory methods (ofElements, ofBoundaryElements, etc)
    * to create domains and thereby populate the element lists. Does not
    * check validity of inputs.
@@ -130,7 +129,7 @@ class Domain {
   void addElement(int geom_id, int elem_id, mfem::Geometry::Type element_geometry);
 
   /** @brief Add a batch of elements to the domain
-   * 
+   *
    * Prefer to use the factory methods (ofElements, ofBoundaryElements, etc)
    * to create domains and thereby populate the element lists. Does not
    * check validity of inputs.
@@ -138,8 +137,7 @@ class Domain {
   void addElements(const std::vector<int>& geom_id, const std::vector<int>& elem_id,
                    mfem::Geometry::Type element_geometry);
 
- private:
-
+private:
   /// @brief the underyling mesh for this domain
   const mfem::Mesh& mesh_;
 
@@ -224,7 +222,7 @@ Domain operator-(const Domain& a, const Domain& b);
 template <int dim>
 inline auto by_attr(int value)
 {
-  return [value](std::vector<tensor<double, dim> >, int attr) { return attr == value; };
+  return [value](std::vector<tensor<double, dim>>, int attr) { return attr == value; };
 }
 
 }  // namespace serac
