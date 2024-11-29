@@ -26,7 +26,10 @@ struct SetOperation {
  *
  * This region can be an entire mesh or some subset of its elements
  */
-struct Domain {
+class Domain {
+ public:
+
+
   /// @brief enum describing what kind of elements are included in a Domain
   enum Type
   {
@@ -37,13 +40,13 @@ struct Domain {
   static constexpr int num_types = 2;  ///< the number of entries in the Type enum
 
   /// @brief the underyling mesh for this domain
-  const mfem::Mesh& mesh_;
+  inline const mfem::Mesh& mesh() const { return mesh_; };
 
   /// @brief the geometric dimension of the domain
-  int dim_;
+  inline int dim() const { return dim_; };
 
   /// @brief whether the elements in this domain are on the boundary or not
-  Type type_;
+  inline Type type() const { return type_; };
 
   /// @brief construct an "empty" domain, to later be populated later with addElement member functions
   Domain(const mfem::Mesh& m, int d, Type type = Domain::Type::Elements) : mesh_(m), dim_(d), type_(type) {}
@@ -136,6 +139,15 @@ struct Domain {
                    mfem::Geometry::Type element_geometry);
 
  private:
+
+  /// @brief the underyling mesh for this domain
+  const mfem::Mesh& mesh_;
+
+  /// @brief the geometric dimension of the domain
+  int dim_;
+
+  /// @brief whether the elements in this domain are on the boundary or not
+  Type type_;
 
   ///@{
   /// @name ElementIds

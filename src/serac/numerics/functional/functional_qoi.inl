@@ -177,12 +177,12 @@ public:
   void AddDomainIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, Domain& domain,
                          std::shared_ptr<QuadratureData<qpt_data_type>> qdata = NoQData)
   {
-    if (domain.mesh_.GetNE() == 0) return;
+    if (domain.mesh().GetNE() == 0) return;
 
-    SLIC_ERROR_ROOT_IF(dim != domain.mesh_.Dimension(), "invalid mesh dimension for domain integral");
+    SLIC_ERROR_ROOT_IF(dim != domain.mesh().Dimension(), "invalid mesh dimension for domain integral");
 
-    check_for_unsupported_elements(domain.mesh_);
-    check_for_missing_nodal_gridfunc(domain.mesh_);
+    check_for_unsupported_elements(domain.mesh());
+    check_for_missing_nodal_gridfunc(domain.mesh());
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
     integrals_.push_back(
@@ -217,12 +217,12 @@ public:
   template <int dim, int... args, typename lambda>
   void AddBoundaryIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, const Domain& domain)
   {
-    auto num_bdr_elements = domain.mesh_.GetNBE();
+    auto num_bdr_elements = domain.mesh().GetNBE();
     if (num_bdr_elements == 0) return;
 
-    SLIC_ERROR_ROOT_IF(dim != domain.dim_, "invalid domain of integration for boundary integral");
+    SLIC_ERROR_ROOT_IF(dim != domain.dim(), "invalid domain of integration for boundary integral");
 
-    check_for_missing_nodal_gridfunc(domain.mesh_);
+    check_for_missing_nodal_gridfunc(domain.mesh());
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
     integrals_.push_back(MakeBoundaryIntegral<signature, Q, dim>(domain, integrand, std::vector<uint32_t>{args...}));
@@ -290,7 +290,7 @@ public:
     bool already_computed[Domain::num_types]{};  // default initializes to `false`
 
     for (auto& integral : integrals_) {
-      auto type = integral.domain_.type_;
+      auto type = integral.domain_.type();
 
       if (!already_computed[type]) {
         G_trial_[type][which].Gather(input_L_[which], input_E_[type][which]);
@@ -336,7 +336,7 @@ public:
     bool already_computed[Domain::num_types][num_trial_spaces]{};  // default initializes to `false`
 
     for (auto& integral : integrals_) {
-      auto type = integral.domain_.type_;
+      auto type = integral.domain_.type();
 
       for (auto i : integral.active_trial_spaces_) {
         if (!already_computed[type][i]) {
@@ -430,8 +430,8 @@ private:
       std::map<mfem::Geometry::Type, ExecArray<double, 3, exec>> element_gradients[Domain::num_types];
 
       for (auto& integral : form_.integrals_) {
-        auto& K_elem             = element_gradients[integral.domain_.type_];
-        auto& trial_restrictions = form_.G_trial_[integral.domain_.type_][which_argument].restrictions;
+        auto& K_elem             = element_gradients[integral.domain_.type()];
+        auto& trial_restrictions = form_.G_trial_[integral.domain_.type()][which_argument].restrictions;
 
         if (K_elem.empty()) {
           for (auto& [geom, trial_restriction] : trial_restrictions) {

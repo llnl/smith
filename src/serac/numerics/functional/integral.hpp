@@ -242,7 +242,7 @@ Integral MakeDomainIntegral(const Domain& domain, const lambda_type& qf,
 {
   FunctionSignature<s> signature;
 
-  SLIC_ERROR_IF(domain.type_ != Domain::Type::Elements, "Error: trying to evaluate a domain integral over a boundary");
+  SLIC_ERROR_IF(domain.type() != Domain::Type::Elements, "Error: trying to evaluate a domain integral over a boundary");
 
   Integral integral(domain, argument_indices);
 
@@ -329,7 +329,7 @@ Integral MakeBoundaryIntegral(const Domain& domain, const lambda_type& qf, std::
 {
   FunctionSignature<s> signature;
 
-  SLIC_ERROR_IF(domain.type_ != Domain::Type::BoundaryElements,
+  SLIC_ERROR_IF(domain.type() != Domain::Type::BoundaryElements,
                 "Error: trying to evaluate a boundary integral over a non-boundary domain of integration");
 
   Integral integral(domain, argument_indices);

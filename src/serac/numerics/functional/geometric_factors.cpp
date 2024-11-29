@@ -61,7 +61,7 @@ void compute_geometric_factors(mfem::Vector& positions_q, mfem::Vector& jacobian
 
 GeometricFactors::GeometricFactors(const Domain& d, int q, mfem::Geometry::Type g)
 {
-  auto* nodes = d.mesh_.GetNodes();
+  auto* nodes = d.mesh().GetNodes();
   auto* fes   = nodes->FESpace();
 
   auto         restriction = serac::ElementRestriction(fes, g);
@@ -71,7 +71,7 @@ GeometricFactors::GeometricFactors(const Domain& d, int q, mfem::Geometry::Type 
   // assumes all elements are the same order
   int p = fes->GetElementOrder(0);
 
-  int spatial_dim   = d.mesh_.SpaceDimension();
+  int spatial_dim   = d.mesh().SpaceDimension();
   int geometry_dim  = dimension_of(g);
   int qpts_per_elem = num_quadrature_points(g, q);
 
@@ -136,7 +136,7 @@ GeometricFactors::GeometricFactors(const Domain& d, int q, mfem::Geometry::Type 
 
 GeometricFactors::GeometricFactors(const Domain& d, int q, mfem::Geometry::Type g, FaceType type)
 {
-  auto* nodes = d.mesh_.GetNodes();
+  auto* nodes = d.mesh().GetNodes();
   auto* fes   = nodes->FESpace();
 
   auto         restriction = serac::ElementRestriction(fes, g, type);
@@ -146,7 +146,7 @@ GeometricFactors::GeometricFactors(const Domain& d, int q, mfem::Geometry::Type 
   // assumes all elements are the same order
   int p = fes->GetElementOrder(0);
 
-  int spatial_dim   = d.mesh_.SpaceDimension();
+  int spatial_dim   = d.mesh().SpaceDimension();
   int geometry_dim  = dimension_of(g);
   int qpts_per_elem = num_quadrature_points(g, q);
 

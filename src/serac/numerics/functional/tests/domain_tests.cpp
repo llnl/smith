@@ -40,24 +40,24 @@ TEST(domain, of_edges)
                                 }));
     auto d0_edges = d0.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d0_edges.size(), 4);
-    EXPECT_EQ(d0.dim_, 1);
+    EXPECT_EQ(d0.dim(), 1);
 
     Domain d1 = Domain::ofEdges(mesh, std::function([](std::vector<vec3> x) {
                                   return (0.5 * (x[0][1] + x[1][1])) < 0.25;  // y coordinate of edge midpoint
                                 }));
     auto d1_edges = d1.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d1_edges.size(), 4);
-    EXPECT_EQ(d1.dim_, 1);
+    EXPECT_EQ(d1.dim(), 1);
 
     Domain d2 = d0 | d1;
     auto d2_edges = d2.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d2_edges.size(), 7);
-    EXPECT_EQ(d2.dim_, 1);
+    EXPECT_EQ(d2.dim(), 1);
 
     Domain d3 = d0 & d1;
     auto d3_edges = d3.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d3_edges.size(), 1);
-    EXPECT_EQ(d3.dim_, 1);
+    EXPECT_EQ(d3.dim(), 1);
 
     // note: by_attr doesn't apply to edge sets in 3D, since
     //       mfem doesn't have the notion of edge attributes
@@ -71,24 +71,24 @@ TEST(domain, of_edges)
                                 }));
     auto d0_edges = d0.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d0_edges.size(), 3);
-    EXPECT_EQ(d0.dim_, 1);
+    EXPECT_EQ(d0.dim(), 1);
 
     Domain d1 = Domain::ofEdges(mesh, std::function([](std::vector<vec3> x) {
                                   return (0.5 * (x[0][1] + x[1][1])) < 0.25;  // y coordinate of edge midpoint
                                 }));
     auto d1_edges = d1.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d1_edges.size(), 3);
-    EXPECT_EQ(d1.dim_, 1);
+    EXPECT_EQ(d1.dim(), 1);
 
     Domain d2 = d0 | d1;
     auto d2_edges = d2.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d2_edges.size(), 5);
-    EXPECT_EQ(d2.dim_, 1);
+    EXPECT_EQ(d2.dim(), 1);
 
     Domain d3 = d0 & d1;
     auto d3_edges = d3.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d3_edges.size(), 1);
-    EXPECT_EQ(d3.dim_, 1);
+    EXPECT_EQ(d3.dim(), 1);
 
     // note: by_attr doesn't apply to edge sets in 3D, since
     //       mfem doesn't have the notion of edge attributes
@@ -104,24 +104,24 @@ TEST(domain, of_edges)
                                 }));
     auto d0_edges = d0.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d0_edges.size(), 1);
-    EXPECT_EQ(d0.dim_, 1);
+    EXPECT_EQ(d0.dim(), 1);
 
     Domain d1 = Domain::ofEdges(mesh, std::function([](std::vector<vec2> x, int /* bdr_attr */) {
                                   return (0.5 * (x[0][1] + x[1][1])) < 0.25;  // y coordinate of edge midpoint
                                 }));
     auto d1_edges = d1.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d1_edges.size(), 8);
-    EXPECT_EQ(d1.dim_, 1);
+    EXPECT_EQ(d1.dim(), 1);
 
     Domain d2 = d0 | d1;
     auto d2_edges = d2.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d2_edges.size(), 9);
-    EXPECT_EQ(d2.dim_, 1);
+    EXPECT_EQ(d2.dim(), 1);
 
     Domain d3 = d0 & d1;
     auto d3_edges = d3.get(mfem::Geometry::SEGMENT);
     EXPECT_EQ(d3_edges.size(), 0);
-    EXPECT_EQ(d3.dim_, 1);
+    EXPECT_EQ(d3.dim(), 1);
 
     // check that by_attr compiles
     Domain d4 = Domain::ofEdges(mesh, by_attr<dim>(3));
@@ -142,24 +142,24 @@ TEST(domain, of_faces)
                                 }));
     auto d0_quads = d0.get(mfem::Geometry::SQUARE);
     EXPECT_EQ(d0_quads.size(), 1);
-    EXPECT_EQ(d0.dim_, 2);
+    EXPECT_EQ(d0.dim(), 2);
 
     Domain d1 = Domain::ofFaces(mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
                                   return average(vertices)[1] < 0.25;  // y coordinate of face center
                                 }));
     auto d1_quads = d1.get(mfem::Geometry::SQUARE);
     EXPECT_EQ(d1_quads.size(), 1);
-    EXPECT_EQ(d1.dim_, 2);
+    EXPECT_EQ(d1.dim(), 2);
 
     Domain d2 = d0 | d1;
     auto d2_quads = d2.get(mfem::Geometry::SQUARE);
     EXPECT_EQ(d2_quads.size(), 2);
-    EXPECT_EQ(d2.dim_, 2);
+    EXPECT_EQ(d2.dim(), 2);
 
     Domain d3 = d0 & d1;
     auto d3_quads = d3.get(mfem::Geometry::SQUARE);
     EXPECT_EQ(d3_quads.size(), 0);
-    EXPECT_EQ(d3.dim_, 2);
+    EXPECT_EQ(d3.dim(), 2);
 
     // check that by_attr compiles
     Domain d4 = Domain::ofFaces(mesh, by_attr<dim>(3));
@@ -181,23 +181,23 @@ TEST(domain, of_faces)
                                 }));
     auto d0_tris = d0.get(mfem::Geometry::TRIANGLE);
     EXPECT_EQ(d0_tris.size(), 4);
-    EXPECT_EQ(d0.dim_, 2);
+    EXPECT_EQ(d0.dim(), 2);
 
     Domain d1 = Domain::ofFaces(
         mesh, std::function([](std::vector<vec3> x, int /* bdr_attr */) { return average(x)[1] < 0.1; }));
     auto d1_tris = d1.get(mfem::Geometry::TRIANGLE);
     EXPECT_EQ(d1_tris.size(), 1);
-    EXPECT_EQ(d1.dim_, 2);
+    EXPECT_EQ(d1.dim(), 2);
 
     Domain d2 = d0 | d1;
     auto d2_tris = d2.get(mfem::Geometry::TRIANGLE);
     EXPECT_EQ(d2_tris.size(), 4);
-    EXPECT_EQ(d2.dim_, 2);
+    EXPECT_EQ(d2.dim(), 2);
 
     Domain d3 = d0 & d1;
     auto d3_tris = d3.get(mfem::Geometry::TRIANGLE);
     EXPECT_EQ(d3_tris.size(), 1);
-    EXPECT_EQ(d3.dim_, 2);
+    EXPECT_EQ(d3.dim(), 2);
 
     // check that by_attr compiles
     Domain d4 = Domain::ofFaces(mesh, by_attr<dim>(3));
@@ -215,24 +215,24 @@ TEST(domain, of_faces)
                                 }));
     auto d0_quads = d0.get(mfem::Geometry::SQUARE);
     EXPECT_EQ(d0_quads.size(), 2);
-    EXPECT_EQ(d0.dim_, 2);
+    EXPECT_EQ(d0.dim(), 2);
 
     Domain d1 = Domain::ofFaces(mesh, std::function([](std::vector<vec2> vertices, int /* attr */) {
                                   return average(vertices)[1] < 0.55;  // y coordinate of face center
                                 }));
     auto d1_quads = d1.get(mfem::Geometry::SQUARE);
     EXPECT_EQ(d1_quads.size(), 8);
-    EXPECT_EQ(d1.dim_, 2);
+    EXPECT_EQ(d1.dim(), 2);
 
     Domain d2 = d0 | d1;
     auto d2_quads = d2.get(mfem::Geometry::SQUARE);
     EXPECT_EQ(d2_quads.size(), 8);
-    EXPECT_EQ(d2.dim_, 2);
+    EXPECT_EQ(d2.dim(), 2);
 
     Domain d3 = d0 & d1;
     auto d3_quads = d3.get(mfem::Geometry::SQUARE);
     EXPECT_EQ(d3_quads.size(), 2);
-    EXPECT_EQ(d3.dim_, 2);
+    EXPECT_EQ(d3.dim(), 2);
 
     // check that by_attr compiles
     Domain d4 = Domain::ofFaces(mesh, by_attr<dim>(3));
@@ -250,24 +250,24 @@ TEST(domain, of_elements)
 
     EXPECT_EQ(d0.get(mfem::Geometry::TETRAHEDRON).size(), 0);
     EXPECT_EQ(d0.get(mfem::Geometry::CUBE).size(), 1);
-    EXPECT_EQ(d0.dim_, 3);
+    EXPECT_EQ(d0.dim(), 3);
 
     Domain d1 = Domain::ofElements(mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
                                      return average(vertices)[1] < 0.75;  // y coordinate of face center
                                    }));
     EXPECT_EQ(d1.get(mfem::Geometry::TETRAHEDRON).size(), 6);
     EXPECT_EQ(d1.get(mfem::Geometry::CUBE).size(), 1);
-    EXPECT_EQ(d1.dim_, 3);
+    EXPECT_EQ(d1.dim(), 3);
 
     Domain d2 = d0 | d1;
     EXPECT_EQ(d2.get(mfem::Geometry::TETRAHEDRON).size(), 6);
     EXPECT_EQ(d2.get(mfem::Geometry::CUBE).size(), 2);
-    EXPECT_EQ(d2.dim_, 3);
+    EXPECT_EQ(d2.dim(), 3);
 
     Domain d3 = d0 & d1;
     EXPECT_EQ(d3.get(mfem::Geometry::TETRAHEDRON).size(), 0);
     EXPECT_EQ(d3.get(mfem::Geometry::CUBE).size(), 0);
-    EXPECT_EQ(d3.dim_, 3);
+    EXPECT_EQ(d3.dim(), 3);
 
     // check that by_attr works
     Domain d4 = Domain::ofElements(mesh, by_attr<dim>(3));
@@ -280,23 +280,23 @@ TEST(domain, of_elements)
                  mesh, std::function([](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; }));
     EXPECT_EQ(d0.get(mfem::Geometry::TRIANGLE).size(), 1);
     EXPECT_EQ(d0.get(mfem::Geometry::SQUARE).size(), 1);
-    EXPECT_EQ(d0.dim_, 2);
+    EXPECT_EQ(d0.dim(), 2);
 
     Domain d1 = Domain::ofElements(
         mesh, std::function([](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[1] < 0.45; }));
     EXPECT_EQ(d1.get(mfem::Geometry::TRIANGLE).size(), 1);
     EXPECT_EQ(d1.get(mfem::Geometry::SQUARE).size(), 1);
-    EXPECT_EQ(d1.dim_, 2);
+    EXPECT_EQ(d1.dim(), 2);
 
     Domain d2 = d0 | d1;
     EXPECT_EQ(d2.get(mfem::Geometry::TRIANGLE).size(), 2);
     EXPECT_EQ(d2.get(mfem::Geometry::SQUARE).size(), 2);
-    EXPECT_EQ(d2.dim_, 2);
+    EXPECT_EQ(d2.dim(), 2);
 
     Domain d3 = d0 & d1;
     EXPECT_EQ(d3.get(mfem::Geometry::TRIANGLE).size(), 0);
     EXPECT_EQ(d3.get(mfem::Geometry::SQUARE).size(), 0);
-    EXPECT_EQ(d3.dim_, 2);
+    EXPECT_EQ(d3.dim(), 2);
 
     // check that by_attr compiles
     Domain d4 = Domain::ofElements(mesh, by_attr<dim>(3));
@@ -311,7 +311,7 @@ TEST(domain, entireDomain2d)
 
   Domain d0 = EntireDomain(mesh);
 
-  EXPECT_EQ(d0.dim_, 2);
+  EXPECT_EQ(d0.dim(), 2);
   EXPECT_EQ(d0.get(mfem::Geometry::TRIANGLE).size(), 2);
   EXPECT_EQ(d0.get(mfem::Geometry::SQUARE).size(), 4);
 
@@ -330,7 +330,7 @@ TEST(domain, entireDomain3d)
 
   Domain d0 = EntireDomain(mesh);
 
-  EXPECT_EQ(d0.dim_, 3);
+  EXPECT_EQ(d0.dim(), 3);
   EXPECT_EQ(d0.get(mfem::Geometry::TETRAHEDRON).size(), 12);
   EXPECT_EQ(d0.get(mfem::Geometry::CUBE).size(), 7);
 
