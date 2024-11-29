@@ -75,11 +75,8 @@ GeometricFactors::GeometricFactors(const Domain& d, int q, mfem::Geometry::Type 
   int geometry_dim  = dimension_of(g);
   int qpts_per_elem = num_quadrature_points(g, q);
 
-  if (g == mfem::Geometry::TRIANGLE) elements = d.tri_ids_;
-  if (g == mfem::Geometry::SQUARE) elements = d.quad_ids_;
-  if (g == mfem::Geometry::TETRAHEDRON) elements = d.tet_ids_;
-  if (g == mfem::Geometry::CUBE) elements = d.hex_ids_;
-
+  elements = d.get(g);
+  
   num_elements = elements.size();
 
   X = mfem::Vector(int(num_elements) * qpts_per_elem * spatial_dim);
