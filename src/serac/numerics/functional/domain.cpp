@@ -475,8 +475,18 @@ Domain EntireBoundary(const mfem::Mesh& mesh)
   }
 }
 
+/// @cond
+using c_iter = std::vector<int>::const_iterator;
+using b_iter = std::back_insert_iterator<std::vector<int>>;
+using set_op = std::function<b_iter(c_iter, c_iter, c_iter, c_iter, b_iter)>;
+/// @endcond
+
+set_op union_op        = std::set_union<c_iter, c_iter, b_iter>;
+set_op intersection_op = std::set_intersection<c_iter, c_iter, b_iter>;
+set_op difference_op   = std::set_difference<c_iter, c_iter, b_iter>;
+
 /// @brief return a std::vector that is the result of applying (a op b)
-std::vector<int> set_operation(SetOperation::set_op op, const std::vector<int>& a, const std::vector<int>& b)
+std::vector<int> set_operation(set_op op, const std::vector<int>& a, const std::vector<int>& b)
 {
   std::vector<int> output;
   op(a.begin(), a.end(), b.begin(), b.end(), back_inserter(output));
@@ -484,7 +494,7 @@ std::vector<int> set_operation(SetOperation::set_op op, const std::vector<int>& 
 }
 
 /// @brief return a Domain that is the result of applying (a op b)
-Domain set_operation(SetOperation::set_op op, const Domain& a, const Domain& b)
+Domain set_operation(set_op op, const Domain& a, const Domain& b)
 {
   assert(&a.mesh_ == &b.mesh_);
   assert(a.dim_ == b.dim_);
@@ -517,10 +527,6 @@ Domain set_operation(SetOperation::set_op op, const Domain& a, const Domain& b)
 
   return output;
 }
-
-SetOperation::set_op union_op        = std::set_union<SetOperation::c_iter, SetOperation::c_iter, SetOperation::b_iter>;
-SetOperation::set_op intersection_op = std::set_intersection<SetOperation::c_iter, SetOperation::c_iter, SetOperation::b_iter>;
-SetOperation::set_op difference_op   = std::set_difference<SetOperation::c_iter, SetOperation::c_iter, SetOperation::b_iter>;
 
 Domain operator|(const Domain& a, const Domain& b) { return set_operation(union_op, a, b); }
 Domain operator&(const Domain& a, const Domain& b) { return set_operation(intersection_op, a, b); }

@@ -13,14 +13,6 @@
 
 namespace serac {
 
-struct SetOperation {
-  /// @cond
-  using c_iter = std::vector<int>::const_iterator;
-  using b_iter = std::back_insert_iterator<std::vector<int>>;
-  using set_op = std::function<b_iter(c_iter, c_iter, c_iter, c_iter, b_iter)>;
-  /// @endcond
-};
-
 /**
  * @brief a class for representing a geometric region that can be used for integration
  *
@@ -28,7 +20,6 @@ struct SetOperation {
  */
 class Domain {
  public:
-
 
   /// @brief enum describing what kind of elements are included in a Domain
   enum Type
@@ -40,13 +31,13 @@ class Domain {
   static constexpr int num_types = 2;  ///< the number of entries in the Type enum
 
   /// @brief the underyling mesh for this domain
-  inline const mfem::Mesh& mesh() const { return mesh_; };
+  const mfem::Mesh& mesh() const { return mesh_; };
 
   /// @brief the geometric dimension of the domain
-  inline int dim() const { return dim_; };
+  int dim() const { return dim_; };
 
   /// @brief whether the elements in this domain are on the boundary or not
-  inline Type type() const { return type_; };
+  Type type() const { return type_; };
 
   /// @brief construct an "empty" domain, to later be populated later with addElement member functions
   Domain(const mfem::Mesh& m, int d, Type type = Domain::Type::Elements) : mesh_(m), dim_(d), type_(type) {}
@@ -109,6 +100,13 @@ class Domain {
   static Domain ofBoundaryElements(const mfem::Mesh& mesh, std::function<bool(std::vector<vec3>, int)> func);
 
   /// @brief get elements by geometry type
+  ///
+  /// Returned list holds the index of each element in this Domain in the set
+  /// of all elements of like geometry in the mesh.
+  /// For example, if get(mfem::Geometry::SEGMENT)[0] is 5, then element 0 in
+  /// this domain is element 5 in the grouping of all edges in the mesh. In
+  /// other words, the returned list holds indices into the "E-vector" of the
+  /// appropriate geometry.
   const std::vector<int>& get(mfem::Geometry::Type geom) const
   {
     if (geom == mfem::Geometry::SEGMENT) return edge_ids_;
@@ -125,7 +123,7 @@ class Domain {
 
   /// @brief Add an element to the domain
   ///
-  /// This is meant for internal use on the class. Prefer to use the factory
+  /// Prefer to use the factory
   /// methods (ofElements, ofBoundaryElements, etc) to create domains and
   /// thereby populate the element lists.
   void addElement(int geom_id, int elem_id, mfem::Geometry::Type element_geometry);
@@ -194,7 +192,11 @@ class Domain {
   std::vector<int> mfem_hex_ids_;
   /// @endcond
 
-  friend Domain set_operation(SetOperation::set_op op, const Domain& a, const Domain& b);
+  using c_iter = std::vector<int>::const_iterator;
+  using b_iter = std::back_insert_iterator<std::vector<int>>;
+  using set_op = std::function<b_iter(c_iter, c_iter, c_iter, c_iter, b_iter)>;
+
+  friend Domain set_operation(set_op op, const Domain& a, const Domain& b);
 
   friend Domain operator|(const Domain& a, const Domain& b);
   friend Domain operator&(const Domain& a, const Domain& b);
