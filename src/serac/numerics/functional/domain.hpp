@@ -121,18 +121,20 @@ class Domain {
   /// @brief get mfem degree of freedom list for a given FiniteElementSpace
   mfem::Array<int> dof_list(mfem::FiniteElementSpace* fes) const;
 
-  /// @brief Add an element to the domain
-  ///
-  /// Prefer to use the factory
-  /// methods (ofElements, ofBoundaryElements, etc) to create domains and
-  /// thereby populate the element lists.
+  /** @brief Add an element to the domain
+   * 
+   * Prefer to use the factory methods (ofElements, ofBoundaryElements, etc)
+   * to create domains and thereby populate the element lists. Does not
+   * check validity of inputs.
+   */
   void addElement(int geom_id, int elem_id, mfem::Geometry::Type element_geometry);
 
-  /// @brief Add a batch of elements to the domain
-  ///
-  /// This is meant for internal use on the class. Prefer to use the factory
-  /// methods (ofElements, ofBoundaryElements, etc) to create domains and
-  /// thereby populate the element lists.
+  /** @brief Add a batch of elements to the domain
+   * 
+   * Prefer to use the factory methods (ofElements, ofBoundaryElements, etc)
+   * to create domains and thereby populate the element lists. Does not
+   * check validity of inputs.
+   */
   void addElements(const std::vector<int>& geom_id, const std::vector<int>& elem_id,
                    mfem::Geometry::Type element_geometry);
 
