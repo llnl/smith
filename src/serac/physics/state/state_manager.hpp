@@ -109,47 +109,60 @@ class StateManager {
     SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag),
                        axom::fmt::format("Serac's state manager does not have a mesh with given tag '{}'", mesh_tag));
     
-    // TODO: make the interface through MFEMSidreDataCollection, something like this:
+    // Get Sidre location for quadrature data inside data collection
     auto& datacoll = datacolls_.at(mesh_tag);
-    // datacoll.AddExternalNamedBuffer(axom::sidre::CHAR8_STR_ID, 2, shape, geom_data.data()).
-    
-    // TODO: remove this when the above interface is there
     axom::sidre::Group* bp_group = datacoll.GetBPGroup(); //mesh_datacoll
-    bp_group->createViewString("just_work_stupid_thing", "like_really");
     axom::sidre::Group* qdatas_group = bp_group->createGroup("quadraturedatas");
-    SLIC_INFO(axom::fmt::format("~~~~~ {}", qdatas_group->getPathName()));
 
-    if (!is_restart_) {
-      for (std::size_t i = 0; i < detail::qdata_geometries.size(); ++i) {
-        auto                   geom_type = detail::qdata_geometries[i];
-        if ((*qdata).data.find(geom_type) != (*qdata).data.end()) {
-          auto                   geom_name = detail::qdata_geometry_names[i];
-          SLIC_INFO(axom::fmt::format("~~~~~~~~~~~~~ {}", geom_name));
-          auto                   geom_data = (*qdata)[geom_type];
-          auto                   num_qdatas = static_cast<axom::IndexType>(geom_data.size());
-          SLIC_ERROR_ROOT_IF(num_qdatas == 0, "Number of QuadratureData's should be more than 0 at this point.");
-          auto                  qdata_size = static_cast<axom::IndexType>(sizeof(geom_data[0]));
-          axom::sidre::IndexType shape[2]  = {num_qdatas, qdata_size};
-          SLIC_INFO(axom::fmt::format("~~~~~~~~~~~~~ Shape {},{}", shape[0], shape[1]));
+    // For each geometry type, use i to get both type and name from matching arrays
+    for (std::size_t i = 0; i < detail::qdata_geometries.size(); ++i) {
+      auto geom_type = detail::qdata_geometries[i];
 
-          axom::sidre::Group*     geom_group = qdatas_group->createGroup(std::string(geom_name));
-          axom::sidre::View*      shape_view = geom_group->createViewAndAllocate("shape", axom::sidre::detail::SidreTT<axom::IndexType>::id, 2);
-          axom::IndexType* shape_data = shape_view->getData();
-          shape_data[0] = shape[0];
-          shape_data[1] = shape[1];
+      // Check if geometry type has any data
+      if ((*qdata).data.find(geom_type) != (*qdata).data.end()) {
+        auto geom_name = detail::qdata_geometry_names[i];
 
-          SLIC_ERROR_ROOT_IF(geom_data.data() == nullptr, "QuadratureData Array cannot be null!");
-          //axom::sidre::View*      data_view = geom_group->createView("data");
-          //data_view->setExternalDataPtr(axom::sidre::UINT8_ID, 2, shape, geom_data.data());
-          axom::sidre::View* data_view = geom_group->createViewAndAllocate("data", axom::sidre::UINT8_ID, shape[0] * shape[1]);
-          std::uint8_t* data = data_view->getData();
-          memcpy(data, geom_data.data(), static_cast<std::size_t>(shape[0] * shape[1]));
-          data[0] = 55;
+        // Get axom::Array of states in map
+        auto states = (*qdata)[geom_type];
 
+        if (!is_restart_) {
+          // Get various size information
+          auto num_states = static_cast<axom::IndexType>(states.size());
+          SLIC_ERROR_ROOT_IF(num_states == 0, "Number of States should be more than 0 at this point.");
+          auto qdata_size = static_cast<axom::IndexType>(sizeof(*(states.begin())));
+          auto total_size = num_states * state_size;
+          // Sidre treats information as an array of uint8s
+          auto num_uint8s = total_size / sizeof(std::uint8_t);
+
+          // Create Sidre group, store basic information, and point Sidre at the array external to Sidre
+          // Note: Sidre will not own this data.
+          axom::sidre::Group* geom_group = qdatas_group->createGroup(std::string(geom_name));
+          geom_group->createViewScalar("num_states", num_states);
+          geom_group->createViewScalar("state_size", state_size);
+          geom_group->createViewScalar("total_size", total_size);
+          axom::sidre::View* states_view = geom_group->createGroup("states");
+          states_view->setExternalDataPtr(axom::sidre::UINT8_ID, num_uint8s, states.data())
+        } else {
+          // Get Sidre group of where the states were stored.
+          // Note: this data is not owned by Sidre and the array should have been created at this point but
+          // the previous data has not been loaded yet into the array.
+          SLIC_ERROR_ROOT_IF(qdatas_group->hasGroup(std::string(geom_name)), 
+                             axom::fmt::format("Loaded Sidre Datastore did not have group for Quadrature Data geometry type '{}'", std::string(geom_name)));
+          axom::sidre::Group* geom_group = qdatas_group->getGroup(std::string(geom_name));
+          SLIC_ERROR_ROOT_IF(geom_group->hasGroup("states"), "Loaded Quadrature Data geometry Sidre group did not have 'states'");
+          axom::sidre::View* states_view = geom_group->getGroup("states");
+
+          // Tell Sidre where the external array is
+          states_view->setExternalDataPtr(states.data());
+
+          // TODO: no idea how to do this....
+          // Load data from disk into the external array
+          axom::sidre::IOManager reader(MPI_COMM_WORLD);
+          reader.loadExternalData(states_view, path);
+          states_view->loadExternalData(filename);
         }
+
       }
-    } else {
-      SLIC_ERROR_ROOT("restarts are not enabled yet here...");
     }
   }
 
