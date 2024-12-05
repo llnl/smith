@@ -21,7 +21,8 @@
 
 namespace serac {
 
-class ContactTest : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactType, std::string>> {};
+class ContactTest
+    : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactType, ContactJacobian, std::string>> {};
 
 TEST_P(ContactTest, beam)
 {
@@ -32,7 +33,7 @@ TEST_P(ContactTest, beam)
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
-  std::string            name = "contact_beam_" + std::get<2>(GetParam());
+  std::string            name = "contact_beam_" + std::get<3>(GetParam());
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
@@ -53,17 +54,18 @@ TEST_P(ContactTest, beam)
                                            .absolute_tol   = 1.0e-12,
                                            .max_iterations = 200,
                                            .print_level    = 1};
-#ifdef SERAC_USE_SUNDIALS
-  // KINFullStep is preferred, but has issues when active set is enabled
-  if (std::get<1>(GetParam()) == ContactType::TiedNormal) {
-    nonlinear_options.nonlin_solver = NonlinearSolver::KINFullStep;
-  }
-#endif
+// #ifdef SERAC_USE_SUNDIALS
+//   // KINFullStep is preferred, but has issues when active set is enabled
+//   if (std::get<1>(GetParam()) == ContactType::TiedNormal) {
+//     nonlinear_options.nonlin_solver = NonlinearSolver::KINFullStep;
+//   }
+// #endif
 
   ContactOptions contact_options{.method      = ContactMethod::SingleMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type        = std::get<1>(GetParam()),
-                                 .penalty     = 1.0e2};
+                                 .penalty     = 1.0e2,
+                                 .jacobian    = std::get<2>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, "beam_mesh");
@@ -112,12 +114,22 @@ TEST_P(ContactTest, beam)
 // NOTE: if Penalty is first and Lagrange Multiplier is second, SuperLU gives a zero diagonal error
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTest,
-    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, "penalty_tiednormal"),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless, "penalty_frictionless"),
+    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Approximate,
+                                    "penalty_tiednormal_Japprox"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
+                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox"),
                     std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::TiedNormal,
-                                    "lagrange_multiplier_tiednormal"),
+                                    ContactJacobian::Approximate, "lagrange_multiplier_tiednormal_Japprox"),
                     std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::Frictionless,
-                                    "lagrange_multiplier_frictionless")));
+                                    ContactJacobian::Approximate, "lagrange_multiplier_frictionless_Japprox"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Exact,
+                                    "penalty_tiednormal_Jexact"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
+                                    ContactJacobian::Exact, "penalty_frictionless_Jexact"),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::TiedNormal,
+                                    ContactJacobian::Exact, "lagrange_multiplier_tiednormal_Jexact"),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::Frictionless,
+                                    ContactJacobian::Exact, "lagrange_multiplier_frictionless_Jexact")));
 
 }  // namespace serac
 

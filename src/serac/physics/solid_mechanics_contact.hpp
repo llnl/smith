@@ -216,6 +216,16 @@ public:
             block_J->owns_blocks = false;
             J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 
+            // temp debug prints begin
+            mfem::SparseMatrix J11_sparse;
+            J_->MergeDiagAndOffd(J11_sparse);
+            mfem::DenseMatrix J11_dense;
+            J11_sparse.ToDenseMatrix(J11_dense);
+            std::ofstream dense11_mat("dense_J11.mat");
+            J11_dense.PrintMatlab(dense11_mat);
+            dense11_mat.close();
+            // temp debug prints end
+
             J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
 
             J_operator_ = J_.get();

@@ -40,6 +40,12 @@ enum class ContactType
   Frictionless /**< Enforce gap >= 0, pressure <= 0, gap * pressure = 0 in the normal direction */
 };
 
+enum class ContactJacobian
+{
+  Approximate, /**< Ignore higher order contributions to the Jacobian */
+  Exact        /**< Compute exact Jacobian (needed for quadratic convergence with Newton) */
+};
+
 /**
  * @brief Stores the options for a contact pair
  */
@@ -55,6 +61,9 @@ struct ContactOptions {
 
   /// Penalty parameter (only used when enforcement == ContactEnforcement::Penalty)
   double penalty = 1.0e3;
+
+  /// The method to use for Jacobian calculations
+  ContactJacobian jacobian = ContactJacobian::Approximate;
 };
 
 }  // namespace serac

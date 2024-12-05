@@ -62,6 +62,18 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
     pressure_space.GetRestrictionMatrix()->BooleanMult(dof_markers, tdof_markers);
     mfem::FiniteElementSpace::MarkerToList(tdof_markers, inactive_tdofs_);
   }
+
+  // make sure we can compute exact Jacobian if requested
+  if (getContactOptions().jacobian == ContactJacobian::Exact) {
+#ifdef TRIBOL_USE_ENZYME
+    tribol::enableEnzyme(interaction_id, true);
+    tribol::registerMfemReferenceCoords(interaction_id, static_cast<const mfem::ParGridFunction&>(*mesh.GetNodes()));
+#else
+    SLIC_INFO_ROOT(
+        "Exact contact Jacobian contributions require Enzyme support in Tribol. Using approximate Jacobian.");
+    contact_opts_.jacobian = ContactJacobian::Approximate;
+#endif
+  }
 }
 
 FiniteElementDual ContactInteraction::forces() const

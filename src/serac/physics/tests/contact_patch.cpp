@@ -10,8 +10,6 @@
 #include <set>
 #include <string>
 
-#include "tribol/interface/tribol.hpp"
-
 #include "axom/slic/core/SimpleLogger.hpp"
 #include <gtest/gtest.h>
 #include "mfem.hpp"
@@ -25,7 +23,7 @@
 
 namespace serac {
 
-class ContactTest : public testing::TestWithParam<std::pair<ContactEnforcement, std::string>> {};
+class ContactTest : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactJacobian, std::string>> {};
 
 TEST_P(ContactTest, patch)
 {
@@ -36,14 +34,14 @@ TEST_P(ContactTest, patch)
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
-  std::string            name = "contact_patch_" + GetParam().second;
+  std::string            name = "contact_patch_" + std::get<2>(GetParam());
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 2, 0);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 0, 0);
   StateManager::setMesh(std::move(mesh), "patch_mesh");
 
 #ifdef SERAC_USE_PETSC
@@ -70,12 +68,14 @@ TEST_P(ContactTest, patch)
                                            .print_level    = 1};
 
   ContactOptions contact_options{.method      = ContactMethod::SingleMortar,
-                                 .enforcement = GetParam().first,
+                                 .enforcement = std::get<0>(GetParam()),
                                  .type        = ContactType::Frictionless,
-                                 .penalty     = 1.0e4};
+                                 .penalty     = 1.0e4,
+                                 .jacobian    = std::get<1>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
-                                             solid_mechanics::default_quasistatic_options, name, "patch_mesh");
+                                             solid_mechanics::default_quasistatic_options, name, "patch_mesh", {}, 0,
+                                             0.0, false, false);
 
   double                      K = 10.0;
   double                      G = 0.25;
@@ -94,9 +94,6 @@ TEST_P(ContactTest, patch)
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {4}, {5}, contact_options);
-#ifdef TRIBOL_USE_ENZYME
-  tribol::enableEnzyme(0, true);
-#endif
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -127,10 +124,14 @@ TEST_P(ContactTest, patch)
   EXPECT_NEAR(0.0, approx_error_l2, 1.0e-3);
 }
 
-INSTANTIATE_TEST_SUITE_P(tribol, ContactTest,
-                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty"),
-                                         std::make_pair(ContactEnforcement::LagrangeMultiplier,
-                                                        "lagrange_multiplier")));
+INSTANTIATE_TEST_SUITE_P(
+    tribol, ContactTest,
+    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ"),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Approximate,
+                                    "lagrange_multiplier_approxJ"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ"),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Exact,
+                                    "lagrange_multiplier_exactJ")));
 
 }  // namespace serac
 

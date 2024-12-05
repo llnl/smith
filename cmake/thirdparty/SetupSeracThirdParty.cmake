@@ -49,6 +49,20 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
     #------------------------------------------------------------------------------
+    # Enzyme
+    #------------------------------------------------------------------------------
+    if (ENZYME_DIR)
+      message(STATUS "Setting up external Enzyme TPL...")
+    
+      set(Enzyme_DIR ${ENZYME_DIR})
+      find_dependency(Enzyme REQUIRED PATHS "${ENZYME_DIR}")
+    
+      set(TRIBOL_USE_ENZYME TRUE)
+    else()
+      message(STATUS "Enzyme support is OFF")
+    endif()
+
+    #------------------------------------------------------------------------------
     # Camp
     #------------------------------------------------------------------------------
     if (NOT CAMP_DIR)
