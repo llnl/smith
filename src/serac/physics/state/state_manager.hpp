@@ -179,11 +179,13 @@ class StateManager {
       }
     }
 
-    // NOTE: This call will reload all external buffers from file stored in the DataStore
-    // TODO: This should be changed to load only the current material quadrature data after
-    // MFEMSidreDatacollection::LoadExternalData is fixed to allow loading the 
-    // external data piecemeal
-    datacoll.LoadExternalData();
+    if (is_restart_) {
+      // NOTE: This call will reload all external buffers from file stored in the DataStore
+      // TODO: This should be changed to load only the current material quadrature data after
+      // MFEMSidreDatacollection::LoadExternalData is fixed to allow loading the 
+      // external data piecemeal
+      datacoll.LoadExternalData();
+    }
   }
 
   /**
