@@ -175,7 +175,8 @@ class StateManager {
           // Tell Sidre where the external array is
           states_view->setExternalDataPtr(states.data());
 
-          datacoll.LoadExternalData("", qds_group_name);
+          // NOTE: This call will reload all external buffers from file stored in the DataStore.
+          datacoll.LoadExternalData();
         }
 
       }
