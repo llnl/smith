@@ -174,13 +174,16 @@ class StateManager {
 
           // Tell Sidre where the external array is
           states_view->setExternalDataPtr(states.data());
-
-          // NOTE: This call will reload all external buffers from file stored in the DataStore.
-          datacoll.LoadExternalData();
         }
 
       }
     }
+
+    // NOTE: This call will reload all external buffers from file stored in the DataStore
+    // TODO: This should be changed to load only the current material quadrature data after
+    // MFEMSidreDatacollection::LoadExternalData is fixed to allow loading the 
+    // external data piecemeal
+    datacoll.LoadExternalData();
   }
 
   /**
