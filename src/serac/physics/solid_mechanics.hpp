@@ -1296,7 +1296,7 @@ public:
     }
 
     if (is_quasistatic_) {
-      quasiStaticSolve(dt, 0.0, 1.0);
+      quasiStaticSolve(dt, 1.0, 0);
     } else {
       // The current ode interface tracks 2 times, one internally which we have a handle to via time_,
       // and one here via the step interface.
@@ -1638,7 +1638,7 @@ protected:
       }...};
 
   /// @brief Solve the Quasi-static Newton system
-  virtual void quasiStaticSolve(double dt, double a, double b, int level = 0)
+  virtual void quasiStaticSolve(double dt, double step_fraction_of_dt_remaining, int level)
   {
     if (level >= 6) {
       if (mpi_rank_ == 0)
@@ -1652,23 +1652,23 @@ protected:
     try {
       // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
       // throughout.
-      if (a == 0.0) time_ += dt;
-      warmStartDisplacement(dt, b);
+      if (level == 0) time_ += dt;
+      warmStartDisplacement(dt, step_fraction_of_dt_remaining);
       nonlin_solver_->solve(displacement_);
     } catch (const std::exception& e) {
       if (mpi_rank_ == 0) mfem::out << "caught nonlinear solver exception: " << e.what() << std::endl;
       displacement_ -= du_;
       solver_success = false;
-      quasiStaticSolve(dt, 1.0, 0.5 * b, level + 1);
-      quasiStaticSolve(dt, 1.0, 1.0, level + 1);
+      quasiStaticSolve(dt, 0.5 * step_fraction_of_dt_remaining, level + 1);
+      quasiStaticSolve(dt, 1.0, level + 1);
     }
 
     if (solver_success) {
-      if (b == 1.0) {
+      if (step_fraction_of_dt_remaining == 1.0) {
         if (mpi_rank_ == 0)
           mfem::out << "SolidMechanics solve succeeded for time " << time_ << " dt = " << dt << std::endl;
       } else {
-        if (mpi_rank_ == 0) mfem::out << "substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+        if (mpi_rank_ == 0) mfem::out << "SolidMechanics substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
       }
     }
   }
