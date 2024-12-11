@@ -1634,6 +1634,8 @@ protected:
   /// @brief Solve the Quasi-static Newton system
   virtual void quasiStaticSolve(double dt, double step_fraction_of_dt_remaining, int level)
   {
+    printf("why is this called\n");
+    exit(1);
     if (level >= 6) {
       if (mpi_rank_ == 0)
         std::cout << "Too many boundary condition cutbacks, accepting solution even though there may be issues. Try "
