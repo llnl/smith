@@ -1662,7 +1662,8 @@ protected:
         if (mpi_rank_ == 0)
           mfem::out << "SolidMechanics solve succeeded for time " << time_ << " dt = " << dt << std::endl;
       } else {
-        if (mpi_rank_ == 0) mfem::out << "SolidMechanics substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+        if (mpi_rank_ == 0)
+          mfem::out << "SolidMechanics substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
       }
     }
   }
