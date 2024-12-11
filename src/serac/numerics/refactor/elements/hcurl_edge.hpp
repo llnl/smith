@@ -14,61 +14,6 @@ struct FiniteElement < Geometry::Edge, Family::Hcurl >{
 
   __host__ __device__ uint32_t num_nodes() const { return p; }
 
-  void nodes(nd::view< double, 2 > xi) const {
-    if (p == 1) {
-      xi(0, 0) = GaussLegendreNode01<1, 0>();
-    }
-
-    if (p == 2) {
-      xi(0, 0) = GaussLegendreNode01<2, 0>();
-      xi(1, 0) = GaussLegendreNode01<2, 1>();
-    }
-
-    if (p == 3) {
-      xi(0, 0) = GaussLegendreNode01<3, 0>();
-      xi(1, 0) = GaussLegendreNode01<3, 1>();
-      xi(2, 0) = GaussLegendreNode01<3, 2>();
-    }
-  }
-
-  void directions(nd::view< double, 2 > xi) {
-    for (int i = 0; i < p; i++) { xi(i, 0) = 1.0; }
-  }
-
-  __host__ __device__ uint32_t num_interior_nodes() { return p; }
-
-  void interior_nodes(nd::view< double, 2 > xi) {
-    nodes(xi); // all the nodes in these elements are interior
-  }
-
-  void interior_directions(nd::view< double, 2 > xi) {
-    directions(xi); // all the nodes in these elements are interior
-  }
-
-  __host__ __device__ void indices(const GeometryInfo & offsets, const Connection * edge, uint32_t * ids) {
-
-    uint32_t edge_id = edge[Edge::cell_offset].index;
-
-    if (p == 1) {
-      ids[0] = offsets.edge + edge_id;
-      return;
-    }
-
-    if (p == 2) {
-      ids[0] = offsets.edge + 2 * edge_id + 0;
-      ids[1] = offsets.edge + 2 * edge_id + 1;
-    }
-
-    if (p == 3) {
-      ids[0] = offsets.edge + 3 * edge_id + 0;
-      ids[1] = offsets.edge + 3 * edge_id + 1;
-      ids[2] = offsets.edge + 3 * edge_id + 2;
-      if (flip(edge[Edge::cell_offset])) { fm::swap(ids[0], ids[2]); }
-      return;
-    }
-    
-  }
-
   template < typename T >
   __host__ __device__ void reorient(const TransformationType type, const Connection * edge, T * values) {
 
@@ -82,11 +27,9 @@ struct FiniteElement < Geometry::Edge, Family::Hcurl >{
   }
 
   __host__ __device__ void reorient(const TransformationType type, const Connection * edge, int8_t * transformation) {
-
     for (int i = 0; i < p; i++) {
       transformation[i] = 0;
     }
-
   }
 
   constexpr vec<1> shape_function(vec<1> xi, uint32_t i) const {
