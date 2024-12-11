@@ -9,6 +9,7 @@
 # Original Source: https://llnl-hatchet.readthedocs.io/en/latest/llnl.html#id3
 
 import sys
+import os
 import platform
 import datetime as dt
 from IPython.display import HTML, display
@@ -23,8 +24,19 @@ sys.path.append(input_deploy_dir_str + "/spotdb")
 import hatchet
 import spotdb
 
-input_db_uri_str = "./mpi"
-input_run_ids_str = "./mpi/cQ-CGJlYj-uFT2yv-_0.cali,./mpi/cQ-CGJlYj-uFT2yv-_1.cali,./mpi/cQ-CGJlYj-uFT2yv-_2.cali"
+# Find latest benchmarks in shared spot location `latest_shared_benchmarks`
+
+# Find benchmarks run on this branch `your_benchmarks`
+
+# Iterate latest benchmarks list
+    # Find associated branch benchmark
+
+input_db_uri_str = "/usr/workspace/smithdev/califiles"
+input_run_ids_str = "{0},{1},{2}".format(
+    os.path.join(input_db_uri_str, "241207-013256_172562_MrFHk9gvGQ9q.cali"),
+    os.path.join(input_db_uri_str, "241207-013250_172139_sSyXuwBLSRyG.cali"),
+    os.path.join(input_db_uri_str, "241207-013241_171769_ErlTtmmkBAAY.cali"))
+print(input_run_ids_str)
 
 db = spotdb.connect(input_db_uri_str)
 runs = input_run_ids_str.split(',')
