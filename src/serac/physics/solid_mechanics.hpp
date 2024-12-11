@@ -27,8 +27,6 @@
 
 namespace serac {
 
-static constexpr bool debug_matrix_symmetry = false;
-
 inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 {
   mfem::HypreParMatrix* H      = K.get();
@@ -1172,10 +1170,8 @@ public:
                                         *parameters_[parameter_indices].state...);
           J_.reset();
           J_ = assemble(drdu);
-
           J_e_.reset();
           J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
-
           return *J_;
         });
   }
@@ -1243,10 +1239,8 @@ public:
             // J = M + c0 * K
             J_.reset();
             J_.reset(mfem::Add(1.0, *m_mat, c0_, *k_mat));
-
             J_e_.reset();
             J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
-
             return *J_;
           });
     }
@@ -1656,7 +1650,7 @@ protected:
       warmStartDisplacement(dt, step_fraction_of_dt_remaining);
       nonlin_solver_->solve(displacement_);
     } catch (const std::exception& e) {
-      if (mpi_rank_ == 0) mfem::out << "caught nonlinear solver exception: " << e.what() << std::endl;
+      if (mpi_rank_ == 0) mfem::out << "Caught nonlinear solver exception: " << e.what() << std::endl;
       displacement_ -= du_;
       solver_success = false;
       quasiStaticSolve(dt, 0.5 * step_fraction_of_dt_remaining, level + 1);
@@ -1796,7 +1790,6 @@ protected:
                                     *parameters_[parameter_indices].previous_state...);
       J_.reset();
       J_ = assemble(drdu);
-
       J_e_.reset();
       J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
 

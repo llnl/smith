@@ -664,7 +664,7 @@ public:
         } else {
           mfem::out << ", norm goal = " << std::setw(13) << norm_goal;
         }
-        mfem::out << " :: ";
+        mfem::out << "\n";
       }
 
       if (norm != norm) {
@@ -765,7 +765,7 @@ public:
           solveTheSubspaceProblem(trResults.d, hess_vec_func, ds, H_ds, r, tr_size, num_leftmost);
         }
 
-        static constexpr double roundOffTol = 1e-15;
+        static constexpr double roundOffTol = 1e-32;
 
         hess_vec_func(trResults.d, trResults.H_d);
         double dHd            = Dot(trResults.d, trResults.H_d);
