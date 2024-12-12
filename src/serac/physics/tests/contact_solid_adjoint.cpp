@@ -64,7 +64,10 @@ std::unique_ptr<SolidMechT> createContactSolver(const NonlinearSolverOptions& no
   auto solid =
       std::make_unique<SolidMechT>(nonlinear_opts, solid_mechanics::direct_linear_options, dyn_opts,
                                    physics_prefix + std::to_string(iter++), mesh_tag, std::vector<std::string>{}, 0, 0.0, false, true);
-  solid->setMaterial(mat);
+  
+
+  Domain whole_mesh = EntireDomain(StateManager::mesh(mesh_tag));
+  solid->setMaterial(mat, whole_mesh);
 
   solid->setDisplacementBCs({2}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) { disp = 0.0; });
   solid->setDisplacementBCs({4}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) {
