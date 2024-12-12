@@ -45,7 +45,7 @@ void ContactData::reset()
 {
   for (auto& interaction : interactions_) {
     FiniteElementState zero = interaction.pressure();
-    zero = 0.0;
+    zero                    = 0.0;
     interaction.setPressure(zero);
   }
 }

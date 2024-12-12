@@ -38,8 +38,8 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
                        mfem::HypreParVector& accel_adjoint_load_vector, mfem::HypreParVector& adjoint_displacement_,
                        mfem::HypreParVector& implicit_sensitivity_displacement_start_of_step_,
                        mfem::HypreParVector& implicit_sensitivity_velocity_start_of_step_,
-                       mfem::HypreParVector& adjoint_essential_,
-                       BoundaryConditionManager& bcs_, mfem::Solver& lin_solver);
+                       mfem::HypreParVector& adjoint_essential_, BoundaryConditionManager& bcs_,
+                       mfem::Solver& lin_solver);
 }  // namespace detail
 
 /**
@@ -1618,7 +1618,7 @@ protected:
   virtual void quasiStaticAdjointSolve(double /*dt*/)
   {
     auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
-                                    *parameters_[parameter_indices].state...);
+                                  *parameters_[parameter_indices].state...);
     J_.reset();
     J_ = assemble(drdu);
 

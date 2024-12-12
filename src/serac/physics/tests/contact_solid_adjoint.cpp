@@ -61,10 +61,9 @@ std::unique_ptr<SolidMechT> createContactSolver(const NonlinearSolverOptions& no
 {
   static int iter = 0;
 
-  auto solid =
-      std::make_unique<SolidMechT>(nonlinear_opts, solid_mechanics::direct_linear_options, dyn_opts,
-                                   physics_prefix + std::to_string(iter++), mesh_tag, std::vector<std::string>{}, 0, 0.0, false, true);
-  
+  auto solid = std::make_unique<SolidMechT>(nonlinear_opts, solid_mechanics::direct_linear_options, dyn_opts,
+                                            physics_prefix + std::to_string(iter++), mesh_tag,
+                                            std::vector<std::string>{}, 0, 0.0, false, true);
 
   Domain whole_mesh = EntireDomain(StateManager::mesh(mesh_tag));
   solid->setMaterial(mat, whole_mesh);
@@ -174,7 +173,7 @@ TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjec
   auto [qoi2, shape_sensitivity2] = computeContactQoiSensitivities(*solid_solver, tsInfo);
 
   EXPECT_EQ(qoi1, qoi2);
-  
+
   solid_solver->resetStates();
   FiniteElementState derivative_direction(shape_sensitivity1.space(), "derivative_direction");
   fillDirection(derivative_direction);
