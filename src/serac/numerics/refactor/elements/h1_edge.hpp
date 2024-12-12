@@ -1,7 +1,6 @@
 #pragma once
 
 #include "fm/macros.hpp"
-#include "refactor/connection.hpp" 
 #include "refactor/interpolation.hpp"
 
 namespace refactor {

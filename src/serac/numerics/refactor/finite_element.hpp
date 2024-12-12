@@ -1,7 +1,7 @@
 #pragma once
 
-#include "refactor/geometry.hpp"
-#include "refactor/quadrature.hpp"
+#include "serac/numerics/refactor/geometry.hpp"
+#include "serac/numerics/refactor/quadrature.hpp"
 
 namespace refactor {
 
@@ -31,6 +31,17 @@ struct FunctionSpace {
     return (components == other.components) && 
            (degree == other.degree) &&
            (family == other.family);
+  }
+};
+
+struct BasisFunction {
+  FunctionSpace space;
+  BasisFunction(Field f) : space(f.family, f.degree, f.data.shape[1]) {}
+  BasisFunction(FunctionSpace s) : space(s) {}
+  bool operator==(const BasisFunction & other) const {
+    return (space.components == other.space.components) && 
+           (space.degree == other.space.degree) &&
+           (space.family == other.space.family);
   }
 };
 
