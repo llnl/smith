@@ -98,12 +98,3 @@ SERAC_HOST_DEVICE constexpr void for_constexpr(const lambda& f)
 {
   detail::for_constexpr(f, std::make_integer_sequence<int, n>{}...);
 }
-
-
-namespace impl {
-}
-
-template < auto ... args, typename T >
-void foreach_constexpr(T && function) {
-  (function(impl::value<args>{}), ...);
-}

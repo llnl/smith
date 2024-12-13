@@ -1,11 +1,11 @@
 #pragma once
 
-#include "fm/macros.hpp"
-#include "refactor/interpolation.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/refactor/interpolation.hpp"
 
 namespace refactor {
 
-using namespace fm;
+using namespace serac;
 
 template <>
 struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
@@ -18,7 +18,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
 
   SERAC_HOST_DEVICE constexpr uint32_t num_nodes() const { return p + 1; }
 
-  constexpr double shape_function(vec<1> xi, uint32_t i) const {
+  constexpr double shape_function(vec1 xi, uint32_t i) const {
     if (p == 1 && i == 0) { return 1.0 - xi[0]; }
     if (p == 1 && i == 1) { return xi[0]; }
 
@@ -35,12 +35,12 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
     return 7777.77;
   }
 
-  constexpr vec<1> shape_function_gradient(vec<1> xi, uint32_t i) const {
+  constexpr vec1 shape_function_gradient(vec1 xi, uint32_t i) const {
     if (p == 1 && i == 0) { return -1.0; }
     if (p == 1 && i == 1) { return +1.0; }
 
     if (p == 2 && i == 0) return  -3.0 + 4.0 * xi[0];
-    if (p == 2 && i == 1) return  4.0 - 8.0 * xi[0];
+    if (p == 2 && i == 1) return   4.0 - 8.0 * xi[0];
     if (p == 2 && i == 2) return  -1.0 + 4.0 * xi[0];
 
     constexpr double sqrt5 = 2.23606797749978981;
@@ -52,7 +52,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
     return 7777.77;
   }
 
-  vec<1> shape_function_derivative(vec<1> xi, uint32_t i) const {
+  vec1 shape_function_derivative(vec1 xi, uint32_t i) const {
     return shape_function_gradient(xi, i);
   }
 
@@ -63,7 +63,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
   nd::array< double, 2 > evaluate_shape_functions(nd::view<const double, 2> xi) const {
     uint32_t q = xi.shape[0];
     nd::array<double, 2> shape_fns({q, p+1});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolation(xi(i, 0), p + 1, &shape_fns(i, 0));
     }
     return shape_fns;

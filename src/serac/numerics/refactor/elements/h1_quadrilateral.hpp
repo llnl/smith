@@ -1,12 +1,11 @@
 #pragma once
 
-#include "refactor/connection.hpp" 
-#include "refactor/tensor_contractions.hpp"
+#include "serac/numerics/refactor/elements/tensor_contractions.hpp"
 
 namespace refactor {
 
 template <>
-struct FiniteElement<mfem::Geometry::SQUARE, Family::H1> {
+struct FiniteElement<Geometry::Quadrilateral, Family::H1> {
 
   using source_type = vec1;
   using flux_type = vec2;

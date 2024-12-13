@@ -1,9 +1,14 @@
 #pragma once
 
+#include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/refactor/geometry.hpp"
 #include "serac/numerics/refactor/quadrature.hpp"
 
+#include "serac/physics/state/finite_element_state.hpp"
+
 namespace refactor {
+
+using Field = serac::FiniteElementState;
 
 enum class Family { 
   H1, 
@@ -84,8 +89,8 @@ auto weighted_shape_function_derivatives(FiniteElement< geom, family > element,
   } 
 }
 
-SERAC_HOST_DEVICE constexpr fm::mat2 face_transformation(int8_t id) {
-  constexpr fm::mat2 matrices[5] = {
+SERAC_HOST_DEVICE constexpr serac::mat2 face_transformation(int8_t id) {
+  constexpr serac::mat2 matrices[5] = {
     {{{0, 1}, {1, 0}}},
     {{{-1, 0}, {-1, 1}}},
     {{{1, -1}, {0, -1}}},
@@ -96,6 +101,7 @@ SERAC_HOST_DEVICE constexpr fm::mat2 face_transformation(int8_t id) {
   return matrices[id-1];
 }
 
+// sam: these orientations are for femto's face orientation convention
 SERAC_HOST_DEVICE constexpr int8_t face_transformation_id(TransformationType type, int orientation) {
   if (type == TransformationType::PhysicalToParent) {
     constexpr int8_t LUT[3] = {1, 2, 3};
@@ -121,10 +127,3 @@ SERAC_HOST_DEVICE constexpr int8_t face_transformation_id(TransformationType typ
 #include "serac/numerics/refactor/elements/hcurl_quadrilateral.hpp"
 #include "serac/numerics/refactor/elements/hcurl_tetrahedron.hpp"
 #include "serac/numerics/refactor/elements/hcurl_hexahedron.hpp"
-
-#include "serac/numerics/refactor/elements/dg_vertex.hpp"
-#include "serac/numerics/refactor/elements/dg_edge.hpp"
-#include "serac/numerics/refactor/elements/dg_triangle.hpp"
-#include "serac/numerics/refactor/elements/dg_quadrilateral.hpp"
-#include "serac/numerics/refactor/elements/dg_tetrahedron.hpp"
-#include "serac/numerics/refactor/elements/dg_hexahedron.hpp"

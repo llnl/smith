@@ -79,26 +79,26 @@ struct GeometryData {
 
   T & operator[](mfem::Geometry::Type g) {
     switch (g) {
-      case mfem::Geometry::POINT:        return vert;
-      case mfem::Geometry::SEGMENT:          return edge;
-      case mfem::Geometry::TRIANGLE:      return tri;
-      case mfem::Geometry::SQUARE: return quad;
-      case mfem::Geometry::TETRAHEDRON:   return tet;
-      case mfem::Geometry::CUBE:    return hex;
+      case mfem::Geometry::POINT:       return vert;
+      case mfem::Geometry::SEGMENT:     return edge;
+      case mfem::Geometry::TRIANGLE:    return tri;
+      case mfem::Geometry::SQUARE:      return quad;
+      case mfem::Geometry::TETRAHEDRON: return tet;
+      case mfem::Geometry::CUBE:        return hex;
+      default: return vert; // (hopefully) unreachable code, to silence compiler warnings
     }
-    return vert; // unreachable code, to silence compiler warnings
   }
 
   const T & operator[](mfem::Geometry::Type g) const {
     switch (g) {
-      case mfem::Geometry::POINT:        return vert;
-      case mfem::Geometry::SEGMENT:          return edge;
-      case mfem::Geometry::TRIANGLE:      return tri;
-      case mfem::Geometry::SQUARE: return quad;
-      case mfem::Geometry::TETRAHEDRON:   return tet;
-      case mfem::Geometry::CUBE:    return hex;
+      case mfem::Geometry::POINT:       return vert;
+      case mfem::Geometry::SEGMENT:     return edge;
+      case mfem::Geometry::TRIANGLE:    return tri;
+      case mfem::Geometry::SQUARE:      return quad;
+      case mfem::Geometry::TETRAHEDRON: return tet;
+      case mfem::Geometry::CUBE:        return hex;
+      default: return vert; // (hopefully) unreachable code, to silence compiler warnings
     }
-    return vert; // unreachable code, to silence compiler warnings
   }
 
 };
@@ -203,7 +203,7 @@ struct GeometryType< mfem::Geometry::TRIANGLE > {
 
   static constexpr int local_edge_ids[3][2] = {{0, 1},{1, 2},{2, 0}};
 
-  SERAC_HOST_DEVICE static constexpr uint32_t number(int n) { return (n * (n + 1)) / 2; };
+  SERAC_HOST_DEVICE static constexpr uint32_t number(int n) { return static_cast< uint32_t >((n * (n + 1)) / 2); };
 };
 using Triangle = GeometryType< mfem::Geometry::TRIANGLE >;
 

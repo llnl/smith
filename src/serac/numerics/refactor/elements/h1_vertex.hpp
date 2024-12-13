@@ -1,7 +1,5 @@
 #pragma once
 
-#include "refactor/connection.hpp" 
-
 namespace refactor {
 
 template <>

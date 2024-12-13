@@ -111,9 +111,11 @@ tensor(const T (&data)[n1]) -> tensor<T, n1>;
 template <typename T, int n1, int n2>
 tensor(const T (&data)[n1][n2]) -> tensor<T, n1, n2>;
 
+using vec1 = tensor<double, 1>;  ///< statically sized "vector" of 1 double
 using vec2 = tensor<double, 2>;  ///< statically sized vector of 2 doubles
 using vec3 = tensor<double, 3>;  ///< statically sized vector of 3 doubles
 
+using mat1 = tensor<double, 1, 1>;  ///< statically sized 1x1 "matrix" of doubles
 using mat2 = tensor<double, 2, 2>;  ///< statically sized 2x2 matrix of doubles
 using mat3 = tensor<double, 3, 3>;  ///< statically sized 3x3 matrix of doubles
 

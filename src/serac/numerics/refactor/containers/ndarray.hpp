@@ -290,7 +290,7 @@ namespace nd {
       static_assert(num_args <= dim);
       constexpr uint32_t rank = (is_range(index_types{}) + ... ) + (dim - num_args);
       if constexpr (rank == 0) {
-        return static_cast<T&>(values[index(iseq, indices...)]);
+        return static_cast<const T&>(values[index(iseq, indices...)]);
       } else {
         constexpr uint32_t is_a_range[] = {is_range(index_types{}) ... };
         stack::array<uint32_t, rank> slice_shape{};
@@ -574,5 +574,3 @@ std::ostream& operator<<(std::ostream & out, const nd::array< T, dim > & arr) {
   print(out, nd::view<const T, dim>(arr));
   return out;
 }
-
-#undef SERAC_HOST_DEVICE

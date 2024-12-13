@@ -1,6 +1,7 @@
 #pragma once
 
-#include "refactor/connection.hpp" 
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/refactor/interpolation.hpp"
 
 namespace refactor {
 
