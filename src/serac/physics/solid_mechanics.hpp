@@ -27,6 +27,7 @@
 
 namespace serac {
 
+/// @brief simple utility for computing matrix norm
 inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 {
   mfem::HypreParMatrix* H      = K.get();

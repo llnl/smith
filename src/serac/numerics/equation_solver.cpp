@@ -19,13 +19,17 @@
 
 namespace serac {
 
+/// @brief A simple exception class for recording Newton and TrustRegion failures
 class SolveException : public std::exception {
 public:
+  /// constructor
   SolveException(const std::string& message) : msg(message) {}
 
+  /// what is message
   const char* what() const noexcept override { return msg.c_str(); }
 
 private:
+  /// message string
   std::string msg;
 };
 
