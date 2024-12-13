@@ -3,17 +3,7 @@
 #include <iostream>
 #include <functional>
 
-#include "refactor/mesh.hpp"
-#include "refactor/field.hpp"
-#include "refactor/piola_transformations.hpp"
-
-#include "refactor/domain.hpp"
-
-#include "misc/for_constexpr.hpp"
-#include "forall.hpp"
-
-#include "fm/types/vec.hpp"
-#include "fm/types/matrix.hpp"
+#include "serac/numerics/refactor/evaluate.hpp"
 
 using namespace refactor;
 

@@ -11,7 +11,7 @@ using namespace fm;
 
 // clang-format off
 template <>
-struct FiniteElement<Geometry::Tetrahedron, Family::Hcurl> {
+struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
 
   using value_type = vec3;
   using derivative_type = vec3;
@@ -21,9 +21,9 @@ struct FiniteElement<Geometry::Tetrahedron, Family::Hcurl> {
 
   static constexpr int dim = 3;
 
-  __host__ __device__ constexpr uint32_t num_nodes() const { return (p * (p + 2) * (p + 3)) / 2; }
+  SERAC_HOST_DEVICE constexpr uint32_t num_nodes() const { return (p * (p + 2) * (p + 3)) / 2; }
 
-  __host__ __device__ void reorient(const TransformationType type, const Connection * tet, int8_t * transformation) {
+  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * tet, int8_t * transformation) {
 
     const Connection * edge = tet + Tetrahedron::edge_offset;
     const Connection * tri = tet + Tetrahedron::tri_offset;
@@ -70,7 +70,7 @@ struct FiniteElement<Geometry::Tetrahedron, Family::Hcurl> {
   }
 
   template < typename T >
-  __host__ __device__ void reorient(const TransformationType type, const Connection * tet, T * values) {
+  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * tet, T * values) {
 
     const Connection * edge = tet + Tetrahedron::edge_offset;
     const Connection * tri = tet + Tetrahedron::tri_offset;
@@ -1194,7 +1194,7 @@ struct FiniteElement<Geometry::Tetrahedron, Family::Hcurl> {
     return interpolated_curl;
   }
 
-  __host__ __device__ uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
     return 0;
   }
 
@@ -1273,7 +1273,7 @@ struct FiniteElement<Geometry::Tetrahedron, Family::Hcurl> {
     return shape_fns;
   }
 
-  __host__ __device__ void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 3> shape_fn, double * /*buffer*/) const {
+  SERAC_HOST_DEVICE void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 3> shape_fn, double * /*buffer*/) const {
     int nnodes = num_nodes();
     int nqpts = source_q.shape[0];
 
@@ -1303,7 +1303,7 @@ struct FiniteElement<Geometry::Tetrahedron, Family::Hcurl> {
     return shape_fns;
   }
 
-  __host__ __device__ void integrate_flux(nd::view<double> residual_e, nd::view<const flux_type> flux_q, nd::view<const double, 3> shape_fn, double * /*buffer*/) const {
+  SERAC_HOST_DEVICE void integrate_flux(nd::view<double> residual_e, nd::view<const flux_type> flux_q, nd::view<const double, 3> shape_fn, double * /*buffer*/) const {
     int nnodes = num_nodes();
     int nqpts = flux_q.shape[0];
 

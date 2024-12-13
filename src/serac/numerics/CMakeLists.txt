@@ -6,6 +6,8 @@
 
 add_subdirectory(functional)
 
+add_subdirectory(refactor)
+
 set(numerics_headers
     equation_solver.hpp
     odes.hpp

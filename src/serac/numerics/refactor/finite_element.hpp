@@ -12,11 +12,11 @@ enum class Family {
   DG 
 };
 
-__host__ __device__ constexpr bool is_scalar_valued(Family f) {
+SERAC_HOST_DEVICE constexpr bool is_scalar_valued(Family f) {
   return (f == Family::H1);
 }
 
-__host__ __device__ constexpr bool is_vector_valued(Family f) {
+SERAC_HOST_DEVICE constexpr bool is_vector_valued(Family f) {
   return (f == Family::Hcurl);
 }
 
@@ -56,10 +56,10 @@ enum class TransformationType {
   TransposePhysicalToParent,
 };
 
-template < Geometry g, Family f >
+template < mfem::Geometry::Type g, Family f >
 struct FiniteElement;
 
-template < Geometry geom, Family family >
+template < mfem::Geometry::Type geom, Family family >
 auto shape_function_derivatives(FiniteElement< geom, family > element,
                                 const nd::view<const double, 2> xi) {
   if constexpr (family == Family::H1) {
@@ -71,7 +71,7 @@ auto shape_function_derivatives(FiniteElement< geom, family > element,
   } 
 }
 
-template < Geometry geom, Family family >
+template < mfem::Geometry::Type geom, Family family >
 auto weighted_shape_function_derivatives(FiniteElement< geom, family > element,
                                          const nd::view<const double, 2> xi,
                                          const nd::view<const double, 1> weights) {
@@ -84,7 +84,7 @@ auto weighted_shape_function_derivatives(FiniteElement< geom, family > element,
   } 
 }
 
-__host__ __device__ constexpr fm::mat2 face_transformation(int8_t id) {
+SERAC_HOST_DEVICE constexpr fm::mat2 face_transformation(int8_t id) {
   constexpr fm::mat2 matrices[5] = {
     {{{0, 1}, {1, 0}}},
     {{{-1, 0}, {-1, 1}}},
@@ -96,7 +96,7 @@ __host__ __device__ constexpr fm::mat2 face_transformation(int8_t id) {
   return matrices[id-1];
 }
 
-__host__ __device__ constexpr int8_t face_transformation_id(TransformationType type, int orientation) {
+SERAC_HOST_DEVICE constexpr int8_t face_transformation_id(TransformationType type, int orientation) {
   if (type == TransformationType::PhysicalToParent) {
     constexpr int8_t LUT[3] = {1, 2, 3};
     return LUT[orientation];
@@ -108,23 +108,23 @@ __host__ __device__ constexpr int8_t face_transformation_id(TransformationType t
 
 }
 
-#include "refactor/elements/h1_vertex.hpp"
-#include "refactor/elements/h1_edge.hpp"
-#include "refactor/elements/h1_triangle.hpp"
-#include "refactor/elements/h1_quadrilateral.hpp"
-#include "refactor/elements/h1_tetrahedron.hpp"
-#include "refactor/elements/h1_hexahedron.hpp"
+#include "serac/numerics/refactor/elements/h1_vertex.hpp"
+#include "serac/numerics/refactor/elements/h1_edge.hpp"
+#include "serac/numerics/refactor/elements/h1_triangle.hpp"
+#include "serac/numerics/refactor/elements/h1_quadrilateral.hpp"
+#include "serac/numerics/refactor/elements/h1_tetrahedron.hpp"
+#include "serac/numerics/refactor/elements/h1_hexahedron.hpp"
 
-#include "refactor/elements/hcurl_vertex.hpp"
-#include "refactor/elements/hcurl_edge.hpp"
-#include "refactor/elements/hcurl_triangle.hpp"
-#include "refactor/elements/hcurl_quadrilateral.hpp"
-#include "refactor/elements/hcurl_tetrahedron.hpp"
-#include "refactor/elements/hcurl_hexahedron.hpp"
+#include "serac/numerics/refactor/elements/hcurl_vertex.hpp"
+#include "serac/numerics/refactor/elements/hcurl_edge.hpp"
+#include "serac/numerics/refactor/elements/hcurl_triangle.hpp"
+#include "serac/numerics/refactor/elements/hcurl_quadrilateral.hpp"
+#include "serac/numerics/refactor/elements/hcurl_tetrahedron.hpp"
+#include "serac/numerics/refactor/elements/hcurl_hexahedron.hpp"
 
-#include "refactor/elements/dg_vertex.hpp"
-#include "refactor/elements/dg_edge.hpp"
-#include "refactor/elements/dg_triangle.hpp"
-#include "refactor/elements/dg_quadrilateral.hpp"
-#include "refactor/elements/dg_tetrahedron.hpp"
-#include "refactor/elements/dg_hexahedron.hpp"
+#include "serac/numerics/refactor/elements/dg_vertex.hpp"
+#include "serac/numerics/refactor/elements/dg_edge.hpp"
+#include "serac/numerics/refactor/elements/dg_triangle.hpp"
+#include "serac/numerics/refactor/elements/dg_quadrilateral.hpp"
+#include "serac/numerics/refactor/elements/dg_tetrahedron.hpp"
+#include "serac/numerics/refactor/elements/dg_hexahedron.hpp"

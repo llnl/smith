@@ -6,7 +6,7 @@ namespace refactor {
 
 // clang-format off
 template <>
-struct FiniteElement<Geometry::Triangle, Family::H1> {
+struct FiniteElement<mfem::Geometry::TRIANGLE, Family::H1> {
 
   using source_type = vec1;
   using flux_type = vec2;
@@ -16,7 +16,7 @@ struct FiniteElement<Geometry::Triangle, Family::H1> {
 
   static constexpr int dim = 2;
 
-  __host__ __device__ constexpr uint32_t num_nodes() const { return Triangle::number(p + 1); }
+  SERAC_HOST_DEVICE constexpr uint32_t num_nodes() const { return Triangle::number(p + 1); }
 
   constexpr double shape_function(vec2 xi, uint32_t i) const {
     if (p == 1) {
@@ -101,7 +101,7 @@ struct FiniteElement<Geometry::Triangle, Family::H1> {
     return interpolated_gradient;
   }
 
-  __host__ __device__ uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
     return 0;
   }
 
@@ -163,7 +163,7 @@ struct FiniteElement<Geometry::Triangle, Family::H1> {
     return shape_fns;
   }
 
-  __host__ __device__ void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 2> shape_fn, double * /*buffer*/) const {
+  SERAC_HOST_DEVICE void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 2> shape_fn, double * /*buffer*/) const {
     int nnodes = num_nodes();
     int nqpts = source_q.shape[0];
 

@@ -8,7 +8,7 @@ using namespace fm;
 
 // clang-format off
 template <>
-struct FiniteElement<Geometry::Quadrilateral, Family::Hcurl> {
+struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
 
   using value_type = vec2;
   using derivative_type = vec1;
@@ -18,10 +18,10 @@ struct FiniteElement<Geometry::Quadrilateral, Family::Hcurl> {
 
   static constexpr int dim = 2;
 
-  __host__ __device__ uint32_t num_nodes() const { return 2 * p * (p + 1); }
+  SERAC_HOST_DEVICE uint32_t num_nodes() const { return 2 * p * (p + 1); }
 
   template < typename T >
-  __host__ __device__ void reorient(const TransformationType type, const Connection * quad, T * values) const {
+  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * quad, T * values) const {
 
     const Connection * edge = quad + Quadrilateral::edge_offset;
 
@@ -51,7 +51,7 @@ struct FiniteElement<Geometry::Quadrilateral, Family::Hcurl> {
 
   }
 
-  __host__ __device__ void reorient(const TransformationType type, const Connection * quad, int8_t * transformation) {
+  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * quad, int8_t * transformation) {
 
     const Connection * edge = quad + Quadrilateral::edge_offset;
 
@@ -227,7 +227,7 @@ struct FiniteElement<Geometry::Quadrilateral, Family::Hcurl> {
        
   // TODO: this is set to nonzero for the batched interpolation, 
   //       even though batched curl doesn't use the buffer
-  __host__ __device__ uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
     uint32_t q = xi.shape[0];
     return q * (p + 1);
   }
@@ -317,7 +317,7 @@ struct FiniteElement<Geometry::Quadrilateral, Family::Hcurl> {
     return shape_fns;
   }
 
-  __host__ __device__ void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 3> shape_fn, double * /*buffer*/) const {
+  SERAC_HOST_DEVICE void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 3> shape_fn, double * /*buffer*/) const {
     int nnodes = num_nodes();
     int nqpts = source_q.shape[0];
 

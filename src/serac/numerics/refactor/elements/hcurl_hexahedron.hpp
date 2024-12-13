@@ -6,7 +6,7 @@ namespace refactor {
 
 // clang-format off
 template <>
-struct FiniteElement<Geometry::Hexahedron, Family::Hcurl> {
+struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
 
   using value_type = vec3;
   using derivative_type = vec3;
@@ -17,7 +17,7 @@ struct FiniteElement<Geometry::Hexahedron, Family::Hcurl> {
   static constexpr int dim = 3;
 
   // clang-format off
-  __host__ __device__ uint8_t const * lexicographic_permutations(int p) {
+  SERAC_HOST_DEVICE uint8_t const * lexicographic_permutations(int p) {
     static constexpr uint8_t linear_lexicographic_permutation[12] = {0,5,1,4,8,9,11,10,2,7,3,6};
     static constexpr uint8_t quadratic_lexicographic_permutation[54] = {0,1,20,23,4,5,18,21,36,45,38,47,44,53,42,51,12,13,32,35,16,17,30,33,3,2,19,22,6,7,37,46,26,29,41,50,11,10,43,52,27,24,39,48,14,15,31,34,8,9,25,28,40,49};
     static constexpr uint8_t cubic_lexicographic_permutation[144] = {0,1,2,51,55,59,9,10,11,48,52,56,96,112,128,99,115,131,111,127,143,108,124,140,36,37,38,87,91,95,45,46,47,84,88,92,5,4,3,8,7,6,50,54,58,49,53,57,12,13,14,24,25,26,97,113,129,98,114,130,63,67,71,75,79,83,103,119,135,107,123,139,23,22,21,35,34,33,110,126,142,109,125,141,68,64,60,80,76,72,104,120,136,100,116,132,39,40,41,42,43,44,85,89,93,86,90,94,15,16,17,18,19,20,27,28,29,30,31,32,61,62,65,66,69,70,73,74,77,78,81,82,101,102,105,106,117,118,121,122,133,134,137,138}; 
@@ -26,14 +26,14 @@ struct FiniteElement<Geometry::Hexahedron, Family::Hcurl> {
   }
   // clang-format on
 
-  __host__ __device__ uint32_t num_nodes() const { return 3 * p * (p + 1) * (p + 1); }
+  SERAC_HOST_DEVICE uint32_t num_nodes() const { return 3 * p * (p + 1) * (p + 1); }
 
   struct QuadrilateralStrides {
     int32_t x_offset; int32_t x_jstride; int32_t x_kstride;
     int32_t y_offset; int32_t y_jstride; int32_t y_kstride;
   };
 
-  __host__ __device__ QuadrilateralStrides quad_strides(Connection c, uint32_t offset) {
+  SERAC_HOST_DEVICE QuadrilateralStrides quad_strides(Connection c, uint32_t offset) {
 
     uint8_t o = c.orientation();
     int32_t P = p;
@@ -54,7 +54,7 @@ struct FiniteElement<Geometry::Hexahedron, Family::Hcurl> {
   }
 
   template < typename T >
-  __host__ __device__ void reorient(const TransformationType type, const Connection * hex, T * values) {
+  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * hex, T * values) {
 
     const Connection * edge = hex + Hexahedron::edge_offset;
     const Connection * quad = hex + Hexahedron::quad_offset;
@@ -107,7 +107,7 @@ struct FiniteElement<Geometry::Hexahedron, Family::Hcurl> {
 
   }
 
-  __host__ __device__ void reorient(const TransformationType type, const Connection * hex, int8_t * transformation) {
+  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * hex, int8_t * transformation) {
 
     const Connection * edge = hex + Hexahedron::edge_offset;
     const Connection * quad = hex + Hexahedron::quad_offset;
@@ -661,7 +661,7 @@ struct FiniteElement<Geometry::Hexahedron, Family::Hcurl> {
   }
 
   // TODO: set to nonzero when reenabling sum-factorization implementations
-  __host__ __device__ uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
     return 0;
   }
 
@@ -826,7 +826,7 @@ struct FiniteElement<Geometry::Hexahedron, Family::Hcurl> {
     return shape_fns;
   }
 
-  __host__ __device__ void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 3> shape_fn, double * /* buffer */) const {
+  SERAC_HOST_DEVICE void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 3> shape_fn, double * /* buffer */) const {
     int nnodes = num_nodes();
     int nqpts = source_q.shape[0];
 

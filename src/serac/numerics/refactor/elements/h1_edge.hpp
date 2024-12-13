@@ -8,7 +8,7 @@ namespace refactor {
 using namespace fm;
 
 template <>
-struct FiniteElement < Geometry::Edge, Family::H1 >{
+struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
 
   using source_type = vec1;
   using flux_type = vec1;
@@ -16,7 +16,7 @@ struct FiniteElement < Geometry::Edge, Family::H1 >{
   using value_type = vec1;
   using grad_type = vec1;
 
-  __host__ __device__ constexpr uint32_t num_nodes() const { return p + 1; }
+  SERAC_HOST_DEVICE constexpr uint32_t num_nodes() const { return p + 1; }
 
   constexpr double shape_function(vec<1> xi, uint32_t i) const {
     if (p == 1 && i == 0) { return 1.0 - xi[0]; }
@@ -56,7 +56,7 @@ struct FiniteElement < Geometry::Edge, Family::H1 >{
     return shape_function_gradient(xi, i);
   }
 
-  __host__ __device__ uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
     return 0;
   }
 
@@ -78,7 +78,7 @@ struct FiniteElement < Geometry::Edge, Family::H1 >{
     return shape_fn_grads;
   }
 
-  __host__ __device__ void interpolate(nd::view<value_type> values_q, nd::view<const double> values_e, nd::view<const double, 2> shape_fns, double * /*buffer*/) const {
+  SERAC_HOST_DEVICE void interpolate(nd::view<value_type> values_q, nd::view<const double> values_e, nd::view<const double, 2> shape_fns, double * /*buffer*/) const {
     int nnodes = num_nodes();
     int nqpts = values_q.shape[0];
 
@@ -91,7 +91,7 @@ struct FiniteElement < Geometry::Edge, Family::H1 >{
     }
   }
 
-  __host__ __device__ void gradient(nd::view<grad_type> gradients_q, nd::view<const double, 1> values_e, nd::view<const double, 2> shape_fn_grads, double * /*buffer*/) const {
+  SERAC_HOST_DEVICE void gradient(nd::view<grad_type> gradients_q, nd::view<const double, 1> values_e, nd::view<const double, 2> shape_fn_grads, double * /*buffer*/) const {
     int nnodes = num_nodes();
     int nqpts = gradients_q.shape[0];
     for (int j = 0; j < nqpts; j++) {
@@ -117,7 +117,7 @@ struct FiniteElement < Geometry::Edge, Family::H1 >{
     return shape_fns;
   }
 
-  __host__ __device__ void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 2> shape_fn, double * /*buffer*/) const {
+  SERAC_HOST_DEVICE void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 2> shape_fn, double * /*buffer*/) const {
     int nnodes = num_nodes();
     int nqpts = source_q.shape[0];
 
@@ -144,7 +144,7 @@ struct FiniteElement < Geometry::Edge, Family::H1 >{
     return shape_fn_grads;
   }
 
-  __host__ __device__ void integrate_flux(nd::view<double> output_e, nd::view<const flux_type> flux_q, nd::view<const double, 2> shape_fn_grads, double * /*buffer*/) const {
+  SERAC_HOST_DEVICE void integrate_flux(nd::view<double> output_e, nd::view<const flux_type> flux_q, nd::view<const double, 2> shape_fn_grads, double * /*buffer*/) const {
     int nnodes = num_nodes();
     int nqpts = flux_q.shape[0];
     for (int i = 0; i < nnodes; i++) {

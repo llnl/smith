@@ -5,7 +5,7 @@
 namespace refactor {
 
 template <>
-struct FiniteElement<Geometry::Hexahedron, Family::H1> {
+struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
 
   using value_type = vec1;
   using derivative_type = vec3;
@@ -13,7 +13,7 @@ struct FiniteElement<Geometry::Hexahedron, Family::H1> {
   using source_type = vec1;
   using flux_type = vec3;
 
-  __host__ __device__ constexpr uint32_t num_nodes() const { return (p + 1) * (p + 1) * (p + 1); }
+  SERAC_HOST_DEVICE constexpr uint32_t num_nodes() const { return (p + 1) * (p + 1) * (p + 1); }
 
   constexpr double phi_1D(double xi, uint32_t i) const {
     return GaussLobattoInterpolation(xi, p + 1, i); 
@@ -84,7 +84,7 @@ struct FiniteElement<Geometry::Hexahedron, Family::H1> {
     return output;
   }
 
-  __host__ __device__ uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
     uint32_t n = p + 1;
     uint32_t q = xi.shape[0];
     return q * n * (n + q);
@@ -101,7 +101,7 @@ struct FiniteElement<Geometry::Hexahedron, Family::H1> {
     return buffer;
   }
 
-  __host__ __device__ void interpolate(nd::view<value_type> values_q, nd::view<const double> values_e, nd::view<double, 3> shape_fns, double * buffer) const {
+  SERAC_HOST_DEVICE void interpolate(nd::view<value_type> values_q, nd::view<const double> values_e, nd::view<double, 3> shape_fns, double * buffer) const {
     uint32_t n = p + 1;
     uint32_t q = shape_fns.shape[1];
 
@@ -128,7 +128,7 @@ struct FiniteElement<Geometry::Hexahedron, Family::H1> {
     return shape_fn_grads;
   }
 
-  __host__ __device__ void gradient(nd::view<derivative_type> gradients_q, nd::view<const double, 1> values_e, nd::view<double, 3> shape_fns, double * buffer) const {
+  SERAC_HOST_DEVICE void gradient(nd::view<derivative_type> gradients_q, nd::view<const double, 1> values_e, nd::view<double, 3> shape_fns, double * buffer) const {
     uint32_t n = p + 1;
     uint32_t q = shape_fns.shape[1];
 
@@ -177,7 +177,7 @@ struct FiniteElement<Geometry::Hexahedron, Family::H1> {
     return buffer;
   }
 
-  __host__ __device__ void integrate_source(nd::view<double, 1> residual_e, nd::view<const source_type, 1> source_q, nd::view<double, 2> shape_fn, double * buffer) const {
+  SERAC_HOST_DEVICE void integrate_source(nd::view<double, 1> residual_e, nd::view<const source_type, 1> source_q, nd::view<double, 2> shape_fn, double * buffer) const {
     uint32_t n = p + 1;
     uint32_t q = shape_fn.shape[1];
 
