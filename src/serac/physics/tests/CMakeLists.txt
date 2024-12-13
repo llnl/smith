@@ -21,6 +21,11 @@ set(physics_serial_test_sources
     solid_multi_material.cpp
     )
 
+blt_list_append(TO physics_serial_test_sources 
+    ELEMENTS 
+        contact_solid_adjoint.cpp
+    IF TRIBOL_FOUND)
+
 serac_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 1)
@@ -46,7 +51,6 @@ blt_list_append(TO physics_parallel_test_sources
                     contact_patch.cpp
                     contact_patch_tied.cpp
                     contact_beam.cpp
-                    contact_solid_adjoint.cpp
                 IF TRIBOL_FOUND)
 
 serac_add_tests(SOURCES       ${physics_parallel_test_sources}
