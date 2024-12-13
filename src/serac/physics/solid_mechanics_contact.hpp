@@ -132,7 +132,7 @@ public:
       // NOTE this copy is required as the sundials solvers do not allow move assignments because of their memory
       // tracking strategy
       // See https://github.com/mfem/mfem/issues/3531
-      mfem::Vector r_blk(r, 0, displacement_.space().TrueVSize());
+      mfem::Vector r_blk(r, 0, displacement_.Size());
       r_blk = res;
 
       contact_.residualFunction(shape_displacement_, u, r);
@@ -309,7 +309,7 @@ protected:
 
     if (use_warm_start_) {
       // Update the system residual
-      mfem::Vector augmented_residual(displacement_.space().TrueVSize() + contact_.numPressureDofs());
+      mfem::Vector augmented_residual(displacement_.Size() + contact_.numPressureDofs());
       augmented_residual     = 0.0;
       const mfem::Vector res = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
                                             *parameters_[parameter_indices].state...);

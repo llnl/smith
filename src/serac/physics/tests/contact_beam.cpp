@@ -42,7 +42,7 @@ TEST_P(ContactTest, beam)
   auto  mesh  = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "beam_mesh");
 
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 1};
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
   return;
