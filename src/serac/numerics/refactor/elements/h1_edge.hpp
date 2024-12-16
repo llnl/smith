@@ -56,7 +56,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
     return shape_function_gradient(xi, i);
   }
 
-  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space([[maybe_unused]] nd::view<const double,2> xi) const {
     return 0;
   }
 
@@ -72,19 +72,19 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
   nd::array< double, 2 > evaluate_shape_function_gradients(nd::view<const double, 2> xi) const {
     uint32_t q = xi.shape[0];
     nd::array<double, 2> shape_fn_grads({q, num_nodes()});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolationDerivative(xi(i, 0), p + 1, &shape_fn_grads(i, 0));
     }
     return shape_fn_grads;
   }
 
   SERAC_HOST_DEVICE void interpolate(nd::view<value_type> values_q, nd::view<const double> values_e, nd::view<const double, 2> shape_fns, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = values_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = values_q.shape[0];
 
-    for (int q = 0; q < nqpts; q++) {
+    for (uint32_t q = 0; q < nqpts; q++) {
       double sum = 0.0;
-      for (int i = 0; i < nnodes; i++) {
+      for (uint32_t i = 0; i < nnodes; i++) {
         sum += shape_fns(q, i) * values_e(i);
       }
       values_q(q) = sum;
@@ -92,11 +92,11 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
   }
 
   SERAC_HOST_DEVICE void gradient(nd::view<grad_type> gradients_q, nd::view<const double, 1> values_e, nd::view<const double, 2> shape_fn_grads, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = gradients_q.shape[0];
-    for (int j = 0; j < nqpts; j++) {
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = gradients_q.shape[0];
+    for (uint32_t j = 0; j < nqpts; j++) {
       double sum = 0.0;
-      for (int i = 0; i < nnodes; i++) {
+      for (uint32_t i = 0; i < nnodes; i++) {
         sum += values_e(i) * shape_fn_grads(j, i);
       }
       gradients_q(j) = sum;
@@ -118,12 +118,12 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
   }
 
   SERAC_HOST_DEVICE void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 2> shape_fn, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = source_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = source_q.shape[0];
 
-    for (int i = 0; i < nnodes; i++) {
+    for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         sum += shape_fn(q, i) * source_q(q);
       }
       residual_e(i) = sum;
@@ -145,11 +145,11 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
   }
 
   SERAC_HOST_DEVICE void integrate_flux(nd::view<double> output_e, nd::view<const flux_type> flux_q, nd::view<const double, 2> shape_fn_grads, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = flux_q.shape[0];
-    for (int i = 0; i < nnodes; i++) {
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = flux_q.shape[0];
+    for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         sum += shape_fn_grads(q, i) * flux_q(q);
       }
       output_e(i) = sum;
@@ -158,11 +158,11 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
 
   #ifdef __CUDACC__
   __device__ void cuda_gradient(nd::view<grad_type, 1> gradients_q, nd::view<const double, 1> values_e, nd::view<const double, 2> shape_fn_grads, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = gradients_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = gradients_q.shape[0];
     for (int j = threadIdx.x; j < nqpts; j += blockDim.x) {
       double sum = 0.0;
-      for (int i = 0; i < nnodes; i++) {
+      for (uint32_t i = 0; i < nnodes; i++) {
         sum += values_e(i) * shape_fn_grads(j, i);
       }
       gradients_q(j) = sum;
@@ -170,12 +170,12 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::H1 >{
   }
 
   __device__ void cuda_integrate_flux(nd::view<double> residual_e, nd::view<const flux_type> flux_q, nd::view<const double, 2> shape_fn_grads, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = flux_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = flux_q.shape[0];
 
     for (int i = threadIdx.x; i < nnodes; i += blockDim.x) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         sum += shape_fn_grads(q, i) * flux_q(q);
       }
       residual_e(i) = sum;

@@ -2,7 +2,7 @@
 
 #include "serac/numerics/functional/tensor.hpp"
 
-namespace femto {
+namespace refactor {
 
 template< int n, int i >
 constexpr double GaussLegendreNode01() {
@@ -121,13 +121,13 @@ constexpr double GaussLobattoNode01() {
   return -1000.0;
 }
 
-void GaussLegendreNodes(int n, double * output);
-void GaussLegendreInterpolation(double x, int n, double * output);
-void GaussLegendreInterpolationDerivative(double x, int n, double * output);
+void GaussLegendreNodes(uint32_t n,  double * output);
+void GaussLegendreInterpolation(double x, uint32_t n,  double * output);
+void GaussLegendreInterpolationDerivative(double x, uint32_t n,  double * output);
 
-void GaussLobattoNodes(int n, double * output);
-void GaussLobattoInterpolation(double x, int n, double * output);
-void GaussLobattoInterpolationDerivative(double x, int n, double * output);
+void GaussLobattoNodes(uint32_t n,  double * output);
+void GaussLobattoInterpolation(double x, uint32_t n,  double * output);
+void GaussLobattoInterpolationDerivative(double x, uint32_t n,  double * output);
 
 constexpr double GaussLobattoInterpolation(double x, uint32_t n, uint32_t i) {
   if (n == 1) { return 1.0; }
@@ -165,16 +165,16 @@ constexpr double GaussLobattoInterpolationDerivative(double x, uint32_t n, uint3
   return -1.0;
 }
 
-void GaussLobattoInterpolationTriangle(const double * xi, int p, double * output);
-void GaussLobattoInterpolationDerivativeTriangle(const double * xi, int p, double * output);
+void GaussLobattoInterpolationTriangle(const double * xi, uint32_t p, double * output);
+void GaussLobattoInterpolationDerivativeTriangle(const double * xi, uint32_t p, double * output);
 
-void GaussLobattoInterpolationQuadrilateral(const double * xi, int n, double * output);
-void GaussLobattoInterpolationDerivativeQuadrilateral(const double * xi, int n, double * output);
+void GaussLobattoInterpolationQuadrilateral(const double * xi, uint32_t n,  double * output);
+void GaussLobattoInterpolationDerivativeQuadrilateral(const double * xi, uint32_t n,  double * output);
 
-void GaussLobattoInterpolationTetrahedron(const double * xi, int p, double * output);
-void GaussLobattoInterpolationDerivativeTetrahedron(const double * xi, int p, double * output);
+void GaussLobattoInterpolationTetrahedron(const double * xi, uint32_t p, double * output);
+void GaussLobattoInterpolationDerivativeTetrahedron(const double * xi, uint32_t p, double * output);
 
-void GaussLobattoInterpolationHexahedron(const double * xi, int n, double * output);
-void GaussLobattoInterpolationDerivativeHexahedron(const double * xi, int n, double * output);
+void GaussLobattoInterpolationHexahedron(const double * xi, uint32_t n,  double * output);
+void GaussLobattoInterpolationDerivativeHexahedron(const double * xi, uint32_t n,  double * output);
 
-} // namespace femto
+} // namespace refactor

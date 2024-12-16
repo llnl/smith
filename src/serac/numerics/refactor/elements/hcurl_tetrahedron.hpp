@@ -1180,7 +1180,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
 
   constexpr vec3 interpolate(vec3 xi, const double * values) const {
     vec3 interpolated_value{};
-    for (int i = 0; i < num_nodes(); i++) {
+    for (uint32_t i = 0; i < num_nodes(); i++) {
       interpolated_value += values[i] * shape_function(xi, i);
     }
     return interpolated_value;
@@ -1188,7 +1188,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
 
   constexpr vec3 curl(vec3 xi, const double * values) const {
     vec3 interpolated_curl{};
-    for (int i = 0; i < num_nodes(); i++) {
+    for (uint32_t i = 0; i < num_nodes(); i++) {
       interpolated_curl += values[i] * shape_function_curl(xi, i);
     }
     return interpolated_curl;
@@ -1201,7 +1201,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
   nd::array< double, 3 > evaluate_shape_functions(nd::view<const double, 2> xi) {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> shape_fns({q, num_nodes(), dim});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       vec3 xi_i = vec3{xi(i, 0), xi(i, 1), xi(i, 2)};
       for (int j = 0; j < num_nodes(); j++) {
         vec3 phi_j = shape_function(xi_i, j);
@@ -1214,12 +1214,12 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
   }
 
   void interpolate(nd::view<value_type> values_q, nd::view<const double, 1> values_e, nd::view<const double, 3> shape_fns, double * /*buffer*/) {
-    int nnodes = num_nodes();
-    int nqpts = values_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = values_q.shape[0];
 
-    for (int q = 0; q < nqpts; q++) {
+    for (uint32_t q = 0; q < nqpts; q++) {
       value_type sum{};
-      for (int i = 0; i < nnodes; i++) {
+      for (uint32_t i = 0; i < nnodes; i++) {
         for (int j = 0; j < dim; j++) {
           sum[j] += shape_fns(q, i, j) * values_e(i);
         }
@@ -1231,7 +1231,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
   nd::array< double, 3 > evaluate_shape_function_curls(nd::view<const double, 2> xi) {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> shape_fns({q, num_nodes(), 3});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       vec3 xi_i = vec3{xi(i, 0), xi(i, 1), xi(i, 2)};
       for (int j = 0; j < num_nodes(); j++) {
         vec3 curl_phi_j = shape_function_curl(xi_i, j);
@@ -1244,12 +1244,12 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
   }
 
   void curl(nd::view<derivative_type> values_q, nd::view<const double, 1> values_e, nd::view<const double, 3> shape_fn_curls, double * /*buffer*/) {
-    int nnodes = num_nodes();
-    int nqpts = values_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = values_q.shape[0];
 
-    for (int q = 0; q < nqpts; q++) {
+    for (uint32_t q = 0; q < nqpts; q++) {
       derivative_type sum{};
-      for (int i = 0; i < nnodes; i++) {
+      for (uint32_t i = 0; i < nnodes; i++) {
         for (int j = 0; j < dim; j++) {
           sum[j] += shape_fn_curls(q, i, j) * values_e(i);
         }
@@ -1261,7 +1261,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
   nd::array< double, 3 > evaluate_weighted_shape_functions(nd::view<const double, 2> xi, nd::view<const double, 1> weights) const {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> shape_fns({q, num_nodes(), dim});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       vec3 xi_i = vec3{xi(i, 0), xi(i, 1), xi(i, 2)};
       for (int j = 0; j < num_nodes(); j++) {
         vec3 phi_j = shape_function(xi_i, j);
@@ -1274,12 +1274,12 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
   }
 
   SERAC_HOST_DEVICE void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 3> shape_fn, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = source_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = source_q.shape[0];
 
-    for (int i = 0; i < nnodes; i++) {
+    for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         for (int j = 0; j < dim; j++) {
           sum += shape_fn(q, i, j) * source_q(q)[j];
         }
@@ -1291,7 +1291,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
   nd::array< double, 3 > evaluate_weighted_shape_function_curls(nd::view<const double, 2> xi, nd::view<const double, 1> weights) const {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> shape_fns({q, num_nodes(), dim});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       vec3 xi_i = vec3{xi(i, 0), xi(i, 1), xi(i, 2)};
       for (int j = 0; j < num_nodes(); j++) {
         vec3 dphi_j = shape_function_curl(xi_i, j);
@@ -1304,12 +1304,12 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
   }
 
   SERAC_HOST_DEVICE void integrate_flux(nd::view<double> residual_e, nd::view<const flux_type> flux_q, nd::view<const double, 3> shape_fn, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = flux_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = flux_q.shape[0];
 
-    for (int i = 0; i < nnodes; i++) {
+    for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         for (int j = 0; j < dim; j++) {
           sum += shape_fn(q, i, j) * flux_q(q)[j];
         }
@@ -1320,12 +1320,12 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
 
   #ifdef __CUDACC__
   __device__ void cuda_integrate_flux(nd::view<double> residual_e, nd::view<const flux_type> flux_q, nd::view<const double, 3> shape_fn_curl, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = flux_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = flux_q.shape[0];
 
     for (int i = threadIdx.x; i < nnodes; i += blockDim.x) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         for (int d = 0; d < dim; d++) {
           sum += shape_fn_curl(q, i, d) * flux_q(q)[d];
         }

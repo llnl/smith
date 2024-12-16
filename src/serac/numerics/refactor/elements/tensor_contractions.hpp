@@ -15,7 +15,7 @@ inline void contract(const nd::view<const double,3> & A, nd::view<double,2> & B,
     for (uint32_t i1 = 0; i1 < n1; i1++) {
       for (uint32_t i2 = 0; i2 < n2; i2++) {
         double sum = (accumulate) ? C(i0, i1, i2) : 0.0;
-        for (int j = 0; j < m; j++) {
+        for (uint32_t j = 0; j < m; j++) {
           sum += B(i0, j) * A(i1, i2, j);
         }
         C(i0, i1, i2) = sum;
@@ -35,7 +35,7 @@ inline void _contract(nd::view<double,2> C, const nd::view<const double,2> & A, 
   for (uint32_t i0 = 0; i0 < n0; i0++) {
     for (uint32_t i1 = 0; i1 < n1; i1++) {
       double sum = (accumulate) ? C(i0, i1) : 0.0;
-      for (int j = 0; j < m; j++) {
+      for (uint32_t j = 0; j < m; j++) {
         sum += A(i0, j) * B(i1, j);
       }
       C(i0, i1) = sum;
@@ -54,7 +54,7 @@ void contract(const nd::view<const double,2> & A, nd::view<double,2> & B, nd::vi
   for (uint32_t i0 = 0; i0 < n0; i0++) {
     for (uint32_t i1 = 0; i1 < n1; i1++) {
       double sum = (accumulate) ? C(i0, i1) : 0.0;
-      for (int j = 0; j < m; j++) {
+      for (uint32_t j = 0; j < m; j++) {
         if constexpr (i == 0) { sum += A(j, i0) * B(i1, j); }
         if constexpr (i == 1) { sum += A(i0, j) * B(i1, j); }
       }
@@ -68,7 +68,7 @@ inline void contract(const nd::view<const double> & A, nd::view<double,2> & B, c
   uint32_t m = A.shape[0];
   for (uint32_t i = 0; i < n; i++) {
     double sum = (accumulate) ? C(i) : 0.0;
-    for (int j = 0; j < m; j++) {
+    for (uint32_t j = 0; j < m; j++) {
       sum += A(j) * B(i, j);
     }
     C(i) = sum;

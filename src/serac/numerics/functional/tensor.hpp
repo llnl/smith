@@ -73,19 +73,39 @@ struct tensor<T, m> {
   SERAC_HOST_DEVICE constexpr auto&       operator[](int i) { return data[i]; }
   SERAC_HOST_DEVICE constexpr const auto& operator[](int i) const { return data[i]; }
 
-  template <int last_dimension = m, typename = typename std::enable_if<last_dimension == 1>::type>
+  T data[m];
+};
+
+template <typename T>
+struct tensor<T, 1> {
+
+  SERAC_HOST_DEVICE constexpr tensor() : data{} {}
+  SERAC_HOST_DEVICE constexpr tensor(T value) : data(value) {}
+
+  template <typename i_type>
+  SERAC_HOST_DEVICE constexpr auto& operator()(i_type)
+  {
+    return data;
+  }
+  template <typename i_type>
+  SERAC_HOST_DEVICE constexpr auto& operator()(i_type) const
+  {
+    return data;
+  }
+  SERAC_HOST_DEVICE constexpr auto&       operator[](int) { return data; }
+  SERAC_HOST_DEVICE constexpr const auto& operator[](int) const { return data; }
+
   SERAC_HOST_DEVICE constexpr operator T()
   {
-    return data[0];
+    return data;
   }
 
-  template <int last_dimension = m, typename = typename std::enable_if<last_dimension == 1>::type>
   SERAC_HOST_DEVICE constexpr operator T() const
   {
-    return data[0];
+    return data;
   }
 
-  T data[m];
+  T data;
 };
 /// @endcond
 

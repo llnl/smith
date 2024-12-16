@@ -31,6 +31,29 @@ struct FunctionSpace {
   uint32_t components;
   FunctionSpace() : family{}, degree{}, components{} {}
   FunctionSpace(Family f, uint32_t d = 2, uint32_t c = 1) : family{f}, degree{d}, components{c}{}
+  FunctionSpace(Field f) {
+
+    const auto & pgf = f.gridFunction();
+    switch(pgf.FESpace()->FEColl()->GetContType()) {
+      case mfem::FiniteElementCollection::CONTINUOUS:
+        family = Family::H1;
+        break;
+      case mfem::FiniteElementCollection::TANGENTIAL:
+        family = Family::Hcurl;
+        break;
+      case mfem::FiniteElementCollection::NORMAL:
+        family = Family::Hdiv;
+        break;
+      case mfem::FiniteElementCollection::DISCONTINUOUS:
+        family = Family::DG;
+        break;
+    }
+
+    degree = uint32_t(pgf.FESpace()->FEColl()->GetOrder());
+
+    components = uint32_t(pgf.VectorDim());
+
+  }
 
   bool operator==(const FunctionSpace & other) const {
     return (components == other.components) && 
@@ -41,7 +64,7 @@ struct FunctionSpace {
 
 struct BasisFunction {
   FunctionSpace space;
-  BasisFunction(Field f) : space(f.family, f.degree, f.data.shape[1]) {}
+  BasisFunction(Field f) : space(f) {}
   BasisFunction(FunctionSpace s) : space(s) {}
   bool operator==(const BasisFunction & other) const {
     return (space.components == other.space.components) && 
@@ -101,7 +124,7 @@ SERAC_HOST_DEVICE constexpr serac::mat2 face_transformation(int8_t id) {
   return matrices[id-1];
 }
 
-// sam: these orientations are for femto's face orientation convention
+// sam: these orientations are for refactor's face orientation convention
 SERAC_HOST_DEVICE constexpr int8_t face_transformation_id(TransformationType type, int orientation) {
   if (type == TransformationType::PhysicalToParent) {
     constexpr int8_t LUT[3] = {1, 2, 3};

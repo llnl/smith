@@ -96,7 +96,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
   nd::array< double, 3 > evaluate_shape_functions(nd::view<const double,2> xi) const {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> buffer({1, q, p+1});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolation(xi(i, 0), p+1, &buffer(0, i, 0));
     }
     return buffer;
@@ -122,7 +122,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
   nd::array< double, 3 > evaluate_shape_function_gradients(nd::view<const double,2> xi) const {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> shape_fn_grads({2, q, p+1});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolation(xi(i, 0), p+1, &shape_fn_grads(0, i, 0));
       GaussLobattoInterpolationDerivative(xi(i, 0), p+1, &shape_fn_grads(1, i, 0));
     }
@@ -169,7 +169,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
     uint32_t q = xi.shape[0];
     nd::array<double, 2> buffer({p+1, q});
     nd::array<double, 1> tmp({p+1});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolation(xi(i, 0), p+1, &tmp(0));
       for (int j = 0; j < p+1; j++) {
         buffer(j, i) = tmp(j) * weights(i);
@@ -206,7 +206,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> buffer({2, p+1, q});
     nd::array<double, 1> tmp({p+1});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolation(xi(i, 0), p+1, &tmp(0));
       for (int j = 0; j < p+1; j++) {
         buffer(0, j, i) = tmp(j) * weights(i);

@@ -100,12 +100,12 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
   }
 
   void interpolate(nd::view<source_type> values_q, nd::view<const double> values_e, nd::view<const double, 2> shape_fns, double * /*buffer*/) {
-    int nnodes = num_nodes();
-    int nqpts = values_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = values_q.shape[0];
 
-    for (int q = 0; q < nqpts; q++) {
+    for (uint32_t q = 0; q < nqpts; q++) {
       double sum = 0.0;
-      for (int i = 0; i < nnodes; i++) {
+      for (uint32_t i = 0; i < nnodes; i++) {
         sum += shape_fns(q, i) * values_e(i);
       }
       values_q(q) = sum;
@@ -115,7 +115,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
   nd::array< double > evaluate_shape_function_curls(nd::view<const double,2> xi) {
     uint32_t q = xi.shape[0];
     nd::array<double> buffer({q * p});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       GaussLegendreInterpolation(xi(i, 0), p, &buffer(p * i));
     }
     return buffer;
@@ -152,7 +152,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
   nd::array< double, 2 > evaluate_weighted_shape_functions(nd::view<const double, 2> xi, nd::view<const double, 1> weights) {
     uint32_t q = xi.shape[0];
     nd::array<double, 2> shape_fns({q, num_nodes()});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       for (int j = 0; j < num_nodes(); j++) {
         shape_fns(i, j) = shape_function(xi(i, 0), j) * weights(i);
       }
@@ -161,12 +161,12 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
   }
 
   SERAC_HOST_DEVICE void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 2> shape_fn, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = source_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = source_q.shape[0];
 
-    for (int i = 0; i < nnodes; i++) {
+    for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         sum += shape_fn(q, i) * source_q(q);
       }
       residual_e(i) = sum;
@@ -176,7 +176,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
   nd::array< double, 2 > evaluate_weighted_shape_function_curls(nd::view<const double, 2> xi, nd::view<const double, 1> weights) {
     uint32_t q = xi.shape[0];
     nd::array<double, 2> shape_fns({q, num_nodes()});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       for (int j = 0; j < num_nodes(); j++) {
         shape_fns(i, j) = shape_function_curl(xi(i, 0), j) * weights(i);
       }
@@ -185,12 +185,12 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
   }
 
   SERAC_HOST_DEVICE void integrate_flux(nd::view<double> residual_e, nd::view<const flux_type> flux_q, nd::view<const double, 2> shape_fn, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = flux_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = flux_q.shape[0];
 
-    for (int i = 0; i < nnodes; i++) {
+    for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         sum += shape_fn(q, i) * flux_q(q);
       }
       residual_e(i) = sum;
@@ -199,12 +199,12 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
 
   #ifdef __CUDACC__
   __device__ void cuda_integrate_flux(nd::view<double> residual_e, nd::view<const flux_type> flux_q, nd::view<const double, 2> shape_fn_curl, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = flux_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = flux_q.shape[0];
 
     for (int i = threadIdx.x; i < nnodes; i += blockDim.x) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         sum += shape_fn_curl(q, i) * flux_q(q);
       }
       residual_e(i) = sum;

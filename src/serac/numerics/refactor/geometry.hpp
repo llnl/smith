@@ -203,7 +203,7 @@ struct GeometryType< mfem::Geometry::TRIANGLE > {
 
   static constexpr int local_edge_ids[3][2] = {{0, 1},{1, 2},{2, 0}};
 
-  SERAC_HOST_DEVICE static constexpr uint32_t number(int n) { return static_cast< uint32_t >((n * (n + 1)) / 2); };
+  SERAC_HOST_DEVICE static constexpr uint32_t number(uint32_t n) { return (n * (n + 1)) / 2; };
 };
 using Triangle = GeometryType< mfem::Geometry::TRIANGLE >;
 

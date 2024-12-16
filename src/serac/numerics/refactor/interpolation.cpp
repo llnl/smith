@@ -1,8 +1,8 @@
 #include <iostream>
 
-namespace femto {
+namespace refactor {
 
-void GaussLegendreNodes(int n, double * output) {
+void GaussLegendreNodes(uint32_t n,  double * output) {
 
   // clang-format off
   switch (n) {
@@ -44,7 +44,7 @@ void GaussLegendreNodes(int n, double * output) {
 
 }
 
-void GaussLegendreInterpolation(double x, int n, double * output) {
+void GaussLegendreInterpolation(double x, uint32_t n,  double * output) {
 
   if (n == 1) { 
     output[0] = 1; 
@@ -87,7 +87,7 @@ void GaussLegendreInterpolation(double x, int n, double * output) {
 
 }
 
-void GaussLegendreInterpolationDerivative01(double x, int n, double * output) {
+void GaussLegendreInterpolationDerivative01(double x, uint32_t n,  double * output) {
 
   if (n == 1) { 
     output[0] = 0.0;
@@ -130,7 +130,7 @@ void GaussLegendreInterpolationDerivative01(double x, int n, double * output) {
 
 }
 
-void GaussLobattoNodes(int n, double * output) {
+void GaussLobattoNodes(uint32_t n,  double * output) {
   if (n == 1) {
     output[0] = 0.5;
     return;
@@ -155,7 +155,7 @@ void GaussLobattoNodes(int n, double * output) {
   }
 }
 
-void GaussLobattoInterpolation(double x, int n, double * output) {
+void GaussLobattoInterpolation(double x, uint32_t n,  double * output) {
   if (n == 1) {
     output[0] = 1.0;
     return;
@@ -183,7 +183,7 @@ void GaussLobattoInterpolation(double x, int n, double * output) {
   std::cout << "error: invalid polynomial order in GaussLobattoInterpolation" << std::endl;
 }
 
-void GaussLobattoInterpolationDerivative(double x, int n, double * output) {
+void GaussLobattoInterpolationDerivative(double x, uint32_t n,  double * output) {
   if (n == 1) {
     output[0] = 0.0;
     return;
@@ -249,7 +249,7 @@ constexpr double GaussLobattoInterpolationDerivative(double x, uint32_t n, uint3
 }
 #endif
 
-void GaussLobattoInterpolationTriangle(const double * xi, int p, double * output) {
+void GaussLobattoInterpolationTriangle(const double * xi, uint32_t p, double * output) {
   if (p == 0) {
     output[0] = 1.0;
     return;
@@ -285,7 +285,7 @@ void GaussLobattoInterpolationTriangle(const double * xi, int p, double * output
   }
 }
 
-void GaussLobattoInterpolationDerivativeTriangle(const double * xi, int p, double * output) {
+void GaussLobattoInterpolationDerivativeTriangle(const double * xi, uint32_t p, double * output) {
   if (p == 0) {
     output[0] = 0.0;
     output[1] = 0.0;
@@ -341,7 +341,7 @@ void GaussLobattoInterpolationDerivativeTriangle(const double * xi, int p, doubl
   }
 }
 
-void GaussLobattoInterpolationQuadrilateral(const double * xi, int n, double * output) {
+void GaussLobattoInterpolationQuadrilateral(const double * xi, uint32_t n,  double * output) {
   double * N[2] = {new double[n], new double[n]};
 
   GaussLobattoInterpolation(xi[0], n, N[0]);
@@ -357,7 +357,7 @@ void GaussLobattoInterpolationQuadrilateral(const double * xi, int n, double * o
   delete N[1];
 }
 
-void GaussLobattoInterpolationDerivativeQuadrilateral(const double * xi, int n, double * output) {
+void GaussLobattoInterpolationDerivativeQuadrilateral(const double * xi, uint32_t n,  double * output) {
   double * N[2] = {new double[n], new double[n]};
   double * dN[2] = {new double[n], new double[n]};
 
@@ -380,7 +380,7 @@ void GaussLobattoInterpolationDerivativeQuadrilateral(const double * xi, int n, 
   delete dN[1];
 }
 
-void GaussLobattoInterpolationTetrahedron(const double * xi, int p, double * output) {
+void GaussLobattoInterpolationTetrahedron(const double * xi, uint32_t p, double * output) {
   if (p == 0) {
     output[0] = 1.0;
     return;
@@ -431,7 +431,7 @@ void GaussLobattoInterpolationTetrahedron(const double * xi, int p, double * out
   }
 }
 
-void GaussLobattoInterpolationDerivativeTetrahedron(const double * xi, int p, double * output) {
+void GaussLobattoInterpolationDerivativeTetrahedron(const double * xi, uint32_t p, double * output) {
   if (p == 0) {
     output[0] = 0.0;
     output[1] = 0.0;
@@ -552,7 +552,7 @@ void GaussLobattoInterpolationDerivativeTetrahedron(const double * xi, int p, do
   }
 }
 
-void GaussLobattoInterpolationHexahedron(const double * xi, int n, double * output) {
+void GaussLobattoInterpolationHexahedron(const double * xi, uint32_t n,  double * output) {
   double * N[3] = {new double[n], new double[n], new double[n]};
 
   GaussLobattoInterpolation(xi[0], n, N[0]);
@@ -570,7 +570,7 @@ void GaussLobattoInterpolationHexahedron(const double * xi, int n, double * outp
   delete N[0]; delete N[1]; delete N[2];
 }
 
-void GaussLobattoInterpolationDerivativeHexahedron(const double * xi, int n, double * output) {
+void GaussLobattoInterpolationDerivativeHexahedron(const double * xi, uint32_t n,  double * output) {
   double * N[3] = {new double[n], new double[n], new double[n]};
   double * dN[3] = {new double[n], new double[n], new double[n]};
 
@@ -596,4 +596,4 @@ void GaussLobattoInterpolationDerivativeHexahedron(const double * xi, int n, dou
   delete dN[0]; delete dN[1]; delete dN[2];
 }
 
-} // namespace femto
+} // namespace refactor

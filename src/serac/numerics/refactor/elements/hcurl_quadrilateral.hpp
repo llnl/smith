@@ -211,7 +211,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
 
   vec2 interpolate(vec2 xi, const double * values) const {
     vec2 interpolated_value{};
-    for (int i = 0; i < num_nodes(); i++) {
+    for (uint32_t i = 0; i < num_nodes(); i++) {
       interpolated_value += values[i] * shape_function(xi, i);
     }
     return interpolated_value;
@@ -219,7 +219,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
 
   vec<1> curl(vec2 xi, const double * values) const {
     double interpolated_curl = 0.0;
-    for (int i = 0; i < num_nodes(); i++) {
+    for (uint32_t i = 0; i < num_nodes(); i++) {
       interpolated_curl += values[i] * shape_function_curl(xi, i);
     }
     return interpolated_curl;
@@ -238,7 +238,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     num_entries += q * p;       // B1
     num_entries += q * (p + 1); // B2
     nd::array<double> buffer({num_entries});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       GaussLegendreInterpolation(xi(i, 0), p, &buffer(p*i));
       GaussLobattoInterpolation(xi(i, 0), p+1, &buffer((p+1)*i + (p*q)));
     }
@@ -275,7 +275,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
   nd::array< double, 2 > evaluate_shape_function_curls(nd::view<const double, 2> xi) const {
     uint32_t q = xi.shape[0];
     nd::array<double, 2> shape_fns({q * q, num_nodes()});
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       for (int j = 0; j < q; j++) {
         vec2 xi_ij = vec2{xi(j, 0), xi(i, 0)};
         for (int k = 0; k < num_nodes(); k++) {
@@ -287,12 +287,12 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
   }
 
   void curl(nd::view<derivative_type> values_q, nd::view<const double, 1> values_e, nd::view<const double, 2> shape_fn_curls, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = values_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = values_q.shape[0];
 
-    for (int q = 0; q < nqpts; q++) {
+    for (uint32_t q = 0; q < nqpts; q++) {
       derivative_type sum = 0.0;
-      for (int i = 0; i < nnodes; i++) {
+      for (uint32_t i = 0; i < nnodes; i++) {
         sum[0] += shape_fn_curls(q, i) * values_e(i);
       }
       values_q(q) = sum;
@@ -304,7 +304,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     nd::array<double, 3> shape_fns({q * q, num_nodes(), dim});
     uint32_t qcount = 0;
     for (int j = 0; j < q; j++) {
-      for (int i = 0; i < q; i++) {
+      for (uint32_t i = 0; i < q; i++) {
         vec2 xi_ij = vec2{xi(i, 0), xi(j, 0)};
         for (int l = 0; l < num_nodes(); l++) {
           vec2 phi = shape_function(xi_ij, l);
@@ -318,12 +318,12 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
   }
 
   SERAC_HOST_DEVICE void integrate_source(nd::view<double> residual_e, nd::view<const source_type> source_q, nd::view<const double, 3> shape_fn, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = source_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = source_q.shape[0];
 
-    for (int i = 0; i < nnodes; i++) {
+    for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         for (int j = 0; j < dim; j++) {
           sum += shape_fn(q, i, j) * source_q(q)[j];
         }
@@ -337,7 +337,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     nd::array<double, 2> shape_fns({q * q, num_nodes()});
     uint32_t qcount = 0;
     for (int j = 0; j < q; j++) {
-      for (int i = 0; i < q; i++) {
+      for (uint32_t i = 0; i < q; i++) {
         vec2 xi_ij = vec2{xi(i, 0), xi(j, 0)};
         for (int l = 0; l < num_nodes(); l++) {
           shape_fns(qcount, l) = shape_function_curl(xi_ij, l) * weights[i] * weights[j];
@@ -349,12 +349,12 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
   }
 
   void integrate_flux(nd::view<double> residual_e, nd::view<const flux_type> flux_q, nd::view<const double, 2> shape_fn_curl, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = flux_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = flux_q.shape[0];
 
-    for (int i = 0; i < nnodes; i++) {
+    for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         sum += shape_fn_curl(q, i) * flux_q(q);
       }
       residual_e(i) = sum;
@@ -363,12 +363,12 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
 
   #ifdef __CUDACC__
   __device__ void cuda_integrate_flux(nd::view<double> residual_e, nd::view<const flux_type> flux_q, nd::view<const double, 2> shape_fn_curl, double * /*buffer*/) const {
-    int nnodes = num_nodes();
-    int nqpts = flux_q.shape[0];
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = flux_q.shape[0];
 
     for (int i = threadIdx.x; i < nnodes; i += blockDim.x) {
       double sum = 0.0;
-      for (int q = 0; q < nqpts; q++) {
+      for (uint32_t q = 0; q < nqpts; q++) {
         sum += shape_fn_curl(q, i) * flux_q(q);
       }
       residual_e(i) = sum;
@@ -384,7 +384,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     auto [B1, B2, G2, A1, num_entries] = scan({q*p, q*(p+1), q*(p+1), q*(p+1)});
     nd::array<double> buffer({num_entries});
     std::cout << num_entries << std::endl;
-    for (int i = 0; i < q; i++) {
+    for (uint32_t i = 0; i < q; i++) {
       GaussLegendreInterpolation(xi(i, 0), p, &buffer(B1 + p * i));
       GaussLobattoInterpolation(xi(i, 0), p+1, &buffer(B2 + (p+1)*i));
       GaussLobattoInterpolation(xi(i, 0), p+1, &buffer(G2 + (p+1)*i));
