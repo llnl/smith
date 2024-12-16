@@ -1,10 +1,10 @@
 #pragma once
 
-#include "fm/types/vec.hpp"
+#include "serac/numerics/functional/tensor.hpp"
 
 namespace refactor {
 
-using namespace fm;
+using namespace serac;
 
 // clang-format off
 template <>
@@ -19,72 +19,6 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
   static constexpr int dim = 2;
 
   SERAC_HOST_DEVICE uint32_t num_nodes() const { return 2 * p * (p + 1); }
-
-  template < typename T >
-  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * quad, T * values) const {
-
-    const Connection * edge = quad + Quadrilateral::edge_offset;
-
-    if (p == 1) {
-      if (edge[0].sign() == Sign::Negative) { values[0] *= -1; }
-      if (edge[1].sign() == Sign::Negative) { values[3] *= -1; }
-      if (edge[2].sign() == Sign::Positive) { values[1] *= -1; }
-      if (edge[3].sign() == Sign::Positive) { values[2] *= -1; }
-      return;
-    }
-
-    if (p == 2) {
-      if (edge[0].sign() == Sign::Negative) { values[ 0] *= -1; values[ 1] *= -1; }
-      if (edge[1].sign() == Sign::Negative) { values[10] *= -1; values[11] *= -1; }
-      if (edge[2].sign() == Sign::Positive) { values[ 4] *= -1; values[ 5] *= -1; }
-      if (edge[3].sign() == Sign::Positive) { values[ 6] *= -1; values[ 7] *= -1; }
-      return;
-    }
-
-    if (p == 3) {
-      if (edge[0].sign() == Sign::Negative) { values[ 0] *= -1; values[ 1] *= -1; values[ 2] *= -1;}
-      if (edge[1].sign() == Sign::Negative) { values[21] *= -1; values[22] *= -1; values[23] *= -1;}
-      if (edge[2].sign() == Sign::Positive) { values[ 9] *= -1; values[10] *= -1; values[11] *= -1;}
-      if (edge[3].sign() == Sign::Positive) { values[12] *= -1; values[13] *= -1; values[14] *= -1;}
-      return;
-    }
-
-  }
-
-  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * quad, int8_t * transformation) {
-
-    const Connection * edge = quad + Quadrilateral::edge_offset;
-
-    uint32_t nnodes = num_nodes();
-    for (int k = 0; k < nnodes; k++) {
-      transformation[k] = 0;
-    }
-
-    if (p == 1) {
-      if (edge[0].sign() == Sign::Negative) { transformation[0] = -1; }
-      if (edge[1].sign() == Sign::Negative) { transformation[3] = -1; }
-      if (edge[2].sign() == Sign::Positive) { transformation[1] = -1; }
-      if (edge[3].sign() == Sign::Positive) { transformation[2] = -1; }
-      return;
-    }
-
-    if (p == 2) {
-      if (edge[0].sign() == Sign::Negative) { transformation[ 0] = -1; transformation[ 1] = -1; }
-      if (edge[1].sign() == Sign::Negative) { transformation[10] = -1; transformation[11] = -1; }
-      if (edge[2].sign() == Sign::Positive) { transformation[ 4] = -1; transformation[ 5] = -1; }
-      if (edge[3].sign() == Sign::Positive) { transformation[ 6] = -1; transformation[ 7] = -1; }
-      return;
-    }
-
-    if (p == 3) {
-      if (edge[0].sign() == Sign::Negative) { transformation[ 0] = -1; transformation[ 1] = -1; transformation[ 2] = -1;}
-      if (edge[1].sign() == Sign::Negative) { transformation[21] = -1; transformation[22] = -1; transformation[23] = -1;}
-      if (edge[2].sign() == Sign::Positive) { transformation[ 9] = -1; transformation[10] = -1; transformation[11] = -1;}
-      if (edge[3].sign() == Sign::Positive) { transformation[12] = -1; transformation[13] = -1; transformation[14] = -1;}
-      return;
-    }
-
-  }
 
   constexpr vec2 shape_function(vec2 xi, uint32_t i) const {
     if (p == 1) {
@@ -145,7 +79,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     }
   }
 
-  vec<1> shape_function_curl(vec2 xi, uint32_t i) const {
+  vec1 shape_function_curl(vec2 xi, uint32_t i) const {
     // expressions generated symbolically by mathematica
     if (p == 1) {
       if (i == 0) { return 1; }
@@ -205,7 +139,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     }
   }
 
-  vec<1> shape_function_derivative(vec2 xi, uint32_t i) const {
+  vec1 shape_function_derivative(vec2 xi, uint32_t i) const {
     return shape_function_curl(xi, i);
   }
 
@@ -217,7 +151,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     return interpolated_value;
   }
 
-  vec<1> curl(vec2 xi, const double * values) const {
+  vec1 curl(vec2 xi, const double * values) const {
     double interpolated_curl = 0.0;
     for (uint32_t i = 0; i < num_nodes(); i++) {
       interpolated_curl += values[i] * shape_function_curl(xi, i);
@@ -247,7 +181,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
 
   void interpolate(nd::view<value_type> values_q, nd::view<const double> values_e, nd::view<double> shape_fn, double * buffer) const {
     uint32_t n = p + 1;
-    uint32_t q = sqrt(values_q.shape[0]);
+    uint32_t q = uint32_t(sqrt(values_q.shape[0]));
 
     // 1D shape function evaluations
     nd::view<double, 2> B1(shape_fn.data(), {q, p}); // legendre shape functions
@@ -256,7 +190,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     nd::view<double, 2> A1(buffer, {q, n}); // storage for intermediates
 
     nd::view<const double, 2> ue(values_e.data(), {n, p});
-    nd::view<double, 2> uq((double*)values_q.data(), {q, q}, {2*q, 2});
+    nd::view<double, 2> uq(static_cast<double*>(&values_q[0][0]), {q, q}, {2*q, 2});
     
     _contract(A1, B1, ue); //  A1(qx, iy) = sum_{ix} B1(qx, ix) * ue(iy, ix)  
     _contract(uq, B2, A1); //  uq(qy, qx) = sum_{iy} B2(qy, iy) * A1(qx, iy)
@@ -265,7 +199,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
 
     // note: column-major strides here, since quadrature points are still 
     // enumerated lexicographically as {y, x} but y-component nodes are {x, y}
-    uq = nd::view<double, 2>(((double*)values_q.data())+1, {q, q}, {2, 2*q});
+    uq = nd::view<double, 2>(static_cast<double*>(&values_q[0][0])+1, {q, q}, {2, 2*q});
     
     _contract(A1, B1, ue); //  A1(qx, iy) = sum_{ix} B1(qx, ix) * ue(iy, ix)  
     _contract(uq, B2, A1); //  uq(qy, qx) = sum_{iy} B2(qy, iy) * A1(qx, iy)
@@ -276,9 +210,9 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     uint32_t q = xi.shape[0];
     nd::array<double, 2> shape_fns({q * q, num_nodes()});
     for (uint32_t i = 0; i < q; i++) {
-      for (int j = 0; j < q; j++) {
+      for (uint32_t j = 0; j < q; j++) {
         vec2 xi_ij = vec2{xi(j, 0), xi(i, 0)};
-        for (int k = 0; k < num_nodes(); k++) {
+        for (uint32_t k = 0; k < num_nodes(); k++) {
           shape_fns(i * q + j, k) = shape_function_curl(xi_ij, k);
         }
       }
@@ -303,10 +237,10 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> shape_fns({q * q, num_nodes(), dim});
     uint32_t qcount = 0;
-    for (int j = 0; j < q; j++) {
+    for (uint32_t j = 0; j < q; j++) {
       for (uint32_t i = 0; i < q; i++) {
         vec2 xi_ij = vec2{xi(i, 0), xi(j, 0)};
-        for (int l = 0; l < num_nodes(); l++) {
+        for (uint32_t l = 0; l < num_nodes(); l++) {
           vec2 phi = shape_function(xi_ij, l);
           shape_fns(qcount, l, 0) = phi[0] * weights[i] * weights[j];
           shape_fns(qcount, l, 1) = phi[1] * weights[i] * weights[j];
@@ -324,7 +258,7 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
       for (uint32_t q = 0; q < nqpts; q++) {
-        for (int j = 0; j < dim; j++) {
+        for (uint32_t j = 0; j < dim; j++) {
           sum += shape_fn(q, i, j) * source_q(q)[j];
         }
       }
@@ -336,10 +270,10 @@ struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
     uint32_t q = xi.shape[0];
     nd::array<double, 2> shape_fns({q * q, num_nodes()});
     uint32_t qcount = 0;
-    for (int j = 0; j < q; j++) {
+    for (uint32_t j = 0; j < q; j++) {
       for (uint32_t i = 0; i < q; i++) {
         vec2 xi_ij = vec2{xi(i, 0), xi(j, 0)};
-        for (int l = 0; l < num_nodes(); l++) {
+        for (uint32_t l = 0; l < num_nodes(); l++) {
           shape_fns(qcount, l) = shape_function_curl(xi_ij, l) * weights[i] * weights[j];
         }
         qcount++;

@@ -4,8 +4,8 @@
 #include "refactor/assert.hpp"
 #include "refactor/threadpool.hpp"
 
-#include "fm/types/matrix.hpp"
-#include "fm/types/vec.hpp"
+
+#include "serac/numerics/functional/tensor.hpp"
 
 #include "common.hpp"
 

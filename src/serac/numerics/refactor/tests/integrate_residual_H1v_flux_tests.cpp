@@ -10,8 +10,8 @@
 #include <gtest/gtest.h>
 
 #include "forall.hpp"
-#include "fm/types/vec.hpp"
-#include "fm/types/matrix.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+
 #include "containers/ndarray_conversions.hpp"
 
 using namespace refactor;

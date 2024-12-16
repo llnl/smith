@@ -73,6 +73,9 @@ struct tensor<T, m> {
   SERAC_HOST_DEVICE constexpr auto&       operator[](int i) { return data[i]; }
   SERAC_HOST_DEVICE constexpr const auto& operator[](int i) const { return data[i]; }
 
+  SERAC_HOST_DEVICE constexpr auto&       operator[](uint32_t i) { return data[i]; }
+  SERAC_HOST_DEVICE constexpr const auto& operator[](uint32_t i) const { return data[i]; }
+
   T data[m];
 };
 
@@ -92,8 +95,12 @@ struct tensor<T, 1> {
   {
     return data;
   }
+
   SERAC_HOST_DEVICE constexpr auto&       operator[](int) { return data; }
   SERAC_HOST_DEVICE constexpr const auto& operator[](int) const { return data; }
+
+  SERAC_HOST_DEVICE constexpr auto&       operator[](uint32_t) { return data; }
+  SERAC_HOST_DEVICE constexpr const auto& operator[](uint32_t) const { return data; }
 
   SERAC_HOST_DEVICE constexpr operator T()
   {
@@ -135,9 +142,15 @@ using vec1 = tensor<double, 1>;  ///< statically sized "vector" of 1 double
 using vec2 = tensor<double, 2>;  ///< statically sized vector of 2 doubles
 using vec3 = tensor<double, 3>;  ///< statically sized vector of 3 doubles
 
+template < int n, typename T = double >
+using vec = tensor<T, n>;  ///< statically sized vector with n components
+
 using mat1 = tensor<double, 1, 1>;  ///< statically sized 1x1 "matrix" of doubles
 using mat2 = tensor<double, 2, 2>;  ///< statically sized 2x2 matrix of doubles
 using mat3 = tensor<double, 3, 3>;  ///< statically sized 3x3 matrix of doubles
+
+template < int m, int n, typename T = double >
+using mat = tensor<T, m, n>;  ///< statically sized mxn matrix
 
 /**
  * @brief A sentinel struct for eliding no-op tensor operations

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fm/types/vec.hpp"
+#include "serac/numerics/functional/tensor.hpp"
 
 namespace refactor {
 
@@ -17,160 +17,16 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
   static constexpr int dim = 3;
 
   // clang-format off
-  SERAC_HOST_DEVICE uint8_t const * lexicographic_permutations(int p) {
+  SERAC_HOST_DEVICE uint8_t const * lexicographic_permutations(uint32_t p_) {
     static constexpr uint8_t linear_lexicographic_permutation[12] = {0,5,1,4,8,9,11,10,2,7,3,6};
     static constexpr uint8_t quadratic_lexicographic_permutation[54] = {0,1,20,23,4,5,18,21,36,45,38,47,44,53,42,51,12,13,32,35,16,17,30,33,3,2,19,22,6,7,37,46,26,29,41,50,11,10,43,52,27,24,39,48,14,15,31,34,8,9,25,28,40,49};
     static constexpr uint8_t cubic_lexicographic_permutation[144] = {0,1,2,51,55,59,9,10,11,48,52,56,96,112,128,99,115,131,111,127,143,108,124,140,36,37,38,87,91,95,45,46,47,84,88,92,5,4,3,8,7,6,50,54,58,49,53,57,12,13,14,24,25,26,97,113,129,98,114,130,63,67,71,75,79,83,103,119,135,107,123,139,23,22,21,35,34,33,110,126,142,109,125,141,68,64,60,80,76,72,104,120,136,100,116,132,39,40,41,42,43,44,85,89,93,86,90,94,15,16,17,18,19,20,27,28,29,30,31,32,61,62,65,66,69,70,73,74,77,78,81,82,101,102,105,106,117,118,121,122,133,134,137,138}; 
     static constexpr uint8_t const * permutations[4] = {nullptr, linear_lexicographic_permutation, quadratic_lexicographic_permutation, cubic_lexicographic_permutation };
-    return permutations[p];
+    return permutations[p_];
   }
   // clang-format on
 
   SERAC_HOST_DEVICE uint32_t num_nodes() const { return 3 * p * (p + 1) * (p + 1); }
-
-  struct QuadrilateralStrides {
-    int32_t x_offset; int32_t x_jstride; int32_t x_kstride;
-    int32_t y_offset; int32_t y_jstride; int32_t y_kstride;
-  };
-
-  SERAC_HOST_DEVICE QuadrilateralStrides quad_strides(Connection c, uint32_t offset) {
-
-    uint8_t o = c.orientation();
-    int32_t P = p;
-    int32_t base = offset + c.index * 2 * p * (p - 1);
-    if (c.sign() == Sign::Positive) {
-      if (o == 0) return {base + 0, 1, P, base + P*(P-1), 1, P};
-      if (o == 1) return {base + P*P-1, -1, P, base + P*(P-2), 1, -P};
-      if (o == 2) return {base + P*P-P-1, -1, -P, base + 2*P*(P-1)-1, -1, -P};
-      if (o == 3) return {base + P*(2*P-3), 1, -P, base + P-1, -1, P};
-    } else {
-      if (o == 0) return {base + P*(P-1), 1, P, base + 0, 1, P};
-      if (o == 1) return {base + P-1, -1, P, base + P*(2*P - 3), 1, -P};
-      if (o == 2) return {base + 2*P*(P-1)-1, -1, -P, base + P*P-P-1, -1, -P};
-      if (o == 3) return {base + P*(P-2), 1, -P, base + P*P-1, -1, P};
-    }
-    return {};
-
-  }
-
-  template < typename T >
-  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * hex, T * values) {
-
-    const Connection * edge = hex + Hexahedron::edge_offset;
-    const Connection * quad = hex + Hexahedron::quad_offset;
-
-    uint8_t const * permutation = lexicographic_permutations(p);
-
-    uint32_t count = 0;
-
-    // edge nodes
-    for (uint32_t i = 0; i < Hexahedron::num_edges; i++) {
-      if (edge[i].sign() == Sign::Negative) {
-        for (uint32_t j = 0; j < p; j++) {
-          values[permutation[count++]] *= -1;
-        }
-      } else {
-        count += p;
-      }
-    }
-
-    if (p == 1) return;
-
-    // face nodes
-    for (uint32_t i = 0; i < Hexahedron::num_quadrilaterals; i++) {
-
-      uint32_t s = quad[i].sign() == Sign::Positive;
-      uint32_t o = quad[i].orientation();
-
-      constexpr bool negate_x[2][4] = {{0, 1, 1, 0}, {0, 0, 0, 0}};
-      // note: the canonical face orientations for the hexahedron were
-      //       chosen such that nedelec basis functions on faces 0, 3, 4
-      //       are flipped in only the local "x" direction
-      if (negate_x[s][o] ^ (i == 0 || i == 3 || i == 4)) {
-        for (uint32_t k = 0; k < p * (p - 1); k++) {
-          values[permutation[count++]] *= -1;
-        }
-      } else {
-        count += p * (p - 1);
-      }
-
-      constexpr bool negate_y[2][4] = {{0, 0, 1, 1}, {0, 0, 0, 0}};
-      if (negate_y[s][o]) {
-        for (uint32_t k = 0; k < p * (p - 1); k++) {
-          values[permutation[count++]] *= -1;
-        }
-      } else {
-        count += p * (p - 1);
-      }
-
-    }
-
-  }
-
-  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * hex, int8_t * transformation) {
-
-    const Connection * edge = hex + Hexahedron::edge_offset;
-    const Connection * quad = hex + Hexahedron::quad_offset;
-
-    uint8_t const * permutation = lexicographic_permutations(p);
-
-    uint32_t count = 0;
-
-    // edge nodes
-    for (uint32_t i = 0; i < Hexahedron::num_edges; i++) {
-      if (edge[i].sign() == Sign::Negative) {
-        for (uint32_t j = 0; j < p; j++) {
-          transformation[permutation[count++]] = -1;
-        }
-      } else {
-        for (uint32_t j = 0; j < p; j++) {
-          transformation[permutation[count++]] =  0;
-        }
-      }
-    }
-
-    if (p == 1) return;
-
-    // face nodes
-    for (uint32_t i = 0; i < Hexahedron::num_quadrilaterals; i++) {
-
-      uint32_t s = quad[i].sign() == Sign::Positive;
-      uint32_t o = quad[i].orientation();
-
-      constexpr bool negate_x[2][4] = {{0, 1, 1, 0}, {0, 0, 0, 0}};
-      // note: the canonical face orientations for the hexahedron were
-      //       chosen such that nedelec basis functions on faces 0, 3, 4
-      //       are flipped in only the local "x" direction
-      if (negate_x[s][o] ^ (i == 0 || i == 3 || i == 4)) {
-        for (uint32_t k = 0; k < p * (p - 1); k++) {
-          transformation[permutation[count++]] = -1;
-        }
-      } else {
-        for (uint32_t k = 0; k < p * (p - 1); k++) {
-          transformation[permutation[count++]]  = 0;
-        }
-      }
-
-      constexpr bool negate_y[2][4] = {{0, 0, 1, 1}, {0, 0, 0, 0}};
-      if (negate_y[s][o]) {
-        for (uint32_t k = 0; k < p * (p - 1); k++) {
-          transformation[permutation[count++]] = -1;
-        }
-      } else {
-        for (uint32_t k = 0; k < p * (p - 1); k++) {
-          transformation[permutation[count++]]  = 0;
-        }
-      }
-
-    }
-
-    // all remaining (interior) nodes are always positive
-    uint32_t nnodes = num_nodes();
-    for (uint32_t i = count; i < nnodes; i++) {
-      transformation[permutation[i]] = 0;
-    }
-
-  }
 
   constexpr vec3 shape_function(vec3 xi, uint32_t i) const {
     if (p == 1) {
@@ -391,14 +247,6 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
     }
 
     return {};
-  }
-
-  constexpr vec3 reoriented_shape_function(vec3 xi, uint32_t i, int8_t transformation) const {
-    if (transformation == -1) {
-      return -shape_function(xi, i);
-    } else {
-      return  shape_function(xi, i);
-    }
   }
 
   constexpr vec3 shape_function_curl(vec3 xi, uint32_t i) const {
@@ -623,25 +471,8 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
     return {};
   }
 
-  constexpr vec3 reoriented_shape_function_curl(vec3 xi, uint32_t i, int8_t transformation) const {
-    if (transformation == -1) {
-      return -shape_function_curl(xi, i);
-    } else {
-      return  shape_function_curl(xi, i);
-    }
-  }
-
   constexpr vec3 shape_function_derivative(vec3 xi, uint32_t i) const {
     return shape_function_curl(xi, i);
-  }
-
-  double shape_function_div(vec3 xi, uint32_t i) {
-    // expressions generated symbolically by mathematica
-    if (p == 1) { 
-      return 0.0; 
-    }
-
-    return {};
   }
 
   vec3 interpolate(vec3 xi, const double * values) {
@@ -661,7 +492,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
   }
 
   // TODO: set to nonzero when reenabling sum-factorization implementations
-  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2>) const {
     return 0;
   }
 
@@ -672,7 +503,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
   nd::array< double > evaluate_shape_functions(nd::view<const double,2> xi) {
     uint32_t q = xi.shape[0];
     nd::array<double> buffer({q * (2 * p + 1)});
-    for (uint32_t i = 0; i < q; i++) {
+    for (int i = 0; i < q; i++) {
       GaussLegendreInterpolation(xi(i, 0), p, &buffer(p * i));
       GaussLobattoInterpolation(xi(i, 0), p+1, &buffer(q * p + p * i));
     }
@@ -702,7 +533,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
   nd::array< double > evaluate_shape_function_curls(nd::view<const double,2> xi) {
     uint32_t q = xi.shape[0];
     nd::array<double> buffer({q * (3 * p + 2)});
-    for (uint32_t i = 0; i < q; i++) {
+    for (int i = 0; i < q; i++) {
       GaussLegendreInterpolation(xi(i, 0), p, &buffer(p * i));
       GaussLobattoInterpolation(xi(i, 0), p+1, &buffer(q * p + p * i));
       GaussLobattoInterpolationDerivative(xi(i, 0), p+1, &buffer(q * p + p * i));
@@ -737,11 +568,11 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> shape_fns({q * q * q, num_nodes(), 3});
     uint32_t qcount = 0;
-    for (int k = 0; k < q; k++) {
-      for (int j = 0; j < q; j++) {
+    for (uint32_t k = 0; k < q; k++) {
+      for (uint32_t j = 0; j < q; j++) {
         for (uint32_t i = 0; i < q; i++) {
           vec3 xi_ijk = vec3{xi(i, 0), xi(j, 0), xi(k, 0)};
-          for (int l = 0; l < num_nodes(); l++) {
+          for (uint32_t l = 0; l < num_nodes(); l++) {
             vec3 phi = shape_function(xi_ijk, l);
             shape_fns(qcount, l, 0) = phi[0];
             shape_fns(qcount, l, 1) = phi[1];
@@ -761,7 +592,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
     for (uint32_t q = 0; q < nqpts; q++) {
       value_type sum{};
       for (uint32_t i = 0; i < nnodes; i++) {
-        for (int c = 0; c < 3; c++) {
+        for (uint32_t c = 0; c < 3; c++) {
           sum[c] += shape_fns(q, i, c) * values_e(i);
         }
       }
@@ -773,11 +604,11 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> shape_fns({q * q * q, num_nodes(), 3});
     uint32_t qcount = 0;
-    for (int k = 0; k < q; k++) {
-      for (int j = 0; j < q; j++) {
+    for (uint32_t k = 0; k < q; k++) {
+      for (uint32_t j = 0; j < q; j++) {
         for (uint32_t i = 0; i < q; i++) {
           vec3 xi_ijk = vec3{xi(i, 0), xi(j, 0), xi(k, 0)};
-          for (int l = 0; l < num_nodes(); l++) {
+          for (uint32_t l = 0; l < num_nodes(); l++) {
             vec3 curl_phi = shape_function_curl(xi_ijk, l);
             shape_fns(qcount, l, 0) = curl_phi[0];
             shape_fns(qcount, l, 1) = curl_phi[1];
@@ -797,7 +628,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
     for (uint32_t q = 0; q < nqpts; q++) {
       derivative_type sum{};
       for (uint32_t i = 0; i < nnodes; i++) {
-        for (int c = 0; c < 3; c++) {
+        for (uint32_t c = 0; c < 3; c++) {
           sum[c] += shape_fn_curls(q, i, c) * values_e(i);
         }
       }
@@ -809,11 +640,11 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> shape_fns({q * q * q, num_nodes(), dim});
     uint32_t qcount = 0;
-    for (int k = 0; k < q; k++) {
-      for (int j = 0; j < q; j++) {
+    for (uint32_t k = 0; k < q; k++) {
+      for (uint32_t j = 0; j < q; j++) {
         for (uint32_t i = 0; i < q; i++) {
           vec3 xi_ijk = vec3{xi(i, 0), xi(j, 0), xi(k, 0)};
-          for (int l = 0; l < num_nodes(); l++) {
+          for (uint32_t l = 0; l < num_nodes(); l++) {
             vec3 phi = shape_function(xi_ijk, l);
             shape_fns(qcount, l, 0) = phi[0] * weights[i] * weights[j] * weights[k];
             shape_fns(qcount, l, 1) = phi[1] * weights[i] * weights[j] * weights[k];
@@ -833,7 +664,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
     for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
       for (uint32_t q = 0; q < nqpts; q++) {
-        for (int j = 0; j < dim; j++) {
+        for (uint32_t j = 0; j < dim; j++) {
           sum += shape_fn(q, i, j) * source_q(q)[j];
         }
       }
@@ -845,11 +676,11 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
     uint32_t q = xi.shape[0];
     nd::array<double, 3> shape_fns({q * q * q, num_nodes(), dim});
     uint32_t qcount = 0;
-    for (int k = 0; k < q; k++) {
-      for (int j = 0; j < q; j++) {
+    for (uint32_t k = 0; k < q; k++) {
+      for (uint32_t j = 0; j < q; j++) {
         for (uint32_t i = 0; i < q; i++) {
           vec3 xi_ijk = vec3{xi(i, 0), xi(j, 0), xi(k, 0)};
-          for (int l = 0; l < num_nodes(); l++) {
+          for (uint32_t l = 0; l < num_nodes(); l++) {
             vec3 dphi = shape_function_curl(xi_ijk, l);
             shape_fns(qcount, l, 0) = dphi[0] * weights[i] * weights[j] * weights[k];
             shape_fns(qcount, l, 1) = dphi[1] * weights[i] * weights[j] * weights[k];
@@ -869,7 +700,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
     for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
       for (uint32_t q = 0; q < nqpts; q++) {
-        for (int j = 0; j < dim; j++) {
+        for (uint32_t j = 0; j < dim; j++) {
           sum += shape_fn_curl(q, i, j) * flux_q(q)[j];
         }
       }
@@ -879,12 +710,12 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
 
   #ifdef __CUDACC__
   __device__ void cuda_integrate_flux(nd::view<double> residual_e, nd::view<const flux_type> flux_q, nd::view<const double, 3> shape_fn_curl, double * /*buffer*/) const {
-    uint32_t nnodes = num_nodes();
-    uint32_t nqpts = flux_q.shape[0];
+    int nnodes = num_nodes();
+    int nqpts = flux_q.shape[0];
 
     for (int i = threadIdx.x; i < nnodes; i += blockDim.x) {
       double sum = 0.0;
-      for (uint32_t q = 0; q < nqpts; q++) {
+      for (int q = 0; q < nqpts; q++) {
         for (int d = 0; d < dim; d++) {
           sum += shape_fn_curl(q, i, d) * flux_q(q)[d];
         }

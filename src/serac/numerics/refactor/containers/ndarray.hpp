@@ -191,9 +191,9 @@ namespace nd {
 
         uint32_t beginnings[num_args] = {uint32_t(nd::begin(indices)) ... };
         uint32_t endings[num_args] = {uint32_t(nd::end(indices)) ... };
-        int k = 0;
-        int offset = 0;
-        for (int i = 0; i < dim; i++) {
+        uint32_t k = 0;
+        uint32_t offset = 0;
+        for (uint32_t i = 0; i < dim; i++) {
           if (i >= num_args) {
             slice_shape[k] = shape[i];
             slice_stride[k] = stride[i];

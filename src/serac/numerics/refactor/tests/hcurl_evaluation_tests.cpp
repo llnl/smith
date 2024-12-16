@@ -12,10 +12,10 @@
 #include "misc/for_constexpr.hpp"
 #include "forall.hpp"
 
-#include "fm/types/vec.hpp"
-#include "fm/types/matrix.hpp"
+#include "serac/numerics/functional/tensor.hpp"
 
-using namespace fm;
+
+using namespace serac;
 using namespace refactor;
 
 template < typename vec_t, typename curl_t>

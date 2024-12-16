@@ -1,13 +1,11 @@
 #pragma once
 
-#include "fm/types/vec.hpp"
-#include "fm/types/matrix.hpp"
+#include "serac/numerics/functional/tensor.hpp"
 
-#include "fm/operations/print.hpp" // REMOVE
 
 namespace refactor {
 
-using namespace fm;
+using namespace serac;
 
 // clang-format off
 template <>
@@ -22,101 +20,6 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
   static constexpr int dim = 3;
 
   SERAC_HOST_DEVICE constexpr uint32_t num_nodes() const { return (p * (p + 2) * (p + 3)) / 2; }
-
-  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * tet, int8_t * transformation) {
-
-    const Connection * edge = tet + Tetrahedron::edge_offset;
-    const Connection * tri = tet + Tetrahedron::tri_offset;
-
-    uint32_t count = 0;
-
-    // edge nodes
-    for (uint32_t i = 0; i < Tetrahedron::num_edges; i++) {
-      if (edge[i].sign() == Sign::Positive) {
-        for (uint32_t j = 0; j < p; j++) {
-          transformation[count++] =  0;
-        }
-      } else {
-        for (uint32_t j = 0; j < p; j++) {
-          transformation[count++] = -1;
-        }
-      }
-    }
-
-    if (p == 1) return;
-
-    // face nodes
-    for (uint32_t i = 0; i < Tetrahedron::num_triangles; i++) {
-      if (tri[i].sign() == Sign::Negative) {
-        for (uint32_t j = 0; j < Triangle::number(p - 1); j++) {
-          transformation[count++] = face_transformation_id(type, tri[i].orientation());
-          transformation[count++] = face_transformation_id(type, tri[i].orientation());
-        }
-      } else {
-        for (uint32_t j = 0; j < Triangle::number(p - 1); j++) {
-          transformation[count++] = 0;
-          transformation[count++] = 0;
-        }
-      }
-    }
-
-    if (p == 2) return;
-
-    // interior nodes
-    transformation[count++] = 0;
-    transformation[count++] = 0;
-    transformation[count++] = 0;
-
-  }
-
-  template < typename T >
-  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * tet, T * values) {
-
-    const Connection * edge = tet + Tetrahedron::edge_offset;
-    const Connection * tri = tet + Tetrahedron::tri_offset;
-
-    uint32_t count = 0;
-
-    // edge nodes
-    if (type == TransformationType::PhysicalToParent || 
-        type == TransformationType::TransposePhysicalToParent) {
-      for (uint32_t i = 0; i < Tetrahedron::num_edges; i++) {
-        if (edge[i].sign() == Sign::Negative) {
-          for (uint32_t j = 0; j < p; j++) {
-            values[count++] *= -1.0;
-          }
-        } else {
-          count += p;
-        }
-      }
-    } else {
-      count += p * Tetrahedron::num_edges;
-    }
-
-    if (p == 1) return;
-
-    constexpr mat2 A[3][3] = {
-      {{{{0, 1}, {1, 0}}}, {{{-1, 0}, {-1, 1}}}, {{{1, -1}, {0, -1}}}}, // PhysicalToParent
-      {{{{0, 1}, {1, 0}}}, {{{-1, -1}, {0, 1}}}, {{{1, 0}, {-1, -1}}}}, // TransposePhysicalToParent
-    };
-
-    // face nodes
-    for (uint32_t i = 0; i < Tetrahedron::num_triangles; i++) {
-      if (tri[i].sign() == Sign::Negative) {
-        uint32_t o = tri[i].orientation();
-        mat2 Ao = A[uint32_t(type)][o];
-        for (int j = 0; j < Triangle::number(p - 1); j++) {
-          T v[2] = {values[count], values[count+1]};
-          values[count]   = Ao[0][0] * v[0] + Ao[0][1] * v[1];
-          values[count+1] = Ao[1][0] * v[0] + Ao[1][1] * v[1];
-          count += 2;
-        }
-      } else {
-        count += 2 * Triangle::number(p - 1);
-      }
-    }
-
-  }
 
   constexpr vec3 shape_function(vec3 xi, uint32_t i) const {
     // expressions generated symbolically by mathematica
@@ -1194,7 +1097,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
     return interpolated_curl;
   }
 
-  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2>) const {
     return 0;
   }
 
@@ -1203,7 +1106,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
     nd::array<double, 3> shape_fns({q, num_nodes(), dim});
     for (uint32_t i = 0; i < q; i++) {
       vec3 xi_i = vec3{xi(i, 0), xi(i, 1), xi(i, 2)};
-      for (int j = 0; j < num_nodes(); j++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
         vec3 phi_j = shape_function(xi_i, j);
         shape_fns(i, j, 0) = phi_j[0];
         shape_fns(i, j, 1) = phi_j[1];
@@ -1220,7 +1123,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
     for (uint32_t q = 0; q < nqpts; q++) {
       value_type sum{};
       for (uint32_t i = 0; i < nnodes; i++) {
-        for (int j = 0; j < dim; j++) {
+        for (uint32_t j = 0; j < dim; j++) {
           sum[j] += shape_fns(q, i, j) * values_e(i);
         }
       }
@@ -1233,7 +1136,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
     nd::array<double, 3> shape_fns({q, num_nodes(), 3});
     for (uint32_t i = 0; i < q; i++) {
       vec3 xi_i = vec3{xi(i, 0), xi(i, 1), xi(i, 2)};
-      for (int j = 0; j < num_nodes(); j++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
         vec3 curl_phi_j = shape_function_curl(xi_i, j);
         shape_fns(i, j, 0) = curl_phi_j[0];
         shape_fns(i, j, 1) = curl_phi_j[1];
@@ -1250,7 +1153,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
     for (uint32_t q = 0; q < nqpts; q++) {
       derivative_type sum{};
       for (uint32_t i = 0; i < nnodes; i++) {
-        for (int j = 0; j < dim; j++) {
+        for (uint32_t j = 0; j < dim; j++) {
           sum[j] += shape_fn_curls(q, i, j) * values_e(i);
         }
       }
@@ -1263,7 +1166,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
     nd::array<double, 3> shape_fns({q, num_nodes(), dim});
     for (uint32_t i = 0; i < q; i++) {
       vec3 xi_i = vec3{xi(i, 0), xi(i, 1), xi(i, 2)};
-      for (int j = 0; j < num_nodes(); j++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
         vec3 phi_j = shape_function(xi_i, j);
         shape_fns(i, j, 0) = phi_j[0] * weights[i];
         shape_fns(i, j, 1) = phi_j[1] * weights[i];
@@ -1280,7 +1183,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
     for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
       for (uint32_t q = 0; q < nqpts; q++) {
-        for (int j = 0; j < dim; j++) {
+        for (uint32_t j = 0; j < dim; j++) {
           sum += shape_fn(q, i, j) * source_q(q)[j];
         }
       }
@@ -1293,7 +1196,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
     nd::array<double, 3> shape_fns({q, num_nodes(), dim});
     for (uint32_t i = 0; i < q; i++) {
       vec3 xi_i = vec3{xi(i, 0), xi(i, 1), xi(i, 2)};
-      for (int j = 0; j < num_nodes(); j++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
         vec3 dphi_j = shape_function_curl(xi_i, j);
         shape_fns(i, j, 0) = dphi_j[0] * weights[i];
         shape_fns(i, j, 1) = dphi_j[1] * weights[i];
@@ -1310,7 +1213,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
     for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
       for (uint32_t q = 0; q < nqpts; q++) {
-        for (int j = 0; j < dim; j++) {
+        for (uint32_t j = 0; j < dim; j++) {
           sum += shape_fn(q, i, j) * flux_q(q)[j];
         }
       }

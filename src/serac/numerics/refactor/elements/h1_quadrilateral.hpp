@@ -1,11 +1,12 @@
 #pragma once
 
+#include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/refactor/elements/tensor_contractions.hpp"
 
 namespace refactor {
 
 template <>
-struct FiniteElement<Geometry::Quadrilateral, Family::H1> {
+struct FiniteElement< mfem::Geometry::SQUARE, Family::H1 > {
 
   using source_type = vec1;
   using flux_type = vec2;
@@ -47,15 +48,15 @@ struct FiniteElement<Geometry::Quadrilateral, Family::H1> {
     GaussLobattoInterpolation(xi[0], p+1, phi); 
 
     double interpolated_in_xi[4]{};
-    for (int i = 0; i < (p+1); i++) {
-      for (int j = 0; j < (p+1); j++) {
+    for (uint32_t i = 0; i < (p+1); i++) {
+      for (uint32_t j = 0; j < (p+1); j++) {
         interpolated_in_xi[i] += phi[j] * values[i*(p+1)+j];
       }
     }
 
     GaussLobattoInterpolation(xi[1], p+1, phi); 
     double result{};
-    for (int i = 0; i < (p+1); i++) {
+    for (uint32_t i = 0; i < (p+1); i++) {
       result += phi[i] * interpolated_in_xi[i];
     }
     return result;
@@ -68,28 +69,28 @@ struct FiniteElement<Geometry::Quadrilateral, Family::H1> {
     double partially_interpolated[4]{};
 
     GaussLobattoInterpolationDerivative(xi[0], p+1, phi); 
-    for (int i = 0; i < (p+1); i++) {
-      for (int j = 0; j < (p+1); j++) {
+    for (uint32_t i = 0; i < (p+1); i++) {
+      for (uint32_t j = 0; j < (p+1); j++) {
         partially_interpolated[i] += phi[j] * values[i*(p+1)+j];
       }
     }
 
     GaussLobattoInterpolation(xi[1], p+1, phi); 
-    for (int i = 0; i < (p+1); i++) {
+    for (uint32_t i = 0; i < (p+1); i++) {
       output[0] += phi[i] * partially_interpolated[i];
     }
 
     //--------------------------------------------------
 
     GaussLobattoInterpolation(xi[0], p+1, phi); 
-    for (int i = 0; i < (p+1); i++) {
-      for (int j = 0; j < (p+1); j++) {
+    for (uint32_t i = 0; i < (p+1); i++) {
+      for (uint32_t j = 0; j < (p+1); j++) {
         partially_interpolated[i] += phi[j] * values[i*(p+1)+j];
       }
     }
 
     GaussLobattoInterpolationDerivative(xi[1], p+1, phi); 
-    for (int i = 0; i < (p+1); i++) {
+    for (uint32_t i = 0; i < (p+1); i++) {
       output[1] += phi[i] * partially_interpolated[i];
     }
 
@@ -119,7 +120,7 @@ struct FiniteElement<Geometry::Quadrilateral, Family::H1> {
     nd::view<double, 2> A(buffer, {n, q});
 
     nd::view<const double, 2> values_e_2D = nd::reshape<2>(values_e, {n, n});
-    nd::view<double, 2> values_q_2D((double*)&values_q[0], {q, q}, {1, q});
+    nd::view<double, 2> values_q_2D(static_cast<double*>(&values_q[0].data), {q, q}, {1, q});
     contract<1>(values_e_2D, shape_fns, A);
     contract<0>(A, shape_fns, values_q_2D);
   }
@@ -144,9 +145,8 @@ struct FiniteElement<Geometry::Quadrilateral, Family::H1> {
     nd::view<double, 2> G = shape_fns(1);
     nd::view<double, 2> A(buffer, {n, q});
 
-    nd::range All{0u, gradients_q.shape[0]};
     nd::view<const double, 2> values_e_2D = nd::reshape<2>(values_e, {n, n});
-    nd::view<double, 2> gradients_q_2D((double*)&gradients_q[0], {q, q}, {2, 2*q});
+    nd::view<double, 2> gradients_q_2D(static_cast<double*>(&gradients_q[0][0]), {q, q}, {2, 2*q});
 
     // du_dxi
     contract<1>(values_e_2D, G, A);
@@ -168,7 +168,7 @@ struct FiniteElement<Geometry::Quadrilateral, Family::H1> {
     nd::array<double, 1> tmp({p+1});
     for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolation(xi(i, 0), p+1, &tmp(0));
-      for (int j = 0; j < p+1; j++) {
+      for (uint32_t j = 0; j < p+1; j++) {
         buffer(j, i) = tmp(j) * weights(i);
       }
     }
@@ -182,7 +182,7 @@ struct FiniteElement<Geometry::Quadrilateral, Family::H1> {
     nd::view<double, 2> BT = shape_fns;
     nd::view<double, 2> A(buffer, {q, n});
 
-    nd::view<const double, 2> s2D((double*)&source_q[0], {q, q}, {1, q});
+    nd::view<const double, 2> s2D(static_cast<const double*>(&source_q[0][0]), {q, q}, {1, q});
     nd::view<double, 2> r2D = nd::reshape<2>(residual_e, {n, n});
 
     contract<1>(s2D, BT, A);
@@ -198,12 +198,12 @@ struct FiniteElement<Geometry::Quadrilateral, Family::H1> {
     nd::array<double, 1> tmp({p+1});
     for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolation(xi(i, 0), p+1, &tmp(0));
-      for (int j = 0; j < p+1; j++) {
+      for (uint32_t j = 0; j < p+1; j++) {
         buffer(0, j, i) = tmp(j) * weights(i);
       }
 
       GaussLobattoInterpolationDerivative(xi(i, 0), p+1, &tmp(0));
-      for (int j = 0; j < p+1; j++) {
+      for (uint32_t j = 0; j < p+1; j++) {
         buffer(1, j, i) = tmp(j) * weights(i);
       }
     }
@@ -219,7 +219,6 @@ struct FiniteElement<Geometry::Quadrilateral, Family::H1> {
     nd::view<double, 2> A(buffer, {q, n});
 
     uint32_t s = 2 * flux_q.stride[0];
-    nd::range All{0u, flux_q.shape[0]};
     nd::view<const double, 2> f2D(&flux_q(0)[0], {q, q}, {s, s*q}); // ?
     nd::view<double, 2> r2D = nd::reshape<2>(residual_e, {n, n});
 

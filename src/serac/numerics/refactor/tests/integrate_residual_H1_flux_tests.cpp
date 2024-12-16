@@ -8,11 +8,11 @@
 #include "refactor/domain.hpp"
 
 #include "forall.hpp"
-#include "fm/types/vec.hpp"
-#include "fm/types/matrix.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+
 #include "containers/ndarray_conversions.hpp"
 
-using namespace fm;
+using namespace serac;
 using namespace refactor;
 
 // ----------------------------------------------------------------------------

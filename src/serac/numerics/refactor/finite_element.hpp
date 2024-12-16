@@ -17,6 +17,9 @@ enum class Family {
   DG 
 };
 
+enum class Modifier { NONE, DIAGONAL, SYM };
+enum class DerivedQuantity { VALUE, DERIVATIVE };
+
 SERAC_HOST_DEVICE constexpr bool is_scalar_valued(Family f) {
   return (f == Family::H1);
 }

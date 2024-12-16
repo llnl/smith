@@ -49,11 +49,11 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
   double interpolate(vec3 xi, double * values) const {
     uint32_t count = 0;
     double output = 0.0;
-    for (int iz = 0; iz < (p+1); iz++) {
+    for (uint32_t iz = 0; iz < (p+1); iz++) {
       double phi_z = phi_1D(xi[2], iz);
-      for (int iy = 0; iy < (p+1); iy++) {
+      for (uint32_t iy = 0; iy < (p+1); iy++) {
         double phi_y = phi_1D(xi[1], iy);
-        for (int ix = 0; ix < (p+1); ix++) {
+        for (uint32_t ix = 0; ix < (p+1); ix++) {
           double phi_x = phi_1D(xi[0], ix);
           output += phi_x * phi_y * phi_z * values[count];
           count++;
@@ -66,13 +66,13 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
   vec3 gradient(vec3 xi, double * values) const {
     vec3 output{};
     uint32_t count = 0;
-    for (int iz = 0; iz < (p+1); iz++) {
+    for (uint32_t iz = 0; iz < (p+1); iz++) {
       double phi_z  = phi_1D(xi[2], iz);
       double dphi_z = dphi_1D(xi[2], iz);
-      for (int iy = 0; iy < (p+1); iy++) {
+      for (uint32_t iy = 0; iy < (p+1); iy++) {
         double phi_y  = phi_1D(xi[1], iy);
         double dphi_y = dphi_1D(xi[1], iy);
-        for (int ix = 0; ix < (p+1); ix++) {
+        for (uint32_t ix = 0; ix < (p+1); ix++) {
           double phi_x  = phi_1D(xi[0], ix);
           double dphi_x = dphi_1D(xi[0], ix);
           output[0] += dphi_x *  phi_y *  phi_z * values[count];
@@ -111,7 +111,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
     nd::view<double, 3> A2(buffer + q * n * n, {q, q, n});
 
     nd::view<const double, 3> values_e_3D = nd::reshape<3>(values_e, {n, n, n});
-    nd::view<double, 3> values_q_3D((double*)&values_q[0], {q, q, q});
+    nd::view<double, 3> values_q_3D(static_cast<double*>(&values_q[0][0]), {q, q, q});
     contract(values_e_3D, phi, A1);
     contract(         A1, phi, A2);
     contract(         A2, phi, values_q_3D);
@@ -138,10 +138,8 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
     nd::view<double, 3> A1(buffer, {q, n, n});
     nd::view<double, 3> A2(buffer + q * n * n, {q, q, n});
 
-    nd::range All{0u, gradients_q.shape[0]};
-
     nd::view<const double, 3> values_e_3D = nd::reshape<3>(values_e, {n, n, n});
-    nd::view<double, 3> gradients_q_3D((double*)&gradients_q[0], {q, q, q}, {3*q*q, 3*q, 3});
+    nd::view<double, 3> gradients_q_3D(static_cast<double*>(&gradients_q[0][0]), {q, q, q}, {3*q*q, 3*q, 3});
 
     // du_dxi
     contract(values_e_3D, G, A1);
@@ -171,7 +169,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
     nd::array<double, 1> tmp({p+1});
     for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolation(xi(i, 0), p+1, &tmp(0));
-      for (int j = 0; j < p+1; j++) {
+      for (uint32_t j = 0; j < p+1; j++) {
         buffer(j, i) = tmp(j) * weights(i);
       }
     }
@@ -186,7 +184,7 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
     nd::view<double, 3> A1(buffer, {n, q, q});
     nd::view<double, 3> A2(buffer + n*q*q, {n, n, q});
 
-    nd::view<const double, 3> s3D((double*)&source_q[0], {q, q, q});
+    nd::view<const double, 3> s3D(static_cast<const double*>(&source_q[0][0]), {q, q, q});
     nd::view<double, 3> r3D = nd::reshape<3>(residual_e, {n, n, n});
 
     //   r(iz, iy, ix) = s(qz, qy, qx) * BT(ix, qx) * BT(iy, qy) * BT(iz, qz)
@@ -208,12 +206,12 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
     nd::array<double, 1> tmp({p+1});
     for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolation(xi(i, 0), p+1, &tmp(0));
-      for (int j = 0; j < p+1; j++) {
+      for (uint32_t j = 0; j < p+1; j++) {
         buffer(0, j, i) = tmp(j) * weights(i);
       }
 
       GaussLobattoInterpolationDerivative(xi(i, 0), p+1, &tmp(0));
-      for (int j = 0; j < p+1; j++) {
+      for (uint32_t j = 0; j < p+1; j++) {
         buffer(1, j, i) = tmp(j) * weights(i);
       }
     }
@@ -228,8 +226,6 @@ struct FiniteElement<mfem::Geometry::CUBE, Family::H1> {
     nd::view<double, 2> GT = shape_fns(1);
     nd::view<double, 3> A1(buffer, {n, q, q});
     nd::view<double, 3> A2(buffer+n*q*q, {n, n, q});
-
-    nd::range All{0u, flux_q.shape[0]};
 
     uint32_t s = flux_q.stride[0] * 3;
     nd::view<const double, 3> f3D(nullptr, {q, q, q}, {s*q*q, s*q, s});

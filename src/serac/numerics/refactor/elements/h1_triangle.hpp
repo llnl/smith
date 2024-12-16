@@ -1,6 +1,6 @@
 #pragma once
 
- 
+#include "serac/numerics/functional/tensor.hpp"
 
 namespace refactor {
 

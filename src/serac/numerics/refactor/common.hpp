@@ -1,6 +1,7 @@
 #pragma once
 
 #include "serac/infrastructure/accelerator.hpp"
+#include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/refactor/finite_element.hpp"
 
 namespace refactor {
@@ -149,54 +150,6 @@ bool compatible_shapes(const stack::array<T, m> & x,
   return true;
 }
 
-template < mfem::Geometry::Type geom, Family test_family, Family trial_family>
-void jacobian_rows_and_columns(nd::view<int,5> rows,
-                               nd::view<int,5> cols,
-                               FunctionSpace trial_space,
-                               FunctionSpace test_space,
-                               GeometryInfo trial_offsets,
-                               GeometryInfo test_offsets,
-                               nd::view<const int> elements,
-                               nd::view<const Connection, 2> connectivity) {
-
-  FiniteElement< geom, test_family > test_el{test_space.degree};
-  FiniteElement< geom, trial_family > trial_el{trial_space.degree};
-
-  // allocate storage for an element's nodal forces
-  constexpr uint32_t gdim = dimension(geom);
-
-  uint32_t num_elements = rows.shape[0];
-  uint32_t test_components = test_space.components;
-  uint32_t trial_components = trial_space.components;
-  uint32_t nodes_per_test_element = test_el.num_nodes();
-  uint32_t nodes_per_trial_element = trial_el.num_nodes();
-
-  nd::array<uint32_t> test_ids({nodes_per_test_element});
-  nd::array<uint32_t> trial_ids({nodes_per_trial_element});
-
-  // for each element of this mfem::Geometry::Type in the domain
-  for (uint32_t e = 0; e < num_elements; e++) {
-
-    // get the ids of nodes for that element
-    test_el.indices(test_offsets, connectivity(elements(e)).data(), test_ids.data());
-    trial_el.indices(trial_offsets, connectivity(elements(e)).data(), trial_ids.data());
-
-    // populate the row/column entries for the element jacobian
-    for (uint32_t J = 0; J < nodes_per_trial_element; J++) {
-      for (uint32_t j = 0; j < trial_space.components; j++) {
-        for (uint32_t I = 0; I < nodes_per_test_element; I++) {
-          for (uint32_t i = 0; i < test_space.components; i++) {
-            rows(e, J, j, I, i) = int(test_ids(I) * test_space.components + i);
-            cols(e, J, j, I, i) = int(trial_ids(J) * trial_space.components + j);
-          }
-        }
-      }
-    }
-
-  }
-
-}
-
 template < mfem::Geometry::Type geom >
 auto quadrature_point(uint32_t q, const nd::view<const double, 2> xi) {
 
@@ -264,7 +217,7 @@ auto flux_transformation(const mat<n,n,double> & A) {
   }
   if constexpr (family == Family::Hcurl) {
     if constexpr (n <= 2) {
-      return vec<1>(1.0);
+      return vec1(1.0);
     }
     if constexpr (n == 3) {
       return transpose(A);
@@ -279,8 +232,8 @@ auto flux_transformation(const mat<n,n,double> & A) {
 namespace nd {
 
 template < typename T, uint32_t n >
-struct printer< fm::vec<n,T> >{ 
-  static SERAC_HOST_DEVICE void print(const fm::vec<n,T> & v) {
+struct printer< serac::vec<n,T> >{ 
+  static SERAC_HOST_DEVICE void print(const serac::vec<n,T> & v) {
     printf("{");
     printer<T>::print(v(0));
     for (int i = 1; i < n; i++) {

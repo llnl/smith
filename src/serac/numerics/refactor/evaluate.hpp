@@ -7,8 +7,6 @@ namespace refactor {
 
 using Field = serac::FiniteElementState;
 
-enum class Modifier { NONE, DIAGONAL, SYM };
-enum class DerivedQuantity { VALUE, DERIVATIVE };
 
 inline bool is_value(DerivedQuantity op) {
   return op == DerivedQuantity::VALUE;

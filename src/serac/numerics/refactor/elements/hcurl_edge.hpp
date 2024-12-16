@@ -1,6 +1,6 @@
 #pragma once
 
-
+#include "serac/numerics/functional/tensor.hpp"
 
 namespace refactor {
 
@@ -14,25 +14,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
 
   SERAC_HOST_DEVICE uint32_t num_nodes() const { return p; }
 
-  template < typename T >
-  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * edge, T * values) {
-
-    // TODO
-    switch (type) {
-      case TransformationType::PhysicalToParent:
-      case TransformationType::TransposePhysicalToParent:
-        break;
-    }
-
-  }
-
-  SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * edge, int8_t * transformation) {
-    for (int i = 0; i < p; i++) {
-      transformation[i] = 0;
-    }
-  }
-
-  constexpr vec<1> shape_function(vec<1> xi, uint32_t i) const {
+  constexpr vec1 shape_function(vec1 xi, uint32_t i) const {
     if (p == 1 && i == 0) { return GaussLegendreInterpolation01<1, 0>(xi[0]); }
 
     if (p == 2 && i == 0) { return GaussLegendreInterpolation01<2, 0>(xi[0]); }
@@ -42,7 +24,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
     if (p == 3 && i == 1) { return GaussLegendreInterpolation01<3, 1>(xi[0]); }
     if (p == 3 && i == 2) { return GaussLegendreInterpolation01<3, 2>(xi[0]); }
 
-    return 1000.0f;
+    return 1000.0;
   }
 
   constexpr vec1 reoriented_shape_function(vec1 xi, uint32_t i, int8_t transformation) const {
@@ -57,7 +39,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
   // but what is the appropriate interpretation of "curl" (if any) for 1D? 
   //
   // the implementation below is just the derivative
-  constexpr vec<1> shape_function_curl(vec<1> xi, uint32_t i) const {
+  constexpr vec1 shape_function_curl(vec1 xi, uint32_t i) const {
     if (p == 1 && i == 0) { return GaussLegendreInterpolationDerivative01<1, 0>(xi); }
 
     if (p == 2 && i == 0) { return GaussLegendreInterpolationDerivative01<2, 0>(xi); }
@@ -67,7 +49,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
     if (p == 3 && i == 1) { return GaussLegendreInterpolationDerivative01<3, 1>(xi); }
     if (p == 3 && i == 2) { return GaussLegendreInterpolationDerivative01<3, 2>(xi); }
 
-    return 1000.0f;
+    return 1000.0;
   }
 
   constexpr vec1 reoriented_shape_function_curl(vec1 xi, uint32_t i, int8_t transformation) const {
@@ -78,11 +60,11 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
     }
   }
 
-  constexpr vec<1> shape_function_derivative(vec<1> xi, uint32_t i) {
+  constexpr vec1 shape_function_derivative(vec1 xi, uint32_t i) {
     return shape_function_curl(xi, i);
   }
 
-  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2>) const {
     return 0;
   }
 
@@ -121,8 +103,8 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
     return buffer;
   }
 
-  void curl(nd::view<flux_type> values_q, nd::view<const double> values_e, nd::view<double> buffer, double * /*buffer*/) {
   #if 0
+  void curl(nd::view<flux_type> values_q, nd::view<const double> values_e, nd::view<double> buffer, double * /*buffer*/) {
     uint32_t n = p + 1;
     uint32_t q = sqrt(values_q.shape[0]);
 
@@ -146,14 +128,14 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
     
     _contract(A1, B1, ue); //  A1(qx, iy) = sum_{ix} B1(qx, ix) * ue(iy, ix)  
     _contract(uq, B2, A1); //  uq(qy, qx) = sum_{iy} B2(qy, iy) * A1(qx, iy)
-  #endif
   }
+  #endif
 
   nd::array< double, 2 > evaluate_weighted_shape_functions(nd::view<const double, 2> xi, nd::view<const double, 1> weights) {
     uint32_t q = xi.shape[0];
     nd::array<double, 2> shape_fns({q, num_nodes()});
     for (uint32_t i = 0; i < q; i++) {
-      for (int j = 0; j < num_nodes(); j++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
         shape_fns(i, j) = shape_function(xi(i, 0), j) * weights(i);
       }
     }
@@ -177,7 +159,7 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
     uint32_t q = xi.shape[0];
     nd::array<double, 2> shape_fns({q, num_nodes()});
     for (uint32_t i = 0; i < q; i++) {
-      for (int j = 0; j < num_nodes(); j++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
         shape_fns(i, j) = shape_function_curl(xi(i, 0), j) * weights(i);
       }
     }

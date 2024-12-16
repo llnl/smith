@@ -1,6 +1,6 @@
 #pragma once
 
- 
+#include "serac/numerics/functional/tensor.hpp"
 
 namespace refactor {
 
@@ -131,7 +131,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::H1> {
     return interpolated_gradient;
   }
 
-  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2>) const {
     return 0;
   }
 
@@ -189,7 +189,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::H1> {
     nd::array<double, 2> shape_fns({q, nnodes});
     for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolationTetrahedron(&xi(i, 0), p, &shape_fns(i, 0));
-      for (int j = 0; j < nnodes; j++) {
+      for (uint32_t j = 0; j < nnodes; j++) {
         shape_fns(i, j) = shape_fns(i, j) * weights(i);
       }
     }
@@ -216,7 +216,7 @@ struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::H1> {
     nd::array<double, 3> shape_fn_grads({q, nnodes, dim});
     for (uint32_t i = 0; i < q; i++) {
       GaussLobattoInterpolationDerivativeTetrahedron(&xi(i, 0), p, &shape_fn_grads(i, 0, 0));
-      for (int j = 0; j < nnodes; j++) {
+      for (uint32_t j = 0; j < nnodes; j++) {
         shape_fn_grads(i, j, 0) = shape_fn_grads(i, j, 0) * weights(i);
         shape_fn_grads(i, j, 1) = shape_fn_grads(i, j, 1) * weights(i);
         shape_fn_grads(i, j, 2) = shape_fn_grads(i, j, 2) * weights(i);

@@ -243,7 +243,7 @@ struct GeometryType< mfem::Geometry::TETRAHEDRON > {
   static constexpr int local_edge_ids[6][2] = {{0, 1}, {1, 2}, {2, 0}, {0, 3}, {1, 3}, {2, 3}};
   static constexpr int local_triangle_ids[4][3] = {{2, 1, 0}, {0, 1, 3}, {1, 2, 3}, {2, 0, 3}};
 
-  SERAC_HOST_DEVICE static constexpr int number(int n) { return (n * (n + 1) * (n + 2)) / 6; }
+  SERAC_HOST_DEVICE static constexpr uint32_t number(uint32_t n) { return (n * (n + 1) * (n + 2)) / 6; }
 };
 using Tetrahedron = GeometryType< mfem::Geometry::TETRAHEDRON >;
 

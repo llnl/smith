@@ -1,10 +1,10 @@
 #pragma once
 
-#include "fm/types/vec.hpp"
+#include "serac/numerics/functional/tensor.hpp"
 
 namespace refactor {
 
-using namespace fm;
+using namespace serac;
 
 // clang-format off
 template <>
@@ -20,6 +20,10 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
 
   SERAC_HOST_DEVICE uint32_t num_nodes() const { return p * (p + 2); }
 
+  #if 0
+  // sam: we don't have a good way to get the orientation info from mfem into the cuda kernel
+  //      so hcurl elements need to be handled slightly differently (e.g. the reorientation could happen in the
+  //      "ElementRestriction" operators instead)
   template < typename T >
   SERAC_HOST_DEVICE void reorient(const TransformationType type, const Connection * tri, T * values) const {
 
@@ -58,6 +62,7 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
     }
 
   }
+  #endif
 
   constexpr vec2 shape_function(vec2 xi, uint32_t i) const {
     if (p == 1) {
@@ -221,7 +226,7 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
     }
   }
 
-  vec<1> shape_function_curl(vec2 xi, uint32_t i) const {
+  vec1 shape_function_curl(vec2 xi, uint32_t i) const {
     // expressions generated symbolically by mathematica
     if (p == 1) { 
       return 2.0; 
@@ -265,11 +270,11 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
     }
   }
 
-  vec<1> shape_function_derivative(vec2 xi, uint32_t i) const {
+  vec1 shape_function_derivative(vec2 xi, uint32_t i) const {
     return shape_function_curl(xi, i);
   }
 
-  vec<1> shape_function_div(const double * xi, uint32_t i) const {
+  vec1 shape_function_div(const double * xi, uint32_t i) const {
     // expressions generated symbolically by mathematica
     if (p == 1) { 
       return 0.0; 
@@ -321,7 +326,7 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
     return interpolated_curl;
   }
 
-  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2> xi) const {
+  SERAC_HOST_DEVICE uint32_t batch_interpolation_scratch_space(nd::view<const double,2>) const {
     return 0;
   }
 
@@ -330,7 +335,7 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
     nd::array<double, 3> shape_fns({q, num_nodes(), dim});
     for (uint32_t i = 0; i < q; i++) {
       vec2 xi_i = vec2{xi(i, 0), xi(i, 1)};
-      for (int j = 0; j < num_nodes(); j++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
         vec2 phi_j = shape_function(xi_i, j);
         shape_fns(i, j, 0) = phi_j[0];
         shape_fns(i, j, 1) = phi_j[1];
@@ -346,7 +351,7 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
     for (uint32_t q = 0; q < nqpts; q++) {
       value_type sum{};
       for (uint32_t i = 0; i < nnodes; i++) {
-        for (int j = 0; j < dim; j++) {
+        for (uint32_t j = 0; j < dim; j++) {
           sum[j] += shape_fns(q, i, j) * values_e(i);
         }
       }
@@ -359,7 +364,7 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
     nd::array<double, 2> shape_fns({q, num_nodes()});
     for (uint32_t i = 0; i < q; i++) {
       vec2 xi_i = vec2{xi(i, 0), xi(i, 1)};
-      for (int j = 0; j < num_nodes(); j++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
         shape_fns(i, j) = shape_function_curl(xi_i, j);
       }
     }
@@ -384,7 +389,7 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
     nd::array<double, 3> shape_fns({q, num_nodes(), dim});
     for (uint32_t i = 0; i < q; i++) {
       vec2 xi_i = vec2{xi(i, 0), xi(i, 1)};
-      for (int j = 0; j < num_nodes(); j++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
         vec2 phi_j = shape_function(xi_i, j);
         shape_fns(i, j, 0) = phi_j[0] * weights[i];
         shape_fns(i, j, 1) = phi_j[1] * weights[i];
@@ -400,7 +405,7 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
     for (uint32_t i = 0; i < nnodes; i++) {
       double sum = 0.0;
       for (uint32_t q = 0; q < nqpts; q++) {
-        for (int j = 0; j < dim; j++) {
+        for (uint32_t j = 0; j < dim; j++) {
           sum += shape_fn(q, i, j) * source_q(q)[j];
         }
       }
@@ -413,7 +418,7 @@ struct FiniteElement<mfem::Geometry::TRIANGLE, Family::Hcurl> {
     nd::array<double, 2> shape_fns({q, num_nodes()});
     for (uint32_t i = 0; i < q; i++) {
       vec2 xi_i = vec2{xi(i, 0), xi(i, 1)};
-      for (int j = 0; j < num_nodes(); j++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
         shape_fns(i, j) = shape_function_curl(xi_i, j) * weights[i];
       }
     }
