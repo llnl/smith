@@ -71,7 +71,7 @@ TEST(LiquidCrystalElastomer, Brighenti)
 
   // Construct a solid mechanics solver
   LinearSolverOptions linear_options = {
-      .linear_solver  = LinearSolver::GMRES,
+      .linear_solver  = LinearSolver::CG,
       .preconditioner = Preconditioner::HypreAMG,
       .relative_tol   = 1.0e-6,
       .absolute_tol   = 1.0e-14,
@@ -95,7 +95,7 @@ TEST(LiquidCrystalElastomer, Brighenti)
 
   SolidMechanics<p, dim, Parameters<H1<p>, L2<p> > > solid_solver(
       nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options, "lce_solid_functional", mesh_tag,
-      {"temperature", "gamma"});
+      {"temperature", "gamma"}, 0, 0.0, false, true, 0);
 
   constexpr int TEMPERATURE_INDEX = 0;
   constexpr int GAMMA_INDEX       = 1;

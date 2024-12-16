@@ -140,6 +140,7 @@ public:
    * @param checkpoint_to_disk Flag to save the transient states on disk instead of memory for transient adjoint solver
    * @param use_warm_start Flag to turn on or off the displacement warm start predictor which helps robustness for
    * large deformation problems
+   * @param max_timestep_cutbacks The maximum number of times the supplied timestep can be cutback before the solver gives up
    *
    * @note On parallel file systems (e.g. lustre), significant slowdowns and occasional errors were observed when
    *       writing and reading the needed trainsient states to disk for adjoint solves
@@ -147,10 +148,10 @@ public:
   SolidMechanics(const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
                  const serac::TimesteppingOptions timestepping_opts, const std::string& physics_name,
                  std::string mesh_tag, std::vector<std::string> parameter_names = {}, int cycle = 0, double time = 0.0,
-                 bool checkpoint_to_disk = false, bool use_warm_start = true)
+                 bool checkpoint_to_disk = false, bool use_warm_start = true, int max_timestep_cutbacks = 5)
       : SolidMechanics(
             std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start)
+            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start, max_timestep_cutbacks)
   {
   }
 
@@ -167,13 +168,14 @@ public:
    * @param checkpoint_to_disk Flag to save the transient states on disk instead of memory for transient adjoint solves
    * @param use_warm_start A flag to turn on or off the displacement warm start predictor which helps robustness for
    * large deformation problems
+   * @param max_timestep_cutbacks The maximum number of times the supplied timestep can be cutback before the solver gives up
    *
    * @note On parallel file systems (e.g. lustre), significant slowdowns and occasional errors were observed when
    *       writing and reading the needed trainsient states to disk for adjoint solves
    */
   SolidMechanics(std::unique_ptr<serac::EquationSolver> solver, const serac::TimesteppingOptions timestepping_opts,
                  const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {},
-                 int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
+                 int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true, int max_timestep_cutbacks = 5)
       : BasePhysics(physics_name, mesh_tag, cycle, time, checkpoint_to_disk),
         displacement_(
             StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_tag_)),
@@ -193,7 +195,8 @@ public:
         ode2_(displacement_.space().TrueVSize(),
               {.time = time_, .c0 = c0_, .c1 = c1_, .u = u_, .du_dt = v_, .d2u_dt2 = acceleration_}, *nonlin_solver_,
               bcs_),
-        use_warm_start_(use_warm_start)
+        use_warm_start_(use_warm_start),
+        max_timestep_cutbacks_(max_timestep_cutbacks)
   {
     SERAC_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(mesh_.Dimension() != dim,
@@ -1615,6 +1618,9 @@ protected:
   /// @brief A flag denoting whether to compute the warm start for improved robustness
   bool use_warm_start_;
 
+  /// @brief The maximum number of cut-back in the supplied time-step increment before the solver will give up
+  int max_timestep_cutbacks_;
+
   /// @brief Coefficient containing the essential boundary values
   std::shared_ptr<mfem::VectorCoefficient> disp_bdr_coef_;
 
@@ -1635,7 +1641,7 @@ protected:
   /// @brief Solve the Quasi-static Newton system
   virtual void quasiStaticSolve(double dt, double step_fraction_of_dt_remaining, int level)
   {
-    if (level >= 6) {
+    if (level > max_timestep_cutbacks_) {
       if (mpi_rank_ == 0)
         std::cout << "Too many boundary condition cutbacks, accepting solution even though there may be issues. Try "
                      "increasing the number of load steps "
