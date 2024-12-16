@@ -314,12 +314,20 @@ double solution_error(PatchBoundaryCondition bc)
 
   // Construct a solid mechanics solver
   #ifdef SERAC_USE_SUNDIALS
-  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::KINBacktrackingLineSearch, .relative_tol = 0.0, .absolute_tol = 1.0e-14, .max_iterations = 30};
+  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::KINBacktrackingLineSearch, .relative_tol = 0.0, .absolute_tol = 1.0e-15, .max_iterations = 30, .print_level=1};
   #else
-  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::Newton, .relative_tol = 0.0, .absolute_tol = 1.0e-14, .max_iterations = 30};
+  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::Newton, .relative_tol = 0.0, .absolute_tol = 1.0e-14, .max_iterations = 30, .print_level=1};
   #endif
 
-  auto equation_solver = std::make_unique<EquationSolver>(nonlin_solver_options, serac::solid_mechanics::default_linear_options, pmesh.GetComm());
+  const LinearSolverOptions cg_solver_options = {.linear_solver  = LinearSolver::CG,
+                                                  .preconditioner = serac::ordering == mfem::Ordering::byVDIM
+                                                                          ? Preconditioner::HypreAMG
+                                                                          : Preconditioner::HypreJacobi,
+                                                    .relative_tol   = 1.0e-6,
+                                                    .absolute_tol   = 1.0e-16,
+                                                    .max_iterations = 500,
+                                                    .print_level    = 0};
+  auto equation_solver = std::make_unique<EquationSolver>(nonlin_solver_options, cg_solver_options, pmesh.GetComm());
 
   SolidMechanics<p, dim> solid(std::move(equation_solver), solid_mechanics::default_quasistatic_options, "solid", mesh_tag);
 

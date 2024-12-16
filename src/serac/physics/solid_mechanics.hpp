@@ -1775,12 +1775,15 @@ protected:
     }
 
     auto& constrained_dofs = bcs_.allEssentialTrueDofs();
+
     for (int i = 0; i < constrained_dofs.Size(); i++) {
       int j = constrained_dofs[i];
       du_[j] -= displacement_(j);
     }
 
-    du_ *= displacement_scale_factor;
+    if (displacement_scale_factor!=1.0) {
+      du_ *= displacement_scale_factor;
+    }
 
     if (use_warm_start_) {
       // Update the linearized Jacobian matrix
@@ -1810,6 +1813,15 @@ protected:
     }
 
     displacement_ += du_;
+
+    // due to solver inaccuracies, the end of step boundary conditions may not be exact at this point
+    if (displacement_scale_factor==1.0) {
+      for (auto& bc : bcs_.essentials()) {
+        // apply the future boundary conditions, but use the most recent Jacobians stiffness.
+        bc.setDofs(displacement_, time_);
+      }
+    }
+
   }
 };
 
