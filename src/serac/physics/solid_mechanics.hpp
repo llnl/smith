@@ -140,7 +140,8 @@ public:
    * @param checkpoint_to_disk Flag to save the transient states on disk instead of memory for transient adjoint solver
    * @param use_warm_start Flag to turn on or off the displacement warm start predictor which helps robustness for
    * large deformation problems
-   * @param max_timestep_cutbacks The maximum number of times the supplied timestep can be cutback before the solver gives up
+   * @param max_timestep_cutbacks The maximum number of times the supplied timestep can be cutback before the solver
+   * gives up
    *
    * @note On parallel file systems (e.g. lustre), significant slowdowns and occasional errors were observed when
    *       writing and reading the needed trainsient states to disk for adjoint solves
@@ -151,7 +152,8 @@ public:
                  bool checkpoint_to_disk = false, bool use_warm_start = true, int max_timestep_cutbacks = 5)
       : SolidMechanics(
             std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start, max_timestep_cutbacks)
+            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start,
+            max_timestep_cutbacks)
   {
   }
 
@@ -168,14 +170,16 @@ public:
    * @param checkpoint_to_disk Flag to save the transient states on disk instead of memory for transient adjoint solves
    * @param use_warm_start A flag to turn on or off the displacement warm start predictor which helps robustness for
    * large deformation problems
-   * @param max_timestep_cutbacks The maximum number of times the supplied timestep can be cutback before the solver gives up
+   * @param max_timestep_cutbacks The maximum number of times the supplied timestep can be cutback before the solver
+   * gives up
    *
    * @note On parallel file systems (e.g. lustre), significant slowdowns and occasional errors were observed when
    *       writing and reading the needed trainsient states to disk for adjoint solves
    */
   SolidMechanics(std::unique_ptr<serac::EquationSolver> solver, const serac::TimesteppingOptions timestepping_opts,
                  const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {},
-                 int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true, int max_timestep_cutbacks = 5)
+                 int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true,
+                 int max_timestep_cutbacks = 5)
       : BasePhysics(physics_name, mesh_tag, cycle, time, checkpoint_to_disk),
         displacement_(
             StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_tag_)),
@@ -1787,7 +1791,7 @@ protected:
       du_[j] -= displacement_(j);
     }
 
-    if (displacement_scale_factor!=1.0) {
+    if (displacement_scale_factor != 1.0) {
       du_ *= displacement_scale_factor;
     }
 
@@ -1821,13 +1825,12 @@ protected:
     displacement_ += du_;
 
     // due to solver inaccuracies, the end of step boundary conditions may not be exact at this point
-    if (displacement_scale_factor==1.0) {
+    if (displacement_scale_factor == 1.0) {
       for (auto& bc : bcs_.essentials()) {
         // apply the future boundary conditions, but use the most recent Jacobians stiffness.
         bc.setDofs(displacement_, time_);
       }
     }
-
   }
 };
 
