@@ -1,6 +1,6 @@
-#include "nd/array.hpp"
-
 #include <cmath>
+
+#include "serac/numerics/refactor/containers/ndarray.hpp"
 
 template < uint32_t rank >
 double relative_error_impl(nd::view<const double, rank> x, nd::view<const double, rank> y) {

@@ -1,4 +1,4 @@
-#include "nd/array.hpp"
+#include "serac/numerics/refactor/containers/ndarray.hpp"
 
 #ifndef NDARRAY_ENABLE_CUDA
 namespace memory {

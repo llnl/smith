@@ -1,4 +1,4 @@
-#include "nd/array.hpp"
+#include "serac/numerics/refactor/containers/ndarray.hpp"
 
 #include <cuda.h>
 
