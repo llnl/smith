@@ -12,7 +12,8 @@ Quickstart Guide
 Getting Serac
 -------------
 
-Serac is hosted on `GitHub <https://github.com/LLNL/serac>`_. Serac uses git submodules, so the project must be cloned recursively. Use either of the following commands to pull Serac's repository:
+Serac is hosted on `GitHub <https://github.com/LLNL/serac>`_. Serac uses git submodules, so the project must be cloned
+recursively. Use either of the following commands to pull Serac's repository:
 
 .. code-block:: bash
 
@@ -212,8 +213,7 @@ Some build options frequently used by Serac include:
 * ``ENABLE_ASAN``: Enables the Address Sanitizer for memory safety inspections, defaults to ``OFF``
 * ``SERAC_ENABLE_TESTS``: Enables Serac unit tests, defaults to ``ON``
 * ``SERAC_ENABLE_CODEVELOP``: Enables local development build of MFEM/Axom, see :ref:`codevelop-label`, defaults to ``OFF``
-* ``SERAC_USE_VDIM_ORDERING``: Sets the vector ordering to be ``byVDIM``, which is significantly faster for algebraic multigrid,
-   but may conflict with other packages if Serac is being used as a dependency, defaults to ``OFF``.
+* ``SERAC_USE_VDIM_ORDERING``: Sets the vector ordering to be ``byVDIM``, which is significantly faster for algebraic multigrid, defaults to ``ON``.
 
 Once the build has been configured, Serac can be built with the following commands:
 
