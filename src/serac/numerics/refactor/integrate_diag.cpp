@@ -8,7 +8,6 @@ template < mfem::Geometry::Type geom, Family family, DerivedQuantity test_op, De
 void batched_integrate_diag(nd::view<double, 2> D,
                             nd::view<const double, 5> qdata,
                             const FunctionSpace space,
-                            const GeometryInfo offsets,
                             const Field & X,
                             const DomainType type,
                             const nd::view<const int> elements,
@@ -27,7 +26,7 @@ void batched_integrate_diag(nd::view<double, 2> D,
   using test_Atype = decltype(piola_transformation<family, test_op>(mat<gdim,gdim>{}));
   using trial_Atype = decltype(weighted_piola_transformation<family, trial_op>(mat<gdim,gdim>{}));
 
-  FiniteElement< geom, Family::H1 > X_el{X.degree};
+  FiniteElement< geom, Family::H1 > X_el{get_degree(X)};
   FiniteElement< geom, family > el{space.degree};
 
   uint32_t num_nodes = D.shape[0];
@@ -36,7 +35,7 @@ void batched_integrate_diag(nd::view<double, 2> D,
   uint32_t nodes_per_element = el.num_nodes();
   uint32_t qpts_per_element = impl::qpe<geom>(xi.shape[0]);
 
-  uint32_t X_components = X.data.shape[1];
+  uint32_t X_components = get_num_components(X);
   uint32_t X_nodes_per_element = X_el.num_nodes();
 
   auto X_shape_fn_grads = X_el.evaluate_shape_function_gradients(xi);
@@ -77,8 +76,6 @@ void batched_integrate_diag(nd::view<double, 2> D,
       nd::array<double> X_e({X_nodes_per_element});
       nd::array<double> X_scratch({X_el.batch_interpolation_scratch_space(xi)});
 
-      // figure out which nodal values belong to this element 
-      X_el.indices(X.offsets, connectivity(elements(e)).data(), X_ids.data());
 
       for (uint32_t c = 0; c < X_components; c++) {
         for (uint32_t j = 0; j < X_nodes_per_element; j++) {
@@ -187,8 +184,8 @@ nd::array<double,2> integrate_sparse_matrix_diagonal(BasisFunction test, const n
 
   uint32_t test_components = phi.components;
   uint32_t trial_components = psi.components;
-  uint32_t sdim = domain.mesh.spatial_dimension;
-  uint32_t gdim = domain.mesh.geometry_dimension;
+  uint32_t sdim = spatial_dimension(domain);
+  uint32_t gdim = geometry_dimension(domain);
 
   stack::array<uint32_t, 5> shape5D = {
     qdata.shape[0],

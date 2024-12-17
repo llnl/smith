@@ -2,7 +2,7 @@
 
 #include "serac/numerics/refactor/containers/ndarray.hpp"
 
-#if __CUDACC__
+#ifdef __CUDACC__
 // dimension should each be less than 10
 template < uint32_t rank >
 __global__ void patterned_ndarray_kernel(nd::view<double, rank> output, stack::array<uint32_t, rank> dimensions) {

@@ -19,7 +19,7 @@ void batched_integrate_residual(Residual & r,
   uint32_t num_elements = elements.size();
   if (num_elements == 0) return;
 
-  FiniteElement< geom, family > r_el{r.space.degree};
+  FiniteElement< geom, family > r_el{get_degree(r)};
 
   using input_t = typename std::conditional< 
     op == DerivedQuantity::VALUE, 
@@ -34,8 +34,8 @@ void batched_integrate_residual(Residual & r,
 
   using A_type = decltype(weighted_piola_transformation<family, op>(mat<gdim,gdim>{}));
 
-  uint32_t num_nodes = r.data.shape[0];
-  uint32_t r_components = r.data.shape[1];
+  uint32_t num_nodes = get_num_nodes(r);
+  uint32_t r_components = get_num_components(r);
   uint32_t r_nodes_per_element = r_el.num_nodes();
   auto r_shape_fns = [&](){
     if constexpr(op == DerivedQuantity::VALUE) {
@@ -51,8 +51,8 @@ void batched_integrate_residual(Residual & r,
     }  
   }();
 
-  FiniteElement< geom, Family::H1 > X_el{X.degree};
-  uint32_t X_components = X.data.shape[1];
+  FiniteElement< geom, Family::H1 > X_el{get_degree(X)};
+  uint32_t X_components = get_num_components(X);
   uint32_t X_nodes_per_element = X_el.num_nodes();
 
   auto X_shape_fn_grads = X_el.evaluate_shape_function_gradients(xi);
@@ -157,14 +157,14 @@ void batched_integrate_residual(Residual & r,
 template < DerivedQuantity op, uint32_t n >
 void integrate_residual(Residual & r, BasisFunction phi, const nd::array<double, n> & f_q, const Domain & domain, const DomainType type) {
 
-  zero(r.data);
+  r = 0.0;
 
-  uint32_t gdim = domain.mesh.geometry_dimension;
+  uint32_t gdim = geometry_dimension(domain);
 
   stack::array<uint32_t, 3> input_dimensions{
     f_q.shape[0],
     phi.space.components,
-    qshape(r.space.family, op, gdim)
+    qshape(get_family(r), op, gdim)
   };
 
   SLIC_ASSERT_MSG(compatible_shapes(f_q.shape, input_dimensions), "incompatible array shapes");
@@ -182,14 +182,12 @@ void integrate_residual(Residual & r, BasisFunction phi, const nd::array<double,
 
       nd::view<const double, 3> integrand_geom = {&f3D(offset, 0, 0), {domain.num_qpts[geom], f3D.shape[1], f3D.shape[2]}};
 
-      const Domain::AssemblyLUT & table = domain.get(geom, phi.space.family, phi.space.degree);
-
       if (phi.space.family == Family::H1) {
-        batched_integrate_residual<geom, Family::H1, op>(r, domain.mesh.X, type, integrand_geom, connectivity, elements, xi, weights, table, element_residual_buffer); 
+        batched_integrate_residual<geom, Family::H1, op>(r, domain.mesh.X, type, integrand_geom, elements, xi, weights, element_residual_buffer); 
       }
 
       if (phi.space.family == Family::Hcurl) {
-        batched_integrate_residual<geom, Family::Hcurl, op>(r, domain.mesh.X, type, integrand_geom, connectivity, elements, xi, weights, table, element_residual_buffer); 
+        batched_integrate_residual<geom, Family::Hcurl, op>(r, domain.mesh.X, type, integrand_geom, elements, xi, weights, element_residual_buffer); 
       }
     }
 

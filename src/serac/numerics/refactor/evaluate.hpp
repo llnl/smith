@@ -7,7 +7,6 @@ namespace refactor {
 
 using Field = serac::FiniteElementState;
 
-
 inline bool is_value(DerivedQuantity op) {
   return op == DerivedQuantity::VALUE;
 }

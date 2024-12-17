@@ -31,7 +31,7 @@ void batched_integrate_spmat(nd::view<double> values,
   using test_Atype = decltype(piola_transformation<test_family, test_op>(mat<gdim,gdim>{}));
   using trial_Atype = decltype(weighted_piola_transformation<trial_family, trial_op>(mat<gdim,gdim>{}));
 
-  FiniteElement< geom, Family::H1 > X_el{X.degree};
+  FiniteElement< geom, Family::H1 > X_el{get_degree(X)};
   FiniteElement< geom, test_family > test_el{test_space.degree};
   FiniteElement< geom, trial_family > trial_el{trial_space.degree};
 
@@ -57,7 +57,7 @@ void batched_integrate_spmat(nd::view<double> values,
     }  
   }();
 
-  uint32_t X_components = X.data.shape[1];
+  uint32_t X_components = get_num_components(X);
   uint32_t X_nodes_per_element = X_el.num_nodes();
 
   auto X_shape_fn_grads = X_el.evaluate_shape_function_gradients(xi);
@@ -98,6 +98,7 @@ void batched_integrate_spmat(nd::view<double> values,
   for (uint32_t e = 0; e < num_elements; e++) {
 
     if (need_to_compute_dX_dxi) {
+
       // figure out which nodal values belong to this element 
       X_el.indices(X.offsets, connectivity(elements(e)).data(), X_ids.data());
 
@@ -138,7 +139,7 @@ void batched_integrate_spmat(nd::view<double> values,
     for (uint32_t i = 0; i < test_components; i++) {
       for (uint32_t j = 0; j < trial_components; j++) {
         for (uint32_t I = 0; I < test_nodes_per_element; I++) {
-          int row_id = test_ids[I] * test_components + i;
+          uint32_t row_id = test_ids[I] * test_components + i;
 
           for (uint32_t q = 0; q < qpts_per_element; q++) {
             uint32_t qid = qoffset + q;
@@ -218,15 +219,14 @@ template <DerivedQuantity test_op, DerivedQuantity trial_op, uint32_t n>
 std::function< void(refactor::sparse_matrix&) > integrate_sparse_matrix(BasisFunction test, const nd::array<double, n> & qdata, BasisFunction trial, const Domain &domain, const DomainType type) {
 
   return [&, type, test, trial](refactor::sparse_matrix & A) {
-    MTR_SCOPE("integrate_spmat", "dphi_dpsi");
 
     auto phi = test.space;
     auto psi = trial.space;
 
     uint32_t test_components = phi.components;
     uint32_t trial_components = psi.components;
-    uint32_t sdim = domain.mesh.spatial_dimension;
-    uint32_t gdim = domain.mesh.geometry_dimension;
+    uint32_t sdim = spatial_dimension(domain);
+    uint32_t gdim = geometry_dimension(domain);
 
     stack::array<uint32_t, 5> shape5D = {
       qdata.shape[0],

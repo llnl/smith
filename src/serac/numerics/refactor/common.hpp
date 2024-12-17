@@ -131,7 +131,7 @@ template < typename T, uint32_t n >
 stack::array<T, n> remove_ones(const stack::array<T, n> & x) { 
   uint32_t rank = 0;
   stack::array<T, n> copy{};
-  for (int i = 0; i < n; i++) {
+  for (uint32_t i = 0; i < n; i++) {
     if (x[i] > 1) copy[rank++] = x[i];
   }
   return copy;
@@ -142,7 +142,7 @@ bool compatible_shapes(const stack::array<T, m> & x,
                        const stack::array<T, n> & y) {
   auto x_filtered = remove_ones(x);
   auto y_filtered = remove_ones(y);
-  for (int i = 0; i < std::max(m, n); i++) {
+  for (uint32_t i = 0; i < std::max(m, n); i++) {
     auto xval = (i >= m) ? 0 : x_filtered[i];
     auto yval = (i >= n) ? 0 : y_filtered[i];
     if (xval != yval) { return false; }

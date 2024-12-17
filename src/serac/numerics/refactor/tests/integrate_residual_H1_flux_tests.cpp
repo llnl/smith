@@ -4,13 +4,7 @@
 #include <iostream>
 #include <functional>
 
-#include "refactor/mesh.hpp"
-#include "refactor/domain.hpp"
-
-#include "forall.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-
-#include "containers/ndarray_conversions.hpp"
 
 using namespace serac;
 using namespace refactor;

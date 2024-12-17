@@ -246,6 +246,14 @@ struct Domain {
                    mfem::Geometry::Type element_geometry);
 };
 
+inline uint32_t spatial_dimension(const Domain & domain) {
+  return static_cast<uint32_t>(domain.mesh_.SpaceDimension());
+}
+
+inline uint32_t geometry_dimension(const Domain & domain) {
+  return static_cast<uint32_t>(domain.dim_);
+}
+
 enum class DomainType { ISOPARAMETRIC, SPATIAL };
 
 struct DomainWithType {

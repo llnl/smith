@@ -4,8 +4,8 @@
 #include "serac/numerics/refactor/geometry.hpp"
 #include "serac/numerics/refactor/quadrature.hpp"
 
-#include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 namespace refactor {
 
@@ -18,6 +18,50 @@ enum class Family {
   Hdiv, 
   DG 
 };
+
+Family get_family(const Field & f) {
+  switch(f.gridFunction().FESpace()->FEColl()->GetContType()) {
+    case mfem::FiniteElementCollection::CONTINUOUS:    return Family::H1;
+    case mfem::FiniteElementCollection::TANGENTIAL:    return Family::Hcurl;
+    case mfem::FiniteElementCollection::NORMAL:        return Family::Hdiv;
+    case mfem::FiniteElementCollection::DISCONTINUOUS: return Family::DG;
+  }
+  return Family::H1; // unreachable
+}
+
+Family get_family(const Residual & r) {
+  switch(r.linearForm().FESpace()->FEColl()->GetContType()) {
+    case mfem::FiniteElementCollection::CONTINUOUS:    return Family::H1;
+    case mfem::FiniteElementCollection::TANGENTIAL:    return Family::Hcurl;
+    case mfem::FiniteElementCollection::NORMAL:        return Family::Hdiv;
+    case mfem::FiniteElementCollection::DISCONTINUOUS: return Family::DG;
+  }
+  return Family::H1; // unreachable
+}
+
+uint32_t get_degree(const Field & f) {
+  return uint32_t(f.gridFunction().FESpace()->FEColl()->GetOrder());
+}
+
+uint32_t get_degree(const Residual & r) {
+  return uint32_t(r.linearForm().FESpace()->FEColl()->GetOrder());
+}
+
+uint32_t get_num_components(const Field & f) {
+  return uint32_t(f.gridFunction().VectorDim());
+}
+
+uint32_t get_num_components(const Residual & r) {
+  return uint32_t(r.linearForm().ParFESpace()->GetVDim());
+}
+
+uint32_t get_num_nodes(const Field & f) {
+  return uint32_t(f.gridFunction().FESpace()->GetNDofs());
+}
+
+uint32_t get_num_nodes(const Residual & r) {
+  return uint32_t(r.linearForm().FESpace()->GetNDofs());
+}
 
 enum class Modifier { NONE, DIAGONAL, SYM };
 enum class DerivedQuantity { VALUE, DERIVATIVE };
@@ -37,27 +81,9 @@ struct FunctionSpace {
   FunctionSpace() : family{}, degree{}, components{} {}
   FunctionSpace(Family f, uint32_t d = 2, uint32_t c = 1) : family{f}, degree{d}, components{c}{}
   FunctionSpace(Field f) {
-
-    const auto & pgf = f.gridFunction();
-    switch(pgf.FESpace()->FEColl()->GetContType()) {
-      case mfem::FiniteElementCollection::CONTINUOUS:
-        family = Family::H1;
-        break;
-      case mfem::FiniteElementCollection::TANGENTIAL:
-        family = Family::Hcurl;
-        break;
-      case mfem::FiniteElementCollection::NORMAL:
-        family = Family::Hdiv;
-        break;
-      case mfem::FiniteElementCollection::DISCONTINUOUS:
-        family = Family::DG;
-        break;
-    }
-
-    degree = uint32_t(pgf.FESpace()->FEColl()->GetOrder());
-
-    components = uint32_t(pgf.VectorDim());
-
+    family = get_family(f);
+    degree = get_degree(f);
+    components = get_num_components(f);
   }
 
   bool operator==(const FunctionSpace & other) const {
