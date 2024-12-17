@@ -44,7 +44,7 @@ namespace nd {
   template < uint32_t dim >
   SERAC_HOST_DEVICE uint32_t product(stack::array< uint32_t, dim > values) {
     uint32_t p = values[0];
-    for (int i = 1; i < dim; i++) { p *= values[i]; }
+    for (uint32_t i = 1; i < dim; i++) { p *= values[i]; }
     return p;
   }
 
@@ -53,11 +53,14 @@ namespace nd {
   template < uint32_t dim >
   SERAC_HOST_DEVICE stack::array< uint32_t, dim > compute_strides(const stack::array< uint32_t, dim > & shape, ordering o, uint32_t m = 1) {
     stack::array< uint32_t, dim > strides{};
-    int32_t k = (o == col_major) ? 0 : dim-1;
-    int32_t s = (o == col_major) ? 1 : -1;
-    for (uint32_t i = 0; i < dim; i++) {
-      strides[k] = (i == 0) ? m : strides[k-s] * shape[k-s];
-      k += s;
+    if (o == col_major) {
+      for (uint32_t i = 0; i < dim; i++) {
+        strides[i] = (i == 0) ? m : strides[i-1] * shape[i-1];
+      }
+    } else { // row major
+      for (uint32_t i = 0; i < dim; i++) {
+        strides[dim-i-1] = (i == 0) ? m : strides[dim-i] * shape[dim-i];
+      }
     }
     return strides;
   }
@@ -140,7 +143,7 @@ namespace nd {
           printf("array index out of bounds\n");
         };
       #endif
-      return ((indices * stride[I]) + ...);
+      return ((static_cast<uint32_t>(indices) * stride[I]) + ...);
     }
 
     template < typename ... index_types >
@@ -281,7 +284,7 @@ namespace nd {
           printf("array index out of bounds\n");
         };
       #endif
-      return ((indices * stride[I]) + ...);
+      return ((static_cast<uint32_t>(indices) * stride[I]) + ...);
     }
 
     template < typename ... index_types >
@@ -298,9 +301,9 @@ namespace nd {
 
         uint32_t beginnings[num_args] = {uint32_t(nd::begin(indices)) ... };
         uint32_t endings[num_args] = {uint32_t(nd::end(indices)) ... };
-        int k = 0;
-        int offset = 0;
-        for (int i = 0; i < dim; i++) {
+        uint32_t k = 0;
+        uint32_t offset = 0;
+        for (uint32_t i = 0; i < dim; i++) {
           if (i >= num_args) {
             slice_shape[k] = shape[i];
             slice_stride[k] = stride[i];
@@ -404,8 +407,8 @@ namespace nd {
     void resize(const stack::array< uint32_t, dim > & new_shape) {
       shape = new_shape;
       _resize(product(shape));
-      for (uint64_t i = 0; i < dim; i++) {
-        uint64_t id = dim - 1 - i;
+      for (uint32_t i = 0; i < dim; i++) {
+        uint32_t id = dim - 1 - i;
         stride[id] = (id == dim - 1) ? 1 : stride[id+1] * shape[id+1];
       }
     }

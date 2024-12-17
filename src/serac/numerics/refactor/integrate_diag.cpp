@@ -1,13 +1,5 @@
 #include "common.hpp"
 
-#include "misc/timer.hpp"
-
-#include "refactor/domain.hpp"
-#include "refactor/assert.hpp"
-#include "refactor/threadpool.hpp"
-
-#include "minitrace.h"
-
 namespace refactor {
 
 namespace impl {

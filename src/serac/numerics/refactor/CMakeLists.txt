@@ -4,6 +4,8 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+add_subdirectory(containers)
+
 set(refactor_headers
 
     elements/h1_edge.hpp
@@ -34,7 +36,7 @@ set(refactor_sources
     integrate_residual.cpp
 )
 
-set(refactor_depends serac_infrastructure serac_functional)
+set(refactor_depends serac_infrastructure serac_functional serac_refactor_containers)
 
 blt_add_library(
     NAME        serac_refactor

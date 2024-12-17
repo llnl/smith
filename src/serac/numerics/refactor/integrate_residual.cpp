@@ -1,16 +1,6 @@
 #include "common.hpp"
 
-#include "refactor/domain.hpp"
-#include "refactor/assert.hpp"
-#include "refactor/threadpool.hpp"
-
-
 #include "serac/numerics/functional/tensor.hpp"
-
-#include "common.hpp"
-
-#include "misc/for_constexpr.hpp"
-#include "misc/timer.hpp"
 
 namespace refactor {
 
@@ -95,123 +85,107 @@ void batched_integrate_residual(Residual & r,
 
   nd::view<double, 2> element_residuals(element_residual_buffer.data(), element_residual_shape);
 
-  {
-    MTR_SCOPE("integrate", "(element residuals)");
+  nd::array< A_type > A_q;
+  nd::array< vec<gdim>, 2 > dX_dxi_q;
+  nd::array<uint32_t> X_ids;
+  nd::array<double> X_e;
+  nd::array< double > X_scratch;
 
-    // for each element with this geometry
-    threadpool::block_parallel_for(num_elements, [&](uint32_t istart, uint32_t iend) {
+  if (need_to_compute_dX_dxi) {
+    X_ids.resize(X_nodes_per_element);
+    X_e.resize(X_nodes_per_element);
+    X_scratch.resize({X_el.batch_interpolation_scratch_space(xi)});
+    A_q.resize({qpts_per_element});
+    dX_dxi_q.resize({X_components, qpts_per_element});
+  }
 
-      nd::array< A_type > A_q;
-      nd::array< vec<gdim>, 2 > dX_dxi_q;
-      nd::array<uint32_t> X_ids;
-      nd::array<double> X_e;
-      nd::array< double > X_scratch;
+  // for each element with this geometry
+  for (uint32_t i = 0; i < num_elements; i++) {
 
+    nd::array<uint32_t> r_ids({r_nodes_per_element});
+    nd::array<double> r_e({r_nodes_per_element});
+    nd::array< double > r_scratch({r_el.batch_interpolation_scratch_space(xi)});
+
+    if (need_to_compute_dX_dxi) {
+
+      // figure out which nodal values belong to this element 
+      X_el.indices(X.offsets, connectivity(elements(i)).data(), X_ids.data());
+
+      for (uint32_t c = 0; c < X_components; c++) {
+        for (uint32_t j = 0; j < X_nodes_per_element; j++) {
+          X_e(j) = X.data(X_ids(j), c);
+        }
+        X_el.gradient(dX_dxi_q(c), X_e, X_shape_fn_grads, X_scratch.data());
+      }
+
+      for (uint32_t q = 0; q < qpts_per_element; q++) {
+        mat<gdim,gdim> dX_dxi;
+        for (uint32_t c = 0; c < gdim; c++) {
+          dX_dxi[c] = dX_dxi_q(c, q);
+        } 
+        A_q[q] = weighted_piola_transformation<family, op>(dX_dxi);
+      }
+
+    }
+
+    nd::array<input_t> input_xi_q({qpts_per_element});
+    for (uint32_t c = 0; c < r_components; c++) {
       if (need_to_compute_dX_dxi) {
-        X_ids.resize(X_nodes_per_element);
-        X_e.resize(X_nodes_per_element);
-        X_scratch.resize({X_el.batch_interpolation_scratch_space(xi)});
-        A_q.resize({qpts_per_element});
-        dX_dxi_q.resize({X_components, qpts_per_element});
+        for (uint32_t q = 0; q < qpts_per_element; q++) {
+          input_xi_q(q) = serac::dot(A_q[q], input_q(i*qpts_per_element+q, c));
+        }
+      } else {
+        for (uint32_t q = 0; q < qpts_per_element; q++) {
+          input_xi_q(q) = input_q(i*qpts_per_element+q, c);
+        }
       }
 
-      nd::array<uint32_t> r_ids({r_nodes_per_element});
-      nd::array<double> r_e({r_nodes_per_element});
-      nd::array< double > r_scratch({r_el.batch_interpolation_scratch_space(xi)});
+      if constexpr (op == DerivedQuantity::VALUE) {
+        r_el.integrate_source(r_e, input_xi_q, r_shape_fns, r_scratch.data());
+      } 
 
-      for (uint32_t i = istart; i < iend; i++) {
-
-        if (need_to_compute_dX_dxi) {
-
-          // figure out which nodal values belong to this element 
-          X_el.indices(X.offsets, connectivity(elements(i)).data(), X_ids.data());
-
-          for (int c = 0; c < X_components; c++) {
-            for (int j = 0; j < X_nodes_per_element; j++) {
-              X_e(j) = X.data(X_ids(j), c);
-            }
-            X_el.gradient(dX_dxi_q(c), X_e, X_shape_fn_grads, X_scratch.data());
-          }
-
-          for (int q = 0; q < qpts_per_element; q++) {
-            mat<gdim,gdim> dX_dxi;
-            for (int c = 0; c < gdim; c++) {
-              dX_dxi[c] = dX_dxi_q(c, q);
-            } 
-            A_q[q] = weighted_piola_transformation<family, op>(dX_dxi);
-          }
-
-        }
-
-        nd::array<input_t> input_xi_q({qpts_per_element});
-        for (int c = 0; c < r_components; c++) {
-          if (need_to_compute_dX_dxi) {
-            for (int q = 0; q < qpts_per_element; q++) {
-              input_xi_q(q) = fm::dot(A_q[q], input_q(i*qpts_per_element+q, c));
-            }
-          } else {
-            for (int q = 0; q < qpts_per_element; q++) {
-              input_xi_q(q) = input_q(i*qpts_per_element+q, c);
-            }
-          }
-
-          if constexpr (op == DerivedQuantity::VALUE) {
-            r_el.integrate_source(r_e, input_xi_q, r_shape_fns, r_scratch.data());
-          } 
-
-          if constexpr (op == DerivedQuantity::DERIVATIVE) {
-            r_el.integrate_flux(r_e, input_xi_q, r_shape_fns, r_scratch.data());
-          }
-
-          if constexpr (is_vector_valued(family)) {
-            r_el.reorient(TransformationType::TransposePhysicalToParent, &connectivity(elements(i), 0), r_e.data()); 
-          }
-
-          for (int j = 0; j < r_nodes_per_element; j++) {
-            element_residuals(i * r_nodes_per_element + j, c) = r_e(j);
-          }
-
-        }
-
+      if constexpr (op == DerivedQuantity::DERIVATIVE) {
+        r_el.integrate_flux(r_e, input_xi_q, r_shape_fns, r_scratch.data());
       }
 
-    });
+      if constexpr (is_vector_valued(family)) {
+        r_el.reorient(TransformationType::TransposePhysicalToParent, &connectivity(elements(i), 0), r_e.data()); 
+      }
+
+      for (uint32_t j = 0; j < r_nodes_per_element; j++) {
+        element_residuals(i * r_nodes_per_element + j, c) = r_e(j);
+      }
+
+    }
 
   }
 
-  {
-    MTR_SCOPE("integrate", "(gather)");
-    threadpool::block_parallel_for(num_nodes, [&](uint32_t istart, uint32_t iend) {
+  std::vector<double> sums(r_components);
 
-      std::vector<double> sums(r_components);
+  for (uint32_t i = 0; i < num_nodes; i++) {
+    uint32_t begin = table.offsets[i];
+    uint32_t end = table.offsets[i+1];
 
-      for (uint32_t i = istart; i < iend; i++) {
-        uint32_t begin = table.offsets[i];
-        uint32_t end = table.offsets[i+1];
+    for (uint32_t c = 0; c < r_components; c++) {
+      sums[c] = 0.0;
+    }
 
-        for (uint32_t c = 0; c < r_components; c++) {
-          sums[c] = 0.0;
-        }
-
-        for (uint32_t k = begin; k < end; k++) {
-          uint32_t id = table.ids[k];
-          for (uint32_t c = 0; c < r_components; c++) {
-            sums[c] += element_residuals(id, c);
-          }
-        }
-
-        for (uint32_t c = 0; c < r_components; c++) {
-          r.data(i, c) += sums[c];
-        }
+    for (uint32_t k = begin; k < end; k++) {
+      uint32_t id = table.ids[k];
+      for (uint32_t c = 0; c < r_components; c++) {
+        sums[c] += element_residuals(id, c);
       }
-    });
+    }
+
+    for (uint32_t c = 0; c < r_components; c++) {
+      r.data(i, c) += sums[c];
+    }
+
   }
 }
 
 template < DerivedQuantity op, uint32_t n >
 void integrate_residual(Residual & r, BasisFunction phi, const nd::array<double, n> & f_q, const Domain & domain, const DomainType type) {
-
-  MTR_SCOPE("integrate", "residual");
 
   zero(r.data);
 

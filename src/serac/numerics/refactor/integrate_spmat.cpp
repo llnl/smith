@@ -1,13 +1,5 @@
 #include "common.hpp"
 
-#include "misc/timer.hpp"
-
-#include "refactor/domain.hpp"
-#include "refactor/assert.hpp"
-#include "refactor/threadpool.hpp"
-
-#include "minitrace.h"
-
 namespace refactor {
 
 namespace impl {
@@ -27,8 +19,6 @@ void batched_integrate_spmat(nd::view<double> values,
                              const nd::view<const int> elements,
                              const nd::view<const double, 2> xi,
                              const nd::view<const double, 1> weights) {
-
-  MTR_SCOPE("integrate_spmat", "batched_dphi_dpsi_xi");
 
   constexpr uint32_t gdim = dimension(geom);
   constexpr uint32_t test_qshape = qshape(test_family, test_op, gdim);
@@ -52,9 +42,6 @@ void batched_integrate_spmat(nd::view<double> values,
   uint32_t trial_nodes_per_element = trial_el.num_nodes();
   uint32_t qpts_per_element = impl::qpe<geom>(xi.shape[0]);
 
-  constexpr int nmutex = 1024;
-  std::vector< std::mutex > mutexes(nmutex);
-
   // precalculate test functions for the provided quadrature rule
   auto psi_wt = [&](){
     if constexpr(trial_op == DerivedQuantity::VALUE) {
@@ -75,6 +62,13 @@ void batched_integrate_spmat(nd::view<double> values,
 
   auto X_shape_fn_grads = X_el.evaluate_shape_function_gradients(xi);
 
+  nd::array<test_Atype> testA_q;
+  nd::array<trial_Atype> trialA_q;
+  nd::array<vec<gdim>, 2> dX_dxi_q;
+  nd::array<uint32_t> X_ids;
+  nd::array<double> X_e;
+  nd::array<double> X_scratch;
+
   //       When do we need to calculate dX/dxi?
   // 
   //     ❌ : don't need to          ✅ : need to 
@@ -91,148 +85,132 @@ void batched_integrate_spmat(nd::view<double> values,
   // +---------------------+------+-------+------+----+
   const bool need_to_compute_dX_dxi = (type == DomainType::SPATIAL);
 
-  // for each element of this mfem::Geometry::Type in the domain
-  threadpool::block_parallel_for(num_elements, [&](uint32_t e_start, uint32_t e_end) {
-
-    THREAD_SCOPE_TRACE("integrate_spmat", "element block");
-
-    nd::array<test_Atype> testA_q;
-    nd::array<trial_Atype> trialA_q;
-    nd::array<vec<gdim>, 2> dX_dxi_q;
-    nd::array<uint32_t> X_ids;
-    nd::array<double> X_e;
-    nd::array<double> X_scratch;
-
-    if (need_to_compute_dX_dxi) {
-      testA_q.resize({qpts_per_element});
-      trialA_q.resize({qpts_per_element});
-      dX_dxi_q.resize({X_components, qpts_per_element});
-      X_ids.resize(X_nodes_per_element);
-      X_e.resize(X_nodes_per_element);
-      X_scratch.resize({X_el.batch_interpolation_scratch_space(xi)});
-    }
-
-    for (uint32_t e = e_start; e < e_end; e++) {
-
-      if (need_to_compute_dX_dxi) {
-        // figure out which nodal values belong to this element 
-        X_el.indices(X.offsets, connectivity(elements(e)).data(), X_ids.data());
-
-        for (int c = 0; c < X_components; c++) {
-          for (int j = 0; j < X_nodes_per_element; j++) {
-            X_e(j) = X.data(X_ids(j), c);
-          }
-          X_el.gradient(dX_dxi_q(c), X_e, X_shape_fn_grads, X_scratch.data());
-        }
-
-        for (int q = 0; q < qpts_per_element; q++) {
-          mat<gdim,gdim> dX_dxi;
-          for (int c = 0; c < gdim; c++) {
-            dX_dxi[c] = dX_dxi_q(c, q);
-          } 
-          testA_q[q] = piola_transformation<test_family, test_op>(dX_dxi);
-          trialA_q[q] = weighted_piola_transformation<trial_family, trial_op>(dX_dxi);
-        }
-      }
-
-      nd::array< double > trial_scratch({trial_el.batch_interpolation_scratch_space(xi)});
-
-      nd::array< trial_qtype > hat_f({qpts_per_element});
-
-      nd::array<uint32_t> test_ids({test_nodes_per_element});
-      test_el.indices(test_offsets, connectivity(elements(e)).data(), test_ids.data());
-
-      nd::array<uint32_t> trial_ids({trial_nodes_per_element});
-      trial_el.indices(trial_offsets, connectivity(elements(e)).data(), trial_ids.data());
-
-      nd::array< int8_t > transformation({test_nodes_per_element});
-      if constexpr (is_vector_valued(test_family)) {
-        test_el.reorient(TransformationType::TransposePhysicalToParent, &connectivity(elements(e), 0), transformation.data()); 
-      }
-
-      uint32_t qoffset = e * qpts_per_element;
-
-      for (uint32_t i = 0; i < test_components; i++) {
-        for (uint32_t j = 0; j < trial_components; j++) {
-          for (uint32_t I = 0; I < test_nodes_per_element; I++) {
-            int row_id = test_ids[I] * test_components + i;
-
-            for (uint32_t q = 0; q < qpts_per_element; q++) {
-              uint32_t qid = qoffset + q;
-
-              auto xi_q = quadrature_point<geom>(q, xi);
-
-              mat_t C{};
-              for (uint32_t k = 0; k < test_qshape; k++) {
-                for (uint32_t m = 0; m < trial_qshape; m++) {
-                  C(k, m) = qdata(qid, i, k, j, m);
-                }
-              }
-
-              test_qtype phi_I;
-
-              if constexpr (is_scalar_valued(test_family) && test_op == DerivedQuantity::VALUE) {
-                phi_I = test_el.shape_function(xi_q, I);
-              }
-
-              if constexpr (is_scalar_valued(test_family) && test_op == DerivedQuantity::DERIVATIVE) {
-                phi_I = test_el.shape_function_gradient(xi_q, I);
-              }
-
-              if constexpr (test_family == Family::Hcurl && test_op == DerivedQuantity::VALUE) {
-                phi_I = test_el.reoriented_shape_function(xi_q, I, transformation[I]);
-              }
-
-              if constexpr (test_family == Family::Hcurl && test_op == DerivedQuantity::DERIVATIVE) {
-                phi_I = test_el.reoriented_shape_function_curl(xi_q, I, transformation[I]);
-              }
-
-              if (need_to_compute_dX_dxi) {
-                phi_I = fm::dot(phi_I, testA_q[q]);
-              }
-
-              hat_f[q] = fm::dot(phi_I, C);
-
-              if (need_to_compute_dX_dxi) {
-                hat_f[q] = fm::dot(trialA_q[q], hat_f[q]);
-              }
-
-            }
-
-            nd::array<double> r_e({trial_el.num_nodes()});
-
-            if constexpr (trial_op == DerivedQuantity::VALUE) {
-              trial_el.integrate_source(r_e, hat_f, psi_wt, trial_scratch.data());
-            } 
-
-            if constexpr (trial_op == DerivedQuantity::DERIVATIVE) {
-              trial_el.integrate_flux(r_e, hat_f, psi_wt, trial_scratch.data());
-            }
-
-            if constexpr (is_vector_valued(trial_family)) {
-              trial_el.reorient(TransformationType::TransposePhysicalToParent, &connectivity(elements(e), 0), r_e.data()); 
-            }
-
-            int row_start = row_ptr[row_id];
-            int row_end = row_ptr[row_id+1];
-            int which = row_id % nmutex;
-            mutexes[which].lock();
-            for (uint32_t J = 0; J < trial_nodes_per_element; J++) {
-              int col_id = trial_ids[J] * trial_components + j;
-
-              // find the position of the nonzero entry of this row with the right column
-              int position = std::lower_bound(&col_ind[row_start], &col_ind[row_end], col_id) - &col_ind[0];
-
-              values[position] += r_e(J);
-            }
-            mutexes[which].unlock();
-          }
-        }
-      }
-
+  if (need_to_compute_dX_dxi) {
+    testA_q.resize({qpts_per_element});
+    trialA_q.resize({qpts_per_element});
+    dX_dxi_q.resize({X_components, qpts_per_element});
+    X_ids.resize(X_nodes_per_element);
+    X_e.resize(X_nodes_per_element);
+    X_scratch.resize({X_el.batch_interpolation_scratch_space(xi)});
   }
 
-  });
+  // for each element of this mfem::Geometry::Type in the domain
+  for (uint32_t e = 0; e < num_elements; e++) {
+
+    if (need_to_compute_dX_dxi) {
+      // figure out which nodal values belong to this element 
+      X_el.indices(X.offsets, connectivity(elements(e)).data(), X_ids.data());
+
+      for (uint32_t c = 0; c < X_components; c++) {
+        for (uint32_t j = 0; j < X_nodes_per_element; j++) {
+          X_e(j) = X.data(X_ids(j), c);
+        }
+        X_el.gradient(dX_dxi_q(c), X_e, X_shape_fn_grads, X_scratch.data());
+      }
+
+      for (uint32_t q = 0; q < qpts_per_element; q++) {
+        mat<gdim,gdim> dX_dxi;
+        for (uint32_t c = 0; c < gdim; c++) {
+          dX_dxi[c] = dX_dxi_q(c, q);
+        } 
+        testA_q[q] = piola_transformation<test_family, test_op>(dX_dxi);
+        trialA_q[q] = weighted_piola_transformation<trial_family, trial_op>(dX_dxi);
+      }
+    }
+
+    nd::array< double > trial_scratch({trial_el.batch_interpolation_scratch_space(xi)});
+
+    nd::array< trial_qtype > hat_f({qpts_per_element});
+
+    nd::array<uint32_t> test_ids({test_nodes_per_element});
+    test_el.indices(test_offsets, connectivity(elements(e)).data(), test_ids.data());
+
+    nd::array<uint32_t> trial_ids({trial_nodes_per_element});
+    trial_el.indices(trial_offsets, connectivity(elements(e)).data(), trial_ids.data());
+
+    nd::array< int8_t > transformation({test_nodes_per_element});
+    if constexpr (is_vector_valued(test_family)) {
+      test_el.reorient(TransformationType::TransposePhysicalToParent, &connectivity(elements(e), 0), transformation.data()); 
+    }
+
+    uint32_t qoffset = e * qpts_per_element;
+
+    for (uint32_t i = 0; i < test_components; i++) {
+      for (uint32_t j = 0; j < trial_components; j++) {
+        for (uint32_t I = 0; I < test_nodes_per_element; I++) {
+          int row_id = test_ids[I] * test_components + i;
+
+          for (uint32_t q = 0; q < qpts_per_element; q++) {
+            uint32_t qid = qoffset + q;
+
+            auto xi_q = quadrature_point<geom>(q, xi);
+
+            mat_t C{};
+            for (uint32_t k = 0; k < test_qshape; k++) {
+              for (uint32_t m = 0; m < trial_qshape; m++) {
+                C(k, m) = qdata(qid, i, k, j, m);
+              }
+            }
+
+            test_qtype phi_I;
+
+            if constexpr (is_scalar_valued(test_family) && test_op == DerivedQuantity::VALUE) {
+              phi_I = test_el.shape_function(xi_q, I);
+            }
+
+            if constexpr (is_scalar_valued(test_family) && test_op == DerivedQuantity::DERIVATIVE) {
+              phi_I = test_el.shape_function_gradient(xi_q, I);
+            }
+
+            if constexpr (test_family == Family::Hcurl && test_op == DerivedQuantity::VALUE) {
+              phi_I = test_el.reoriented_shape_function(xi_q, I, transformation[I]);
+            }
+
+            if constexpr (test_family == Family::Hcurl && test_op == DerivedQuantity::DERIVATIVE) {
+              phi_I = test_el.reoriented_shape_function_curl(xi_q, I, transformation[I]);
+            }
+
+            if (need_to_compute_dX_dxi) {
+              phi_I = fm::dot(phi_I, testA_q[q]);
+            }
+
+            hat_f[q] = fm::dot(phi_I, C);
+
+            if (need_to_compute_dX_dxi) {
+              hat_f[q] = fm::dot(trialA_q[q], hat_f[q]);
+            }
+
+          }
+
+          nd::array<double> r_e({trial_el.num_nodes()});
+
+          if constexpr (trial_op == DerivedQuantity::VALUE) {
+            trial_el.integrate_source(r_e, hat_f, psi_wt, trial_scratch.data());
+          } 
+
+          if constexpr (trial_op == DerivedQuantity::DERIVATIVE) {
+            trial_el.integrate_flux(r_e, hat_f, psi_wt, trial_scratch.data());
+          }
+
+          if constexpr (is_vector_valued(trial_family)) {
+            trial_el.reorient(TransformationType::TransposePhysicalToParent, &connectivity(elements(e), 0), r_e.data()); 
+          }
+
+          int row_start = row_ptr[row_id];
+          int row_end = row_ptr[row_id+1];
+          for (uint32_t J = 0; J < trial_nodes_per_element; J++) {
+            int col_id = static_cast<int>(trial_ids[J] * trial_components + j);
+
+            // find the position of the nonzero entry of this row with the right column
+            int position = std::lower_bound(&col_ind[row_start], &col_ind[row_end], col_id) - &col_ind[0];
+
+            values[position] += r_e(J);
+          }
+        }
+      }
+    }
+
+  }
 
 }
 
