@@ -159,7 +159,7 @@ void batched_interpolate(nd::view<double, 3> u_q,
 
         if (need_to_compute_dX_dxi) {
           for (int q = 0; q < qpts_per_element; q++) {
-            output_q(i*qpts_per_element+q, c) = fm::dot(u_xi_q[q], A_q[q]);
+            output_q(i*qpts_per_element+q, c) = serac::dot(u_xi_q[q], A_q[q]);
           }
         } else {
           for (int q = 0; q < qpts_per_element; q++) {

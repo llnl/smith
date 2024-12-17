@@ -246,6 +246,20 @@ struct Domain {
                    mfem::Geometry::Type element_geometry);
 };
 
+enum class DomainType { ISOPARAMETRIC, SPATIAL };
+
+struct DomainWithType {
+  const Domain & domain;
+  const DomainType type;
+
+  DomainWithType(const Domain & d) : domain(d), type(DomainType::SPATIAL) {};
+  DomainWithType(DomainType t, const Domain & d) : domain(d), type(t) {};
+};
+
+inline DomainWithType isoparametric(const Domain & domain) {
+  return DomainWithType(DomainType::ISOPARAMETRIC, domain);
+}
+
 /// @brief constructs a domain from all the elements in a mesh
 Domain EntireDomain(const mesh_t& mesh);
 

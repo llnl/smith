@@ -171,13 +171,13 @@ void batched_integrate_spmat(nd::view<double> values,
             }
 
             if (need_to_compute_dX_dxi) {
-              phi_I = fm::dot(phi_I, testA_q[q]);
+              phi_I = serac::dot(phi_I, testA_q[q]);
             }
 
-            hat_f[q] = fm::dot(phi_I, C);
+            hat_f[q] = serac::dot(phi_I, C);
 
             if (need_to_compute_dX_dxi) {
-              hat_f[q] = fm::dot(trialA_q[q], hat_f[q]);
+              hat_f[q] = serac::dot(trialA_q[q], hat_f[q]);
             }
 
           }
@@ -234,7 +234,7 @@ std::function< void(refactor::sparse_matrix&) > integrate_sparse_matrix(BasisFun
       psi.components, qshape(psi.family, trial_op, gdim)
     };
 
-    refactor_ASSERT(compatible_shapes(qdata.shape, shape5D), "incompatible array shapes");
+    SLIC_ASSERT_MSG(compatible_shapes(qdata.shape, shape5D), "incompatible array shapes");
 
     nd::view<const double,5> q5D{qdata.data(), shape5D};
 

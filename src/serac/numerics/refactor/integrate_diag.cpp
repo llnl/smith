@@ -11,14 +11,10 @@ void batched_integrate_diag(nd::view<double, 2> D,
                             const GeometryInfo offsets,
                             const Field & X,
                             const DomainType type,
-                            const nd::view<const Connection, 2> connectivity,
                             const nd::view<const int> elements,
                             const nd::view<const double, 2> xi,
                             const nd::view<const double, 1> weights,
-                            const Domain::AssemblyLUT & table,
                             nd::array<double> & D_e_buffer) {
-
-  MTR_SCOPE("integrate_spmat", "batched_dphi_dpsi_xi");
 
   constexpr uint32_t gdim = dimension(geom);
   constexpr uint32_t test_qshape = qshape(family, test_op, gdim);
@@ -70,7 +66,7 @@ void batched_integrate_diag(nd::view<double, 2> D,
   nd::view<double, 2> D_e(D_e_buffer.data(), D_e_shape);
 
   // for each element of this mfem::Geometry::Type in the domain
-  threadpool::parallel_for(num_elements, [&](uint32_t e) {
+  for (uint32_t e = 0; e < num_elements; e++) {
 
     nd::array<test_Atype> testA_q;
     nd::array<trial_Atype> trialA_q;
@@ -84,8 +80,8 @@ void batched_integrate_diag(nd::view<double, 2> D,
       // figure out which nodal values belong to this element 
       X_el.indices(X.offsets, connectivity(elements(e)).data(), X_ids.data());
 
-      for (int c = 0; c < X_components; c++) {
-        for (int j = 0; j < X_nodes_per_element; j++) {
+      for (uint32_t c = 0; c < X_components; c++) {
+        for (uint32_t j = 0; j < X_nodes_per_element; j++) {
           X_e(j) = X.data(X_ids(j), c);
         }
         X_el.gradient(dX_dxi_q(c), X_e, X_shape_fn_grads, X_scratch.data());
@@ -93,9 +89,9 @@ void batched_integrate_diag(nd::view<double, 2> D,
 
       testA_q.resize({qpts_per_element});
       trialA_q.resize({qpts_per_element});
-      for (int q = 0; q < qpts_per_element; q++) {
+      for (uint32_t q = 0; q < qpts_per_element; q++) {
         mat<gdim,gdim> dX_dxi;
-        for (int c = 0; c < gdim; c++) {
+        for (uint32_t c = 0; c < gdim; c++) {
           dX_dxi[c] = dX_dxi_q(c, q);
         } 
         testA_q[q] = piola_transformation<family, test_op>(dX_dxi);
@@ -163,11 +159,11 @@ void batched_integrate_diag(nd::view<double, 2> D,
           }
 
           if (need_to_compute_dX_dxi) {
-            phi_I = fm::dot(phi_I, testA_q[q]);
-            psi_I = fm::dot(psi_I, trialA_q[q]);
+            phi_I = serac::dot(phi_I, testA_q[q]);
+            psi_I = serac::dot(psi_I, trialA_q[q]);
           }
 
-          sum += fm::dot(fm::dot(phi_I, C), psi_I) * wt;
+          sum += serac::dot(serac::dot(phi_I, C), psi_I) * wt;
 
         }
 
@@ -177,35 +173,6 @@ void batched_integrate_diag(nd::view<double, 2> D,
       
     }
 
-  });
-
-  {
-    MTR_SCOPE("integrate", "(gather)");
-    threadpool::block_parallel_for(num_nodes, [&](uint32_t istart, uint32_t iend) {
-
-      std::vector<double> sums(num_components);
-
-      for (uint32_t i = istart; i < iend; i++) {
-        uint32_t begin = table.offsets[i];
-        uint32_t end = table.offsets[i+1];
-
-        for (uint32_t c = 0; c < num_components; c++) {
-          sums[c] = 0.0;
-        }
-
-        for (uint32_t k = begin; k < end; k++) {
-          uint32_t id = table.ids[k];
-          for (uint32_t c = 0; c < num_components; c++) {
-            sums[c] += D_e(id, c);
-          }
-        }
-
-        for (uint32_t c = 0; c < num_components; c++) {
-          D(i, c) += sums[c];
-        }
-      }
-
-    });
   }
 
 }
@@ -213,12 +180,10 @@ void batched_integrate_diag(nd::view<double, 2> D,
 template <DerivedQuantity test_op, DerivedQuantity trial_op, uint32_t n>
 nd::array<double,2> integrate_sparse_matrix_diagonal(BasisFunction test, const nd::array<double, n> & qdata, BasisFunction trial, const Domain &domain, const DomainType type) {
 
-  MTR_SCOPE("integrate", "diag");
-
   auto phi = test.space;
   auto psi = trial.space;
 
-  refactor_ASSERT(phi == psi, "must have matching test and trial spaces for diag(...)");
+  SLIC_ASSERT_MSG(phi == psi, "must have matching test and trial spaces for diag(...)");
 
   uint32_t test_components = phi.components;
   uint32_t trial_components = psi.components;
@@ -231,7 +196,7 @@ nd::array<double,2> integrate_sparse_matrix_diagonal(BasisFunction test, const n
     psi.components, qshape(psi.family, trial_op, gdim)
   };
 
-  refactor_ASSERT(compatible_shapes(qdata.shape, shape5D), "incompatible array shapes");
+  SLIC_ASSERT_MSG(compatible_shapes(qdata.shape, shape5D), "incompatible array shapes");
 
   nd::view<const double,5> q5D{qdata.data(), shape5D};
 

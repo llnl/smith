@@ -11,11 +11,9 @@ void batched_integrate_residual(Residual & r,
                                 const Field & X,
                                 const DomainType type,
                                 nd::view<const double, 3> f_q,
-                                nd::view<const Connection, 2> connectivity,
                                 const nd::view<const int> elements,
                                 const nd::view<const double, 2> xi,
                                 const nd::view<const double, 1> weights,
-                                const Domain::AssemblyLUT & table,
                                 nd::array<double> & element_residual_buffer) {
 
   uint32_t num_elements = elements.size();
@@ -23,13 +21,13 @@ void batched_integrate_residual(Residual & r,
 
   FiniteElement< geom, family > r_el{r.space.degree};
 
-  using input_t = std::conditional< 
+  using input_t = typename std::conditional< 
     op == DerivedQuantity::VALUE, 
     typename FiniteElement< geom, family >::source_type,
     typename FiniteElement< geom, family >::flux_type
   >::type;
 
-  nd::view<input_t, 2> input_q((input_t*)&f_q[0], {f_q.shape[0], f_q.shape[1]});
+  nd::view<input_t, 2> input_q(reinterpret_cast<input_t*>(&f_q[0]), {f_q.shape[0], f_q.shape[1]});
 
   constexpr uint32_t gdim = dimension(geom);
   uint32_t qpts_per_element = impl::qpe<geom>(xi.shape[0]);
@@ -75,8 +73,6 @@ void batched_integrate_residual(Residual & r,
   // +---------------------+------+-------+------+----+
   const bool need_to_compute_dX_dxi = (type == DomainType::SPATIAL);
 
-
-
   stack::array<uint32_t, 2> element_residual_shape = {num_elements * r_nodes_per_element, r_components};
   
   if (element_residual_buffer.sz < nd::product(element_residual_shape)) {
@@ -92,7 +88,6 @@ void batched_integrate_residual(Residual & r,
   nd::array< double > X_scratch;
 
   if (need_to_compute_dX_dxi) {
-    X_ids.resize(X_nodes_per_element);
     X_e.resize(X_nodes_per_element);
     X_scratch.resize({X_el.batch_interpolation_scratch_space(xi)});
     A_q.resize({qpts_per_element});
@@ -107,9 +102,6 @@ void batched_integrate_residual(Residual & r,
     nd::array< double > r_scratch({r_el.batch_interpolation_scratch_space(xi)});
 
     if (need_to_compute_dX_dxi) {
-
-      // figure out which nodal values belong to this element 
-      X_el.indices(X.offsets, connectivity(elements(i)).data(), X_ids.data());
 
       for (uint32_t c = 0; c < X_components; c++) {
         for (uint32_t j = 0; j < X_nodes_per_element; j++) {
@@ -160,28 +152,6 @@ void batched_integrate_residual(Residual & r,
 
   }
 
-  std::vector<double> sums(r_components);
-
-  for (uint32_t i = 0; i < num_nodes; i++) {
-    uint32_t begin = table.offsets[i];
-    uint32_t end = table.offsets[i+1];
-
-    for (uint32_t c = 0; c < r_components; c++) {
-      sums[c] = 0.0;
-    }
-
-    for (uint32_t k = begin; k < end; k++) {
-      uint32_t id = table.ids[k];
-      for (uint32_t c = 0; c < r_components; c++) {
-        sums[c] += element_residuals(id, c);
-      }
-    }
-
-    for (uint32_t c = 0; c < r_components; c++) {
-      r.data(i, c) += sums[c];
-    }
-
-  }
 }
 
 template < DerivedQuantity op, uint32_t n >
@@ -197,7 +167,7 @@ void integrate_residual(Residual & r, BasisFunction phi, const nd::array<double,
     qshape(r.space.family, op, gdim)
   };
 
-  refactor_ASSERT(compatible_shapes(f_q.shape, input_dimensions), "incompatible array shapes");
+  SLIC_ASSERT_MSG(compatible_shapes(f_q.shape, input_dimensions), "incompatible array shapes");
 
   static nd::array< double > element_residual_buffer;
 

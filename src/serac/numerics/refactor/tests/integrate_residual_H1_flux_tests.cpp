@@ -30,7 +30,7 @@ void flux_test(std::string filename,
 
   // evaluate g at each quadrature point
   std::function< vecd(vecd, matd) > g_xi = [g](vecd x, matd J) { 
-    return dot(fm::inv(J), g(x)) * det(J); 
+    return dot(serac::inv(J), g(x)) * det(J); 
   };
 
   for (int p = 1; p < 4; p++) {

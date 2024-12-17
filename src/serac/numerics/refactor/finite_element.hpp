@@ -5,10 +5,12 @@
 #include "serac/numerics/refactor/quadrature.hpp"
 
 #include "serac/physics/state/finite_element_state.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
 
 namespace refactor {
 
 using Field = serac::FiniteElementState;
+using Residual = serac::FiniteElementDual;
 
 enum class Family { 
   H1, 
