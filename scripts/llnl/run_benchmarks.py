@@ -18,7 +18,9 @@ from common_build_functions import *
 
 from argparse import ArgumentParser
 
+import grp
 import os
+import stat
 
 
 def parse_args():
