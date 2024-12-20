@@ -780,8 +780,8 @@ public:
         double realObjective = std::numeric_limits<double>::max();
         double normPred      = std::numeric_limits<double>::max();
         try {
-          normPred    = computeResidual(x_pred, r_pred);
-          double obj1 = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
+          normPred      = computeResidual(x_pred, r_pred);
+          double obj1   = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
           realObjective = obj1;
         } catch (const std::exception&) {
           realObjective = std::numeric_limits<double>::max();
