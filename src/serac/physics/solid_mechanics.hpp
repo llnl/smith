@@ -1826,11 +1826,15 @@ protected:
 
     // due to solver inaccuracies, the end of step boundary conditions may not be exact at this point
     if (displacement_scale_factor == 1.0) {
-      printf("set bcs back to what they need to be\n");
+      du_ = 0.0;
       for (auto& bc : bcs_.essentials()) {
-        // apply the future boundary conditions, but use the most recent Jacobians stiffness.
-        bc.setDofs(displacement_, time_);
+        bc.setDofs(du_, time_);
       }
+      for (int i = 0; i < constrained_dofs.Size(); i++) {
+        int j = constrained_dofs[i];
+        du_[j] -= displacement_(j);
+      }
+      displacement_ += du_;
     }
   }
 

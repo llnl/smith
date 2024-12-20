@@ -313,7 +313,7 @@ double solution_error(PatchBoundaryCondition bc)
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // Construct a solid mechanics solver
-  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 0.0, .absolute_tol = 1.0e-14, .max_iterations = 30, .print_level=1};
+  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::Newton, .relative_tol = 0.0, .absolute_tol = 1.0e-14, .max_iterations = 30, .print_level=1};
 
   const LinearSolverOptions cg_solver_options = {.linear_solver  = LinearSolver::CG,
                                                   .preconditioner = serac::ordering == mfem::Ordering::byVDIM
@@ -325,7 +325,7 @@ double solution_error(PatchBoundaryCondition bc)
                                                     .print_level    = 0};
   auto equation_solver = std::make_unique<EquationSolver>(nonlin_solver_options, cg_solver_options, pmesh.GetComm());
 
-  SolidMechanics<p, dim> solid(std::move(equation_solver), solid_mechanics::default_quasistatic_options, "solid", mesh_tag);
+  SolidMechanics<p, dim> solid(std::move(equation_solver), solid_mechanics::default_quasistatic_options, "solid", mesh_tag, std::vector<std::string>{}, 0, 0.0, false, true, 2);
 
   solid_mechanics::NeoHookean mat{.density=1.0, .K=1.0, .G=1.0};
   Domain domain = EntireDomain(pmesh);
