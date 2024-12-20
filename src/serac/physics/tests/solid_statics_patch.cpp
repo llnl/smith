@@ -313,11 +313,7 @@ double solution_error(PatchBoundaryCondition bc)
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // Construct a solid mechanics solver
-  #ifdef SERAC_USE_SUNDIALS
-  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::KINBacktrackingLineSearch, .relative_tol = 0.0, .absolute_tol = 1.0e-15, .max_iterations = 30, .print_level=1};
-  #else
-  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::Newton, .relative_tol = 0.0, .absolute_tol = 1.0e-14, .max_iterations = 30, .print_level=1};
-  #endif
+  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 0.0, .absolute_tol = 1.0e-14, .max_iterations = 30, .print_level=1};
 
   const LinearSolverOptions cg_solver_options = {.linear_solver  = LinearSolver::CG,
                                                   .preconditioner = serac::ordering == mfem::Ordering::byVDIM
