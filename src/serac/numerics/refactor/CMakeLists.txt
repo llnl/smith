@@ -34,6 +34,9 @@ set(refactor_sources
     integrate_diag.cpp
     integrate_spmat.cpp
     integrate_residual.cpp
+
+    get_nodal_coordinates.cpp
+    get_nodal_directions.cpp
 )
 
 set(refactor_depends serac_infrastructure serac_functional serac_refactor_containers)

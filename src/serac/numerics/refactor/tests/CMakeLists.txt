@@ -15,6 +15,8 @@ set(refactor_serial_test_sources
     integrate_residual_H1v_flux_tests.cpp
     integrate_residual_Hcurl_flux_tests.cpp
     integrate_residual_Hcurl_source_tests.cpp
+
+    nodal_coordinates_and_directions_tests.cpp
 )
 
 serac_add_tests( SOURCES       ${refactor_serial_test_sources}

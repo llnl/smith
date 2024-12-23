@@ -1,3 +1,4 @@
+#if 0
 #include "evaluate.hpp"
 
 #include "common.hpp"
@@ -172,19 +173,18 @@ void batched_interpolate(nd::view<double, 3> u_q,
 ////////////////////////////////////////////////////////////////////////////////
 
 template < Family family, DerivedQuantity op >
-void evaluate(nd::array<double,3> & output, const Field & u, const Domain & domain, const DomainType & type) {
+void evaluate(nd::array<double,3> & output, const Field & u, const Domain & domain, const DomainType & type, const MeshQuadratureRule & qrule) {
 
   uint32_t gdim = static_cast<uint32_t>(domain.dim_);
   uint32_t num_components = output.shape[1];
 
-  auto qranges = ranges(domain.num_qpts);
+  auto qranges = ranges(qrule.num_qpts);
 
   uint32_t offset = 0;
   foreach_geometry([&](auto geom){
     nd::view<const int> elements = domain.active_elements[geom];
     if (gdim == dimension(geom) && elements.size() > 0) {
-      nd::view<const double, 2> xi = domain.rule[geom].points;
-      nd::range all{0u, num_components};
+      nd::view<const double, 2> xi = qrule[geom].points;
       impl::batched_interpolate<geom, family, op>(output(qranges[geom]), u, domain.mesh.X, type, elements, xi); 
     }
   });
@@ -193,7 +193,7 @@ void evaluate(nd::array<double,3> & output, const Field & u, const Domain & doma
 
 } // namespace impl
 
-nd::array<double,3> evaluate(const FieldOp && input, const DomainWithType & d) { 
+nd::array<double,3> evaluate(const FieldOp && input, const DomainWithType & d, const MeshQuadratureRule & qrule) { 
 
   const Domain & domain = d.domain; 
   const DomainType & type = d.type; 
@@ -203,7 +203,7 @@ nd::array<double,3> evaluate(const FieldOp && input, const DomainWithType & d) {
   uint32_t gdim = geometry_dimension(domain);
   uint32_t num_components = get_num_components(input.field);
   stack::array<uint32_t, 3> output_dimensions{
-    total(domain.num_qpts),
+    total(qrule.num_qpts),
     num_components,
     qshape(f, input.op, gdim)
   };
@@ -227,3 +227,4 @@ nd::array<double,3> evaluate(const FieldOp && input, const DomainWithType & d) {
 }
 
 } // namespace refactor
+#endif

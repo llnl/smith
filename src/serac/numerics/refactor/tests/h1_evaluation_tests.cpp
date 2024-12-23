@@ -4,6 +4,7 @@
 #include <functional>
 
 #include "serac/numerics/refactor/evaluate.hpp"
+#include "serac/numerics/refactor/tests/common.hpp"
 
 using namespace refactor;
 
@@ -25,21 +26,22 @@ void evaluation_test(std::string filename,
 
   auto mesh = Mesh::load(SERAC_MESH_DIR + filename);
 
-  Field u = create_field(mesh, Family::H1, p);
+  Field u = create_field(mesh, refactor::Family::H1, p);
   nd::array<double, 2> nodes = nodes_for(u, mesh);
 
   u = forall(f, nodes);
 
-  for (int q = 1; q <= 4; q++) {
+  for (uint32_t q = 1; q <= 4; q++) {
 
-    Domain domain(mesh, MeshQuadratureRule(q));
+    MeshQuadratureRule qrule(q);
+    Domain domain(mesh);
 
     auto x_q = evaluate(mesh.X, domain);
     auto dX_dxi_q = evaluate(grad(mesh.X), isoparametric(domain));
 
-    auto u_q = evaluate(u, domain);
-    auto du_dxi_q = evaluate(grad(u), isoparametric(domain));
-    auto du_dX_q_1 = evaluate(grad(u), domain);
+    auto u_q = evaluate(u, domain, qrule);
+    auto du_dxi_q = evaluate(grad(u), isoparametric(domain), qrule);
+    auto du_dX_q_1 = evaluate(grad(u), domain, qrule);
     auto du_dX_q_2 = forall(contravariant_piola<vec_t, mat_t>, du_dxi_q, dX_dxi_q);
 
     // evaluate f, df_dx directly at each quadrature point

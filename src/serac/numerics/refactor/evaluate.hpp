@@ -1,5 +1,6 @@
 #pragma once
 
+#include "serac/numerics/refactor/containers/ndarray.hpp"
 #include "serac/numerics/refactor/finite_element.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 
@@ -103,5 +104,9 @@ auto dot(BasisFunctionOp psi, const nd::array<T,n> & data, BasisFunctionOp phi) 
 
 double dot(const Residual & r, const Field & u);
 double dot(const Field & u, const Residual & r);
+
+////////////////////////////////////////////////////////////////////////////////
+
+nd::array<double,3> evaluate(const FieldOp && input, const DomainWithType & d, const MeshQuadratureRule &);
 
 }

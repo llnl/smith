@@ -209,7 +209,7 @@ struct finite_element<mfem::Geometry::CUBE, H1<p, c> > {
     union {
       tensor<qf_input_type, q * q * q>                                   one_dimensional;
       tensor<tuple<tensor<double, c>, tensor<double, c, dim> >, q, q, q> three_dimensional;
-    } output;
+    } output{};
 
     for (int qz = 0; qz < q; qz++) {
       for (int qy = 0; qy < q; qy++) {

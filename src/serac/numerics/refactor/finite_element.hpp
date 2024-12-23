@@ -3,6 +3,7 @@
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/refactor/geometry.hpp"
 #include "serac/numerics/refactor/quadrature.hpp"
+#include "serac/numerics/refactor/containers/ndarray.hpp"
 
 #include "serac/physics/state/finite_element_dual.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
@@ -19,7 +20,7 @@ enum class Family {
   DG 
 };
 
-Family get_family(const Field & f) {
+inline Family get_family(const Field & f) {
   switch(f.gridFunction().FESpace()->FEColl()->GetContType()) {
     case mfem::FiniteElementCollection::CONTINUOUS:    return Family::H1;
     case mfem::FiniteElementCollection::TANGENTIAL:    return Family::Hcurl;
@@ -29,7 +30,7 @@ Family get_family(const Field & f) {
   return Family::H1; // unreachable
 }
 
-Family get_family(const Residual & r) {
+inline Family get_family(const Residual & r) {
   switch(r.linearForm().FESpace()->FEColl()->GetContType()) {
     case mfem::FiniteElementCollection::CONTINUOUS:    return Family::H1;
     case mfem::FiniteElementCollection::TANGENTIAL:    return Family::Hcurl;
@@ -39,39 +40,42 @@ Family get_family(const Residual & r) {
   return Family::H1; // unreachable
 }
 
-uint32_t get_degree(const Field & f) {
+inline uint32_t get_degree(const Field & f) {
   return uint32_t(f.gridFunction().FESpace()->FEColl()->GetOrder());
 }
 
-uint32_t get_degree(const Residual & r) {
+inline uint32_t get_degree(const Residual & r) {
   return uint32_t(r.linearForm().FESpace()->FEColl()->GetOrder());
 }
 
-uint32_t get_num_components(const Field & f) {
+inline uint32_t get_num_components(const Field & f) {
   return uint32_t(f.gridFunction().VectorDim());
 }
 
-uint32_t get_num_components(const Residual & r) {
+inline uint32_t get_num_components(const Residual & r) {
   return uint32_t(r.linearForm().ParFESpace()->GetVDim());
 }
 
-uint32_t get_num_nodes(const Field & f) {
+inline uint32_t get_num_nodes(const Field & f) {
   return uint32_t(f.gridFunction().FESpace()->GetNDofs());
 }
 
-uint32_t get_num_nodes(const Residual & r) {
+inline uint32_t get_num_nodes(const Residual & r) {
   return uint32_t(r.linearForm().FESpace()->GetNDofs());
 }
+
+nd::array< double, 2 > get_nodal_coordinates(const Field & f);
+nd::array< double, 2 > get_nodal_directions(const Field & f);
 
 enum class Modifier { NONE, DIAGONAL, SYM };
 enum class DerivedQuantity { VALUE, DERIVATIVE };
 
 SERAC_HOST_DEVICE constexpr bool is_scalar_valued(Family f) {
-  return (f == Family::H1);
+  return (f == Family::H1) || (f == Family::DG);
 }
 
 SERAC_HOST_DEVICE constexpr bool is_vector_valued(Family f) {
-  return (f == Family::Hcurl);
+  return (f == Family::Hcurl) || (f == Family::Hdiv);
 }
 
 struct FunctionSpace {

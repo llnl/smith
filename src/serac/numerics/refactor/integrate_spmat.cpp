@@ -1,3 +1,4 @@
+#if 0
 #include "common.hpp"
 
 namespace refactor {
@@ -315,3 +316,4 @@ template std::function< void(refactor::sparse_matrix&) > integrate_sparse_matrix
 } // namespace impl
 
 } // namespace refactor
+#endif

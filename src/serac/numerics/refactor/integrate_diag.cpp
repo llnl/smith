@@ -1,3 +1,4 @@
+#if 0
 #include "common.hpp"
 
 namespace refactor {
@@ -263,3 +264,4 @@ template nd::array<double,2> integrate_sparse_matrix_diagonal<DerivedQuantity::D
 } // namespace impl
 
 } // namespace refactor
+#endif

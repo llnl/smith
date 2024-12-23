@@ -226,7 +226,7 @@ struct finite_element<mfem::Geometry::SQUARE, H1<p, c> > {
     union {
       tensor<qf_input_type, q * q>                                    one_dimensional;
       tensor<tuple<tensor<double, c>, tensor<double, c, dim> >, q, q> two_dimensional;
-    } output;
+    } output{};
 
     for (int qy = 0; qy < q; qy++) {
       for (int qx = 0; qx < q; qx++) {

@@ -1,3 +1,4 @@
+#if 0
 #include "common.hpp"
 
 #include "serac/numerics/functional/tensor.hpp"
@@ -211,3 +212,4 @@ template void integrate_residual<DerivedQuantity::DERIVATIVE, 3>(Residual&, Basi
 } // namespace impl
 
 } // namespace refactor
+#endif
