@@ -44,7 +44,7 @@
 #include "tribol/config.hpp"
 #endif
 
-#include "serac/infrastructure/git_sha.hpp"
+#include "serac/git_sha.hpp"
 #include "serac/infrastructure/initialize.hpp"
 #include "serac/infrastructure/logger.hpp"
 

@@ -9,7 +9,7 @@
 # a full rebuild.
 serac_configure_file(
   git_sha.hpp.in
-  ${PROJECT_BINARY_DIR}/include/serac/infrastructure/git_sha.hpp
+  ${CMAKE_BINARY_DIR}/include/serac/git_sha.hpp
  )
 
 set(infrastructure_headers
@@ -17,7 +17,7 @@ set(infrastructure_headers
     accelerator.hpp
     cli.hpp
     debug_print.hpp
-    ${PROJECT_BINARY_DIR}/include/serac/infrastructure/git_sha.hpp
+    ${CMAKE_BINARY_DIR}/include/serac/git_sha.hpp
     initialize.hpp
     input.hpp
     logger.hpp
