@@ -139,7 +139,7 @@ files:
 Serac benchmarks are run weekly to track changes over time. The following are steps to visualize this data in a meaningful
 way:
 
-- Go to https://lc.llnl.gov/spot2/?sf=/usr/WS2/smithdev/califiles
+- Go to https://lc.llnl.gov/spot2/?sf=/usr/WS2/smithdev/califiles/serac
 - Click the check mark button on the top right to view additional data categories
 - Ensure ``mpi.world.size``, ``executable``, ``cluster``, and ``compilers`` are enabled
 - Find the pie and bar charts associated with those categories

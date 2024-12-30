@@ -128,6 +128,41 @@ struct NeoHookean {
   double G;        ///< shear modulus
 };
 
+/// Neo-Hookean material version with additive split of deviatoric and volumetric behavior
+struct NeoHookeanAdditiveSplit {
+  using State = Empty;  ///< this material has no internal variables
+
+  /**
+   * @brief Piola stress calculation
+   *
+   * @tparam dim Dimensionality of space
+   * @param du_dX displacement gradient with respect to the reference configuration
+   * @return The first Piola stress
+   */
+  template <typename T, int dim>
+  SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
+  {
+    using std::pow;
+    constexpr auto I     = Identity<dim>();
+    auto           F     = I + du_dX;
+    auto           J     = det(F);
+    auto           Jm13  = pow(J, -1.0 / 3.0);
+    auto           F_bar = Jm13 * F;
+    auto           Pdev  = G * Jm13 * (F_bar - 1.0 / 3.0 * inner(F_bar, F_bar) * inv(transpose(F_bar)));
+
+    // any volumetric model could be substituted here
+    using std::log1p;
+    auto logJ = log1p(detApIm1(du_dX));
+    auto Pvol = K * logJ * inv(transpose(F));
+
+    return Pdev + Pvol;
+  }
+
+  double density;  ///< mass density
+  double K;        ///< bulk modulus
+  double G;        ///< shear modulus
+};
+
 /**
  * @brief Linear isotropic hardening law
  */
