@@ -138,7 +138,8 @@ TEST(J2SmallStrain, SatisfiesConsistency)
   Hardening            hardening_law{.sigma_y = 0.1, .n = 2.0, .eps0 = 0.01};
   Material             material{.E = 1.0, .nu = 0.25, .hardening = hardening_law, .Hk = 0.0, .density = 1.0};
   auto                 internal_state = Material::State{};
-  tensor<double, 3, 3> stress         = material(internal_state, du_dx);
+  const double dt = 1.0;
+  tensor<double, 3, 3> stress         = material(internal_state, dt, du_dx);
   double               mises          = std::sqrt(1.5) * norm(dev(stress));
   double               flow_stress    = hardening_law(internal_state.accumulated_plastic_strain);
   EXPECT_NEAR(mises, flow_stress, 1e-9 * mises);
@@ -250,7 +251,9 @@ TEST(J2, DerivativeCorrectness)
   }};
   // clang-format on
 
-  auto stress_and_tangent = material(internal_state, make_dual(H));
+  const double dt = 1.0;
+
+  auto stress_and_tangent = material(internal_state, dt, make_dual(H));
   auto tangent            = get_gradient(stress_and_tangent);
 
   // make sure that this load case is actually yielding
@@ -260,10 +263,10 @@ TEST(J2, DerivativeCorrectness)
 
   // finite difference evaluations
   auto internal_state_old_p = Material::State{};
-  auto stress_p             = material(internal_state_old_p, H + epsilon * dH);
+  auto stress_p             = material(internal_state_old_p, dt, H + epsilon * dH);
 
   auto internal_state_old_m = Material::State{};
-  auto stress_m             = material(internal_state_old_m, H - epsilon * dH);
+  auto stress_m             = material(internal_state_old_m, dt, H - epsilon * dH);
 
   // Make sure the finite difference evaluations all took the same branch (yielding).
   ASSERT_GT(internal_state_old_p.accumulated_plastic_strain, 1e-3);
@@ -298,6 +301,8 @@ TEST(J2, FrameIndifference)
   }};
   //clang-format on
 
+  const double dt = 1.0;
+
   // before we check frame indifference, make sure Q is a rotation
   constexpr auto I = Identity<3>();
   ASSERT_LT(norm(dot(transpose(Q), Q) - I), 1e-14);
@@ -306,7 +311,7 @@ TEST(J2, FrameIndifference)
   auto internal_state = Material::State{};
 
   // Piola stress components in original coordinate frame
-  auto P = material(internal_state, H);
+  auto P = material(internal_state, dt, H);
 
   // make sure that this load case is actually yielding
   ASSERT_GT(internal_state.accumulated_plastic_strain, 1e-3);
@@ -321,7 +326,7 @@ TEST(J2, FrameIndifference)
   auto internal_state_star = Material::State{};
 
   // stress in second coordinate frame
-  auto P_star = material(internal_state_star, H_star);
+  auto P_star = material(internal_state_star, dt, H_star);
 
   auto error = P_star - dot(Q, P);
   ASSERT_LT(norm(error), 1e-13*norm(P));

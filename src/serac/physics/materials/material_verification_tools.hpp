@@ -43,6 +43,7 @@ auto uniaxial_stress_test(double t_max, size_t num_steps, const MaterialType mat
                           std::function<double(double)> epsilon_xx, const parameter_types... parameter_functions)
 {
   double t = 0;
+  const double dt = t_max / double(num_steps - 1);
 
   auto state = initial_state;
 
@@ -55,7 +56,7 @@ auto uniaxial_stress_test(double t_max, size_t num_steps, const MaterialType mat
     du_dx[1][1]     = epsilon_yy;
     du_dx[2][2]     = epsilon_zz;
     auto state_copy = state;
-    auto stress     = material(state_copy, du_dx, parameter_functions(t)...);
+    auto stress     = material(state_copy, dt, du_dx, parameter_functions(t)...);
     return tensor{{stress[1][1], stress[2][2]}};
   };
 
@@ -63,7 +64,6 @@ auto uniaxial_stress_test(double t_max, size_t num_steps, const MaterialType mat
   output_history.reserve(num_steps);
 
   tensor<double, 3, 3> dudx{};
-  const double         dt = t_max / double(num_steps - 1);
   for (size_t i = 0; i < num_steps; i++) {
     auto initial_guess     = tensor<double, 2>{dudx[1][1], dudx[2][2]};
     auto epsilon_yy_and_zz = find_root(sigma_yy_and_zz, initial_guess);
@@ -71,7 +71,7 @@ auto uniaxial_stress_test(double t_max, size_t num_steps, const MaterialType mat
     dudx[1][1]             = epsilon_yy_and_zz[0];
     dudx[2][2]             = epsilon_yy_and_zz[1];
 
-    auto stress = material(state, dudx, parameter_functions(t)...);
+    auto stress = material(state, dt, dudx, parameter_functions(t)...);
     output_history.push_back(tuple{t, dudx, stress, state});
 
     t += dt;
@@ -107,12 +107,12 @@ auto single_quadrature_point_test(double t_max, size_t num_steps, const Material
   const double dt    = t_max / double(num_steps - 1);
   auto         state = initial_state;
 
-  using output_type = decltype(std::tuple{t, state, f(0.0)..., decltype(material(state, f(0.0)...)){}});
+  using output_type = decltype(std::tuple{t, state, f(0.0)..., decltype(material(state, dt, f(0.0)...)){}});
   std::vector<output_type> history;
   history.reserve(num_steps);
 
   for (size_t i = 0; i < num_steps; i++) {
-    auto material_output = material(state, f(t)...);
+    auto material_output = material(state, dt, f(t)...);
     history.push_back(std::tuple{t, state, f(t)..., material_output});
     t += dt;
   }

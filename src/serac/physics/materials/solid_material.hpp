@@ -252,7 +252,7 @@ struct J2SmallStrain {
 
   /** @brief calculate the Cauchy stress, given the displacement gradient and previous material state */
   template <typename T>
-  auto operator()(State& state, const T du_dX) const
+  auto operator()(State& state, double dt, const tensor<T, dim, dim>& du_dX) const
   {
     using std::sqrt;
     constexpr auto I = Identity<dim>();
@@ -313,7 +313,7 @@ struct J2 {
 
   /** @brief calculate the Cauchy stress, given the displacement gradient and previous material state */
   template <typename T>
-  auto operator()(State& state, const T du_dX) const
+  auto operator()(State& state, double dt, const tensor<T, dim, dim>& du_dX) const
   {
     using std::sqrt;
     constexpr auto I = Identity<dim>();
