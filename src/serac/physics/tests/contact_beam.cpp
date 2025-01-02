@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
@@ -75,15 +76,15 @@ TEST_P(ContactTest, beam)
   solid_solver.setMaterial(mat, material_block);
 
   // Pass the BC information to the solver object
-  solid_solver.setDisplacementBCs({1}, [](const mfem::Vector&, mfem::Vector& u) {
-    u.SetSize(dim);
-    u = 0.0;
-  });
-  solid_solver.setDisplacementBCs({6}, [](const mfem::Vector&, mfem::Vector& u) {
-    u.SetSize(dim);
-    u    = 0.0;
+  Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  solid_solver.setFixedBCs(support);
+  auto applied_displacement = [](tensor<double, dim>, double) {
+    tensor<double, dim> u{};
     u[2] = -0.15;
-  });
+    return u;
+  };
+  auto driven_surface = Domain::ofBoundaryElements(pmesh, by_attr<dim>(6));
+  solid_solver.setDisplacementBCs(applied_displacement, driven_surface);
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {7}, {5}, contact_options);

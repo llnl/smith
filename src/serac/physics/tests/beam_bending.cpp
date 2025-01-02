@@ -16,6 +16,7 @@
 #include "mfem.hpp"
 
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
@@ -72,13 +73,11 @@ TEST(BeamBending, TwoDimensional)
   Domain                             material_block = EntireDomain(pmesh);
   solid_solver.setMaterial(mat, material_block);
 
-  // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
+  Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  solid_solver.setFixedBCs(support);
 
-  // Define a boundary attribute set and specify initial / boundary conditions
-  std::set<int> ess_bdr = {1};
-  solid_solver.setDisplacementBCs(ess_bdr, bc);
-  solid_solver.setDisplacement(bc);
+  // initial displacement
+  solid_solver.setDisplacement([](const mfem::Vector&, mfem::Vector& bc_vec) { bc_vec = 0.0; });
 
   Domain top_face = Domain::ofBoundaryElements(
       pmesh, [](std::vector<vec2> vertices, int /*attr*/) { return (average(vertices)[1] > 0.99); });

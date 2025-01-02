@@ -70,7 +70,10 @@ std::unique_ptr<SolidMechanicsType> createNonlinearSolidMechanicsSolver(mfem::Pa
       },
       whole_mesh);
 
-  solid->setDisplacementBCs({1}, [](const mfem::Vector&, mfem::Vector& disp) { disp = boundary_disp; });
+  Domain essential_bdr        = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  auto   applied_displacement = [](vec2, double) { return boundary_disp * vec2{{1.0, 1.0}}; };
+
+  solid->setDisplacementBCs(applied_displacement, essential_bdr);
 
   solid->completeSetup();
 

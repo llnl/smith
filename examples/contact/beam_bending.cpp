@@ -38,6 +38,10 @@ int main(int argc, char* argv[])
   auto  mesh  = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 2, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "beam_mesh");
 
+  // create boundary domains for boundary conditions
+  auto support                      = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  auto applied_displacement_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
+
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -82,15 +86,15 @@ int main(int argc, char* argv[])
   solid_solver.setMaterial(serac::DependsOn<0, 1>{}, mat, whole_mesh);
 
   // Pass the BC information to the solver object
-  solid_solver.setDisplacementBCs({1}, [](const mfem::Vector&, mfem::Vector& u) {
-    u.SetSize(dim);
-    u = 0.0;
-  });
-  solid_solver.setDisplacementBCs({6}, [](const mfem::Vector&, double t, mfem::Vector& u) {
-    u.SetSize(dim);
-    u    = 0.0;
+  solid_solver.setFixedBCs(support);
+
+  auto applied_displacement = [](serac::tensor<double, dim>, double t) {
+    serac::tensor<double, dim> u{};
     u[2] = -0.05 * t;
-  });
+    return u;
+  };
+
+  solid_solver.setDisplacementBCs(applied_displacement, applied_displacement_surface);
 
   // Add the contact interaction
   auto          contact_interaction_id = 0;

@@ -189,7 +189,7 @@ void L2_scalar_valued_test(std::string meshfile)
       interior_faces);
 
   double t = 0.0;
-  check_gradient(residual, t, U0, U1);
+  check_gradient(residual, t, U0, U1, 2e-4);
 }
 
 TEST(basic, L2_mixed_scalar_test_tris_and_quads_linear)

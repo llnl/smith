@@ -19,14 +19,15 @@
 #include "serac/physics/common.hpp"
 #include "serac/physics/solid_mechanics_input.hpp"
 #include "serac/physics/base_physics.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/numerics/odes.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 
 namespace serac {
-
 namespace solid_mechanics {
 
 namespace detail {
@@ -423,176 +424,70 @@ public:
   }
 
   /**
-   * @brief Set essential displacement boundary conditions (strongly enforced)
+   * @brief Set essential displacement boundary conditions on selected components
    *
-   * @param[in] disp_bdr The boundary attributes from the mesh on which to enforce a displacement
-   * @param[in] disp The prescribed boundary displacement function
+   * @param[in] applied_displacement Function specifying the applied displacement vector.
+   * @param[in] domain Domain over which to apply the boundary condition.
+   * @param[in] components (optional) Indicator of vector components to be constrained.
+   *            If argument is omitted, the default is to constrain all components.
    *
    * @note This method must be called prior to completeSetup()
    *
-   * For the displacement function, the first argument is the input position and the second argument is the output
-   * prescribed displacement.
+   * The signature of the applied_displacement callable is:
+   * tensor<double, dim> applied_displacement(tensor<double, dim> X, double t)
+   * Parameters:
+   *   X - coordinates of node
+   *   t - time
+   * Returns:
+   *   u, vector of applied displacements
+   *
+   * Usage examples:
+   *
+   * To constrain the Y component:
+   * setDisplacementBCs(applied_displacement, domain, Component::Y);
+   *
+   * To constrain the X and Z components:
+   * setDisplacementBCs(applied_displacement, domain, Component::X + Component::Z);
+   *
+   * To constrain all components:
+   * setDisplacementBCs((applied_displacement, domain);
    */
-  void setDisplacementBCs(const std::set<int>& disp_bdr, std::function<void(const mfem::Vector&, mfem::Vector&)> disp)
+  template <typename AppliedDisplacementFunction>
+  void setDisplacementBCs(AppliedDisplacementFunction applied_displacement, Domain& domain,
+                          Components components = Component::ALL)
   {
-    // Project the coefficient onto the grid function
-    disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, disp);
+    for (int i = 0; i < dim; ++i) {
+      if (components[size_t(i)]) {
+        auto mfem_coefficient_function = [applied_displacement, i](const mfem::Vector& X_mfem, double t) {
+          auto X = make_tensor<dim>([&X_mfem](int k) { return X_mfem[k]; });
+          return applied_displacement(X, t)[i];
+        };
 
-    bcs_.addEssential(disp_bdr, disp_bdr_coef_, displacement_.space());
+        component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
+
+        auto dof_list = domain.dof_list(&displacement_.space());
+
+        // scalar ldofs -> vector ldofs
+        displacement_.space().DofsToVDofs(i, dof_list);
+
+        bcs_.addEssential(dof_list, component_disp_bdr_coef_, displacement_.space(), i);
+      }
+    }
   }
 
   /**
-   * @brief Set essential displacement boundary conditions (strongly enforced)
+   * @brief Shortcut to set selected components of displacements to zero for all time
    *
-   * @param[in] disp_bdr The boundary attributes from the mesh on which to enforce a displacement
-   * @param[in] disp The prescribed boundary displacement function
-   *
-   * For the displacement function, the first argument is the input position, the second argument is the time, and the
-   * third argument is the output prescribed displacement.
+   * @param[in] domain Domain to apply the homogeneous boundary condition to
+   * @param[in] components (optional) Indicator of vector components to be constrained.
+   *            If argument is omitted, the default is to constrain all components.
    *
    * @note This method must be called prior to completeSetup()
    */
-  void setDisplacementBCs(const std::set<int>&                                            disp_bdr,
-                          std::function<void(const mfem::Vector&, double, mfem::Vector&)> disp)
+  void setFixedBCs(Domain& domain, Components components = Component::ALL)
   {
-    // Project the coefficient onto the grid function
-    disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, disp);
-
-    bcs_.addEssential(disp_bdr, disp_bdr_coef_, displacement_.space());
-  }
-
-  /**
-   * @brief Set the displacement essential boundary conditions on a single component
-   *
-   * @param[in] disp_bdr The set of boundary attributes to set the displacement on
-   * @param[in] disp The vector function containing the set displacement values
-   * @param[in] component The component to set the displacment on
-   *
-   * For the displacement function, the argument is the input position, the second argument is the time, and the output
-   * is the value of the component of the displacement.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCs(const std::set<int>& disp_bdr, std::function<double(const mfem::Vector&, double)> disp,
-                          int component)
-  {
-    // Project the coefficient onto the grid function
-    component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(disp);
-
-    bcs_.addEssential(disp_bdr, component_disp_bdr_coef_, displacement_.space(), component);
-  }
-
-  /**
-   * @brief Set the displacement essential boundary conditions on a single component
-   *
-   * @param[in] disp_bdr The set of boundary attributes to set the displacement on
-   * @param[in] disp The vector function containing the set displacement values
-   * @param[in] component The component to set the displacment on
-   *
-   * For the displacement function, the argument is the input position and the output is the value of the component of
-   * the displacement.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCs(const std::set<int>& disp_bdr, std::function<double(const mfem::Vector& x)> disp,
-                          int component)
-  {
-    // Project the coefficient onto the grid function
-    component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(disp);
-
-    bcs_.addEssential(disp_bdr, component_disp_bdr_coef_, displacement_.space(), component);
-  }
-
-  /**
-   * @brief Set the displacement essential boundary conditions on a set of true degrees of freedom
-   *
-   * @param true_dofs A set of true degrees of freedom to set the displacement on
-   * @param disp The vector function containing the prescribed displacement values
-   *
-   * The @a true_dofs list can be determined using functions from the @a mfem::ParFiniteElementSpace related to the
-   * displacement @a serac::FiniteElementState .
-   *
-   * For the displacement function, the first argument is the input position, the second argument is time,
-   * and the third argument is the prescribed output displacement vector.
-   *
-   * @note The displacement function is required to be vector-valued. However, only the dofs specified in the @a
-   * true_dofs array will be set. This means that if the @a true_dofs array only contains dofs for a specific vector
-   * component in a vector-valued finite element space, only that component will be set.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCsByDofList(const mfem::Array<int>                                          true_dofs,
-                                   std::function<void(const mfem::Vector&, double, mfem::Vector&)> disp)
-  {
-    disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, disp);
-
-    bcs_.addEssential(true_dofs, disp_bdr_coef_, displacement_.space());
-  }
-
-  /**
-   * @brief Set the displacement essential boundary conditions on a set of true degrees of freedom
-   *
-   * @param true_dofs A set of true degrees of freedom to set the displacement on
-   * @param disp The vector function containing the prescribed displacement values
-   *
-   * The @a true_dofs list can be determined using functions from the @a mfem::ParFiniteElementSpace class.
-   *
-   * @note The coefficient is required to be vector-valued. However, only the dofs specified in the @a true_dofs
-   * array will be set. This means that if the @a true_dofs array only contains dofs for a specific vector component in
-   * a vector-valued finite element space, only that component will be set.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCsByDofList(const mfem::Array<int>                                  true_dofs,
-                                   std::function<void(const mfem::Vector&, mfem::Vector&)> disp)
-  {
-    disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, disp);
-
-    bcs_.addEssential(true_dofs, disp_bdr_coef_, displacement_.space());
-  }
-
-  /**
-   * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area
-   *
-   * @param is_node_constrained A callback function that returns true if displacement nodes at a certain position should
-   * be constrained by this boundary condition
-   * @param disp The vector function containing the prescribed displacement values
-   *
-   * The displacement function takes a spatial position as the first argument and time as the second argument. It
-   * computes the desired displacement and fills the third argument with these displacement values.
-   *
-   * @note This method searches over the entire mesh, not just the boundary nodes.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCs(std::function<bool(const mfem::Vector&)>                        is_node_constrained,
-                          std::function<void(const mfem::Vector&, double, mfem::Vector&)> disp)
-  {
-    auto constrained_dofs = calculateConstrainedDofs(is_node_constrained);
-
-    setDisplacementBCsByDofList(constrained_dofs, disp);
-  }
-
-  /**
-   * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area
-   *
-   * @param is_node_constrained A callback function that returns true if displacement nodes at a certain position should
-   * be constrained by this boundary condition
-   * @param disp The vector function containing the prescribed displacement values
-   *
-   * The displacement function takes a spatial position as the first argument. It computes the desired displacement
-   * and fills the second argument with these displacement values.
-   *
-   * @note This method searches over the entire mesh, not just the boundary nodes.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCs(std::function<bool(const mfem::Vector&)>                is_node_constrained,
-                          std::function<void(const mfem::Vector&, mfem::Vector&)> disp)
-  {
-    auto constrained_dofs = calculateConstrainedDofs(is_node_constrained);
-
-    setDisplacementBCsByDofList(constrained_dofs, disp);
+    auto zero_vector_function = [](tensor<double, dim>, double) { return tensor<double, dim>{}; };
+    setDisplacementBCs(zero_vector_function, domain, components);
   }
 
   /**
@@ -612,47 +507,38 @@ public:
    *
    * @note This method must be called prior to completeSetup()
    */
-  void setDisplacementBCs(std::function<bool(const mfem::Vector&)>           is_node_constrained,
-                          std::function<double(const mfem::Vector&, double)> disp, int component)
+  //clang-format off
+  [[deprecated("Please use the boundary condition methods that take Domain objects. This method will be removed.")]]
+  //clang-format on
+  void
+  setDisplacementBCs(std::function<bool(const mfem::Vector&)>           is_node_constrained,
+                     std::function<double(const mfem::Vector&, double)> disp, int component)
   {
-    auto constrained_dofs = calculateConstrainedDofs(is_node_constrained, component);
+    // Get the nodal positions for the displacement vector in grid function form
+    mfem::ParGridFunction coordinates(
+        const_cast<mfem::ParFiniteElementSpace*>(&displacement_.space()));  // mfem const correctness issue
+    mesh_.GetNodes(coordinates);
 
-    auto vector_function = [disp, component](const mfem::Vector& x, double time, mfem::Vector& displacement) {
-      displacement            = 0.0;
-      displacement(component) = disp(x, time);
-    };
+    mfem::Array<int> ldof_list;
 
-    setDisplacementBCsByDofList(constrained_dofs, vector_function);
-  }
+    const int num_nodes = coordinates.FESpace()->GetNDofs();
+    for (int i = 0; i < num_nodes; i++) {
+      mfem::Array<int> dofs;
+      dofs.Append(i);
+      displacement_.space().DofsToVDofs(dofs);
+      mfem::Vector X(dim);
+      for (int j = 0; j < dim; j++) {
+        X(j) = coordinates(dofs[j]);
+      }
+      if (is_node_constrained(X)) {
+        int ldof = displacement_.space().DofToVDof(i, component);
+        ldof_list.Append(ldof);
+      }
+    }
 
-  /**
-   * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area for a single
-   * displacement vector component
-   *
-   * @param is_node_constrained A callback function that returns true if displacement nodes at a certain position should
-   * be constrained by this boundary condition
-   * @param disp The scalar function containing the prescribed component displacement values
-   * @param component The component of the displacement vector that should be set by this boundary condition. The other
-   * components of displacement are unconstrained.
-   *
-   * The displacement function takes a spatial position as an argument. It computes the desired displacement scalar for
-   * the given component and returns that value.
-   *
-   * @note This method searches over the entire mesh, not just the boundary nodes.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCs(std::function<bool(const mfem::Vector& x)>   is_node_constrained,
-                          std::function<double(const mfem::Vector& x)> disp, int component)
-  {
-    auto constrained_dofs = calculateConstrainedDofs(is_node_constrained, component);
+    component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(disp);
 
-    auto vector_function = [disp, component](const mfem::Vector& x, mfem::Vector& displacement) {
-      displacement            = 0.0;
-      displacement(component) = disp(x);
-    };
-
-    setDisplacementBCsByDofList(constrained_dofs, vector_function);
+    bcs_.addEssential(ldof_list, component_disp_bdr_coef_, displacement_.space(), component);
   }
 
   /// @overload

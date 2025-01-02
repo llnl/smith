@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/serac_config.hpp"
@@ -104,8 +105,12 @@ std::unique_ptr<SolidMechanics<p, dim>> createNonlinearSolidMechanicsSolver(
                                                         std::vector<std::string>{}, 0, 0.0, checkpoint_to_disk, false);
   solid->setMaterial(mat, whole_domain);
 
-  solid->setDisplacementBCs(
-      {1}, [](const mfem::Vector&, double t, mfem::Vector& disp) { disp = (1.0 + 10 * t) * boundary_disp; });
+  auto applied_displacement = [](tensor<double, dim>, double t) {
+    auto u = make_tensor<dim>([t](int) { return (1.0 + 10 * t) * boundary_disp; });
+    return u;
+  };
+  auto applied_displacement_surface = Domain::ofBoundaryElements(solid->mesh(), by_attr<dim>(1));
+  solid->setDisplacementBCs(applied_displacement, applied_displacement_surface);
   solid->addBodyForce(
       [](auto X, auto t) {
         auto Y = X;

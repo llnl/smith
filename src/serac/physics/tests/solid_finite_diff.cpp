@@ -11,6 +11,7 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/materials/solid_material.hpp"
@@ -80,9 +81,8 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  std::set<int> ess_bdr = {1};
-  solid_solver.setDisplacementBCs(ess_bdr, bc);
-  solid_solver.setDisplacement(bc);
+  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  solid_solver.setFixedBCs(essential_boundary);
 
   tensor<double, dim> constant_force;
 
@@ -208,8 +208,8 @@ void finite_difference_shape_test(LoadingType load)
   constexpr int p   = 1;
   constexpr int dim = 2;
 
-  // Define a boundary attribute set
-  std::set<int> ess_bdr = {1};
+  // Define the boundary for essential bcs
+  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
 
   double shape_displacement_value = 1.0;
 
@@ -231,11 +231,11 @@ void finite_difference_shape_test(LoadingType load)
   solid_solver.setShapeDisplacement(shape_displacement);
 
   // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
+  auto mfem_vector_zero = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
 
   // Set the initial displacement and boundary condition
-  solid_solver.setDisplacementBCs(ess_bdr, bc);
-  solid_solver.setDisplacement(bc);
+  solid_solver.setFixedBCs(essential_boundary);
+  solid_solver.setDisplacement(mfem_vector_zero);
 
   Domain top_face = Domain::ofBoundaryElements(pmesh, [](std::vector<vec2> vertices, int /*attr*/) {
     return average(vertices)[1] > 0.99;  // select faces by y-coordinate

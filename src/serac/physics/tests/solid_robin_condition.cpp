@@ -6,6 +6,7 @@
 
 #include "serac/physics/solid_mechanics.hpp"
 
+#include <algorithm>
 #include <functional>
 #include <fstream>
 #include <set>
@@ -15,6 +16,7 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
@@ -66,38 +68,26 @@ void functional_solid_test_robin_condition()
 
   // prescribe zero displacement in the y- and z-directions
   // at the supported end of the beam,
-  std::set<int> support     = {1};
-  auto          zero        = [](const mfem::Vector&) -> double { return 0.0; };
-  int           y_direction = 1;
-  int           z_direction = 2;
-  solid_solver.setDisplacementBCs(support, zero, y_direction);
-  solid_solver.setDisplacementBCs(support, zero, z_direction);
+  Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  solid_solver.setFixedBCs(support, Component::Y + Component::Z);
 
-  // clang-format off
-  Domain robinDomain = Domain::ofBoundaryElements(StateManager::mesh(mesh_tag), 
-    [](std::vector<serac::tensor<double, dim>> X, int) {
-      for (const auto& coordinate : X) {
-        if (coordinate[0]<0.01) {
-          return true;
-        }
-      }
-      return false;
-    });
-  solid_solver.addCustomBoundaryIntegral(DependsOn<>{}, 
+  // apply an axial displacement at the the tip of the beam
+  auto translated_in_x = [](tensor<double, dim>, double t) -> vec3 {
+    tensor<double, dim> u{};
+    u[0] = t;
+    return u;
+  };
+  Domain tip = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  solid_solver.setDisplacementBCs(translated_in_x, tip, Component::X);
+
+  solid_solver.addCustomBoundaryIntegral(
+      DependsOn<>{},
       [](double /* t */, auto /*position*/, auto displacement, auto /*acceleration*/) {
         auto [u, du_dxi] = displacement;
         auto f           = u * 3.0;
         return f;  // define a displacement-proportional traction at the support
-      }, robinDomain);
-  // clang-format on
-
-  // apply an axial displacement at the the tip of the beam
-  auto translated_in_x = [](const mfem::Vector&, double t, mfem::Vector& u) -> void {
-    u    = 0.0;
-    u[0] = t;
-  };
-  std::set<int> tip = {2};
-  solid_solver.setDisplacementBCs(tip, translated_in_x);
+      },
+      support);
 
   auto zero_displacement = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 0.0; };
   solid_solver.setDisplacement(zero_displacement);

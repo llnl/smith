@@ -259,7 +259,8 @@ void functional_solid_test_euler(NonlinSolve nonlinSolve, Prec prec)
   seracSolid->setTraction([&](auto, auto n, auto) { return 1e-5 * n; }, backSurface);
 
   // displacement on bottom surface
-  seracSolid->setDisplacementBCs({1}, [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; });
+  serac::Domain bottom_surface = Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(1));
+  seracSolid->setFixedBCs(bottom_surface);
 
   seracSolid->completeSetup();
 
@@ -328,8 +329,9 @@ void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, 
   seracSolid->setMaterial(material, whole_domain);
 
   // fix displacement on side surface
-  seracSolid->setDisplacementBCs({2, 3, 4, 5}, [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; });
-  // seracSolid->setDisplacementBCs({3}, [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; });
+  serac::Domain side_surface = serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>({2, 3, 4, 5}));
+  seracSolid->setFixedBCs(side_surface);
+  // seracSolid->setFixedBCs(serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(3));
 
   serac::Domain topSurface = serac::Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(6));
   // seracSolid->setTraction([&](auto, auto n, auto) { return -loadMagnitude * n; }, topSurface);

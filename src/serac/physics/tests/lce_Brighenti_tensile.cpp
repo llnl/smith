@@ -10,7 +10,9 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/materials/liquid_crystal_elastomer.hpp"
@@ -38,6 +40,13 @@ TEST(LiquidCrystalElastomer, Brighenti)
   std::string mesh_tag{"mesh"};
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+
+  auto xmin_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(5));
+  auto ymin_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  auto zmin_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  auto xmax_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(3));
+  auto ymax_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(4));
+  auto zmax_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(6));
 
   double             initial_temperature = 25 + 273;
   double             final_temperature   = 430.0;
@@ -122,10 +131,9 @@ TEST(LiquidCrystalElastomer, Brighenti)
   solid_solver.setMaterial(DependsOn<TEMPERATURE_INDEX, GAMMA_INDEX>{}, mat, whole_mesh, qdata);
 
   // prescribe symmetry conditions
-  auto zeroFunc = [](const mfem::Vector /*x*/) { return 0.0; };
-  solid_solver.setDisplacementBCs({1}, zeroFunc, 2);  // bottom face z-dir disp = 0
-  solid_solver.setDisplacementBCs({2}, zeroFunc, 1);  // left face y-dir disp = 0
-  solid_solver.setDisplacementBCs({5}, zeroFunc, 0);  // back face x-dir disp = 0
+  solid_solver.setFixedBCs(xmin_face, Component::X);
+  solid_solver.setFixedBCs(ymin_face, Component::Y);
+  solid_solver.setFixedBCs(zmin_face, Component::Z);
 
   // set initila displacement different than zero to help solver
   auto ini_displacement = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 1.0e-5; };
@@ -133,15 +141,7 @@ TEST(LiquidCrystalElastomer, Brighenti)
   double iniLoadVal = 1.0e0;
   double maxLoadVal = 4 * 1.3e0 / lx / lz;
   double loadVal    = iniLoadVal + 0.0 * maxLoadVal;
-
-  Domain front_face = Domain::ofBoundaryElements(
-      pmesh, [ly](std::vector<vec3> vertices, int /* attr */) { return average(vertices)[1] > 0.99 * ly; });
-
-  solid_solver.setTraction(
-      [&loadVal](auto /*x*/, auto /*n*/, auto /*t*/) {
-        return tensor<double, 3>{0, loadVal, 0};
-      },
-      front_face);
+  solid_solver.setTraction([&loadVal](auto, auto n, auto) { return loadVal * n; }, ymax_face);
 
   solid_solver.setDisplacement(ini_displacement);
 
@@ -162,11 +162,11 @@ TEST(LiquidCrystalElastomer, Brighenti)
         auto n           = normalize(cross(dX_dxi));
         return dot(u, n);
       },
-      front_face);
+      ymax_face);
 
   Functional<double(H1<p, dim>)> area({&solid_solver.displacement().space()});
   area.AddSurfaceIntegral(
-      DependsOn<>{}, [=](double /*t*/, auto /*position*/) { return 1.0; }, front_face);
+      DependsOn<>{}, [=](double /*t*/, auto /*position*/) { return 1.0; }, ymax_face);
 
   double t            = 0.0;
   double initial_area = area(t, solid_solver.displacement());

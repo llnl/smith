@@ -12,6 +12,7 @@
 
 #include "serac/serac_config.hpp"
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
@@ -80,11 +81,9 @@ void periodic_test(mfem::Element::Type element_type)
   solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
   solid_solver.setMaterial(DependsOn<0, 1>{}, mat, whole_mesh);
 
-  // Boundary conditions:
-  // Prescribe zero displacement at the supported end of the beam
-  std::set<int> support           = {2};
-  auto          zero_displacement = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 0.0; };
-  solid_solver.setDisplacementBCs(support, zero_displacement);
+  // Boundary conditions
+  Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  solid_solver.setFixedBCs(support);
 
   double iniDispVal       = 5.0e-6;
   auto   ini_displacement = [iniDispVal](const mfem::Vector&, mfem::Vector& u) -> void { u = iniDispVal; };

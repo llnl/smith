@@ -14,6 +14,7 @@
 #include "serac/physics/solid_mechanics_contact.hpp"
 #include "serac/infrastructure/terminator.hpp"
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/serac_config.hpp"
@@ -83,21 +84,22 @@ int main(int argc, char* argv[])
   solid_solver.setMaterial(serac::DependsOn<0, 1>{}, mat, whole_mesh);
 
   // Pass the BC information to the solver object
-  solid_solver.setDisplacementBCs({5}, [](const mfem::Vector&, mfem::Vector& u) {
-    u.SetSize(dim);
-    u = 0.0;
-  });
-  solid_solver.setDisplacementBCs({12}, [](const mfem::Vector&, double t, mfem::Vector& u) {
-    constexpr double init_steps = 2.0;
-    u.SetSize(dim);
-    u = 0.0;
+  serac::Domain bottom_of_substrate = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(5));
+  solid_solver.setFixedBCs(bottom_of_substrate);
+
+  serac::Domain top_of_indenter      = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(12));
+  auto          applied_displacement = [](serac::tensor<double, dim>, double t) {
+    constexpr double           init_steps = 2.0;
+    serac::tensor<double, dim> u{};
     if (t <= init_steps + 1.0e-12) {
       u[2] = -t * 0.3 / init_steps;
     } else {
       u[0] = -(t - init_steps) * 0.25;
       u[2] = -0.3;
     }
-  });
+    return u;
+  };
+  solid_solver.setDisplacementBCs(applied_displacement, top_of_indenter);
 
   // Add the contact interaction
   auto          contact_interaction_id = 0;
