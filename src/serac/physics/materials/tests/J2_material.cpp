@@ -16,6 +16,9 @@
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/physics/materials/material_verification_tools.hpp"
 
+#include <fstream>
+#include <string>
+
 namespace serac {
 
 using namespace serac;
@@ -86,7 +89,7 @@ TEST(J2SmallStrain, Verification)
   using Hardening = solid_mechanics::LinearHardening;
   using Material  = solid_mechanics::J2SmallStrain<Hardening>;
 
-  Hardening       hardening{.sigma_y = sigma_y, .Hi = 0.0};
+  Hardening       hardening{.sigma_y = sigma_y, .Hi = 0.0, .eta = 0.0};
   Material        material{.E = E, .nu = nu, .hardening = hardening, .Hk = 0.0, .density = 1.0};
   Material::State initial_state{};
 
@@ -115,9 +118,10 @@ TEST(J2SmallStrain, Verification)
 TEST(J2, PowerLawHardeningWorksWithDuals)
 {
   double                             sigma_y = 1.0;
-  solid_mechanics::PowerLawHardening hardening_law{.sigma_y = sigma_y, .n = 2.0, .eps0 = 0.01};
+  solid_mechanics::PowerLawHardening hardening_law{.sigma_y = sigma_y, .n = 2.0, .eps0 = 0.01, .eta = 0.0};
   double                             eqps        = 0.1;
-  auto                               flow_stress = hardening_law(make_dual(eqps));
+  double eqps_dot = 1.0;
+  auto                               flow_stress = hardening_law(make_dual(eqps), eqps_dot);
   EXPECT_GT(flow_stress.value, sigma_y);
   EXPECT_GT(flow_stress.gradient, 0.0);
 };
@@ -135,13 +139,13 @@ TEST(J2SmallStrain, SatisfiesConsistency)
   using Hardening = solid_mechanics::PowerLawHardening;
   using Material  = solid_mechanics::J2SmallStrain<Hardening>;
 
-  Hardening            hardening_law{.sigma_y = 0.1, .n = 2.0, .eps0 = 0.01};
+  Hardening            hardening_law{.sigma_y = 0.1, .n = 2.0, .eps0 = 0.01, .eta = 0.0};
   Material             material{.E = 1.0, .nu = 0.25, .hardening = hardening_law, .Hk = 0.0, .density = 1.0};
   auto                 internal_state = Material::State{};
   const double dt = 1.0;
   tensor<double, 3, 3> stress         = material(internal_state, dt, du_dx);
   double               mises          = std::sqrt(1.5) * norm(dev(stress));
-  double               flow_stress    = hardening_law(internal_state.accumulated_plastic_strain);
+  double               flow_stress    = hardening_law(internal_state.accumulated_plastic_strain, 0.0);
   EXPECT_NEAR(mises, flow_stress, 1e-9 * mises);
 
   double               twoG = material.E / (1 + material.nu);
@@ -159,7 +163,7 @@ TEST(J2SmallStrain, Uniaxial)
   double sigma_y = 0.01;
   double Hi      = E / 100.0;
 
-  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi};
+  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi, .eta = 0.0};
   Material  material{.E = E, .nu = nu, .hardening = hardening, .Hk = 0.0, .density = 1.0};
 
   auto internal_state   = Material::State{};
@@ -196,7 +200,7 @@ TEST(J2, Uniaxial)
   double sigma_y = 0.01;
   double Hi      = E / 100.0;
 
-  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi};
+  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi, .eta = 0.0};
   Material  material{.E = E, .nu = 0.25, .hardening = hardening, .density = 1.0};
 
   auto internal_state   = Material::State{};
@@ -335,6 +339,49 @@ TEST(J2, FrameIndifference)
   error = internal_state.Fpinv - internal_state_star.Fpinv;
   ASSERT_LT(norm(error), 1e-13*norm(internal_state.Fpinv));
 }
+
+TEST(J2, PlotOutput)
+{
+  /* Log strain J2 plasticity has the nice feature that the exact uniaxial stress solution from
+     small strain plasticity are applicable, if you replace the lineasr strain with log strain
+     and use the Kirchhoff stress as the output.
+  */
+
+  using Hardening = solid_mechanics::VoceHardening;
+  using Material  = solid_mechanics::J2<Hardening>;
+
+  constexpr double E       = 1.0;
+  constexpr double sigma_y = 0.001;
+  constexpr double sigma_sat = 3*sigma_y;
+  constexpr double strain_constant = 10*sigma_y/E;
+  constexpr double eta = 1e-2;
+
+  constexpr double max_strain = 3*strain_constant;
+  constexpr double strain_rate = 1e-1;
+  const std::string tag = "m1";
+  constexpr double t_max = max_strain/strain_rate;
+  
+
+
+  Hardening hardening{sigma_y, sigma_sat, strain_constant, eta};
+  Material  material{.E = E, .nu = 0.25, .hardening = hardening, .density = 1.0};
+
+  auto internal_state   = Material::State{};
+  auto strain           = [=](double t) { return max_strain*t/t_max; };
+  auto response_history = uniaxial_stress_test(t_max, 100, material, internal_state, strain);
+
+  std::ofstream file("J2_" + tag + ".txt");
+
+  for (auto r : response_history) {
+    auto [t, dudx, P, state] = r;
+    auto   TK                = dot(P, transpose(dudx + Identity<3>()));
+    double e                 = std::log1p(dudx[0][0]);       // log strain
+    double s                 = TK[0][0];                          // Kirchhoff stress
+    double pe                = -std::log(get<3>(r).Fpinv[0][0]);  // plastic strain
+    file << t << " " << e << " " << s << std::endl;
+  }
+  file.close();
+};
 
 }  // namespace serac
 
