@@ -50,3 +50,7 @@ install(
     DESTINATION
         examples/serac/buckling
 )
+
+
+# Adding Korner Examples
+add_subdirectory(korner_examples)
