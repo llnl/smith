@@ -89,8 +89,8 @@ void run_lattice_compression(const running_parameters& rp)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  // std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex-with-contact-block.mesh";
-  std::string filename = "/p/lustre1/korner1/serac_test/meshes/korner_lattice/hexmesh3.g";
+  std::string filename = SERAC_REPO_DIR "/data/meshes/lattice_contact.g";
+  // std::string filename = "/p/lustre1/korner1/serac_test/meshes/korner_lattice/hexmesh3.g";
 
   auto  mesh  = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 0, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "beam_mesh");
