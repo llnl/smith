@@ -131,7 +131,7 @@ can be found in the Spack compiler files in our repository:
 
 We currently regularly test the following Spack configuration files:
 
-* Linux Ubuntu 22.04 (via Azure)
+* Linux Ubuntu 22.04 (via Github Actions)
 * TOSS4 (On Ruby at LC)
 * BlueOS (On Lassen at LC)
 

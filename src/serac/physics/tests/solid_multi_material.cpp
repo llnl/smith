@@ -50,6 +50,12 @@ TEST(Solid, MultiMaterial)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
+  // identify the relevant boundary domains on this mesh
+  Domain x_min    = Domain::ofBoundaryElements(pmesh, by_attr<dim>(5));
+  Domain y_min    = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  Domain z_min    = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  Domain end_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(3));
+
   // _solver_params_start
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
@@ -82,17 +88,13 @@ TEST(Solid, MultiMaterial)
   solid.setMaterial(mat_left, left);
   solid.setMaterial(mat_right, right);
 
-  constexpr double stress   = 1.0;
-  Domain           end_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(3));
+  constexpr double stress = 1.0;
   solid.setTraction(
       DependsOn<>{}, [stress](auto, auto n, auto) { return stress * n; }, end_face);
 
-  solid.setDisplacementBCs(
-      {2}, [](auto) { return 0.0; }, 1);
-  solid.setDisplacementBCs(
-      {5}, [](auto) { return 0.0; }, 0);
-  solid.setDisplacementBCs(
-      {1}, [](auto) { return 0.0; }, 2);
+  solid.setFixedBCs(x_min, Component::X);
+  solid.setFixedBCs(y_min, Component::Y);
+  solid.setFixedBCs(z_min, Component::Z);
 
   solid.completeSetup();
 
@@ -167,6 +169,10 @@ TEST(Solid, MultiMaterialWithState)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
+  Domain x_min_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(5));
+  Domain y_min_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  Domain z_min_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
@@ -217,12 +223,9 @@ TEST(Solid, MultiMaterialWithState)
   solid.setTraction(
       DependsOn<>{}, [applied_stress](auto, auto n, auto) { return applied_stress * n; }, end_face);
 
-  solid.setDisplacementBCs(
-      {2}, [](auto) { return 0.0; }, 1);
-  solid.setDisplacementBCs(
-      {5}, [](auto) { return 0.0; }, 0);
-  solid.setDisplacementBCs(
-      {1}, [](auto) { return 0.0; }, 2);
+  solid.setFixedBCs(x_min_face, Component::X);
+  solid.setFixedBCs(y_min_face, Component::Y);
+  solid.setFixedBCs(z_min_face, Component::Z);
 
   solid.completeSetup();
 

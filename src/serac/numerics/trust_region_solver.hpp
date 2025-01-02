@@ -25,6 +25,19 @@
 
 namespace serac {
 
+class PetscException : public std::exception {
+public:
+  /// constructor
+  PetscException(const std::string& message) : msg(message) {}
+
+  /// what is message
+  const char* what() const noexcept override { return msg.c_str(); }
+
+private:
+  /// message string
+  std::string msg;
+};
+
 /// @brief computes the global size of mfem::Vector
 int globalSize(const mfem::Vector& parallel_v, const MPI_Comm& comm);
 

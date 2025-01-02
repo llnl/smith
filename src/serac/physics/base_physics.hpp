@@ -348,7 +348,7 @@ public:
    */
   virtual const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity()
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Initial condition sensitivities not enabled in physics module {}", name_));
+    SLIC_WARNING_ROOT(axom::fmt::format("Initial condition sensitivities not enabled in physics module {}", name_));
     return {};
   }
 
@@ -363,19 +363,29 @@ public:
 
   /**
    * @brief Set the loads for the adjoint reverse timestep solve
+   * @param string_to_dual An unorder map from the state field name string to the finite element adjoint/dual load
+   * The adjoint load is d(qoi)/d(state)
    */
-  virtual void setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&>)
+  virtual void setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&> string_to_dual)
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Adjoint analysis not defined for physics module {}", name_));
+    if (!string_to_dual.empty()) {
+      SLIC_ERROR_ROOT(
+          axom::fmt::format("Failed to setAdjointLoad.  Adjoint analysis not defined for physics module {}", name_));
+    }
   }
 
   /**
    * @brief Set the dual loads (dirichlet values) for the adjoint reverse timestep solve
    * This must be called after setAdjointLoad
+   * @param string_to_bc An unorder map from dual name string to finite element adjoint/state boundary condition
+   * The adjoint bc is d(qoi)/d(dual)
    */
-  virtual void setDualAdjointBcs(std::unordered_map<std::string, const serac::FiniteElementState&>)
+  virtual void setDualAdjointBcs(std::unordered_map<std::string, const serac::FiniteElementState&> string_to_bc)
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Adjoint analysis not defined for physics module {}", name_));
+    if (!string_to_bc.empty()) {
+      SLIC_ERROR_ROOT(
+          axom::fmt::format("Failed to setDualAdjointBCs.  Adjoint analysis not defined for physics module {}", name_));
+    }
   }
 
   /**

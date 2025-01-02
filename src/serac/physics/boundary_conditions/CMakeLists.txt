@@ -8,6 +8,7 @@ set(boundary_conditions_headers
     boundary_condition.hpp
     boundary_condition_helper.hpp
     boundary_condition_manager.hpp
+    components.hpp
     )
 
 set(boundary_conditions_sources

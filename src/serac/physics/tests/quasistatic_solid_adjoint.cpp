@@ -15,6 +15,7 @@
 #include "mfem.hpp"
 
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/terminator.hpp"
@@ -140,9 +141,16 @@ TEST(quasistatic, finiteDifference)
   ::serac::StateManager::initialize(datastore, "sidreDataStore");
 
   mfem::Mesh mesh = mfem::Mesh::MakeCartesian3D(1, 1, 1, mfem::Element::HEXAHEDRON);
+  mesh.Print();
   assert(mesh.SpaceDimension() == DIM);
   auto             pmesh   = ::std::make_unique<::mfem::ParMesh>(MPI_COMM_WORLD, mesh);
   ::mfem::ParMesh* meshPtr = &::serac::StateManager::setMesh(::std::move(pmesh), mesh_tag);
+
+  Domain        whole_domain = EntireDomain(*meshPtr);
+  Domain        xmax_face    = ::serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(3));
+  Domain        ymax_face    = ::serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(4));
+  Domain        zmin_face    = ::serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(1));
+  serac::Domain zmax_face    = serac::Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(6));
 
   // set up solver
   using solidType        = serac::SolidMechanics<ORDER, DIM, ::serac::Parameters<paramFES, paramFES>>;
@@ -158,19 +166,14 @@ TEST(quasistatic, finiteDifference)
   using materialType = ParameterizedNeoHookeanSolid;
   materialType material;
 
-  Domain whole_domain = EntireDomain(*meshPtr);
   seracSolid->setMaterial(::serac::DependsOn<0, 1>{}, material, whole_domain);
 
-  seracSolid->setDisplacementBCs(
-      {3}, [](const mfem::Vector&) { return 0.0; }, 0);
-  seracSolid->setDisplacementBCs(
-      {4}, [](const mfem::Vector&) { return 0.0; }, 1);
-  seracSolid->setDisplacementBCs(
-      {1}, [](const mfem::Vector&) { return 0.0; }, 2);
+  seracSolid->setFixedBCs(xmax_face, Component::X);
+  seracSolid->setFixedBCs(ymax_face, Component::Y);
+  seracSolid->setFixedBCs(zmin_face, Component::Z);
 
-  // serac::Domain loadRegion = serac::Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(6));
   // seracSolid->setTraction([](auto, auto n, auto) {return 1.0*n;}, loadRegion);
-  seracSolid->setDisplacementBCs({6}, [](const mfem::Vector&, double time, mfem::Vector& u) { return u[2] = time; });
+  seracSolid->setDisplacementBCs([](vec3, double time) { return vec3{{0.0, 0.0, time}}; }, zmax_face, Component::Z);
 
   double                      E0 = 1.0;
   double                      v0 = 0.3;

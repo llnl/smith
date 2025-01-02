@@ -51,7 +51,7 @@ def parse_args():
                       action="store_true",
                       dest="skip_tests",
                       default=False,
-                      help="Skip unit tests which will not work in some configurations (CUDA on Azure)")
+                      help="Skip unit tests which will not work in some configurations (e.g. CUDA on GitHub Actions)")
     parser.add_argument("-v", "--verbose",
                       action="store_true",
                       dest="verbose",

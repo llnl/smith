@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
@@ -43,6 +44,11 @@ TEST_P(ContactPatchTied, patch)
 
   auto  mesh  = mesh::refineAndDistribute(buildMeshFromFile(filename), 3, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "patch_mesh");
+
+  Domain x0_faces  = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  Domain y0_faces  = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
+  Domain z0_face   = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
+  Domain zmax_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
 
 // TODO: investigate performance with Petsc
 // #ifdef SERAC_USE_PETSC
@@ -82,17 +88,15 @@ TEST_P(ContactPatchTied, patch)
   Domain                      material_block = EntireDomain(pmesh);
   solid_solver.setMaterial(mat, material_block);
 
-  // Define the function for the initial displacement and boundary condition
-  auto zero_disp_bc = [](const mfem::Vector&) { return 0.0; };
   // NOTE: Tribol will miss this contact if warm start doesn't account for contact
   constexpr double max_disp        = 0.2;
-  auto             nonzero_disp_bc = [](const mfem::Vector&, double t) { return -max_disp * t; };
+  auto             nonzero_disp_bc = [](vec3, double t) { return vec3{{0.0, 0.0, -max_disp * t}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  solid_solver.setDisplacementBCs({1}, zero_disp_bc, 0);
-  solid_solver.setDisplacementBCs({2}, zero_disp_bc, 1);
-  solid_solver.setDisplacementBCs({3}, zero_disp_bc, 2);
-  solid_solver.setDisplacementBCs({6}, nonzero_disp_bc, 2);
+  solid_solver.setFixedBCs(x0_faces, Component::X);
+  solid_solver.setFixedBCs(y0_faces, Component::Y);
+  solid_solver.setFixedBCs(z0_face, Component::Z);
+  solid_solver.setDisplacementBCs(nonzero_disp_bc, zmax_face, Component::Z);
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {4}, {5}, contact_options);

@@ -382,12 +382,32 @@ public:
       H_directions.emplace_back(H_left.get());
     }
 
-    std::tie(directions, H_directions) = removeDependentDirections(directions, H_directions);
+    try {
+      std::tie(directions, H_directions) = removeDependentDirections(directions, H_directions);
+    } catch (const std::exception& e) {
+      if (print_options.warnings) {
+        mfem::out << "remove dependent directions failed with " << e.what() << std::endl;
+      }
+      return;
+    }
 
     mfem::Vector b(g);
     b *= -1;
-    auto [sol, leftvecs, leftvals, energy_change] =
-        solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost);
+
+    mfem::Vector                               sol;
+    std::vector<std::shared_ptr<mfem::Vector>> leftvecs;
+    std::vector<double>                        leftvals;
+    double                                     energy_change;
+
+    try {
+      std::tie(sol, leftvecs, leftvals, energy_change) =
+          solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost);
+    } catch (const std::exception& e) {
+      if (print_options.warnings) {
+        mfem::out << "subspace solve failed with " << e.what() << std::endl;
+      }
+      return;
+    }
 
     left_mosts.clear();
     for (auto& lv : leftvecs) {
@@ -398,8 +418,9 @@ public:
     double subspace_energy = computeEnergy(g, hess_vec_func, sol);
 
     if (print_options.iterations || print_options.warnings) {
+      double leftval = leftvals.size() ? leftvals[0] : 1.0;
       mfem::out << "Energy using subspace solver from: " << base_energy << ", to: " << subspace_energy << " / "
-                << energy_change << ".  Min eig: " << leftvals[0] << std::endl;
+                << energy_change << ".  Min eig: " << leftval << std::endl;
     }
 
     if (subspace_energy < base_energy) {
@@ -727,7 +748,6 @@ public:
         if (use_with_option1 || use_with_option2 || use_with_option3) {
           if (!have_computed_Hvs) {
             have_computed_Hvs = true;
-
             hess_vec_func(trResults.z, trResults.H_z);
             hess_vec_func(trResults.d_old, trResults.H_d_old);
             hess_vec_func(trResults.cauchy_point, trResults.H_cauchy_point);
@@ -755,9 +775,8 @@ public:
         double realObjective = std::numeric_limits<double>::max();
         double normPred      = std::numeric_limits<double>::max();
         try {
-          normPred    = computeResidual(x_pred, r_pred);
-          double obj1 = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
-
+          normPred      = computeResidual(x_pred, r_pred);
+          double obj1   = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
           realObjective = obj1;
         } catch (const std::exception&) {
           realObjective = std::numeric_limits<double>::max();

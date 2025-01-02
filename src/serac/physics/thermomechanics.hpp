@@ -15,6 +15,7 @@
 #include "mfem.hpp"
 
 #include "serac/physics/base_physics.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/thermomechanics_input.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/heat_transfer.hpp"
@@ -405,16 +406,40 @@ public:
   }
 
   /**
-   * @brief Set essential displacement boundary conditions (strongly enforced)
+   * @brief Set essential displacement boundary conditions on selected components
    *
-   * @param[in] displacement_attributes The boundary attributes on which to enforce a displacement
-   * @param[in] prescribed_value The prescribed boundary displacement function
+   * @param[in] applied_displacement Function specifying the applied displacement vector.
+   * @param[in] domain Domain over which to apply the boundary condition.
+   * @param[in] components (optional) (optional) Indicator of vector components to be constrained.
+   *            If argument is omitted, the default is to constrain all components.
+   *
+   * @note This method must be called prior to completeSetup()
+   *
+   * The signature of the applied_displacement callable is:
+   * tensor<double, dim> applied_displacement(tensor<double, dim> X, double t)
+   * Parameters:
+   *   X - coordinates of node
+   *   t - time
+   * Returns:
+   *   u, vector of applied displacements
    */
-  void setDisplacementBCs(const std::set<int>&                                           displacement_attributes,
-                          std::function<void(const mfem::Vector& x, mfem::Vector& disp)> prescribed_value)
+  template <typename AppliedDisplacementFunction>
+  void setDisplacementBCs(AppliedDisplacementFunction applied_displacement, Domain& domain,
+                          Components components = Component::ALL)
   {
-    solid_.setDisplacementBCs(displacement_attributes, prescribed_value);
+    solid_.setDisplacementBCs(applied_displacement, domain, components);
   }
+
+  /**
+   * @brief Shortcut to set selected components of displacements to zero for all time
+   *
+   * @param[in] domain Domain to apply the homogeneous boundary condition to
+   * @param[in] components (optional) Indicator of vector components to be constrained.
+   *            If argument is omitted, the default is to constrain all components.
+   *
+   * @note This method must be called prior to completeSetup()
+   */
+  void setFixedBCs(Domain& domain, Components components = Component::ALL) { solid_.setFixedBCs(domain, components); }
 
   /**
    * @brief Set the thermal flux boundary condition

@@ -13,6 +13,7 @@
 #include "serac/infrastructure/initialize.hpp"
 #include "serac/infrastructure/terminator.hpp"
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/thermomechanics.hpp"
 
@@ -125,14 +126,13 @@ TEST(Thermomechanics, ParameterizedMaterial)
   simulation.setParameter(1, alpha);
 
   // set up essential boundary conditions
-  std::set<int> x_equals_0 = {4};
-  std::set<int> y_equals_0 = {2};
-  std::set<int> z_equals_0 = {1};
+  Domain x_equals_0 = Domain::ofBoundaryElements(pmesh, by_attr<dim>(4));
+  Domain y_equals_0 = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  Domain z_equals_0 = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
 
-  auto zero_scalar = [](const mfem::Vector&) -> double { return 0.0; };
-  simulation.setDisplacementBCs(x_equals_0, zero_scalar, 0);
-  simulation.setDisplacementBCs(y_equals_0, zero_scalar, 1);
-  simulation.setDisplacementBCs(z_equals_0, zero_scalar, 2);
+  simulation.setFixedBCs(x_equals_0, Component::X);
+  simulation.setFixedBCs(y_equals_0, Component::Y);
+  simulation.setFixedBCs(z_equals_0, Component::Z);
 
   // set up initial conditions
   auto zero_vector = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 0.0; };

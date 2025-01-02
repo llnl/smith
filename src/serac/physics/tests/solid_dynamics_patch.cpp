@@ -15,6 +15,7 @@
 #include "mfem.hpp"
 
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
@@ -72,11 +73,11 @@ std::set<int> essentialBoundaryAttributes(PatchBoundaryCondition bc)
 }
 
 // clang-format off
-const tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
-                              {0.198344644470483, 0.060514559793513, 0.084137393813728},
-                              {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+constexpr tensor<double, 3, 3> A_3d{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
+                                 {0.198344644470483, 0.060514559793513, 0.084137393813728},
+                                 {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
 
-const tensor<double, 3> b{{0.765645367640828, 0.992487355850465, 0.162199373722092}};
+constexpr tensor<double, 3> b_3d{{0.765645367640828, 0.992487355850465, 0.162199373722092}};
 // clang-format on
 
 /**
@@ -87,15 +88,15 @@ const tensor<double, 3> b{{0.765645367640828, 0.992487355850465, 0.1621993737220
 template <int dim>
 class AffineSolution {
 public:
-  AffineSolution() : disp_grad_rate(dim), initial_displacement(dim)
+  AffineSolution()
+      : disp_grad_rate(make_tensor<dim, dim>([](int i, int j) { return A_3d[i][j]; })),
+        initial_displacement(make_tensor<dim>([](int i) { return b_3d[i]; })){};
+
+  /// exact solution for displacement field
+  tensor<double, dim> eval(tensor<double, dim> X, double t) const
   {
-    for (int i = 0; i < dim; i++) {
-      initial_displacement(i) = b[i];
-      for (int j = 0; j < dim; j++) {
-        disp_grad_rate(i, j) = A[i][j];
-      }
-    }
-  };
+    return t * dot(disp_grad_rate, X) + initial_displacement;
+  }
 
   /**
    * @brief MFEM-style coefficient function corresponding to this solution
@@ -105,12 +106,17 @@ public:
    */
   void operator()(const mfem::Vector& X, double t, mfem::Vector& u) const
   {
-    disp_grad_rate.Mult(X, u);
-    u *= t;
-    u += initial_displacement;
+    auto X_tensor = make_tensor<dim>([&X](int i) { return X[i]; });
+    auto u_tensor = this->eval(X_tensor, t);
+    for (int i = 0; i < dim; ++i) u[i] = u_tensor[i];
   }
 
-  void velocity(const mfem::Vector& X, double /* t */, mfem::Vector& v) const { disp_grad_rate.Mult(X, v); }
+  void velocity(const mfem::Vector& X, double /* t */, mfem::Vector& v) const
+  {
+    auto X_tensor = make_tensor<dim>([&X](int i) { return X[i]; });
+    auto v_tensor = disp_grad_rate * X_tensor;
+    for (int i = 0; i < dim; ++i) v[i] = v_tensor[i];
+  }
 
   /**
    * @brief Apply forcing that should produce this exact displacement
@@ -131,45 +137,36 @@ public:
    * @param essential_boundaries Boundary attributes on which essential boundary conditions are desired
    */
   template <int p, typename Material>
-  void applyLoads(const Material& material, SolidMechanics<p, dim>& solid, std::set<int> essential_boundaries,
-                  Domain& bdr_domain) const
+  void applyLoads(const Material& material, SolidMechanics<p, dim>& solid, Domain essential_boundary,
+                  Domain /* whole_domain */) const
   {
     // essential BCs
-    auto ebc_func = [*this](const auto& X, double t, auto& u) { this->operator()(X, t, u); };
-    solid.setDisplacementBCs(essential_boundaries, ebc_func);
+    auto ebc_func = [*this](tensor<double, dim> X, double t) { return this->eval(X, t); };
+    solid.setDisplacementBCs(ebc_func, essential_boundary);
+
+    // It's tempting to restrict the traction to the appropriate sub-boundary by defining
+    // Domain natural_boundary = EntireBoundary(solid.mesh()) - essential_boundary;
+    // ... and then passing natural_boundary to setTraction(). However, in some cases,
+    // natural_boundary will be empty. It's easier to assign the traction to the
+    // entire boundary, and it will automatically be ignored on the essential boundary.
 
     // natural BCs
-    auto Hdot     = make_tensor<dim, dim>([&](int i, int j) { return disp_grad_rate(i, j); });
-    auto traction = [material, Hdot](auto, auto n0, auto t) {
-      auto                     H = Hdot * t;
+    auto traction = [material, *this](auto, auto n0, auto t) {
+      auto                     H = this->disp_grad_rate * t;
       typename Material::State state;  // needs to be reconfigured for mats with state
       tensor<double, dim, dim> P = material(state, H);
-
-      // We don't have a good way to restrict the tractions to the
-      // complement of the essential boundary segments.
-      // The following matches the case when the top and left surfaces
-      // have essential boundary conditions:
-      //
-      // auto T = (n0[0] > 0.99 || n0[1] < -0.99)? dot(P, n0) : 0.0*n0;
-      //
-      // Note that the patch test should pass even if we apply the
-      // tractions to all boundaries. The point of choosing the surfaces
-      // is to make the nodal reaction forces correct for debugging
-      // output.
-
-      // This version applies the traction to all surfaces. The reaction
-      // forces reported will be zero. (Tractions get summed into reactions
-      // even on essential boundary portions).
-      auto T = dot(P, n0);
-      return T;
+      return dot(P, n0);
     };
-    solid.setTraction(traction, bdr_domain);
+    Domain entire_boundary = EntireBoundary(solid.mesh());
+    solid.setTraction(traction, entire_boundary);
   }
 
 private:
-  mfem::DenseMatrix disp_grad_rate;        /// Linear part of solution. Equivalently, the displacement gradient rate
-  mfem::Vector      initial_displacement;  /// Constant part of solution. Rigid body displacement.
+  tensor<double, dim, dim> disp_grad_rate;  /// Linear part of solution. Equivalently, the displacement gradient rate
+  tensor<double, dim>      initial_displacement;  /// Constant part of solution. Rigid body displacement.
 };
+
+constexpr tensor<double, 3> a_3d{{0.1, -0.2, 0.25}};
 
 /**
  * @brief Constant acceleration exact solution
@@ -181,12 +178,9 @@ private:
 template <int dim>
 class ConstantAccelerationSolution {
 public:
-  ConstantAccelerationSolution() : acceleration(dim)
-  {
-    acceleration(0) = 0.1;
-    acceleration(1) = -0.2;
-    if constexpr (dim == 3) acceleration(2) = 0.25;
-  };
+  ConstantAccelerationSolution() : acceleration(make_tensor<dim>([](int i) { return a_3d[i]; })){};
+
+  tensor<double, dim> eval(tensor<double, dim>, double t) const { return 0.5 * t * t * acceleration; };
 
   /**
    * @brief MFEM-style coefficient function corresponding to this solution
@@ -194,16 +188,17 @@ public:
    * @param X Coordinates of point in reference configuration at which solution is sought
    * @param u Exact solution evaluated at \p X
    */
-  void operator()(const mfem::Vector& /* X */, double t, mfem::Vector& u) const
+  void operator()(const mfem::Vector& X, double t, mfem::Vector& u) const
   {
-    u = acceleration;
-    u *= 0.5 * t * t;
+    tensor<double, dim> X_tensor{make_tensor<dim>([&X](int i) { return X[i]; })};
+    tensor<double, dim> u_tensor = eval(X_tensor, t);
+    for (int i = 0; i < dim; ++i) u[i] = u_tensor[i];
   }
 
   void velocity(const mfem::Vector& /* X */, double t, mfem::Vector& v) const
   {
-    v = acceleration;
-    v *= t;
+    auto v_tensor = acceleration * t;
+    for (int i = 0; i < dim; ++i) v[i] = v_tensor[i];
   }
 
   /**
@@ -225,22 +220,22 @@ public:
    * @param essential_boundaries Boundary attributes on which essential boundary conditions are desired
    */
   template <int p, typename Material>
-  void applyLoads(const Material& material, SolidMechanics<p, dim>& solid, std::set<int> essential_boundaries,
-                  Domain& domain) const
+  void applyLoads(const Material& material, SolidMechanics<p, dim>& solid, Domain essential_boundary,
+                  Domain whole_domain) const
   {
     // essential BCs
-    auto ebc_func = [*this](const auto& X, double t, auto& u) { this->operator()(X, t, u); };
-    solid.setDisplacementBCs(essential_boundaries, ebc_func);
+    auto ebc_func = [*this](tensor<double, dim> X, double t) { return this->eval(X, t); };
+    solid.setDisplacementBCs(ebc_func, essential_boundary);
 
     // no natural BCs
 
     // body force
-    auto a = make_tensor<dim>([*this](int i) { return this->acceleration(i); });
-    solid.addBodyForce([&material, a](auto /* X */, auto /* t */) { return material.density * a; }, domain);
+    solid.addBodyForce([&material, *this](auto /* X */, auto /* t */) { return material.density * this->acceleration; },
+                       whole_domain);
   }
 
 private:
-  mfem::Vector acceleration;  /// Constant acceleration vector of solution
+  tensor<double, dim> acceleration;  /// Constant acceleration vector of solution
 };
 
 /**
@@ -312,8 +307,7 @@ double solution_error(solution_type exact_solution, PatchBoundaryCondition bc)
                                "solid_dynamics", mesh_tag);
 
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = 1.0, .G = 1.0};
-  Domain                      whole_domain   = EntireDomain(pmesh);
-  Domain                      whole_boundary = EntireBoundary(pmesh);
+  Domain                      whole_domain = EntireDomain(pmesh);
   solid.setMaterial(mat, whole_domain);
 
   // initial conditions
@@ -322,13 +316,8 @@ double solution_error(solution_type exact_solution, PatchBoundaryCondition bc)
   solid.setDisplacement([exact_solution](const mfem::Vector& x, mfem::Vector& u) { exact_solution(x, 0.0, u); });
 
   // forcing terms
-  if constexpr (std::is_same<solution_type, ConstantAccelerationSolution<dim> >::value) {
-    exact_solution.applyLoads(mat, solid, essentialBoundaryAttributes<dim>(bc), whole_domain);
-  }
-
-  if constexpr (std::is_same<solution_type, AffineSolution<dim> >::value) {
-    exact_solution.applyLoads(mat, solid, essentialBoundaryAttributes<dim>(bc), whole_boundary);
-  }
+  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
+  exact_solution.applyLoads(mat, solid, essential_boundary, whole_domain);
 
   // Finalize the data structures
   solid.completeSetup();

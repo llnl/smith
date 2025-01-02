@@ -16,7 +16,13 @@ struct DenseMat {
 
   /// @brief constructor
   /// @param a matrix
-  DenseMat(const DenseMat& a) { MatDuplicate(a.A, MAT_COPY_VALUES, &A); }
+  DenseMat(const DenseMat& a)
+  {
+    MatDuplicate(a.A, MAT_COPY_VALUES, &A);
+    MatCopy(a.A, A, SAME_NONZERO_PATTERN);
+    MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
+    MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+  }
 
   /// @brief destructor
   ~DenseMat() { MatDestroy(&A); }
@@ -59,6 +65,26 @@ struct DenseMat {
     MatView(A, PETSC_VIEWER_STDOUT_SELF);
   }
 
+  /// @brief check for nans
+  bool hasNan() const
+  {
+    auto [rows, cols] = size();
+    for (int i = 0; i < rows; ++i) {
+      for (int j = 0; j < cols; ++j) {
+        double val = (*this)(i, j);
+        if (val != val) return true;
+      }
+    }
+    return false;
+  }
+
+  /// @brief  reassemble petsc dense matrix after values have been modified
+  void reassemble()
+  {
+    MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
+    MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+  }
+
   /// petsc matrix
   Mat A;
 };
@@ -88,6 +114,9 @@ DenseMat sym(const DenseMat& a)
       b.setValue(j, i, val);
     }
   }
+
+  b.reassemble();
+
   return b;
 }
 

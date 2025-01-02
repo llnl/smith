@@ -46,8 +46,8 @@ void shape_test()
   mfem::Vector shape_displacement;
   mfem::Vector pure_displacement;
 
-  // Define a boundary attribute set
-  std::set<int> ess_bdr = {1};
+  // Define the boundary where essential boundary conditions will be prescribed
+  auto ess_bdr = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
 
   // Use a krylov solver for the Jacobian solve
 
@@ -86,6 +86,18 @@ void shape_test()
     bc_vec[1] = (x[0] * 0.1) / (shape_factor + 1.0);
   };
 
+  auto applied_displacement = [](tensor<double, dim> x, double) {
+    tensor<double, dim> u{};
+    u[1] = x[0] * 0.1;
+    return u;
+  };
+
+  auto applied_displacement_pure = [shape_factor](tensor<double, dim> x, double) {
+    tensor<double, dim> u{};
+    u[1] = (x[0] * 0.1) / (shape_factor + 1.0);
+    return u;
+  };
+
   // Construct and apply a uniform body load
   tensor<double, dim> constant_force;
 
@@ -115,7 +127,11 @@ void shape_test()
                                         "solid_functional", mesh_tag);
 
     // Set the initial displacement and boundary condition
-    solid_solver.setDisplacementBCs(ess_bdr, bc);
+    solid_solver.setDisplacementBCs(applied_displacement, ess_bdr);
+
+    // For consistency of the problem, this value should match the one in the BCs
+    // TODO(Brandon): When the setDisplacement is updated to take a serac::tensor valued callable,
+    // pass the same functor here as is used for the BCs.
     solid_solver.setDisplacement(bc);
 
     solid_solver.setShapeDisplacement(user_defined_shape_displacement);
@@ -165,7 +181,7 @@ void shape_test()
     visit_dc.Save();
 
     // Set the initial displacement and boundary condition
-    solid_solver_no_shape.setDisplacementBCs(ess_bdr, bc_pure);
+    solid_solver_no_shape.setDisplacementBCs(applied_displacement_pure, ess_bdr);
     solid_solver_no_shape.setDisplacement(bc_pure);
 
     Domain whole_mesh = EntireDomain(StateManager::mesh(new_mesh_tag));

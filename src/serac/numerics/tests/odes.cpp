@@ -261,12 +261,12 @@ double first_order_ode_test(int nsteps, ode_type type, constraint_type constrain
 
   if (constraint == SINE_WAVE) {
     auto coef = std::make_shared<mfem::FunctionCoefficient>(sine_wave);
-    bcs.addEssential({1}, coef, dummy.space());
+    bcs.addEssential(std::set<int>{1}, coef, dummy.space());
   }
 
   if (constraint == TRIANGLE_WAVE) {
     auto coef = std::make_shared<mfem::FunctionCoefficient>(triangle_wave);
-    bcs.addEssential({1}, coef, dummy.space());
+    bcs.addEssential(std::set<int>{1}, coef, dummy.space());
   }
 
   std::function<mfem::Vector(const mfem::Vector&)>      f_int;
@@ -382,12 +382,12 @@ double second_order_ode_test(int nsteps, ode_type type, constraint_type constrai
 
   if (constraint == SINE_WAVE) {
     auto coef = std::make_shared<mfem::FunctionCoefficient>(sine_wave);
-    bcs.addEssential({1}, coef, dummy.space());
+    bcs.addEssential(std::set<int>{1}, coef, dummy.space());
   }
 
   if (constraint == TRIANGLE_WAVE) {
     auto coef = std::make_shared<mfem::FunctionCoefficient>(triangle_wave);
-    bcs.addEssential({1}, coef, dummy.space());
+    bcs.addEssential(std::set<int>{1}, coef, dummy.space());
   }
 
   std::function<mfem::Vector(const mfem::Vector&)>      f_int;

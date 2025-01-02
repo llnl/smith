@@ -6,6 +6,7 @@
 
 #include "serac/physics/solid_mechanics.hpp"
 
+#include <algorithm>
 #include <functional>
 #include <fstream>
 #include <set>
@@ -16,6 +17,8 @@
 #include "mfem.hpp"
 
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/numerics/functional/domain.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
@@ -80,19 +83,17 @@ void functional_solid_test_static_J2()
   solid_solver.setMaterial(mat, whole_domain, qdata);
 
   // prescribe zero displacement at the supported end of the beam,
-  std::set<int> support           = {1};
-  auto          zero_displacement = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 0.0; };
-  solid_solver.setDisplacementBCs(support, zero_displacement);
+  auto support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  solid_solver.setFixedBCs(support);
 
   // apply a displacement along z to the the tip of the beam
-  auto translated_in_z = [](const mfem::Vector&, double t, mfem::Vector& u) -> void {
-    u    = 0.0;
+  auto translated_in_z = [](tensor<double, dim>, double t) {
+    tensor<double, dim> u{};
     u[2] = t * (t - 1);
+    return u;
   };
-  std::set<int> tip = {2};
-  solid_solver.setDisplacementBCs(tip, translated_in_z);
-
-  solid_solver.setDisplacement(zero_displacement);
+  auto tip = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  solid_solver.setDisplacementBCs(translated_in_z, tip, Component::Z);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -112,124 +113,6 @@ void functional_solid_test_static_J2()
   // deformation after unloading
   // EXPECT_LT(norm(solid_solver.reactions()), 1.0e-5);
 }
-
-// The purpose of this test is to check that the spatial function-defined essential boundary conditions are
-// working appropriately. It takes a 4 hex cube mesh and pins it in one corner. The z-direction displacement
-// is set to zero on the bottom face and a constant negative value on the top face.
-void functional_solid_spatial_essential_bc()
-{
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  constexpr int p                   = 1;
-  constexpr int dim                 = 3;
-  int           serial_refinement   = 1;
-  int           parallel_refinement = 0;
-
-  // Create DataStore
-  axom::sidre::DataStore datastore;
-  serac::StateManager::initialize(datastore, "solid_mechanics_spatial_essential");
-
-  // Construct the appropriate dimension mesh and give it to the data store
-  std::string filename = SERAC_REPO_DIR "/data/meshes/onehex.mesh";
-
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
-  std::string mesh_tag{"mesh"};
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
-
-  // Construct a functional-based solid mechanics solver
-  SolidMechanics<p, dim> solid_solver(solid_mechanics::default_nonlinear_options,
-                                      solid_mechanics::direct_linear_options,
-                                      solid_mechanics::default_quasistatic_options, "solid_mechanics", mesh_tag);
-
-  solid_mechanics::LinearIsotropic mat{1.0, 1.0, 1.0};
-  Domain                           whole_domain = EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, whole_domain);
-
-  // Set up
-  auto zero_vector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
-
-  // We want to test both the scalar displacement functions including the time argument and the scalar displacement
-  // functions without
-  auto zero_scalar   = [](const mfem::Vector&, double) { return 0.0; };
-  auto scalar_offset = [](const mfem::Vector&) { return -0.1; };
-
-  auto is_on_bottom = [](const mfem::Vector& x) {
-    if (x(2) < 0.01) {
-      return true;
-    }
-    return false;
-  };
-
-  auto is_on_bottom_corner = [](const mfem::Vector& x) {
-    if (x(0) < 0.01 && x(1) < 0.01 && x(2) < 0.01) {
-      return true;
-    }
-    return false;
-  };
-
-  auto is_on_top = [](const mfem::Vector& x) {
-    if (x(2) > 0.95) {
-      return true;
-    }
-    return false;
-  };
-
-  solid_solver.setDisplacementBCs(is_on_bottom_corner, zero_vector);
-  solid_solver.setDisplacementBCs(is_on_bottom, zero_scalar, 2);
-  solid_solver.setDisplacementBCs(is_on_top, scalar_offset, 2);
-
-  // Set a zero initial guess
-  solid_solver.setDisplacement(zero_vector);
-
-  // Finalize the data structures
-  solid_solver.completeSetup();
-
-  // Perform the quasi-static solve
-  solid_solver.advanceTimestep(1.0);
-  solid_solver.outputStateToDisk();
-
-  auto [size, rank] = serac::getMPIInfo();
-
-  // This exact solution is only correct when two MPI ranks are used
-  // It is based on a poisson ratio of 0.125 with a prescribed z strain of 10%
-  if (size == 2) {
-    auto vdim  = solid_solver.displacement().space().GetVDim();
-    auto ndofs = solid_solver.displacement().space().GetTrueVSize() / vdim;
-    auto dof   = [ndofs, vdim](auto node, auto component) {
-      return mfem::Ordering::Map<serac::ordering>(ndofs, vdim, node, component);
-    };
-
-    // This is a vector of pairs containing the exact solution index and value for the known analytical dofs.
-    // These exact indices and values are chosen to avoid dependence on solver tolerances.
-    if (rank == 0) {
-      std::vector<std::pair<int, double>> solution = {
-          {dof(0, 0), 0.0},      {dof(1, 0), 0.0125},   {dof(4, 0), 0.00625}, {dof(8, 0), 0.0},     {dof(9, 0), 0.0125},
-          {dof(12, 0), 0.00625}, {dof(0, 1), 0.0},      {dof(2, 1), 0.0125},  {dof(7, 1), 0.00625}, {dof(8, 1), 0.0},
-          {dof(11, 1), 0.0125},  {dof(15, 1), 0.00625}, {dof(0, 2), -0.1},    {dof(1, 2), -0.1},    {dof(2, 2), -0.1},
-          {dof(3, 2), -0.1},     {dof(4, 2), -0.1},     {dof(5, 2), -0.1},    {dof(6, 2), -0.1},    {dof(7, 2), -0.1},
-          {dof(8, 2), -0.05},    {dof(9, 2), -0.05},    {dof(10, 2), -0.05},  {dof(11, 2), -0.05},  {dof(12, 2), -0.05},
-          {dof(13, 2), -0.05},   {dof(14, 2), -0.05},   {dof(15, 2), -0.05},  {dof(16, 2), -0.1},   {dof(17, 2), -0.05},
-      };
-      for (auto exact_entry : solution) {
-        EXPECT_NEAR(exact_entry.second, solid_solver.displacement()(exact_entry.first), 1.0e-8);
-      }
-    }
-
-    if (rank == 1) {
-      std::vector<std::pair<int, double>> solution = {
-          {dof(0, 0), 0.0},     {dof(1, 0), 0.0125}, {dof(4, 0), 0.00625}, {dof(0, 1), 0.0}, {dof(2, 1), 0.0125},
-          {dof(7, 1), 0.00625}, {dof(0, 2), 0.0},    {dof(1, 2), 0.0},     {dof(2, 2), 0.0}, {dof(3, 2), 0.0},
-          {dof(4, 2), 0.0},     {dof(5, 2), 0.0},    {dof(6, 2), 0.0},     {dof(7, 2), 0.0}, {dof(8, 2), 0.0},
-      };
-      for (auto exact_entry : solution) {
-        EXPECT_NEAR(exact_entry.second, solid_solver.displacement()(exact_entry.first), 1.0e-8);
-      }
-    }
-  }
-}
-
 template <typename lambda>
 struct ParameterizedBodyForce {
   template <int dim, typename T1, typename T2>
@@ -309,22 +192,11 @@ void functional_parameterized_solid_test(double expected_disp_norm)
   solid_mechanics::ParameterizedLinearIsotropicSolid mat{1.0, 0.0, 0.0};
   solid_solver.setMaterial(DependsOn<0, 1>{}, mat, whole_domain);
 
-  // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
+  // Specify initial / boundary conditions
+  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
 
-  // Define a boundary attribute set and specify initial / boundary conditions
-  std::set<int> ess_bdr = {1};
-
-  // Generate a true dof set from the boundary attribute
-  mfem::Array<int> bdr_attr_marker(pmesh.bdr_attributes.Max());
-  bdr_attr_marker    = 0;
-  bdr_attr_marker[0] = 1;
-  mfem::Array<int> true_dofs;
-  auto             fe_space = const_cast<mfem::ParFiniteElementSpace*>(&solid_solver.displacement().space());
-  fe_space->GetEssentialTrueDofs(bdr_attr_marker, true_dofs);
-
-  solid_solver.setDisplacementBCsByDofList(true_dofs, bc);
-  solid_solver.setDisplacement(bc);
+  solid_solver.setFixedBCs(essential_boundary);
+  solid_solver.setDisplacement([](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; });
 
   tensor<double, dim> constant_force;
 
@@ -370,8 +242,6 @@ void functional_parameterized_solid_test(double expected_disp_norm)
 TEST(SolidMechanics, 2DQuadParameterizedStatic) { functional_parameterized_solid_test<2, 2>(2.2378592112148716); }
 
 TEST(SolidMechanics, 3DQuadStaticJ2) { functional_solid_test_static_J2(); }
-
-TEST(SolidMechanics, SpatialBoundaryCondition) { functional_solid_spatial_essential_bc(); }
 
 }  // namespace serac
 

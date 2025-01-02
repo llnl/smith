@@ -121,9 +121,8 @@ TEST(LiquidCrystalElastomer, Bertoldi)
 
   // Boundary conditions:
   // Prescribe zero displacement at the supported end of the beam
-  std::set<int> support           = {2};
-  auto          zero_displacement = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 0.0; };
-  solid_solver.setDisplacementBCs(support, zero_displacement);
+  auto support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  solid_solver.setFixedBCs(support);
 
   double iniDispVal       = 5.0e-6;
   auto   ini_displacement = [iniDispVal](const mfem::Vector&, mfem::Vector& u) -> void { u = iniDispVal; };

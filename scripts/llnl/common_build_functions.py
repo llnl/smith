@@ -327,10 +327,6 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
             print("[ERROR: Tests for host-config: %s failed]\n" % host_config)
             return res
     else:
-        # Copy dummy .xml file to avoid Azure CI warning when not running tests
-        dummy_ctest_src = pjoin(get_repo_dir(), "scripts/azure-pipelines/DummyTest.xml")
-        dummy_ctest_dst = pjoin(build_dir, "Test.xml")
-        shutil.copy(dummy_ctest_src, dummy_ctest_dst)
         print("[skipping unit tests]")
 
     # build the docs

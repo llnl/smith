@@ -42,8 +42,11 @@ void functional_test_static_3D(double expected_norm)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  // Define a boundary attribute set
-  std::set<int> ess_bdr = {1};
+  // Define the boundary subset where essential boundary conditions will be prescribed
+  // For simplicity, we apply essential boundary condtions in both the thermal and mechanics
+  // on the same boundary subset.
+  std::set<int> ess_bdr                         = {1};
+  auto          displacement_essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(ess_bdr));
 
   // define the solid solver configurations
   // no default solver options for solid yet, so make some here
@@ -88,7 +91,7 @@ void functional_test_static_3D(double expected_norm)
   auto zeroVector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
 
   // Set the initial displcament and boundary condition
-  thermal_solid_solver.setDisplacementBCs(ess_bdr, zeroVector);
+  thermal_solid_solver.setFixedBCs(displacement_essential_boundary);
   thermal_solid_solver.setDisplacement(zeroVector);
 
   // Finalize the data structures
@@ -126,8 +129,8 @@ void functional_test_shrinking_3D(double expected_norm)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  // Define a boundary attribute set
-  std::set<int> constraint_bdr = {1};
+  // Define a boundary partitions where essential boundary conditions will be prescribed
+  Domain        constraint_bdr = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
   std::set<int> temp_bdr       = {1, 2, 3};
 
   // define the solid solver configurations
@@ -176,7 +179,7 @@ void functional_test_shrinking_3D(double expected_norm)
   auto zeroVector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
 
   // Set the initial displacement and boundary condition
-  thermal_solid_solver.setDisplacementBCs(constraint_bdr, zeroVector);
+  thermal_solid_solver.setFixedBCs(constraint_bdr);
   thermal_solid_solver.setDisplacement(zeroVector);
 
   // Finalize the data structures

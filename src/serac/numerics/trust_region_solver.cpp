@@ -185,7 +185,9 @@ auto qr(const std::vector<const mfem::Vector*>& states)
   Mat R;
   int num_cols = static_cast<int>(states.size());
   MatCreateSeqDense(PETSC_COMM_SELF, num_cols, num_cols, NULL, &R);
-  BVOrthogonalize(Q, R);
+  auto error = BVOrthogonalize(Q, R);
+
+  if (error) throw PetscException("BVOrthogonalize failed.");
 
   return std::make_pair(Q, DenseMat(R));
 }
@@ -383,7 +385,17 @@ std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector
   DenseMat sAs1 = dot(states, Astates);
   DenseMat sAs  = sym(sAs1);
 
+  if (sAs.hasNan()) {
+    throw PetscException("States in subspace solve contain NaNs.");
+    return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0);
+  }
+
   auto [Q_parallel, R] = qr(states);
+
+  if (R.hasNan()) {
+    throw PetscException("R from qr returning with a NaN.");
+    return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0);
+  }
 
   auto [rows, cols] = R.size();
   SLIC_ERROR_IF(rows != cols, "R matrix is not square in subspace problem solve\n");
@@ -434,7 +446,6 @@ std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector
   BVDestroy(&Q_parallel);
   VecDestroy(&b_parallel);
   VecDestroy(&x_parallel);
-
   return std::make_tuple(sol, leftmosts, leftvals, energy);
 }
 
@@ -443,6 +454,7 @@ std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector
 std::pair<std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>> removeDependentDirections(
     std::vector<const mfem::Vector*> directions, std::vector<const mfem::Vector*> A_directions)
 {
+  SERAC_MARK_FUNCTION;
   std::vector<double> norms;
   size_t              num_dirs = directions.size();
 

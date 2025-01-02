@@ -268,7 +268,14 @@ Domain operator-(const Domain& a, const Domain& b);
 template <int dim>
 inline auto by_attr(int value)
 {
-  return [value](std::vector<tensor<double, dim> >, int attr) { return attr == value; };
+  return [value](std::vector<tensor<double, dim>>, int attr) { return value == attr; };
+}
+
+/// @brief convenience predicate for creating domains by a set of attributes
+template <int dim>
+inline auto by_attr(std::set<int> values)
+{
+  return [values](std::vector<tensor<double, dim>>, int attr) { return values.find(attr) != values.end(); };
 }
 
 /**
@@ -292,7 +299,7 @@ inline std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> geometry_counts(cons
  * @brief convenience function for computing the arithmetic mean of some list of vectors
  */
 template <int dim>
-inline tensor<double, dim> average(std::vector<tensor<double, dim> >& positions)
+inline tensor<double, dim> average(std::vector<tensor<double, dim>>& positions)
 {
   tensor<double, dim> total{};
   for (auto x : positions) {
