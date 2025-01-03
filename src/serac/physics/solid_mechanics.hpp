@@ -740,10 +740,15 @@ public:
   template <typename Material>
   struct MaterialStressFunctor {
     /// @brief Constructor for the functor
-    MaterialStressFunctor(Material material) : material_(material) {}
+    MaterialStressFunctor(Material material, SolidMechanics& owner) : material_(material), owner_(&owner) {}
 
     /// @brief Material model
     Material material_;
+
+    /// @brief Pointer to the `SolidMechanics` instance that owns the current `MaterialStressFunctor`
+    ///
+    /// This is needed to compute the time increment from the enclosing
+    const SolidMechanics* owner_;
 
     /**
      * @brief Material stress response call
@@ -766,8 +771,9 @@ public:
     {
       auto du_dX   = get<DERIVATIVE>(displacement);
       auto d2u_dt2 = get<VALUE>(acceleration);
+      const double dt = owner_->time_ - owner_->time_prev_;
 
-      auto stress = material_(state, du_dX, params...);
+      auto stress = material_(state, dt, du_dX, params...);
 
       return serac::tuple{material_.density * d2u_dt2, stress};
     }
@@ -804,7 +810,7 @@ public:
   {
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
                   "invalid quadrature data provided in setMaterial()");
-    MaterialStressFunctor<MaterialType> material_functor(material);
+    MaterialStressFunctor<MaterialType> material_functor(material, *this);
     residual_->AddDomainIntegral(
         Dimension<dim>{},
         DependsOn<0, 1,
@@ -1170,6 +1176,7 @@ public:
     if (is_quasistatic_) {
       quasiStaticSolve(dt);
     } else {
+      time_prev_ = time_;
       // The current ode interface tracks 2 times, one internally which we have a handle to via time_,
       // and one here via the step interface.
       // We are ignoring this one, and just using the internal version for now.
@@ -1515,6 +1522,7 @@ protected:
     // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
     // throughout.
     warmStartDisplacement(dt);
+    time_prev_ = time_;
     time_ += dt;
 
     // this method is essentially equivalent to the 1-liner

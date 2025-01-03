@@ -77,7 +77,7 @@ public:
    * @param essential_boundaries Boundary attributes on which essential boundary conditions are desired
    */
   template <int p, typename Material>
-  void applyLoads(const Material& material, SolidMechanics<p, dim>& sf, Domain essential_boundary) const
+  void applyLoads(const Material& material, SolidMechanics<p, dim>& sf, Domain essential_boundary, double dt) const
   {
     // essential BCs
     auto ebc_func = [*this](tensor<double, dim> X, double) { return this->eval(X); };
@@ -86,7 +86,7 @@ public:
 
     // natural BCs
     typename Material::State state;
-    tensor<double, dim, dim> P               = material(state, A);
+    tensor<double, dim, dim> P               = material(state, dt, A);
     auto                     traction        = [P](auto, auto n0, auto) { return dot(P, n0); };
     Domain                   entire_boundary = EntireBoundary(sf.mesh());
     sf.setTraction(traction, entire_boundary);
@@ -216,14 +216,16 @@ double solution_error(PatchBoundaryCondition bc)
 
   solid.setMaterial(mat, domain);
 
+  constexpr double dt = 1.0;
+
   Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
-  exact_displacement.applyLoads(mat, solid, essential_boundary);
+  exact_displacement.applyLoads(mat, solid, essential_boundary, dt);
 
   // Finalize the data structures
   solid.completeSetup();
 
   // Perform the quasi-static solve
-  solid.advanceTimestep(1.0);
+  solid.advanceTimestep(dt);
 
   // Output solution for debugging
   // solid.outputStateToDisk("paraview_output");
@@ -338,7 +340,9 @@ double pressure_error()
   });
   // clang-format on
 
-  tensor<double, dim, dim> P        = mat(state, H);
+  constexpr double dt = 1.0;
+
+  tensor<double, dim, dim> P        = mat(state, dt, H);
   auto                     F        = H + Identity<dim>();
   auto                     sigma    = dot(P, transpose(F)) / det(F);
   double                   pressure = -sigma[0][0];
@@ -358,7 +362,7 @@ double pressure_error()
   solid.completeSetup();
 
   // Perform the quasi-static solve
-  solid.advanceTimestep(1.0);
+  solid.advanceTimestep(dt);
 
   solid.outputStateToDisk();
 

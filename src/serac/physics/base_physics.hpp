@@ -618,6 +618,8 @@ protected:
    */
   double time_;
 
+  double time_prev_;
+
   /**
    * @brief The maximum time reached for the forward solver
    */
