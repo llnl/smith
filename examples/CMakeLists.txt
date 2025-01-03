@@ -50,3 +50,13 @@ install(
     DESTINATION
         examples/serac/buckling
 )
+
+# Add the uniaxial examples
+add_subdirectory(uniaxial)
+
+install(
+    FILES
+        uniaxial/uniaxial.cpp
+    DESTINATION
+        examples/serac/uniaxial
+)
