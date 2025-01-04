@@ -21,42 +21,12 @@ install(
 # Add the simple conduction examples
 add_subdirectory(simple_conduction)
 
-install(
-    FILES
-        simple_conduction/without_input_file.cpp
-    DESTINATION
-        examples/serac/simple_conduction
-)
-
 # Add the contact examples
 add_subdirectory(contact)
-
-install(
-    FILES
-        contact/beam_bending.cpp
-        contact/ironing.cpp
-        contact/sphere.cpp
-        contact/twist.cpp
-    DESTINATION
-        examples/serac/contact
-)
 
 # Add the buckling examples
 add_subdirectory(buckling)
 
-install(
-    FILES
-        buckling/cylinder.cpp
-    DESTINATION
-        examples/serac/buckling
-)
-
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
 
-install(
-    FILES
-        uniaxial/uniaxial.cpp
-    DESTINATION
-        examples/serac/uniaxial
-)

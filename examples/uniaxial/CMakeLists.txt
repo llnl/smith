@@ -11,3 +11,10 @@ blt_add_executable( NAME        uniaxial_tension
                     )
 
 # add serac_functional to DEPENDS_ON 
+
+install(
+    FILES
+        uniaxial_tension.cpp
+    DESTINATION
+        examples/serac/uniaxial
+)
