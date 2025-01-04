@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <string>
+#include <fstream>
 
 #include "axom/inlet.hpp"
 #include "axom/slic/core/SimpleLogger.hpp"
@@ -33,7 +34,7 @@ int main(int argc, char* argv[])
   
   int serial_refinements = 0;
   int parallel_refinements = 0;
-  int time_steps = 20;
+  int time_steps = 100;
   double strain_rate = 1e-3;
 
   constexpr double E = 1.0;
@@ -53,7 +54,7 @@ int main(int argc, char* argv[])
   app.add_option("--parallel-refinements", parallel_refinements, "Parallel refinement steps", true);
   app.add_option("--time-steps", time_steps, 
     "Number of time steps to divide simulation", true);
-  app.add_option("--strain_rate", strain_rate, "Nominal strain rate", true);
+  app.add_option("--strain-rate", strain_rate, "Nominal strain rate", true);
 
   double max_time = max_strain/strain_rate;
   
@@ -63,26 +64,17 @@ int main(int argc, char* argv[])
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, simulation_tag + "_data");
 
-  auto serial_mesh = std::make_unique<mfem::Mesh>(
-    mfem::Mesh::MakeCartesian3D(elements_in_x, elements_in_y, elements_in_z,
-                                mfem::Element::QUADRILATERAL, true, x_length,
-                                y_length, z_length));
-  serial_mesh->Print();
-  auto  mesh  = serac::mesh::refineAndDistribute(std::move(*serial_mesh), serial_refinements, parallel_refinements);
+  auto  mesh  = serac::mesh::refineAndDistribute(serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length), serial_refinements, parallel_refinements);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // create boundary domains for boundary conditions
-  auto fix_x = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  auto fix_x = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(5));
   auto fix_y = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
-  auto fix_z = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(4));
+  auto fix_z = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
   auto apply_displacement = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
   serac::Domain whole_mesh = serac::EntireDomain(pmesh);
 
-  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
-#ifndef MFEM_USE_STRUMPACK
-  SLIC_INFO_ROOT("Uniaxial app requires MFEM built with strumpack.");
-  return 1;
-#endif
+  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = serac::NonlinearSolver::Newton,
                                                   .relative_tol   = 1.0e-10,
@@ -117,6 +109,22 @@ int main(int argc, char* argv[])
 
   double dt = max_time/(time_steps - 1);
 
+  // get nodes and dofs to compute total force
+  mfem::Array<int> dof_list = apply_displacement.dof_list(&solid_solver.displacement().space());
+  solid_solver.displacement().space().DofsToVDofs(0, dof_list);
+
+  auto compute_tensile_force = [&dof_list](const serac::FiniteElementDual& reaction) -> double {
+    double R{};
+    for (int i = 0; i < dof_list.Size(); i++) {
+      R += reaction(dof_list[i]);
+    }
+    return R;
+  };
+
+  std::ofstream file("uniaxial.txt");
+  file << "# time displacement force" << std::endl;
+  file << 0 << " " << 0 << " " << 0 << std::endl;
+
   for (int i = 0; i < time_steps; ++i) {
     SLIC_INFO_ROOT("------------------------------------------");
     SLIC_INFO_ROOT(axom::fmt::format("TIME STEP {}", i));
@@ -127,8 +135,13 @@ int main(int argc, char* argv[])
 
     // Output the sidre-based plot files
     solid_solver.outputStateToDisk(paraview_tag);
+
+    double u = applied_displacement(serac::vec3{}, solid_solver.time())[0];
+    double f = compute_tensile_force(solid_solver.dual("reactions"));
+    file << solid_solver.time() << " " << u << " " << f << std::endl;
   }
 
+  file.close();
   serac::exitGracefully();
 
   return 0;
