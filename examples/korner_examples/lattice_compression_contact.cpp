@@ -121,7 +121,7 @@ void run_lattice_compression(const running_parameters& rp)
   serac::ContactOptions contact_options{.method      = serac::ContactMethod::SingleMortar,
     .enforcement = serac::ContactEnforcement::Penalty,
     .type        = serac::ContactType::Frictionless,
-    .penalty     = 1.0e5};
+    .penalty     = 1.0e6};
   serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
     nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "beam_mesh",
     {"bulk_mod", "shear_mod"});
