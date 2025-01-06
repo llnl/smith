@@ -113,9 +113,10 @@ void run_lattice_compression(const running_parameters& rp)
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = serac::NonlinearSolver::TrustRegion,
                                                   .relative_tol   = 1.0e-8,
-                                                  .absolute_tol   = 1.0e-10,
-                                                  .max_iterations = 200,
-                                                  .print_level    = 1};
+                                                  .absolute_tol   = 1.0e-9,
+                                                  .max_iterations = 200, //500,
+                                                  .print_level    = 1,
+                                                  .subspace_option = serac::SubSpaceOptions::WHEN_INDEFINITE_OR_BOUNDARY};
 
 #ifdef USING_CONTACT
   serac::ContactOptions contact_options{.method      = serac::ContactMethod::SingleMortar,
@@ -124,7 +125,7 @@ void run_lattice_compression(const running_parameters& rp)
     .penalty     = 1.0e6};
   serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
     nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "beam_mesh",
-    {"bulk_mod", "shear_mod"});
+    {"bulk_mod", "shear_mod"}, 0, 0.0, false, true );
 #else
   serac::SolidMechanics<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
       nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "beam_mesh",
@@ -154,19 +155,22 @@ void run_lattice_compression(const running_parameters& rp)
   solid_solver.setMaterial(serac::DependsOn<0, 1>{}, mat, whole_mesh);
 
   // Pass the BC information to the solver object
-  solid_solver.setDisplacementBCs({1}, [](const mfem::Vector&, mfem::Vector& u) {
-    u.SetSize(dim);
-    u = 0.0;
-  });
-  solid_solver.setDisplacementBCs({2}, [](const mfem::Vector&, double t, mfem::Vector& u) {
-    u.SetSize(dim);
-    u    = 0.0;
+  auto fixed = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  solid_solver.setDisplacementBCs([](const tensor<double, dim>&, double /*t*/) {
+    return tensor<double, dim>{0.0};
+  }, fixed);
+
+  auto pushed = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
+  solid_solver.setDisplacementBCs([](const tensor<double, dim>&, double t) {
+    tensor<double,dim> u{0.0};
     u[1] = -0.01 * t;
-  });
+    return u;
+  }, pushed);
 
 
   if (rp.constrain_3D){
-    solid_solver.setDisplacementBCs([](const mfem::Vector &){return true;}, [](const mfem::Vector &){return 0.0;}, 2);
+    solid_solver.setDisplacementBCs([](const tensor<double, dim>&, double /*t*/) {
+    return tensor<double, dim>{0.0}; }, whole_mesh, Component::Z);
   }
   // solid_solver.addBodyForce(BodyForceType body_force, Domain &domain)
   // solid_solver.setTraction(TractionType traction_function, Domain &domain)
@@ -178,14 +182,17 @@ void run_lattice_compression(const running_parameters& rp)
 
   // Add the contact interaction
   #ifdef USING_CONTACT
-  auto          contact_interaction_id = 0;
+  //auto          contact_interaction_id = 0;
   std::set<int> surface_1_boundary_attributes;
   std::set<int> surface_2_boundary_attributes;
     surface_1_boundary_attributes = std::set<int>({5});
     surface_2_boundary_attributes = std::set<int>({4});
 
-  solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,
+  solid_solver.addContactInteraction(0, surface_1_boundary_attributes,
                                      surface_2_boundary_attributes, contact_options);
+
+  //solid_solver.addContactInteraction(1, surface_1_boundary_attributes,
+  //                                   surface_1_boundary_attributes, contact_options);
   #endif
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -198,13 +205,11 @@ void run_lattice_compression(const running_parameters& rp)
 
   const int N_steps = rp.N_Steps;
 
-  size_t cnt = 0;
   for (int i{0}; i < N_steps; ++i) {
     solid_solver.advanceTimestep(dt);
 
     // Output the sidre-based plot files
     solid_solver.outputStateToDisk(paraview_name);
-    cnt++;
   }
 }
 

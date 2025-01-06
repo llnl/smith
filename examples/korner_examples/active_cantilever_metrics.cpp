@@ -140,16 +140,16 @@ std::vector<mfem::Vector> run_beam_contact(const running_parameters & rp){
   serac::Domain                                        whole_mesh = serac::EntireDomain(pmesh);
   solid_solver.setMaterial(serac::DependsOn<0, 1>{}, mat, whole_mesh);
 
+
   // Pass the BC information to the solver object
-  solid_solver.setDisplacementBCs({1}, [](const mfem::Vector&, mfem::Vector& u) {
-    u.SetSize(dim);
-    u = 0.0;
-  });
-  solid_solver.setDisplacementBCs({6}, [](const mfem::Vector&, double t, mfem::Vector& u) {
-    u.SetSize(dim);
-    u    = 0.0;
+  auto surface1 = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  solid_solver.setFixedBCs(surface1);
+  auto surface6 = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
+  solid_solver.setDisplacementBCs([](const tensor<double,dim>&, double t) {
+    tensor<double,dim> u{0.};
     u[2] = -0.005 * t;
-  });
+    return u;
+  }, surface6);
 
   // Add the contact interaction
   auto          contact_interaction_id = 0;
@@ -265,12 +265,16 @@ std::vector<mfem::Vector> run_test(const running_parameters& rp)
   // solid_solver.setMaterial(mat);
 
   // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
+  auto bc = [](const tensor<double,dim>&, double /*t*/) {
+    return tensor<double,dim>{0.0};
+  };
+
+  auto ic = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  std::set<int> ess_bdr = {1};
-  solid_solver.setDisplacementBCs(ess_bdr, bc);
-  solid_solver.setDisplacement(bc);
+  auto face1 = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  solid_solver.setDisplacementBCs(bc, face1); //ess_bdr, bc);
+  solid_solver.setDisplacement(ic);
 
   // Add the contact interaction
   auto contact_interaction_id = 0;
@@ -416,12 +420,16 @@ void test(const running_parameters& rp)
   // solid_solver.setMaterial(mat);
 
   // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
+  auto bc = [](const tensor<double,dim>&, double /*t*/) {
+    return tensor<double,dim>{0.0};
+  };
+
+  auto ic = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  std::set<int> ess_bdr = {1};
-  solid_solver.setDisplacementBCs(ess_bdr, bc);
-  solid_solver.setDisplacement(bc);
+  auto face1 = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  solid_solver.setDisplacementBCs(bc, face1); //ess_bdr, bc);
+  solid_solver.setDisplacement(ic);
 
   // Add the contact interaction
   auto contact_interaction_id = 0;
