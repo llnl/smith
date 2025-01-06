@@ -7,6 +7,7 @@
 
 #include <mpi.h>
 #include "serac/infrastructure/terminator.hpp"
+#include "serac/numerics/solver_config.hpp"
 #include "serac/physics/contact/contact_config.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/solid_mechanics.hpp"
@@ -74,7 +75,7 @@ struct StVenantKirchhoff {
 struct running_parameters {
   bool        self_contact  = false;
   std::string save_location = "";
-  const int   N_Steps       = 200;
+  const int   N_Steps       = 100;
   double      T             = 2.0;
 };
 
@@ -89,21 +90,28 @@ void run_lattice_compression(const running_parameters& rp)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  std::string filename = SERAC_REPO_DIR "/data/meshes/lattice_contact.g";
+  std::string filename = SERAC_REPO_DIR "/data/meshes/lattice_contact2.g";
   // std::string filename = "/p/lustre1/korner1/serac_test/meshes/korner_lattice/hexmesh3.g";
 
-  auto  mesh  = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 0, 0);
+  auto  mesh  = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 2, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "beam_mesh");
 
-  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
+  // serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
+  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::CG,
+                                              .preconditioner = serac::Preconditioner::HypreJacobi,
+                                              .relative_tol = 1.0e-10,
+                                              .absolute_tol = 1.0e-12,
+                                              .max_iterations = dim * 10000,
+                                              .print_level = 0
+  };
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
   return 1;
 #endif
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = serac::NonlinearSolver::TrustRegion,
-                                                  .relative_tol   = 1.0e-12,
-                                                  .absolute_tol   = 1.0e-12,
+                                                  .relative_tol   = 1.0e-8,
+                                                  .absolute_tol   = 1.0e-10,
                                                   .max_iterations = 200,
                                                   .print_level    = 1};
 
@@ -169,8 +177,8 @@ void run_lattice_compression(const running_parameters& rp)
   auto          contact_interaction_id = 0;
   std::set<int> surface_1_boundary_attributes;
   std::set<int> surface_2_boundary_attributes;
-    surface_1_boundary_attributes = std::set<int>({3});
-    surface_2_boundary_attributes = std::set<int>({3});
+    surface_1_boundary_attributes = std::set<int>({5});
+    surface_2_boundary_attributes = std::set<int>({4});
 
   solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,
                                      surface_2_boundary_attributes, contact_options);
