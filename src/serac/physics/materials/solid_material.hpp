@@ -281,7 +281,8 @@ struct J2SmallStrain {
     // (ii) admissibility
     const double eqps_old = state.accumulated_plastic_strain;
     auto         residual = [eqps_old, G, dt, *this](auto delta_eqps, auto trial_q) {
-      return trial_q - (3.0 * G + Hk) * delta_eqps - this->hardening(eqps_old + delta_eqps, delta_eqps/dt);
+      auto eqps_dot = dt > 0.0? delta_eqps/dt : 0.0*delta_eqps;
+      return trial_q - (3.0 * G + Hk) * delta_eqps - this->hardening(eqps_old + delta_eqps, eqps_dot);
     };
     if (residual(0.0, get_value(q)) > tol * hardening.sigma_y) {
       // (iii) return mapping
@@ -339,14 +340,15 @@ struct J2 {
     // small strain one.
     auto p = K * tr(Ee);
     auto s = 2.0 * G * dev(Ee);
-    auto q = sqrt(1.5) * norm(s);
+    double q_val = sqrt(1.5) * norm(get_value(s));
 
     // (ii) admissibility
     const double eqps_old = state.accumulated_plastic_strain;
     auto         residual = [eqps_old, G, dt, *this](auto delta_eqps, auto trial_mises) {
-      return trial_mises - 3.0 * G * delta_eqps - this->hardening(eqps_old + delta_eqps, delta_eqps/dt);
+      auto eqps_dot = dt > 0.0? delta_eqps/dt : 0.0*delta_eqps;
+      return trial_mises - 3.0 * G * delta_eqps - this->hardening(eqps_old + delta_eqps, eqps_dot);
     };
-    if (residual(0.0, get_value(q)) > tol * hardening.sigma_y) {
+    if (residual(0.0, q_val) > tol * hardening.sigma_y) {
       // (iii) return mapping
 
       // Note the tolerance for convergence is the same as the tolerance for entering the return map.
@@ -354,8 +356,14 @@ struct J2 {
       // variables, the return map won't be repeated.
       ScalarSolverOptions opts{.xtol = 0, .rtol = tol * hardening.sigma_y, .max_iter = 25};
       double              lower_bound = 0.0;
-      double              upper_bound = (get_value(q) - hardening(eqps_old, 0.0)) / (3.0 * G);
-      auto [delta_eqps, status]       = solve_scalar_equation(residual, 0.0, lower_bound, upper_bound, opts, q);
+      double              upper_bound = (q_val - hardening(eqps_old, 0.0)) / (3.0 * G);
+      // safe to compute derivative of mises stress now that we're in yielding branch
+      auto q = sqrt(1.5) * norm(s);
+      auto [delta_eqps, status] = solve_scalar_equation(residual, 0.0, lower_bound, upper_bound, opts, q);
+
+      if (!status.converged) {
+        SLIC_WARNING("J2 solve failed to converge.");
+      }
 
       auto Np = 1.5 * s / q;
 

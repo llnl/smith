@@ -19,8 +19,11 @@
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/serac_config.hpp"
 
+#include <cfenv>
+
 int main(int argc, char* argv[])
 {
+  feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
   serac::initialize(argc, argv);
 
   constexpr int p = 2;
