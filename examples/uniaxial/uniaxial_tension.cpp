@@ -52,9 +52,13 @@ int main(int argc, char* argv[])
   // Mesh options
   app.add_option("--serial-refinements", serial_refinements, "Serial refinement steps", true);
   app.add_option("--parallel-refinements", parallel_refinements, "Parallel refinement steps", true);
-  app.add_option("--time-steps", time_steps, 
-    "Number of time steps to divide simulation", true);
+  app.add_option("--time-steps", time_steps, "Number of time steps to divide simulation", true);
   app.add_option("--strain-rate", strain_rate, "Nominal strain rate", true);
+  app.set_help_flag("--help");
+  
+  CLI11_PARSE(app, argc, argv);
+
+  SLIC_INFO_ROOT(axom::fmt::format("strain rate: {}", strain_rate));
 
   double max_time = max_strain/strain_rate;
   
@@ -64,7 +68,10 @@ int main(int argc, char* argv[])
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, simulation_tag + "_data");
 
-  auto  mesh  = serac::mesh::refineAndDistribute(serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length), serial_refinements, parallel_refinements);
+  auto mesh  = serac::mesh::refineAndDistribute(
+    serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, 
+                           x_length, y_length, z_length),
+    serial_refinements, parallel_refinements);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // create boundary domains for boundary conditions
@@ -113,7 +120,7 @@ int main(int argc, char* argv[])
   mfem::Array<int> dof_list = apply_displacement.dof_list(&solid_solver.displacement().space());
   solid_solver.displacement().space().DofsToVDofs(0, dof_list);
 
-  auto compute_tensile_force = [&dof_list](const serac::FiniteElementDual& reaction) -> double {
+  auto compute_net_force = [&dof_list](const serac::FiniteElementDual& reaction) -> double {
     double R{};
     for (int i = 0; i < dof_list.Size(); i++) {
       R += reaction(dof_list[i]);
@@ -137,7 +144,7 @@ int main(int argc, char* argv[])
     solid_solver.outputStateToDisk(paraview_tag);
 
     double u = applied_displacement(serac::vec3{}, solid_solver.time())[0];
-    double f = compute_tensile_force(solid_solver.dual("reactions"));
+    double f = compute_net_force(solid_solver.dual("reactions"));
     file << solid_solver.time() << " " << u << " " << f << std::endl;
   }
 
