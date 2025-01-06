@@ -74,9 +74,11 @@ struct StVenantKirchhoff {
 }  // namespace custom_material
 struct running_parameters {
   bool        self_contact  = false;
+  bool        constrain_3D = false;
   std::string save_location = "";
   const int   N_Steps       = 100;
   double      T             = 2.0;
+
 };
 
 void run_lattice_compression(const running_parameters& rp)
@@ -93,7 +95,7 @@ void run_lattice_compression(const running_parameters& rp)
   std::string filename = SERAC_REPO_DIR "/data/meshes/lattice_contact2.g";
   // std::string filename = "/p/lustre1/korner1/serac_test/meshes/korner_lattice/hexmesh3.g";
 
-  auto  mesh  = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 2, 0);
+  auto  mesh  = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 0, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "beam_mesh");
 
   // serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
@@ -119,7 +121,7 @@ void run_lattice_compression(const running_parameters& rp)
   serac::ContactOptions contact_options{.method      = serac::ContactMethod::SingleMortar,
     .enforcement = serac::ContactEnforcement::Penalty,
     .type        = serac::ContactType::Frictionless,
-    .penalty     = 1.0e3};
+    .penalty     = 1.0e5};
   serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
     nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "beam_mesh",
     {"bulk_mod", "shear_mod"});
@@ -163,7 +165,9 @@ void run_lattice_compression(const running_parameters& rp)
   });
 
 
-  solid_solver.setDisplacementBCs([](const mfem::Vector &){return true;}, [](const mfem::Vector &){return 0.0;}, 2);
+  if (rp.constrain_3D){
+    solid_solver.setDisplacementBCs([](const mfem::Vector &){return true;}, [](const mfem::Vector &){return 0.0;}, 2);
+  }
   // solid_solver.addBodyForce(BodyForceType body_force, Domain &domain)
   // solid_solver.setTraction(TractionType traction_function, Domain &domain)
 
@@ -226,8 +230,8 @@ int main(int argc, char* argv[])
 
   axom::slic::SimpleLogger  logger;
   serac::running_parameters rp;
+  rp.constrain_3D = false;
   serac::run_lattice_compression(rp);
-  // standard_contact = serac::run_beam_contact(rp);
 
 
 
