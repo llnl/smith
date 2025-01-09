@@ -108,12 +108,12 @@ class StateManager {
     SLIC_ERROR_ROOT_IF(!ds_, "Serac's data store was not initialized - call StateManager::initialize first");
     SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag),
                        axom::fmt::format("Serac's state manager does not have a mesh with given tag '{}'", mesh_tag));
-    
+
     constexpr const char* qds_group_name = "quadraturedatas";
 
     // Get Sidre location for quadrature data inside data collection
-    auto& datacoll = datacolls_.at(mesh_tag);
-    axom::sidre::Group* bp_group = datacoll.GetBPGroup(); //mesh_datacoll
+    auto&               datacoll = datacolls_.at(mesh_tag);
+    axom::sidre::Group* bp_group = datacoll.GetBPGroup();  // mesh_datacoll
     // For each geometry type, use i to get both type and name from matching arrays
     for (std::size_t i = 0; i < detail::qdata_geometries.size(); ++i) {
       auto geom_type = detail::qdata_geometries[i];
@@ -142,47 +142,53 @@ class StateManager {
           geom_group->createViewScalar("num_states", num_states);
           geom_group->createViewScalar("state_size", state_size);
           geom_group->createViewScalar("total_size", total_size);
+
+          // Tell Sidre where the external array is, how large it is (calculated above), and what is in it (faking
+          // uint8)
           axom::sidre::View* states_view = geom_group->createView("states");
           states_view->setExternalDataPtr(axom::sidre::UINT8_ID, num_uint8s, states.data());
         } else {
           // Get Sidre group of where the states were stored.
           // Note: this data is not owned by Sidre and the array should have been created at this point but
           // the previous data has not been loaded yet into the array.
-          SLIC_ERROR_ROOT_IF(bp_group->hasGroup(qds_group_name), 
+          SLIC_ERROR_ROOT_IF(!bp_group->hasGroup(qds_group_name),
                              axom::fmt::format("Loaded Sidre Datastore did not have group for Quadrature Datas"));
           axom::sidre::Group* qdatas_group = bp_group->getGroup(qds_group_name);
-          SLIC_ERROR_ROOT_IF(qdatas_group->hasGroup(std::string(geom_name)), 
-                             axom::fmt::format("Loaded Sidre Datastore did not have group for Quadrature Data geometry type '{}'", std::string(geom_name)));
+          SLIC_ERROR_ROOT_IF(
+              !qdatas_group->hasGroup(std::string(geom_name)),
+              axom::fmt::format("Loaded Sidre Datastore did not have group for Quadrature Data geometry type '{}'",
+                                std::string(geom_name)));
           axom::sidre::Group* geom_group = qdatas_group->getGroup(std::string(geom_name));
-          SLIC_ERROR_ROOT_IF(geom_group->hasGroup("states"), "Loaded Quadrature Data geometry Sidre group did not have 'states'");
-          axom::sidre::View* states_view = geom_group->getView("states");
 
           // Verify size correctness
-          auto verify_size = [](axom::sidre::Group* group, int value, const std::string& view_name, const std::string& err_msg)
-          {
-            SLIC_ERROR_IF(group->hasView(view_name), 
-                          axom::fmt::format("Loaded Sidre Datastore does not have value '{}' for Quadrature Data.", view_name));
+          auto verify_size = [](axom::sidre::Group* group, int value, const std::string& view_name,
+                                const std::string& err_msg) {
+            SLIC_ERROR_IF(
+                !group->hasView(view_name),
+                axom::fmt::format("Loaded Sidre Datastore does not have value '{}' for Quadrature Data.", view_name));
             auto prev_value = group->getView(view_name)->getData<axom::IndexType>();
             SLIC_ERROR_IF(value != prev_value, axom::fmt::format(err_msg, value, prev_value));
           };
           verify_size(geom_group, num_states, "num_states",
-                              "Current number of Quadrature Data States '{}' does not match value in restart '{}'.");
+                      "Current number of Quadrature Data States '{}' does not match value in restart '{}'.");
           verify_size(geom_group, state_size, "state_size",
-                              "Current size of Quadrature Data State '{}' does not match value in restart '{}'.");
+                      "Current size of Quadrature Data State '{}' does not match value in restart '{}'.");
           verify_size(geom_group, total_size, "total_size",
-                              "Current total size of Quadrature Data States '{}' does not match value in restart '{}'.");
+                      "Current total size of Quadrature Data States '{}' does not match value in restart '{}'.");
 
           // Tell Sidre where the external array is
+          SLIC_ERROR_ROOT_IF(!geom_group->hasView("states"),
+                             "Loaded Quadrature Data geometry Sidre view did not have 'states'");
+          axom::sidre::View* states_view = geom_group->getView("states");
           states_view->setExternalDataPtr(states.data());
         }
-
       }
     }
 
     if (is_restart_) {
       // NOTE: This call will reload all external buffers from file stored in the DataStore
       // TODO: This should be changed to load only the current material quadrature data after
-      // MFEMSidreDatacollection::LoadExternalData is fixed to allow loading the 
+      // MFEMSidreDatacollection::LoadExternalData and SPIO is enhanced to allow loading the
       // external data piecemeal
       datacoll.LoadExternalData();
     }
@@ -443,10 +449,7 @@ class StateManager {
    * @param[in] mesh_tag The mesh name used to name the new datacollection
    * @return The name of the data collection for the given mesh_tag
    */
-  static std::string getCollectionName(const std::string& mesh_tag)
-  {
-     return mesh_tag + "_datacoll";
-  }
+  static std::string getCollectionName(const std::string& mesh_tag) { return mesh_tag + "_datacoll"; }
 
   /**
    * @brief Construct the shape displacement field for the requested mesh

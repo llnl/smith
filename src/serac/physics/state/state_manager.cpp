@@ -50,43 +50,11 @@ double StateManager::newDataCollection(const std::string& mesh_tag, const std::o
     datacoll.UpdateStateFromDS();
     datacoll.UpdateMeshAndFieldsFromDS();
 
-<<<<<<< HEAD
-    checkMesh(mesh(name));
-=======
-    // Functional needs the nodal grid function and neighbor data in the mesh
-
-    // Determine if the existing nodal grid function is discontinuous. This
-    // indicates that the mesh is periodic and the new nodal grid function must also
-    // be discontinuous.
-    bool is_discontinuous = false;
-    auto nodes            = mesh(mesh_tag).GetNodes();
-    if (nodes) {
-      is_discontinuous = nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS;
-      SLIC_WARNING_ROOT_IF(
-          is_discontinuous,
-          "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 fields and "
-          "has not been thoroughly tested. Proceed at your own risk.");
-    }
-
-    // This mfem call ensures the mesh contains an H1 grid function describing nodal
-    // cordinates. The parameters do the following:
-    // 1. Sets the order of the mesh to  p = 1
-    // 2. Uses the existing continuity of the mesh finite element space (periodic meshes are discontinuous)
-    // 3. Uses the spatial dimension as the mesh dimension (i.e. it is not a lower dimension manifold)
-    // 4. Uses the ordering set by serac::ordering
-    mesh(mesh_tag).SetCurvature(1, is_discontinuous, -1, serac::ordering);
->>>>>>> 9f6833b64 (rename variable to be consistent with rest of class)
+    checkMesh(mesh(mesh_tag));
 
     // Sidre will destruct the nodal grid function instead of the mesh
     mesh(mesh_tag).SetNodesOwner(false);
 
-<<<<<<< HEAD
-=======
-    // Generate the face neighbor information in the mesh. This is needed by the face restriction
-    // operators used by Functional
-    mesh(mesh_tag).ExchangeFaceNbrData();
-
->>>>>>> 9f6833b64 (rename variable to be consistent with rest of class)
     // Construct and store the shape displacement fields and sensitivities associated with this mesh
     constructShapeFields(mesh_tag);
 
@@ -101,13 +69,8 @@ double StateManager::newDataCollection(const std::string& mesh_tag, const std::o
 void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteElementState*> states_to_load)
 {
   SERAC_MARK_FUNCTION;
-<<<<<<< HEAD
   const mfem::ParMesh* meshPtr = &(*states_to_load.begin())->mesh();
   std::string mesh_name = collectionID(meshPtr);
-=======
-  mfem::ParMesh* meshPtr   = &(*states_to_load.begin())->mesh();
-  std::string    mesh_tag = collectionID(meshPtr);
->>>>>>> 9f6833b64 (rename variable to be consistent with rest of class)
 
   std::string coll_name = getCollectionName(mesh_tag);
 
