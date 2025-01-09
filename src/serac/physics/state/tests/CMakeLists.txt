@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-set(state_test_depends serac_mesh serac_state gtest)
+set(state_manager_tests_depends serac_state serac_physics_materials serac_functional serac_mesh gtest)
 
 set(state_test_sources
     test_finite_element_state.cpp
