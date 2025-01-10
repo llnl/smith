@@ -31,7 +31,7 @@ void evaluation_test(std::string filename,
 
   auto mesh = Mesh::load(SERAC_MESH_DIR + filename);
 
-  Field u = create_field(mesh, Family::Hcurl, p);
+  Field u = create_field(mesh, Family::HCURL, p);
   nd::array<double, 2> nodes = nodes_for(u, mesh);
   nd::array<double, 2> directions = directions_for(u, mesh);
 

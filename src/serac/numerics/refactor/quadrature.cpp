@@ -1,4 +1,6 @@
-#include "refactor/quadrature.hpp"
+#include "serac/numerics/refactor/quadrature.hpp"
+
+#include "serac/numerics/refactor/common.hpp"
 
 #include <iostream>
 
@@ -364,5 +366,13 @@ GeometryInfo qpts_per_geom(const MeshQuadratureRule & qrule, int dim) {
     (dim == 3) * qrule.hex.points.shape[0] * qrule.hex.points.shape[0] * qrule.hex.points.shape[0]
   };
 }
+
+
+GeometryInfo MeshQuadratureRule::num_qpts(const serac::Domain & domain) const {
+  int gdim = domain.dim_;
+  GeometryInfo gcounts = refactor::geometry_counts(domain);
+  GeometryInfo qpts = qpts_per_geom(*this, gdim);
+  return gcounts * qpts;
+}; 
 
 } // namespace refactor

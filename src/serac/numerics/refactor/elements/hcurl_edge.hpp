@@ -5,7 +5,7 @@
 namespace refactor {
 
 template <>
-struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
+struct FiniteElement < mfem::Geometry::SEGMENT, Family::HCURL >{
 
   using source_type = vec1;
   using flux_type = vec1;
@@ -94,13 +94,28 @@ struct FiniteElement < mfem::Geometry::SEGMENT, Family::Hcurl >{
     }
   }
 
-  nd::array< double > evaluate_shape_function_curls(nd::view<const double,2> xi) {
-    uint32_t q = xi.shape[0];
-    nd::array<double> buffer({q * p});
-    for (uint32_t i = 0; i < q; i++) {
-      GaussLegendreInterpolation(xi(i, 0), p, &buffer(p * i));
+  void curl(nd::view<flux_type> values_q, nd::view<const double, 1> values_e, nd::view<const double, 2> shape_fn_curls, double * /*buffer*/) const {
+    uint32_t nnodes = num_nodes();
+    uint32_t nqpts = values_q.shape[0];
+
+    for (uint32_t q = 0; q < nqpts; q++) {
+      flux_type sum{};
+      for (uint32_t i = 0; i < nnodes; i++) {
+        sum[0] += shape_fn_curls(q, i) * values_e(i);
+      }
+      values_q(q) = sum;
     }
-    return buffer;
+  }
+
+  nd::array< double, 2 > evaluate_shape_function_curls(nd::view<const double, 2> xi) const {
+    uint32_t q = xi.shape[0];
+    nd::array<double, 2> shape_fns({q, num_nodes()});
+    for (uint32_t i = 0; i < q; i++) {
+      for (uint32_t j = 0; j < num_nodes(); j++) {
+        shape_fns(i, j) = shape_function_curl(xi(i, 0), j);
+      }
+    }
+    return shape_fns;
   }
 
   #if 0

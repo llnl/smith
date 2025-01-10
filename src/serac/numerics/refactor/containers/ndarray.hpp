@@ -525,7 +525,7 @@ SERAC_HOST_DEVICE void print_recursive(nd::view< T, dim > arr, int depth) {
   if constexpr (dim == 1) {
     for (int i = 0; i < depth; i++) printf("  ");
     printf("{");
-    for (int i = 0; i < arr.shape[0]; i++) {
+    for (uint32_t i = 0; i < arr.shape[0]; i++) {
       printer<S>::print(arr(i));
       if (i != arr.shape[0] - 1) { printf(","); }
     }
@@ -534,7 +534,7 @@ SERAC_HOST_DEVICE void print_recursive(nd::view< T, dim > arr, int depth) {
     const T * ptr = arr.data();
     stack::array< uint32_t, dim - 1 > shape;
     stack::array< uint32_t, dim - 1 > stride;
-    for (int i = 0; i < dim - 1; i++) {
+    for (uint32_t i = 0; i < dim - 1; i++) {
       shape[i] = arr.shape[i+1];
       stride[i] = arr.stride[i+1];
     }
@@ -546,7 +546,7 @@ SERAC_HOST_DEVICE void print_recursive(nd::view< T, dim > arr, int depth) {
       print_recursive(slice, 0);
     } else {
       printf("\n");
-      for (int i = 0; i < arr.shape[0]; i++) {
+      for (uint32_t i = 0; i < arr.shape[0]; i++) {
         print_recursive(slice, depth+1);
         if (i != arr.shape[0] - 1) { printf(","); }
         printf("\n");

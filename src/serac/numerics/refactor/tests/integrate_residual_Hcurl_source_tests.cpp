@@ -40,7 +40,7 @@ void integrate_source_test(std::string filename,
 
     std::function< double(vecd, vecd) > f_p = [f, p](vecd x, vecd n) { return dot(f(x,p), n) ; };
 
-    Field u = create_field(mesh, Family::Hcurl, p, 1);
+    Field u = create_field(mesh, Family::HCURL, p, 1);
     nd::array<double,2> nodes = nodes_for(u, mesh); 
     nd::array<double,2> directions = directions_for(u, mesh); 
     u = forall(f_p, nodes, directions);

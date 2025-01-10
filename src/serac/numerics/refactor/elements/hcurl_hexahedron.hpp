@@ -6,7 +6,7 @@ namespace refactor {
 
 // clang-format off
 template <>
-struct FiniteElement<mfem::Geometry::CUBE, Family::Hcurl> {
+struct FiniteElement<mfem::Geometry::CUBE, Family::HCURL> {
 
   using value_type = vec3;
   using derivative_type = vec3;

@@ -347,8 +347,8 @@ void GaussLobattoInterpolationQuadrilateral(const double * xi, uint32_t n,  doub
   GaussLobattoInterpolation(xi[0], n, N[0]);
   GaussLobattoInterpolation(xi[1], n, N[1]);
 
-  for (int j = 0; j < n; j++) {
-    for (int i = 0; i < n; i++) {
+  for (uint32_t j = 0; j < n; j++) {
+    for (uint32_t i = 0; i < n; i++) {
       output[j * n + i] = N[0][i] * N[0][j];
     }
   }
@@ -367,8 +367,8 @@ void GaussLobattoInterpolationDerivativeQuadrilateral(const double * xi, uint32_
   GaussLobattoInterpolation(xi[0], n, dN[0]);
   GaussLobattoInterpolation(xi[1], n, dN[1]);
 
-  for (int j = 0; j < n; j++) {
-    for (int i = 0; i < n; i++) {
+  for (uint32_t j = 0; j < n; j++) {
+    for (uint32_t i = 0; i < n; i++) {
       output[2 * (j * n + i) + 0] = dN[0][i] *  N[0][j];
       output[2 * (j * n + i) + 1] =  N[0][i] * dN[0][j];
     }
@@ -559,9 +559,9 @@ void GaussLobattoInterpolationHexahedron(const double * xi, uint32_t n,  double 
   GaussLobattoInterpolation(xi[1], n, N[1]);
   GaussLobattoInterpolation(xi[2], n, N[2]);
 
-  for (int k = 0; k < n; k++) {
-    for (int j = 0; j < n; j++) {
-      for (int i = 0; i < n; i++) {
+  for (uint32_t k = 0; k < n; k++) {
+    for (uint32_t j = 0; j < n; j++) {
+      for (uint32_t i = 0; i < n; i++) {
         output[(k * n + j) * n + i] = N[0][i] * N[1][j] * N[2][k];
       }
     }
@@ -582,9 +582,9 @@ void GaussLobattoInterpolationDerivativeHexahedron(const double * xi, uint32_t n
   GaussLobattoInterpolation(xi[1], n, dN[1]);
   GaussLobattoInterpolation(xi[2], n, dN[2]);
 
-  for (int k = 0; k < n; k++) {
-    for (int j = 0; j < n; j++) {
-      for (int i = 0; i < n; i++) {
+  for (uint32_t k = 0; k < n; k++) {
+    for (uint32_t j = 0; j < n; j++) {
+      for (uint32_t i = 0; i < n; i++) {
         output[3 * ((k * n + j) * n + i) + 0] = dN[0][i] *  N[1][j] *  N[2][k];
         output[3 * ((k * n + j) * n + i) + 1] =  N[0][i] * dN[1][j] *  N[2][k];
         output[3 * ((k * n + j) * n + i) + 2] =  N[0][i] *  N[1][j] * dN[2][k];

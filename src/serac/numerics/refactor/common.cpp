@@ -47,4 +47,15 @@ uint32_t elements_per_block(mfem::Geometry::Type geom, Family family, int p) {
 
 }
 
+GeometryInfo geometry_counts(const Domain & domain) {
+  return {
+    0,
+    uint32_t(domain.edge_ids_.size()),
+    uint32_t(domain.tri_ids_.size()),
+    uint32_t(domain.quad_ids_.size()),
+    uint32_t(domain.tet_ids_.size()),
+    uint32_t(domain.hex_ids_.size())
+  };
+}
+
 } // namespace refactor

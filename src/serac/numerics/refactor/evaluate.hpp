@@ -1,8 +1,10 @@
 #pragma once
 
+#include "serac/numerics/functional/family.hpp"
 #include "serac/numerics/refactor/containers/ndarray.hpp"
 #include "serac/numerics/refactor/finite_element.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
 
 namespace refactor {
 
@@ -33,7 +35,6 @@ struct BasisFunctionOp {
   BasisFunctionOp(const DerivedQuantity & o, const BasisFunction & f) : mod(Modifier::NONE), op(o), function(f){};
   BasisFunctionOp(const Modifier & m, const DerivedQuantity & o, const BasisFunction & f) : mod(m), op(o), function(f){};
 };
-
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -107,6 +108,6 @@ double dot(const Field & u, const Residual & r);
 
 ////////////////////////////////////////////////////////////////////////////////
 
-nd::array<double,3> evaluate(const FieldOp && input, const DomainWithType & d, const MeshQuadratureRule &);
+nd::array<double,3> evaluate(const FieldOp && input, Domain & domain, const MeshQuadratureRule &);
 
 }

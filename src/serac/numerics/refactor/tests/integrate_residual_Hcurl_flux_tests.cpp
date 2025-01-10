@@ -48,7 +48,7 @@ void integrate_flux_test(std::string filename,
       return dot(f(x,p), n) ; 
     };
 
-    Field u = create_field(mesh, Family::Hcurl, p, 1);
+    Field u = create_field(mesh, Family::HCURL, p, 1);
     nd::array<double,2> nodes = nodes_for(u, mesh); 
     nd::array<double,2> directions = directions_for(u, mesh); 
     u = forall(f_p, nodes, directions);

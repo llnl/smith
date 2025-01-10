@@ -49,7 +49,7 @@ void batched_integrate_spmat(nd::view<double> values,
       return trial_el.evaluate_weighted_shape_functions(xi, weights);
     }  
 
-    if constexpr(trial_op == DerivedQuantity::DERIVATIVE && trial_family == Family::Hcurl) {
+    if constexpr(trial_op == DerivedQuantity::DERIVATIVE && trial_family == Family::HCURL) {
       return trial_el.evaluate_weighted_shape_function_curls(xi, weights);
     }  
 
@@ -164,11 +164,11 @@ void batched_integrate_spmat(nd::view<double> values,
               phi_I = test_el.shape_function_gradient(xi_q, I);
             }
 
-            if constexpr (test_family == Family::Hcurl && test_op == DerivedQuantity::VALUE) {
+            if constexpr (test_family == Family::HCURL && test_op == DerivedQuantity::VALUE) {
               phi_I = test_el.reoriented_shape_function(xi_q, I, transformation[I]);
             }
 
-            if constexpr (test_family == Family::Hcurl && test_op == DerivedQuantity::DERIVATIVE) {
+            if constexpr (test_family == Family::HCURL && test_op == DerivedQuantity::DERIVATIVE) {
               phi_I = test_el.reoriented_shape_function_curl(xi_q, I, transformation[I]);
             }
 
@@ -263,8 +263,8 @@ std::function< void(refactor::sparse_matrix&) > integrate_sparse_matrix(BasisFun
           stack::array< uint32_t, 5 > qdata_shape{domain.num_qpts[geom], shape5D[1], shape5D[2], shape5D[3], shape5D[4]};
           nd::view<const double, 5> geom_qdata{&q5D(qoffset, 0, 0, 0, 0), qdata_shape};
 
-          foreach_constexpr< Family::H1, Family::Hcurl >([&](auto test_family) {
-            foreach_constexpr< Family::H1, Family::Hcurl >([&](auto trial_family) {
+          foreach_constexpr< Family::H1, Family::HCURL >([&](auto test_family) {
+            foreach_constexpr< Family::H1, Family::HCURL >([&](auto trial_family) {
               if (test_family == phi.family && trial_family == psi.family) {
                 batched_integrate_spmat<geom, test_family, test_op, trial_family, trial_op >(
                   A.values, A.row_ptr, A.col_ind, 

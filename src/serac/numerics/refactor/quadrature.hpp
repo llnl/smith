@@ -1,6 +1,7 @@
 #pragma once
 
 #include "serac/numerics/refactor/geometry.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/numerics/refactor/containers/ndarray.hpp"
 
 namespace refactor {
@@ -16,6 +17,8 @@ enum class QuadratureRuleType { UniformStructured, UniformUnstructured, Nonunifo
 struct MeshQuadratureRule : public GeometryData< ElementQuadratureRule >{
   MeshQuadratureRule(uint32_t q, bool compact = true);
   QuadratureRuleType type;
+
+  GeometryInfo num_qpts(const serac::Domain & domain) const; 
 };
 
 void gauss_legendre_segment_rule(uint32_t q, double * qpts, double * qwts);

@@ -65,6 +65,8 @@ public:
    */
   FiniteElementState(FiniteElementState&& rhs) : FiniteElementVector(std::move(rhs)) {}
 
+
+
   /**
    * @brief Copy assignment
    *
@@ -251,3 +253,56 @@ double computeL2Error(const FiniteElementState& state, mfem::VectorCoefficient& 
 double computeL2Error(const FiniteElementState& state, mfem::Coefficient& exact_solution);
 
 }  // namespace serac
+
+namespace refactor {
+
+  using Field = serac::FiniteElementState;
+
+  Family get_family(const Field & f);
+  uint32_t get_degree(const Field & f);
+  uint32_t get_num_components(const Field & f);
+  uint32_t get_num_nodes(const Field & f);
+  mfem::FiniteElementSpace * get_FES(const Field & f);
+
+  Field mesh_coordinates(mfem::ParMesh & mesh);
+
+  nd::array< double, 2 > get_nodal_coordinates(const Field & f);
+  nd::array< double, 2 > get_nodal_directions(const Field & f);
+
+  struct FunctionSpace {
+    Family family;
+    uint32_t degree;
+    uint32_t components;
+    FunctionSpace() : family{}, degree{}, components{} {}
+    FunctionSpace(Family f, uint32_t d = 2, uint32_t c = 1) : family{f}, degree{d}, components{c}{}
+    FunctionSpace(Field f) {
+      family = get_family(f);
+      degree = get_degree(f);
+      components = get_num_components(f);
+    }
+
+    bool operator==(const FunctionSpace & other) const {
+      return (components == other.components) && 
+             (degree == other.degree) &&
+             (family == other.family);
+    }
+  };
+
+  struct BasisFunction {
+    FunctionSpace space;
+    BasisFunction(Field f) : space(f) {}
+    BasisFunction(FunctionSpace s) : space(s) {}
+    bool operator==(const BasisFunction & other) const {
+      return (space.components == other.space.components) && 
+             (space.degree == other.space.degree) &&
+             (space.family == other.space.family);
+    }
+  };
+
+  GeometryInfo nodes_per_geom(FunctionSpace space);
+  GeometryInfo interior_nodes_per_geom(FunctionSpace space);
+
+  GeometryInfo dofs_per_geom(FunctionSpace space);
+  GeometryInfo interior_dofs_per_geom(FunctionSpace space);
+
+}

@@ -8,7 +8,7 @@ using namespace serac;
 
 // clang-format off
 template <>
-struct FiniteElement<mfem::Geometry::SQUARE, Family::Hcurl> {
+struct FiniteElement<mfem::Geometry::SQUARE, Family::HCURL> {
 
   using value_type = vec2;
   using derivative_type = vec1;

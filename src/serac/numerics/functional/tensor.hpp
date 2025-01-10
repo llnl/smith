@@ -1274,6 +1274,13 @@ SERAC_HOST_DEVICE constexpr auto I2(const tensor<T, 3, 3>& A)
  * @param[in] A The matrix to obtain the determinant of
  */
 template <typename T>
+SERAC_HOST_DEVICE constexpr auto det(const tensor<T, 1, 1>& A)
+{
+  return A[0][0];
+}
+
+/// @overload
+template <typename T>
 SERAC_HOST_DEVICE constexpr auto det(const tensor<T, 2, 2>& A)
 {
   return A[0][0] * A[1][1] - A[0][1] * A[1][0];

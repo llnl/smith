@@ -8,6 +8,8 @@ namespace refactor {
 
 uint32_t elements_per_block(mfem::Geometry::Type geom, Family family, int p);
 
+GeometryInfo geometry_counts(const Domain & domain);
+
 template < typename T >
 struct array_rank;
 
@@ -27,35 +29,37 @@ SERAC_HOST_DEVICE constexpr uint32_t round_up_to_multiple_of_128(uint32_t n) {
 
 constexpr uint32_t source_shape(Family f, uint32_t gdim) {
   switch(f) {
+    case Family::QOI:   return 1;
     case Family::H1:    return 1;
-    case Family::Hcurl: return gdim;
-    case Family::Hdiv:  return gdim;
-    case Family::DG:    return 1;
+    case Family::HCURL: return gdim;
+    case Family::HDIV:  return gdim;
+    case Family::L2:    return 1;
   }
   return (1u << 31);
 }
 
 constexpr uint32_t flux_shape(Family f, uint32_t gdim) {
   switch(f) {
+    case Family::QOI:   return 0;
     case Family::H1:    return gdim;
-    case Family::Hcurl: return (gdim == 2) ? 1 : gdim;
-    case Family::Hdiv:  return (gdim == 2) ? 1 : gdim;
-    case Family::DG:    return gdim;
+    case Family::HCURL: return (gdim == 2) ? 1 : gdim;
+    case Family::HDIV:  return (gdim == 2) ? 1 : gdim;
+    case Family::L2:    return gdim;
   }
 
   return (1u << 31);
 }
 
-template < Family f, DerivedQuantity op, uint32_t dim >
+template < Family f, DerivedQuantity op, int dim >
 auto piola_transformation(const mat<dim,dim> & dX_dxi) {
   if constexpr ((f == Family::H1    && op == DerivedQuantity::DERIVATIVE) ||
-                (f == Family::DG    && op == DerivedQuantity::DERIVATIVE) ||
-                (f == Family::Hcurl && op == DerivedQuantity::VALUE)) {
+                (f == Family::L2    && op == DerivedQuantity::DERIVATIVE) ||
+                (f == Family::HCURL && op == DerivedQuantity::VALUE)) {
     return inv(dX_dxi);
   }
 
-  if constexpr ((f == Family::Hcurl && op == DerivedQuantity::DERIVATIVE) ||
-                (f == Family::Hdiv  && op == DerivedQuantity::VALUE)) {
+  if constexpr ((f == Family::HCURL && op == DerivedQuantity::DERIVATIVE) ||
+                (f == Family::HDIV  && op == DerivedQuantity::VALUE)) {
     if constexpr (dim == 2) {
       return mat<1,1>{1.0 / det(dX_dxi)};
     } else {
@@ -64,24 +68,24 @@ auto piola_transformation(const mat<dim,dim> & dX_dxi) {
   }
 
   if constexpr ((f == Family::H1    && op == DerivedQuantity::VALUE) ||
-                (f == Family::DG    && op == DerivedQuantity::VALUE) || 
-                (f == Family::Hdiv  && op == DerivedQuantity::DERIVATIVE)) {
+                (f == Family::L2    && op == DerivedQuantity::VALUE) || 
+                (f == Family::HDIV  && op == DerivedQuantity::DERIVATIVE)) {
     // this should never be called, but we implement it here regardless
     // to suppress a compiler warning about incompatible return values
     return 1.0;
   }
 }
 
-template < Family f, DerivedQuantity op, uint32_t dim >
+template < Family f, DerivedQuantity op, int dim >
 auto weighted_piola_transformation(const mat<dim,dim> & dX_dxi) {
   if constexpr ((f == Family::H1    && op == DerivedQuantity::DERIVATIVE) ||
-                (f == Family::DG    && op == DerivedQuantity::DERIVATIVE) ||
-                (f == Family::Hcurl && op == DerivedQuantity::VALUE)) {
+                (f == Family::L2    && op == DerivedQuantity::DERIVATIVE) ||
+                (f == Family::HCURL && op == DerivedQuantity::VALUE)) {
     return adj(dX_dxi);
   }
 
-  if constexpr ((f == Family::Hcurl && op == DerivedQuantity::DERIVATIVE) ||
-                (f == Family::Hdiv  && op == DerivedQuantity::VALUE)) {
+  if constexpr ((f == Family::HCURL && op == DerivedQuantity::DERIVATIVE) ||
+                (f == Family::HDIV  && op == DerivedQuantity::VALUE)) {
     if constexpr (dim == 2) {
       return mat<1,1>{1.0};
     } else {
@@ -90,8 +94,8 @@ auto weighted_piola_transformation(const mat<dim,dim> & dX_dxi) {
   }
 
   if constexpr ((f == Family::H1    && op == DerivedQuantity::VALUE) ||
-                (f == Family::DG    && op == DerivedQuantity::VALUE) || 
-                (f == Family::Hdiv  && op == DerivedQuantity::DERIVATIVE)) {
+                (f == Family::L2    && op == DerivedQuantity::VALUE) || 
+                (f == Family::HDIV  && op == DerivedQuantity::DERIVATIVE)) {
     return det(dX_dxi);
   }
 }
@@ -118,9 +122,9 @@ constexpr uint32_t qshape(Family f, DerivedQuantity op, uint32_t gdim) {
   } 
 
   if (op == DerivedQuantity::DERIVATIVE) {
-    if (f == Family::H1 || f == Family::DG) { return gdim; }
-    if (f == Family::Hcurl) { return (gdim == 2) ? 1 : gdim; }
-    if (f == Family::Hdiv) { return 1; }
+    if (f == Family::H1 || f == Family::L2) { return gdim; }
+    if (f == Family::HCURL) { return (gdim == 2) ? 1 : gdim; }
+    if (f == Family::HDIV) { return 1; }
   }
 
   return (1u<<31);
@@ -185,7 +189,7 @@ auto value_transformation(const mat<n,n,double> & A) {
   if constexpr (family == Family::H1) {
     return mat1{1.0};
   }
-  if constexpr (family == Family::Hcurl) {
+  if constexpr (family == Family::HCURL) {
     return inv(A); 
   }
 }
@@ -195,7 +199,7 @@ auto derivative_transformation(const mat<n,n,double> & A) {
   if constexpr (family == Family::H1) {
     return contravariant_piola(A);
   }
-  if constexpr (family == Family::Hcurl) {
+  if constexpr (family == Family::HCURL) {
     return covariant_piola(A);
   }
 }
@@ -205,7 +209,7 @@ auto source_transformation(const mat<n,n,double> & A) {
   if constexpr (family == Family::H1) {
     return det(A);
   }
-  if constexpr (family == Family::Hcurl) {
+  if constexpr (family == Family::HCURL) {
     return inv(A) * det(A); 
   }
 }
@@ -215,7 +219,7 @@ auto flux_transformation(const mat<n,n,double> & A) {
   if constexpr (family == Family::H1) {
     return inv(A) * det(A);
   }
-  if constexpr (family == Family::Hcurl) {
+  if constexpr (family == Family::HCURL) {
     if constexpr (n <= 2) {
       return vec1(1.0);
     }

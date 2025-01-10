@@ -34,12 +34,14 @@ set(refactor_sources
     integrate_diag.cpp
     integrate_spmat.cpp
     integrate_residual.cpp
+    interpolation.cpp
+    quadrature.cpp
 
     get_nodal_coordinates.cpp
     get_nodal_directions.cpp
 )
 
-set(refactor_depends serac_infrastructure serac_functional serac_refactor_containers)
+set(refactor_depends serac_physics serac_infrastructure serac_functional serac_refactor_containers)
 
 blt_add_library(
     NAME        serac_refactor

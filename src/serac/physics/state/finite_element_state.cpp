@@ -123,3 +123,52 @@ double computeL2Error(const FiniteElementState& state, mfem::Coefficient& exact_
 }
 
 }  // namespace serac
+
+
+namespace refactor {
+
+serac::Family get_family(const Field & f) {
+  switch(f.gridFunction().FESpace()->FEColl()->GetContType()) {
+    case mfem::FiniteElementCollection::CONTINUOUS:    return Family::H1;
+    case mfem::FiniteElementCollection::TANGENTIAL:    return Family::HCURL;
+    case mfem::FiniteElementCollection::NORMAL:        return Family::HDIV;
+    case mfem::FiniteElementCollection::DISCONTINUOUS: return Family::L2;
+  }
+  return Family::H1; // unreachable
+}
+
+mfem::FiniteElementSpace * get_FES(const Field & f) {
+  return f.gridFunction().FESpace();
+}
+
+uint32_t get_degree(const Field & f) {
+  return uint32_t(f.gridFunction().FESpace()->FEColl()->GetOrder());
+}
+
+uint32_t get_num_components(const Field & f) {
+  return uint32_t(f.gridFunction().VectorDim());
+}
+
+uint32_t get_num_nodes(const Field & f) {
+  return uint32_t(f.gridFunction().FESpace()->GetNDofs());
+}
+
+Field mesh_coordinates(mfem::ParMesh & mesh) {
+
+  // sam: as I understand it mfem::Mesh::GetNodes() requires mfem::Mesh::EnsureNodes()
+  //      be called ahead of time, or else it will not return a valid (mfem::ParGridFunction *)
+  //      
+  //      this is also why the mesh is passed as non-const &
+  mesh.EnsureNodes();
+
+  mfem::ParGridFunction* mesh_nodes = dynamic_cast<mfem::ParGridFunction *>(mesh.GetNodes());
+
+  Field X(*mesh_nodes->ParFESpace());
+
+  X.setFromGridFunction(*mesh_nodes);
+
+  return X;
+
+}
+
+}

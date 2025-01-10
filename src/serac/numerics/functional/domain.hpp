@@ -182,6 +182,7 @@ struct Domain {
     exit(1);
   }
 
+
   /**
    * @brief returns how many elements of any type belong to this domain
    */

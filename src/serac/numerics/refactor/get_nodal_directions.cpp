@@ -1,3 +1,4 @@
+#if 0
 #include "serac/numerics/refactor/finite_element.hpp"
 
 namespace refactor {
@@ -39,3 +40,4 @@ nd::array< double, 2 > get_nodal_directions(const Field & f) {
 }
 
 }
+#endif

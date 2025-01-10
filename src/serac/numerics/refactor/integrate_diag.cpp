@@ -131,11 +131,11 @@ void batched_integrate_diag(nd::view<double, 2> D,
             phi_I = el.shape_function_gradient(xi_q, I);
           }
 
-          if constexpr (family == Family::Hcurl && test_op == DerivedQuantity::VALUE) {
+          if constexpr (family == Family::HCURL && test_op == DerivedQuantity::VALUE) {
             phi_I = el.reoriented_shape_function(xi_q, I, transformation[I]);
           }
 
-          if constexpr (family == Family::Hcurl && test_op == DerivedQuantity::DERIVATIVE) {
+          if constexpr (family == Family::HCURL && test_op == DerivedQuantity::DERIVATIVE) {
             phi_I = el.reoriented_shape_function_curl(xi_q, I, transformation[I]);
           }
 
@@ -148,11 +148,11 @@ void batched_integrate_diag(nd::view<double, 2> D,
             psi_I = el.shape_function_gradient(xi_q, I);
           }
 
-          if constexpr (family == Family::Hcurl && trial_op == DerivedQuantity::VALUE) {
+          if constexpr (family == Family::HCURL && trial_op == DerivedQuantity::VALUE) {
             psi_I = el.reoriented_shape_function(xi_q, I, transformation[I]);
           }
 
-          if constexpr (family == Family::Hcurl && trial_op == DerivedQuantity::DERIVATIVE) {
+          if constexpr (family == Family::HCURL && trial_op == DerivedQuantity::DERIVATIVE) {
             psi_I = el.reoriented_shape_function_curl(xi_q, I, transformation[I]);
           }
 
@@ -215,7 +215,7 @@ nd::array<double,2> integrate_sparse_matrix_diagonal(BasisFunction test, const n
 
       const Domain::AssemblyLUT & table = domain.get(geom, phi.family, phi.degree);
 
-      foreach_constexpr< Family::H1, Family::Hcurl >([&](auto family) {
+      foreach_constexpr< Family::H1, Family::HCURL >([&](auto family) {
         if (family == phi.family) {
           batched_integrate_diag<geom, family, test_op, trial_op >(
             output.data,

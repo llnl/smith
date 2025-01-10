@@ -1,118 +1,25 @@
 #pragma once
 
+#include "serac/numerics/functional/family.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/refactor/geometry.hpp"
 #include "serac/numerics/refactor/quadrature.hpp"
 #include "serac/numerics/refactor/containers/ndarray.hpp"
 
-#include "serac/physics/state/finite_element_dual.hpp"
-#include "serac/physics/state/finite_element_state.hpp"
-
 namespace refactor {
 
-using Field = serac::FiniteElementState;
-using Residual = serac::FiniteElementDual;
-
-enum class Family { 
-  H1, 
-  Hcurl, 
-  Hdiv, 
-  DG 
-};
-
-inline Family get_family(const Field & f) {
-  switch(f.gridFunction().FESpace()->FEColl()->GetContType()) {
-    case mfem::FiniteElementCollection::CONTINUOUS:    return Family::H1;
-    case mfem::FiniteElementCollection::TANGENTIAL:    return Family::Hcurl;
-    case mfem::FiniteElementCollection::NORMAL:        return Family::Hdiv;
-    case mfem::FiniteElementCollection::DISCONTINUOUS: return Family::DG;
-  }
-  return Family::H1; // unreachable
-}
-
-inline Family get_family(const Residual & r) {
-  switch(r.linearForm().FESpace()->FEColl()->GetContType()) {
-    case mfem::FiniteElementCollection::CONTINUOUS:    return Family::H1;
-    case mfem::FiniteElementCollection::TANGENTIAL:    return Family::Hcurl;
-    case mfem::FiniteElementCollection::NORMAL:        return Family::Hdiv;
-    case mfem::FiniteElementCollection::DISCONTINUOUS: return Family::DG;
-  }
-  return Family::H1; // unreachable
-}
-
-inline uint32_t get_degree(const Field & f) {
-  return uint32_t(f.gridFunction().FESpace()->FEColl()->GetOrder());
-}
-
-inline uint32_t get_degree(const Residual & r) {
-  return uint32_t(r.linearForm().FESpace()->FEColl()->GetOrder());
-}
-
-inline uint32_t get_num_components(const Field & f) {
-  return uint32_t(f.gridFunction().VectorDim());
-}
-
-inline uint32_t get_num_components(const Residual & r) {
-  return uint32_t(r.linearForm().ParFESpace()->GetVDim());
-}
-
-inline uint32_t get_num_nodes(const Field & f) {
-  return uint32_t(f.gridFunction().FESpace()->GetNDofs());
-}
-
-inline uint32_t get_num_nodes(const Residual & r) {
-  return uint32_t(r.linearForm().FESpace()->GetNDofs());
-}
-
-nd::array< double, 2 > get_nodal_coordinates(const Field & f);
-nd::array< double, 2 > get_nodal_directions(const Field & f);
+using serac::Family;
 
 enum class Modifier { NONE, DIAGONAL, SYM };
 enum class DerivedQuantity { VALUE, DERIVATIVE };
 
 SERAC_HOST_DEVICE constexpr bool is_scalar_valued(Family f) {
-  return (f == Family::H1) || (f == Family::DG);
+  return (f == Family::H1) || (f == Family::L2);
 }
 
 SERAC_HOST_DEVICE constexpr bool is_vector_valued(Family f) {
-  return (f == Family::Hcurl) || (f == Family::Hdiv);
+  return (f == Family::HCURL) || (f == Family::HDIV);
 }
-
-struct FunctionSpace {
-  Family family;
-  uint32_t degree;
-  uint32_t components;
-  FunctionSpace() : family{}, degree{}, components{} {}
-  FunctionSpace(Family f, uint32_t d = 2, uint32_t c = 1) : family{f}, degree{d}, components{c}{}
-  FunctionSpace(Field f) {
-    family = get_family(f);
-    degree = get_degree(f);
-    components = get_num_components(f);
-  }
-
-  bool operator==(const FunctionSpace & other) const {
-    return (components == other.components) && 
-           (degree == other.degree) &&
-           (family == other.family);
-  }
-};
-
-struct BasisFunction {
-  FunctionSpace space;
-  BasisFunction(Field f) : space(f) {}
-  BasisFunction(FunctionSpace s) : space(s) {}
-  bool operator==(const BasisFunction & other) const {
-    return (space.components == other.space.components) && 
-           (space.degree == other.space.degree) &&
-           (space.family == other.space.family);
-  }
-};
-
-GeometryInfo nodes_per_geom(FunctionSpace space);
-GeometryInfo interior_nodes_per_geom(FunctionSpace space);
-
-GeometryInfo dofs_per_geom(FunctionSpace space);
-GeometryInfo interior_dofs_per_geom(FunctionSpace space);
 
 enum class TransformationType {
   PhysicalToParent,
@@ -129,7 +36,7 @@ auto shape_function_derivatives(FiniteElement< geom, family > element,
     return element.evaluate_shape_function_gradients(xi);
   } 
 
-  if constexpr (family == Family::Hcurl) {
+  if constexpr (family == Family::HCURL) {
     return element.evaluate_shape_function_curls(xi);
   } 
 }
@@ -142,7 +49,7 @@ auto weighted_shape_function_derivatives(FiniteElement< geom, family > element,
     return element.evaluate_weighted_shape_function_gradients(xi, weights);
   } 
 
-  if constexpr (family == Family::Hcurl) {
+  if constexpr (family == Family::HCURL) {
     return element.evaluate_weighted_shape_function_curls(xi, weights);
   } 
 }

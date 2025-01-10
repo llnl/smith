@@ -43,7 +43,7 @@ void batched_integrate_residual(Residual & r,
       return r_el.evaluate_weighted_shape_functions(xi, weights);
     }  
 
-    if constexpr(op == DerivedQuantity::DERIVATIVE && family == Family::Hcurl) {
+    if constexpr(op == DerivedQuantity::DERIVATIVE && family == Family::HCURL) {
       return r_el.evaluate_weighted_shape_function_curls(xi, weights);
     }  
 
@@ -187,8 +187,8 @@ void integrate_residual(Residual & r, BasisFunction phi, const nd::array<double,
         batched_integrate_residual<geom, Family::H1, op>(r, domain.mesh.X, type, integrand_geom, elements, xi, weights, element_residual_buffer); 
       }
 
-      if (phi.space.family == Family::Hcurl) {
-        batched_integrate_residual<geom, Family::Hcurl, op>(r, domain.mesh.X, type, integrand_geom, elements, xi, weights, element_residual_buffer); 
+      if (phi.space.family == Family::HCURL) {
+        batched_integrate_residual<geom, Family::HCURL, op>(r, domain.mesh.X, type, integrand_geom, elements, xi, weights, element_residual_buffer); 
       }
     }
 

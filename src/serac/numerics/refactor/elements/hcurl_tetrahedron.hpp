@@ -9,7 +9,7 @@ using namespace serac;
 
 // clang-format off
 template <>
-struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::Hcurl> {
+struct FiniteElement<mfem::Geometry::TETRAHEDRON, Family::HCURL> {
 
   using value_type = vec3;
   using derivative_type = vec3;

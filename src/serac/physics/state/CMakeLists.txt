@@ -12,8 +12,9 @@ set(state_headers
     )
 
 set(state_sources
-    finite_element_vector.cpp
+    finite_element_dual.cpp
     finite_element_state.cpp
+    finite_element_vector.cpp
     state_manager.cpp
     )
 

@@ -140,3 +140,14 @@ protected:
 };
 
 }  // namespace serac
+
+namespace refactor {
+
+  using Residual = serac::FiniteElementDual;
+
+  Family get_family(const Residual & r);
+  uint32_t get_degree(const Residual & r);
+  uint32_t get_num_components(const Residual & r);
+  uint32_t get_num_nodes(const Residual & r);
+
+}
