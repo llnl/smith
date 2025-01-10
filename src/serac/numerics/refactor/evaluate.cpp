@@ -123,7 +123,7 @@ void evaluate(nd::array<double,3> & output, const Field & u_T, Domain & domain, 
   P->Mult(u_T, u_L);
 
   // we just use this as a key to create/fetch the appropriate restriction operator
-  serac::FunctionSpace space{get_family(u_T), int(get_degree(u_T)), 1}; 
+  serac::FunctionSpace space{get_family(u_T), int(get_degree(u_T)), int(u_components)}; 
 
   // insert_restriction is idempotent, so only the first call will do anything expensive
   domain.insert_restriction(u_fes, space);
