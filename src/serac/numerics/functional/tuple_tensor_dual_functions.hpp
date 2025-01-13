@@ -861,10 +861,10 @@ inline SERAC_HOST_DEVICE tuple<vec3, mat3> eig_symm(const mat3& A)
 
     double A11 = dot(s0, A_dev_s0);
     double A12 = dot(s0, A_dev_s1);
-    double A21 = dot(s1, A_dev_s0);
+    double A21 = A12;
     double A22 = dot(s1, A_dev_s1);
 
-    double delta = 0.5 * sgn(A11 - A22) * std::sqrt((A11 - A22) * (A11 - A22) + 4 * A12 * A21);
+    double delta = 0.5 * std::sqrt((A11 - A22) * (A11 - A22) + 4 * A12 * A21);
 
     eta(1) = 0.5 * (A11 + A22) - delta;
     eta(2) = 0.5 * (A11 + A22) + delta;
