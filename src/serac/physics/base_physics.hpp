@@ -618,7 +618,10 @@ protected:
    */
   double time_;
 
-  double time_prev_;
+  /**
+   * @brief Current time step
+   */
+  double dt_;
 
   /**
    * @brief The maximum time reached for the forward solver
