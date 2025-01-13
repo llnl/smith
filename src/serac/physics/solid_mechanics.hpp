@@ -1170,9 +1170,6 @@ public:
       }
     }
 
-    // store the current time step for use in rate-dependent materials
-    dt_ = dt;
-
     if (is_quasistatic_) {
       quasiStaticSolve(dt);
     } else {
@@ -1183,6 +1180,7 @@ public:
       // but at the moment, the double times creates a lot of confusion, so
       // we short circuit the extra time here by passing a dummy time and ignoring it.
       double time_tmp = time_;
+      dt_ = dt;
       ode2_.Step(displacement_, velocity_, time_tmp, dt);
     }
 
@@ -1521,7 +1519,6 @@ protected:
     // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
     // throughout.
     warmStartDisplacement(dt);
-    time_prev_ = time_;
     time_ += dt;
 
     // this method is essentially equivalent to the 1-liner
@@ -1641,7 +1638,7 @@ protected:
     }
 
     if (use_warm_start_) {
-      // Update the linearized Jacobian matrix
+      // Update external forcing
       auto r = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
                             *parameters_[parameter_indices].state...);
 
@@ -1669,6 +1666,7 @@ protected:
     }
 
     displacement_ += du_;
+    dt_ = dt;
   }
 };
 
