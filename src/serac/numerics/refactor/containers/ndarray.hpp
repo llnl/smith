@@ -515,8 +515,8 @@ template <> struct printer<int8_t>{ static SERAC_HOST_DEVICE void print(int8_t x
 template <> struct printer<uint8_t>{ static SERAC_HOST_DEVICE void print(uint8_t x) { printf("%u", x); } };
 template <> struct printer<int32_t>{ static SERAC_HOST_DEVICE void print(int32_t x) { printf("%d", x); } };
 template <> struct printer<uint32_t>{ static SERAC_HOST_DEVICE void print(uint32_t x) { printf("%u", x); } };
-template <> struct printer<int64_t>{ static SERAC_HOST_DEVICE void print(int64_t x) { printf("%ld", x); } };
-template <> struct printer<uint64_t>{ static SERAC_HOST_DEVICE void print(uint64_t x) { printf("%lu", x); } };
+template <> struct printer<int64_t>{ static SERAC_HOST_DEVICE void print(int64_t x) { printf("%lld", x); } };
+template <> struct printer<uint64_t>{ static SERAC_HOST_DEVICE void print(uint64_t x) { printf("%llu", x); } };
 
 template < typename T, uint32_t dim >
 SERAC_HOST_DEVICE void print_recursive(nd::view< T, dim > arr, int depth) {

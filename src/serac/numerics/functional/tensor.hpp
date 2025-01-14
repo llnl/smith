@@ -628,6 +628,15 @@ SERAC_HOST_DEVICE constexpr auto& operator-=(tensor<T, n...>& A, zero)
 
 /**
  * @overload
+ * @note this overload implements the case where both arguments are scalars
+ */
+SERAC_HOST_DEVICE constexpr auto outer(double A, double B)
+{
+  return A * B;
+}
+
+/**
+ * @overload
  * @note this overload implements the case where the left argument is a scalar, and the right argument is a tensor
  */
 template <typename T, int n>
@@ -1269,6 +1278,11 @@ SERAC_HOST_DEVICE constexpr auto I2(const tensor<T, 3, 3>& A)
          A[2][0] * A[0][2];
 }
 
+SERAC_HOST_DEVICE constexpr auto det(const double & A)
+{
+  return A;
+}
+
 /**
  * @brief Returns the determinant of a matrix
  * @param[in] A The matrix to obtain the determinant of
@@ -1624,6 +1638,15 @@ template <typename T, int n>
 SERAC_HOST_DEVICE constexpr auto linear_solve(const LuFactorization<T, n>& /* lu_factors */, const zero /* b */)
 {
   return zero{};
+}
+
+/**
+ * @brief Inverts a (1x1) matrix
+ * @param[in] A The "matrix" to invert
+ */
+SERAC_HOST_DEVICE constexpr double inv(const double & A)
+{
+  return 1.0 / A;
 }
 
 /**

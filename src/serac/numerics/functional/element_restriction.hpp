@@ -61,7 +61,7 @@ struct DoF {
   DoF() : bits{} {}
 
   /// copy ctor
-  DoF(const DoF& other) : bits{other.bits} {}
+  //DoF(const DoF& other) : bits{other.bits} {}
 
   /// create a `DoF` from the given index, sign and orientation values
   DoF(uint64_t index, uint64_t sign = 0, uint64_t orientation = 0)
@@ -70,7 +70,7 @@ struct DoF {
   }
 
   /// copy assignment operator
-  void operator=(const DoF& other) { bits = other.bits; }
+  //void operator=(const DoF& other) { bits = other.bits; }
 
   /// get the sign field of this `DoF`
   int sign() const { return (bits & sign_mask) ? -1 : 1; }

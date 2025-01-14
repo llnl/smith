@@ -5,20 +5,6 @@
 
 namespace refactor {
 
-inline GeometryData< nd::range<uint32_t> > ranges(GeometryInfo a) {
-  GeometryData< nd::range<uint32_t> > output;
-
-  uint32_t total = 0;
-  output.vert = nd::range{total, total + a.vert}; total += a.vert;
-  output.edge = nd::range{total, total + a.edge}; total += a.edge;
-  output.tri  = nd::range{total, total + a.tri};  total += a.tri;
-  output.quad = nd::range{total, total + a.quad}; total += a.quad;
-  output.tet  = nd::range{total, total + a.tet};  total += a.tet;
-  output.hex  = nd::range{total, total + a.hex};  total += a.hex;
-
-  return output;
-};
-
 namespace impl {
 
 template < mfem::Geometry::Type geom, Family family, DerivedQuantity op >
@@ -192,20 +178,6 @@ FieldOp div(const Field & f) {
   return {DerivedQuantity::DERIVATIVE, f};
 }
 
-BasisFunctionOp grad(const BasisFunction & f) { 
-  SLIC_ERROR_IF(!is_scalar_valued(f.space.family), "grad(BasisFunction) only supports scalar-valued function spaces");
-  return {DerivedQuantity::DERIVATIVE, f}; 
-}
-
-BasisFunctionOp curl(const BasisFunction & f) {
-  SLIC_ERROR_IF(f.space.family != Family::HCURL, "curl(BasisFunction) only supports Family::Hcurl");
-  return {DerivedQuantity::DERIVATIVE, f};
-}
-
-BasisFunctionOp div(const BasisFunction & f) {
-  SLIC_ERROR_IF(f.space.family != Family::HDIV, "div(BasisFunction) only supports Family::Hdiv");
-  return {DerivedQuantity::DERIVATIVE, f};
-}
 
 } // namespace refactor
 #endif

@@ -140,6 +140,20 @@ inline GeometryInfo operator*(GeometryInfo a, uint32_t scale) {
   };
 };
 
+inline GeometryData< nd::range<uint32_t> > ranges(GeometryInfo a) {
+  GeometryData< nd::range<uint32_t> > output;
+
+  uint32_t total = 0;
+  output.vert = nd::range{total, total + a.vert}; total += a.vert;
+  output.edge = nd::range{total, total + a.edge}; total += a.edge;
+  output.tri  = nd::range{total, total + a.tri};  total += a.tri;
+  output.quad = nd::range{total, total + a.quad}; total += a.quad;
+  output.tet  = nd::range{total, total + a.tet};  total += a.tet;
+  output.hex  = nd::range{total, total + a.hex};  total += a.hex;
+
+  return output;
+};
+
 inline uint32_t total(GeometryInfo input){
   return input.vert + input.edge + input.tri + input.quad + input.tet + input.hex;
 };
