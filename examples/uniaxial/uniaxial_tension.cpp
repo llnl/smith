@@ -21,6 +21,14 @@
 
 #include <cfenv>
 
+template <class Physics>
+void output(double u, double f, const Physics& solid, const std::string& paraview_tag, std::ofstream& file)
+{
+  solid.outputStateToDisk(paraview_tag);
+  file << solid.time() << " " << u << " " << f << std::endl;
+}
+
+
 int main(int argc, char* argv[])
 {
   feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
@@ -49,6 +57,7 @@ int main(int argc, char* argv[])
   constexpr double eta = 1e-2;
 
   constexpr double max_strain = 3*strain_constant;
+  std::string output_filename = "uniaxial_fd.txt";
 
   // Handle command line arguments
   axom::CLI::App app{"Plane strain uniaxial extension of a bar."};
@@ -57,11 +66,13 @@ int main(int argc, char* argv[])
   app.add_option("--parallel-refinements", parallel_refinements, "Parallel refinement steps", true);
   app.add_option("--time-steps", time_steps, "Number of time steps to divide simulation", true);
   app.add_option("--strain-rate", strain_rate, "Nominal strain rate", true);
+  app.add_option("--output-file", output_filename, "Name for force-displacement output file", true);
   app.set_help_flag("--help");
   
   CLI11_PARSE(app, argc, argv);
 
   SLIC_INFO_ROOT(axom::fmt::format("strain rate: {}", strain_rate));
+  SLIC_INFO_ROOT(axom::fmt::format("time_steps: {}", time_steps));
 
   double max_time = max_strain/strain_rate;
   
@@ -114,9 +125,6 @@ int main(int argc, char* argv[])
 
   solid_solver.completeSetup();
 
-  std::string paraview_tag = simulation_tag + "_paraview";
-  solid_solver.outputStateToDisk(paraview_tag);
-
   double dt = max_time/(time_steps - 1);
 
   // get nodes and dofs to compute total force
@@ -131,24 +139,26 @@ int main(int argc, char* argv[])
     return R;
   };
 
-  std::ofstream file("uniaxial.txt");
+  std::string paraview_tag = simulation_tag + "_paraview";
+  std::ofstream file(output_filename);
   file << "# time displacement force" << std::endl;
-  file << 0 << " " << 0 << " " << 0 << std::endl;
+  {
+    double u = applied_displacement(serac::vec3{}, solid_solver.time())[0];
+    double f = compute_net_force(solid_solver.dual("reactions"));
+    output(u, f, solid_solver, paraview_tag, file);
+  }
 
-  for (int i = 0; i < time_steps; ++i) {
+  for (int i = 1; i < time_steps; ++i) {
     SLIC_INFO_ROOT("------------------------------------------");
     SLIC_INFO_ROOT(axom::fmt::format("TIME STEP {}", i));
-    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of {})", solid_solver.time(), max_time));
+    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of {})", solid_solver.time() + dt, max_time));
     serac::logger::flush();
 
     solid_solver.advanceTimestep(dt);
 
-    // Output the sidre-based plot files
-    solid_solver.outputStateToDisk(paraview_tag);
-
     double u = applied_displacement(serac::vec3{}, solid_solver.time())[0];
     double f = compute_net_force(solid_solver.dual("reactions"));
-    file << solid_solver.time() << " " << u << " " << f << std::endl;
+    output(u, f, solid_solver, paraview_tag, file);
   }
 
   file.close();
