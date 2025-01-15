@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-from spack import *
+from spack.package import *
 
 class SeracDevtools(BundlePackage):
     """This is a set of tools necessary for the developers of Serac"""
