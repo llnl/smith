@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-from spack import *
+from spack.package import *
 from spack.spec import UnsupportedCompilerError
 from spack.util.executable import which_string
 

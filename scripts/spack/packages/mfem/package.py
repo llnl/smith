@@ -3,8 +3,8 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+from spack.package import *
 from spack.pkg.builtin.mfem import Mfem as BuiltinMfem
-
 
 class Mfem(BuiltinMfem):
 
