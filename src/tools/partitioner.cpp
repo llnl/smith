@@ -21,7 +21,7 @@ using timer = axom::utilities::Timer;
 // `num_blocks` roughly equal-sized contiguous chunks
 std::vector<uint32_t> partition_range(uint32_t n, uint32_t num_blocks)
 {
-  uint32_t quotient  = n / num_blocks;
+  uint32_t quotient = n / num_blocks;
   uint32_t remainder = n % num_blocks;
 
   std::vector<uint32_t> blocks(num_blocks + 1);
@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
   std::cout << "reading in mesh file ... ";
   stopwatch.start();
   std::ifstream infile(input_mesh);
-  mfem::Mesh    mesh(infile);
+  mfem::Mesh mesh(infile);
   stopwatch.stop();
   std::cout << "completed after " << stopwatch.elapsed() * 1000.0 << "ms" << std::endl;
 

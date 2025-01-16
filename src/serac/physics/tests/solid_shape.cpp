@@ -24,10 +24,10 @@ void shape_test()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 0;
+  int serial_refinement = 0;
   int parallel_refinement = 0;
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Construct the appropriate dimension mesh and give it to the data store
@@ -55,8 +55,8 @@ void shape_test()
 
   // Use tight tolerances as this is a machine precision test
 #ifdef SERAC_USE_PETSC
-  linear_options.linear_solver        = LinearSolver::PetscCG;
-  linear_options.preconditioner       = Preconditioner::Petsc;
+  linear_options.linear_solver = LinearSolver::PetscCG;
+  linear_options.preconditioner = Preconditioner::Petsc;
   linear_options.petsc_preconditioner = PetscPCType::HMG;
 #else
   linear_options.preconditioner = Preconditioner::HypreJacobi;
@@ -66,8 +66,8 @@ void shape_test()
 
   auto nonlinear_options = solid_mechanics::default_nonlinear_options;
 
-  nonlinear_options.absolute_tol   = 8.0e-15;
-  nonlinear_options.relative_tol   = 8.0e-15;
+  nonlinear_options.absolute_tol = 8.0e-15;
+  nonlinear_options.relative_tol = 8.0e-15;
   nonlinear_options.max_iterations = 10;
 
   solid_mechanics::LinearIsotropic mat{1.0, 1.0, 1.0};
@@ -200,7 +200,7 @@ void shape_test()
     visit_dc.Save();
   }
 
-  double error          = pure_displacement.DistanceTo(shape_displacement.GetData());
+  double error = pure_displacement.DistanceTo(shape_displacement.GetData());
   double relative_error = error / pure_displacement.Norml2();
   EXPECT_LT(relative_error, 4.5e-12);
 }

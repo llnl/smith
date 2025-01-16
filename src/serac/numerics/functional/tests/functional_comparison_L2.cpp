@@ -21,7 +21,7 @@ using namespace serac;
 
 int num_procs, myid;
 
-constexpr bool                 verbose = true;
+constexpr bool verbose = true;
 std::unique_ptr<mfem::ParMesh> mesh2D;
 std::unique_ptr<mfem::ParMesh> mesh3D;
 
@@ -37,7 +37,7 @@ struct hcurl_qfunction {
   SERAC_HOST_DEVICE auto operator()(UnusedType1, UnusedType2, Position X) const
   {
     auto dp_dX = serac::get<1>(X);
-    auto I     = serac::Identity<dim>();
+    auto I = serac::Identity<dim>();
     return serac::tuple{serac::det(dp_dX + I), serac::zero{}};
   }
 };
@@ -50,9 +50,9 @@ struct test_qfunction {
     static constexpr double b = 0.0;
     // get the value and the gradient from the input tuple
     auto [X, dX_dxi] = position;
-    auto [u, du_dx]  = temperature;
-    auto source      = a * u - (100 * X[0] * X[1]);
-    auto flux        = b * du_dx;
+    auto [u, du_dx] = temperature;
+    auto source = a * u - (100 * X[0] * X[1]);
+    auto flux = b * du_dx;
     return serac::tuple{source, flux};
   }
 };
@@ -69,7 +69,7 @@ void functional_test(mfem::ParMesh& mesh, L2<p> test, L2<p> trial, Dimension<dim
   [[maybe_unused]] static constexpr double b = 0.0;
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = decltype(test);
+  using test_space = decltype(test);
   using trial_space = decltype(trial);
 
   // Create standard MFEM bilinear and linear forms on H1
@@ -87,7 +87,7 @@ void functional_test(mfem::ParMesh& mesh, L2<p> test, L2<p> trial, Dimension<dim
   std::unique_ptr<mfem::HypreParMatrix> J(A.ParallelAssemble());
 
   // Create a linear form for the load term using the standard MFEM method
-  mfem::ParLinearForm       f(fespace.get());
+  mfem::ParLinearForm f(fespace.get());
   mfem::FunctionCoefficient load_func([&](const mfem::Vector& coords) { return 100 * coords(0) * coords(1); });
   // FunctionCoefficient load_func([&]([[maybe_unused]] const Vector& coords) { return 1.0; });
 
@@ -128,7 +128,7 @@ void functional_test(mfem::ParMesh& mesh, L2<p> test, L2<p> trial, Dimension<dim
   r1 -= (*F);
 
   // Compute the residual using weak form
-  double t        = 0.0;
+  double t = 0.0;
   auto [r2, drdU] = residual(t, differentiate_wrt(U));
 
   mfem::Vector diff(r1.Size());
@@ -174,7 +174,7 @@ TEST(L2, 3DCubic) { functional_test(*mesh3D, L2<3>{}, L2<3>{}, Dimension<3>{}); 
 TEST(L2, 2DMixed)
 {
   constexpr int dim = 2;
-  using test_space  = L2<0>;
+  using test_space = L2<0>;
   using trial_space = H1<1, dim>;
 
   auto [L2fespace, L2fec] = serac::generateParFiniteElementSpace<test_space>(mesh2D.get());
@@ -196,7 +196,7 @@ int main(int argc, char* argv[])
 
   axom::slic::SimpleLogger logger;
 
-  int serial_refinement   = 0;
+  int serial_refinement = 0;
   int parallel_refinement = 0;
 
   std::string meshfile2D = SERAC_REPO_DIR "/data/meshes/star.mesh";

@@ -28,7 +28,7 @@ namespace serac {
  */
 template <int dim>
 class AffineSolution {
-public:
+ public:
   AffineSolution() : A(dim)
   {
     // clang-format off

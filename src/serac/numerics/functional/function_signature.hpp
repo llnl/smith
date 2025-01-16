@@ -12,7 +12,7 @@ struct FunctionSignature;
  */
 template <typename output_type, typename... input_types>
 struct FunctionSignature<output_type(input_types...)> {
-  using return_type     = output_type;                 ///< the type returned by the function
+  using return_type = output_type;                     ///< the type returned by the function
   using parameter_types = std::tuple<input_types...>;  ///< the types of the function arguments
 
   /// the number of input arguments in the function signature

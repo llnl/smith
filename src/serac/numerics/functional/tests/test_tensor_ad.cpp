@@ -18,9 +18,9 @@ TEST(Tensor, Norm)
   EXPECT_DOUBLE_EQ(norm(a) - sqrt(55), 0.0);
 }
 
-const auto   eps = std::numeric_limits<double>::epsilon();
-const double x   = 0.5;
-const double y   = 0.25;
+const auto eps = std::numeric_limits<double>::epsilon();
+const double x = 0.5;
+const double y = 0.25;
 
 TEST(DualNumberTensor, Max)
 {
@@ -123,7 +123,7 @@ TEST(DualNumberTensor, Pow)
 TEST(DualNumberTensor, MixedOperations)
 {
   auto xd = make_dual(x);
-  auto r  = cos(xd) * cos(xd);
+  auto r = cos(xd) * cos(xd);
   EXPECT_LT(abs(-2.0 * sin(x) * cos(x) - r.gradient), eps);
 
   r = exp(xd) * cos(xd);
@@ -135,9 +135,9 @@ TEST(DualNumberTensor, MixedOperations)
   r = exp(xd) * pow(xd, 1.5);
   EXPECT_LT(abs((exp(x) * (pow(x, 1.5) + 1.5 * pow(x, 0.5))) - r.gradient), eps);
 
-  tensor<double, 2> vx  = {{0.5, 0.25}};
+  tensor<double, 2> vx = {{0.5, 0.25}};
   tensor<double, 2> vre = {{0.894427190999916, 0.4472135954999579}};
-  auto              vr  = norm(make_dual(vx));
+  auto vr = norm(make_dual(vx));
   EXPECT_LT(norm(vr.gradient - vre), eps);
 }
 
@@ -204,9 +204,9 @@ TEST(dual_number_tensor, isotropic_tensor)
   double D1 = 1.0;
 
   auto W = [&](auto dudx) {
-    auto I    = Identity<dim>();
-    auto F    = I + dudx;
-    auto J    = det(F);
+    auto I = Identity<dim>();
+    auto F = I + dudx;
+    auto J = det(F);
     auto Jm23 = pow(J, -2.0 / 3.0);
     auto Wvol = D1 * (J - 1.0) * (J - 1.0);
     auto Wdev = C1 * (Jm23 * inner(F, F) - 3.0);
@@ -269,7 +269,7 @@ TEST(Tensor, Eigenvalues)
   tensor<dual<tuple_type_3>, 3, 3> A;
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      A(i, j).value            = (3 - i) * (i == j) + 0.25 * (i + j);
+      A(i, j).value = (3 - i) * (i == j) + 0.25 * (i + j);
       get<0>(A(i, j).gradient) = i;
     }
   }

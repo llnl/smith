@@ -34,7 +34,7 @@ struct LiquidCrystElastomerBrighenti {
   struct State {
     tensor<double, dim, dim> deformation_gradient;  ///< F from the last timestep
     tensor<double, dim, dim> distribution_tensor;   ///< mu from the last timestep
-    double                   temperature;           ///< temperature at the last timestep
+    double temperature;                             ///< temperature at the last timestep
   };
 
   /**
@@ -87,26 +87,26 @@ struct LiquidCrystElastomerBrighenti {
 
     // get the values from the packed value/gradient tuples
     auto temperature = get<0>(temperature_tuple);
-    auto gamma       = get<0>(gamma_tuple);
+    auto gamma = get<0>(gamma_tuple);
 
-    auto   I  = Identity<dim>();
+    auto I = Identity<dim>();
     double q0 = initial_order_parameter_;
     tensor normal{{cos(gamma), sin(gamma), 0.0 * gamma}};
 
     if (norm(state.deformation_gradient) == 0) {
-      state.distribution_tensor  = get_value((N_b_squared_ / 3.0) * ((1 - q0) * I) + (3 * q0 * outer(normal, normal)));
+      state.distribution_tensor = get_value((N_b_squared_ / 3.0) * ((1 - q0) * I) + (3 * q0 * outer(normal, normal)));
       state.deformation_gradient = get_value(displacement_grad) + I;
-      state.temperature          = get_value(temperature);
+      state.temperature = get_value(temperature);
     }
 
     // kinematics
-    auto F     = displacement_grad + I;
+    auto F = displacement_grad + I;
     auto F_old = state.deformation_gradient;
     auto F_hat = dot(F, inv(F_old));
-    auto J     = det(F);
+    auto J = det(F);
 
     // Distribution tensor function of nematic order tensor
-    auto mu  = calculateDistributionTensor(state, F_hat, temperature, normal);
+    auto mu = calculateDistributionTensor(state, F_hat, temperature, normal);
     auto mu0 = (N_b_squared_ / 3.0) * ((1 - q0) * I) + (3 * q0 * outer(normal, normal));
 
     // stress output
@@ -120,8 +120,8 @@ struct LiquidCrystElastomerBrighenti {
 
     // update state variables
     state.deformation_gradient = get_value(F);
-    state.temperature          = get_value(temperature);
-    state.distribution_tensor  = get_value(mu);
+    state.temperature = get_value(temperature);
+    state.distribution_tensor = get_value(mu);
 
     return stress;
   }
@@ -149,29 +149,29 @@ struct LiquidCrystElastomerBrighenti {
     // Nematic order scalar
     using std::exp;
     auto theta_old = state.temperature;
-    auto q_old     = initial_order_parameter_ / (1 + exp((theta_old - transition_temperature_) / order_constant_));
-    auto q         = initial_order_parameter_ / (1 + exp((theta - transition_temperature_) / order_constant_));
+    auto q_old = initial_order_parameter_ / (1 + exp((theta_old - transition_temperature_) / order_constant_));
+    auto q = initial_order_parameter_ / (1 + exp((theta - transition_temperature_) / order_constant_));
 
     // Nematic order tensor
-    constexpr auto I      = Identity<dim>();
-    auto           n_dyad = outer(normal, normal);
+    constexpr auto I = Identity<dim>();
+    auto n_dyad = outer(normal, normal);
     // BT: These are different than what Jorge-Luis had. I found the papers
     // to be confusing on this point. I'm extrapolating from Eq (7)
     // in https://doi.org/10.1016/j.mechrescom.2022.103858
     // Well-defined validation problems would help to confirm.
     auto Q_old = 0.5 * ((1.0 - q_old) * I + 3.0 * q_old * n_dyad);
-    auto Q     = 0.5 * ((1.0 - q) * I + 3.0 * q * n_dyad);
+    auto Q = 0.5 * ((1.0 - q) * I + 3.0 * q * n_dyad);
 
     // Polar decomposition of incremental deformation gradient
     auto U_hat = matrix_sqrt(transpose(F_hat) * F_hat);
     auto R_hat = F_hat * inv(U_hat);
 
     // Distribution tensor (using 'Strang Splitting' approach)
-    double alpha  = 2.0 * N_b_squared_ / 3.0;
-    auto   mu_old = state.distribution_tensor;
-    auto   mu_hat = mu_old + alpha * (Q - Q_old);
-    auto   mu_a   = dot(F_hat, dot(mu_hat, transpose(F_hat)));
-    auto   mu_b   = alpha * (Q - dot(R_hat, dot(Q, transpose(R_hat))));
+    double alpha = 2.0 * N_b_squared_ / 3.0;
+    auto mu_old = state.distribution_tensor;
+    auto mu_hat = mu_old + alpha * (Q - Q_old);
+    auto mu_a = dot(F_hat, dot(mu_hat, transpose(F_hat)));
+    auto mu_b = alpha * (Q - dot(R_hat, dot(Q, transpose(R_hat))));
 
     return mu_a + mu_b;
   }
@@ -262,16 +262,16 @@ struct LiquidCrystalElastomerBertoldi {
     using std::cos, std::sin;
 
     // Compute the normal
-    auto   gamma = get<0>(gamma_tuple);
-    auto   eta   = get<0>(eta_tuple);
+    auto gamma = get<0>(gamma_tuple);
+    auto eta = get<0>(eta_tuple);
     tensor normal{{cos(gamma) * cos(eta), sin(gamma) * cos(eta), 0.0 * gamma + sin(eta)}};
 
     // Get order parameters
-    auto   St = get<0>(inst_order_param_tuple);
+    auto St = get<0>(inst_order_param_tuple);
     double S0 = initial_order_parameter_;
 
     const double lambda = poisson_ratio_ * young_modulus_ / (1.0 + poisson_ratio_) / (1.0 - 2.0 * poisson_ratio_);
-    const double mu     = young_modulus_ / 2.0 / (1.0 + poisson_ratio_);
+    const double mu = young_modulus_ / 2.0 / (1.0 + poisson_ratio_);
 
     // kinematics
     auto I = Identity<dim>();
@@ -316,16 +316,16 @@ struct LiquidCrystalElastomerBertoldi {
     using std::cos, std::sin;
 
     // Compute the normal
-    auto   gamma = get<0>(gamma_tuple);
-    auto   eta   = get<0>(eta_tuple);
+    auto gamma = get<0>(gamma_tuple);
+    auto eta = get<0>(eta_tuple);
     tensor normal{{cos(gamma) * cos(eta), sin(gamma) * cos(eta), 0.0 * gamma + sin(eta)}};
 
     // Get order parameters
-    auto   St = get<0>(inst_order_param_tuple);
+    auto St = get<0>(inst_order_param_tuple);
     double S0 = initial_order_parameter_;
 
     const double lambda = poisson_ratio_ * young_modulus_ / (1.0 + poisson_ratio_) / (1.0 - 2.0 * poisson_ratio_);
-    const double mu     = young_modulus_ / 2.0 / (1.0 + poisson_ratio_);
+    const double mu = young_modulus_ / 2.0 / (1.0 + poisson_ratio_);
 
     // kinematics
     auto I = Identity<dim>();

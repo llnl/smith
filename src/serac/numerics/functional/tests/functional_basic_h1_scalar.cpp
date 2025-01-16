@@ -34,14 +34,14 @@ struct TestThermalModelOne {
   template <typename P, typename Temp>
   SERAC_HOST_DEVICE auto operator()(double, [[maybe_unused]] P position, [[maybe_unused]] Temp temperature) const
   {
-    double                d00 = 1.0;
+    double d00 = 1.0;
     constexpr static auto d01 = 1.0 * make_tensor<dim>([](int i) { return i; });
     constexpr static auto d10 = 1.0 * make_tensor<dim>([](int i) { return 2 * i * i; });
     constexpr static auto d11 = 1.0 * make_tensor<dim, dim>([](int i, int j) { return i + j * (j + 1) + 1; });
-    auto [X, dX_dxi]          = position;
-    auto [u, du_dx]           = temperature;
-    auto source               = d00 * u + dot(d01, du_dx) - 0.0 * (100 * X[0] * X[1]);
-    auto flux                 = d10 * u + dot(d11, du_dx);
+    auto [X, dX_dxi] = position;
+    auto [u, du_dx] = temperature;
+    auto source = d00 * u + dot(d01, du_dx) - 0.0 * (100 * X[0] * X[1]);
+    auto flux = d10 * u + dot(d11, du_dx);
 
     return serac::tuple{source, flux};
   }
@@ -61,16 +61,16 @@ template <int ptest, int ptrial, int dim>
 void thermal_test_impl(std::unique_ptr<mfem::ParMesh>& mesh)
 {
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = H1<ptest>;
+  using test_space = H1<ptest>;
   using trial_space = H1<ptrial>;
 
   // Create standard MFEM bilinear and linear forms on H1
-  auto [test_fespace, test_fec]   = serac::generateParFiniteElementSpace<test_space>(mesh.get());
+  auto [test_fespace, test_fec] = serac::generateParFiniteElementSpace<test_space>(mesh.get());
   auto [trial_fespace, trial_fec] = serac::generateParFiniteElementSpace<trial_space>(mesh.get());
 
   mfem::Vector U(trial_fespace->TrueVSize());
 
-  mfem::ParGridFunction     U_gf(trial_fespace.get());
+  mfem::ParGridFunction U_gf(trial_fespace.get());
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
   U_gf.GetTrueDofs(U);

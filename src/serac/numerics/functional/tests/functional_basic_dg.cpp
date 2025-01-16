@@ -27,7 +27,7 @@ using namespace serac::profiling;
 template <int dim, int p>
 void L2_test(std::string meshfile)
 {
-  using test_space  = L2<p, dim>;
+  using test_space = L2<p, dim>;
   using trial_space = L2<p, dim>;
 
   // int k = 0;
@@ -35,7 +35,7 @@ void L2_test(std::string meshfile)
 
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 0);
 
-  auto                        fec = mfem::L2_FECollection(p, dim, mfem::BasisType::GaussLobatto);
+  auto fec = mfem::L2_FECollection(p, dim, mfem::BasisType::GaussLobatto);
   mfem::ParFiniteElementSpace fespace(mesh.get(), &fec, dim, serac::ordering);
 
   mfem::Vector U(fespace.TrueVSize());
@@ -53,7 +53,7 @@ void L2_test(std::string meshfile)
       [=](double /*t*/, auto X, auto velocity) {
         // compute the surface normal
         auto dX_dxi = get<DERIVATIVE>(X);
-        auto n      = normalize(cross(dX_dxi));
+        auto n = normalize(cross(dX_dxi));
 
         // extract the velocity values from each side of the interface
         // note: the orientation convention is such that the normal
@@ -93,11 +93,11 @@ void L2_qoi_test(std::string meshfile)
 
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 1);
 
-  auto                        fec = mfem::L2_FECollection(p, dim, mfem::BasisType::GaussLobatto);
+  auto fec = mfem::L2_FECollection(p, dim, mfem::BasisType::GaussLobatto);
   mfem::ParFiniteElementSpace fespace(mesh.get(), &fec, dim, serac::ordering);
 
-  int                  seed = 0;
-  mfem::HypreParVector U    = *fespace.NewTrueDofVector();
+  int seed = 0;
+  mfem::HypreParVector U = *fespace.NewTrueDofVector();
   U.Randomize(seed);
 
   // Construct the new functional object using the specified test and trial spaces
@@ -112,7 +112,7 @@ void L2_qoi_test(std::string meshfile)
       [=](double /*t*/, auto X, auto velocity) {
         // compute the unit surface normal
         auto dX_dxi = get<DERIVATIVE>(X);
-        auto n      = normalize(cross(dX_dxi));
+        auto n = normalize(cross(dX_dxi));
 
         // extract the velocity values from each side of the interface
         // note: the orientation convention is such that the normal
@@ -149,16 +149,16 @@ TEST(basic, L2_qoi_test_hexes_quadratic) { L2_qoi_test<3, 2>(SERAC_REPO_DIR "/da
 template <int dim, int p>
 void L2_scalar_valued_test(std::string meshfile)
 {
-  using test_space    = L2<p>;
+  using test_space = L2<p>;
   using trial_space_0 = L2<p>;
   using trial_space_1 = H1<p, dim>;
 
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 1);
 
-  auto                        L2fec = mfem::L2_FECollection(p, dim, mfem::BasisType::GaussLobatto);
+  auto L2fec = mfem::L2_FECollection(p, dim, mfem::BasisType::GaussLobatto);
   mfem::ParFiniteElementSpace fespace_0(mesh.get(), &L2fec, 1, serac::ordering);
 
-  auto                        H1fec = mfem::H1_FECollection(p, dim);
+  auto H1fec = mfem::H1_FECollection(p, dim);
   mfem::ParFiniteElementSpace fespace_1(mesh.get(), &H1fec, dim, serac::ordering);
 
   mfem::Vector U0(fespace_0.TrueVSize());
@@ -170,7 +170,7 @@ void L2_scalar_valued_test(std::string meshfile)
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space_0, trial_space_1)> residual(&fespace_0, {&fespace_0, &fespace_1});
 
-  constexpr int VALUE      = 0;
+  constexpr int VALUE = 0;
   constexpr int DERIVATIVE = 1;
 
   Domain interior_faces = InteriorFaces(*mesh);
@@ -181,8 +181,8 @@ void L2_scalar_valued_test(std::string meshfile)
         auto n = normalize(cross(get<DERIVATIVE>(X)));
 
         auto [rho0, rho1] = rho;
-        auto uTn          = dot(get<VALUE>(u), n);
-        auto s            = uTn > 0;
+        auto uTn = dot(get<VALUE>(u), n);
+        auto s = uTn > 0;
 
         return serac::tuple{uTn * ((s)*rho0 + (1.0 - s) * rho1), uTn * ((1.0 - s) * rho0 + (s)*rho1)};
       },

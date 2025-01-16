@@ -40,11 +40,11 @@ std::array<int, n> apply_permutation(const int (&arr)[n], const int (&p)[n])
 mfem::Mesh generate_permuted_mesh(mfem::Geometry::Type geom, int i)
 {
   if (geom == mfem::Geometry::TRIANGLE) {
-    constexpr int dim                                        = 2;
-    constexpr int num_elements                               = 2;
-    constexpr int num_vertices                               = 4;
-    constexpr int num_permutations                           = 3;
-    int           positive_permutations[num_permutations][3] = {{0, 1, 2}, {1, 2, 0}, {2, 0, 1}};
+    constexpr int dim = 2;
+    constexpr int num_elements = 2;
+    constexpr int num_vertices = 4;
+    constexpr int num_permutations = 3;
+    int positive_permutations[num_permutations][3] = {{0, 1, 2}, {1, 2, 0}, {2, 0, 1}};
 
     /*
         y
@@ -58,7 +58,7 @@ mfem::Mesh generate_permuted_mesh(mfem::Geometry::Type geom, int i)
         |        '.|
         0----------1--> x
     */
-    int    elements[num_elements][3]   = {{0, 1, 3}, {1, 2, 3}};
+    int elements[num_elements][3] = {{0, 1, 3}, {1, 2, 3}};
     double vertices[num_vertices][dim] = {{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}};
 
     mfem::Mesh output(dim, num_vertices, num_elements);
@@ -80,11 +80,11 @@ mfem::Mesh generate_permuted_mesh(mfem::Geometry::Type geom, int i)
   }
 
   if (geom == mfem::Geometry::SQUARE) {
-    constexpr int dim                                        = 2;
-    constexpr int num_elements                               = 2;
-    constexpr int num_vertices                               = 6;
-    constexpr int num_permutations                           = 4;
-    int           positive_permutations[num_permutations][4] = {{0, 1, 2, 3}, {1, 2, 3, 0}, {2, 3, 0, 1}, {3, 0, 1, 2}};
+    constexpr int dim = 2;
+    constexpr int num_elements = 2;
+    constexpr int num_vertices = 6;
+    constexpr int num_permutations = 4;
+    int positive_permutations[num_permutations][4] = {{0, 1, 2, 3}, {1, 2, 3, 0}, {2, 3, 0, 1}, {3, 0, 1, 2}};
 
     /*
         y
@@ -97,7 +97,7 @@ mfem::Mesh generate_permuted_mesh(mfem::Geometry::Type geom, int i)
         |          |          |
         0----------1----------2--> x
     */
-    int    elements[num_elements][4]   = {{0, 1, 4, 3}, {1, 2, 5, 4}};
+    int elements[num_elements][4] = {{0, 1, 4, 3}, {1, 2, 5, 4}};
     double vertices[num_vertices][dim] = {{0.0, 0.0}, {1.0, 0.0}, {2.0, 0.0}, {0.0, 1.0}, {1.0, 1.0}, {2.0, 1.0}};
 
     mfem::Mesh output(dim, num_vertices, num_elements);
@@ -119,13 +119,13 @@ mfem::Mesh generate_permuted_mesh(mfem::Geometry::Type geom, int i)
   }
 
   if (geom == mfem::Geometry::TETRAHEDRON) {
-    constexpr int dim                                        = 3;
-    constexpr int num_elements                               = 2;
-    constexpr int num_vertices                               = 5;
-    constexpr int num_permutations                           = 12;
-    int           positive_permutations[num_permutations][4] = {{0, 1, 2, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {1, 0, 3, 2},
-                                                                {1, 2, 0, 3}, {1, 3, 2, 0}, {2, 0, 1, 3}, {2, 1, 3, 0},
-                                                                {2, 3, 0, 1}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 2, 1, 0}};
+    constexpr int dim = 3;
+    constexpr int num_elements = 2;
+    constexpr int num_vertices = 5;
+    constexpr int num_permutations = 12;
+    int positive_permutations[num_permutations][4] = {{0, 1, 2, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {1, 0, 3, 2},
+                                                      {1, 2, 0, 3}, {1, 3, 2, 0}, {2, 0, 1, 3}, {2, 1, 3, 0},
+                                                      {2, 3, 0, 1}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 2, 1, 0}};
 
     /*
 
@@ -144,7 +144,7 @@ mfem::Mesh generate_permuted_mesh(mfem::Geometry::Type geom, int i)
                     '0'
 
     */
-    int    elements[num_elements][4]   = {{0, 1, 2, 3}, {1, 2, 3, 4}};
+    int elements[num_elements][4] = {{0, 1, 2, 3}, {1, 2, 3, 4}};
     double vertices[num_vertices][dim] = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {1, 1, 1}};
 
     mfem::Mesh output(dim, num_vertices, num_elements);
@@ -166,17 +166,17 @@ mfem::Mesh generate_permuted_mesh(mfem::Geometry::Type geom, int i)
   }
 
   if (geom == mfem::Geometry::CUBE) {
-    constexpr int dim                                        = 3;
-    constexpr int num_elements                               = 2;
-    constexpr int num_vertices                               = 12;
-    constexpr int num_permutations                           = 24;
-    int           positive_permutations[num_permutations][8] = {
-                  {0, 1, 2, 3, 4, 5, 6, 7}, {0, 3, 7, 4, 1, 2, 6, 5}, {0, 4, 5, 1, 3, 7, 6, 2}, {1, 0, 4, 5, 2, 3, 7, 6},
-                  {1, 2, 3, 0, 5, 6, 7, 4}, {1, 5, 6, 2, 0, 4, 7, 3}, {2, 1, 5, 6, 3, 0, 4, 7}, {2, 3, 0, 1, 6, 7, 4, 5},
-                  {2, 6, 7, 3, 1, 5, 4, 0}, {3, 0, 1, 2, 7, 4, 5, 6}, {3, 2, 6, 7, 0, 1, 5, 4}, {3, 7, 4, 0, 2, 6, 5, 1},
-                  {4, 0, 3, 7, 5, 1, 2, 6}, {4, 5, 1, 0, 7, 6, 2, 3}, {4, 7, 6, 5, 0, 3, 2, 1}, {5, 1, 0, 4, 6, 2, 3, 7},
-                  {5, 4, 7, 6, 1, 0, 3, 2}, {5, 6, 2, 1, 4, 7, 3, 0}, {6, 2, 1, 5, 7, 3, 0, 4}, {6, 5, 4, 7, 2, 1, 0, 3},
-                  {6, 7, 3, 2, 5, 4, 0, 1}, {7, 3, 2, 6, 4, 0, 1, 5}, {7, 4, 0, 3, 6, 5, 1, 2}, {7, 6, 5, 4, 3, 2, 1, 0}};
+    constexpr int dim = 3;
+    constexpr int num_elements = 2;
+    constexpr int num_vertices = 12;
+    constexpr int num_permutations = 24;
+    int positive_permutations[num_permutations][8] = {
+        {0, 1, 2, 3, 4, 5, 6, 7}, {0, 3, 7, 4, 1, 2, 6, 5}, {0, 4, 5, 1, 3, 7, 6, 2}, {1, 0, 4, 5, 2, 3, 7, 6},
+        {1, 2, 3, 0, 5, 6, 7, 4}, {1, 5, 6, 2, 0, 4, 7, 3}, {2, 1, 5, 6, 3, 0, 4, 7}, {2, 3, 0, 1, 6, 7, 4, 5},
+        {2, 6, 7, 3, 1, 5, 4, 0}, {3, 0, 1, 2, 7, 4, 5, 6}, {3, 2, 6, 7, 0, 1, 5, 4}, {3, 7, 4, 0, 2, 6, 5, 1},
+        {4, 0, 3, 7, 5, 1, 2, 6}, {4, 5, 1, 0, 7, 6, 2, 3}, {4, 7, 6, 5, 0, 3, 2, 1}, {5, 1, 0, 4, 6, 2, 3, 7},
+        {5, 4, 7, 6, 1, 0, 3, 2}, {5, 6, 2, 1, 4, 7, 3, 0}, {6, 2, 1, 5, 7, 3, 0, 4}, {6, 5, 4, 7, 2, 1, 0, 3},
+        {6, 7, 3, 2, 5, 4, 0, 1}, {7, 3, 2, 6, 4, 0, 1, 5}, {7, 4, 0, 3, 6, 5, 1, 2}, {7, 6, 5, 4, 3, 2, 1, 0}};
 
     /*
         z
@@ -277,7 +277,7 @@ template <mfem::Geometry::Type geom, int polynomial_order>
 void parametrized_test(int permutation)
 {
   constexpr mfem::Geometry::Type face_geom = face_type(geom);
-  constexpr int                  dim       = dimension_of(geom);
+  constexpr int dim = dimension_of(geom);
 
   mfem::Mesh mesh = generate_permuted_mesh(geom, permutation);
 
@@ -307,26 +307,26 @@ void parametrized_test(int permutation)
     face_ids = interior_faces.mfem_quad_ids_;
   }
 
-  auto H1_fec    = std::make_unique<mfem::H1_FECollection>(polynomial_order, dim);
+  auto H1_fec = std::make_unique<mfem::H1_FECollection>(polynomial_order, dim);
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(polynomial_order, dim);
-  auto L2_fec    = std::make_unique<mfem::L2_FECollection>(polynomial_order, dim, mfem::BasisType::GaussLobatto);
+  auto L2_fec = std::make_unique<mfem::L2_FECollection>(polynomial_order, dim, mfem::BasisType::GaussLobatto);
 
-  auto H1_fes    = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
+  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
   auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
-  auto L2_fes    = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
 
   mfem::GridFunction H1_gf(H1_fes.get());
   mfem::GridFunction Hcurl_gf(Hcurl_fes.get());
   mfem::GridFunction L2_gf(L2_fes.get());
 
-  mfem::FunctionCoefficient       sfunc(scalar_func_mfem<dim>);
+  mfem::FunctionCoefficient sfunc(scalar_func_mfem<dim>);
   mfem::VectorFunctionCoefficient vfunc(dim, vector_func_mfem<dim>);
 
   H1_gf.ProjectCoefficient(sfunc);
   Hcurl_gf.ProjectCoefficient(vfunc);
   L2_gf.ProjectCoefficient(sfunc);
 
-  auto H1_dofs    = GetFaceDofs(H1_fes.get(), face_geom, FaceType::INTERIOR);
+  auto H1_dofs = GetFaceDofs(H1_fes.get(), face_geom, FaceType::INTERIOR);
   auto Hcurl_dofs = GetFaceDofs(Hcurl_fes.get(), face_geom, FaceType::INTERIOR);
 
   auto L2_dofs = GetFaceDofs(L2_fes.get(), face_geom, face_ids);
@@ -344,7 +344,7 @@ void parametrized_test(int permutation)
 
   using space = L2<polynomial_order>;
 
-  auto   pmesh           = mesh::refineAndDistribute(std::move(mesh), 0);
+  auto pmesh = mesh::refineAndDistribute(std::move(mesh), 0);
   Domain pinterior_faces = InteriorFaces(*pmesh);
 
   auto L2_pfes = mfem::ParFiniteElementSpace(pmesh.get(), L2_fec.get());
@@ -355,7 +355,7 @@ void parametrized_test(int permutation)
       Dimension<dim - 1>{}, DependsOn<0>{},
       [](double /*t*/, auto X, auto rho) {
         // std::cout << get<0>(X) << std::endl;
-        double expected   = scalar_func(get<0>(X));
+        double expected = scalar_func(get<0>(X));
         auto [rho1, rho2] = rho;
         EXPECT_NEAR(expected, get_value(rho1), 5.0e-14);
         EXPECT_NEAR(expected, get_value(rho2), 5.0e-14);
@@ -364,12 +364,12 @@ void parametrized_test(int permutation)
       },
       pinterior_faces);
 
-  mfem::Vector          U(L2_pfes.TrueVSize());
+  mfem::Vector U(L2_pfes.TrueVSize());
   mfem::ParGridFunction U_pgf(&L2_pfes);
   U_pgf.ProjectCoefficient(sfunc);
   U_pgf.GetTrueDofs(U);
 
-  double t      = 0.0;
+  double t = 0.0;
   double output = r(t, U);
 
   EXPECT_NEAR(output, 0.0, 5.0e-14);

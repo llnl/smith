@@ -18,8 +18,8 @@ std::ostream& operator<<(std::ostream& out, axom::Array<DoF, 2, axom::MemorySpac
 
 TEST(patch_test_meshes, triangle_domains)
 {
-  int        p   = 2;
-  int        dim = 2;
+  int p = 2;
+  int dim = 2;
   mfem::Mesh mesh(SERAC_REPO_DIR "/data/meshes/patch2D_tris.mesh");
 
   auto H1_fec = std::make_unique<mfem::H1_FECollection>(p, dim);
@@ -88,17 +88,17 @@ TEST(patch_test_meshes, triangle_domains)
 
 TEST(patch_test_meshes, quadrilateral_domains)
 {
-  int        p   = 2;
-  int        dim = 2;
+  int p = 2;
+  int dim = 2;
   mfem::Mesh mesh(SERAC_REPO_DIR "/data/meshes/patch2D_quads.mesh");
 
-  auto H1_fec    = std::make_unique<mfem::H1_FECollection>(p, dim);
+  auto H1_fec = std::make_unique<mfem::H1_FECollection>(p, dim);
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(p, dim);
-  auto L2_fec    = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
+  auto L2_fec = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
 
-  auto H1_fes    = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
+  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
   auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
-  auto L2_fes    = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
 
   Domain whole = EntireDomain(mesh);
   EXPECT_EQ(whole.mfem_edge_ids_.size(), 0);
@@ -157,17 +157,17 @@ TEST(patch_test_meshes, quadrilateral_domains)
 
 TEST(patch_test_meshes, triangle_and_quadrilateral_domains)
 {
-  int        p   = 2;
-  int        dim = 2;
+  int p = 2;
+  int dim = 2;
   mfem::Mesh mesh(SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh");
 
-  auto H1_fec    = std::make_unique<mfem::H1_FECollection>(p, dim);
+  auto H1_fec = std::make_unique<mfem::H1_FECollection>(p, dim);
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(p, dim);
-  auto L2_fec    = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
+  auto L2_fec = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
 
-  auto H1_fes    = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
+  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
   auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
-  auto L2_fes    = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
 
   Domain whole = EntireDomain(mesh);
   EXPECT_EQ(whole.mfem_edge_ids_.size(), 0);
@@ -226,17 +226,17 @@ TEST(patch_test_meshes, triangle_and_quadrilateral_domains)
 
 TEST(patch_test_meshes, tetrahedron_domains)
 {
-  int        p   = 2;
-  int        dim = 3;
+  int p = 2;
+  int dim = 3;
   mfem::Mesh mesh(SERAC_REPO_DIR "/data/meshes/patch3D_tets.mesh");
 
-  auto H1_fec    = std::make_unique<mfem::H1_FECollection>(p, dim);
+  auto H1_fec = std::make_unique<mfem::H1_FECollection>(p, dim);
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(p, dim);
-  auto L2_fec    = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
+  auto L2_fec = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
 
-  auto H1_fes    = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
+  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
   auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
-  auto L2_fes    = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
 
   Domain whole = EntireDomain(mesh);
   EXPECT_EQ(whole.mfem_edge_ids_.size(), 0);
@@ -295,17 +295,17 @@ TEST(patch_test_meshes, tetrahedron_domains)
 
 TEST(patch_test_meshes, hexahedron_domains)
 {
-  int        p   = 2;
-  int        dim = 3;
+  int p = 2;
+  int dim = 3;
   mfem::Mesh mesh(SERAC_REPO_DIR "/data/meshes/patch3D_hexes.mesh");
 
-  auto H1_fec    = std::make_unique<mfem::H1_FECollection>(p, dim);
+  auto H1_fec = std::make_unique<mfem::H1_FECollection>(p, dim);
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(p, dim);
-  auto L2_fec    = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
+  auto L2_fec = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
 
-  auto H1_fes    = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
+  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
   auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
-  auto L2_fes    = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
 
   Domain whole = EntireDomain(mesh);
   EXPECT_EQ(whole.mfem_edge_ids_.size(), 0);

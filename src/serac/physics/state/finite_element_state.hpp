@@ -47,7 +47,7 @@ inline bool is_vector_valued(const GeneralCoefficient& coef)
  * Namely: Mesh, FiniteElementCollection, FiniteElementState, and the true vector of the solution
  */
 class FiniteElementState : public FiniteElementVector {
-public:
+ public:
   using FiniteElementVector::FiniteElementVector;
   using mfem::Vector::Print;
 
@@ -213,7 +213,7 @@ public:
    */
   mfem::ParGridFunction& gridFunction() const;
 
-protected:
+ protected:
   /**
    * @brief An optional container for a grid function (L-vector) view of the finite element state.
    *

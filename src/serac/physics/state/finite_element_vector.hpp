@@ -48,7 +48,7 @@ enum class ElementType
  * containing the true degrees of freedom for the field.
  */
 class FiniteElementVector : public mfem::HypreParVector {
-public:
+ public:
   /**
    * @brief Minimal constructor for a FiniteElementVector given a finite element space
    * @param[in] space The space to use for the finite element state. This space is deep copied into the new FE state
@@ -173,7 +173,7 @@ public:
    */
   virtual ~FiniteElementVector() {}
 
-protected:
+ protected:
   /**
    * @brief A reference to the mesh object on which the field is defined
    */

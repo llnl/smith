@@ -29,10 +29,10 @@ void functional_solid_test_robin_condition()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  constexpr int p                   = 2;
-  constexpr int dim                 = 3;
-  int           serial_refinement   = 0;
-  int           parallel_refinement = 0;
+  constexpr int p = 2;
+  constexpr int dim = 3;
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
 
   // Create DataStore
   axom::sidre::DataStore datastore;
@@ -43,15 +43,15 @@ void functional_solid_test_robin_condition()
 
   std::string mesh_tag{"mesh"};
 
-  auto  mesh  = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // _solver_params_start
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
-                                                  .relative_tol   = 1.0e-12,
-                                                  .absolute_tol   = 1.0e-12,
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-12,
+                                                  .absolute_tol = 1.0e-12,
                                                   .max_iterations = 5000,
-                                                  .print_level    = 1};
+                                                  .print_level = 1};
 
   SolidMechanics<p, dim> solid_solver(nonlinear_options, solid_mechanics::default_linear_options,
                                       solid_mechanics::default_quasistatic_options, "solid_mechanics", mesh_tag);
@@ -84,7 +84,7 @@ void functional_solid_test_robin_condition()
       DependsOn<>{},
       [](double /* t */, auto /*position*/, auto displacement, auto /*acceleration*/) {
         auto [u, du_dxi] = displacement;
-        auto f           = u * 3.0;
+        auto f = u * 3.0;
         return f;  // define a displacement-proportional traction at the support
       },
       support);
@@ -98,9 +98,9 @@ void functional_solid_test_robin_condition()
   solid_solver.outputStateToDisk("robin_condition");
 
   // Perform the quasi-static solve
-  int    num_steps = 1;
-  double tmax      = 1.0;
-  double dt        = tmax / num_steps;
+  int num_steps = 1;
+  double tmax = 1.0;
+  double dt = tmax / num_steps;
   for (int i = 0; i < num_steps; i++) {
     solid_solver.advanceTimestep(dt);
     solid_solver.outputStateToDisk("robin_condition");

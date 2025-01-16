@@ -198,7 +198,7 @@ struct Domain {
   {
     mfem::Array<int> offsets(mfem::Geometry::NUM_GEOMETRIES + 1);
 
-    int total                      = 0;
+    int total = 0;
     offsets[mfem::Geometry::POINT] = total;
     total += 0;  // vertices;
     offsets[mfem::Geometry::SEGMENT] = total;
@@ -211,8 +211,8 @@ struct Domain {
     total += int(tet_ids_.size());
     offsets[mfem::Geometry::CUBE] = total;
     total += int(hex_ids_.size());
-    offsets[mfem::Geometry::PRISM]          = total;
-    offsets[mfem::Geometry::PYRAMID]        = total;
+    offsets[mfem::Geometry::PRISM] = total;
+    offsets[mfem::Geometry::PYRAMID] = total;
     offsets[mfem::Geometry::NUM_GEOMETRIES] = total;
 
     return offsets;

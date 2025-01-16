@@ -147,7 +147,7 @@ std::unique_ptr<serac::BasePhysics> createPhysics(
  * @return The order of the discretization
  */
 int getOrder(std::optional<serac::SolidMechanicsInputOptions> solid_mechanics_options,
-             std::optional<serac::HeatTransferInputOptions>   heat_transfer_options)
+             std::optional<serac::HeatTransferInputOptions> heat_transfer_options)
 {
   int order = 0;
   if (solid_mechanics_options) {
@@ -192,7 +192,7 @@ int main(int argc, char* argv[])
 
   // Read input file
   std::string input_file_path = "";
-  auto        search          = cli_opts.find("input-file");
+  auto search = cli_opts.find("input-file");
   if (search != cli_opts.end()) {
     input_file_path = search->second;
   }
@@ -204,7 +204,7 @@ int main(int argc, char* argv[])
   // * StateManager state files
   // * Summary file
   std::string output_directory = "";
-  search                       = cli_opts.find("output-directory");
+  search = cli_opts.find("output-directory");
   if (search != cli_opts.end()) {
     output_directory = search->second;
   }
@@ -261,10 +261,10 @@ int main(int argc, char* argv[])
   datastore.getRoot()->getGroup("input_file")->save(input_values_path, "json");
 
   // Initialize/set the time information
-  double t       = 0;
+  double t = 0;
   double t_final = inlet["t_final"];
-  double dt      = inlet["dt"];
-  int    cycle   = 0;
+  double dt = inlet["dt"];
+  int cycle = 0;
 
   std::string mesh_tag{"mesh"};
 
@@ -280,13 +280,13 @@ int main(int argc, char* argv[])
     serac::StateManager::setMesh(std::move(mesh), mesh_tag);
   } else {
     // If restart_cycle is non-empty, then this is a restart run and the data will be loaded here
-    t     = serac::StateManager::load(*restart_cycle, mesh_tag);
+    t = serac::StateManager::load(*restart_cycle, mesh_tag);
     cycle = *restart_cycle;
   }
 
   // Create nullable containers for the solid and heat transfer input file options
   std::optional<serac::SolidMechanicsInputOptions> solid_mechanics_options;
-  std::optional<serac::HeatTransferInputOptions>   heat_transfer_options;
+  std::optional<serac::HeatTransferInputOptions> heat_transfer_options;
 
   // If the blocks exist, read the appropriate input file options
   if (inlet.isUserProvided("solid")) {

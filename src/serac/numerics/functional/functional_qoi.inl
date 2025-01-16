@@ -59,8 +59,8 @@ template <typename... trials, ExecutionSpace exec>
 class Functional<double(trials...), exec> {
   using test = QOI;
   static constexpr tuple<trials...> trial_spaces{};
-  static constexpr uint32_t         num_trial_spaces = sizeof...(trials);
-  static constexpr auto             Q                = std::max({test::order, trials::order...}) + 1;
+  static constexpr uint32_t num_trial_spaces = sizeof...(trials);
+  static constexpr auto Q = std::max({test::order, trials::order...}) + 1;
 
   class Gradient;
 
@@ -75,7 +75,7 @@ class Functional<double(trials...), exec> {
   };
   // clang-format on
 
-public:
+ public:
   /**
    * @brief Constructs using a @p mfem::ParFiniteElementSpace object corresponding to the trial space
    * @param[in] trial_fes The trial space
@@ -98,9 +98,9 @@ public:
       input_E_buffer_.push_back({});
     }
 
-    std::array<Family, num_trial_spaces> trial_families   = {trials::family...};
-    std::array<int, num_trial_spaces>    trial_orders     = {trials::order...};
-    std::array<int, num_trial_spaces>    trial_components = {trials::components...};
+    std::array<Family, num_trial_spaces> trial_families = {trials::family...};
+    std::array<int, num_trial_spaces> trial_orders = {trials::order...};
+    std::array<int, num_trial_spaces> trial_components = {trials::components...};
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
       trial_function_spaces_[i] = {trial_families[i], trial_orders[i], trial_components[i]};
     }
@@ -372,7 +372,7 @@ public:
     return (*this)(DifferentiateWRT<i>{}, t, args...);
   }
 
-private:
+ private:
   /**
    * @brief Indicates whether to obtain values or gradients from a calculation
    */
@@ -386,7 +386,7 @@ private:
    * @brief mfem::Operator that produces the gradient of a @p Functional from a @p Mult
    */
   class Gradient {
-  public:
+   public:
     /**
      * @brief Constructs a Gradient wrapper that references a parent @p Functional
      * @param[in] f The @p Functional to use for gradient calculations
@@ -396,8 +396,6 @@ private:
     {
     }
 
-    void Mult(const mfem::Vector& x, mfem::Vector& y) const { form_.GradientMult(x, y); }
-
     double operator()(const mfem::Vector& x) const { return form_.ActionOfGradient(x, which_argument); }
 
     uint64_t max_buffer_size()
@@ -405,11 +403,11 @@ private:
       uint64_t max_entries = 0;
       for (auto& integral : form_.integrals_) {
         if (integral.DependsOn(which_argument)) {
-          Domain&     dom     = integral.domain_;
+          Domain& dom = integral.domain_;
           const auto& G_trial = dom.get_restriction(form_.trial_function_spaces_[which_argument]);
           for (const auto& [geom, test_restriction] : G_trial.restrictions) {
-            const auto& trial_restriction   = G_trial.restrictions.at(geom);
-            uint64_t    entries_per_element = trial_restriction.nodes_per_elem * trial_restriction.components;
+            const auto& trial_restriction = G_trial.restrictions.at(geom);
+            uint64_t entries_per_element = trial_restriction.nodes_per_elem * trial_restriction.components;
             max_entries = std::max(max_entries, trial_restriction.num_elements * entries_per_element);
           }
         }
@@ -436,7 +434,7 @@ private:
 
         // if this integral's derivative isn't identically zero
         if (integral.functional_to_integral_index_.count(which_argument) > 0) {
-          uint32_t    id      = integral.functional_to_integral_index_.at(which_argument);
+          uint32_t id = integral.functional_to_integral_index_.at(which_argument);
           const auto& G_trial = dom.get_restriction(form_.trial_function_spaces_[which_argument]);
           for (const auto& [geom, calculate_element_gradients] : integral.element_gradient_[id]) {
             const auto& trial_restriction = G_trial.restrictions.at(geom);
@@ -450,7 +448,7 @@ private:
 
             const std::vector<int>& element_ids = integral.domain_.get(geom);
 
-            uint32_t         cols_per_elem = uint32_t(trial_restriction.nodes_per_elem * trial_restriction.components);
+            uint32_t cols_per_elem = uint32_t(trial_restriction.nodes_per_elem * trial_restriction.components);
             std::vector<DoF> trial_vdofs(cols_per_elem);
 
             for (uint32_t e = 0; e < element_ids.size(); e++) {
@@ -474,7 +472,7 @@ private:
 
     friend auto assemble(Gradient& g) { return g.assemble(); }
 
-  private:
+   private:
     /**
      * @brief The "parent" @p Functional to calculate gradients with
      */
@@ -486,7 +484,7 @@ private:
   };
 
   /// @brief Manages DOFs for the test space
-  const mfem::L2_FECollection       test_fec_;
+  const mfem::L2_FECollection test_fec_;
   const mfem::ParFiniteElementSpace test_space_;
 
   /// @brief Manages DOFs for the trial space
@@ -503,12 +501,12 @@ private:
   /// @brief The input set of local DOF values (i.e., on the current rank)
   mutable mfem::Vector input_L_[num_trial_spaces];
 
-  mutable std::vector<mfem::Vector>      input_E_buffer_;
+  mutable std::vector<mfem::Vector> input_E_buffer_;
   mutable std::vector<mfem::BlockVector> input_E_;
 
   mutable std::vector<Integral> integrals_;
 
-  mutable mfem::Vector      output_E_buffer_;
+  mutable mfem::Vector output_E_buffer_;
   mutable mfem::BlockVector output_E_;
 
   QoIElementRestriction G_test_;

@@ -40,7 +40,7 @@ void initialize([[maybe_unused]] MPI_Comm comm, [[maybe_unused]] std::string opt
 
 #ifdef SERAC_USE_CALIPER
   // Initialize Caliper
-  mgr               = cali::ConfigManager();
+  mgr = cali::ConfigManager();
   auto check_result = mgr->check(options.c_str());
 
   if (check_result.empty()) {

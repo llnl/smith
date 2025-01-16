@@ -41,11 +41,11 @@ struct ParameterizedLinearIsotropicSolid {
   SERAC_HOST_DEVICE auto operator()(State& /*state*/, const serac::tensor<DispGradType, dim, dim>& du_dX,
                                     const BulkType& DeltaK, const ShearType& DeltaG) const
   {
-    constexpr auto I       = Identity<dim>();
-    auto           K       = K0 + get<0>(DeltaK);
-    auto           G       = G0 + get<0>(DeltaG);
-    auto           lambda  = K - (2.0 / dim) * G;
-    auto           epsilon = 0.5 * (transpose(du_dX) + du_dX);
+    constexpr auto I = Identity<dim>();
+    auto K = K0 + get<0>(DeltaK);
+    auto G = G0 + get<0>(DeltaG);
+    auto lambda = K - (2.0 / dim) * G;
+    auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
     return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
   }
 
@@ -85,12 +85,12 @@ struct ParameterizedNeoHookeanSolid {
                                     const BulkType& DeltaK, const ShearType& DeltaG) const
   {
     using std::log1p;
-    constexpr auto I         = Identity<dim>();
-    auto           K         = K0 + get<0>(DeltaK);
-    auto           G         = G0 + get<0>(DeltaG);
-    auto           lambda    = K - (2.0 / dim) * G;
-    auto           B_minus_I = du_dX * transpose(du_dX) + transpose(du_dX) + du_dX;
-    auto           logJ      = log1p(detApIm1(du_dX));
+    constexpr auto I = Identity<dim>();
+    auto K = K0 + get<0>(DeltaK);
+    auto G = G0 + get<0>(DeltaG);
+    auto lambda = K - (2.0 / dim) * G;
+    auto B_minus_I = du_dX * transpose(du_dX) + transpose(du_dX) + du_dX;
+    auto logJ = log1p(detApIm1(du_dX));
 
     // Kirchoff stress, in form that avoids cancellation error when F is near I
     auto TK = lambda * logJ * I + G * B_minus_I;
@@ -124,7 +124,7 @@ struct underlying_scalar {
 
 /// @brief J2 material with Voce hardening, with hardening parameters exposed as differentiable parameters
 struct ParameterizedJ2Nonlinear {
-  static constexpr int    dim = 3;      ///< dimension of space
+  static constexpr int dim = 3;         ///< dimension of space
   static constexpr double tol = 1e-10;  ///< relative tolerance on residual for accepting return map solution
 
   double E;        ///< Young's modulus
@@ -133,8 +133,8 @@ struct ParameterizedJ2Nonlinear {
 
   /// @brief variables required to characterize the hysteresis response
   struct State {
-    tensor<double, dim, dim> plastic_strain;              ///< plastic strain
-    double                   accumulated_plastic_strain;  ///< uniaxial equivalent plastic strain
+    tensor<double, dim, dim> plastic_strain;  ///< plastic strain
+    double accumulated_plastic_strain;        ///< uniaxial equivalent plastic strain
   };
 
   /// @brief calculate the Cauchy stress, given the displacement gradient and previous material state
@@ -152,20 +152,20 @@ struct ParameterizedJ2Nonlinear {
     one = 1.0;
 
     using std::sqrt;
-    constexpr auto I       = Identity<dim>();
-    const double   K       = E / (3.0 * (1.0 - 2.0 * nu));
-    const double   G       = 0.5 * E / (1.0 + nu);
-    const double   rel_tol = tol * get_value(sigma_y);
+    constexpr auto I = Identity<dim>();
+    const double K = E / (3.0 * (1.0 - 2.0 * nu));
+    const double G = 0.5 * E / (1.0 + nu);
+    const double rel_tol = tol * get_value(sigma_y);
 
     // (i) elastic predictor
     auto el_strain = sym(du_dX) - state.plastic_strain;
-    auto p         = K * tr(el_strain);
-    auto s         = 2.0 * G * dev(el_strain) * one;  // multiply by "one" to get type correct for parameter derivatives
-    auto q         = sqrt(1.5) * norm(s);
+    auto p = K * tr(el_strain);
+    auto s = 2.0 * G * dev(el_strain) * one;  // multiply by "one" to get type correct for parameter derivatives
+    auto q = sqrt(1.5) * norm(s);
 
     // (ii) admissibility
     const double eqps_old = state.accumulated_plastic_strain;
-    auto         residual = [eqps_old, G, *this](auto delta_eqps, auto trial_mises, auto y0, auto ysat, auto e0) {
+    auto residual = [eqps_old, G, *this](auto delta_eqps, auto trial_mises, auto y0, auto ysat, auto e0) {
       auto Y = this->flow_strength(eqps_old + delta_eqps, y0, ysat, e0);
       return trial_mises - 3.0 * G * delta_eqps - Y;
     };
@@ -176,7 +176,7 @@ struct ParameterizedJ2Nonlinear {
       // This ensures that if the constitutive update is called again with the updated internal
       // variables, the return map won't be repeated.
       ScalarSolverOptions opts{.xtol = 0, .rtol = rel_tol, .max_iter = 25};
-      double              lower_bound = 0.0;
+      double lower_bound = 0.0;
       double upper_bound = (get_value(q) - flow_strength(eqps_old, get_value(sigma_y), get_value(sigma_sat),
                                                          get_value(strain_constant))) /
                            (3.0 * G);

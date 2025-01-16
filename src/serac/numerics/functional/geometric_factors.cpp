@@ -19,17 +19,17 @@ void compute_geometric_factors(mfem::Vector& positions_q, mfem::Vector& jacobian
 {
   static constexpr TensorProductQuadratureRule<Q> rule{};
 
-  constexpr int spatial_dim   = function_space::components;
-  constexpr int geometry_dim  = dimension_of(geom);
+  constexpr int spatial_dim = function_space::components;
+  constexpr int geometry_dim = dimension_of(geom);
   constexpr int qpts_per_elem = num_quadrature_points(geom, Q);
 
-  using element_type  = finite_element<geom, function_space>;
+  using element_type = finite_element<geom, function_space>;
   using position_type = tensor<double, spatial_dim, qpts_per_elem>;
   using jacobian_type = tensor<double, geometry_dim, spatial_dim, qpts_per_elem>;
 
   auto X_q = reinterpret_cast<position_type*>(positions_q.ReadWrite());
   auto J_q = reinterpret_cast<jacobian_type*>(jacobians_q.ReadWrite());
-  auto X   = reinterpret_cast<const typename element_type::dof_type*>(positions_e.Read());
+  auto X = reinterpret_cast<const typename element_type::dof_type*>(positions_e.Read());
 
   std::size_t num_elements = elements.size();
 
@@ -63,20 +63,20 @@ GeometricFactors::GeometricFactors(const Domain& domain, int q, mfem::Geometry::
 {
   // const mfem::ParGridFunction* nodes = static_cast< const mfem::ParGridFunction * >(domain.mesh_.GetNodes());
   //  mfem::ParFiniteElementSpace * pfes = nodes->ParFESpace();
-  const mfem::GridFunction*       nodes = domain.mesh_.GetNodes();
-  const mfem::FiniteElementSpace* fes   = nodes->FESpace();
+  const mfem::GridFunction* nodes = domain.mesh_.GetNodes();
+  const mfem::FiniteElementSpace* fes = nodes->FESpace();
 
   const std::vector<int>& element_ids = domain.get_mfem_ids(geom);
 
-  auto         restriction = serac::ElementRestriction(fes, geom, element_ids);
+  auto restriction = serac::ElementRestriction(fes, geom, element_ids);
   mfem::Vector X_e(int(restriction.ESize()));
   restriction.Gather(*nodes, X_e);
 
   // assumes all elements are the same order
   int p = fes->GetElementOrder(0);
 
-  int spatial_dim   = domain.mesh_.SpaceDimension();
-  int geometry_dim  = dimension_of(geom);
+  int spatial_dim = domain.mesh_.SpaceDimension();
+  int geometry_dim = dimension_of(geom);
   int qpts_per_elem = num_quadrature_points(geom, q);
 
   num_elements = element_ids.size();

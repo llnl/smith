@@ -45,7 +45,7 @@ TEST(QoI, TetrahedronQuality)
   using shape_space = H1<1, dim>;
 
   std::string meshfile3D = SERAC_REPO_DIR "/data/meshes/onetet.mesh";
-  auto        mesh       = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), 0, 0);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), 0, 0);
 
   auto [fes, fec] = generateParFiniteElementSpace<shape_space>(mesh.get());
 
@@ -70,7 +70,7 @@ TEST(QoI, TetrahedronQuality)
       serac::Dimension<3>{}, serac::DependsOn<0>{},
       [=](double /*t*/, auto position, auto displacement) {
         auto [X, dX_dxi] = position;  // <--- the position derivative term is w.r.t. xi, not X!
-        auto [u, du_dX]  = displacement;
+        auto [u, du_dX] = displacement;
 
         // x := X + u,
         // so, dx/dxi = dX/dxi + du/dxi

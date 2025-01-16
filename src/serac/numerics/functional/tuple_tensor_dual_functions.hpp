@@ -138,7 +138,7 @@ SERAC_HOST_DEVICE constexpr auto make_dual_helper(double arg)
 {
   using gradient_t = one_hot_t<i, N, double>;
   dual<gradient_t> arg_dual{};
-  arg_dual.value                   = arg;
+  arg_dual.value = arg;
   serac::get<i>(arg_dual.gradient) = 1.0;
   return arg_dual;
 }
@@ -156,7 +156,7 @@ SERAC_HOST_DEVICE constexpr auto make_dual_helper(const tensor<T, n...>& arg)
   using gradient_t = one_hot_t<i, N, tensor<T, n...>>;
   tensor<dual<gradient_t>, n...> arg_dual{};
   for_constexpr<n...>([&](auto... j) {
-    arg_dual(j...).value                         = arg(j...);
+    arg_dual(j...).value = arg(j...);
     serac::get<i>(arg_dual(j...).gradient)(j...) = 1.0;
   });
   return arg_dual;
@@ -340,7 +340,7 @@ SERAC_HOST_DEVICE constexpr auto make_dual(const tensor<double, n...>& A)
 {
   tensor<dual<tensor<double, n...>>, n...> A_dual{};
   for_constexpr<n...>([&](auto... i) {
-    A_dual(i...).value          = A(i...);
+    A_dual(i...).value = A(i...);
     A_dual(i...).gradient(i...) = 1.0;
   });
   return A_dual;
@@ -358,11 +358,11 @@ SERAC_HOST_DEVICE constexpr auto make_dual(const tensor<double, n...>& A)
 template <typename T, int n>
 SERAC_HOST_DEVICE constexpr LuFactorization<T, n> factorize_lu(const tensor<T, n, n>& A)
 {
-  constexpr auto abs  = [](double x) { return (x < 0) ? -x : x; };
+  constexpr auto abs = [](double x) { return (x < 0) ? -x : x; };
   constexpr auto swap = [](auto& x, auto& y) {
     auto tmp = x;
-    x        = y;
-    y        = tmp;
+    x = y;
+    y = tmp;
   };
 
   auto U = A;
@@ -400,7 +400,7 @@ SERAC_HOST_DEVICE constexpr LuFactorization<T, n> factorize_lu(const tensor<T, n
     // zero entries below in this column in U
     // and fill in L entries
     for (int j = i + 1; j < n; j++) {
-      auto c  = U[j][i] / U[i][i];
+      auto c = U[j][i] / U[i][i];
       L[j][i] = c;
       U[j] -= c * U[i];
       U[j][i] = T{};
@@ -428,12 +428,12 @@ SERAC_HOST_DEVICE constexpr auto linear_solve(const tensor<S, n, n>& A, const te
 
   // Strip off derivatives, if any, and compute only x (ie no derivative)
   auto lu_factors = factorize_lu(get_value(A));
-  auto x          = linear_solve(lu_factors, get_value(b));
+  auto x = linear_solve(lu_factors, get_value(b));
 
   // Compute directional derivative of x.
   // If both b and A are not dual, the zero type
   // makes these no-ops.
-  auto r  = get_gradient(b) - dot(get_gradient(A), x);
+  auto r = get_gradient(b) - dot(get_gradient(A), x);
   auto dx = linear_solve(lu_factors, r);
 
   if constexpr (is_zero<decltype(dx)>{}) {
@@ -475,7 +475,7 @@ SERAC_HOST_DEVICE constexpr auto inv(tensor<dual<gradient_type>, n, n> A)
 {
   auto invA = inv(get_value(A));
   return make_tensor<n, n>([&](int i, int j) {
-    auto          value = invA[i][j];
+    auto value = invA[i][j];
     gradient_type gradient{};
     for (int k = 0; k < n; k++) {
       for (int l = 0; l < n; l++) {
@@ -523,17 +523,17 @@ SERAC_HOST_DEVICE constexpr auto get_gradient(const tensor<dual<tensor<double, m
  * @brief Status and diagnostics of nonlinear equation solvers
  */
 struct SolverStatus {
-  bool         converged;   ///< converged Flag indicating whether solver converged to a solution or aborted.
+  bool converged;           ///< converged Flag indicating whether solver converged to a solution or aborted.
   unsigned int iterations;  ///< Number of iterations taken
-  double       residual;    ///< Final value of residual.
+  double residual;          ///< Final value of residual.
 };
 
 /**
  * @brief Settings for @p solve_scalar_equation
  */
 struct ScalarSolverOptions {
-  double       xtol;      ///< absolute tolerance on Newton correction
-  double       rtol;      ///< absolute tolerance on absolute value of residual
+  double xtol;            ///< absolute tolerance on Newton correction
+  double rtol;            ///< absolute tolerance on absolute value of residual
   unsigned int max_iter;  ///< maximum allowed number of iterations
 };
 
@@ -578,14 +578,14 @@ auto solve_scalar_equation(const function& f, double x0, double lower_bound, dou
   SLIC_ERROR_ROOT_IF(fl * fh > 0, "solve_scalar_equation: root not bracketed by input bounds.");
 
   unsigned int iterations = 0;
-  bool         converged  = false;
+  bool converged = false;
 
   // handle corner cases where one of the brackets is the root
   if (fl == 0) {
-    x         = lower_bound;
+    x = lower_bound;
     converged = true;
   } else if (fh == 0) {
-    x         = upper_bound;
+    x = upper_bound;
     converged = true;
   }
 
@@ -606,12 +606,12 @@ auto solve_scalar_equation(const function& f, double x0, double lower_bound, dou
       x0 = 0.5 * (lower_bound + upper_bound);
     }
 
-    x                  = x0;
+    x = x0;
     double delta_x_old = std::abs(upper_bound - lower_bound);
-    double delta_x     = delta_x_old;
-    auto   R           = f(make_dual(x), get_value(params)...);
-    auto   fval        = get_value(R);
-    df_dx              = get_gradient(R);
+    double delta_x = delta_x_old;
+    auto R = f(make_dual(x), get_value(params)...);
+    auto fval = get_value(R);
+    df_dx = get_gradient(R);
 
     while (!converged) {
       if (iterations == options.max_iter) {
@@ -623,20 +623,20 @@ auto solve_scalar_equation(const function& f, double x0, double lower_bound, dou
       if ((x - xh) * df_dx - fval > 0 || (x - xl) * df_dx - fval < 0 ||
           std::abs(2. * fval) > std::abs(delta_x_old * df_dx)) {
         delta_x_old = delta_x;
-        delta_x     = 0.5 * (xh - xl);
-        x           = xl + delta_x;
-        converged   = (x == xl);
+        delta_x = 0.5 * (xh - xl);
+        x = xl + delta_x;
+        converged = (x == xl);
       } else {  // use Newton step
         delta_x_old = delta_x;
-        delta_x     = fval / df_dx;
-        auto temp   = x;
+        delta_x = fval / df_dx;
+        auto temp = x;
         x -= delta_x;
         converged = (x == temp);
       }
 
       // function and jacobian evaluation
-      R     = f(make_dual(x), get_value(params)...);
-      fval  = get_value(R);
+      R = f(make_dual(x), get_value(params)...);
+      fval = get_value(R);
       df_dx = get_gradient(R);
 
       // convergence check
@@ -665,12 +665,12 @@ auto solve_scalar_equation(const function& f, double x0, double lower_bound, dou
       (is_dual_number<ParamTypes>::value || ...) || (is_tensor_of_dual_number<ParamTypes>::value || ...);
   if constexpr (contains_duals) {
     auto [fval, df] = f(x, params...);
-    auto         dx = -df / df_dx;
+    auto dx = -df / df_dx;
     SolverStatus status{.converged = converged, .iterations = iterations, .residual = fval};
     return tuple{dual{x, dx}, status};
   }
   if constexpr (!contains_duals) {
-    auto         fval = f(x, params...);
+    auto fval = f(x, params...);
     SolverStatus status{.converged = converged, .iterations = iterations, .residual = fval};
     return tuple{x, status};
   }
@@ -694,14 +694,14 @@ auto find_root(const function& f, tensor<double, n> x0)
   static_assert(std::is_same_v<decltype(f(x0)), tensor<double, n>>,
                 "error: f(x) must have the same number of equations as unknowns");
 
-  double epsilon        = 1.0e-8;
-  int    max_iterations = 10;
+  double epsilon = 1.0e-8;
+  int max_iterations = 10;
 
   auto x = x0;
 
   for (int k = 0; k < max_iterations; k++) {
     auto output = f(make_dual(x));
-    auto r      = get_value(output);
+    auto r = get_value(output);
     if (norm(r) < epsilon) break;
     auto J = get_gradient(output);
     x -= linear_solve(J, r);
@@ -746,8 +746,8 @@ auto eigenvalues(const serac::tensor<T, size, size>& A)
     // and calculate their derivatives, when appropriate
     if constexpr (is_dual_number<T>::value) {
       tensor<double, size> phi = make_tensor<size>([&](int i) { return eig_sys.Eigenvector(k)[i]; });
-      auto                 dA  = make_tensor<size, size>([&](int i, int j) { return A(i, j).gradient; });
-      output[k].gradient       = dot(phi, dA, phi);
+      auto dA = make_tensor<size, size>([&](int i, int j) { return A(i, j).gradient; });
+      output[k].gradient = dot(phi, dA, phi);
     }
   }
 
@@ -779,8 +779,8 @@ SERAC_HOST_DEVICE tensor<int, 3> argsort(const tensor<T, 3>& v)
 {
   auto swap = [](int& first, int& second) {
     int tmp = first;
-    first   = second;
-    second  = tmp;
+    first = second;
+    second = tmp;
   };
   tensor<int, 3> order{0, 1, 2};
   if (v[0] > v[1]) swap(order[0], order[1]);
@@ -804,16 +804,16 @@ inline SERAC_HOST_DEVICE tuple<vec3, mat3> eig_symm(const mat3& A)
   // We know of optimizations for this routine. When this becomes the
   // bottleneck, we can revisit. See OptimiSM for details.
 
-  tensor<double, 3>    eta{};
+  tensor<double, 3> eta{};
   tensor<double, 3, 3> Q = DenseIdentity<3>();
 
-  auto   A_dev = dev(A);
-  double J2    = 0.5 * inner(A_dev, A_dev);
-  double J3    = det(A_dev);
+  auto A_dev = dev(A);
+  double J2 = 0.5 * inner(A_dev, A_dev);
+  double J3 = det(A_dev);
 
   if (J2 > 0.0) {
     // angle used to find eigenvalues
-    double tmp   = (0.5 * J3) * std::pow(3.0 / J2, 1.5);
+    double tmp = (0.5 * J3) * std::pow(3.0 / J2, 1.5);
     double alpha = std::acos(fmin(fmax(tmp, -1.0), 1.0)) / 3.0;
 
     // consider the most distinct eigenvalue first
@@ -826,7 +826,7 @@ inline SERAC_HOST_DEVICE tuple<vec3, mat3> eig_symm(const mat3& A)
     // find the eigenvector for that eigenvalue
     mat3 r;
 
-    int    imax     = -1;
+    int imax = -1;
     double norm_max = -1.0;
 
     for (int i = 0; i < 3; i++) {
@@ -836,7 +836,7 @@ inline SERAC_HOST_DEVICE tuple<vec3, mat3> eig_symm(const mat3& A)
 
       double norm_r = norm(r[i]);
       if (norm_max < norm_r) {
-        imax     = i;
+        imax = i;
         norm_max = norm_r;
       }
     }
@@ -983,7 +983,7 @@ SERAC_HOST_DEVICE constexpr auto symmetric_mat3_function_with_derivative(tensor<
                                                                          const Function& g)
 {
   return make_tensor<3, 3>([&](int i, int j) {
-    auto     value = f_A[i][j];
+    auto value = f_A[i][j];
     Gradient gradient{};
     for (int k = 0; k < 3; k++) {
       for (int l = 0; l < 3; l++) {

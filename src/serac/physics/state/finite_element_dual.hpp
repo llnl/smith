@@ -26,7 +26,7 @@ namespace serac {
  * space of linear forms as applied to a specific basis set)
  */
 class FiniteElementDual : public FiniteElementVector {
-public:
+ public:
   using FiniteElementVector::FiniteElementVector;
   using FiniteElementVector::operator=;
   using mfem::Vector::Print;
@@ -129,7 +129,7 @@ public:
     return *linear_form_;
   }
 
-protected:
+ protected:
   /**
    * @brief An optional container for a linear form (L-vector) view of the finite element dual.
    *

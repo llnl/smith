@@ -54,7 +54,7 @@ std::string findMeshFilePath(const std::string& mesh_path, const std::string& in
 
   // Check relative to input file
   std::string input_file_dir = fullDirectoryFromPath(input_file_path);
-  std::string possible_path  = filesystem::joinPath(input_file_dir, mesh_path);
+  std::string possible_path = filesystem::joinPath(input_file_dir, mesh_path);
   if (filesystem::pathExists(possible_path)) {
     return possible_path;
   }
@@ -67,7 +67,7 @@ std::string findMeshFilePath(const std::string& mesh_path, const std::string& in
 
 std::string fullDirectoryFromPath(const std::string& path)
 {
-  char  actualpath[PATH_MAX + 1];
+  char actualpath[PATH_MAX + 1];
   char* ptr = realpath(path.c_str(), actualpath);
   if (ptr == nullptr) {
     SLIC_ERROR_ROOT("Failed to find absolute path from input file.");
@@ -79,7 +79,7 @@ std::string fullDirectoryFromPath(const std::string& path)
 
 std::string getInputFileName(const std::string& file_path)
 {
-  axom::Path  path(file_path);
+  axom::Path path(file_path);
   std::string basename = path.baseName();
   std::string name;
 
@@ -233,7 +233,7 @@ mfem::Vector FromInlet<mfem::Vector>::operator()(const axom::inlet::Container& b
 serac::input::BoundaryConditionInputOptions FromInlet<serac::input::BoundaryConditionInputOptions>::operator()(
     const axom::inlet::Container& base)
 {
-  serac::input::BoundaryConditionInputOptions result{.attrs     = {},
+  serac::input::BoundaryConditionInputOptions result{.attrs = {},
                                                      .coef_opts = base.get<serac::input::CoefficientInputOptions>()};
   // Build a set with just the values of the map
   auto bdr_attr_map = base["attrs"].get<std::unordered_map<int, int>>();

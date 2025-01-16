@@ -37,13 +37,13 @@ struct DoF {
   // with -Wconversion enabled, see: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=39170
   // So, we resort to masks and bitshifting instead.
 
-  static constexpr uint64_t sign_mask        = 0x8000'0000'0000'0000;       ///< bits for sign field
-  static constexpr uint64_t orientation_mask = 0x7000'0000'0000'0000;       ///< bits for orientation field
-  static constexpr uint64_t index_mask       = 0x0000'FFFF'FFFF'FFFF'FFFF;  ///< bits for the index field
+  static constexpr uint64_t sign_mask = 0x8000'0000'0000'0000;         ///< bits for sign field
+  static constexpr uint64_t orientation_mask = 0x7000'0000'0000'0000;  ///< bits for orientation field
+  static constexpr uint64_t index_mask = 0x0000'FFFF'FFFF'FFFF'FFFF;   ///< bits for the index field
 
-  static constexpr uint64_t sign_shift        = 63;  ///< number of trailing zeros in `sign_mask`
+  static constexpr uint64_t sign_shift = 63;         ///< number of trailing zeros in `sign_mask`
   static constexpr uint64_t orientation_shift = 60;  ///< number of trailing zeros in `orientation_mask`
-  static constexpr uint64_t index_shift       = 0;   ///< number of trailing zeros in `index_mask`
+  static constexpr uint64_t index_shift = 0;         ///< number of trailing zeros in `index_mask`
 
   /**
    * @brief a 64-bit word encoding the following metadata (laid out from MSB to LSB);
@@ -139,7 +139,7 @@ struct Array2D {
   const T& operator()(int i, int j) const { return values[uint64_t(i) * dim[1] + uint64_t(j)]; }
 
   std::vector<T> values;  ///< the values of each element in the array
-  uint64_t       dim[2];  ///< the number of rows and columns in the array, respectively
+  uint64_t dim[2];        ///< the number of rows and columns in the array, respectively
 };
 
 namespace serac {

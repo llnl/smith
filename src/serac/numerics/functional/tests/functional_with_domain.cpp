@@ -30,12 +30,12 @@ struct TestThermalIntegratorOne {
   SERAC_HOST_DEVICE auto operator()(double, Position position, Temperature temperature) const
   {
     constexpr static double d00 = 1.0;
-    constexpr static auto   d01 = 1.0 * make_tensor<dim>([](int i) { return i; });
-    constexpr static auto   d10 = 1.0 * make_tensor<dim>([](int i) { return 2 * i * i; });
-    constexpr static auto   d11 = 1.0 * make_tensor<dim, dim>([](int i, int j) { return i + j * (j + 1) + 1; });
+    constexpr static auto d01 = 1.0 * make_tensor<dim>([](int i) { return i; });
+    constexpr static auto d10 = 1.0 * make_tensor<dim>([](int i) { return 2 * i * i; });
+    constexpr static auto d11 = 1.0 * make_tensor<dim, dim>([](int i, int j) { return i + j * (j + 1) + 1; });
 
     auto [X, dX_dxi] = position;
-    auto [u, du_dx]  = temperature;
+    auto [u, du_dx] = temperature;
 
     double mask = 1.0;
     if constexpr (apply_mask) {
@@ -43,7 +43,7 @@ struct TestThermalIntegratorOne {
     }
 
     auto source = mask * (d00 * u + dot(d01, du_dx) - 0.0 * (100 * X[0] * X[1]));
-    auto flux   = mask * (d10 * u + dot(d11, du_dx));
+    auto flux = mask * (d10 * u + dot(d11, du_dx));
     return serac::tuple{source, flux};
   }
 };
@@ -77,7 +77,7 @@ template <int ptest, int ptrial, int dim>
 void whole_mesh_comparison_test_impl(std::unique_ptr<mfem::ParMesh>& mesh)
 {
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = H1<ptest>;
+  using test_space = H1<ptest>;
   using trial_space = H1<ptrial>;
 
   // Create standard MFEM bilinear and linear forms on H1
@@ -87,7 +87,7 @@ void whole_mesh_comparison_test_impl(std::unique_ptr<mfem::ParMesh>& mesh)
 
   mfem::Vector U(trial_fespace->TrueVSize());
 
-  mfem::ParGridFunction     U_gf(trial_fespace.get());
+  mfem::ParGridFunction U_gf(trial_fespace.get());
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
   U_gf.GetTrueDofs(U);
@@ -97,18 +97,18 @@ void whole_mesh_comparison_test_impl(std::unique_ptr<mfem::ParMesh>& mesh)
   Functional<test_space(trial_space)> residual_comparison(test_fespace.get(), {trial_fespace.get()});
 
   auto everything = [](std::vector<tensor<double, dim>>, int /* attr */) { return true; };
-  auto on_left    = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[0] < 0.5; };
-  auto on_right   = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[0] >= 0.5; };
-  auto on_bottom  = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[1] < 0.5; };
-  auto on_top     = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[1] >= 0.5; };
+  auto on_left = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[0] < 0.5; };
+  auto on_right = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[0] >= 0.5; };
+  auto on_bottom = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[1] < 0.5; };
+  auto on_top = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[1] >= 0.5; };
 
   Domain whole_mesh = Domain::ofElements(*mesh, everything);
-  Domain left       = Domain::ofElements(*mesh, on_left);
-  Domain right      = Domain::ofElements(*mesh, on_right);
+  Domain left = Domain::ofElements(*mesh, on_left);
+  Domain right = Domain::ofElements(*mesh, on_right);
 
-  Domain whole_boundary  = Domain::ofBoundaryElements(*mesh, everything);
+  Domain whole_boundary = Domain::ofBoundaryElements(*mesh, everything);
   Domain bottom_boundary = Domain::ofBoundaryElements(*mesh, on_bottom);
-  Domain top_boundary    = Domain::ofBoundaryElements(*mesh, on_top);
+  Domain top_boundary = Domain::ofBoundaryElements(*mesh, on_top);
 
   residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, TestThermalIntegratorOne<dim>{}, left);
 
@@ -176,7 +176,7 @@ template <int ptest, int ptrial, int dim>
 void partial_mesh_comparison_test_impl(std::unique_ptr<mfem::ParMesh>& mesh)
 {
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = H1<ptest>;
+  using test_space = H1<ptest>;
   using trial_space = H1<ptrial>;
 
   // Create standard MFEM bilinear and linear forms on H1
@@ -186,7 +186,7 @@ void partial_mesh_comparison_test_impl(std::unique_ptr<mfem::ParMesh>& mesh)
 
   mfem::Vector U(trial_fespace->TrueVSize());
 
-  mfem::ParGridFunction     U_gf(trial_fespace.get());
+  mfem::ParGridFunction U_gf(trial_fespace.get());
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
   U_gf.GetTrueDofs(U);
@@ -195,10 +195,10 @@ void partial_mesh_comparison_test_impl(std::unique_ptr<mfem::ParMesh>& mesh)
   Functional<test_space(trial_space)> residual(test_fespace.get(), {trial_fespace.get()});
   Functional<test_space(trial_space)> residual_comparison(test_fespace.get(), {trial_fespace.get()});
 
-  auto   on_left = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[0] < 4.0; };
-  Domain left    = Domain::ofElements(*mesh, on_left);
+  auto on_left = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[0] < 4.0; };
+  Domain left = Domain::ofElements(*mesh, on_left);
 
-  auto   on_top       = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[1] >= 0.99; };
+  auto on_top = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[1] >= 0.99; };
   Domain top_boundary = Domain::ofBoundaryElements(*mesh, on_top);
 
   residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, TestThermalIntegratorOne<dim>{}, left);
@@ -245,18 +245,18 @@ TEST(basic, partial_mesh_comparison_hexes) { partial_mesh_comparison_test<1, 1>(
 
 TEST(qoi, partial_boundary)
 {
-  constexpr auto dim  = 3;
-  auto           mesh = mesh::refineAndDistribute(buildMeshFromFile(SERAC_REPO_DIR "/data/meshes/beam-hex.mesh"), 1);
+  constexpr auto dim = 3;
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(SERAC_REPO_DIR "/data/meshes/beam-hex.mesh"), 1);
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = double;
+  using test_space = double;
   using trial_space = H1<1>;
 
   auto [trial_fespace, trial_fec] = serac::generateParFiniteElementSpace<trial_space>(mesh.get());
 
   mfem::Vector U(trial_fespace->TrueVSize());
 
-  mfem::ParGridFunction     U_gf(trial_fespace.get());
+  mfem::ParGridFunction U_gf(trial_fespace.get());
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
   U_gf.GetTrueDofs(U);
@@ -264,7 +264,7 @@ TEST(qoi, partial_boundary)
   // Construct the new functional object using the known test and trial spaces
   Functional<test_space(trial_space)> qoi({trial_fespace.get()});
 
-  auto   on_top       = [](std::vector<tensor<double, 3>> X, int /* attr */) { return average(X)[1] >= 0.99; };
+  auto on_top = [](std::vector<tensor<double, 3>> X, int /* attr */) { return average(X)[1] >= 0.99; };
   Domain top_boundary = Domain::ofBoundaryElements(*mesh, on_top);
 
   qoi.AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn</*nothing*/>{}, TrivialIntegrator{}, top_boundary);
@@ -278,18 +278,18 @@ TEST(qoi, partial_boundary)
 
 TEST(qoi, partial_domain)
 {
-  constexpr auto dim  = 3;
-  auto           mesh = mesh::refineAndDistribute(buildMeshFromFile(SERAC_REPO_DIR "/data/meshes/beam-hex.mesh"), 1);
+  constexpr auto dim = 3;
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(SERAC_REPO_DIR "/data/meshes/beam-hex.mesh"), 1);
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = double;
+  using test_space = double;
   using trial_space = H1<1>;
 
   auto [trial_fespace, trial_fec] = serac::generateParFiniteElementSpace<trial_space>(mesh.get());
 
   mfem::Vector U(trial_fespace->TrueVSize());
 
-  mfem::ParGridFunction     U_gf(trial_fespace.get());
+  mfem::ParGridFunction U_gf(trial_fespace.get());
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
   U_gf.GetTrueDofs(U);
@@ -297,13 +297,13 @@ TEST(qoi, partial_domain)
   // Construct the new functional object using the known test and trial spaces
   Functional<test_space(trial_space)> qoi({trial_fespace.get()});
 
-  auto   on_left = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[0] < 4.0; };
-  Domain left    = Domain::ofElements(*mesh, on_left);
+  auto on_left = [](std::vector<tensor<double, dim>> X, int /* attr */) { return average(X)[0] < 4.0; };
+  Domain left = Domain::ofElements(*mesh, on_left);
 
   qoi.AddDomainIntegral(Dimension<dim>{}, DependsOn</*nothing*/>{}, TrivialIntegrator{}, left);
 
-  double time   = 0.0;
-  auto   volume = qoi(time, U);
+  double time = 0.0;
+  auto volume = qoi(time, U);
 
   EXPECT_NEAR(volume, 4.0, 1.0e-14);
 }

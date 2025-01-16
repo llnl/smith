@@ -54,7 +54,7 @@ struct LinearIsotropicConductor {
     return serac::tuple{density_ * specific_heat_capacity_, -1.0 * conductivity_ * temperature_gradient};
   }
 
-private:
+ private:
   /// Density
   double density_;
 
@@ -76,7 +76,7 @@ struct IsotropicConductorWithLinearConductivityVsTemperature {
    * @param d_conductivity_d_temperature Slope for the thermal conductivity as a function of temperature
    */
   IsotropicConductorWithLinearConductivityVsTemperature(double density = 1.0, double specific_heat_capacity = 1.0,
-                                                        double reference_conductivity       = 1.0,
+                                                        double reference_conductivity = 1.0,
                                                         double d_conductivity_d_temperature = 0.0)
       : density_(density),
         specific_heat_capacity_(specific_heat_capacity),
@@ -108,7 +108,7 @@ struct IsotropicConductorWithLinearConductivityVsTemperature {
     return serac::tuple{density_ * specific_heat_capacity_, -1.0 * currentConductivity * temperature_gradient};
   }
 
-private:
+ private:
   /// Density
   double density_;
 
@@ -166,7 +166,7 @@ struct LinearConductor {
     return serac::tuple{density_ * specific_heat_capacity_, -1.0 * conductivity_ * temperature_gradient};
   }
 
-private:
+ private:
   /// Density
   double density_;
 

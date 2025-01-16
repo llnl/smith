@@ -58,7 +58,7 @@ struct BasisVectors {
   BV constructBases(const std::vector<const mfem::Vector*>& states) const
   {
     size_t num_cols = states.size();
-    BV     Q;
+    BV Q;
     BVCreate(PETSC_COMM_SELF, &Q);
     BVSetType(Q, BVVECS);
     BVSetSizesFromVec(Q, v, static_cast<int>(num_cols));
@@ -72,12 +72,12 @@ struct BasisVectors {
     return Q;
   }
 
-private:
+ private:
   const int local_rows;
   const int global_rows;
 
   std::vector<int> col_indices;
-  Vec              v;
+  Vec v;
 };
 
 /**
@@ -86,7 +86,7 @@ private:
  */
 Vec petscVec(const mfem::Vector& state)
 {
-  const int local_rows  = state.Size();
+  const int local_rows = state.Size();
   const int global_rows = globalSize(state, PETSC_COMM_WORLD);
 
   Vec v;
@@ -117,7 +117,7 @@ Vec petscVec(const mfem::Vector& state)
 void copy(const Vec& v, mfem::Vector& s)
 {
   const int local_rows = s.Size();
-  PetscInt  iStart, iEnd;
+  PetscInt iStart, iEnd;
   VecGetOwnershipRange(v, &iStart, &iEnd);
 
   SLIC_ERROR_IF(local_rows != iEnd - iStart,
@@ -141,9 +141,9 @@ Mat dot(const std::vector<const mfem::Vector*>& s, const std::vector<const mfem:
 {
   SLIC_ERROR_IF(s.size() != As.size(),
                 "Search directions and their linear operator result must have same number of columns");
-  size_t num_cols     = s.size();
-  int    num_cols_int = static_cast<int>(num_cols);
-  Mat    sAs;
+  size_t num_cols = s.size();
+  int num_cols_int = static_cast<int>(num_cols);
+  Mat sAs;
   MatCreateSeqDense(PETSC_COMM_SELF, num_cols_int, num_cols_int, NULL, &sAs);
   for (size_t i = 0; i < num_cols; ++i) {
     for (size_t j = 0; j < num_cols; ++j) {
@@ -164,7 +164,7 @@ Mat dot(const std::vector<const mfem::Vector*>& s, const std::vector<const mfem:
 Vec dot(const std::vector<const mfem::Vector*>& s, const mfem::Vector& b)
 {
   size_t num_cols = s.size();
-  Vec    sb;
+  Vec sb;
   VecCreateSeq(PETSC_COMM_SELF, static_cast<int>(num_cols), &sb);
   for (size_t i = 0; i < num_cols; ++i) {
     VecSetValue(sb, static_cast<int>(i), mfem::InnerProduct(PETSC_COMM_WORLD, *s[i], b), INSERT_VALUES);
@@ -180,7 +180,7 @@ Vec dot(const std::vector<const mfem::Vector*>& s, const mfem::Vector& b)
 auto qr(const std::vector<const mfem::Vector*>& states)
 {
   BasisVectors bvs(*states[0]);
-  BV           Q = bvs.constructBases(states);
+  BV Q = bvs.constructBases(states);
 
   Mat R;
   int num_cols = static_cast<int>(states.size());
@@ -201,9 +201,9 @@ auto qr(const std::vector<const mfem::Vector*>& states)
  */
 double quadraticEnergy(const DenseMat& A, const DenseVec& b, const DenseVec& x)
 {
-  DenseVec Ax  = A * x;
-  double   xAx = dot(x, Ax);
-  double   xb  = dot(x, b);
+  DenseVec Ax = A * x;
+  double xAx = dot(x, Ax);
+  double xb = dot(x, b);
   return 0.5 * xAx - xb;
 }
 
@@ -249,22 +249,22 @@ auto exactTrustRegionSolve(DenseMat A, const DenseVec& b, double delta, int num_
 {
   // minimize 1/2 x^T A x - b^T x, s.t. norm(x) <= delta
   auto [isize, jsize] = A.size();
-  auto isize2         = b.size();
+  auto isize2 = b.size();
   SLIC_ERROR_IF(isize != jsize, "Exact trust region solver requires square matrices");
   SLIC_ERROR_IF(isize != isize2,
                 "The right hand size for exact trust region solve must be consistent with the input matrix size");
 
   auto [sigs, V] = eigh(A);
   std::vector<DenseVec> leftmosts;
-  std::vector<double>   minsigs;
-  size_t                num_leftmost_possible(size_t(std::min(num_leftmost, isize)));
+  std::vector<double> minsigs;
+  size_t num_leftmost_possible(size_t(std::min(num_leftmost, isize)));
   for (size_t i = 0; i < num_leftmost_possible; ++i) {
     leftmosts.emplace_back(V[i]);
     minsigs.emplace_back(sigs[i]);
   }
 
   const auto& leftMost = V[0];
-  double      minSig   = sigs[0];
+  double minSig = sigs[0];
 
   // bv = V.T b, V has columns which are eigenvectors
   DenseVec bv(isize);
@@ -273,8 +273,8 @@ auto exactTrustRegionSolve(DenseMat A, const DenseVec& b, double delta, int num_
   }
 
   DenseVec bvOverSigs = bv / sigs;
-  double   sigScale   = sum(abs(sigs)) / isize;
-  double   eps        = 1e-12 * sigScale;
+  double sigScale = sum(abs(sigs)) / isize;
+  double eps = 1e-12 * sigScale;
 
   // Check if solution is inside the trust region
   if ((minSig >= eps) && (norm(bvOverSigs) <= delta)) {
@@ -299,10 +299,10 @@ auto exactTrustRegionSolve(DenseMat A, const DenseVec& b, double delta, int num_
       p.add(bv[i], V[size_t(i)]);
     }
 
-    const auto& z     = leftMost;
-    double      pz    = dot(p, z);
-    double      pp    = dot(p, p);
-    double      ddmpp = std::max(delta * delta - pp, 0.0);
+    const auto& z = leftMost;
+    double pz = dot(p, z);
+    double pp = dot(p, p);
+    double ddmpp = std::max(delta * delta - pp, 0.0);
 
     double tau1 = -pz + std::sqrt(pz * pz + ddmpp);
     double tau2 = -pz - std::sqrt(pz * pz + ddmpp);
@@ -320,22 +320,22 @@ auto exactTrustRegionSolve(DenseMat A, const DenseVec& b, double delta, int num_
     return std::make_tuple(x, leftmosts, minsigs, true);
   }
   DenseVec bvbv = bv * bv;
-  sigsPlusLam   = sigs + lam;
+  sigsPlusLam = sigs + lam;
 
   double pNormSq = pnorm_squared(bvbv, sigsPlusLam);
-  double pNorm   = std::sqrt(pNormSq);
-  double bError  = (pNorm - delta) / delta;
+  double pNorm = std::sqrt(pNormSq);
+  double bError = (pNorm - delta) / delta;
 
   // consider an out if it doesn't converge, or use a better initial guess, or bound the lam from below and above.
-  size_t iters    = 0;
+  size_t iters = 0;
   size_t maxIters = 30;
   while ((std::abs(bError) > 1e-9) && (iters++ < maxIters)) {
     double qNormSq = qnorm_squared(bvbv, sigsPlusLam);
     lam += (pNormSq / qNormSq) * bError;
     sigsPlusLam = sigs + lam;
-    pNormSq     = pnorm_squared(bvbv, sigsPlusLam);
-    pNorm       = std::sqrt(pNormSq);
-    bError      = (pNorm - delta) / delta;
+    pNormSq = pnorm_squared(bvbv, sigsPlusLam);
+    pNorm = std::sqrt(pNormSq);
+    bError = (pNorm - delta) / delta;
   }
 
   bool success = true;
@@ -383,7 +383,7 @@ std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector
 {
   SERAC_MARK_FUNCTION;
   DenseMat sAs1 = dot(states, Astates);
-  DenseMat sAs  = sym(sAs1);
+  DenseMat sAs = sym(sAs1);
 
   if (sAs.hasNan()) {
     throw PetscException("States in subspace solve contain NaNs.");
@@ -409,16 +409,16 @@ std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector
   for (int i = 0; i < rows; ++i) {
     if (R(i, i) < 1e-9 * trace_mag) {
       // printf("removing after QR state number %d\n", i);
-      auto statesNew  = remove_at(states, size_t(i));
+      auto statesNew = remove_at(states, size_t(i));
       auto AstatesNew = remove_at(Astates, size_t(i));
       return solveSubspaceProblem(statesNew, AstatesNew, b, delta, num_leftmost);
     }
   }
 
-  auto     Rinv = inverse(R);
-  DenseMat pAp  = sAs.PtAP(Rinv);
+  auto Rinv = inverse(R);
+  DenseMat pAp = sAs.PtAP(Rinv);
 
-  Vec                 b_parallel = petscVec(b);
+  Vec b_parallel = petscVec(b);
   std::vector<double> pb_vec(states.size());
   BVDotVec(Q_parallel, b_parallel, &pb_vec[0]);
   DenseVec pb(pb_vec);
@@ -456,7 +456,7 @@ std::pair<std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>> re
 {
   SERAC_MARK_FUNCTION;
   std::vector<double> norms;
-  size_t              num_dirs = directions.size();
+  size_t num_dirs = directions.size();
 
   for (size_t i = 0; i < num_dirs; ++i) {
     norms.push_back(std::sqrt(mfem::InnerProduct(PETSC_COMM_WORLD, *directions[i], *directions[i])));
@@ -467,7 +467,7 @@ std::pair<std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>> re
     bool keepi = true;
     if (norms[i] == 0) keepi = false;
     for (auto&& kept_and_j : kepts) {
-      size_t j      = kept_and_j.second;
+      size_t j = kept_and_j.second;
       double dot_ij = mfem::InnerProduct(PETSC_COMM_WORLD, *directions[i], *kept_and_j.first);
       if (dot_ij > 0.999 * norms[i] * norms[j]) {
         keepi = false;

@@ -50,7 +50,7 @@ mfem::Mesh buildMeshFromFile(const std::string& mesh_file)
 void squish(mfem::Mesh& mesh)
 {
   int num_vertices = mesh.GetNV();
-  int dim          = mesh.SpaceDimension();
+  int dim = mesh.SpaceDimension();
 
   mfem::Vector vertices;
   mesh.GetVertices(vertices);
@@ -73,14 +73,14 @@ void squish(mfem::Mesh& mesh)
 
 mfem::Mesh buildDiskMesh(int approx_number_of_elements)
 {
-  static constexpr int dim                   = 2;
-  static constexpr int num_elems             = 4;
-  static constexpr int num_vertices          = 5;
+  static constexpr int dim = 2;
+  static constexpr int num_elems = 4;
+  static constexpr int num_vertices = 5;
   static constexpr int num_boundary_elements = 4;
 
   static constexpr double vertices[num_vertices][dim] = {{0, 0}, {1, 0}, {0, 1}, {-1, 0}, {0, -1}};
-  static constexpr int    triangles[num_elems][3]     = {{1, 2, 0}, {2, 3, 0}, {3, 4, 0}, {4, 1, 0}};
-  static constexpr int    segments[num_elems][2]      = {{1, 2}, {2, 3}, {3, 4}, {4, 1}};
+  static constexpr int triangles[num_elems][3] = {{1, 2, 0}, {2, 3, 0}, {3, 4, 0}, {4, 1, 0}};
+  static constexpr int segments[num_elems][2] = {{1, 2}, {2, 3}, {3, 4}, {4, 1}};
 
   auto mesh = mfem::Mesh(dim, num_vertices, num_elems, num_boundary_elements);
 
@@ -106,17 +106,17 @@ mfem::Mesh buildDiskMesh(int approx_number_of_elements)
 
 mfem::Mesh buildBallMesh(int approx_number_of_elements)
 {
-  static constexpr int dim                   = 3;
-  static constexpr int num_elems             = 8;
-  static constexpr int num_vertices          = 7;
+  static constexpr int dim = 3;
+  static constexpr int num_elems = 8;
+  static constexpr int num_vertices = 7;
   static constexpr int num_boundary_elements = 8;
 
   static constexpr double vertices[num_vertices][dim] = {{0, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, 0, -1},
                                                          {0, 0, 1}, {0, -1, 0}, {1, 0, 0}};
-  static constexpr int    triangles[num_elems][3]     = {{4, 5, 6}, {4, 6, 2}, {4, 2, 1}, {4, 1, 5},
-                                                         {5, 1, 3}, {5, 3, 6}, {3, 1, 2}, {6, 3, 2}};
-  static constexpr int    tetrahedra[num_elems][4]    = {{0, 4, 5, 6}, {0, 4, 6, 2}, {0, 4, 2, 1}, {0, 4, 1, 5},
-                                                         {0, 5, 1, 3}, {0, 5, 3, 6}, {0, 3, 1, 2}, {0, 6, 3, 2}};
+  static constexpr int triangles[num_elems][3] = {{4, 5, 6}, {4, 6, 2}, {4, 2, 1}, {4, 1, 5},
+                                                  {5, 1, 3}, {5, 3, 6}, {3, 1, 2}, {6, 3, 2}};
+  static constexpr int tetrahedra[num_elems][4] = {{0, 4, 5, 6}, {0, 4, 6, 2}, {0, 4, 2, 1}, {0, 4, 1, 5},
+                                                   {0, 5, 1, 3}, {0, 5, 3, 6}, {0, 3, 1, 2}, {0, 6, 3, 2}};
 
   auto mesh = mfem::Mesh(dim, num_vertices, num_elems, num_boundary_elements);
 
@@ -155,9 +155,9 @@ mfem::Mesh buildCuboidMesh(int elements_in_x, int elements_in_y, int elements_in
 
 mfem::Mesh buildCylinderMesh(int radial_refinement, int elements_lengthwise, double radius, double height)
 {
-  static constexpr int dim                   = 2;
-  static constexpr int num_vertices          = 17;
-  static constexpr int num_elems             = 12;
+  static constexpr int dim = 2;
+  static constexpr int num_vertices = 17;
+  static constexpr int num_elems = 12;
   static constexpr int num_boundary_elements = 8;
 
   // a == 1.0 produces a mesh of a cylindrical "core" surrounded by
@@ -166,7 +166,7 @@ mfem::Mesh buildCylinderMesh(int radial_refinement, int elements_lengthwise, dou
   //
   // a > 1 makes the "core" section no longer a cylinder, but its elements
   // are no longer nearly degenerate
-  constexpr double        a                           = 1.3;
+  constexpr double a = 1.3;
   static constexpr double vertices[num_vertices][dim] = {{0.0000000000000000, 0.0000000000000000},
                                                          {0.5773502691896258, 0.0000000000000000},
                                                          {0.4082482904638630 * a, 0.4082482904638630 * a},
@@ -224,7 +224,7 @@ mfem::Mesh buildCylinderMesh(int radial_refinement, int elements_lengthwise, dou
 
       // stretch the octagonal shape into a circle of the appropriate radius
       double theta = atan2(vertex(1), vertex(0));
-      double phi   = fmod(theta + M_PI, M_PI_4);
+      double phi = fmod(theta + M_PI, M_PI_4);
       vertex *= radius * (cos(phi) + (-1.0 + sqrt(2.0)) * sin(phi));
 
       for (int d = 0; d < dim; d++) {
@@ -241,19 +241,19 @@ mfem::Mesh buildCylinderMesh(int radial_refinement, int elements_lengthwise, dou
 mfem::Mesh buildRing(int radial_refinement, double inner_radius, double outer_radius, double total_angle, int sectors)
 {
   using index_type = int;
-  using size_type  = std::vector<index_type>::size_type;
+  using size_type = std::vector<index_type>::size_type;
 
   static constexpr int dim = 2;
 
   SLIC_ASSERT_MSG(total_angle > 0., "only positive angles supported");
 
   // ensure total_angle is (0, 2 * pi]
-  total_angle        = std::min(total_angle, 2. * M_PI);
+  total_angle = std::min(total_angle, 2. * M_PI);
   const double angle = total_angle / sectors;
 
-  auto num_elems             = static_cast<size_type>(sectors);
-  auto num_vertices_ring     = static_cast<size_type>((total_angle == 2. * M_PI) ? sectors : sectors + 1);
-  auto num_vertices          = num_vertices_ring * 2;
+  auto num_elems = static_cast<size_type>(sectors);
+  auto num_vertices_ring = static_cast<size_type>((total_angle == 2. * M_PI) ? sectors : sectors + 1);
+  auto num_vertices = num_vertices_ring * 2;
   auto num_boundary_elements = num_elems * 2;
 
   SLIC_ERROR_ROOT_IF(outer_radius <= inner_radius,
@@ -261,8 +261,8 @@ mfem::Mesh buildRing(int radial_refinement, double inner_radius, double outer_ra
 
   std::vector<std::vector<double>> vertices(static_cast<size_type>(num_vertices), std::vector<double>(dim, 0.));
   for (size_type i = 0; i < num_vertices_ring; i++) {
-    double s       = sin(angle * static_cast<double>(i));
-    double c       = cos(angle * static_cast<double>(i));
+    double s = sin(angle * static_cast<double>(i));
+    double c = cos(angle * static_cast<double>(i));
     vertices[i][0] = inner_radius * c;
     vertices[i][1] = inner_radius * s;
 
@@ -322,7 +322,7 @@ mfem::Mesh buildRing(int radial_refinement, double inner_radius, double outer_ra
       // stretch the polygonal shape into a cylinder
       // phi is the angle to the closest multiple of a sector angle
       double theta = atan2(vertex(1), vertex(0));
-      double phi   = fmod(theta + 2. * M_PI, angle);
+      double phi = fmod(theta + 2. * M_PI, angle);
 
       // this calculation assumes the 0 <= phi <= angle
       // the distance from the center of the cylinder to the midpoint of the radial edge is known
@@ -365,7 +365,7 @@ mfem::Mesh build_hollow_quarter_cylinder(std::size_t radial_divisions, std::size
   mfem::Mesh mesh = mfem::Mesh::MakeCartesian3D(static_cast<int>(radial_divisions), static_cast<int>(angular_divisions),
                                                 static_cast<int>(vertical_divisions), mfem::Element::HEXAHEDRON);
 
-  int          num_vertices = mesh.GetNV();
+  int num_vertices = mesh.GetNV();
   mfem::Vector new_vertices;
   mesh.GetVertices(new_vertices);
   mfem::Vector vertex(dim);
@@ -375,11 +375,11 @@ mfem::Mesh build_hollow_quarter_cylinder(std::size_t radial_divisions, std::size
     }
 
     // transform the vertices to make it into a cylindrical shell
-    double r     = inner_radius + (outer_radius - inner_radius) * vertex[0];
+    double r = inner_radius + (outer_radius - inner_radius) * vertex[0];
     double theta = vertex[1] * M_PI_2;
-    vertex(0)    = r * cos(theta);
-    vertex(1)    = r * sin(theta);
-    vertex(2)    = vertex(2) * height;
+    vertex(0) = r * cos(theta);
+    vertex(1) = r * sin(theta);
+    vertex(2) = vertex(2) * height;
 
     for (int d = 0; d < dim; d++) {
       new_vertices[d * num_vertices + i] = vertex(d);
@@ -481,7 +481,7 @@ serac::mesh::InputOptions FromInlet<serac::mesh::InputOptions>::operator()(const
   std::string mesh_type = base["type"];
   if (mesh_type == "box") {
     auto elements_input = base["elements"];
-    bool z_present      = elements_input.contains("z");
+    bool z_present = elements_input.contains("z");
 
     std::vector<int> elements(z_present ? 3 : 2);
     elements[0] = elements_input["x"];
@@ -504,7 +504,7 @@ serac::mesh::InputOptions FromInlet<serac::mesh::InputOptions>::operator()(const
     return {serac::mesh::BoxInputOptions{elements, overall_size}, ser_ref, par_ref};
   } else if (mesh_type == "disk" || mesh_type == "ball") {
     int approx_elements = base["approx_elements"];
-    int dim             = 3;
+    int dim = 3;
     if (mesh_type == "disk") {
       dim = 2;
     }

@@ -13,27 +13,27 @@ namespace serac {
 
 // Initialize StateManager's static members - these will be fully initialized in StateManager::initialize
 std::unordered_map<std::string, axom::sidre::MFEMSidreDataCollection> StateManager::datacolls_;
-std::unordered_map<std::string, std::unique_ptr<FiniteElementState>>  StateManager::shape_displacements_;
-bool                                                                  StateManager::is_restart_ = false;
-axom::sidre::DataStore*                                               StateManager::ds_         = nullptr;
-std::string                                                           StateManager::output_dir_ = "";
-std::unordered_map<std::string, mfem::ParGridFunction*>               StateManager::named_states_;
-std::unordered_map<std::string, mfem::ParGridFunction*>               StateManager::named_duals_;
+std::unordered_map<std::string, std::unique_ptr<FiniteElementState>> StateManager::shape_displacements_;
+bool StateManager::is_restart_ = false;
+axom::sidre::DataStore* StateManager::ds_ = nullptr;
+std::string StateManager::output_dir_ = "";
+std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_states_;
+std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_duals_;
 
 double StateManager::newDataCollection(const std::string& name, const std::optional<int> cycle_to_load)
 {
   SLIC_ERROR_ROOT_IF(!ds_, "Cannot construct a DataCollection without a DataStore");
   std::string coll_name = name + "_datacoll";
 
-  auto global_grp   = ds_->getRoot()->createGroup(coll_name + "_global");
+  auto global_grp = ds_->getRoot()->createGroup(coll_name + "_global");
   auto bp_index_grp = global_grp->createGroup("blueprint_index/" + coll_name);
-  auto domain_grp   = ds_->getRoot()->createGroup(coll_name);
+  auto domain_grp = ds_->getRoot()->createGroup(coll_name);
 
   // Needs to be configured to own the mesh data so all mesh data is saved to datastore/output file
   constexpr bool owns_mesh_data = true;
-  auto [iter, _]                = datacolls_.emplace(std::piecewise_construct, std::forward_as_tuple(name),
-                                                     std::forward_as_tuple(coll_name, bp_index_grp, domain_grp, owns_mesh_data));
-  auto& datacoll                = iter->second;
+  auto [iter, _] = datacolls_.emplace(std::piecewise_construct, std::forward_as_tuple(name),
+                                      std::forward_as_tuple(coll_name, bp_index_grp, domain_grp, owns_mesh_data));
+  auto& datacoll = iter->second;
   datacoll.SetComm(MPI_COMM_WORLD);
 
   datacoll.SetPrefixPath(output_dir_);
@@ -56,7 +56,7 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
     // indicates that the mesh is periodic and the new nodal grid function must also
     // be discontinuous.
     bool is_discontinuous = false;
-    auto nodes            = mesh(name).GetNodes();
+    auto nodes = mesh(name).GetNodes();
     if (nodes) {
       is_discontinuous = nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS;
       SLIC_WARNING_ROOT_IF(
@@ -94,8 +94,8 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
 void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteElementState*> states_to_load)
 {
   SERAC_MARK_FUNCTION;
-  mfem::ParMesh* meshPtr   = &(*states_to_load.begin())->mesh();
-  std::string    mesh_name = collectionID(meshPtr);
+  mfem::ParMesh* meshPtr = &(*states_to_load.begin())->mesh();
+  std::string mesh_name = collectionID(meshPtr);
 
   std::string coll_name = mesh_name + "_datacoll";
 
@@ -121,7 +121,7 @@ void StateManager::initialize(axom::sidre::DataStore& ds, const std::string& out
   if (ds_) {
     reset();
   }
-  ds_         = &ds;
+  ds_ = &ds;
   output_dir_ = output_directory;
   if (output_directory.empty()) {
     SLIC_ERROR_ROOT(
@@ -141,8 +141,8 @@ void StateManager::storeState(FiniteElementState& state)
   auto mesh_tag = collectionID(&state.mesh());
   SLIC_ERROR_ROOT_IF(hasState(state.name()),
                      axom::fmt::format("StateManager already contains a state named '{}'", state.name()));
-  auto&                  datacoll = datacolls_.at(mesh_tag);
-  const std::string      name     = state.name();
+  auto& datacoll = datacolls_.at(mesh_tag);
+  const std::string name = state.name();
   mfem::ParGridFunction* grid_function;
   if (is_restart_) {
     grid_function = datacoll.GetParField(name);
@@ -178,8 +178,8 @@ void StateManager::storeDual(FiniteElementDual& dual)
   auto mesh_tag = collectionID(&dual.mesh());
   SLIC_ERROR_ROOT_IF(hasDual(dual.name()),
                      axom::fmt::format("StateManager already contains a state named '{}'", dual.name()));
-  auto&                  datacoll = datacolls_.at(mesh_tag);
-  const std::string      name     = dual.name();
+  auto& datacoll = datacolls_.at(mesh_tag);
+  const std::string name = dual.name();
   mfem::ParGridFunction* grid_function;
   if (is_restart_) {
     grid_function = datacoll.GetParField(name);
@@ -216,7 +216,7 @@ void StateManager::save(const double t, const int cycle, const std::string& mesh
   SERAC_MARK_FUNCTION;
   SLIC_ERROR_ROOT_IF(!ds_, "Serac's data store was not initialized - call StateManager::initialize first");
   SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag '{}' not found in the data store", mesh_tag));
-  auto&       datacoll  = datacolls_.at(mesh_tag);
+  auto& datacoll = datacolls_.at(mesh_tag);
   std::string file_path = axom::utilities::filesystem::joinPath(datacoll.GetPrefixPath(), datacoll.GetCollectionName());
   SLIC_INFO_ROOT(
       axom::fmt::format("Saving data collection at time: '{}' and cycle: '{}' to path: '{}'", t, cycle, file_path));
@@ -232,7 +232,7 @@ mfem::ParMesh& StateManager::setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const
   // indicates that the mesh is periodic and the new nodal grid function must also
   // be discontinuous.
   bool is_discontinuous = false;
-  auto nodes            = pmesh->GetNodes();
+  auto nodes = pmesh->GetNodes();
   if (nodes) {
     is_discontinuous = nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS;
     SLIC_WARNING_ROOT_IF(

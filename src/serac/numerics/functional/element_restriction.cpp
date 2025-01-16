@@ -18,7 +18,7 @@ std::vector<std::vector<int> > lexicographic_permutations(int p)
   std::vector<std::vector<int> > output(mfem::Geometry::Type::NUM_GEOMETRIES);
 
   {
-    auto             P = mfem::H1_SegmentElement(p).GetLexicographicOrdering();
+    auto P = mfem::H1_SegmentElement(p).GetLexicographicOrdering();
     std::vector<int> native_to_lex(uint32_t(P.Size()));
     for (int i = 0; i < P.Size(); i++) {
       native_to_lex[uint32_t(i)] = P[i];
@@ -27,7 +27,7 @@ std::vector<std::vector<int> > lexicographic_permutations(int p)
   }
 
   {
-    auto             P = mfem::H1_TriangleElement(p).GetLexicographicOrdering();
+    auto P = mfem::H1_TriangleElement(p).GetLexicographicOrdering();
     std::vector<int> native_to_lex(uint32_t(P.Size()));
     for (int i = 0; i < P.Size(); i++) {
       native_to_lex[uint32_t(i)] = P[i];
@@ -36,7 +36,7 @@ std::vector<std::vector<int> > lexicographic_permutations(int p)
   }
 
   {
-    auto             P = mfem::H1_QuadrilateralElement(p).GetLexicographicOrdering();
+    auto P = mfem::H1_QuadrilateralElement(p).GetLexicographicOrdering();
     std::vector<int> native_to_lex(uint32_t(P.Size()));
     for (int i = 0; i < P.Size(); i++) {
       native_to_lex[uint32_t(i)] = P[i];
@@ -45,7 +45,7 @@ std::vector<std::vector<int> > lexicographic_permutations(int p)
   }
 
   {
-    auto             P = mfem::H1_TetrahedronElement(p).GetLexicographicOrdering();
+    auto P = mfem::H1_TetrahedronElement(p).GetLexicographicOrdering();
     std::vector<int> native_to_lex(uint32_t(P.Size()));
     for (int i = 0; i < P.Size(); i++) {
       native_to_lex[uint32_t(i)] = P[i];
@@ -54,7 +54,7 @@ std::vector<std::vector<int> > lexicographic_permutations(int p)
   }
 
   {
-    auto             P = mfem::H1_HexahedronElement(p).GetLexicographicOrdering();
+    auto P = mfem::H1_HexahedronElement(p).GetLexicographicOrdering();
     std::vector<int> native_to_lex(uint32_t(P.Size()));
     for (int i = 0; i < P.Size(); i++) {
       native_to_lex[uint32_t(i)] = P[i];
@@ -85,16 +85,16 @@ Array2D<int> face_permutations(mfem::Geometry::Type geom, int p)
     //
     // {{i, j}, {p-i-j, j}, {j, p-i-j}, {i, p-i-j}, {p-i-j, i}, {j, i}}
     Array2D<int> output(6, (p + 1) * (p + 2) / 2);
-    auto         tri_id = [p](int x, int y) { return x + ((3 + 2 * p - y) * y) / 2; };
+    auto tri_id = [p](int x, int y) { return x + ((3 + 2 * p - y) * y) / 2; };
     for (int j = 0; j <= p; j++) {
       for (int i = 0; i <= p - j; i++) {
-        int id                          = tri_id(i, j);
-        output(0, tri_id(i, j))         = id;
+        int id = tri_id(i, j);
+        output(0, tri_id(i, j)) = id;
         output(1, tri_id(p - i - j, j)) = id;
         output(2, tri_id(j, p - i - j)) = id;
         output(3, tri_id(i, p - i - j)) = id;
         output(4, tri_id(p - i - j, i)) = id;
-        output(5, tri_id(j, i))         = id;
+        output(5, tri_id(j, i)) = id;
       }
     }
     return output;
@@ -108,18 +108,18 @@ Array2D<int> face_permutations(mfem::Geometry::Type geom, int p)
     //
     // {{i,j}, {j,i}, {p-j,i}, {p-i,j}, {p-i, p-j}, {p-j, p-i}, {j, p-i}, {i, p-j}}
     Array2D<int> output(8, (p + 1) * (p + 1));
-    auto         quad_id = [p](int x, int y) { return ((p + 1) * y) + x; };
+    auto quad_id = [p](int x, int y) { return ((p + 1) * y) + x; };
     for (int j = 0; j <= p; j++) {
       for (int i = 0; i <= p; i++) {
-        int id                           = quad_id(i, j);
-        output(0, quad_id(i, j))         = id;
-        output(1, quad_id(j, i))         = id;
-        output(2, quad_id(p - j, i))     = id;
-        output(3, quad_id(p - i, j))     = id;
+        int id = quad_id(i, j);
+        output(0, quad_id(i, j)) = id;
+        output(1, quad_id(j, i)) = id;
+        output(2, quad_id(p - j, i)) = id;
+        output(3, quad_id(p - i, j)) = id;
         output(4, quad_id(p - i, p - j)) = id;
         output(5, quad_id(p - j, p - i)) = id;
-        output(6, quad_id(j, p - i))     = id;
-        output(7, quad_id(i, p - j))     = id;
+        output(6, quad_id(j, p - i)) = id;
+        output(7, quad_id(i, p - j)) = id;
       }
     }
     return output;
@@ -183,7 +183,7 @@ std::vector<Array2D<int> > geom_local_face_dofs(int p)
   Array2D<int> tets(4, (p + 1) * (p + 2) / 2);
   for (int k = 0; k <= p; k++) {
     for (int j = 0; j <= p - k; j++) {
-      int id      = tri_id(j, k);
+      int id = tri_id(j, k);
       tets(0, id) = tet_id(p - j - k, j, k);
       tets(1, id) = tet_id(0, k, j);
       tets(2, id) = tet_id(j, 0, k);
@@ -202,7 +202,7 @@ std::vector<Array2D<int> > geom_local_face_dofs(int p)
   Array2D<int> hexes(6, (p + 1) * (p + 1));
   for (int k = 0; k <= p; k++) {
     for (int j = 0; j <= p; j++) {
-      int id       = quad_id(j, k);
+      int id = quad_id(j, k);
       hexes(0, id) = hex_id(j, p - k, 0);
       hexes(1, id) = hex_id(j, 0, k);
       hexes(2, id) = hex_id(p, j, k);
@@ -219,10 +219,10 @@ std::vector<Array2D<int> > geom_local_face_dofs(int p)
 axom::Array<DoF, 2, axom::MemorySpace::Host> GetElementRestriction(const serac::fes_t* fes, mfem::Geometry::Type geom)
 {
   std::vector<DoF> elem_dofs{};
-  mfem::Mesh*      mesh = fes->GetMesh();
+  mfem::Mesh* mesh = fes->GetMesh();
 
   // note: this assumes that all the elements are the same polynomial order
-  int                            p        = fes->GetElementOrder(0);
+  int p = fes->GetElementOrder(0);
   std::vector<std::vector<int> > lex_perm = lexicographic_permutations(p);
 
   uint64_t n = 0;
@@ -250,7 +250,7 @@ axom::Array<DoF, 2, axom::MemorySpace::Host> GetElementRestriction(const serac::
       // TODO
       // TODO
       // TODO
-      uint64_t sign        = 1;
+      uint64_t sign = 1;
       uint64_t orientation = 0;
       for (int k = 0; k < dofs.Size(); k++) {
         elem_dofs.push_back({uint64_t(dofs[k]), sign, orientation});
@@ -271,7 +271,7 @@ axom::Array<DoF, 2, axom::MemorySpace::Host> GetElementRestriction(const serac::
   if (n == 0) {
     return axom::Array<DoF, 2, axom::MemorySpace::Host>{};
   } else {
-    uint64_t                                     dofs_per_elem = elem_dofs.size() / n;
+    uint64_t dofs_per_elem = elem_dofs.size() / n;
     axom::Array<DoF, 2, axom::MemorySpace::Host> output(n, dofs_per_elem);
     std::memcpy(output.data(), elem_dofs.data(), sizeof(DoF) * n * dofs_per_elem);
     return output;
@@ -283,10 +283,10 @@ axom::Array<DoF, 2, axom::MemorySpace::Host> GetElementDofs(const serac::fes_t* 
 
 {
   std::vector<DoF> elem_dofs{};
-  mfem::Mesh*      mesh = fes->GetMesh();
+  mfem::Mesh* mesh = fes->GetMesh();
 
   // note: this assumes that all the elements are the same polynomial order
-  int                            p        = fes->GetElementOrder(0);
+  int p = fes->GetElementOrder(0);
   std::vector<std::vector<int> > lex_perm = lexicographic_permutations(p);
 
   uint64_t n = 0;
@@ -316,7 +316,7 @@ axom::Array<DoF, 2, axom::MemorySpace::Host> GetElementDofs(const serac::fes_t* 
       // TODO
       // TODO
       // TODO
-      uint64_t sign        = 1;
+      uint64_t sign = 1;
       uint64_t orientation = 0;
       for (int k = 0; k < dofs.Size(); k++) {
         elem_dofs.push_back({uint64_t(dofs[k]), sign, orientation});
@@ -337,7 +337,7 @@ axom::Array<DoF, 2, axom::MemorySpace::Host> GetElementDofs(const serac::fes_t* 
   if (n == 0) {
     return axom::Array<DoF, 2, axom::MemorySpace::Host>{};
   } else {
-    uint64_t                                     dofs_per_elem = elem_dofs.size() / n;
+    uint64_t dofs_per_elem = elem_dofs.size() / n;
     axom::Array<DoF, 2, axom::MemorySpace::Host> output(n, dofs_per_elem);
     std::memcpy(output.data(), elem_dofs.data(), sizeof(DoF) * n * dofs_per_elem);
     return output;
@@ -348,14 +348,14 @@ axom::Array<DoF, 2, axom::MemorySpace::Host> GetFaceDofs(const serac::fes_t* fes
                                                          FaceType type)
 {
   std::vector<DoF> face_dofs;
-  mfem::Mesh*      mesh         = fes->GetMesh();
-  mfem::Table*     face_to_elem = mesh->GetFaceToElementTable();
+  mfem::Mesh* mesh = fes->GetMesh();
+  mfem::Table* face_to_elem = mesh->GetFaceToElementTable();
 
   // note: this assumes that all the elements are the same polynomial order
-  int                            p               = fes->GetElementOrder(0);
-  Array2D<int>                   face_perm       = face_permutations(face_geom, p);
-  std::vector<Array2D<int> >     local_face_dofs = geom_local_face_dofs(p);
-  std::vector<std::vector<int> > lex_perm        = lexicographic_permutations(p);
+  int p = fes->GetElementOrder(0);
+  Array2D<int> face_perm = face_permutations(face_geom, p);
+  std::vector<Array2D<int> > local_face_dofs = geom_local_face_dofs(p);
+  std::vector<std::vector<int> > lex_perm = lexicographic_permutations(p);
 
   uint64_t n = 0;
 
@@ -452,7 +452,7 @@ axom::Array<DoF, 2, axom::MemorySpace::Host> GetFaceDofs(const serac::fes_t* fes
   if (n == 0) {
     return axom::Array<DoF, 2, axom::MemorySpace::Host>{};
   } else {
-    uint64_t                                     dofs_per_face = face_dofs.size() / n;
+    uint64_t dofs_per_face = face_dofs.size() / n;
     axom::Array<DoF, 2, axom::MemorySpace::Host> output(n, dofs_per_face);
     std::memcpy(output.data(), face_dofs.data(), sizeof(DoF) * n * dofs_per_face);
     return output;
@@ -463,14 +463,14 @@ axom::Array<DoF, 2, axom::MemorySpace::Host> GetFaceDofs(const serac::fes_t* fes
                                                          const std::vector<int>& mfem_face_ids)
 {
   std::vector<DoF> face_dofs;
-  mfem::Mesh*      mesh         = fes->GetMesh();
-  mfem::Table*     face_to_elem = mesh->GetFaceToElementTable();
+  mfem::Mesh* mesh = fes->GetMesh();
+  mfem::Table* face_to_elem = mesh->GetFaceToElementTable();
 
   // note: this assumes that all the elements are the same polynomial order
-  int                            p               = fes->GetElementOrder(0);
-  Array2D<int>                   face_perm       = face_permutations(face_geom, p);
-  std::vector<Array2D<int> >     local_face_dofs = geom_local_face_dofs(p);
-  std::vector<std::vector<int> > lex_perm        = lexicographic_permutations(p);
+  int p = fes->GetElementOrder(0);
+  Array2D<int> face_perm = face_permutations(face_geom, p);
+  std::vector<Array2D<int> > local_face_dofs = geom_local_face_dofs(p);
+  std::vector<std::vector<int> > lex_perm = lexicographic_permutations(p);
 
   // sam: this function contains several comments that relate to an investigation into adopting
   //      mfem's FaceNbrData pattern (which ended up being too invasive to implement initially).
@@ -619,7 +619,7 @@ axom::Array<DoF, 2, axom::MemorySpace::Host> GetFaceDofs(const serac::fes_t* fes
   if (n == 0) {
     return axom::Array<DoF, 2, axom::MemorySpace::Host>{};
   } else {
-    uint64_t                                     dofs_per_face = face_dofs.size() / n;
+    uint64_t dofs_per_face = face_dofs.size() / n;
     axom::Array<DoF, 2, axom::MemorySpace::Host> output(n, dofs_per_face);
     std::memcpy(output.data(), face_dofs.data(), sizeof(DoF) * n * dofs_per_face);
     return output;
@@ -643,12 +643,12 @@ ElementRestriction::ElementRestriction(const fes_t* fes, mfem::Geometry::Type el
 
   ordering = fes->GetOrdering();
 
-  lsize          = uint64_t(fes->GetVSize());
-  components     = uint64_t(fes->GetVDim());
-  num_nodes      = lsize / components;
-  num_elements   = uint64_t(dof_info.shape()[0]);
+  lsize = uint64_t(fes->GetVSize());
+  components = uint64_t(fes->GetVDim());
+  num_nodes = lsize / components;
+  num_elements = uint64_t(dof_info.shape()[0]);
   nodes_per_elem = uint64_t(dof_info.shape()[1]);
-  esize          = num_elements * nodes_per_elem * components;
+  esize = num_elements * nodes_per_elem * components;
 }
 
 uint64_t ElementRestriction::ESize() const { return esize; }
@@ -678,8 +678,8 @@ void ElementRestriction::Gather(const mfem::Vector& L_vector, mfem::Vector& E_ve
   for (uint64_t i = 0; i < num_elements; i++) {
     for (uint64_t c = 0; c < components; c++) {
       for (uint64_t j = 0; j < nodes_per_elem; j++) {
-        uint64_t E_id       = (i * components + c) * nodes_per_elem + j;
-        uint64_t L_id       = GetVDof(dof_info(i, j), c).index();
+        uint64_t E_id = (i * components + c) * nodes_per_elem + j;
+        uint64_t L_id = GetVDof(dof_info(i, j), c).index();
         E_vector[int(E_id)] = L_vector[int(L_id)];
       }
     }

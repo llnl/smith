@@ -68,7 +68,7 @@ struct SineIntegrator {
   template <typename Position, typename Temperature>
   SERAC_HOST_DEVICE auto operator()(double /*t*/, Position position, Temperature temperature) const
   {
-    auto X           = get<VALUE>(position);
+    auto X = get<VALUE>(position);
     auto [u, grad_u] = temperature;
     return X[0] * X[0] + sin(X[1]) + X[0] * u * u * u;
   }
@@ -89,8 +89,8 @@ struct FourArgSineIntegrator {
   SERAC_HOST_DEVICE auto operator()(double /*t*/, Position position, Temperature temperature,
                                     TimeDerivativeTemp dtemperature_dt) const
   {
-    auto [X, dX_dxi]     = position;
-    auto [u, grad_u]     = temperature;
+    auto [X, dX_dxi] = position;
+    auto [u, grad_u] = temperature;
     auto [du_dt, unused] = dtemperature_dt;
     return X[0] * X[0] + sin(du_dt) + X[0] * u * u * u;
   }
@@ -101,8 +101,8 @@ struct FourArgCosineIntegrator {
   SERAC_HOST_DEVICE auto operator()(double /*t*/, Position position, Temperature temperature,
                                     TimeDerivativeTemp dtemperature_dt) const
   {
-    auto [X, dX_dxi]     = position;
-    auto [u, grad_u]     = temperature;
+    auto [X, dX_dxi] = position;
+    auto [u, grad_u] = temperature;
     auto [du_dt, unused] = dtemperature_dt;
     return X[0] - X[1] + cos(u * du_dt);
   }
@@ -153,7 +153,7 @@ double x_moment_mfem(mfem::ParMesh& mesh)
   mass_lf.Assemble();
 
   mfem::FunctionCoefficient x_coordinate([](mfem::Vector x) { return x[0]; });
-  mfem::ParGridFunction     x_gf(fespace.get());
+  mfem::ParGridFunction x_gf(fespace.get());
   x_gf.ProjectCoefficient(x_coordinate);
 
   return mass_lf(x_gf);
@@ -192,26 +192,26 @@ template <int p, int dim>
 void qoi_test(mfem::ParMesh& mesh, H1<p> trial, Dimension<dim>, WhichTest which)
 {
   // Define the types for the test and trial spaces using the function arguments
-  using trial_space   = decltype(trial);
+  using trial_space = decltype(trial);
   auto [fespace, fec] = serac::generateParFiniteElementSpace<trial_space>(&mesh);
 
-  mfem::ParGridFunction     U_gf(fespace.get());
+  mfem::ParGridFunction U_gf(fespace.get());
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
 
   mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
-  mfem::HypreParVector  U   = *tmp;
+  mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
-  mfem::ParGridFunction     V_gf(fespace.get());
+  mfem::ParGridFunction V_gf(fespace.get());
   mfem::FunctionCoefficient x_coord([](mfem::Vector x) { return x[0]; });
   V_gf.ProjectCoefficient(x_coord);
 
   mfem::HypreParVector* tmp2 = fespace->NewTrueDofVector();
-  mfem::HypreParVector  V    = *tmp2;
+  mfem::HypreParVector V = *tmp2;
   V_gf.GetTrueDofs(V);
 
-  Domain domain   = EntireDomain(mesh);
+  Domain domain = EntireDomain(mesh);
   Domain boundary = EntireBoundary(mesh);
 
   switch (which) {
@@ -318,7 +318,7 @@ void qoi_test(mfem::ParMesh& mesh, H1<p1> trial1, H1<p2> trial2, Dimension<dim>)
   mfem::HypreParVector U2 = *tmp;
   U2_gf.GetTrueDofs(U2);
 
-  Domain domain   = EntireDomain(mesh);
+  Domain domain = EntireDomain(mesh);
   Domain boundary = EntireBoundary(mesh);
 
   Functional<double(trial_space1, trial_space2)> f({fespace1.get(), fespace2.get()});
@@ -329,8 +329,8 @@ void qoi_test(mfem::ParMesh& mesh, H1<p1> trial1, H1<p2> trial2, Dimension<dim>)
   // integrates the qoi for these domains to machine precision
   //
   // see scripts/wolfram/qoi_examples.nb for more info
-  constexpr double expected[]     = {4.6640262484879, 192400.1149761554};
-  double           relative_error = (f(t, U1, U2) - expected[dim - 2]) / expected[dim - 2];
+  constexpr double expected[] = {4.6640262484879, 192400.1149761554};
+  double relative_error = (f(t, U1, U2) - expected[dim - 2]) / expected[dim - 2];
 
   // the tolerance on this one isn't very tight since
   // we're using a pretty the coarse integration rule
@@ -342,7 +342,7 @@ void qoi_test(mfem::ParMesh& mesh, H1<p1> trial1, H1<p2> trial2, Dimension<dim>)
 
 TEST(QoI, DependsOnVectorValuedInput)
 {
-  constexpr int p   = 2;
+  constexpr int p = 2;
   constexpr int dim = 3;
 
   mfem::ParMesh& mesh = *mesh3D;
@@ -352,15 +352,15 @@ TEST(QoI, DependsOnVectorValuedInput)
 
   auto [fespace, fec] = serac::generateParFiniteElementSpace<trial_space>(&mesh);
 
-  mfem::ParGridFunction           U_gf(fespace.get());
+  mfem::ParGridFunction U_gf(fespace.get());
   mfem::VectorFunctionCoefficient x_squared(dim, [](const mfem::Vector x, mfem::Vector& y) {
-    y    = 0.0;
+    y = 0.0;
     y[0] = x[0] * x[0];
   });
   U_gf.ProjectCoefficient(x_squared);
 
   mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
-  mfem::HypreParVector  U   = *tmp;
+  mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
   Domain whole_mesh = EntireDomain(mesh);
@@ -368,7 +368,7 @@ TEST(QoI, DependsOnVectorValuedInput)
   Functional<double(trial_space)> f({fespace.get()});
   f.AddVolumeIntegral(DependsOn<0>{}, GetNormZeroIntegrator{}, whole_mesh);
 
-  double exact_answer   = 141.3333333333333;
+  double exact_answer = 141.3333333333333;
   double relative_error = (f(t, U) - exact_answer) / exact_answer;
   EXPECT_NEAR(0.0, relative_error, 1.0e-10);
 
@@ -386,12 +386,12 @@ TEST(QoI, AddAreaIntegral)
 
   auto [fespace, fec] = serac::generateParFiniteElementSpace<trial_space>(&mesh);
 
-  mfem::ParGridFunction     U_gf(fespace.get());
+  mfem::ParGridFunction U_gf(fespace.get());
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
 
   mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
-  mfem::HypreParVector  U   = *tmp;
+  mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
   Functional<double(trial_space)> measure({fespace.get()});
@@ -416,12 +416,12 @@ TEST(QoI, AddVolumeIntegral)
   // Create standard MFEM bilinear and linear forms on H1
   auto [fespace, fec] = serac::generateParFiniteElementSpace<trial_space>(&mesh);
 
-  mfem::ParGridFunction     U_gf(fespace.get());
+  mfem::ParGridFunction U_gf(fespace.get());
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
 
   mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
-  mfem::HypreParVector  U   = *tmp;
+  mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
   Functional<double(trial_space)> measure({fespace.get()});
@@ -457,7 +457,7 @@ TEST(QoI, UsingL2)
   // this tests a fix for the QoI constructor segfaulting when using L2 spaces
   Functional<double(trial_space_0, trial_space_1)> f({fespace_0.get(), fespace_1.get()});
 
-  Domain whole_mesh     = EntireDomain(mesh);
+  Domain whole_mesh = EntireDomain(mesh);
   Domain whole_boundary = EntireBoundary(mesh);
 
   f.AddVolumeIntegral(DependsOn<1>{}, TrivialVariadicIntegrator{}, whole_mesh);
@@ -485,13 +485,13 @@ TEST(QoI, ShapeAndParameter)
   // Define the mesh and runtime finite element spaces for the calculation
   mfem::ParMesh& mesh = *mesh3D;
 
-  auto [shape_fe_space, shape_fe_coll]         = generateParFiniteElementSpace<shape_space>(&mesh);
+  auto [shape_fe_space, shape_fe_coll] = generateParFiniteElementSpace<shape_space>(&mesh);
   auto [parameter_fe_space, parameter_fe_coll] = generateParFiniteElementSpace<parameter_space>(&mesh);
 
   std::array<const mfem::ParFiniteElementSpace*, 1> trial_fes = {parameter_fe_space.get()};
-  const mfem::ParFiniteElementSpace*                shape_fes = shape_fe_space.get();
+  const mfem::ParFiniteElementSpace* shape_fes = shape_fe_space.get();
 
-  auto   everything = [](std::vector<tensor<double, dim>> /*X*/, int /* attr */) { return true; };
+  auto everything = [](std::vector<tensor<double, dim>> /*X*/, int /* attr */) { return true; };
   Domain whole_mesh = Domain::ofElements(mesh, everything);
 
   // Define the shape-aware QOI objects
@@ -512,7 +512,7 @@ TEST(QoI, ShapeAndParameter)
   *parameter = 0.1;
 
   // Note that the first argument after time is always the shape displacement field
-  double val    = serac_qoi(t, *shape_displacement, *parameter);
+  double val = serac_qoi(t, *shape_displacement, *parameter);
   double volume = serac_volume(t, *shape_displacement, *parameter);
 
   double average = val / volume;
@@ -547,16 +547,16 @@ TEST(QoI, ShapeAndParameterBoundary)
   // Define the mesh and runtime finite element spaces for the calculation
   mfem::ParMesh& mesh = *mesh3D;
 
-  auto [shape_fe_space, shape_fe_coll]         = generateParFiniteElementSpace<shape_space>(&mesh);
+  auto [shape_fe_space, shape_fe_coll] = generateParFiniteElementSpace<shape_space>(&mesh);
   auto [parameter_fe_space, parameter_fe_coll] = generateParFiniteElementSpace<parameter_space>(&mesh);
 
   std::array<const mfem::ParFiniteElementSpace*, 1> trial_fes = {parameter_fe_space.get()};
-  const mfem::ParFiniteElementSpace*                shape_fes = shape_fe_space.get();
+  const mfem::ParFiniteElementSpace* shape_fes = shape_fe_space.get();
 
   // Define the shape-aware QOI objects
   qoi_type serac_qoi(shape_fes, trial_fes);
 
-  auto   everything     = [](std::vector<tensor<double, dim>> /*X*/, int /* attr */) { return true; };
+  auto everything = [](std::vector<tensor<double, dim>> /*X*/, int /* attr */) { return true; };
   Domain whole_boundary = Domain::ofBoundaryElements(mesh, everything);
 
   // Note that the integral does not have a shape parameter field. The transformations are handled under the hood
@@ -576,7 +576,7 @@ TEST(QoI, ShapeAndParameterBoundary)
   *parameter = 5.0;
 
   // Note that the first argument after time is always the shape displacement field
-  double val    = serac_qoi(t, *shape_displacement, *parameter);
+  double val = serac_qoi(t, *shape_displacement, *parameter);
   double volume = serac_area(t, *shape_displacement, *parameter);
 
   double average = val / volume;
@@ -680,7 +680,7 @@ int main(int argc, char* argv[])
 
   axom::slic::SimpleLogger logger;
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   std::string meshfile2D = SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";

@@ -8,7 +8,7 @@ namespace serac {
 
 /// @cond
 using mesh_t = mfem::Mesh;
-using fes_t  = mfem::FiniteElementSpace;
+using fes_t = mfem::FiniteElementSpace;
 /// @endcond
 
 }  // namespace serac

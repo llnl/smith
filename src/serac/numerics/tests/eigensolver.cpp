@@ -16,14 +16,14 @@
 
 TEST(PETSC_AND_SLEPC, CanComputeSmallestEigenvalueAndEigenvectors)
 {
-  int      world_rank;
+  int world_rank;
   MPI_Comm comm;
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
   MPI_Comm_split(MPI_COMM_WORLD, (0 != world_rank) ? MPI_UNDEFINED : 0, 0, &comm);
   if (world_rank != 0) return;
 
-  Mat          A; /* problem matrix */
-  int          N = 6;
+  Mat A; /* problem matrix */
+  int N = 6;
   unsigned int M = 3;
   MatCreate(comm, &A);
   MatSetSizes(A, PETSC_DECIDE, PETSC_DECIDE, N, N);

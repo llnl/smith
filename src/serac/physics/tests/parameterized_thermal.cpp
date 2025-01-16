@@ -23,7 +23,7 @@ TEST(Thermal, ParameterizedMaterial)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -39,7 +39,7 @@ TEST(Thermal, ParameterizedMaterial)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Define a boundary attribute set
@@ -66,7 +66,7 @@ TEST(Thermal, ParameterizedMaterial)
 
   thermal_solver.setParameter(0, user_defined_conductivity);
 
-  Domain whole_domain   = EntireDomain(pmesh);
+  Domain whole_domain = EntireDomain(pmesh);
   Domain whole_boundary = EntireBoundary(pmesh);
 
   // Construct a potentially user-defined parameterized material and send it to the thermal module

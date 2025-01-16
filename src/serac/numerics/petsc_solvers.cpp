@@ -62,8 +62,8 @@ static PetscErrorCode solverWrapperView(PC pc, PetscViewer viewer)
  */
 static PetscErrorCode solverWrapperMult(PC pc, Vec x, Vec y)
 {
-  Mat               A;
-  PetscBool         is_hypre;
+  Mat A;
+  PetscBool is_hypre;
   SolverWrapperCtx* ctx;
 
   PetscFunctionBeginUser;
@@ -106,8 +106,8 @@ static PetscErrorCode solverWrapperMult(PC pc, Vec x, Vec y)
  */
 static PetscErrorCode solverWrapperMultTranspose(PC pc, Vec x, Vec y)
 {
-  Mat               A;
-  PetscBool         is_hypre;
+  Mat A;
+  PetscBool is_hypre;
   SolverWrapperCtx* ctx;
 
   PetscFunctionBeginUser;
@@ -195,8 +195,8 @@ static PetscErrorCode wrapSolverInShellPC(PC pc, mfem::Solver& solver, bool owns
 PetscErrorCode convertPCPreSolve(PC pc, [[maybe_unused]] KSP ksp)
 {
   PetscPCSolver* solver;
-  Mat            A;
-  void*          void_solver;
+  Mat A;
+  void* void_solver;
 
   PetscFunctionBeginUser;
   PetscCall(PCGetApplicationContext(pc, &void_solver));
@@ -205,7 +205,7 @@ PetscErrorCode convertPCPreSolve(PC pc, [[maybe_unused]] KSP ksp)
   // That means we have to ensure the matrix is MATAIJ
   if (!solver->checked_for_convert_ || solver->converted_matrix_) {
     PetscCall(PCGetOperators(pc, NULL, &A));
-    char*   found;
+    char* found;
     MatType mat_type;
     PetscCall(MatGetType(A, &mat_type));
     PetscCall(PetscStrstr(mat_type, "aij", &found));
@@ -254,11 +254,11 @@ PetscPCSolver::PetscPCSolver(MPI_Comm comm_, Operator& op, PCType pc_type, const
 void PetscPCSolver::SetOperator(const mfem::Operator& op)
 {
   PetscBool is_nest;
-  bool      delete_pA = false;
+  bool delete_pA = false;
 
   auto* pA = const_cast<mfem::PetscParMatrix*>(dynamic_cast<const mfem::PetscParMatrix*>(&op));
   if (!pA) {
-    pA        = new mfem::PetscParMatrix(GetComm(), &op, PETSC_MATAIJ);
+    pA = new mfem::PetscParMatrix(GetComm(), &op, PETSC_MATAIJ);
     delete_pA = true;
   }
   PetscCallAbort(GetComm(), PetscObjectTypeCompare(*pA, MATNEST, &is_nest));
@@ -283,7 +283,7 @@ void PetscPCSolver::SetOperator(const mfem::Operator& op)
     PetscCallAbort(GetComm(), PCFieldSplitSetType(*fieldsplit_pc_, PC_COMPOSITE_ADDITIVE));
     PetscCallAbort(GetComm(), PCSetFromOptions(*fieldsplit_pc_));
     PetscCallAbort(GetComm(), PCSetUp(*fieldsplit_pc_));
-    KSP*     sub_ksps;
+    KSP* sub_ksps;
     PetscInt n = 1;
     PetscCallAbort(GetComm(), PCFieldSplitGetSubKSP(*fieldsplit_pc_, &n, &sub_ksps));
     PetscCallAbort(GetComm(), KSPSetPC(sub_ksps[0], *this));
@@ -358,7 +358,7 @@ void PetscPreconditionerSpaceDependent::SetOperator(const Operator& op)
 static PetscErrorCode gamg_pre_solve(PC pc, KSP ksp)
 {
   PetscGAMGSolver* solver;
-  void*            void_solver;
+  void* void_solver;
 
   PetscFunctionBeginUser;
   PetscCall(convertPCPreSolve(pc, ksp));
@@ -412,11 +412,11 @@ void PetscGAMGSolver::SetupNearNullSpace()
   }
 
   PetscInt sdim = fespace_->GetParMesh()->SpaceDimension();
-  int      vdim = fespace_->GetVDim();
+  int vdim = fespace_->GetVDim();
 
   // coordinates
-  const mfem::FiniteElementCollection* fec     = fespace_->FEColl();
-  bool                                 h1space = dynamic_cast<const mfem::H1_FECollection*>(fec);
+  const mfem::FiniteElementCollection* fec = fespace_->FEColl();
+  bool h1space = dynamic_cast<const mfem::H1_FECollection*>(fec);
   if (h1space) {
     SLIC_DEBUG_ROOT("PetscGAMGSolver::SetupNearNullSpace(...) - Setting up near null space");
     mfem::ParFiniteElementSpace* fespace_coords = fespace_;
@@ -429,7 +429,7 @@ void PetscGAMGSolver::SetupNearNullSpace()
       fespace_coords = new mfem::ParFiniteElementSpace(fespace_->GetParMesh(), fec, vdim, mfem::Ordering::byVDIM);
     }
     mfem::VectorFunctionCoefficient coeff_coords(sdim, func_coords);
-    mfem::ParGridFunction           gf_coords(fespace_coords);
+    mfem::ParGridFunction gf_coords(fespace_coords);
     gf_coords.ProjectCoefficient(coeff_coords);
     mfem::HypreParVector* hvec_coords = gf_coords.ParallelProject();
     auto data_coords = const_cast<PetscScalar*>(mfem::Read(hvec_coords->GetMemory(), hvec_coords->Size(), false));
@@ -568,17 +568,17 @@ PetscPCType stringToPetscPCType(const std::string& type_str)
 PetscErrorCode convertKSPPreSolve(KSP ksp, [[maybe_unused]] Vec rhs, [[maybe_unused]] Vec x, void* ctx)
 {
   PetscKSPSolver* solver;
-  Mat             A;
-  PetscBool       is_nest;
+  Mat A;
+  PetscBool is_nest;
 
   PetscFunctionBeginUser;
-  solver                  = static_cast<PetscKSPSolver*>(ctx);
-  auto*          prec     = solver->prec;
+  solver = static_cast<PetscKSPSolver*>(ctx);
+  auto* prec = solver->prec;
   PetscPCSolver* petsc_pc = dynamic_cast<PetscPCSolver*>(prec);
   PetscCall(KSPGetOperators(ksp, NULL, &A));
   if (petsc_pc) {
     PetscCall(PetscObjectTypeCompare(reinterpret_cast<PetscObject>(A), MATNEST, &is_nest));
-    PC        pc_orig;
+    PC pc_orig;
     PetscBool is_fieldsplit;
     PetscCall(KSPGetPC(ksp, &pc_orig));
     PetscCall(PetscObjectTypeCompare(reinterpret_cast<PetscObject>(pc_orig), PCFIELDSPLIT, &is_fieldsplit));
@@ -628,8 +628,8 @@ PetscKSPSolver::PetscKSPSolver(MPI_Comm comm_, KSPType ksp_type, const std::stri
                                bool iter_mode)
     : mfem::IterativeSolver(comm_), mfem::PetscLinearSolver(comm_, prefix, wrap_op, iter_mode)
 {
-  abs_tol  = PETSC_DEFAULT;
-  rel_tol  = PETSC_DEFAULT;
+  abs_tol = PETSC_DEFAULT;
+  rel_tol = PETSC_DEFAULT;
   max_iter = PETSC_DEFAULT;
   PetscCallAbort(GetComm(), KSPConvergedDefaultSetConvergedMaxits(*this, PETSC_TRUE));
   PetscCallAbort(GetComm(), KSPSetType(*this, ksp_type));
@@ -642,8 +642,8 @@ PetscKSPSolver::PetscKSPSolver(const mfem::PetscParMatrix& A, KSPType ksp_type, 
                                bool iter_mode)
     : mfem::IterativeSolver(A.GetComm()), mfem::PetscLinearSolver(A, prefix, iter_mode), wrap_(false)
 {
-  abs_tol  = PETSC_DEFAULT;
-  rel_tol  = PETSC_DEFAULT;
+  abs_tol = PETSC_DEFAULT;
+  rel_tol = PETSC_DEFAULT;
   max_iter = PETSC_DEFAULT;
   PetscCallAbort(GetComm(), KSPConvergedDefaultSetConvergedMaxits(*this, PETSC_TRUE));
   PetscCallAbort(GetComm(), KSPSetType(*this, ksp_type));
@@ -656,8 +656,8 @@ PetscKSPSolver::PetscKSPSolver(const mfem::HypreParMatrix& A, KSPType ksp_type, 
                                bool iter_mode)
     : mfem::IterativeSolver(A.GetComm()), mfem::PetscLinearSolver(A, wrap_op, prefix, iter_mode), wrap_(wrap_op)
 {
-  abs_tol  = PETSC_DEFAULT;
-  rel_tol  = PETSC_DEFAULT;
+  abs_tol = PETSC_DEFAULT;
+  rel_tol = PETSC_DEFAULT;
   max_iter = PETSC_DEFAULT;
   PetscCallAbort(GetComm(), KSPConvergedDefaultSetConvergedMaxits(*this, PETSC_TRUE));
   PetscCallAbort(GetComm(), KSPSetType(*this, ksp_type));
@@ -681,8 +681,8 @@ void PetscKSPSolver::MultTranspose(const mfem::Vector& b, mfem::Vector& x) const
 void PetscKSPSolver::SetOperator(const mfem::Operator& op)
 {
   const mfem::HypreParMatrix* hA = dynamic_cast<const mfem::HypreParMatrix*>(&op);
-  mfem::PetscParMatrix*       pA = const_cast<mfem::PetscParMatrix*>(dynamic_cast<const mfem::PetscParMatrix*>(&op));
-  const mfem::Operator*       oA = dynamic_cast<const mfem::Operator*>(&op);
+  mfem::PetscParMatrix* pA = const_cast<mfem::PetscParMatrix*>(dynamic_cast<const mfem::PetscParMatrix*>(&op));
+  const mfem::Operator* oA = dynamic_cast<const mfem::Operator*>(&op);
 
   // set tolerances from user
   SetTolerances();
@@ -722,9 +722,9 @@ void PetscKSPSolver::SetOperator(const mfem::Operator& op)
 
   // Set operators into PETSc KSP
   KSP ksp = *this;
-  Mat A   = *pA;
+  Mat A = *pA;
   if (operatorset) {
-    Mat      C;
+    Mat C;
     PetscInt nheight, nwidth, oheight, owidth;
 
     PetscCallAbort(GetComm(), KSPGetOperators(ksp, &C, NULL));
@@ -741,7 +741,7 @@ void PetscKSPSolver::SetOperator(const mfem::Operator& op)
     }
   }
   PetscBool is_nest;
-  MatType   type;
+  MatType type;
   MatGetType(*pA, &type);
   PetscCallAbort(GetComm(), PetscObjectTypeCompare(*pA, MATNEST, &is_nest));
   SLIC_DEBUG_ROOT(axom::fmt::format("PetscKSPSolver::SetOperator(...) - Mat type: {}", type));
@@ -757,10 +757,10 @@ void PetscKSPSolver::SetOperator(const mfem::Operator& op)
   operatorset = true;
 
   // Update the Operator fields.
-  IterativeSolver::height   = pA->Height();
+  IterativeSolver::height = pA->Height();
   PetscLinearSolver::height = pA->Height();
-  IterativeSolver::width    = pA->Width();
-  PetscLinearSolver::width  = pA->Width();
+  IterativeSolver::width = pA->Width();
+  PetscLinearSolver::width = pA->Width();
 
   if (petsc_pc) {
     prec->SetOperator(*pA);
@@ -795,11 +795,11 @@ void PetscKSPSolver::SetPreconditioner(mfem::Solver& pc)
 PetscErrorCode linesearchPreCheckBackoffOnNan(SNESLineSearch linesearch, Vec X, Vec Y, PetscBool* changed,
                                               [[maybe_unused]] void* ctx)
 {
-  SNES        snes;
-  PetscReal   lambda_orig, lambda, min_lambda;
+  SNES snes;
+  PetscReal lambda_orig, lambda, min_lambda;
   PetscScalar fty;
-  PetscInt    max_failures, num_failures = 0;
-  Vec         W, Ftemp;
+  PetscInt max_failures, num_failures = 0;
+  Vec W, Ftemp;
   PetscViewer monitor;
   PetscObject linesearch_obj = reinterpret_cast<PetscObject>(linesearch);
 
@@ -863,8 +863,8 @@ PetscNewtonSolver::PetscNewtonSolver(MPI_Comm comm_, SNESType snes_type, SNESLin
       snes_type_(snes_type),
       linesearch_type_(linesearch_type)
 {
-  rel_tol  = PETSC_DEFAULT;
-  abs_tol  = PETSC_DEFAULT;
+  rel_tol = PETSC_DEFAULT;
+  abs_tol = PETSC_DEFAULT;
   max_iter = PETSC_DEFAULT;
   SetJacobianType(ANY_TYPE);
   PetscCallVoid(SNESSetType(*this, snes_type_));
@@ -884,8 +884,8 @@ PetscNewtonSolver::PetscNewtonSolver(MPI_Comm comm_, NonlinearSolverOptions nonl
   SetMaxIter(nonlinear_options_.max_iterations);
   SetPrintLevel(nonlinear_options_.print_level);
 
-  rel_tol  = nonlinear_options_.relative_tol;
-  abs_tol  = nonlinear_options_.absolute_tol;
+  rel_tol = nonlinear_options_.relative_tol;
+  abs_tol = nonlinear_options_.absolute_tol;
   max_iter = nonlinear_options_.max_iterations;
   if (nonlinear_options_.min_iterations > 0) {
     PetscCallAbort(GetComm(), SNESSetForceIteration(*this, PETSC_TRUE));
@@ -898,7 +898,7 @@ void PetscNewtonSolver::SetTolerances()
   // Fix specifically the absolute tolerance for CP linesearch, since a PETSc bug will erroneously lead to early
   // "convergence". See: https://gitlab.com/petsc/petsc/-/issues/1583
   if (operatorset) {
-    PetscBool      is_newtonls, is_cp;
+    PetscBool is_newtonls, is_cp;
     SNESLineSearch linesearch;
     PetscCallAbort(GetComm(), PetscObjectTypeCompare(*this, SNESNEWTONLS, &is_newtonls));
     PetscCallAbort(GetComm(), SNESGetLineSearch(*this, &linesearch));
@@ -908,7 +908,7 @@ void PetscNewtonSolver::SetTolerances()
     auto max_ls_iters = nonlinear_options_.max_line_search_iterations > 0
                             ? nonlinear_options_.max_line_search_iterations
                             : PETSC_DEFAULT;
-    auto abs_ls_tol   = is_newtonls && is_cp ? 1e-30 : PETSC_DEFAULT;
+    auto abs_ls_tol = is_newtonls && is_cp ? 1e-30 : PETSC_DEFAULT;
     // min step, max step, rel tol, abs tol, delta step tol, max iters
     PetscCallAbort(GetComm(), SNESLineSearchSetTolerances(linesearch, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT,
                                                           abs_ls_tol, PETSC_DEFAULT, max_ls_iters));
@@ -955,10 +955,10 @@ void PetscNewtonSolver::SetSolver(mfem::Solver& solver)
   auto petsc_solver = dynamic_cast<mfem::PetscLinearSolver*>(&solver);
   if (petsc_solver) {
     PetscCallAbort(GetComm(), SNESSetKSP(*this, *petsc_solver));
-    prec             = &solver;
+    prec = &solver;
     auto* ksp_solver = dynamic_cast<PetscKSPSolver*>(&solver);
     if (ksp_solver) {
-      auto* inner_prec       = ksp_solver->GetPreconditioner();
+      auto* inner_prec = ksp_solver->GetPreconditioner();
       auto* petsc_inner_prec = dynamic_cast<mfem::PetscPreconditioner*>(inner_prec);
       if (petsc_inner_prec) {
         SLIC_DEBUG_ROOT("PetscNewtonSolver::SetSolver(...) - Set Jacobian type to PETSC_MATAIJ");
@@ -1010,10 +1010,10 @@ void PetscNewtonSolver::Mult(const mfem::Vector& b, mfem::Vector& x) const
   PetscBool is_set;
   PetscCallAbort(GetComm(), KSPGetOperatorsSet(ksp, &is_set, NULL));
   if (is_set) {
-    Mat      A;
+    Mat A;
     PetscInt nheight, nwidth;
-    int      oheight = B->GlobalSize();
-    int      owidth  = X->GlobalSize();
+    int oheight = B->GlobalSize();
+    int owidth = X->GlobalSize();
     PetscCallAbort(GetComm(), KSPGetOperators(ksp, &A, NULL));
     PetscCallAbort(GetComm(), MatGetSize(A, &nheight, &nwidth));
     if (nheight != oheight || nwidth != owidth) {

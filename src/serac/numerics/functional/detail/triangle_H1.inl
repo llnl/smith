@@ -21,13 +21,13 @@
 /// @cond
 template <int p, int c>
 struct finite_element<mfem::Geometry::TRIANGLE, H1<p, c> > {
-  static constexpr auto geometry   = mfem::Geometry::TRIANGLE;
-  static constexpr auto family     = Family::H1;
-  static constexpr int  components = c;
-  static constexpr int  dim        = 2;
-  static constexpr int  order      = p;
-  static constexpr int  n          = (p + 1);
-  static constexpr int  ndof       = (p + 1) * (p + 2) / 2;
+  static constexpr auto geometry = mfem::Geometry::TRIANGLE;
+  static constexpr auto family = Family::H1;
+  static constexpr int components = c;
+  static constexpr int dim = 2;
+  static constexpr int order = p;
+  static constexpr int n = (p + 1);
+  static constexpr int ndof = (p + 1) * (p + 2) / 2;
 
   static constexpr int VALUE = 0, GRADIENT = 1;
   static constexpr int SOURCE = 0, FLUX = 1;
@@ -35,7 +35,7 @@ struct finite_element<mfem::Geometry::TRIANGLE, H1<p, c> > {
   using residual_type =
       typename std::conditional<components == 1, tensor<double, ndof>, tensor<double, ndof, components> >::type;
 
-  using dof_type    = tensor<double, c, ndof>;
+  using dof_type = tensor<double, c, ndof>;
   using dof_type_if = dof_type;
 
   using value_type = typename std::conditional<components == 1, double, tensor<double, components> >::type;
@@ -244,15 +244,15 @@ struct finite_element<mfem::Geometry::TRIANGLE, H1<p, c> > {
   static auto batch_apply_shape_fn(int j, tensor<in_t, q*(q + 1) / 2> input, const TensorProductQuadratureRule<q>&)
   {
     using source_t = decltype(get<0>(get<0>(in_t{})) + dot(get<1>(get<0>(in_t{})), tensor<double, 2>{}));
-    using flux_t   = decltype(get<0>(get<1>(in_t{})) + dot(get<1>(get<1>(in_t{})), tensor<double, 2>{}));
+    using flux_t = decltype(get<0>(get<1>(in_t{})) + dot(get<1>(get<1>(in_t{})), tensor<double, 2>{}));
 
     constexpr auto xi = GaussLegendreNodes<q, mfem::Geometry::TRIANGLE>();
 
-    static constexpr int               Q = q * (q + 1) / 2;
+    static constexpr int Q = q * (q + 1) / 2;
     tensor<tuple<source_t, flux_t>, Q> output;
 
     for (int i = 0; i < Q; i++) {
-      double              phi_j      = shape_function(xi[i], j);
+      double phi_j = shape_function(xi[i], j);
       tensor<double, dim> dphi_j_dxi = shape_function_gradient(xi[i], j);
 
       const auto& d00 = get<0>(get<0>(input(i)));
@@ -269,13 +269,13 @@ struct finite_element<mfem::Geometry::TRIANGLE, H1<p, c> > {
   template <int q>
   SERAC_HOST_DEVICE static auto interpolate(const tensor<double, c, ndof>& X, const TensorProductQuadratureRule<q>&)
   {
-    constexpr auto       xi                    = GaussLegendreNodes<q, mfem::Geometry::TRIANGLE>();
+    constexpr auto xi = GaussLegendreNodes<q, mfem::Geometry::TRIANGLE>();
     static constexpr int num_quadrature_points = q * (q + 1) / 2;
 
     // transpose the quadrature data into a flat tensor of tuples
     union {
       tensor<tuple<tensor<double, c>, tensor<double, c, dim> >, num_quadrature_points> unflattened;
-      tensor<qf_input_type, num_quadrature_points>                                     flattened;
+      tensor<qf_input_type, num_quadrature_points> flattened;
     } output{};
 
     for (int i = 0; i < c; i++) {
@@ -300,18 +300,18 @@ struct finite_element<mfem::Geometry::TRIANGLE, H1<p, c> > {
     }
 
     using source_component_type = std::conditional_t<is_zero<source_type>{}, zero, double>;
-    using flux_component_type   = std::conditional_t<is_zero<flux_type>{}, zero, tensor<double, dim> >;
+    using flux_component_type = std::conditional_t<is_zero<flux_type>{}, zero, tensor<double, dim> >;
 
-    constexpr int  num_quadrature_points = q * (q + 1) / 2;
-    constexpr int  ntrial                = std::max(size(source_type{}), size(flux_type{}) / dim) / c;
-    constexpr auto integration_points    = GaussLegendreNodes<q, mfem::Geometry::TRIANGLE>();
-    constexpr auto integration_weights   = GaussLegendreWeights<q, mfem::Geometry::TRIANGLE>();
+    constexpr int num_quadrature_points = q * (q + 1) / 2;
+    constexpr int ntrial = std::max(size(source_type{}), size(flux_type{}) / dim) / c;
+    constexpr auto integration_points = GaussLegendreNodes<q, mfem::Geometry::TRIANGLE>();
+    constexpr auto integration_weights = GaussLegendreWeights<q, mfem::Geometry::TRIANGLE>();
 
     for (int j = 0; j < ntrial; j++) {
       for (int i = 0; i < c; i++) {
         for (int Q = 0; Q < num_quadrature_points; Q++) {
           tensor<double, 2> xi = integration_points[Q];
-          double            wt = integration_weights[Q];
+          double wt = integration_weights[Q];
 
           source_component_type source;
           if constexpr (!is_zero<source_type>{}) {

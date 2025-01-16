@@ -20,12 +20,12 @@ void debug_sparse_matrix(serac::Functional<T>& f, double t, const mfem::Vector& 
   mfem::Vector dU(U.Size());
   dU = 0.0;
 
-  auto [value, dfdU]                                = f(t, serac::differentiate_wrt(U));
+  auto [value, dfdU] = f(t, serac::differentiate_wrt(U));
   std::unique_ptr<mfem::HypreParMatrix> dfdU_matrix = assemble(dfdU);
 
   std::cout << "{";
   for (int i = 0; i < U.Size(); i++) {
-    dU[i]               = 1;
+    dU[i] = 1;
     mfem::Vector df_jvp = dfdU(dU);  // matrix-free
 
     std::cout << "{";
@@ -63,7 +63,7 @@ void check_gradient(serac::Functional<T, exec>& f, double t, mfem::Vector& U, do
   }
   dU.Randomize(seed);
 
-  auto [value, dfdU]                                = f(t, serac::differentiate_wrt(U));
+  auto [value, dfdU] = f(t, serac::differentiate_wrt(U));
   std::unique_ptr<mfem::HypreParMatrix> dfdU_matrix = assemble(dfdU);
 
   // jacobian vector products
@@ -140,7 +140,7 @@ void check_gradient(serac::Functional<T>& f, double t, const mfem::Vector& U, co
   ddU_dt.Randomize(seed + 1);
 
   {
-    auto [value, dfdU]                                = f(t, serac::differentiate_wrt(U), dU_dt);
+    auto [value, dfdU] = f(t, serac::differentiate_wrt(U), dU_dt);
     std::unique_ptr<mfem::HypreParMatrix> dfdU_matrix = assemble(dfdU);
 
     // jacobian vector products
@@ -203,7 +203,7 @@ void check_gradient(serac::Functional<T>& f, double t, const mfem::Vector& U, co
   }
 
   {
-    auto [value, df_ddU_dt]                                = f(t, U, serac::differentiate_wrt(dU_dt));
+    auto [value, df_ddU_dt] = f(t, U, serac::differentiate_wrt(dU_dt));
     std::unique_ptr<mfem::HypreParMatrix> df_ddU_dt_matrix = assemble(df_ddU_dt);
 
     // jacobian vector products
@@ -276,7 +276,7 @@ void check_gradient(serac::Functional<double(T), execution_space>& f, double t, 
   int seed = 42;
 
   mfem::HypreParVector dU = U;
-  dU                      = U;
+  dU = U;
   dU.Randomize(seed);
 
   double epsilon = 1.0e-8;
@@ -287,11 +287,11 @@ void check_gradient(serac::Functional<double(T), execution_space>& f, double t, 
 
   // TODO: fix this weird copy ctor behavior in mfem::HypreParVector
   auto U_plus = U;
-  U_plus      = U;
+  U_plus = U;
   U_plus.Add(epsilon, dU);
 
   auto U_minus = U;
-  U_minus      = U;
+  U_minus = U;
   U_minus.Add(-epsilon, dU);
 
   double df1 = (f(t, U_plus) - f(t, U_minus)) / (2 * epsilon);
@@ -313,7 +313,7 @@ template <typename T1, typename T2>
 void check_gradient(serac::Functional<double(T1, T2)>& f, double t, const mfem::HypreParVector& U,
                     const mfem::HypreParVector& dU_dt)
 {
-  int    seed    = 42;
+  int seed = 42;
   double epsilon = 1.0e-8;
 
   mfem::HypreParVector dU(U);
@@ -324,18 +324,18 @@ void check_gradient(serac::Functional<double(T1, T2)>& f, double t, const mfem::
 
   // TODO: fix this weird copy ctor behavior in mfem::HypreParVector
   auto U_plus = U;
-  U_plus      = U;
+  U_plus = U;
   U_plus.Add(epsilon, dU);
 
   auto U_minus = U;
-  U_minus      = U;
+  U_minus = U;
   U_minus.Add(-epsilon, dU);
 
   {
     double df1 = (f(t, U_plus, dU_dt) - f(t, U_minus, dU_dt)) / (2 * epsilon);
 
     auto [value, dfdU] = f(t, serac::differentiate_wrt(U), dU_dt);
-    double df2         = dfdU(dU);
+    double df2 = dfdU(dU);
 
     std::unique_ptr<mfem::HypreParVector> dfdU_vector = assemble(dfdU);
 
@@ -349,18 +349,18 @@ void check_gradient(serac::Functional<double(T1, T2)>& f, double t, const mfem::
   }
 
   auto dU_dt_plus = dU_dt;
-  dU_dt_plus      = dU_dt;
+  dU_dt_plus = dU_dt;
   dU_dt_plus.Add(epsilon, ddU_dt);
 
   auto dU_dt_minus = dU_dt;
-  dU_dt_minus      = dU_dt;
+  dU_dt_minus = dU_dt;
   dU_dt_minus.Add(-epsilon, ddU_dt);
 
   {
     double df1 = (f(t, U, dU_dt_plus) - f(t, U, dU_dt_minus)) / (2 * epsilon);
 
     auto [value, df_ddU_dt] = f(t, U, serac::differentiate_wrt(dU_dt));
-    double df2              = df_ddU_dt(ddU_dt);
+    double df2 = df_ddU_dt(ddU_dt);
 
     std::unique_ptr<mfem::HypreParVector> df_ddU_dt_vector = assemble(df_ddU_dt);
 

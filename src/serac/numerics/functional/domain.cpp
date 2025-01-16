@@ -38,7 +38,7 @@ namespace serac {
 template <int d>
 std::vector<tensor<double, d>> gather(const mfem::Vector& coordinates, mfem::Array<int> ids)
 {
-  int                            num_vertices = coordinates.Size() / d;
+  int num_vertices = coordinates.Size() / d;
   std::vector<tensor<double, d>> x(std::size_t(ids.Size()));
   for (int v = 0; v < ids.Size(); v++) {
     for (int j = 0; j < d; j++) {
@@ -77,7 +77,7 @@ static Domain domain_of_edges(const mesh_t& mesh, std::function<T> predicate)
 
     if constexpr (d == 2) {
       int bdr_id = edge_id_to_bdr_id[i];
-      int attr   = (bdr_id >= 0) ? mesh.GetBdrAttribute(bdr_id) : -1;
+      int attr = (bdr_id >= 0) ? mesh.GetBdrAttribute(bdr_id) : -1;
       if (predicate(x, attr)) {
         output.addElement(i, i, mfem::Geometry::SEGMENT);
       }
@@ -129,7 +129,7 @@ static Domain domain_of_faces(const mesh_t& mesh, std::function<bool(std::vector
     num_faces = mesh.GetNumFaces();
   }
 
-  int tri_id  = 0;
+  int tri_id = 0;
   int quad_id = 0;
 
   for (int i = 0; i < num_faces; i++) {
@@ -148,7 +148,7 @@ static Domain domain_of_faces(const mesh_t& mesh, std::function<bool(std::vector
       attr = mesh.GetAttribute(i);
     } else {
       int bdr_id = face_id_to_bdr_id[i];
-      attr       = (bdr_id >= 0) ? mesh.GetBdrAttribute(bdr_id) : -1;
+      attr = (bdr_id >= 0) ? mesh.GetBdrAttribute(bdr_id) : -1;
     }
 
     if (predicate(x, attr)) {
@@ -196,10 +196,10 @@ static Domain domain_of_elems(const mesh_t& mesh, std::function<bool(std::vector
   mfem::Vector vertices;
   mesh.GetVertices(vertices);
 
-  int tri_id  = 0;
+  int tri_id = 0;
   int quad_id = 0;
-  int tet_id  = 0;
-  int hex_id  = 0;
+  int tet_id = 0;
+  int hex_id = 0;
 
   // elements that satisfy the predicate are added to the domain
   int num_elems = mesh.GetNE();
@@ -294,7 +294,7 @@ void Domain::addElements(const std::vector<int>& geom_ids, const std::vector<int
 ///////////////////////////////////////////////////////////////////////////////////////
 
 template <int d>
-static Domain domain_of_boundary_elems(const mesh_t&                                            mesh,
+static Domain domain_of_boundary_elems(const mesh_t& mesh,
                                        std::function<bool(std::vector<tensor<double, d>>, int)> predicate)
 {
   assert(mesh.SpaceDimension() == d);
@@ -309,7 +309,7 @@ static Domain domain_of_boundary_elems(const mesh_t&                            
   mesh.GetVertices(vertices);
 
   int edge_id = 0;
-  int tri_id  = 0;
+  int tri_id = 0;
   int quad_id = 0;
 
   // faces that satisfy the predicate are added to the domain
@@ -325,7 +325,7 @@ static Domain domain_of_boundary_elems(const mesh_t&                            
     auto x = gather<d>(vertices, vertex_ids);
 
     int bdr_id = face_id_to_bdr_id[f];
-    int attr   = (bdr_id >= 0) ? mesh.GetBdrAttribute(bdr_id) : -1;
+    int attr = (bdr_id >= 0) ? mesh.GetBdrAttribute(bdr_id) : -1;
 
     bool add = predicate(x, attr);
 
@@ -457,7 +457,7 @@ void findDomainDofsOnNeighborRanks(const serac::fes_t* fes, mfem::Array<int>& lo
 
 mfem::Array<int> Domain::dof_list(const serac::fes_t* fes) const
 {
-  std::set<int>    dof_ids;
+  std::set<int> dof_ids;
   mfem::Array<int> elem_dofs;
 
   std::function<void(int i, mfem::Array<int>&)> GetDofs;
@@ -515,7 +515,7 @@ mfem::Array<int> Domain::dof_list(const serac::fes_t* fes) const
   }
 
   mfem::Array<int> uniq_dof_ids(int(dof_ids.size()));
-  int              i = 0;
+  int i = 0;
   for (auto id : dof_ids) {
     uniq_dof_ids[i++] = id;
   }
@@ -576,7 +576,7 @@ Domain InteriorFaces(const mesh_t& mesh)
   Domain output{mesh, mesh.SpaceDimension() - 1, Domain::Type::InteriorFaces};
 
   int edge_id = 0;
-  int tri_id  = 0;
+  int tri_id = 0;
   int quad_id = 0;
 
   for (int f = 0; f < mesh.GetNumFaces(); f++) {
@@ -638,8 +638,8 @@ void unzip(const std::vector<int2>& ab, std::vector<int>& a, std::vector<int>& b
   b.resize(ab.size());
   for (uint32_t i = 0; i < ab.size(); i++) {
     auto ab_i = ab[i];
-    a[i]      = std::get<0>(ab_i);
-    b[i]      = std::get<1>(ab_i);
+    a[i] = std::get<0>(ab_i);
+    b[i] = std::get<1>(ab_i);
   }
 }
 
@@ -676,12 +676,12 @@ Domain set_operation(SET_OPERATION op, const Domain& a, const Domain& b)
 
   Domain combined{a.mesh_, a.dim_, a.type_};
 
-  using Ids         = std::vector<int>;
+  using Ids = std::vector<int>;
   auto apply_set_op = [&op](const Ids& x, const Ids& y) { return set_operation(op, x, y); };
 
   auto fill_combined_lists = [apply_set_op, &combined](const Ids& a_ids, const Ids& a_mfem_ids, const Ids& b_ids,
                                                        const Ids& b_mfem_ids, mfem::Geometry::Type g) {
-    auto combined_ids      = apply_set_op(a_ids, b_ids);
+    auto combined_ids = apply_set_op(a_ids, b_ids);
     auto combined_mfem_ids = apply_set_op(a_mfem_ids, b_mfem_ids);
     combined.addElements(combined_ids, combined_mfem_ids, g);
   };

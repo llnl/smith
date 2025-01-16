@@ -24,7 +24,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -40,7 +40,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Construct and initialized the user-defined moduli to be used as a differentiable parameter in
@@ -59,7 +59,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
   // Construct a functional-based solid solver
 
-  auto lin_options          = solid_mechanics::default_linear_options;
+  auto lin_options = solid_mechanics::default_linear_options;
   lin_options.linear_solver = LinearSolver::SuperLU;
 
   SolidMechanics<p, dim, Parameters<H1<1>, H1<1>>> solid_solver(
@@ -74,7 +74,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   constexpr int bulk_parameter_index = 0;
 
   solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  Domain                                        whole_mesh = EntireDomain(pmesh);
+  Domain whole_mesh = EntireDomain(pmesh);
   solid_solver.setMaterial(DependsOn<0, 1>{}, mat, whole_mesh);
 
   // Define the function for the initial displacement and boundary condition
@@ -112,7 +112,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
   // Construct a dummy adjoint load (this would come from a QOI downstream).
   // This adjoint load is equivalent to a discrete L1 norm on the displacement.
-  serac::FiniteElementDual              adjoint_load(solid_solver.displacement().space(), "adjoint_load");
+  serac::FiniteElementDual adjoint_load(solid_solver.displacement().space(), "adjoint_load");
   std::unique_ptr<mfem::HypreParVector> assembled_vector(adjoint_load_form.ParallelAssemble());
   adjoint_load = *assembled_vector;
 
@@ -189,7 +189,7 @@ void finite_difference_shape_test(LoadingType load)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -205,7 +205,7 @@ void finite_difference_shape_test(LoadingType load)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Define the boundary for essential bcs
@@ -222,7 +222,7 @@ void finite_difference_shape_test(LoadingType load)
                                       solid_mechanics::default_quasistatic_options, "solid_functional", mesh_tag);
 
   solid_mechanics::NeoHookean mat{1.0, 1.0, 1.0};
-  Domain                      whole_mesh = EntireDomain(pmesh);
+  Domain whole_mesh = EntireDomain(pmesh);
   solid_solver.setMaterial(mat, whole_mesh);
 
   FiniteElementState shape_displacement(pmesh, H1<SHAPE_ORDER, dim>{});
@@ -269,7 +269,7 @@ void finite_difference_shape_test(LoadingType load)
 
   // Construct a dummy adjoint load (this would come from a QOI downstream).
   // This adjoint load is equivalent to a discrete L1 norm on the displacement.
-  serac::FiniteElementDual              adjoint_load(solid_solver.displacement().space(), "adjoint_load");
+  serac::FiniteElementDual adjoint_load(solid_solver.displacement().space(), "adjoint_load");
   std::unique_ptr<mfem::HypreParVector> assembled_vector(adjoint_load_form.ParallelAssemble());
   adjoint_load = *assembled_vector;
 

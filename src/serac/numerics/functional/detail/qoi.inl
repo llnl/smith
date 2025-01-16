@@ -12,14 +12,14 @@
 /// @cond
 template <mfem::Geometry::Type g>
 struct finite_element<g, QOI> {
-  static constexpr auto geometry   = g;
-  static constexpr auto family     = Family::QOI;
-  static constexpr int  components = 1;
-  static constexpr int  dim        = 1;
-  static constexpr int  ndof       = 1;
+  static constexpr auto geometry = g;
+  static constexpr auto family = Family::QOI;
+  static constexpr int components = 1;
+  static constexpr int dim = 1;
+  static constexpr int ndof = 1;
 
-  using dof_type      = double;
-  using dof_type_if   = double;
+  using dof_type = double;
+  using dof_type_if = double;
   using residual_type = double;
 
   SERAC_HOST_DEVICE static constexpr double shape_functions(double /* xi */) { return 1.0; }

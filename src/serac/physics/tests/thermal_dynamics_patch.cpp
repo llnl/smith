@@ -101,18 +101,18 @@ double dynamic_solution_error(const ExactSolution& exact_solution, PatchBoundary
 
   std::string mesh_tag{"mesh"};
   std::string filename = std::string(SERAC_REPO_DIR) + "/data/meshes/patch" + std::to_string(dim) + "D.mesh";
-  auto        mesh     = mesh::refineAndDistribute(buildMeshFromFile(filename));
-  auto&       pmesh    = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename));
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // Construct a heat transfer solver
   NonlinearSolverOptions nonlinear_opts{.relative_tol = 5.0e-13, .absolute_tol = 5.0e-13};
 
-  TimesteppingOptions dyn_opts{.timestepper        = TimestepMethod::BackwardEuler,
+  TimesteppingOptions dyn_opts{.timestepper = TimestepMethod::BackwardEuler,
                                .enforcement_method = DirichletEnforcementMethod::DirectControl};
 
   HeatTransfer<p, dim> thermal(nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts, "thermal", mesh_tag);
 
-  Domain whole_domain   = EntireDomain(pmesh);
+  Domain whole_domain = EntireDomain(pmesh);
   Domain whole_boundary = EntireBoundary(pmesh);
 
   heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, 1.0);
@@ -153,7 +153,7 @@ const double b{3.0};
  */
 template <int dim>
 class LinearSolution {
-public:
+ public:
   LinearSolution() : temp_grad_rate(dim)
   {
     initial_temperature = b;
@@ -200,7 +200,7 @@ public:
 
     // natural BCs
     auto temp_rate_grad = make_tensor<dim>([&](int i) { return temp_grad_rate(i); });
-    auto flux_function  = [material, temp_rate_grad](auto X, auto n0, auto t, auto temp) {
+    auto flux_function = [material, temp_rate_grad](auto X, auto n0, auto t, auto temp) {
       auto temp_grad = temp_rate_grad * t;
 
       auto flux = serac::get<1>(material(X, temp, temp_grad));
@@ -216,77 +216,77 @@ public:
     thermal.setSource(source_function, dom);
   }
 
-private:
-  mfem::Vector temp_grad_rate;       /// Linear part of solution. Equivalently, the temperature gradient rate
-  double       initial_temperature;  /// Constant part of temperature
+ private:
+  mfem::Vector temp_grad_rate;  /// Linear part of solution. Equivalently, the temperature gradient rate
+  double initial_temperature;   /// Constant part of temperature
 };
 
 const double tol = 1e-12;
 
 TEST(HeatTransferDynamic, PatchTest2dQ1EssentialBcs)
 {
-  constexpr int p     = 1;
-  constexpr int dim   = 2;
-  double        error = dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::Essential);
+  constexpr int p = 1;
+  constexpr int dim = 2;
+  double error = dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::Essential);
   EXPECT_LT(error, tol);
 }
 
 TEST(HeatTransferDynamic, PatchTest3dQ1EssentialBcs)
 {
-  constexpr int p     = 1;
-  constexpr int dim   = 3;
-  double        error = dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::Essential);
+  constexpr int p = 1;
+  constexpr int dim = 3;
+  double error = dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::Essential);
   EXPECT_LT(error, tol);
 }
 
 TEST(HeatTransferDynamic, PatchTest2dQ2EssentialBcs)
 {
-  constexpr int p     = 2;
-  constexpr int dim   = 2;
-  double        error = dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::Essential);
+  constexpr int p = 2;
+  constexpr int dim = 2;
+  double error = dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::Essential);
   EXPECT_LT(error, tol);
 }
 
 TEST(HeatTransferDynamic, PatchTest3dQ2EssentialBcs)
 {
-  constexpr int p     = 2;
-  constexpr int dim   = 3;
-  double        error = dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::Essential);
+  constexpr int p = 2;
+  constexpr int dim = 3;
+  double error = dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::Essential);
   EXPECT_LT(error, tol);
 }
 
 TEST(HeatTransferDynamic, PatchTest2dQ1FluxBcs)
 {
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
-  double        error =
+  double error =
       dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::MixedEssentialAndNatural);
   EXPECT_LT(error, tol);
 }
 
 TEST(HeatTransferDynamic, PatchTest3dQ1FluxBcs)
 {
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 3;
-  double        error =
+  double error =
       dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::MixedEssentialAndNatural);
   EXPECT_LT(error, tol);
 }
 
 TEST(HeatTransferDynamic, PatchTest2dQ2FluxBcs)
 {
-  constexpr int p   = 2;
+  constexpr int p = 2;
   constexpr int dim = 2;
-  double        error =
+  double error =
       dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::MixedEssentialAndNatural);
   EXPECT_LT(error, tol);
 }
 
 TEST(HeatTransferDynamic, PatchTest3dQ2FluxBcs)
 {
-  constexpr int p   = 2;
+  constexpr int p = 2;
   constexpr int dim = 3;
-  double        error =
+  double error =
       dynamic_solution_error<p, dim>(LinearSolution<dim>(), PatchBoundaryCondition::MixedEssentialAndNatural);
   EXPECT_LT(error, tol);
 }

@@ -24,7 +24,7 @@ namespace serac {
  * @brief A container for the boundary condition information relating to a specific physics module
  */
 class BoundaryConditionManager {
-public:
+ public:
   /**
    * @brief Construct a new Boundary Condition Manager object
    *
@@ -100,7 +100,7 @@ public:
    */
   const std::vector<BoundaryCondition>& essentials() const { return ess_bdr_; }
 
-private:
+ private:
   /**
    * @brief Updates the "cached" list of all DOF indices
    */

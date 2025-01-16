@@ -27,12 +27,12 @@ struct ParameterizedLinearIsotropicSolid {
   SERAC_HOST_DEVICE auto operator()(State&, const ::serac::tensor<T1, dim, dim>& u_grad, const T2& E_tuple,
                                     const T3& v_tuple) const
   {
-    auto       E      = ::serac::get<0>(E_tuple);                 // Young's modulus VALUE
-    auto       v      = ::serac::get<0>(v_tuple);                 // Poisson's ratio VALUE
-    auto       lambda = E * v / ((1.0 + v) * (1.0 - 2.0 * v));    // Lamé's first parameter
-    auto       mu     = E / (2.0 * (1.0 + v));                    // Lamé's second parameter
-    const auto I      = ::serac::Identity<dim>();                 // identity matrix
-    auto       strain = ::serac::sym(u_grad);                     // small strain tensor
+    auto E = ::serac::get<0>(E_tuple);                            // Young's modulus VALUE
+    auto v = ::serac::get<0>(v_tuple);                            // Poisson's ratio VALUE
+    auto lambda = E * v / ((1.0 + v) * (1.0 - 2.0 * v));          // Lamé's first parameter
+    auto mu = E / (2.0 * (1.0 + v));                              // Lamé's second parameter
+    const auto I = ::serac::Identity<dim>();                      // identity matrix
+    auto strain = ::serac::sym(u_grad);                           // small strain tensor
     return lambda * ::serac::tr(strain) * I + 2.0 * mu * strain;  // Cauchy stress
   }
   static constexpr double density{1.0};  ///< mass density, for dynamics problems
@@ -46,14 +46,14 @@ struct ParameterizedNeoHookeanSolid {
                                     const T3& v_tuple) const
   {
     using std::log1p;
-    constexpr auto I         = serac::Identity<dim>();
-    auto           E         = serac::get<0>(E_tuple);
-    auto           v         = serac::get<0>(v_tuple);
-    auto           G         = E / (2.0 * (1.0 + v));
-    auto           lambda    = (E * v) / ((1.0 + v) * (1.0 - 2.0 * v));
-    auto           B_minus_I = du_dX * serac::transpose(du_dX) + serac::transpose(du_dX) + du_dX;
-    auto           J_minus_1 = serac::detApIm1(du_dX);
-    auto           J         = J_minus_1 + 1;
+    constexpr auto I = serac::Identity<dim>();
+    auto E = serac::get<0>(E_tuple);
+    auto v = serac::get<0>(v_tuple);
+    auto G = E / (2.0 * (1.0 + v));
+    auto lambda = (E * v) / ((1.0 + v) * (1.0 - 2.0 * v));
+    auto B_minus_I = du_dX * serac::transpose(du_dX) + serac::transpose(du_dX) + du_dX;
+    auto J_minus_1 = serac::detApIm1(du_dX);
+    auto J = J_minus_1 + 1;
     return (lambda * log1p(J_minus_1) * I + G * B_minus_I) / J;
   }
   static constexpr double density{1.0};  ///< mass density, for dynamics problems
@@ -61,25 +61,25 @@ struct ParameterizedNeoHookeanSolid {
 
 namespace serac {
 
-constexpr int DIM   = 3;
+constexpr int DIM = 3;
 constexpr int ORDER = 1;
 
-const std::string mesh_tag       = "mesh";
+const std::string mesh_tag = "mesh";
 const std::string physics_prefix = "solid";
 
 using paramFES = serac::L2<0>;
-using uFES     = serac::H1<ORDER, DIM>;
-using qoiType  = serac::Functional<double(paramFES, paramFES, uFES)>;
+using uFES = serac::H1<ORDER, DIM>;
+using qoiType = serac::Functional<double(paramFES, paramFES, uFES)>;
 
 double forwardPass(serac::BasePhysics* solid, qoiType* qoi, mfem::ParMesh* /*meshPtr*/, int nTimeSteps, double timeStep,
                    std::string /*saveName*/)
 {
   solid->resetStates();
 
-  double                           qoiValue = 0.0;
-  const serac::FiniteElementState& E        = solid->parameter("E");
-  const serac::FiniteElementState& v        = solid->parameter("v");
-  const serac::FiniteElementState& u        = solid->state("displacement");
+  double qoiValue = 0.0;
+  const serac::FiniteElementState& E = solid->parameter("E");
+  const serac::FiniteElementState& v = solid->parameter("v");
+  const serac::FiniteElementState& u = solid->state("displacement");
 
   double prev = (*qoi)(solid->time(), E, v, u);
   for (int i = 0; i < nTimeSteps; i++) {
@@ -97,13 +97,13 @@ double forwardPass(serac::BasePhysics* solid, qoiType* qoi, mfem::ParMesh* /*mes
 void adjointPass(serac::BasePhysics* solid, qoiType* qoi, int nTimeSteps, double timeStep,
                  mfem::ParFiniteElementSpace& param_space, double& Ederiv, double& vderiv)
 {
-  serac::FiniteElementDual         Egrad(param_space);
-  serac::FiniteElementDual         vgrad(param_space);
+  serac::FiniteElementDual Egrad(param_space);
+  serac::FiniteElementDual vgrad(param_space);
   const serac::FiniteElementState& E = solid->parameter("E");
   const serac::FiniteElementState& v = solid->parameter("v");
   for (int i = nTimeSteps; i > 0; i--) {
-    const serac::FiniteElementState& u      = solid->loadCheckpointedState("displacement", i);
-    double                           scalar = (i == nTimeSteps) ? 0.5 * timeStep : timeStep;
+    const serac::FiniteElementState& u = solid->loadCheckpointedState("displacement", i);
+    double scalar = (i == nTimeSteps) ? 0.5 * timeStep : timeStep;
 
     auto dQoI_dE = ::serac::get<1>((*qoi)(::serac::DifferentiateWRT<0>{}, solid->time(), E, v, u));
     std::unique_ptr<::mfem::HypreParVector> assembled_Egrad = dQoI_dE.assemble();
@@ -143,22 +143,22 @@ TEST(quasistatic, finiteDifference)
   mfem::Mesh mesh = mfem::Mesh::MakeCartesian3D(1, 1, 1, mfem::Element::HEXAHEDRON);
   mesh.Print();
   assert(mesh.SpaceDimension() == DIM);
-  auto             pmesh   = ::std::make_unique<::mfem::ParMesh>(MPI_COMM_WORLD, mesh);
+  auto pmesh = ::std::make_unique<::mfem::ParMesh>(MPI_COMM_WORLD, mesh);
   ::mfem::ParMesh* meshPtr = &::serac::StateManager::setMesh(::std::move(pmesh), mesh_tag);
 
-  Domain        whole_domain = EntireDomain(*meshPtr);
-  Domain        xmax_face    = ::serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(3));
-  Domain        ymax_face    = ::serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(4));
-  Domain        zmin_face    = ::serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(1));
-  serac::Domain zmax_face    = serac::Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(6));
+  Domain whole_domain = EntireDomain(*meshPtr);
+  Domain xmax_face = ::serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(3));
+  Domain ymax_face = ::serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(4));
+  Domain zmin_face = ::serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(1));
+  serac::Domain zmax_face = serac::Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(6));
 
   // set up solver
-  using solidType        = serac::SolidMechanics<ORDER, DIM, ::serac::Parameters<paramFES, paramFES>>;
-  auto nonlinear_options = serac::NonlinearSolverOptions{.nonlin_solver  = ::serac::NonlinearSolver::Newton,
-                                                         .relative_tol   = 1e-6,
-                                                         .absolute_tol   = 1e-8,
+  using solidType = serac::SolidMechanics<ORDER, DIM, ::serac::Parameters<paramFES, paramFES>>;
+  auto nonlinear_options = serac::NonlinearSolverOptions{.nonlin_solver = ::serac::NonlinearSolver::Newton,
+                                                         .relative_tol = 1e-6,
+                                                         .absolute_tol = 1e-8,
                                                          .max_iterations = 10,
-                                                         .print_level    = 1};
+                                                         .print_level = 1};
   auto seracSolid = ::std::make_unique<solidType>(nonlinear_options, serac::solid_mechanics::direct_linear_options,
                                                   ::serac::solid_mechanics::default_quasistatic_options, physics_prefix,
                                                   mesh_tag, std::vector<std::string>{"E", "v"});
@@ -175,8 +175,8 @@ TEST(quasistatic, finiteDifference)
   // seracSolid->setTraction([](auto, auto n, auto) {return 1.0*n;}, loadRegion);
   seracSolid->setDisplacementBCs([](vec3, double time) { return vec3{{0.0, 0.0, time}}; }, zmax_face, Component::Z);
 
-  double                      E0 = 1.0;
-  double                      v0 = 0.3;
+  double E0 = 1.0;
+  double v0 = 0.3;
   ::serac::FiniteElementState Estate(seracSolid->parameter(seracSolid->parameterNames()[0]));
   ::serac::FiniteElementState vstate(seracSolid->parameter(seracSolid->parameterNames()[1]));
   Estate = E0;
@@ -187,23 +187,23 @@ TEST(quasistatic, finiteDifference)
   seracSolid->completeSetup();
 
   // set up QoI
-  auto [param_space, _]                        = ::serac::generateParFiniteElementSpace<paramFES>(meshPtr);
+  auto [param_space, _] = ::serac::generateParFiniteElementSpace<paramFES>(meshPtr);
   const ::mfem::ParFiniteElementSpace* u_space = &seracSolid->state("displacement").space();
 
   std::array<const ::mfem::ParFiniteElementSpace*, 3> qoiFES = {param_space.get(), param_space.get(), u_space};
-  auto                                                qoi    = std::make_unique<qoiType>(qoiFES);
+  auto qoi = std::make_unique<qoiType>(qoiFES);
   qoi->AddDomainIntegral(
       serac::Dimension<DIM>{}, serac::DependsOn<0, 1, 2>{},
       [&](auto time, auto, auto E, auto v, auto u) {
-        auto du_dx  = ::serac::get<1>(u);
-        auto state  = ::serac::Empty{};
+        auto du_dx = ::serac::get<1>(u);
+        auto state = ::serac::Empty{};
         auto stress = material(state, du_dx, E, v);
         return stress[2][2] * time;
       },
       whole_domain);
 
-  int    nTimeSteps = 3;
-  double timeStep   = 0.8;
+  int nTimeSteps = 3;
+  double timeStep = 0.8;
   forwardPass(seracSolid.get(), qoi.get(), meshPtr, nTimeSteps, timeStep, "f0");
 
   // ADJOINT GRADIENT

@@ -30,7 +30,7 @@ void BoundaryConditionManager::addEssential(const std::set<int>& ess_bdr, serac:
   all_dofs_valid_ = false;
 }
 
-void BoundaryConditionManager::addEssential(const mfem::Array<int>&            local_dofs,
+void BoundaryConditionManager::addEssential(const mfem::Array<int>& local_dofs,
                                             std::shared_ptr<mfem::Coefficient> ess_bdr_coef,
                                             mfem::ParFiniteElementSpace& space, std::optional<int> component)
 {

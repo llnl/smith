@@ -50,7 +50,7 @@ void test(int dof)
   deformed_mesh.Save("deformed_" + std::to_string(dof) + ".mesh");
 
   auto undeformed_pmesh = mesh::refineAndDistribute(std::move(undeformed_mesh), 0, 0);
-  auto deformed_pmesh   = mesh::refineAndDistribute(std::move(deformed_mesh), 0, 0);
+  auto deformed_pmesh = mesh::refineAndDistribute(std::move(deformed_mesh), 0, 0);
 
   auto [fes, fec] = generateParFiniteElementSpace<shape_space>(undeformed_pmesh.get());
 
@@ -63,7 +63,7 @@ void test(int dof)
       serac::Dimension<1>{}, serac::DependsOn<0>{}, [](auto...) { return 1.0; }, *deformed_pmesh);
 
   std::unique_ptr<mfem::HypreParVector> u(fes->NewTrueDofVector());
-  *u        = 0.0;
+  *u = 0.0;
   (*u)[dof] = 0.25;
   std::cout << "(ShapeAwareFunctional) perimeter of undeformed mesh + shape: " << saf_qoi(t, *u) << std::endl;
   std::cout << "(          Functional) perimeter of deformed mesh: " << qoi(t, *u) << std::endl;

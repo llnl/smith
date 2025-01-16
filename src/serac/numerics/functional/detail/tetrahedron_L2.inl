@@ -20,13 +20,13 @@
 /// @cond
 template <int p, int c>
 struct finite_element<mfem::Geometry::TETRAHEDRON, L2<p, c> > {
-  static constexpr auto geometry   = mfem::Geometry::TETRAHEDRON;
-  static constexpr auto family     = Family::L2;
-  static constexpr int  components = c;
-  static constexpr int  dim        = 3;
-  static constexpr int  n          = (p + 1);
-  static constexpr int  ndof       = (p + 1) * (p + 2) * (p + 3) / 6;
-  static constexpr int  nqpts(int q) { return num_quadrature_points(mfem::Geometry::TETRAHEDRON, q); }
+  static constexpr auto geometry = mfem::Geometry::TETRAHEDRON;
+  static constexpr auto family = Family::L2;
+  static constexpr int components = c;
+  static constexpr int dim = 3;
+  static constexpr int n = (p + 1);
+  static constexpr int ndof = (p + 1) * (p + 2) * (p + 3) / 6;
+  static constexpr int nqpts(int q) { return num_quadrature_points(mfem::Geometry::TETRAHEDRON, q); }
 
   static constexpr int VALUE = 0, GRADIENT = 1;
   static constexpr int SOURCE = 0, FLUX = 1;
@@ -42,7 +42,7 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, L2<p, c> > {
   using qf_input_type = tuple<value_type, derivative_type>;
 
   SERAC_HOST_DEVICE static constexpr double shape_function([[maybe_unused]] tensor<double, dim> xi,
-                                                           [[maybe_unused]] int                 i)
+                                                           [[maybe_unused]] int i)
   {
     if constexpr (p == 0) {
       return 1.0;
@@ -344,14 +344,14 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, L2<p, c> > {
   static auto batch_apply_shape_fn(int j, tensor<in_t, nqpts(q)> input, const TensorProductQuadratureRule<q>&)
   {
     using source_t = decltype(get<0>(get<0>(in_t{})) + dot(get<1>(get<0>(in_t{})), tensor<double, dim>{}));
-    using flux_t   = decltype(get<0>(get<1>(in_t{})) + dot(get<1>(get<1>(in_t{})), tensor<double, dim>{}));
+    using flux_t = decltype(get<0>(get<1>(in_t{})) + dot(get<1>(get<1>(in_t{})), tensor<double, dim>{}));
 
     constexpr auto xi = GaussLegendreNodes<q, mfem::Geometry::TETRAHEDRON>();
 
     tensor<tuple<source_t, flux_t>, nqpts(q)> output;
 
     for (int i = 0; i < nqpts(q); i++) {
-      double              phi_j      = shape_function(xi[i], j);
+      double phi_j = shape_function(xi[i], j);
       tensor<double, dim> dphi_j_dxi = shape_function_gradient(xi[i], j);
 
       const auto& d00 = get<0>(get<0>(input(i)));
@@ -373,7 +373,7 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, L2<p, c> > {
     // transpose the quadrature data into a flat tensor of tuples
     union {
       tensor<tuple<tensor<double, c>, tensor<double, c, dim> >, nqpts(q)> unflattened;
-      tensor<qf_input_type, nqpts(q)>                                     flattened;
+      tensor<qf_input_type, nqpts(q)> flattened;
     } output{};
 
     for (int i = 0; i < c; i++) {
@@ -398,17 +398,17 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, L2<p, c> > {
     }
 
     using source_component_type = std::conditional_t<is_zero<source_type>{}, zero, double>;
-    using flux_component_type   = std::conditional_t<is_zero<flux_type>{}, zero, tensor<double, dim> >;
+    using flux_component_type = std::conditional_t<is_zero<flux_type>{}, zero, tensor<double, dim> >;
 
-    constexpr int  ntrial              = std::max(size(source_type{}), size(flux_type{}) / dim) / c;
-    constexpr auto integration_points  = GaussLegendreNodes<q, mfem::Geometry::TETRAHEDRON>();
+    constexpr int ntrial = std::max(size(source_type{}), size(flux_type{}) / dim) / c;
+    constexpr auto integration_points = GaussLegendreNodes<q, mfem::Geometry::TETRAHEDRON>();
     constexpr auto integration_weights = GaussLegendreWeights<q, mfem::Geometry::TETRAHEDRON>();
 
     for (int j = 0; j < ntrial; j++) {
       for (int i = 0; i < c; i++) {
         for (int Q = 0; Q < nqpts(q); Q++) {
           tensor<double, dim> xi = integration_points[Q];
-          double              wt = integration_weights[Q];
+          double wt = integration_weights[Q];
 
           source_component_type source;
           if constexpr (!is_zero<source_type>{}) {
