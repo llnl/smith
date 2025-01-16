@@ -36,7 +36,7 @@ struct LinearIsotropic {
    * @return The Cauchy stress
    */
   template <typename T, int dim>
-  SERAC_HOST_DEVICE auto operator()(State& /* state */, double /* dt */, const tensor<T, dim, dim>& du_dX) const
+  SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
   {
     auto I       = Identity<dim>();
     auto lambda  = K - (2.0 / 3.0) * G;
@@ -72,7 +72,7 @@ struct StVenantKirchhoff {
    * @return The Cauchy stress
    */
   template <typename T, int dim>
-  auto operator()(State&, double /* dt */, const tensor<T, dim, dim>& grad_u) const
+  auto operator()(State&, const tensor<T, dim, dim>& grad_u) const
   {
     static constexpr auto I = Identity<dim>();
     auto                  F = grad_u + I;
@@ -107,7 +107,7 @@ struct NeoHookean {
    * @return The Cauchy stress
    */
   template <typename T, int dim>
-  SERAC_HOST_DEVICE auto operator()(State& /* state */, double /* dt */, const tensor<T, dim, dim>& du_dX) const
+  SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
   {
     using std::log1p;
     constexpr auto I         = Identity<dim>();
@@ -140,7 +140,7 @@ struct NeoHookeanAdditiveSplit {
    * @return The first Piola stress
    */
   template <typename T, int dim>
-  SERAC_HOST_DEVICE auto operator()(State& /* state */, double /* dt */, const tensor<T, dim, dim>& du_dX) const
+  SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
   {
     using std::pow;
     constexpr auto I     = Identity<dim>();

@@ -217,7 +217,7 @@ TEST(Solid, MultiMaterialWithState)
   auto                 qdata = solid.createQuadratureDataBuffer(initial_state, right);
 
   solid.setMaterial(mat_left, left);
-  solid.setMaterial(mat_right, right, qdata);
+  solid.setRateDependentMaterial(mat_right, right, qdata);
 
   Domain end_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(3));
   solid.setTraction(

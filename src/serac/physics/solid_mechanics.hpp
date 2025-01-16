@@ -740,13 +740,10 @@ public:
   template <typename Material>
   struct MaterialStressFunctor {
     /// @brief Constructor for the functor
-    MaterialStressFunctor(Material material, const double* dt) : material_(material), time_increment_(dt) {}
+    MaterialStressFunctor(Material material) : material_(material) {}
 
     /// @brief Material model
     Material material_;
-
-    /// @brief Current time step
-    const double* time_increment_;
 
     /**
      * @brief Material stress response call
@@ -770,7 +767,7 @@ public:
       auto du_dX   = get<DERIVATIVE>(displacement);
       auto d2u_dt2 = get<VALUE>(acceleration);
 
-      auto stress = material_(state, *time_increment_, du_dX, params...);
+      auto stress = material_(state, du_dX, params...);
 
       return serac::tuple{material_.density * d2u_dt2, stress};
     }
@@ -807,7 +804,7 @@ public:
   {
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
                   "invalid quadrature data provided in setMaterial()");
-    MaterialStressFunctor<MaterialType> material_functor(material, &dt_);
+    MaterialStressFunctor<MaterialType> material_functor(material);
     residual_->AddDomainIntegral(
         Dimension<dim>{},
         DependsOn<0, 1,
@@ -824,6 +821,77 @@ public:
                    std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
     setMaterial(DependsOn<>{}, material, domain, qdata);
+  }
+
+  /**
+   * Functor for materials that get dt as an argument 
+   */
+  template <typename Material>
+  struct RateDependentMaterialStressFunctor {
+    /// @brief Constructor for the functor
+    RateDependentMaterialStressFunctor(Material material, const double* dt) : material_(material), time_increment_(dt) {}
+
+    /// @brief Material model
+    Material material_;
+
+    /// @brief Current time step
+    const double* time_increment_;
+
+    /**
+     * @brief Material stress response call
+     *
+     * @tparam X Spatial position type
+     * @tparam State state
+     * @tparam Displacement displacement
+     * @tparam Acceleration acceleration
+     * @tparam Params variadic parameters for call
+     * @param[in] state state
+     * @param[in] displacement displacement
+     * @param[in] acceleration acceleration
+     * @param[in] params parameter pack
+     * @return The calculated material response (tuple of volumetric heat capacity and thermal flux) for a linear
+     * isotropic material
+     */
+    template <typename X, typename State, typename Displacement, typename Acceleration, typename... Params>
+    auto SERAC_HOST_DEVICE operator()(double, X, State& state, Displacement displacement, Acceleration acceleration,
+                                      Params... params) const
+    {
+      auto du_dX   = get<DERIVATIVE>(displacement);
+      auto d2u_dt2 = get<VALUE>(acceleration);
+
+      auto stress = material_(state, *time_increment_, du_dX, params...);
+
+      return serac::tuple{material_.density * d2u_dt2, stress};
+    }
+  };
+
+
+  /**
+   * Set a material that gets dt as an argument
+   */
+  template <int... active_parameters, typename RateDependentMaterialType, typename StateType = Empty>
+  void setRateDependentMaterial(DependsOn<active_parameters...>, const RateDependentMaterialType& material, Domain& domain,
+                   qdata_type<StateType> qdata = EmptyQData)
+  {
+    static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename RateDependentMaterialType::State>,
+                  "invalid quadrature data provided in setMaterial()");
+    RateDependentMaterialStressFunctor<RateDependentMaterialType> material_functor(material, &dt_);
+    residual_->AddDomainIntegral(
+        Dimension<dim>{},
+        DependsOn<0, 1,
+                  active_parameters + NUM_STATE_VARS...>{},  // the magic number "+ NUM_STATE_VARS" accounts for the
+                                                             // fact that the displacement, acceleration, and shape
+                                                             // fields are always-on and come first, so the `n`th
+                                                             // parameter will actually be argument `n + NUM_STATE_VARS`
+        std::move(material_functor), domain, qdata);
+  }
+
+  /// @overload
+  template <typename RateDependentMaterialType, typename StateType = Empty>
+  void setRateDependentMaterial(const RateDependentMaterialType& material, Domain& domain,
+                   std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
+  {
+    setRateDependentMaterial(DependsOn<>{}, material, domain, qdata);
   }
 
   /**

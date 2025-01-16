@@ -50,6 +50,7 @@ int main(int argc, char* argv[])
 
   constexpr double E = 1.0;
   constexpr double nu = 0.25;
+  constexpr double density = 1.0;
 
   constexpr double sigma_y = 0.001;
   constexpr double sigma_sat = 3.0*sigma_y;
@@ -111,11 +112,11 @@ int main(int argc, char* argv[])
   using Material = serac::solid_mechanics::J2<Hardening>;
 
   Hardening hardening{sigma_y, sigma_sat, strain_constant, eta};
-  Material material{E, nu, hardening, .density = 1.0};
+  Material material{E, nu, hardening, density};
 
   auto internal_states = solid_solver.createQuadratureDataBuffer(Material::State{}, whole_mesh);
 
-  solid_solver.setMaterial(material, whole_mesh, internal_states);
+  solid_solver.setRateDependentMaterial(material, whole_mesh, internal_states);
 
   solid_solver.setFixedBCs(fix_x, serac::Component::X);
   solid_solver.setFixedBCs(fix_y, serac::Component::Y);

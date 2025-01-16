@@ -77,7 +77,7 @@ public:
    * @param essential_boundaries Boundary attributes on which essential boundary conditions are desired
    */
   template <int p, typename Material>
-  void applyLoads(const Material& material, SolidMechanics<p, dim>& sf, Domain essential_boundary, double dt) const
+  void applyLoads(const Material& material, SolidMechanics<p, dim>& sf, Domain essential_boundary) const
   {
     // essential BCs
     auto ebc_func = [*this](tensor<double, dim> X, double) { return this->eval(X); };
@@ -86,7 +86,7 @@ public:
 
     // natural BCs
     typename Material::State state;
-    tensor<double, dim, dim> P               = material(state, dt, A);
+    tensor<double, dim, dim> P               = material(state, A);
     auto                     traction        = [P](auto, auto n0, auto) { return dot(P, n0); };
     Domain                   entire_boundary = EntireBoundary(sf.mesh());
     sf.setTraction(traction, entire_boundary);
@@ -219,7 +219,7 @@ double solution_error(PatchBoundaryCondition bc)
   constexpr double dt = 1.0;
 
   Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
-  exact_displacement.applyLoads(mat, solid, essential_boundary, dt);
+  exact_displacement.applyLoads(mat, solid, essential_boundary);
 
   // Finalize the data structures
   solid.completeSetup();
@@ -342,7 +342,7 @@ double pressure_error()
 
   constexpr double dt = 1.0;
 
-  tensor<double, dim, dim> P        = mat(state, dt, H);
+  tensor<double, dim, dim> P        = mat(state, H);
   auto                     F        = H + Identity<dim>();
   auto                     sigma    = dot(P, transpose(F)) / det(F);
   double                   pressure = -sigma[0][0];
