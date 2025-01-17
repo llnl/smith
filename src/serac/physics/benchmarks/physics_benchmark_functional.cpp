@@ -87,6 +87,7 @@ int main(int argc, char* argv[])
 
   // Initialize profiling
   serac::profiling::initialize();
+  SERAC_MARK_FUNCTION;
 
   // Add metadata
   SERAC_SET_METADATA("test", "functional");
