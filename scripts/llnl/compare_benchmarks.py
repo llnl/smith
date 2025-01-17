@@ -32,22 +32,29 @@ import spotdb
 
 # Iterate latest benchmarks list
     # Find associated branch benchmark
+    # diff = PR - develop, if the `main` number is bigger, it means it took X more seconds
 
-
-input_db_uri_str = "/usr/workspace/smithdev/califiles"
+input_db_uri_str = "/usr/workspace/meemee/serac/repo/build-ruby-toss_4_x86_64_ib-gcc@10.3.1-release"
 input_run_ids_str = "{0},{1}".format(
-    os.path.join(input_db_uri_str, "241207-013256_172562_MrFHk9gvGQ9q.cali"),
-    os.path.join(input_db_uri_str, "241207-013250_172139_sSyXuwBLSRyG.cali"))
-print(input_run_ids_str)
+    os.path.join(input_db_uri_str, "physics-benchmarks-functional-baseline.cali"),
+    os.path.join(input_db_uri_str, "physics-benchmarks-functional-PR.cali"))
 
 db = spotdb.connect(input_db_uri_str)
 runs = input_run_ids_str.split(',')
 
 gfs = hatchet.GraphFrame.from_spotdb(db, runs)
 
-for idx, gf in enumerate(gfs):
-    launchdate = dt.datetime.fromtimestamp(int(gf.metadata["launchdate"]))
-    jobsize = int(gf.metadata.get("jobsize", 1))
-    print("launchdate: {}, jobsize: {}".format(launchdate, jobsize))
-    print(gf.tree())
-    display(HTML(gf.dataframe.to_html()))
+gf_diff = gfs[1] - gfs[0]
+#gf_diff.drop_index_levels()
+
+# print(gf_diff.dataframe)
+# print(gf_diff.tree(rank=0))
+
+print(gf_diff.tree(depth=1))
+
+# for idx, gf in enumerate(gfs):
+#     launchdate = dt.datetime.fromtimestamp(int(gf.metadata["launchdate"]))
+#     jobsize = int(gf.metadata.get("jobsize", 1))
+#     print("launchdate: {}, jobsize: {}".format(launchdate, jobsize))
+#     print(gf.tree())
+#     display(HTML(gf.dataframe.to_html()))
