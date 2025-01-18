@@ -360,6 +360,7 @@ double pressure_error()
   solid.completeSetup();
 
   // Perform the quasi-static solve
+  constexpr double dt = 1.0;
   solid.advanceTimestep(dt);
 
   solid.outputStateToDisk();

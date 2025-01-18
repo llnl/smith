@@ -168,7 +168,7 @@ TEST(J2SmallStrain, Uniaxial)
 
   auto internal_state = Material::State{};
   auto strain = [=](double t) { return sigma_y / E * t; };
-  auto response_history = uniaxial_stress_test(2.0, 4, material, internal_state, strain);
+  auto response_history = uniaxial_stress_test_rate_dependent(2.0, 4, material, internal_state, strain);
 
   auto stress_exact = [=](double epsilon) {
     return epsilon < sigma_y / E ? E * epsilon : E / (E + Hi) * (sigma_y + Hi * epsilon);
@@ -205,7 +205,7 @@ TEST(J2, Uniaxial)
 
   auto internal_state = Material::State{};
   auto strain = [=](double t) { return sigma_y / E * t; };
-  auto response_history = uniaxial_stress_test(2.0, 4, material, internal_state, strain);
+  auto response_history = uniaxial_stress_test_rate_dependent(2.0, 4, material, internal_state, strain);
 
   auto stress_exact = [=](double epsilon) {
     return epsilon < sigma_y / E ? E * epsilon : E / (E + Hi) * (sigma_y + Hi * epsilon);
@@ -368,7 +368,7 @@ TEST(J2, PlotOutput)
 
   auto internal_state   = Material::State{};
   auto strain           = [=](double t) { return max_strain*t/t_max; };
-  auto response_history = uniaxial_stress_test(t_max, 100, material, internal_state, strain);
+  auto response_history = uniaxial_stress_test_rate_dependent(t_max, 100, material, internal_state, strain);
 
   std::ofstream file("J2_" + tag + ".txt");
 
@@ -378,7 +378,7 @@ TEST(J2, PlotOutput)
     double e                 = std::log1p(dudx[0][0]);       // log strain
     double s                 = TK[0][0];                          // Kirchhoff stress
     double pe                = -std::log(get<3>(r).Fpinv[0][0]);  // plastic strain
-    file << t << " " << e << " " << s << std::endl;
+    file << t << " " << e << " " << s << " " << pe << std::endl;
   }
   file.close();
 };

@@ -64,7 +64,6 @@ auto uniaxial_stress_test(double t_max, size_t num_steps, const MaterialType mat
   output_history.reserve(num_steps);
 
   tensor<double, 3, 3> dudx{};
-  const double dt = t_max / double(num_steps - 1);
   for (size_t i = 0; i < num_steps; i++) {
     auto initial_guess = tensor<double, 2>{dudx[1][1], dudx[2][2]};
     auto epsilon_yy_and_zz = find_root(sigma_yy_and_zz, initial_guess);
@@ -72,13 +71,31 @@ auto uniaxial_stress_test(double t_max, size_t num_steps, const MaterialType mat
     dudx[1][1] = epsilon_yy_and_zz[0];
     dudx[2][2] = epsilon_yy_and_zz[1];
 
-    auto stress = material(state, dt, dudx, parameter_functions(t)...);
+    auto stress = material(state, dudx, parameter_functions(t)...);
     output_history.push_back(tuple{t, dudx, stress, state});
 
     t += dt;
   }
 
   return output_history;
+}
+
+/**
+ * @brief Drive a rate-dependent material model thorugh a uniaxial tension experiment
+ *
+ * Drives material model through specified axial displacement gradient history.
+ * The time elaspses from 0 up to t_max.
+ * Currently only implemented for isotropic materials (or orthotropic materials with the
+ * principal axes aligned with the coordinate directions).
+ */
+template <typename MaterialType, typename StateType, typename... parameter_types>
+auto uniaxial_stress_test_rate_dependent(double t_max, size_t num_steps, const MaterialType material, const StateType initial_state,
+                                         std::function<double(double)> epsilon_xx, const parameter_types... parameter_functions)
+{
+  const double dt = t_max / double(num_steps - 1);
+  auto mat_with_dt = [&material, dt](auto& state, auto du_dx, parameter_types... parameters) { return material(state, dt, du_dx, parameters...); };
+  return uniaxial_stress_test(t_max, num_steps, mat_with_dt, initial_state, epsilon_xx, parameter_functions...);
+
 }
 
 /**
