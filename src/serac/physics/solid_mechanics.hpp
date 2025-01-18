@@ -828,7 +828,9 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   template <typename Material>
   struct RateDependentMaterialStressFunctor {
     /// @brief Constructor for the functor
-    RateDependentMaterialStressFunctor(Material material, const double* dt) : material_(material), time_increment_(dt) {}
+    RateDependentMaterialStressFunctor(Material material, const double* dt) : material_(material), time_increment_(dt)
+    {
+    }
 
     /// @brief Material model
     Material material_;
@@ -855,7 +857,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     auto SERAC_HOST_DEVICE operator()(double, X, State& state, Displacement displacement, Acceleration acceleration,
                                       Params... params) const
     {
-      auto du_dX   = get<DERIVATIVE>(displacement);
+      auto du_dX = get<DERIVATIVE>(displacement);
       auto d2u_dt2 = get<VALUE>(acceleration);
 
       auto stress = material_(state, *time_increment_, du_dX, params...);
@@ -864,16 +866,16 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     }
   };
 
-
   /**
    * Set a material that gets dt as an argument
    */
   template <int... active_parameters, typename RateDependentMaterialType, typename StateType = Empty>
-  void setRateDependentMaterial(DependsOn<active_parameters...>, const RateDependentMaterialType& material, Domain& domain,
-                   qdata_type<StateType> qdata = EmptyQData)
+  void setRateDependentMaterial(DependsOn<active_parameters...>, const RateDependentMaterialType& material,
+                                Domain& domain, qdata_type<StateType> qdata = EmptyQData)
   {
-    static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename RateDependentMaterialType::State>,
-                  "invalid quadrature data provided in setMaterial()");
+    static_assert(
+        std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename RateDependentMaterialType::State>,
+        "invalid quadrature data provided in setMaterial()");
     RateDependentMaterialStressFunctor<RateDependentMaterialType> material_functor(material, &dt_);
     residual_->AddDomainIntegral(
         Dimension<dim>{},
@@ -888,7 +890,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// @overload
   template <typename RateDependentMaterialType, typename StateType = Empty>
   void setRateDependentMaterial(const RateDependentMaterialType& material, Domain& domain,
-                   std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
+                                std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
     setRateDependentMaterial(DependsOn<>{}, material, domain, qdata);
   }

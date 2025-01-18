@@ -89,13 +89,15 @@ auto uniaxial_stress_test(double t_max, size_t num_steps, const MaterialType mat
  * principal axes aligned with the coordinate directions).
  */
 template <typename MaterialType, typename StateType, typename... parameter_types>
-auto uniaxial_stress_test_rate_dependent(double t_max, size_t num_steps, const MaterialType material, const StateType initial_state,
-                                         std::function<double(double)> epsilon_xx, const parameter_types... parameter_functions)
+auto uniaxial_stress_test_rate_dependent(double t_max, size_t num_steps, const MaterialType material,
+                                         const StateType initial_state, std::function<double(double)> epsilon_xx,
+                                         const parameter_types... parameter_functions)
 {
   const double dt = t_max / double(num_steps - 1);
-  auto mat_with_dt = [&material, dt](auto& state, auto du_dx, parameter_types... parameters) { return material(state, dt, du_dx, parameters...); };
+  auto mat_with_dt = [&material, dt](auto& state, auto du_dx, parameter_types... parameters) {
+    return material(state, dt, du_dx, parameters...);
+  };
   return uniaxial_stress_test(t_max, num_steps, mat_with_dt, initial_state, epsilon_xx, parameter_functions...);
-
 }
 
 /**

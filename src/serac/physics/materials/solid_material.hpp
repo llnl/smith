@@ -166,7 +166,7 @@ struct NeoHookeanAdditiveSplit {
 template <typename T>
 auto overstress(double viscosity, T accumulated_plastic_strain_rate)
 {
-  return viscosity*accumulated_plastic_strain_rate;
+  return viscosity * accumulated_plastic_strain_rate;
 }
 
 /**
@@ -211,7 +211,8 @@ struct PowerLawHardening {
   auto operator()(T1 accumulated_plastic_strain, T2 accumulated_plastic_strain_rate) const
   {
     using std::pow;
-    return sigma_y * pow(1.0 + accumulated_plastic_strain / eps0, 1.0 / n) + overstress(eta, accumulated_plastic_strain_rate);
+    return sigma_y * pow(1.0 + accumulated_plastic_strain / eps0, 1.0 / n) +
+           overstress(eta, accumulated_plastic_strain_rate);
   };
 };
 
@@ -224,7 +225,7 @@ struct VoceHardening {
   double sigma_y;          ///< yield strength
   double sigma_sat;        ///< saturation value of flow strength
   double strain_constant;  ///< The constant dictating how fast the exponential decays
-  double eta = 0.0;              ///< linear viscosity for rate dependence
+  double eta = 0.0;        ///< linear viscosity for rate dependence
 
   /**
    * @brief Computes the flow stress
@@ -281,7 +282,7 @@ struct J2SmallStrain {
     // (ii) admissibility
     const double eqps_old = state.accumulated_plastic_strain;
     auto residual = [eqps_old, G, dt, *this](auto delta_eqps, auto trial_q) {
-      auto eqps_dot = dt > 0.0? delta_eqps/dt : 0.0*delta_eqps;
+      auto eqps_dot = dt > 0.0 ? delta_eqps / dt : 0.0 * delta_eqps;
       return trial_q - (3.0 * G + Hk) * delta_eqps - this->hardening(eqps_old + delta_eqps, eqps_dot);
     };
     if (residual(0.0, get_value(q)) > tol * hardening.sigma_y) {
@@ -345,7 +346,7 @@ struct J2 {
     // (ii) admissibility
     const double eqps_old = state.accumulated_plastic_strain;
     auto residual = [eqps_old, G, dt, *this](auto delta_eqps, auto trial_mises) {
-      auto eqps_dot = dt > 0.0? delta_eqps/dt : 0.0*delta_eqps;
+      auto eqps_dot = dt > 0.0 ? delta_eqps / dt : 0.0 * delta_eqps;
       return trial_mises - 3.0 * G * delta_eqps - this->hardening(eqps_old + delta_eqps, eqps_dot);
     };
     if (residual(0.0, q_val) > tol * hardening.sigma_y) {
