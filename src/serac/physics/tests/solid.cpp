@@ -196,7 +196,6 @@ void functional_parameterized_solid_test(double expected_disp_norm)
   Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
 
   solid_solver.setFixedBCs(essential_boundary);
-  solid_solver.setDisplacement([](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; });
 
   tensor<double, dim> constant_force;
 

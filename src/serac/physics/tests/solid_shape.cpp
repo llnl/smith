@@ -74,18 +74,6 @@ void shape_test()
 
   double shape_factor = 2.0;
 
-  // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector& x, mfem::Vector& bc_vec) -> void {
-    bc_vec[0] = 0.0;
-    bc_vec[1] = x[0] * 0.1;
-  };
-
-  // Define the function for the initial displacement and boundary condition
-  auto bc_pure = [shape_factor](const mfem::Vector& x, mfem::Vector& bc_vec) -> void {
-    bc_vec[0] = 0.0;
-    bc_vec[1] = (x[0] * 0.1) / (shape_factor + 1.0);
-  };
-
   auto applied_displacement = [](tensor<double, dim> x, double) {
     tensor<double, dim> u{};
     u[1] = x[0] * 0.1;
@@ -130,9 +118,8 @@ void shape_test()
     solid_solver.setDisplacementBCs(applied_displacement, ess_bdr);
 
     // For consistency of the problem, this value should match the one in the BCs
-    // TODO(Brandon): When the setDisplacement is updated to take a serac::tensor valued callable,
-    // pass the same functor here as is used for the BCs.
-    solid_solver.setDisplacement(bc);
+    solid_solver.setDisplacement(
+        [applied_displacement](tensor<double, dim> X) { return applied_displacement(X, 0.0); });
 
     solid_solver.setShapeDisplacement(user_defined_shape_displacement);
 
@@ -182,7 +169,8 @@ void shape_test()
 
     // Set the initial displacement and boundary condition
     solid_solver_no_shape.setDisplacementBCs(applied_displacement_pure, ess_bdr);
-    solid_solver_no_shape.setDisplacement(bc_pure);
+    solid_solver_no_shape.setDisplacement(
+        [applied_displacement_pure](tensor<double, dim> X) { return applied_displacement_pure(X, 0.0); });
 
     Domain whole_mesh = EntireDomain(StateManager::mesh(new_mesh_tag));
 

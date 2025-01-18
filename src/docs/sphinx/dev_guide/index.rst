@@ -24,6 +24,7 @@ Developer Guide
    codevelop
    state_manager
    equation_solver
+   macmini
 
 Developing a New Physics Module
 -------------------------------

@@ -475,7 +475,8 @@ class Thermomechanics : public BasePhysics {
    *
    * @param displacement The function describing the displacement field
    */
-  void setDisplacement(std::function<void(const mfem::Vector& x, mfem::Vector& u)> displacement)
+  template <typename Callable>
+  void setDisplacement(Callable displacement)
   {
     solid_.setDisplacement(displacement);
   }

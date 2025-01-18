@@ -894,30 +894,42 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   }
 
   /**
-   * @brief Set the underlying finite element state to a prescribed displacement
+   * @brief Set the underlying finite element state to a prescribed displacement field
    *
-   * @param disp The function describing the displacement field
+   * @param applied_displacement The displacement field as a callable,
+   *   which must have the signature:
+   *   tensor<double, dim> applied_displacement(tensor<double, dim> X)
+   *
+   *   args:
+   *   X: coordinates of the material point in the reference configuration
+   *
+   *   returns: u, the displacement at X.
    */
-  void setDisplacement(std::function<void(const mfem::Vector& x, mfem::Vector& disp)> disp)
+  template <typename AppliedDisplacementFunction>
+  void setDisplacement(AppliedDisplacementFunction applied_displacement)
   {
-    // Project the coefficient onto the grid function
-    mfem::VectorFunctionCoefficient disp_coef(dim, disp);
-    displacement_.project(disp_coef);
+    displacement_.setFromFieldFunction(applied_displacement);
   }
 
   /// @overload
   void setDisplacement(const FiniteElementState& temp) { displacement_ = temp; }
 
   /**
-   * @brief Set the underlying finite element state to a prescribed velocity
+   * @brief Set the underlying finite element state to a prescribed velocity field
    *
-   * @param vel The function describing the velocity field
+   * @param applied_velocity The velocity field as a callable,
+   *   which must have the signature:
+   *   tensor<double, dim> applied_velocity(tensor<double, dim> X)
+   *
+   *   args:
+   *   X: coordinates of the material point in the reference configuration
+   *
+   *   returns: v, the velocity at X.
    */
-  void setVelocity(std::function<void(const mfem::Vector& x, mfem::Vector& vel)> vel)
+  template <typename AppliedVelocityFunction>
+  void setVelocity(AppliedVelocityFunction applied_velocity)
   {
-    // Project the coefficient onto the grid function
-    mfem::VectorFunctionCoefficient vel_coef(dim, vel);
-    velocity_.project(vel_coef);
+    velocity_.setFromFieldFunction(applied_velocity);
   }
 
   /// @overload

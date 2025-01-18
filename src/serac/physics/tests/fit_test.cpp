@@ -83,9 +83,6 @@ void stress_extrapolation_test()
   auto down = [up](tensor<double, dim> X, double time) { return -up(X, time); };
   solid_solver.setDisplacementBCs(down, bottom_hole);
 
-  auto zero_displacement = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 0.0; };
-  solid_solver.setDisplacement(zero_displacement);
-
   // Finalize the data structures
   solid_solver.completeSetup();
 

@@ -74,8 +74,8 @@ std::set<int> essentialBoundaryAttributes(PatchBoundaryCondition bc)
 
 // clang-format off
 constexpr tensor<double, 3, 3> A_3d{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
-                                 {0.198344644470483, 0.060514559793513, 0.084137393813728},
-                                 {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+                                     {0.198344644470483, 0.060514559793513, 0.084137393813728},
+                                     {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
 
 constexpr tensor<double, 3> b_3d{{0.765645367640828, 0.992487355850465, 0.162199373722092}};
 // clang-format on
@@ -93,7 +93,7 @@ class AffineSolution {
         initial_displacement(make_tensor<dim>([](int i) { return b_3d[i]; })){};
 
   /// exact solution for displacement field
-  tensor<double, dim> eval(tensor<double, dim> X, double t) const
+  tensor<double, dim> displacement(tensor<double, dim> X, double t) const
   {
     return t * dot(disp_grad_rate, X) + initial_displacement;
   }
@@ -107,16 +107,11 @@ class AffineSolution {
   void operator()(const mfem::Vector& X, double t, mfem::Vector& u) const
   {
     auto X_tensor = make_tensor<dim>([&X](int i) { return X[i]; });
-    auto u_tensor = this->eval(X_tensor, t);
+    auto u_tensor = this->displacement(X_tensor, t);
     for (int i = 0; i < dim; ++i) u[i] = u_tensor[i];
   }
 
-  void velocity(const mfem::Vector& X, double /* t */, mfem::Vector& v) const
-  {
-    auto X_tensor = make_tensor<dim>([&X](int i) { return X[i]; });
-    auto v_tensor = disp_grad_rate * X_tensor;
-    for (int i = 0; i < dim; ++i) v[i] = v_tensor[i];
-  }
+  tensor<double, dim> velocity(tensor<double, dim> X, double /* t */) const { return dot(disp_grad_rate, X); }
 
   /**
    * @brief Apply forcing that should produce this exact displacement
@@ -141,7 +136,7 @@ class AffineSolution {
                   Domain /* whole_domain */) const
   {
     // essential BCs
-    auto ebc_func = [*this](tensor<double, dim> X, double t) { return this->eval(X, t); };
+    auto ebc_func = [*this](tensor<double, dim> X, double t) { return this->displacement(X, t); };
     solid.setDisplacementBCs(ebc_func, essential_boundary);
 
     // It's tempting to restrict the traction to the appropriate sub-boundary by defining
@@ -180,7 +175,7 @@ class ConstantAccelerationSolution {
  public:
   ConstantAccelerationSolution() : acceleration(make_tensor<dim>([](int i) { return a_3d[i]; })){};
 
-  tensor<double, dim> eval(tensor<double, dim>, double t) const { return 0.5 * t * t * acceleration; };
+  tensor<double, dim> displacement(tensor<double, dim>, double t) const { return 0.5 * t * t * acceleration; };
 
   /**
    * @brief MFEM-style coefficient function corresponding to this solution
@@ -191,15 +186,11 @@ class ConstantAccelerationSolution {
   void operator()(const mfem::Vector& X, double t, mfem::Vector& u) const
   {
     tensor<double, dim> X_tensor{make_tensor<dim>([&X](int i) { return X[i]; })};
-    tensor<double, dim> u_tensor = eval(X_tensor, t);
+    tensor<double, dim> u_tensor = displacement(X_tensor, t);
     for (int i = 0; i < dim; ++i) u[i] = u_tensor[i];
   }
 
-  void velocity(const mfem::Vector& /* X */, double t, mfem::Vector& v) const
-  {
-    auto v_tensor = acceleration * t;
-    for (int i = 0; i < dim; ++i) v[i] = v_tensor[i];
-  }
+  tensor<double, dim> velocity(tensor<double, dim>, double t) const { return t * acceleration; }
 
   /**
    * @brief Apply forcing that should produce this exact displacement
@@ -224,7 +215,7 @@ class ConstantAccelerationSolution {
                   Domain whole_domain) const
   {
     // essential BCs
-    auto ebc_func = [*this](tensor<double, dim> X, double t) { return this->eval(X, t); };
+    auto ebc_func = [*this](tensor<double, dim> X, double t) { return this->displacement(X, t); };
     solid.setDisplacementBCs(ebc_func, essential_boundary);
 
     // no natural BCs
@@ -311,9 +302,8 @@ double solution_error(solution_type exact_solution, PatchBoundaryCondition bc)
   solid.setMaterial(mat, whole_domain);
 
   // initial conditions
-  solid.setVelocity([exact_solution](const mfem::Vector& x, mfem::Vector& v) { exact_solution.velocity(x, 0.0, v); });
-
-  solid.setDisplacement([exact_solution](const mfem::Vector& x, mfem::Vector& u) { exact_solution(x, 0.0, u); });
+  solid.setVelocity([&exact_solution](tensor<double, dim> X) { return exact_solution.velocity(X, 0.0); });
+  solid.setDisplacement([&exact_solution](tensor<double, dim> X) { return exact_solution.displacement(X, 0.0); });
 
   // forcing terms
   Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));

@@ -87,12 +87,8 @@ void functional_test_static_3D(double expected_norm)
   thermal_solid_solver.setTemperatureBCs(ess_bdr, one);
   thermal_solid_solver.setTemperature(one);
 
-  // Define the function for the disolacement boundary condition
-  auto zeroVector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
-
-  // Set the initial displcament and boundary condition
+  // Set the boundary condition
   thermal_solid_solver.setFixedBCs(displacement_essential_boundary);
-  thermal_solid_solver.setDisplacement(zeroVector);
 
   // Finalize the data structures
   thermal_solid_solver.completeSetup();
@@ -175,12 +171,8 @@ void functional_test_shrinking_3D(double expected_norm)
   thermal_solid_solver.setTemperatureBCs(temp_bdr, one);
   thermal_solid_solver.setTemperature(initial_temperature_field);
 
-  // Define the function for the displacement boundary condition
-  auto zeroVector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
-
   // Set the initial displacement and boundary condition
   thermal_solid_solver.setFixedBCs(constraint_bdr);
-  thermal_solid_solver.setDisplacement(zeroVector);
 
   // Finalize the data structures
   thermal_solid_solver.completeSetup();

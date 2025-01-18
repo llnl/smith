@@ -135,15 +135,10 @@ TEST(LiquidCrystalElastomer, Brighenti)
   solid_solver.setFixedBCs(ymin_face, Component::Y);
   solid_solver.setFixedBCs(zmin_face, Component::Z);
 
-  // set initila displacement different than zero to help solver
-  auto ini_displacement = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 1.0e-5; };
-
   double iniLoadVal = 1.0e0;
   double maxLoadVal = 4 * 1.3e0 / lx / lz;
   double loadVal = iniLoadVal + 0.0 * maxLoadVal;
   solid_solver.setTraction([&loadVal](auto, auto n, auto) { return loadVal * n; }, ymax_face);
-
-  solid_solver.setDisplacement(ini_displacement);
 
   // Finalize the data structures
   solid_solver.completeSetup();

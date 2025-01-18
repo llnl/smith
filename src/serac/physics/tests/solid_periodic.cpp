@@ -85,9 +85,9 @@ void periodic_test(mfem::Element::Type element_type)
   Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
   solid_solver.setFixedBCs(support);
 
-  double iniDispVal = 5.0e-6;
-  auto ini_displacement = [iniDispVal](const mfem::Vector&, mfem::Vector& u) -> void { u = iniDispVal; };
-  solid_solver.setDisplacement(ini_displacement);
+  constexpr double iniDispVal = 5.0e-6;
+  auto initial_displacement = [](tensor<double, dim>) { return make_tensor<dim>([](int) { return iniDispVal; }); };
+  solid_solver.setDisplacement(initial_displacement);
 
   tensor<double, dim> constant_force{};
   constant_force[1] = 1.0e-2;

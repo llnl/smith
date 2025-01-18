@@ -134,10 +134,6 @@ TEST(Thermomechanics, ParameterizedMaterial)
   simulation.setFixedBCs(y_equals_0, Component::Y);
   simulation.setFixedBCs(z_equals_0, Component::Z);
 
-  // set up initial conditions
-  auto zero_vector = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 0.0; };
-  simulation.setDisplacement(zero_vector);
-
   // Finalize the data structures
   simulation.completeSetup();
 

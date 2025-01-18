@@ -77,9 +77,6 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   Domain whole_mesh = EntireDomain(pmesh);
   solid_solver.setMaterial(DependsOn<0, 1>{}, mat, whole_mesh);
 
-  // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
-
   // Define a boundary attribute set and specify initial / boundary conditions
   Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
   solid_solver.setFixedBCs(essential_boundary);
@@ -128,10 +125,11 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   // to check if computed qoi sensitivity is consistent
   // with finite difference on the displacement
   double eps = 1.0e-5;
+  FiniteElementState zero_state(pmesh, H1<p, dim>{}, "zero");
   for (int i = 0; i < user_defined_bulk_modulus.gridFunction().Size(); ++i) {
     // Perturb the bulk modulus
     user_defined_bulk_modulus(i) = bulk_modulus_value + eps;
-    solid_solver.setDisplacement(bc);
+    solid_solver.setDisplacement(zero_state);
 
     solid_solver.setParameter(0, user_defined_bulk_modulus);
 
@@ -140,7 +138,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
     user_defined_bulk_modulus(i) = bulk_modulus_value - eps;
 
-    solid_solver.setDisplacement(bc);
+    solid_solver.setDisplacement(zero_state);
 
     solid_solver.setParameter(0, user_defined_bulk_modulus);
     solid_solver.advanceTimestep(1.0);
@@ -230,12 +228,8 @@ void finite_difference_shape_test(LoadingType load)
   shape_displacement = shape_displacement_value;
   solid_solver.setShapeDisplacement(shape_displacement);
 
-  // Define the function for the initial displacement and boundary condition
-  auto mfem_vector_zero = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
-
   // Set the initial displacement and boundary condition
   solid_solver.setFixedBCs(essential_boundary);
-  solid_solver.setDisplacement(mfem_vector_zero);
 
   Domain top_face = Domain::ofBoundaryElements(pmesh, [](std::vector<vec2> vertices, int /*attr*/) {
     return average(vertices)[1] > 0.99;  // select faces by y-coordinate

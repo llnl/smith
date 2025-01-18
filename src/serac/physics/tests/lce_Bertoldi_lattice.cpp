@@ -124,9 +124,9 @@ TEST(LiquidCrystalElastomer, Bertoldi)
   auto support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
   solid_solver.setFixedBCs(support);
 
-  double iniDispVal = 5.0e-6;
-  auto ini_displacement = [iniDispVal](const mfem::Vector&, mfem::Vector& u) -> void { u = iniDispVal; };
-  solid_solver.setDisplacement(ini_displacement);
+  constexpr double iniDispVal = 5.0e-6;
+  auto initial_displacement = [lx](vec3 X) { return vec3{0.0, (X[0] / lx) * iniDispVal, 0.0}; };
+  solid_solver.setDisplacement(initial_displacement);
 
   // Finalize the data structures
   solid_solver.completeSetup();

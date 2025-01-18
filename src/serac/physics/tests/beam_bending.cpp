@@ -76,9 +76,6 @@ TEST(BeamBending, TwoDimensional)
   Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
   solid_solver.setFixedBCs(support);
 
-  // initial displacement
-  solid_solver.setDisplacement([](const mfem::Vector&, mfem::Vector& bc_vec) { bc_vec = 0.0; });
-
   Domain top_face = Domain::ofBoundaryElements(
       pmesh, [](std::vector<vec2> vertices, int /*attr*/) { return (average(vertices)[1] > 0.99); });
 

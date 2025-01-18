@@ -89,9 +89,6 @@ void functional_solid_test_robin_condition()
       },
       support);
 
-  auto zero_displacement = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 0.0; };
-  solid_solver.setDisplacement(zero_displacement);
-
   // Finalize the data structures
   solid_solver.completeSetup();
 
