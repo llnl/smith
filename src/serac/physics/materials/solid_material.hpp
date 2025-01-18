@@ -163,6 +163,9 @@ struct NeoHookeanAdditiveSplit {
   double G;        ///< shear modulus
 };
 
+/**
+ * Overstress for linear viscosity
+ */
 template <typename T>
 auto overstress(double viscosity, T accumulated_plastic_strain_rate)
 {
@@ -175,7 +178,7 @@ auto overstress(double viscosity, T accumulated_plastic_strain_rate)
 struct LinearHardening {
   double sigma_y;  ///< yield strength
   double Hi;       ///< Isotropic hardening modulus
-  double eta;
+  double eta;      ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
@@ -198,7 +201,7 @@ struct PowerLawHardening {
   double sigma_y;  ///< yield strength
   double n;        ///< hardening index in reciprocal form
   double eps0;     ///< reference value of accumulated plastic strain
-  double eta = 0.0;
+  double eta = 0.0; ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
@@ -225,13 +228,15 @@ struct VoceHardening {
   double sigma_y;          ///< yield strength
   double sigma_sat;        ///< saturation value of flow strength
   double strain_constant;  ///< The constant dictating how fast the exponential decays
-  double eta = 0.0;        ///< linear viscosity for rate dependence
+  double eta = 0.0;        ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
    *
-   * @tparam T Number-like type for the argument
-   * @param accumulated_plastic_strain The uniaxial equivalent accumulated plastic strain
+   * @tparam T1 Number-like type
+   * @tparam T2 Number-like type
+   * @param epsilon_p The uniaxial equivalent accumulated plastic strain
+   * @param epsilon_p_dot The rate of the uniaxial equivalent accumulated plastic strain
    * @return Flow stress value
    */
   template <typename T1, typename T2>
