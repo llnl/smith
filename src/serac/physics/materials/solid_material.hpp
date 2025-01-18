@@ -183,8 +183,10 @@ struct LinearHardening {
   /**
    * @brief Computes the flow stress
    *
-   * @tparam T Number-like type for the argument
+   * @tparam T1 Number-like type
+   * @tparam T2 Number-like type
    * @param accumulated_plastic_strain The uniaxial equivalent accumulated plastic strain
+   * @param accumulated_plastic_strain_rate The rate of the uniaxial equivalent accumulated plastic strain
    * @return Flow stress value
    */
   template <typename T1, typename T2>
@@ -206,8 +208,10 @@ struct PowerLawHardening {
   /**
    * @brief Computes the flow stress
    *
-   * @tparam T Number-like type for the argument
+   * @tparam T1 Number-like type
+   * @tparam T2 Number-like type
    * @param accumulated_plastic_strain The uniaxial equivalent accumulated plastic strain
+   * @param accumulated_plastic_strain_rate The rate of the uniaxial equivalent accumulated plastic strain
    * @return Flow stress value
    */
   template <typename T1, typename T2>
@@ -235,15 +239,17 @@ struct VoceHardening {
    *
    * @tparam T1 Number-like type
    * @tparam T2 Number-like type
-   * @param epsilon_p The uniaxial equivalent accumulated plastic strain
-   * @param epsilon_p_dot The rate of the uniaxial equivalent accumulated plastic strain
+   * @param accumulated_plastic_strain The uniaxial equivalent accumulated plastic strain
+   * @param accumulated_plastic_strain_rate The rate of the uniaxial equivalent accumulated plastic strain
    * @return Flow stress value
    */
   template <typename T1, typename T2>
-  auto operator()(T1 epsilon_p, T2 epsilon_p_dot) const
+  auto operator()(T1 accumulated_plastic_strain, T2 accumulated_plastic_strain_rate) const
   {
     using std::exp;
+    auto& epsilon_p = accumulated_plastic_strain;
     auto Y_eq = sigma_sat - (sigma_sat - sigma_y) * exp(-epsilon_p / strain_constant);
+    auto& epsilon_p_dot = accumulated_plastic_strain_rate;
     auto Y_vis = overstress(eta, epsilon_p_dot);
     return Y_eq + Y_vis;
   };
