@@ -820,7 +820,10 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   }
 
   /**
-   * Functor for materials that get dt as an argument 
+   * Functor for materials that get dt as an argument
+   *
+   * Wraps materials that have the signature
+   * stress = material(state, dt, du_dX, params...)
    */
   template <typename Material>
   struct RateDependentMaterialStressFunctor {
