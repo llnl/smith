@@ -340,49 +340,6 @@ TEST(J2, FrameIndifference)
   ASSERT_LT(norm(error), 1e-13*norm(internal_state.Fpinv));
 }
 
-TEST(J2, PlotOutput)
-{
-  /* Log strain J2 plasticity has the nice feature that the exact uniaxial stress solution from
-     small strain plasticity are applicable, if you replace the lineasr strain with log strain
-     and use the Kirchhoff stress as the output.
-  */
-
-  using Hardening = solid_mechanics::VoceHardening;
-  using Material  = solid_mechanics::J2<Hardening>;
-
-  constexpr double E       = 1.0;
-  constexpr double sigma_y = 0.001;
-  constexpr double sigma_sat = 3*sigma_y;
-  constexpr double strain_constant = 10*sigma_y/E;
-  constexpr double eta = 1e-2;
-
-  constexpr double max_strain = 3*strain_constant;
-  constexpr double strain_rate = 1e-1;
-  const std::string tag = "m1";
-  constexpr double t_max = max_strain/strain_rate;
-  
-
-
-  Hardening hardening{sigma_y, sigma_sat, strain_constant, eta};
-  Material  material{.E = E, .nu = 0.25, .hardening = hardening, .density = 1.0};
-
-  auto internal_state   = Material::State{};
-  auto strain           = [=](double t) { return max_strain*t/t_max; };
-  auto response_history = uniaxial_stress_test_rate_dependent(t_max, 100, material, internal_state, strain);
-
-  std::ofstream file("J2_" + tag + ".txt");
-
-  for (auto r : response_history) {
-    auto [t, dudx, P, state] = r;
-    auto   TK                = dot(P, transpose(dudx + Identity<3>()));
-    double e                 = std::log1p(dudx[0][0]);       // log strain
-    double s                 = TK[0][0];                          // Kirchhoff stress
-    double pe                = -std::log(get<3>(r).Fpinv[0][0]);  // plastic strain
-    file << t << " " << e << " " << s << " " << pe << std::endl;
-  }
-  file.close();
-};
-
 }  // namespace serac
 
 int main(int argc, char* argv[])
