@@ -54,12 +54,12 @@ TEST_P(ContactTest, beam)
                                            .absolute_tol   = 1.0e-12,
                                            .max_iterations = 200,
                                            .print_level    = 1};
-// #ifdef SERAC_USE_SUNDIALS
-//   // KINFullStep is preferred, but has issues when active set is enabled
-//   if (std::get<1>(GetParam()) == ContactType::TiedNormal) {
-//     nonlinear_options.nonlin_solver = NonlinearSolver::KINFullStep;
-//   }
-// #endif
+  // #ifdef SERAC_USE_SUNDIALS
+  //   // KINFullStep is preferred, but has issues when active set is enabled
+  //   if (std::get<1>(GetParam()) == ContactType::TiedNormal) {
+  //     nonlinear_options.nonlin_solver = NonlinearSolver::KINFullStep;
+  //   }
+  // #endif
 
   ContactOptions contact_options{.method      = ContactMethod::SingleMortar,
                                  .enforcement = std::get<0>(GetParam()),
@@ -124,8 +124,8 @@ INSTANTIATE_TEST_SUITE_P(
                                     ContactJacobian::Approximate, "lagrange_multiplier_frictionless_Japprox"),
                     std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Exact,
                                     "penalty_tiednormal_Jexact"),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-                                    ContactJacobian::Exact, "penalty_frictionless_Jexact"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless, ContactJacobian::Exact,
+                                    "penalty_frictionless_Jexact"),
                     std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::TiedNormal,
                                     ContactJacobian::Exact, "lagrange_multiplier_tiednormal_Jexact"),
                     std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::Frictionless,
