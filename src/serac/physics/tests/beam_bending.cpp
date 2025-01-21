@@ -16,6 +16,7 @@
 #include "mfem.hpp"
 
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
@@ -24,7 +25,7 @@ namespace serac {
 
 TEST(BeamBending, TwoDimensional)
 {
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -40,47 +41,45 @@ TEST(BeamBending, TwoDimensional)
 
   std::string mesh_tag{"mesh"};
 
-  serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  serac::LinearSolverOptions linear_options{.linear_solver  = LinearSolver::GMRES,
+  serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::GMRES,
                                             .preconditioner = Preconditioner::HypreAMG,
-                                            .relative_tol   = 1.0e-6,
-                                            .absolute_tol   = 1.0e-14,
+                                            .relative_tol = 1.0e-6,
+                                            .absolute_tol = 1.0e-14,
                                             .max_iterations = 500,
-                                            .print_level    = 1};
+                                            .print_level = 1};
 
 #ifdef SERAC_USE_SUNDIALS
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::KINFullStep,
-                                                  .relative_tol   = 1.0e-12,
-                                                  .absolute_tol   = 1.0e-12,
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::KINFullStep,
+                                                  .relative_tol = 1.0e-12,
+                                                  .absolute_tol = 1.0e-12,
                                                   .max_iterations = 5000,
-                                                  .print_level    = 1};
+                                                  .print_level = 1};
 #else
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
-                                                  .relative_tol   = 1.0e-12,
-                                                  .absolute_tol   = 1.0e-12,
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-12,
+                                                  .absolute_tol = 1.0e-12,
                                                   .max_iterations = 5000,
-                                                  .print_level    = 1};
+                                                  .print_level = 1};
 #endif
 
   SolidMechanics<p, dim> solid_solver(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                       "solid_mechanics", mesh_tag);
 
-  double                             K = 1.91666666666667;
-  double                             G = 1.0;
+  double K = 1.91666666666667;
+  double G = 1.0;
   solid_mechanics::StVenantKirchhoff mat{1.0, K, G};
-  solid_solver.setMaterial(mat);
+  Domain material_block = EntireDomain(pmesh);
+  solid_solver.setMaterial(mat, material_block);
 
-  // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
+  Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  solid_solver.setFixedBCs(support);
 
-  // Define a boundary attribute set and specify initial / boundary conditions
-  std::set<int> ess_bdr = {1};
-  solid_solver.setDisplacementBCs(ess_bdr, bc);
-  solid_solver.setDisplacement(bc);
+  Domain top_face = Domain::ofBoundaryElements(
+      pmesh, [](std::vector<vec2> vertices, int /*attr*/) { return (average(vertices)[1] > 0.99); });
 
-  solid_solver.setTraction([](const auto& x, const auto& n, const double) { return -0.01 * n * (x[1] > 0.99); },
-                           EntireBoundary(StateManager::mesh(mesh_tag)));
+  solid_solver.setTraction([](auto /*x*/, auto n, auto /*t*/) { return -0.01 * n; }, top_face);
 
   // Finalize the data structures
   solid_solver.completeSetup();

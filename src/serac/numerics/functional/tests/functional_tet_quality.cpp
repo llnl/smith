@@ -45,9 +45,11 @@ TEST(QoI, TetrahedronQuality)
   using shape_space = H1<1, dim>;
 
   std::string meshfile3D = SERAC_REPO_DIR "/data/meshes/onetet.mesh";
-  auto        mesh       = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), 0, 0);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), 0, 0);
 
   auto [fes, fec] = generateParFiniteElementSpace<shape_space>(mesh.get());
+
+  Domain whole_domain = EntireDomain(*mesh);
 
   // Define the shape-aware QOI objects
   serac::ShapeAwareFunctional<shape_space, double()> saf_qoi(fes.get(), {});
@@ -60,7 +62,7 @@ TEST(QoI, TetrahedronQuality)
         auto [x, dx_dxi] = position;
         return mu(dot(regular_tet_correction, dx_dxi));
       },
-      *mesh);
+      whole_domain);
 
   serac::Functional<double(shape_space)> qoi({fes.get()});
 
@@ -68,7 +70,7 @@ TEST(QoI, TetrahedronQuality)
       serac::Dimension<3>{}, serac::DependsOn<0>{},
       [=](double /*t*/, auto position, auto displacement) {
         auto [X, dX_dxi] = position;  // <--- the position derivative term is w.r.t. xi, not X!
-        auto [u, du_dX]  = displacement;
+        auto [u, du_dX] = displacement;
 
         // x := X + u,
         // so, dx/dxi = dX/dxi + du/dxi
@@ -78,7 +80,7 @@ TEST(QoI, TetrahedronQuality)
         auto dx_dxi = dX_dxi + dot(du_dX, dX_dxi);
         return mu(dot(regular_tet_correction, dx_dxi));
       },
-      *mesh);
+      whole_domain);
 
   std::unique_ptr<mfem::HypreParVector> u(fes->NewTrueDofVector());
   *u = 0.0;

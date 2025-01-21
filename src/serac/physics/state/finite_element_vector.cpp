@@ -18,10 +18,10 @@ namespace serac {
  */
 bool sameFiniteElementSpace(const mfem::FiniteElementSpace& left, const mfem::FiniteElementSpace& right)
 {
-  bool sameMesh            = (left.GetMesh() == right.GetMesh());
-  bool equivalentFEColl    = strcmp(left.FEColl()->Name(), right.FEColl()->Name()) == 0;
+  bool sameMesh = (left.GetMesh() == right.GetMesh());
+  bool equivalentFEColl = strcmp(left.FEColl()->Name(), right.FEColl()->Name()) == 0;
   bool sameVectorDimension = (left.GetVDim() == right.GetVDim());
-  bool sameOrdering        = (left.GetOrdering() == right.GetOrdering());
+  bool sameOrdering = (left.GetOrdering() == right.GetOrdering());
   return sameMesh && equivalentFEColl && sameVectorDimension && sameOrdering;
 }
 
@@ -88,10 +88,10 @@ FiniteElementVector& FiniteElementVector::operator=(const FiniteElementVector& r
 
 FiniteElementVector& FiniteElementVector::operator=(FiniteElementVector&& rhs)
 {
-  mesh_  = rhs.mesh_;
-  coll_  = std::move(rhs.coll_);
+  mesh_ = rhs.mesh_;
+  coll_ = std::move(rhs.coll_);
   space_ = std::move(rhs.space_);
-  name_  = rhs.name_;
+  name_ = rhs.name_;
 
   auto* parallel_vec = rhs.StealParVector();
   WrapHypreParVector(parallel_vec);
@@ -109,8 +109,8 @@ double avg(const FiniteElementVector& fe_vector)
 {
   double global_sum;
   double local_sum = fe_vector.Sum();
-  int    global_size;
-  int    local_size = fe_vector.Size();
+  int global_size;
+  int local_size = fe_vector.Size();
   MPI_Allreduce(&local_sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, fe_vector.comm());
   MPI_Allreduce(&local_size, &global_size, 1, MPI_INT, MPI_SUM, fe_vector.comm());
   return global_sum / global_size;

@@ -13,12 +13,12 @@
 using namespace serac;
 
 static constexpr double tolerance = 4.0e-16;
-static constexpr auto   I         = Identity<3>();
+static constexpr auto I = Identity<3>();
 
 template <typename T, int n>
 tensor<T, n, n> composeMatrixFromLU(const tensor<int, n>& P, const tensor<T, n, n>& L, const tensor<T, n, n>& U)
 {
-  auto            LU = dot(L, U);
+  auto LU = dot(L, U);
   tensor<T, n, n> PLU{};
   for (int i = 0; i < n; i++) {
     PLU[P[i]] = LU[i];
@@ -67,39 +67,39 @@ TEST(Tensor, BasicOperations)
 
 TEST(Tensor, DeterminantPrecision2x2Diagonal)
 {
-  double               eps = 1e-8;
-  tensor<double, 2, 2> A   = diag(tensor<double, 2>{eps, eps});
+  double eps = 1e-8;
+  tensor<double, 2, 2> A = diag(tensor<double, 2>{eps, eps});
 
   // compute det(A + I) - 1
   double exact = eps * eps + 2 * eps;
 
   // naive approach reduces precision
   double Jm1_naive = det(A + Identity<2>()) - 1;
-  double error     = (Jm1_naive - exact) / exact;
+  double error = (Jm1_naive - exact) / exact;
   EXPECT_GT(abs(error), 1e-9);
 
   // detApIm1 retains more significant digits
   double good = detApIm1(A);
-  error       = (good - exact) / exact;
+  error = (good - exact) / exact;
   EXPECT_LT(abs(error), 1e-14);
 }
 
 TEST(Tensor, DeterminantPrecision3x3Diagonal)
 {
-  double               eps = 1e-8;
-  tensor<double, 3, 3> A   = diag(tensor<double, 3>{eps, eps, eps});
+  double eps = 1e-8;
+  tensor<double, 3, 3> A = diag(tensor<double, 3>{eps, eps, eps});
 
   // compute det(A + I) - 1
   double exact = eps * eps * eps + 3 * eps * eps + 3 * eps;
 
   // naive approach reduces precision
   double Jm1_naive = det(A + Identity<3>()) - 1;
-  double error     = (Jm1_naive - exact) / exact;
+  double error = (Jm1_naive - exact) / exact;
   EXPECT_GT(abs(error), 1e-9);
 
   // detApIm1 retains more significant digits
   double good = detApIm1(A);
-  error       = (good - exact) / exact;
+  error = (good - exact) / exact;
   EXPECT_LT(abs(error), 1e-14);
 }
 
@@ -147,8 +147,8 @@ TEST(Tensor, Elasticity)
   static auto abs = [](auto x) { return (x < 0) ? -x : x; };
 
   double lambda = 5.0;
-  double mu     = 3.0;
-  tensor C      = make_tensor<3, 3, 3, 3>([&](int i, int j, int k, int l) {
+  double mu = 3.0;
+  tensor C = make_tensor<3, 3, 3, 3>([&](int i, int j, int k, int l) {
     return lambda * (i == j) * (k == l) + mu * ((i == k) * (j == l) + (i == l) * (j == k));
   });
 
@@ -169,9 +169,9 @@ TEST(Tensor, NavierStokes)
 {
   static auto abs = [](auto x) { return (x < 0) ? -x : x; };
 
-  static constexpr double rho   = 3.0;
-  static constexpr double mu    = 2.0;
-  auto                    sigma = [&](auto p, auto v, auto L) { return rho * outer(v, v) + 2.0 * mu * sym(L) - p * I; };
+  static constexpr double rho = 3.0;
+  static constexpr double mu = 2.0;
+  auto sigma = [&](auto p, auto v, auto L) { return rho * outer(v, v) + 2.0 * mu * sym(L) - p * I; };
 
   auto dsigma_dp = [&](auto /*p*/, auto /*v*/, auto /*L*/) { return -1.0 * I; };
 
@@ -184,25 +184,25 @@ TEST(Tensor, NavierStokes)
         [&](int i, int j, int k, int l) { return mu * ((i == k) * (j == l) + (i == l) * (j == k)); });
   };
 
-  double               p = 3.14;
-  tensor               v = {{1.0, 2.0, 3.0}};
+  double p = 3.14;
+  tensor v = {{1.0, 2.0, 3.0}};
   tensor<double, 3, 3> L = {{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}}};
 
   {
     auto exact = dsigma_dp(p, v, L);
-    auto ad    = get_gradient(sigma(make_dual(p), v, L));
+    auto ad = get_gradient(sigma(make_dual(p), v, L));
     EXPECT_LT(abs(squared_norm(exact - ad)), tolerance);
   }
 
   {
     auto exact = dsigma_dv(p, v, L);
-    auto ad    = get_gradient(sigma(p, make_dual(v), L));
+    auto ad = get_gradient(sigma(p, make_dual(v), L));
     EXPECT_LT(abs(squared_norm(exact - ad)), tolerance);
   }
 
   {
     auto exact = dsigma_dL(p, v, L);
-    auto ad    = get_gradient(sigma(p, v, make_dual(L)));
+    auto ad = get_gradient(sigma(p, v, make_dual(L)));
     EXPECT_LT(abs(squared_norm(exact - ad)), tolerance);
   }
 }
@@ -210,7 +210,7 @@ TEST(Tensor, NavierStokes)
 TEST(Tensor, IsotropicOperations)
 {
   double lambda = 5.0;
-  double mu     = 3.0;
+  double mu = 3.0;
 
   tensor<double, 3> u = {1, 2, 3};
 
@@ -274,14 +274,14 @@ TEST(tensor, matrix_sqrt)
 TEST(Tensor, Inverse4x4)
 {
   const tensor<double, 4, 4> A{{{2, 1, -1, 1}, {-3, -1, 2, 8}, {-2, 4, 2, 6}, {1, 1, 7, 2}}};
-  auto                       invA = inv(A);
+  auto invA = inv(A);
   EXPECT_LT(squared_norm(dot(A, invA) - Identity<4>()), tolerance);
 }
 
 TEST(Tensor, DerivativeOfInverse)
 {
   const tensor<double, 4, 4> A{{{2, 1, -1, 1}, {-3, -1, 2, 8}, {-2, 4, 2, 6}, {1, 1, 7, 2}}};
-  auto                       invA = inv(make_dual(A));
+  auto invA = inv(make_dual(A));
   EXPECT_LT(squared_norm(dot(A, get_value(invA)) - Identity<4>()), tolerance);
 }
 
@@ -299,7 +299,7 @@ void checkLUDecomposition(const tensor<double, n, n>& A)
   }
 
   // check L and U are indeed factors of A
-  auto                 LU = dot(L, U);
+  auto LU = dot(L, U);
   tensor<double, n, n> PLU{};
   for (int i = 0; i < n; i++) {
     PLU[P[i]] = LU[i];
@@ -334,12 +334,12 @@ TEST(Tensor, LuDecompositionWorksOnDualNumbers)
   tensor<dual<double>, 3, 3> A{};
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      A[i][j].value    = v[i][j];
+      A[i][j].value = v[i][j];
       A[i][j].gradient = g[i][j];
     }
   }
   auto [P, L, U] = factorize_lu(A);
-  auto PLU       = composeMatrixFromLU(P, L, U);
+  auto PLU = composeMatrixFromLU(P, L, U);
 
   EXPECT_LT(squared_norm(get_value(A) - get_value(PLU)), tolerance);
   EXPECT_LT(squared_norm(get_gradient(A) - get_gradient(PLU)), tolerance);
@@ -348,7 +348,7 @@ TEST(Tensor, LuDecompositionWorksOnDualNumbers)
 TEST(Tensor, LinearSolveWithOneRhs)
 {
   const tensor<double, 3, 3> A{{{2, 1, -1}, {-3, -1, 2}, {-2, 1, 2}}};
-  const tensor<double, 3>    b{{-1, 2, 3}};
+  const tensor<double, 3> b{{-1, 2, 3}};
 
   auto x = linear_solve(A, b);
   EXPECT_LT(squared_norm(dot(A, x) - b), tolerance);
@@ -366,8 +366,8 @@ TEST(Tensor, LinearSolveWithMultipleRhs)
 TEST(Tensor, LinearSolveIsConstexprCorrect)
 {
   constexpr tensor<double, 3, 3> A{{{2, 1, -1}, {-3, -1, 2}, {-2, 1, 2}}};
-  constexpr tensor<double, 3>    b{{-1, 2, 3}};
-  constexpr auto                 x = linear_solve(A, b);
+  constexpr tensor<double, 3> b{{-1, 2, 3}};
+  constexpr auto x = linear_solve(A, b);
   EXPECT_LT(squared_norm(dot(A, x) - b), tolerance);
 }
 
@@ -380,12 +380,12 @@ TEST(Tensor, DerivativeOfLinearSolve)
   // t = 1 --> dxdt = -x
 
   const tensor<double, 3, 3> A{{{2, 1, -1}, {-3, -1, 2}, {-2, 1, 2}}};
-  const tensor<double, 3>    b{{-1, 2, 3}};
+  const tensor<double, 3> b{{-1, 2, 3}};
 
   auto f = [&A, &b](dual<double> t) { return linear_solve(t * t * A, t * b); };
 
   double t = 1.0;
-  auto   x = f(make_dual(t));
+  auto x = f(make_dual(t));
 
   // expect x_dot = -x
   EXPECT_LT(squared_norm(get_value(x) + get_gradient(x)), tolerance);
@@ -394,15 +394,15 @@ TEST(Tensor, DerivativeOfLinearSolve)
 TEST(Tensor, DerivativeOfLinearSolveWrtBMatchesFiniteDifference)
 {
   const tensor<double, 3, 3> A{{{2, 1, -1}, {-3, -1, 2}, {-2, 1, 2}}};
-  tensor<double, 3>          b_value{{-1, 2, 3}};
-  const tensor<double, 3>    b_gradient{{0.337494265892494, 0.194238454581911, 0.307832573181341}};
-  auto                       b = make_dual(b_value, b_gradient);
+  tensor<double, 3> b_value{{-1, 2, 3}};
+  const tensor<double, 3> b_gradient{{0.337494265892494, 0.194238454581911, 0.307832573181341}};
+  auto b = make_dual(b_value, b_gradient);
 
   auto x_value = linear_solve(A, b_value);
 
   // first order forward difference
-  const double h     = 1e-6;
-  auto         dx_FD = (linear_solve(A, b_value + h * b_gradient) - x_value) / h;
+  const double h = 1e-6;
+  auto dx_FD = (linear_solve(A, b_value + h * b_gradient) - x_value) / h;
 
   auto x = linear_solve(A, b);
 
@@ -418,15 +418,15 @@ TEST(Tensor, DerivativeOfLinearSolveWrtAMatchesFiniteDifference)
   tensor<dual<double>, 3, 3> A{};
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      A[i][j].value    = v[i][j];
+      A[i][j].value = v[i][j];
       A[i][j].gradient = g[i][j];
     }
   }
   const tensor<double, 3> b{{-1, 2, 3}};
 
   // central difference (2nd order accurate)
-  const double h     = 1e-6;
-  auto         dx_FD = (linear_solve(v + h * g, b) - linear_solve(v - h * g, b)) / (2 * h);
+  const double h = 1e-6;
+  auto dx_FD = (linear_solve(v + h * g, b) - linear_solve(v - h * g, b)) / (2 * h);
 
   auto x = linear_solve(A, b);
 
@@ -436,12 +436,12 @@ TEST(Tensor, DerivativeOfLinearSolveWrtAMatchesFiniteDifference)
 TEST(Tensor, argsort)
 {
   tensor v{{1.0, 3.0, 0.0}};
-  auto   sorted = argsort(v);
+  auto sorted = argsort(v);
   ASSERT_EQ(sorted[0], 2);
   ASSERT_EQ(sorted[1], 0);
   ASSERT_EQ(sorted[2], 1);
 
-  v      = {3.0, 1.0, 0.0};
+  v = {3.0, 1.0, 0.0};
   sorted = argsort(v);
   ASSERT_EQ(sorted[0], 2);
   ASSERT_EQ(sorted[1], 1);
@@ -450,8 +450,8 @@ TEST(Tensor, argsort)
 
 TEST(Tensor, EigendecompOfTriplyDegenerate)
 {
-  const double lambda     = 2.5;
-  const auto   A          = lambda * DenseIdentity<3>();
+  const double lambda = 2.5;
+  const auto A = lambda * DenseIdentity<3>();
   auto [eigvals, eigvecs] = eig_symm(A);
   for (int i = 0; i < 3; i++) {
     EXPECT_NEAR(eigvals[i], lambda, 1e-12);
@@ -506,7 +506,7 @@ TEST(Tensor, EigendecompWith2NearlyDegenerateEigenvalues)
 
 TEST(Tensor, LogOfSpherical)
 {
-  auto A    = M_E * DenseIdentity<3>();
+  auto A = M_E * DenseIdentity<3>();
   auto logA = log_symm(A);
   ASSERT_LT(norm(logA - DenseIdentity<3>()), 1e-12);
 }
@@ -516,8 +516,8 @@ TEST(Tensor, LogOfGeneralSymmetric)
   // Tests using a property of logarithm of symmetric matrices:
   // if A and B are spd matrices that commute, then log(AB) = log(A) + log(B)
 
-  const tensor               lambda_A{{1.1, 2.6, 2.2}};
-  const tensor               lambda_B{{0.8, 1.3, 1.3}};
+  const tensor lambda_A{{1.1, 2.6, 2.2}};
+  const tensor lambda_B{{0.8, 1.3, 1.3}};
   const tensor<double, 3, 3> Q{{{-0.928152308749236, -0.091036503308254, -0.360895617636},
                                 {0.238177386319198, 0.599832274220295, -0.763853896664712},
                                 {0.28601542687348, -0.794929932679048, -0.535052873762272}}};
@@ -532,13 +532,13 @@ TEST(Tensor, LogOfGeneralSymmetric)
 
 TEST(Tensor, LogDerivative)
 {
-  const tensor               lambda{{1.1, 2.6, 2.2}};
+  const tensor lambda{{1.1, 2.6, 2.2}};
   const tensor<double, 3, 3> Q{{{-0.928152308749236, -0.091036503308254, -0.360895617636},
                                 {0.238177386319198, 0.599832274220295, -0.763853896664712},
                                 {0.28601542687348, -0.794929932679048, -0.535052873762272}}};
-  auto                       A = dot(Q, dot(diag(lambda), transpose(Q)));
+  auto A = dot(Q, dot(diag(lambda), transpose(Q)));
 
-  auto logA     = log_symm(make_dual(A));
+  auto logA = log_symm(make_dual(A));
   auto dlogA_dA = get_gradient(logA);
 
   // perturbation should be symmetric, or else violates requirement of log_symm
@@ -558,11 +558,11 @@ TEST(Tensor, LogDerivative)
 
 TEST(Tensor, ExponentialTraceIdentity)
 {
-  const tensor               lambda{{1.1, 2.6, 2.2}};
+  const tensor lambda{{1.1, 2.6, 2.2}};
   const tensor<double, 3, 3> Q{{{-0.928152308749236, -0.091036503308254, -0.360895617636},
                                 {0.238177386319198, 0.599832274220295, -0.763853896664712},
                                 {0.28601542687348, -0.794929932679048, -0.535052873762272}}};
-  auto                       A = dot(Q, dot(diag(lambda), transpose(Q)));
+  auto A = dot(Q, dot(diag(lambda), transpose(Q)));
 
   auto expA = exp_symm(A);
   EXPECT_NEAR(det(expA), std::exp(tr(A)), 1e-12);
@@ -570,13 +570,13 @@ TEST(Tensor, ExponentialTraceIdentity)
 
 TEST(Tensor, ExpDerivative)
 {
-  const tensor               lambda{{1.1, 2.6, 2.2}};
+  const tensor lambda{{1.1, 2.6, 2.2}};
   const tensor<double, 3, 3> Q{{{-0.928152308749236, -0.091036503308254, -0.360895617636},
                                 {0.238177386319198, 0.599832274220295, -0.763853896664712},
                                 {0.28601542687348, -0.794929932679048, -0.535052873762272}}};
-  auto                       A = dot(Q, dot(diag(lambda), transpose(Q)));
+  auto A = dot(Q, dot(diag(lambda), transpose(Q)));
 
-  auto expA     = exp_symm(make_dual(A));
+  auto expA = exp_symm(make_dual(A));
   auto dexpA_dA = get_gradient(expA);
 
   // perturbation should be symmetric, or else violates requirement of log_symm
@@ -596,11 +596,11 @@ TEST(Tensor, ExpDerivative)
 
 TEST(Tensor, Sqrt)
 {
-  const tensor               lambda{{1.1, 2.6, 2.2}};
+  const tensor lambda{{1.1, 2.6, 2.2}};
   const tensor<double, 3, 3> Q{{{-0.928152308749236, -0.091036503308254, -0.360895617636},
                                 {0.238177386319198, 0.599832274220295, -0.763853896664712},
                                 {0.28601542687348, -0.794929932679048, -0.535052873762272}}};
-  auto                       A = dot(Q, dot(diag(lambda), transpose(Q)));
+  auto A = dot(Q, dot(diag(lambda), transpose(Q)));
 
   auto sqrtA = sqrt_symm(A);
 
@@ -609,13 +609,13 @@ TEST(Tensor, Sqrt)
 
 TEST(Tensor, SqrtDerivative)
 {
-  const tensor               lambda{{1.1, 2.6, 2.2}};
+  const tensor lambda{{1.1, 2.6, 2.2}};
   const tensor<double, 3, 3> Q{{{-0.928152308749236, -0.091036503308254, -0.360895617636},
                                 {0.238177386319198, 0.599832274220295, -0.763853896664712},
                                 {0.28601542687348, -0.794929932679048, -0.535052873762272}}};
-  auto                       A = dot(Q, dot(diag(lambda), transpose(Q)));
+  auto A = dot(Q, dot(diag(lambda), transpose(Q)));
 
-  auto sqrtA     = sqrt_symm(make_dual(A));
+  auto sqrtA = sqrt_symm(make_dual(A));
   auto dsqrtA_dA = get_gradient(sqrtA);
 
   // perturbation should be symmetric, or else violates requirement of log_symm

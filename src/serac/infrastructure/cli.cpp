@@ -24,9 +24,9 @@ std::unordered_map<std::string, std::string> defineAndParse(int argc, char* argv
 
   // specify all input arguments
   axom::CLI::App app{app_description};
-  std::string    input_file_path;
+  std::string input_file_path;
   app.add_option("-i, --input-file", input_file_path, "Input file to use")->check(axom::CLI::ExistingFile);
-  int  restart_cycle;
+  int restart_cycle;
   auto restart_opt =
       app.add_option("-c, --restart-cycle", restart_cycle, "Cycle to restart from")->check(axom::CLI::PositiveNumber);
   bool create_input_file_docs{false};

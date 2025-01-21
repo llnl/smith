@@ -53,10 +53,10 @@ SERAC_HOST_DEVICE constexpr auto GaussQuadratureRule()
 
   if constexpr (g == mfem::Geometry::SQUARE) {
     QuadratureRule<Q * Q, 2> rule{};
-    int                      count = 0;
+    int count = 0;
     for (int j = 0; j < Q; j++) {
       for (int i = 0; i < Q; i++) {
-        rule.points[count]    = {x[i], x[j]};
+        rule.points[count] = {x[i], x[j]};
         rule.weights[count++] = w[i] * w[j];
       }
     }
@@ -65,11 +65,11 @@ SERAC_HOST_DEVICE constexpr auto GaussQuadratureRule()
 
   if constexpr (g == mfem::Geometry::CUBE) {
     QuadratureRule<Q * Q * Q, 3> rule{};
-    int                          count = 0;
+    int count = 0;
     for (int k = 0; k < Q; k++) {
       for (int j = 0; j < Q; j++) {
         for (int i = 0; i < Q; i++) {
-          rule.points[count]    = {x[i], x[j], x[k]};
+          rule.points[count] = {x[i], x[j], x[k]};
           rule.weights[count++] = w[i] * w[j] * w[k];
         }
       }

@@ -21,7 +21,7 @@ void functional_test_static()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 2;
 
   // Create DataStore
@@ -36,15 +36,16 @@ void functional_test_static()
 
   auto mesh =
       serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-  serac::StateManager::setMesh(std::move(mesh), "default_mesh");
+
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "default_mesh");
 
   // Define a boundary attribute set
   std::set<int> ess_bdr = {1};
 
-  serac::LinearSolverOptions linear_options = {.linear_solver  = serac::LinearSolver::CG,
+  serac::LinearSolverOptions linear_options = {.linear_solver = serac::LinearSolver::CG,
                                                .preconditioner = serac::Preconditioner::HypreAMG,
-                                               .relative_tol   = 1.0e-6,
-                                               .absolute_tol   = 1.0e-12,
+                                               .relative_tol = 1.0e-6,
+                                               .absolute_tol = 1.0e-12,
                                                .max_iterations = 200};
 
   // Construct a functional-based heat transfer solver
@@ -63,8 +64,10 @@ void functional_test_static()
     cond = {{{1.5, 0.01, 0.0}, {0.01, 1.0, 0.0}, {0.0, 0.0, 1.0}}};
   }
 
+  serac::Domain whole_domain = serac::EntireDomain(pmesh);
+
   serac::heat_transfer::LinearConductor<dim> mat(1.0, 1.0, cond);
-  thermal_solver.setMaterial(mat);
+  thermal_solver.setMaterial(mat, whole_domain);
 
   // Define the function for the initial temperature and boundary condition
   auto one = [](const mfem::Vector&, double) -> double { return 1.0; };
@@ -75,7 +78,7 @@ void functional_test_static()
 
   // Define a constant source term
   serac::heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source);
+  thermal_solver.setSource(source, whole_domain);
 
   // Finalize the data structures
   thermal_solver.completeSetup();
@@ -93,7 +96,7 @@ void functional_test_dynamic()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 2;
 
   // Create DataStore
@@ -108,7 +111,8 @@ void functional_test_dynamic()
 
   auto mesh =
       serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-  serac::StateManager::setMesh(std::move(mesh), "default_mesh");
+
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "default_mesh");
 
   // Define a boundary attribute set
   std::set<int> ess_bdr = {1};
@@ -118,10 +122,12 @@ void functional_test_dynamic()
       serac::heat_transfer::default_nonlinear_options, serac::heat_transfer::default_linear_options,
       serac::heat_transfer::default_timestepping_options, "thermal_functional", "default_mesh");
 
+  serac::Domain whole_domain = serac::EntireDomain(pmesh);
+
   // Define an isotropic conductor material model
   serac::heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, 1.0);
 
-  thermal_solver.setMaterial(mat);
+  thermal_solver.setMaterial(mat, whole_domain);
 
   // Define the function for the initial temperature and boundary condition
   auto initial_temp = [](const mfem::Vector& x, double) -> double {
@@ -137,7 +143,7 @@ void functional_test_dynamic()
 
   // Define a constant source term
   serac::heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source);
+  thermal_solver.setSource(source, whole_domain);
 
   // Finalize the data structures
   thermal_solver.completeSetup();

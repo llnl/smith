@@ -32,7 +32,7 @@ namespace serac::mfem_ext {
  * without having to manually define a separate functor class.
  */
 class SecondOrderODE : public mfem::SecondOrderTimeDependentOperator {
-public:
+ public:
   /**
    * @brief a small number used to compute finite difference approximations
    * to time derivatives of boundary conditions.
@@ -170,7 +170,7 @@ public:
    */
   TimestepMethod GetTimestepper() { return timestepper_; }
 
-private:
+ private:
   /**
    * @brief Internal implementation used for mfem::SOTDO::Mult and mfem::SOTDO::ImplicitSolve
    *        Solves the equation d2u_dt2 = f(u + c0 * d2u_dt2, du_dt + c1 * d2u_dt2, t)
@@ -211,7 +211,7 @@ private:
    * @brief Reference to boundary conditions used to constrain the solution
    */
   const BoundaryConditionManager& bcs_;
-  mfem::Vector                    zero_;
+  mfem::Vector zero_;
 
   /**
    * @brief Working vectors for ODE outputs prior to constraint enforcement
@@ -236,7 +236,7 @@ private:
  * without having to manually define a separate functor class.
  */
 class FirstOrderODE : public mfem::TimeDependentOperator {
-public:
+ public:
   /**
    * @brief a small number used to compute finite difference approximations
    * to time derivatives of boundary conditions.
@@ -354,7 +354,7 @@ public:
    */
   TimestepMethod GetTimestepper() { return timestepper_; }
 
-private:
+ private:
   /**
    * @brief Internal implementation used for mfem::TDO::Mult and mfem::TDO::ImplicitSolve\
    * @param[in] time The current time
@@ -385,7 +385,7 @@ private:
    * @brief Reference to boundary conditions used to constrain the solution
    */
   const BoundaryConditionManager& bcs_;
-  mfem::Vector                    zero_;
+  mfem::Vector zero_;
 
   /**
    * @brief Working vectors for ODE outputs prior to constraint enforcement

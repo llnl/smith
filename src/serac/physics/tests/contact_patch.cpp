@@ -15,6 +15,7 @@
 #include "mfem.hpp"
 
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
@@ -28,29 +29,34 @@ class ContactTest : public testing::TestWithParam<std::tuple<ContactEnforcement,
 TEST_P(ContactTest, patch)
 {
   // NOTE: p must be equal to 1 for now
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 3;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
-  std::string            name = "contact_patch_" + std::get<2>(GetParam());
+  std::string name = "contact_patch_" + std::get<2>(GetParam());
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 0, 0);
-  StateManager::setMesh(std::move(mesh), "patch_mesh");
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 2, 0);
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "patch_mesh");
+
+  Domain x0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  Domain y0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
+  Domain z0_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
+  Domain zmax_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
 
 #ifdef SERAC_USE_PETSC
   LinearSolverOptions linear_options{
-      .linear_solver        = LinearSolver::PetscGMRES,
-      .preconditioner       = Preconditioner::Petsc,
+      .linear_solver = LinearSolver::PetscGMRES,
+      .preconditioner = Preconditioner::Petsc,
       .petsc_preconditioner = PetscPCType::HMG,
-      .absolute_tol         = 1e-16,
-      .print_level          = 1,
+      .absolute_tol = 1e-16,
+      .print_level = 1,
   };
 #elif defined(MFEM_USE_STRUMPACK)
   // #ifdef MFEM_USE_STRUMPACK
@@ -61,36 +67,36 @@ TEST_P(ContactTest, patch)
   return;
 #endif
 
-  NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
-                                           .relative_tol   = 1.0e-12,
-                                           .absolute_tol   = 1.0e-12,
+  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+                                           .relative_tol = 1.0e-12,
+                                           .absolute_tol = 1.0e-12,
                                            .max_iterations = 20,
-                                           .print_level    = 1};
+                                           .print_level = 1};
 
-  ContactOptions contact_options{.method      = ContactMethod::SingleMortar,
+  ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = std::get<0>(GetParam()),
-                                 .type        = ContactType::Frictionless,
-                                 .penalty     = 1.0e4,
-                                 .jacobian    = std::get<1>(GetParam())};
+                                 .type = ContactType::Frictionless,
+                                 .penalty = 1.0e4,
+                                 .jacobian = std::get<1>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, "patch_mesh", {}, 0,
                                              0.0, false, false);
 
-  double                      K = 10.0;
-  double                      G = 0.25;
+  double K = 10.0;
+  double G = 0.25;
   solid_mechanics::NeoHookean mat{1.0, K, G};
-  solid_solver.setMaterial(mat);
+  Domain material_block = EntireDomain(pmesh);
+  solid_solver.setMaterial(mat, material_block);
 
   // Define the function for the initial displacement and boundary condition
-  auto zero_disp_bc    = [](const mfem::Vector&) { return 0.0; };
-  auto nonzero_disp_bc = [](const mfem::Vector&) { return -0.01; };
+  auto applied_disp_function = [](tensor<double, dim>, auto) { return tensor<double, dim>{{0, 0, -0.01}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  solid_solver.setDisplacementBCs({1}, zero_disp_bc, 0);
-  solid_solver.setDisplacementBCs({2}, zero_disp_bc, 1);
-  solid_solver.setDisplacementBCs({3}, zero_disp_bc, 2);
-  solid_solver.setDisplacementBCs({6}, nonzero_disp_bc, 2);
+  solid_solver.setFixedBCs(x0_faces, Component::X);
+  solid_solver.setFixedBCs(y0_faces, Component::Y);
+  solid_solver.setFixedBCs(z0_face, Component::Z);
+  solid_solver.setDisplacementBCs(applied_disp_function, zmax_face, Component::Z);
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {4}, {5}, contact_options);
@@ -109,14 +115,14 @@ TEST_P(ContactTest, patch)
   solid_solver.outputStateToDisk(paraview_name);
 
   // Check the l2 norm of the displacement dofs
-  auto                            c = (3.0 * K - 2.0 * G) / (3.0 * K + G);
+  auto c = (3.0 * K - 2.0 * G) / (3.0 * K + G);
   mfem::VectorFunctionCoefficient elasticity_sol_coeff(3, [c](const mfem::Vector& x, mfem::Vector& u) {
     u[0] = 0.25 * 0.01 * c * x[0];
     u[1] = 0.25 * 0.01 * c * x[1];
     u[2] = -0.5 * 0.01 * x[2];
   });
-  mfem::ParFiniteElementSpace     elasticity_fes(solid_solver.reactions().space());
-  mfem::ParGridFunction           elasticity_sol(&elasticity_fes);
+  mfem::ParFiniteElementSpace elasticity_fes(solid_solver.reactions().space());
+  mfem::ParGridFunction elasticity_sol(&elasticity_fes);
   elasticity_sol.ProjectCoefficient(elasticity_sol_coeff);
   mfem::ParGridFunction approx_error(elasticity_sol);
   approx_error -= solid_solver.displacement().gridFunction();

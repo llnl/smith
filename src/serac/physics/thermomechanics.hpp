@@ -15,6 +15,7 @@
 #include "mfem.hpp"
 
 #include "serac/physics/base_physics.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/thermomechanics_input.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/heat_transfer.hpp"
@@ -30,7 +31,7 @@ namespace serac {
  */
 template <int order, int dim, typename... parameter_space>
 class Thermomechanics : public BasePhysics {
-public:
+ public:
   /**
    * @brief Construct a new coupled Thermal-SolidMechanics object
    *
@@ -298,7 +299,7 @@ public:
       // state variables.
       State state{};
 
-      auto [u, du_dX]                 = displacement;
+      auto [u, du_dX] = displacement;
       auto [T, heat_capacity, s0, q0] = mat(state, du_dX, temperature, temperature_gradient, parameters...);
 
       return serac::tuple{heat_capacity, q0};
@@ -340,7 +341,7 @@ public:
     SERAC_HOST_DEVICE auto operator()(State& state, const T1& displacement_gradient, const T2& temperature,
                                       param_types... parameters) const
     {
-      auto [theta, dtheta_dX]         = temperature;
+      auto [theta, dtheta_dX] = temperature;
       auto [T, heat_capacity, s0, q0] = mat(state, displacement_gradient, theta, dtheta_dX, parameters...);
       return T;
     }
@@ -352,6 +353,7 @@ public:
    * @tparam MaterialType The thermomechanical material type
    * @tparam StateType The type that contains the internal variables for MaterialType
    * @param material A material that provides a function to evaluate stress, heat flux, density, and heat capacity
+   * @param domain which elements in the mesh are described by the specified material
    * @param qdata the buffer of material internal variables at each quadrature point
    *
    * @pre material must be a object that can be called with the following arguments:
@@ -371,22 +373,24 @@ public:
    * and thermal flux when operator() is called with the arguments listed above.
    */
   template <int... active_parameters, typename MaterialType, typename StateType>
-  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material,
+  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material, Domain& domain,
                    std::shared_ptr<QuadratureData<StateType>> qdata)
   {
     // note: these parameter indices are offset by 1 since, internally, this module uses the first parameter
     // to communicate the temperature and displacement field information to the other physics module
     //
-    thermal_.setMaterial(DependsOn<0, active_parameters + 1 ...>{}, ThermalMaterialInterface<MaterialType>{material});
+    thermal_.setMaterial(DependsOn<0, active_parameters + 1 ...>{}, ThermalMaterialInterface<MaterialType>{material},
+                         domain);
     solid_.setMaterial(DependsOn<0, active_parameters + 1 ...>{}, MechanicalMaterialInterface<MaterialType>{material},
-                       qdata);
+                       domain, qdata);
   }
 
   /// @overload
   template <typename MaterialType, typename StateType = Empty>
-  void setMaterial(const MaterialType& material, std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
+  void setMaterial(const MaterialType& material, Domain& domain,
+                   std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
-    setMaterial(DependsOn<>{}, material, qdata);
+    setMaterial(DependsOn<>{}, material, domain, qdata);
   }
 
   /**
@@ -395,23 +399,47 @@ public:
    * @param[in] temperature_attributes The boundary attributes on which to enforce a temperature
    * @param[in] prescribed_value The prescribed boundary temperature function
    */
-  void setTemperatureBCs(const std::set<int>&                                   temperature_attributes,
+  void setTemperatureBCs(const std::set<int>& temperature_attributes,
                          std::function<double(const mfem::Vector& x, double t)> prescribed_value)
   {
     thermal_.setTemperatureBCs(temperature_attributes, prescribed_value);
   }
 
   /**
-   * @brief Set essential displacement boundary conditions (strongly enforced)
+   * @brief Set essential displacement boundary conditions on selected components
    *
-   * @param[in] displacement_attributes The boundary attributes on which to enforce a displacement
-   * @param[in] prescribed_value The prescribed boundary displacement function
+   * @param[in] applied_displacement Function specifying the applied displacement vector.
+   * @param[in] domain Domain over which to apply the boundary condition.
+   * @param[in] components (optional) (optional) Indicator of vector components to be constrained.
+   *            If argument is omitted, the default is to constrain all components.
+   *
+   * @note This method must be called prior to completeSetup()
+   *
+   * The signature of the applied_displacement callable is:
+   * tensor<double, dim> applied_displacement(tensor<double, dim> X, double t)
+   * Parameters:
+   *   X - coordinates of node
+   *   t - time
+   * Returns:
+   *   u, vector of applied displacements
    */
-  void setDisplacementBCs(const std::set<int>&                                           displacement_attributes,
-                          std::function<void(const mfem::Vector& x, mfem::Vector& disp)> prescribed_value)
+  template <typename AppliedDisplacementFunction>
+  void setDisplacementBCs(AppliedDisplacementFunction applied_displacement, Domain& domain,
+                          Components components = Component::ALL)
   {
-    solid_.setDisplacementBCs(displacement_attributes, prescribed_value);
+    solid_.setDisplacementBCs(applied_displacement, domain, components);
   }
+
+  /**
+   * @brief Shortcut to set selected components of displacements to zero for all time
+   *
+   * @param[in] domain Domain to apply the homogeneous boundary condition to
+   * @param[in] components (optional) Indicator of vector components to be constrained.
+   *            If argument is omitted, the default is to constrain all components.
+   *
+   * @note This method must be called prior to completeSetup()
+   */
+  void setFixedBCs(Domain& domain, Components components = Component::ALL) { solid_.setFixedBCs(domain, components); }
 
   /**
    * @brief Set the thermal flux boundary condition
@@ -447,7 +475,8 @@ public:
    *
    * @param displacement The function describing the displacement field
    */
-  void setDisplacement(std::function<void(const mfem::Vector& x, mfem::Vector& u)> displacement)
+  template <typename Callable>
+  void setDisplacement(Callable displacement)
   {
     solid_.setDisplacement(displacement);
   }
@@ -522,9 +551,9 @@ public:
    */
   const serac::FiniteElementState& temperature() const { return thermal_.temperature(); };
 
-protected:
+ protected:
   using displacement_field = H1<order, dim>;  ///< the function space for the displacement field
-  using temperature_field  = H1<order>;       ///< the function space for the temperature field
+  using temperature_field = H1<order>;        ///< the function space for the temperature field
 
   /// Submodule to compute the heat transfer physics
   HeatTransfer<order, dim, Parameters<displacement_field, parameter_space...>> thermal_;

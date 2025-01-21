@@ -30,7 +30,7 @@ namespace serac {
 std::pair<int, int> getMPIInfo(MPI_Comm comm)
 {
   int num_procs = 0;
-  int rank      = 0;
+  int rank = 0;
   if (MPI_Comm_size(comm, &num_procs) != MPI_SUCCESS) {
     SLIC_ERROR("Failed to determine number of MPI processes");
   }

@@ -49,7 +49,7 @@ std::string removePrefix(const std::string& prefix, const std::string& target);
  * @brief This is the abstract base class for a generic forward solver
  */
 class BasePhysics {
-public:
+ public:
   /**
    * @brief Empty constructor
    * @param[in] physics_name Name of the physics module instance
@@ -140,7 +140,7 @@ public:
    */
   virtual void resetAdjointStates()
   {
-    time_  = max_time_;
+    time_ = max_time_;
     cycle_ = max_cycle_;
   }
 
@@ -348,7 +348,7 @@ public:
    */
   virtual const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity()
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Initial condition sensitivities not enabled in physics module {}", name_));
+    SLIC_WARNING_ROOT(axom::fmt::format("Initial condition sensitivities not enabled in physics module {}", name_));
     return {};
   }
 
@@ -363,19 +363,29 @@ public:
 
   /**
    * @brief Set the loads for the adjoint reverse timestep solve
+   * @param string_to_dual An unorder map from the state field name string to the finite element adjoint/dual load
+   * The adjoint load is d(qoi)/d(state)
    */
-  virtual void setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&>)
+  virtual void setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&> string_to_dual)
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Adjoint analysis not defined for physics module {}", name_));
+    if (!string_to_dual.empty()) {
+      SLIC_ERROR_ROOT(
+          axom::fmt::format("Failed to setAdjointLoad.  Adjoint analysis not defined for physics module {}", name_));
+    }
   }
 
   /**
    * @brief Set the dual loads (dirichlet values) for the adjoint reverse timestep solve
    * This must be called after setAdjointLoad
+   * @param string_to_bc An unorder map from dual name string to finite element adjoint/state boundary condition
+   * The adjoint bc is d(qoi)/d(dual)
    */
-  virtual void setDualAdjointBcs(std::unordered_map<std::string, const serac::FiniteElementState&>)
+  virtual void setDualAdjointBcs(std::unordered_map<std::string, const serac::FiniteElementState&> string_to_bc)
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Adjoint analysis not defined for physics module {}", name_));
+    if (!string_to_bc.empty()) {
+      SLIC_ERROR_ROOT(
+          axom::fmt::format("Failed to setDualAdjointBCs.  Adjoint analysis not defined for physics module {}", name_));
+    }
   }
 
   /**
@@ -422,7 +432,7 @@ public:
    * @return The named Finite Element Dual
    */
   virtual FiniteElementDual loadCheckpointedDual([[maybe_unused]] const std::string& state_name,
-                                                 [[maybe_unused]] int                cycle)
+                                                 [[maybe_unused]] int cycle)
   {
     SLIC_ERROR_ROOT(axom::fmt::format("loadCheckpointedDual not enabled in physics module {}", name_));
     return *duals_[0];
@@ -464,7 +474,7 @@ public:
   /// @overload
   mfem::ParMesh& mesh() { return mesh_; }
 
-protected:
+ protected:
   /**
    * @brief Create a paraview data collection for the physics package if requested
    */
@@ -544,9 +554,9 @@ protected:
     template <typename FunctionSpace>
     ParameterInfo(mfem::ParMesh& mesh, FunctionSpace space, const std::string& name = "")
     {
-      state          = std::make_unique<FiniteElementState>(mesh, space, name);
+      state = std::make_unique<FiniteElementState>(mesh, space, name);
       previous_state = std::make_unique<FiniteElementState>(mesh, space, "previous_" + name);
-      sensitivity    = std::make_unique<FiniteElementDual>(mesh, space, name + "_sensitivity");
+      sensitivity = std::make_unique<FiniteElementDual>(mesh, space, name + "_sensitivity");
       StateManager::storeState(*state);
       StateManager::storeDual(*sensitivity);
     }

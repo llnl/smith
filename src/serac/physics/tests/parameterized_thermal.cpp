@@ -23,7 +23,7 @@ TEST(Thermal, ParameterizedMaterial)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -39,7 +39,7 @@ TEST(Thermal, ParameterizedMaterial)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Define a boundary attribute set
@@ -66,9 +66,12 @@ TEST(Thermal, ParameterizedMaterial)
 
   thermal_solver.setParameter(0, user_defined_conductivity);
 
+  Domain whole_domain = EntireDomain(pmesh);
+  Domain whole_boundary = EntireBoundary(pmesh);
+
   // Construct a potentially user-defined parameterized material and send it to the thermal module
   heat_transfer::ParameterizedLinearIsotropicConductor mat;
-  thermal_solver.setMaterial(DependsOn<0>{}, mat);
+  thermal_solver.setMaterial(DependsOn<0>{}, mat, whole_domain);
 
   // Define the function for the initial temperature and boundary condition
   auto bdr_temp = [](const mfem::Vector& x, double) -> double {
@@ -84,11 +87,11 @@ TEST(Thermal, ParameterizedMaterial)
 
   // Define a constant source term
   heat_transfer::ConstantSource source{-1.0};
-  thermal_solver.setSource(source, EntireDomain(pmesh));
+  thermal_solver.setSource(source, whole_domain);
 
   // Set the flux term to zero for testing code paths
   heat_transfer::ConstantFlux flux_bc{0.0};
-  thermal_solver.setFluxBCs(flux_bc);
+  thermal_solver.setFluxBCs(flux_bc, whole_boundary);
 
   // Finalize the data structures
   thermal_solver.completeSetup();

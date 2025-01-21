@@ -1,7 +1,6 @@
 # <img src="/share/serac/logo/serac-logo-blue.png?raw=true" width="150" alt="Serac"/>
 
-[![Build
-Status](https://dev.azure.com/llnl-serac/serac/_apis/build/status/LLNL.serac?branchName=develop)](https://dev.azure.com/llnl-serac/serac/_build/latest?definitionId=1&branchName=develop)
+[![Build Status](https://github.com/LLNL/serac/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/LLNL/serac/actions/workflows/unit-tests.yml)
 [![Documentation Status](https://readthedocs.org/projects/serac/badge/?version=latest)](https://serac.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/LLNL/serac/branch/develop/graph/badge.svg?token=DO4KFMPNM0)](https://codecov.io/gh/LLNL/serac)
 [![License](https://img.shields.io/badge/license-BSD%203--Clause-blue.svg)](./LICENSE)

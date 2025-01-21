@@ -28,7 +28,7 @@ namespace serac {
  */
 template <int dim>
 class AffineSolution {
-public:
+ public:
   AffineSolution() : A(dim)
   {
     // clang-format off
@@ -68,7 +68,7 @@ public:
    * @param essential_boundaries Boundary attributes on which essential boundary conditions are desired
    */
   template <int p, typename Material>
-  void applyLoads(const Material& material, HeatTransfer<p, dim>& physics, std::set<int> essential_boundaries) const
+  void applyLoads(const Material& material, HeatTransfer<p, dim>& physics, std::set<int> essential_boundaries, Domain & boundary) const
   {
     // essential BCs
     auto ebc_func = [*this](const auto& X, auto){ return this->operator()(X); };
@@ -80,7 +80,7 @@ public:
     auto flux = serac::get<1>(material(dummy_x, 1.0, temp_grad));
 
     auto surface_flux = [flux](auto, auto n0, auto, auto) { return dot(flux, n0); };
-    physics.setFluxBCs(surface_flux);
+    physics.setFluxBCs(surface_flux, boundary);
   }
 
  private:
@@ -167,7 +167,7 @@ double solution_error(const ExactSolution& exact_temperature, PatchBoundaryCondi
 
   std::string mesh_tag{"mesh"};
 
-  serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto & pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // Construct a heat transfer mechanics solver
   auto nonlinear_opts = heat_transfer::default_nonlinear_options;
@@ -176,9 +176,11 @@ double solution_error(const ExactSolution& exact_temperature, PatchBoundaryCondi
   HeatTransfer<p, dim> thermal(nonlinear_opts, heat_transfer::direct_linear_options, heat_transfer::default_static_options, "thermal", mesh_tag);
 
   heat_transfer::LinearIsotropicConductor mat(1.0,1.0,1.0);
-  thermal.setMaterial(mat);
+  Domain whole_domain = EntireDomain(pmesh);
+  Domain whole_boundary = EntireBoundary(pmesh);
+  thermal.setMaterial(mat, whole_domain);
 
-  exact_temperature.applyLoads(mat, thermal, essentialBoundaryAttributes<dim>(bc));
+  exact_temperature.applyLoads(mat, thermal, essentialBoundaryAttributes<dim>(bc), whole_boundary);
 
   // Finalize the data structures
   thermal.completeSetup();

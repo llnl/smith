@@ -14,6 +14,7 @@
 
 #include "mfem.hpp"
 
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/solid_mechanics_contact.hpp"
 #include "serac/infrastructure/terminator.hpp"
 #include "serac/mesh/mesh_utils.hpp"
@@ -31,7 +32,7 @@ int main(int argc, char* argv[])
   constexpr int dim = 3;
 
   // Create DataStore
-  std::string            name = "contact_sphere_example";
+  std::string name = "contact_sphere_example";
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, name + "_data");
 
@@ -52,7 +53,10 @@ int main(int argc, char* argv[])
 
   std::vector<mfem::Mesh*> mesh_ptrs{&ball_mesh, &cube_mesh};
   auto mesh = serac::mesh::refineAndDistribute(mfem::Mesh(mesh_ptrs.data(), static_cast<int>(mesh_ptrs.size())), 0, 0);
-  serac::StateManager::setMesh(std::move(mesh), "sphere_mesh");
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "sphere_mesh");
+
+  auto fixed_boundary = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
+  auto driven_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(12));
 
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
 #ifndef MFEM_USE_STRUMPACK
@@ -60,31 +64,29 @@ int main(int argc, char* argv[])
   return 1;
 #endif
 
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = serac::NonlinearSolver::Newton,
-                                                  .relative_tol   = 1.0e-8,
-                                                  .absolute_tol   = 1.0e-5,
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-8,
+                                                  .absolute_tol = 1.0e-5,
                                                   .max_iterations = 200,
-                                                  .print_level    = 1};
+                                                  .print_level = 1};
 
-  serac::ContactOptions contact_options{.method      = serac::ContactMethod::SingleMortar,
+  serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                         .enforcement = serac::ContactEnforcement::Penalty,
-                                        .type        = serac::ContactType::Frictionless,
-                                        .penalty     = 1.0e4};
+                                        .type = serac::ContactType::Frictionless,
+                                        .penalty = 1.0e4};
 
   serac::SolidMechanicsContact<p, dim> solid_solver(
       nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "sphere_mesh");
 
   serac::solid_mechanics::NeoHookean mat{1.0, 10.0, 0.25};
-  solid_solver.setMaterial(mat);
+  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
+  solid_solver.setMaterial(mat, whole_mesh);
 
   // Pass the BC information to the solver object
-  solid_solver.setDisplacementBCs({3}, [](const mfem::Vector&, mfem::Vector& u) {
-    u.SetSize(dim);
-    u = 0.0;
-  });
-  solid_solver.setDisplacementBCs({12}, [](const mfem::Vector& x, double t, mfem::Vector& u) {
-    u.SetSize(dim);
-    u = 0.0;
+  solid_solver.setFixedBCs(fixed_boundary);
+
+  auto applied_displacement = [](serac::tensor<double, dim> x, double t) {
+    serac::tensor<double, dim> u{};
     if (t <= 3.0 + 1.0e-12) {
       u[2] = -t * 0.02;
     } else {
@@ -94,10 +96,13 @@ int main(int argc, char* argv[])
           std::sin(M_PI / 40.0 * (t - 3.0)) * (x[0] - 0.5) + (std::cos(M_PI / 40.0 * (t - 3.0)) - 1.0) * (x[1] - 0.5);
       u[2] = -0.06;
     }
-  });
+    return u;
+  };
+
+  solid_solver.setDisplacementBCs(applied_displacement, driven_surface);
 
   // Add the contact interaction
-  auto          contact_interaction_id = 0;
+  auto contact_interaction_id = 0;
   std::set<int> surface_1_boundary_attributes({5});
   std::set<int> surface_2_boundary_attributes({7});
   solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,

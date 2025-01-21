@@ -61,12 +61,6 @@ std::ostream& operator<<(std::ostream& out, DoF dof)
   return out;
 }
 
-std::ostream& operator<<(std::ostream& out, serac::SignedIndex i)
-{
-  out << "{" << i.index_ << ", " << i.sign_ << "}";
-  return out;
-}
-
 /**
  * @brief write an array of values out to file, in a space-separated format
  * @tparam T the type of each value in the array

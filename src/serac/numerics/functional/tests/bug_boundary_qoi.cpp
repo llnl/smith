@@ -45,13 +45,15 @@ TEST(BoundaryIntegralQOI, AttrBug)
   pmesh->EnsureNodes();
   pmesh->ExchangeFaceNbrData();
 
-  using shapeFES              = serac::H1<ORDER, 2>;
+  using shapeFES = serac::H1<ORDER, 2>;
   auto [shape_fes, shape_fec] = serac::generateParFiniteElementSpace<shapeFES>(pmesh.get());
 
+  Domain whole_boundary = EntireBoundary(*pmesh);
+
   serac::ShapeAwareFunctional<shapeFES, double()> totalSurfArea(shape_fes.get(), {});
-  totalSurfArea.AddBoundaryIntegral(serac::Dimension<2 - 1>{}, serac::DependsOn<>{}, IdentityFunctor{}, *pmesh);
+  totalSurfArea.AddBoundaryIntegral(serac::Dimension<2 - 1>{}, serac::DependsOn<>{}, IdentityFunctor{}, whole_boundary);
   serac::FiniteElementState shape(*shape_fes);
-  double                    totalSurfaceArea = totalSurfArea(0.0, shape);
+  double totalSurfaceArea = totalSurfArea(0.0, shape);
 
   EXPECT_NEAR(totalSurfaceArea, 4.0, 1.0e-14);
 

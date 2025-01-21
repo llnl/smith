@@ -16,7 +16,7 @@ AddressSanitizer
 
 AddressSanitizer (aka Asan) is memory error detection tool that is a part of LLVM.  It
 very fast and easy to use but doesn't seem as robust as Valgrind.  It requires compile
-and link flags which are enabled via the CMake option ENABLE_ASAN.  Anything in our CMake
+and link flags which are enabled via the CMake option ``ENABLE_ASAN``.  Anything in our CMake
 system will get those flags after that is enabled but our third-party libraries (like MFEM)
 will not. After that just run your built executable and Asan will output a log to the screen
 after your program is done running.  Asan's behavior can be modified with a set of
@@ -24,14 +24,14 @@ after your program is done running.  Asan's behavior can be modified with a set 
 
 .. note::
     Asan only works with the Clang and GCC compiler chains.  Our build system will throw
-    and error if you try to build with anything else while ENABLE_ASAN is ON.
+    an error if you try to build with anything else while ``ENABLE_ASAN`` is ``ON``.
 
 Here is a recommended workflow:
 
 .. code-block:: bash
 
-    ./config-build.py -hc host-configs/rzgenie-toss_3_x86_64_ib-gcc@8.1.0.cmake -DENABLE_ASAN=ON
-    cd build-rzgenie-toss_3_x86_64_ib-gcc@8.1.0-debug
+    ./config-build.py -hc host-configs/ruby-toss_4_x86_64_ib-clang@14.0.6.cmake -DENABLE_ASAN=ON
+    cd build-ruby-toss_4_x86_64_ib-clang@14.0.6-debug
     srun -N1 --exclusive --mpi-bind=off make -j
     LSAN_OPTIONS=suppressions=../suppressions.asan ASAN_OPTIONS=log_path=asan.out:log_exe_name=true srun -n2 bin/serac
 
@@ -39,11 +39,11 @@ This will output files in the current directory for each process that follow the
 ``asan.out.<exe name>.<pid>``.  It also sets your return code to a non-zero value if there
 were any non-suppressed memory errors.
 
-LSAN_OPTIONS and ASAN_OPTIONS are delimited by ':'.
+``LSAN_OPTIONS`` and ``ASAN_OPTIONS`` are delimited by ':'.
 
-Here is an explanation of the given options (all should be added to ASAN_OPTIONS unless noted):
+Here is an explanation of the given options (all should be added to ``ASAN_OPTIONS`` unless noted):
 
-  * ``suppressions``: Location of memory leak suppression file (LSAN_OPTIONS)
+  * ``suppressions``: Location of memory leak suppression file (``LSAN_OPTIONS``)
   * ``log_path``: Logs to the given file instead of to the screen. This is very helpful
     to avoid intermingled lines on the screen from every process
   * ``log_exe_name``: Adds executable name to log_path
@@ -53,7 +53,7 @@ Helpful options:
   * ``fast_unwind_on_malloc=0``: This improves Asan's stack tracing ability but also greatly slows
     down the run
   * ``exitcode=0``: This stops Asan from returning a a non-zero exit code from your executable
-    (defaults to 23) (LSAN_OPTIONS)
+    (defaults to 23) (``LSAN_OPTIONS``)
     
     
 Debugging with Address Sanitizer enabled
@@ -121,7 +121,6 @@ error reporting symbol. One way to do this is to filter the symbols in the execu
 
 and select the one that corresponds to the the original error (read of size 8 => ``__asan_report_load8``).
 
-    
 
 Valgrind
 --------
@@ -143,7 +142,7 @@ Here is a recommended workflow:
     srun -N1 --exclusive --mpi-bind=off make -j
     srun -n2 valgrind --tool=memcheck --log-file=valgrind.out --leak-check=yes --show-leak-kinds=all --num-callers=20 --suppressions=../suppressions.valgrind bin/serac
 
-This will will produce a file called ``valgrind.out`` in the current directory with a valgrind report.
+This will produce a file called ``valgrind.out`` in the current directory with a valgrind report.
 
 Here is an explanation of the given options:
 

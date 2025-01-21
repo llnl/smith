@@ -18,7 +18,9 @@ from common_build_functions import *
 
 from argparse import ArgumentParser
 
+import grp
 import os
+import stat
 
 
 def parse_args():
@@ -89,6 +91,12 @@ def main():
     for cali_file in cali_files:
         if os.path.exists(cali_file):
             shutil.copy2(cali_file, spot_dir)
+            # Update group and permissions of new caliper file
+            cali_file = os.path.join(spot_dir, os.path.basename(cali_file))
+            group_info = grp.getgrnam("smithdev")
+            os.chown(cali_file, -1, group_info.gr_gid)
+            os.chmod(cali_file,
+                     stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
 
     # Print SPOT url
     if on_rz():
