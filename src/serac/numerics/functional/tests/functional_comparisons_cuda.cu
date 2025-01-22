@@ -137,7 +137,8 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
 
   // Set a random state to evaluate the residual
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 3;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   U.UseDevice(true);
@@ -257,7 +258,8 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
   F->HostRead();
 
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 4;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   U.UseDevice(true);
@@ -347,7 +349,8 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
   F->UseDevice(true);
 
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 5;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   U.UseDevice(true);

@@ -5,7 +5,7 @@
 
 using namespace serac;
 
-std::ostream& operator<<(std::ostream& out, axom::Array<DoF, 2, axom::MemorySpace::Host> arr)
+std::ostream& operator<<(std::ostream& out, axom::Array<DoF, 2, serac::detail::host_memory_space> arr)
 {
   for (int i = 0; i < arr.shape()[0]; i++) {
     for (int j = 0; j < arr.shape()[1]; j++) {

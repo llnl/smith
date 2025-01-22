@@ -13,6 +13,9 @@
 #include <iomanip>
 #include <vector>
 
+#include "serac/infrastructure/memory.hpp"
+#include "serac/numerics/functional/element_restriction.hpp"
+
 /**
  * @brief write an array of values out to file, in a space-separated format
  * @tparam T the type of each value in the array
@@ -62,48 +65,53 @@ std::ostream& operator<<(std::ostream& out, DoF dof)
 }
 
 /**
- * @brief write an array of values out to file, in a space-separated format
+ * @brief write a 2D array of values out to file, in a space-separated format
  * @tparam T the type of each value in the array
  * @param v the values to write to file
  * @param filename the name of the output file
  */
-template <typename ArrayT>
-void write_to_file(const ArrayT& arr_orig, std::string filename)
+template <typename T>
+void write_to_file(axom::Array<T, 2, serac::detail::host_memory_space> arr, std::string filename)
 {
   std::ofstream outfile(filename);
 
-#ifdef SERAC_USE_UMPIRE
-  axom::Array<ArrayT::value_type, ArrayT::Dims, axom::MemorySpace::Host> arr(arr_orig);
-#else
-  const auto& arr = arr_orig;
-#endif
-
-  if constexpr (ArrayT::Dims == 2) {
-    for (axom::IndexType i = 0; i < arr.shape()[0]; i++) {
-      outfile << "{";
-      for (axom::IndexType j = 0; j < arr.shape()[1]; j++) {
-        outfile << arr(i, j);
-        if (j < arr.shape()[1] - 1) outfile << ", ";
-      }
-      outfile << "}\n";
+  for (axom::IndexType i = 0; i < arr.shape()[0]; i++) {
+    outfile << "{";
+    for (axom::IndexType j = 0; j < arr.shape()[1]; j++) {
+      outfile << arr(i, j);
+      if (j < arr.shape()[1] - 1) outfile << ", ";
     }
+    outfile << "}\n";
   }
-  if constexpr (ArrayT::Dims == 3) {
-    outfile << std::setprecision(16);
 
-    for (axom::IndexType i = 0; i < arr.shape()[0]; i++) {
+  outfile.close();
+}
+
+/**
+ * @brief write a 3D array of values out to file, in a mathematica-compatible format
+ * @tparam T the type of each value in the array
+ * @param v the values to write to file
+ * @param filename the name of the output file
+ */
+template <typename T>
+void write_to_file(axom::Array<T, 3, serac::detail::host_memory_space> arr, std::string filename)
+{
+  std::ofstream outfile(filename);
+
+  outfile << std::setprecision(16);
+
+  for (axom::IndexType i = 0; i < arr.shape()[0]; i++) {
+    outfile << "{";
+    for (axom::IndexType j = 0; j < arr.shape()[1]; j++) {
       outfile << "{";
-      for (axom::IndexType j = 0; j < arr.shape()[1]; j++) {
-        outfile << "{";
-        for (axom::IndexType k = 0; k < arr.shape()[2]; k++) {
-          outfile << arr(i, j, k);
-          if (k < arr.shape()[2] - 1) outfile << ", ";
-        }
-        outfile << "}";
-        if (j < arr.shape()[1] - 1) outfile << ", ";
+      for (axom::IndexType k = 0; k < arr.shape()[2]; k++) {
+        outfile << arr(i, j, k);
+        if (k < arr.shape()[2] - 1) outfile << ", ";
       }
-      outfile << "}\n";
+      outfile << "}";
+      if (j < arr.shape()[1] - 1) outfile << ", ";
     }
+    outfile << "}\n";
   }
 
   outfile.close();

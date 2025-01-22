@@ -98,7 +98,8 @@ void functional_test(mfem::ParMesh& mesh, L2<p> test, L2<p> trial, Dimension<dim
 
   // Set a random state to evaluate the residual
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 2;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   u_global.GetTrueDofs(U);

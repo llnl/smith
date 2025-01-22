@@ -278,14 +278,17 @@ void functional_test_2D(mfem::ParMesh& mesh, double tolerance)
   ones = 1;
 
   mfem::Vector U1(fespace1->TrueVSize());
-  U1.Randomize();
+  int seed = 6;
+  U1.Randomize(seed);
 
   mfem::Vector U2(fespace2->TrueVSize());
-  U2.Randomize();
+  seed = 7;
+  U2.Randomize(seed);
   U2 *= 0.1;
 
   mfem::Vector dU2(fespace2->TrueVSize());
-  dU2.Randomize();
+  seed = 8;
+  dU2.Randomize(seed);
 
   // Construct the new functional object using the known test and trial spaces
   ShapeAwareFunctional<shape_space, test_space(trial_space)> residual(fespace2.get(), fespace1.get(), {fespace1.get()});
@@ -323,14 +326,17 @@ void functional_test_3D(mfem::ParMesh& mesh, double tolerance)
   ones = 1;
 
   mfem::Vector U1(fespace1->TrueVSize());
-  U1.Randomize();
+  int seed = 9;
+  U1.Randomize(seed);
 
   mfem::Vector U2(fespace2->TrueVSize());
-  U2.Randomize();
+  seed = 1;
+  U2.Randomize(seed);
   U2 *= 0.1;
 
   mfem::Vector dU2(fespace2->TrueVSize());
-  dU2.Randomize();
+  seed = 2;
+  dU2.Randomize(seed);
 
   // Construct the new functional object using the known test and trial spaces
   ShapeAwareFunctional<shape_space, test_space(trial_space)> residual(fespace2.get(), fespace1.get(), {fespace1.get()});
