@@ -24,14 +24,14 @@ int n = 0;  // index of tests used to send the output to different locations
 template <typename output_space>
 void stress_extrapolation_test()
 {
-  int serial_refinement   = 2;
+  int serial_refinement = 2;
   int parallel_refinement = 0;
 
   std::string filename = SERAC_REPO_DIR "/data/meshes/notched_plate.mesh";
 
   auto mesh_ = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
 
-  constexpr int p   = 2;
+  constexpr int p = 2;
   constexpr int dim = 2;
 
   using input_space = H1<2, dim>;
@@ -48,11 +48,11 @@ void stress_extrapolation_test()
 
   LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
-  NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
-                                           .relative_tol   = 1.0e-12,
-                                           .absolute_tol   = 1.0e-12,
+  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+                                           .relative_tol = 1.0e-12,
+                                           .absolute_tol = 1.0e-12,
                                            .max_iterations = 5000,
-                                           .print_level    = 1};
+                                           .print_level = 1};
 
   FiniteElementState sigma_J2(pmesh, output_space{}, "sigma_J2");
 
@@ -72,7 +72,7 @@ void stress_extrapolation_test()
 
   // prescribe small displacement at each hole, pulling the plate apart
   Domain top_hole = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
-  auto   up       = [](tensor<double, dim>, double) {
+  auto up = [](tensor<double, dim>, double) {
     tensor<double, dim> u{};
     u[1] = 0.01;
     return u;
@@ -80,11 +80,8 @@ void stress_extrapolation_test()
   solid_solver.setDisplacementBCs(up, top_hole);
 
   Domain bottom_hole = Domain::ofBoundaryElements(pmesh, by_attr<dim>(3));
-  auto   down        = [up](tensor<double, dim> X, double time) { return -up(X, time); };
+  auto down = [up](tensor<double, dim> X, double time) { return -up(X, time); };
   solid_solver.setDisplacementBCs(down, bottom_hole);
-
-  auto zero_displacement = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 0.0; };
-  solid_solver.setDisplacement(zero_displacement);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -100,7 +97,7 @@ void stress_extrapolation_test()
 
   sigma_J2 = fit<dim, output_space(input_space)>(
       [&](double /*t*/, [[maybe_unused]] auto position, [[maybe_unused]] auto displacement_) {
-        mat3 du_dx  = to_3x3(get_value(get<1>(displacement_)));
+        mat3 du_dx = to_3x3(get_value(get<1>(displacement_)));
         auto stress = mat(internal_variables, du_dx);
         return tuple{I2(dev(stress)), zero{}};
       },

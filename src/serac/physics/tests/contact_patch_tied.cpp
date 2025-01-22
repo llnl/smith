@@ -29,25 +29,25 @@ class ContactPatchTied : public testing::TestWithParam<std::pair<ContactEnforcem
 TEST_P(ContactPatchTied, patch)
 {
   // NOTE: p must be equal to 1 for now
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 3;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
-  std::string            name = "contact_patch_" + GetParam().second;
+  std::string name = "contact_patch_" + GetParam().second;
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
 
-  auto  mesh  = mesh::refineAndDistribute(buildMeshFromFile(filename), 3, 0);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 3, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "patch_mesh");
 
-  Domain x0_faces  = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  Domain y0_faces  = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
-  Domain z0_face   = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
+  Domain x0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  Domain y0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
+  Domain z0_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
   Domain zmax_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
 
 // TODO: investigate performance with Petsc
@@ -68,29 +68,29 @@ TEST_P(ContactPatchTied, patch)
   return;
 #endif
 
-  NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
-                                           .relative_tol   = 1.0e-10,
-                                           .absolute_tol   = 1.0e-10,
+  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+                                           .relative_tol = 1.0e-10,
+                                           .absolute_tol = 1.0e-10,
                                            .max_iterations = 20,
-                                           .print_level    = 1};
+                                           .print_level = 1};
 
-  ContactOptions contact_options{.method      = ContactMethod::SingleMortar,
+  ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = GetParam().first,
-                                 .type        = ContactType::TiedNormal,
-                                 .penalty     = 1.0e4};
+                                 .type = ContactType::TiedNormal,
+                                 .penalty = 1.0e4};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, "patch_mesh");
 
-  double                      K = 10.0;
-  double                      G = 0.25;
+  double K = 10.0;
+  double G = 0.25;
   solid_mechanics::NeoHookean mat{1.0, K, G};
-  Domain                      material_block = EntireDomain(pmesh);
+  Domain material_block = EntireDomain(pmesh);
   solid_solver.setMaterial(mat, material_block);
 
   // NOTE: Tribol will miss this contact if warm start doesn't account for contact
-  constexpr double max_disp        = 0.2;
-  auto             nonzero_disp_bc = [](vec3, double t) { return vec3{{0.0, 0.0, -max_disp * t}}; };
+  constexpr double max_disp = 0.2;
+  auto nonzero_disp_bc = [](vec3, double t) { return vec3{{0.0, 0.0, -max_disp * t}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
   solid_solver.setFixedBCs(x0_faces, Component::X);
@@ -109,7 +109,7 @@ TEST_P(ContactPatchTied, patch)
 
   // Perform the quasi-static solve
   constexpr int n_steps = 1;
-  double        dt      = 1.0 / static_cast<double>(n_steps);
+  double dt = 1.0 / static_cast<double>(n_steps);
   for (int i{0}; i < n_steps; ++i) {
     solid_solver.advanceTimestep(dt);
 
@@ -118,14 +118,14 @@ TEST_P(ContactPatchTied, patch)
   }
 
   // Check the l2 norm of the displacement dofs
-  auto                            c = (3.0 * K - 2.0 * G) / (3.0 * K + G);
+  auto c = (3.0 * K - 2.0 * G) / (3.0 * K + G);
   mfem::VectorFunctionCoefficient elasticity_sol_coeff(3, [c](const mfem::Vector& x, mfem::Vector& u) {
     u[0] = 0.25 * max_disp * c * x[0];
     u[1] = 0.25 * max_disp * c * x[1];
     u[2] = -0.5 * max_disp * x[2];
   });
-  mfem::ParFiniteElementSpace     elasticity_fes(solid_solver.displacement().space());
-  mfem::ParGridFunction           elasticity_sol(&elasticity_fes);
+  mfem::ParFiniteElementSpace elasticity_fes(solid_solver.displacement().space());
+  mfem::ParGridFunction elasticity_sol(&elasticity_fes);
   elasticity_sol.ProjectCoefficient(elasticity_sol_coeff);
   mfem::ParGridFunction approx_error(elasticity_sol);
   approx_error -= solid_solver.displacement().gridFunction();

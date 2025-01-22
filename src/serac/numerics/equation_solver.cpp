@@ -21,13 +21,13 @@ namespace serac {
 
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
 class NewtonSolver : public mfem::NewtonSolver {
-protected:
+ protected:
   /// initial solution vector to do line-search off of
   mutable mfem::Vector x0;
   /// nonlinear solver options
   NonlinearSolverOptions nonlinear_options;
 
-public:
+ public:
   /// constructor
   NewtonSolver(const NonlinearSolverOptions& nonlinear_opts) : nonlinear_options(nonlinear_opts) {}
 
@@ -93,7 +93,7 @@ public:
       mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "...\n";
     }
 
-    norm_goal            = std::max(rel_tol * initial_norm, abs_tol);
+    norm_goal = std::max(rel_tol * initial_norm, abs_tol);
     prec->iterative_mode = false;
 
     int it = 0;
@@ -136,18 +136,18 @@ public:
       add(x0, -stepScale, c, x);
       norm = evaluateNorm(x, r);
 
-      const int               max_ls_iters = nonlinear_options.max_line_search_iterations;
-      static constexpr real_t reduction    = 0.5;
+      const int max_ls_iters = nonlinear_options.max_line_search_iterations;
+      static constexpr real_t reduction = 0.5;
 
       const double sufficientDecreaseParam = 0.0;  // 1e-15;
-      const double cMagnitudeInR           = sufficientDecreaseParam != 0.0 ? std::abs(Dot(c, r)) / norm_nm1 : 0.0;
+      const double cMagnitudeInR = sufficientDecreaseParam != 0.0 ? std::abs(Dot(c, r)) / norm_nm1 : 0.0;
 
       auto is_improved = [=](real_t currentNorm, real_t c_scale) {
         return currentNorm < norm_nm1 - sufficientDecreaseParam * c_scale * cMagnitudeInR;
       };
 
       // back-track linesearch
-      int ls_iter     = 0;
+      int ls_iter = 0;
       int ls_iter_sum = 0;
       for (; !is_improved(norm, stepScale) && ls_iter < max_ls_iters; ++ls_iter, ++ls_iter_sum) {
         stepScale *= reduction;
@@ -247,7 +247,7 @@ struct TrustRegionResults {
   /// resets trust region results for a new outer iteration
   void reset()
   {
-    z            = 0.0;
+    z = 0.0;
     cauchy_point = 0.0;
   }
 
@@ -302,7 +302,7 @@ void printTrustRegionInfo(double realObjective, double modelObjective, size_t cg
  * it appears to be very effective in practice.
  */
 class TrustRegion : public mfem::NewtonSolver {
-protected:
+ protected:
   /// predicted solution
   mutable mfem::Vector x_pred;
   /// predicted residual
@@ -322,7 +322,7 @@ protected:
   /// currently required
   Solver& tr_precond;
 
-public:
+ public:
   /// internal counter for hess-vecs
   mutable size_t num_hess_vecs = 0;
   /// internal counter for preconditions
@@ -394,10 +394,10 @@ public:
     mfem::Vector b(g);
     b *= -1;
 
-    mfem::Vector                               sol;
+    mfem::Vector sol;
     std::vector<std::shared_ptr<mfem::Vector>> leftvecs;
-    std::vector<double>                        leftvals;
-    double                                     energy_change;
+    std::vector<double> leftvals;
+    double energy_change;
 
     try {
       std::tie(sol, leftvecs, leftvals, energy_change) =
@@ -414,7 +414,7 @@ public:
       left_mosts.emplace_back(std::move(lv));
     }
 
-    double base_energy     = computeEnergy(g, hess_vec_func, z);
+    double base_energy = computeEnergy(g, hess_vec_func, z);
     double subspace_energy = computeEnergy(g, hess_vec_func, sol);
 
     if (print_options.iterations || print_options.warnings) {
@@ -433,8 +433,8 @@ public:
   void projectToBoundaryBetweenWithCoefs(mfem::Vector& z, const mfem::Vector& y, double trSize, double zz, double zy,
                                          double yy) const
   {
-    double dd  = yy - 2 * zy + zz;
-    double zd  = zy - zz;
+    double dd = yy - 2 * zy + zz;
+    double zd = zy - zz;
     double tau = (std::sqrt((trSize * trSize - zz) * dd + zd * zd) - zd) / dd;
     z.Add(-tau, z);
     z.Add(tau, y);
@@ -471,7 +471,7 @@ public:
   double computeEnergy(const mfem::Vector& r_local, const HessVecFunc& H, const mfem::Vector& z) const
   {
     SERAC_MARK_FUNCTION;
-    double       rz = Dot(r_local, z);
+    double rz = Dot(r_local, z);
     mfem::Vector tmp(r_local);
     tmp = 0.0;
     H(z, tmp);
@@ -486,14 +486,14 @@ public:
   {
     SERAC_MARK_FUNCTION;
     // minimize r0@z + 0.5*z@J@z
-    results.interior_status     = TrustRegionResults::Status::Interior;
+    results.interior_status = TrustRegionResults::Status::Interior;
     results.cg_iterations_count = 0;
 
-    auto& z      = results.z;
+    auto& z = results.z;
     auto& cgIter = results.cg_iterations_count;
-    auto& d      = results.d;
-    auto& Pr     = results.Pr;
-    auto& Hd     = results.H_d;
+    auto& d = results.d;
+    auto& Pr = results.Pr;
+    auto& Hd = results.H_d;
 
     const double cg_tol_squared = settings.cg_tol * settings.cg_tol;
 
@@ -510,11 +510,11 @@ public:
     d = Pr;
     d *= -1.0;
 
-    z          = 0.0;
-    double zz  = 0.;
+    z = 0.0;
+    double zz = 0.;
     double rPr = Dot(rCurrent, Pr);
-    double zd  = 0.0;
-    double dd  = Dot(d, d);
+    double zd = 0.0;
+    double dd = Dot(d, d);
 
     // std::cout << "initial energy = " << computeEnergy(r0, hess_vec_func, z) << std::endl;
 
@@ -527,7 +527,7 @@ public:
 
       hess_vec_func(d, Hd);
       const double curvature = Dot(d, Hd);
-      const double alphaCg   = curvature != 0.0 ? rPr / curvature : 0.0;
+      const double alphaCg = curvature != 0.0 ? rPr / curvature : 0.0;
 
       auto& zPred = Pr;  // re-use Pr memory.
                          // This predicted step will no longer be used by the time Pr is, so we can avoid an extra
@@ -565,7 +565,7 @@ public:
       }
 
       double beta = rPrNp1 / rPr;
-      rPr         = rPrNp1;
+      rPr = rPrNp1;
       add(-1.0, Pr, beta, d, d);
 
       zz = zzNp1;
@@ -620,19 +620,19 @@ public:
 
     using real_t = mfem::real_t;
 
-    num_hess_vecs          = 0;
-    num_preconds           = 0;
-    num_residuals          = 0;
-    num_subspace_solves    = 0;
+    num_hess_vecs = 0;
+    num_preconds = 0;
+    num_residuals = 0;
+    num_subspace_solves = 0;
     num_jacobian_assembles = 0;
 
     real_t norm, norm_goal;
     norm = initial_norm = computeResidual(X, r);
-    norm_goal           = std::max(rel_tol * initial_norm, abs_tol);
+    norm_goal = std::max(rel_tol * initial_norm, abs_tol);
     if (print_options.first_and_last && !print_options.iterations) {
       mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "...\n";
     }
-    prec->iterative_mode      = false;
+    prec->iterative_mode = false;
     tr_precond.iterative_mode = false;
 
     // local arrays
@@ -643,16 +643,16 @@ public:
     scratch.SetSize(X.Size());
     scratch = 0.0;
 
-    TrustRegionResults  trResults(X.Size());
+    TrustRegionResults trResults(X.Size());
     TrustRegionSettings settings;
     settings.min_cg_iterations = static_cast<size_t>(nonlinear_options.min_iterations);
     settings.max_cg_iterations = static_cast<size_t>(linear_options.max_iterations);
-    settings.cg_tol            = 0.5 * norm_goal;
+    settings.cg_tol = 0.5 * norm_goal;
 
     int subspace_option = nonlinear_options.subspace_option;
-    int num_leftmost    = nonlinear_options.num_leftmost;
+    int num_leftmost = nonlinear_options.num_leftmost;
 
-    scratch        = 1.0;
+    scratch = 1.0;
     double tr_size = nonlinear_options.trust_region_scaling * std::sqrt(Dot(scratch, scratch));
     size_t cumulative_cg_iters_from_last_precond_update = 0;
 
@@ -693,7 +693,7 @@ public:
       }
 
       auto hess_vec_func = [&](const mfem::Vector& x_, mfem::Vector& v_) { hessVec(x_, v_); };
-      auto precond_func  = [&](const mfem::Vector& x_, mfem::Vector& v_) { precond(x_, v_); };
+      auto precond_func = [&](const mfem::Vector& x_, mfem::Vector& v_) { precond(x_, v_); };
 
       double cauchyPointNormSquared = tr_size * tr_size;
       trResults.reset();
@@ -722,7 +722,7 @@ public:
         trResults.z = trResults.cauchy_point;
 
         trResults.cg_iterations_count = 1;
-        trResults.interior_status     = TrustRegionResults::Status::OnBoundary;
+        trResults.interior_status = TrustRegionResults::Status::OnBoundary;
       } else {
         settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
         solveTrustRegionModelProblem(r, scratch, hess_vec_func, precond_func, settings, tr_size, trResults);
@@ -732,7 +732,7 @@ public:
       bool have_computed_Hvs = false;
 
       bool happyAboutTrSize = false;
-      int  lineSearchIter   = 0;
+      int lineSearchIter = 0;
       while (!happyAboutTrSize && lineSearchIter <= nonlinear_options.max_line_search_iterations) {
         ++lineSearchIter;
 
@@ -767,27 +767,27 @@ public:
         static constexpr double roundOffTol = 0.0;  // 1e-14;
 
         hess_vec_func(trResults.d, trResults.H_d);
-        double dHd            = Dot(trResults.d, trResults.H_d);
+        double dHd = Dot(trResults.d, trResults.H_d);
         double modelObjective = Dot(r, trResults.d) + 0.5 * dHd - roundOffTol;
 
         add(X, trResults.d, x_pred);
 
         double realObjective = std::numeric_limits<double>::max();
-        double normPred      = std::numeric_limits<double>::max();
+        double normPred = std::numeric_limits<double>::max();
         try {
-          normPred      = computeResidual(x_pred, r_pred);
-          double obj1   = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
+          normPred = computeResidual(x_pred, r_pred);
+          double obj1 = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
           realObjective = obj1;
         } catch (const std::exception&) {
           realObjective = std::numeric_limits<double>::max();
-          normPred      = std::numeric_limits<double>::max();
+          normPred = std::numeric_limits<double>::max();
         }
 
         if (normPred <= norm_goal) {
-          trResults.d_old  = trResults.d;
-          X                = x_pred;
-          r                = r_pred;
-          norm             = normPred;
+          trResults.d_old = trResults.d;
+          X = x_pred;
+          r = r_pred;
+          norm = normPred;
           happyAboutTrSize = true;
           if (print_options.iterations) {
             printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
@@ -798,7 +798,7 @@ public:
         }
 
         double modelImprove = -modelObjective;
-        double realImprove  = -realObjective;
+        double realImprove = -realObjective;
 
         double rho = realImprove / modelImprove;
         if (modelObjective > 0) {
@@ -836,10 +836,10 @@ public:
         }
 
         if (willAccept) {
-          trResults.d_old  = trResults.d;
-          X                = x_pred;
-          r                = r_pred;
-          norm             = normPred;
+          trResults.d_old = trResults.d;
+          X = x_pred;
+          r = r_pred;
+          norm = normPred;
           happyAboutTrSize = true;
           break;
         }
@@ -870,20 +870,20 @@ EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolv
 {
   auto [lin_solver, preconditioner] = buildLinearSolverAndPreconditioner(lin_opts, comm);
 
-  lin_solver_     = std::move(lin_solver);
+  lin_solver_ = std::move(lin_solver);
   preconditioner_ = std::move(preconditioner);
-  nonlin_solver_  = buildNonlinearSolver(nonlinear_opts, lin_opts, *preconditioner_, comm);
+  nonlin_solver_ = buildNonlinearSolver(nonlinear_opts, lin_opts, *preconditioner_, comm);
 }
 
 EquationSolver::EquationSolver(std::unique_ptr<mfem::NewtonSolver> nonlinear_solver,
-                               std::unique_ptr<mfem::Solver>       linear_solver,
-                               std::unique_ptr<mfem::Solver>       preconditioner)
+                               std::unique_ptr<mfem::Solver> linear_solver,
+                               std::unique_ptr<mfem::Solver> preconditioner)
 {
   SLIC_ERROR_ROOT_IF(!nonlinear_solver, "Nonlinear solvers must be given to construct an EquationSolver");
   SLIC_ERROR_ROOT_IF(!linear_solver, "Linear solvers must be given to construct an EquationSolver");
 
-  nonlin_solver_  = std::move(nonlinear_solver);
-  lin_solver_     = std::move(linear_solver);
+  nonlin_solver_ = std::move(nonlinear_solver);
+  lin_solver_ = std::move(linear_solver);
   preconditioner_ = std::move(preconditioner);
 }
 
@@ -1053,7 +1053,7 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(const NonlinearSolverOp
         SLIC_ERROR_ROOT("Unknown KINSOL nonlinear solver type given.");
     }
     auto kinsol_solver = std::make_unique<mfem::KINSolver>(comm, kinsol_strat, true);
-    nonlinear_solver   = std::move(kinsol_solver);
+    nonlinear_solver = std::move(kinsol_solver);
 #else
     SLIC_ERROR_ROOT("KINSOL was not enabled when MFEM was built");
 #endif
@@ -1134,21 +1134,21 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
 #ifdef MFEM_USE_AMGX
 std::unique_ptr<mfem::AmgXSolver> buildAMGX(const AMGXOptions& options, const MPI_Comm comm)
 {
-  auto          amgx = std::make_unique<mfem::AmgXSolver>();
+  auto amgx = std::make_unique<mfem::AmgXSolver>();
   conduit::Node options_node;
   options_node["config_version"] = 2;
-  auto& solver_options           = options_node["solver"];
-  solver_options["solver"]       = "AMG";
-  solver_options["presweeps"]    = 1;
-  solver_options["postsweeps"]   = 2;
+  auto& solver_options = options_node["solver"];
+  solver_options["solver"] = "AMG";
+  solver_options["presweeps"] = 1;
+  solver_options["postsweeps"] = 2;
   solver_options["interpolator"] = "D2";
-  solver_options["max_iters"]    = 2;
-  solver_options["convergence"]  = "ABSOLUTE";
-  solver_options["cycle"]        = "V";
+  solver_options["max_iters"] = 2;
+  solver_options["convergence"] = "ABSOLUTE";
+  solver_options["cycle"] = "V";
 
   if (options.verbose) {
-    options_node["solver/obtain_timings"]    = 1;
-    options_node["solver/monitor_residual"]  = 1;
+    options_node["solver/obtain_timings"] = 1;
+    options_node["solver/monitor_residual"] = 1;
     options_node["solver/print_solve_stats"] = 1;
   }
 
@@ -1158,24 +1158,24 @@ std::unique_ptr<mfem::AmgXSolver> buildAMGX(const AMGXOptions& options, const MP
   // in the constructor
   static const auto solver_names = []() {
     std::unordered_map<AMGXSolver, std::string> names;
-    names[AMGXSolver::AMG]             = "AMG";
-    names[AMGXSolver::PCGF]            = "PCGF";
-    names[AMGXSolver::CG]              = "CG";
-    names[AMGXSolver::PCG]             = "PCG";
-    names[AMGXSolver::PBICGSTAB]       = "PBICGSTAB";
-    names[AMGXSolver::BICGSTAB]        = "BICGSTAB";
-    names[AMGXSolver::FGMRES]          = "FGMRES";
-    names[AMGXSolver::JACOBI_L1]       = "JACOBI_L1";
-    names[AMGXSolver::GS]              = "GS";
-    names[AMGXSolver::POLYNOMIAL]      = "POLYNOMIAL";
-    names[AMGXSolver::KPZ_POLYNOMIAL]  = "KPZ_POLYNOMIAL";
-    names[AMGXSolver::BLOCK_JACOBI]    = "BLOCK_JACOBI";
-    names[AMGXSolver::MULTICOLOR_GS]   = "MULTICOLOR_GS";
+    names[AMGXSolver::AMG] = "AMG";
+    names[AMGXSolver::PCGF] = "PCGF";
+    names[AMGXSolver::CG] = "CG";
+    names[AMGXSolver::PCG] = "PCG";
+    names[AMGXSolver::PBICGSTAB] = "PBICGSTAB";
+    names[AMGXSolver::BICGSTAB] = "BICGSTAB";
+    names[AMGXSolver::FGMRES] = "FGMRES";
+    names[AMGXSolver::JACOBI_L1] = "JACOBI_L1";
+    names[AMGXSolver::GS] = "GS";
+    names[AMGXSolver::POLYNOMIAL] = "POLYNOMIAL";
+    names[AMGXSolver::KPZ_POLYNOMIAL] = "KPZ_POLYNOMIAL";
+    names[AMGXSolver::BLOCK_JACOBI] = "BLOCK_JACOBI";
+    names[AMGXSolver::MULTICOLOR_GS] = "MULTICOLOR_GS";
     names[AMGXSolver::MULTICOLOR_DILU] = "MULTICOLOR_DILU";
     return names;
   }();
 
-  options_node["solver/solver"]   = solver_names.at(options.solver);
+  options_node["solver/solver"] = solver_names.at(options.solver);
   options_node["solver/smoother"] = solver_names.at(options.smoother);
 
   // Treat the string as the config (not a filename)
@@ -1189,8 +1189,8 @@ std::unique_ptr<mfem::AmgXSolver> buildAMGX(const AMGXOptions& options, const MP
 std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opts, [[maybe_unused]] MPI_Comm comm)
 {
   std::unique_ptr<mfem::Solver> preconditioner_solver;
-  auto                          preconditioner = linear_opts.preconditioner;
-  auto                          print_level    = linear_opts.print_level;
+  auto preconditioner = linear_opts.preconditioner;
+  auto print_level = linear_opts.print_level;
 
   // Handle the preconditioner - currently just BoomerAMG and HypreSmoother are supported
   if (preconditioner == Preconditioner::HypreAMG) {
@@ -1281,19 +1281,19 @@ using serac::NonlinearSolverOptions;
 serac::LinearSolverOptions FromInlet<serac::LinearSolverOptions>::operator()(const axom::inlet::Container& base)
 {
   LinearSolverOptions options;
-  std::string         type = base["type"];
+  std::string type = base["type"];
 
   if (type == "direct") {
     options.linear_solver = serac::LinearSolver::SuperLU;
-    options.print_level   = base["direct_options/print_level"];
+    options.print_level = base["direct_options/print_level"];
     return options;
   }
 
-  auto config             = base["iterative_options"];
-  options.relative_tol    = config["rel_tol"];
-  options.absolute_tol    = config["abs_tol"];
-  options.max_iterations  = config["max_iter"];
-  options.print_level     = config["print_level"];
+  auto config = base["iterative_options"];
+  options.relative_tol = config["rel_tol"];
+  options.absolute_tol = config["abs_tol"];
+  options.max_iterations = config["max_iter"];
+  options.print_level = config["print_level"];
   std::string solver_type = config["solver_type"];
   if (solver_type == "gmres") {
     options.linear_solver = serac::LinearSolver::GMRES;
@@ -1321,7 +1321,7 @@ serac::LinearSolverOptions FromInlet<serac::LinearSolverOptions>::operator()(con
 #ifdef SERAC_USE_PETSC
   } else if (prec_type == "Petsc") {
     const std::string petsc_prec = config["petsc_prec_type"];
-    options.preconditioner       = serac::Preconditioner::Petsc;
+    options.preconditioner = serac::Preconditioner::Petsc;
     options.petsc_preconditioner = serac::mfem_ext::stringToPetscPCType(petsc_prec);
 #endif
   } else {
@@ -1335,10 +1335,10 @@ serac::LinearSolverOptions FromInlet<serac::LinearSolverOptions>::operator()(con
 serac::NonlinearSolverOptions FromInlet<serac::NonlinearSolverOptions>::operator()(const axom::inlet::Container& base)
 {
   NonlinearSolverOptions options;
-  options.relative_tol          = base["rel_tol"];
-  options.absolute_tol          = base["abs_tol"];
-  options.max_iterations        = base["max_iter"];
-  options.print_level           = base["print_level"];
+  options.relative_tol = base["rel_tol"];
+  options.absolute_tol = base["abs_tol"];
+  options.max_iterations = base["max_iter"];
+  options.print_level = base["print_level"];
   const std::string solver_type = base["solver_type"];
   if (solver_type == "Newton") {
     options.nonlin_solver = serac::NonlinearSolver::Newton;
@@ -1356,7 +1356,7 @@ serac::NonlinearSolverOptions FromInlet<serac::NonlinearSolverOptions>::operator
 
 serac::EquationSolver FromInlet<serac::EquationSolver>::operator()(const axom::inlet::Container& base)
 {
-  auto lin    = base["linear"].get<LinearSolverOptions>();
+  auto lin = base["linear"].get<LinearSolverOptions>();
   auto nonlin = base["nonlinear"].get<NonlinearSolverOptions>();
 
   auto [linear_solver, preconditioner] = serac::buildLinearSolverAndPreconditioner(lin, MPI_COMM_WORLD);

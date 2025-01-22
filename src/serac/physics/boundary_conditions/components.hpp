@@ -19,15 +19,15 @@ namespace serac {
 /// Type giving vector components meaningful names and restricting inputs to Components class to meaningful values
 enum class Component : size_t
 {
-  X   = 0b001,
-  Y   = 0b010,
-  Z   = 0b100,
+  X = 0b001,
+  Y = 0b010,
+  Z = 0b100,
   ALL = 0b111
 };
 
 /// A set to flag components of a vector field
 class Components {
-public:
+ public:
   /// @brief Constructor
   Components(Component i) : flags_{size_t(i)} {};
 
@@ -47,7 +47,7 @@ public:
   /// See docstring on function definition
   friend Components operator+(Component i, Components j);
 
-private:
+ private:
   /// @brief Stores a bitmask indicating which of the X, Y, and Z vector components are currently flagged
   std::bitset<3> flags_;
 };

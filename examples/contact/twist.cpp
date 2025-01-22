@@ -31,17 +31,17 @@ int main(int argc, char* argv[])
   constexpr int dim = 3;
 
   // Create DataStore
-  std::string            name = "contact_twist_example";
+  std::string name = "contact_twist_example";
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, name + "_data");
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
 
-  auto  mesh  = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 3, 0);
+  auto mesh = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 3, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "twist_mesh");
 
-  auto fixed_surface  = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
+  auto fixed_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
   auto driven_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
 
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
@@ -50,22 +50,22 @@ int main(int argc, char* argv[])
   return 1;
 #endif
 
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = serac::NonlinearSolver::Newton,
-                                                  .relative_tol   = 1.0e-7,
-                                                  .absolute_tol   = 1.0e-4,
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-7,
+                                                  .absolute_tol = 1.0e-4,
                                                   .max_iterations = 200,
-                                                  .print_level    = 1};
+                                                  .print_level = 1};
 
-  serac::ContactOptions contact_options{.method      = serac::ContactMethod::SingleMortar,
+  serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                         .enforcement = serac::ContactEnforcement::Penalty,
-                                        .type        = serac::ContactType::Frictionless,
-                                        .penalty     = 1.0e5};
+                                        .type = serac::ContactType::Frictionless,
+                                        .penalty = 1.0e5};
 
   serac::SolidMechanicsContact<p, dim> solid_solver(
       nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "twist_mesh");
 
   serac::solid_mechanics::NeoHookean mat{1.0, 10.0, 10.0};
-  serac::Domain                      whole_mesh = serac::EntireDomain(pmesh);
+  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
   solid_solver.setMaterial(mat, whole_mesh);
 
   // Pass the BC information to the solver object
@@ -88,7 +88,7 @@ int main(int argc, char* argv[])
   solid_solver.setDisplacementBCs(applied_displacement, driven_surface);
 
   // Add the contact interaction
-  auto          contact_interaction_id = 0;
+  auto contact_interaction_id = 0;
   std::set<int> surface_1_boundary_attributes({4});
   std::set<int> surface_2_boundary_attributes({5});
   solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,

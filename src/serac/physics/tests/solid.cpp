@@ -32,10 +32,10 @@ void functional_solid_test_static_J2()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  constexpr int p                   = 2;
-  constexpr int dim                 = 3;
-  int           serial_refinement   = 0;
-  int           parallel_refinement = 0;
+  constexpr int p = 2;
+  constexpr int dim = 3;
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
 
   // Create DataStore
   axom::sidre::DataStore datastore;
@@ -53,26 +53,26 @@ void functional_solid_test_static_J2()
   // _solver_params_start
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
-                                                  .relative_tol   = 1.0e-12,
-                                                  .absolute_tol   = 1.0e-12,
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-12,
+                                                  .absolute_tol = 1.0e-12,
                                                   .max_iterations = 5000,
-                                                  .print_level    = 1};
+                                                  .print_level = 1};
 
   SolidMechanics<p, dim> solid_solver(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                       "solid_mechanics", mesh_tag);
   // _solver_params_end
 
   using Hardening = solid_mechanics::LinearHardening;
-  using Material  = solid_mechanics::J2SmallStrain<Hardening>;
+  using Material = solid_mechanics::J2SmallStrain<Hardening>;
 
   Hardening hardening{.sigma_y = 50.0, .Hi = 50.0};
-  Material  mat{
-       .E         = 10000,  // Young's modulus
-       .nu        = 0.25,   // Poisson's ratio
-       .hardening = hardening,
-       .Hk        = 5.0,  // kinematic hardening constant
-       .density   = 1.0   // mass density
+  Material mat{
+      .E = 10000,  // Young's modulus
+      .nu = 0.25,  // Poisson's ratio
+      .hardening = hardening,
+      .Hk = 5.0,      // kinematic hardening constant
+      .density = 1.0  // mass density
   };
 
   Material::State initial_state{};
@@ -101,8 +101,8 @@ void functional_solid_test_static_J2()
   solid_solver.outputStateToDisk("paraview");
 
   // Perform the quasi-static solve
-  int    num_steps = 10;
-  double tmax      = 1.0;
+  int num_steps = 10;
+  double tmax = 1.0;
   for (int i = 0; i < num_steps; i++) {
     solid_solver.advanceTimestep(tmax / num_steps);
     solid_solver.outputStateToDisk("paraview");
@@ -131,7 +131,7 @@ void functional_parameterized_solid_test(double expected_disp_norm)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 0;
+  int serial_refinement = 0;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -186,7 +186,7 @@ void functional_parameterized_solid_test(double expected_disp_norm)
   solid_solver.setParameter(0, user_defined_bulk_modulus);
   solid_solver.setParameter(1, user_defined_shear_modulus);
 
-  Domain whole_domain   = EntireDomain(pmesh);
+  Domain whole_domain = EntireDomain(pmesh);
   Domain whole_boundary = EntireBoundary(pmesh);
 
   solid_mechanics::ParameterizedLinearIsotropicSolid mat{1.0, 0.0, 0.0};
@@ -196,7 +196,6 @@ void functional_parameterized_solid_test(double expected_disp_norm)
   Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
 
   solid_solver.setFixedBCs(essential_boundary);
-  solid_solver.setDisplacement([](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; });
 
   tensor<double, dim> constant_force;
 

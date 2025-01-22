@@ -31,7 +31,7 @@ namespace serac {
  */
 template <int order, int dim, typename... parameter_space>
 class Thermomechanics : public BasePhysics {
-public:
+ public:
   /**
    * @brief Construct a new coupled Thermal-SolidMechanics object
    *
@@ -299,7 +299,7 @@ public:
       // state variables.
       State state{};
 
-      auto [u, du_dX]                 = displacement;
+      auto [u, du_dX] = displacement;
       auto [T, heat_capacity, s0, q0] = mat(state, du_dX, temperature, temperature_gradient, parameters...);
 
       return serac::tuple{heat_capacity, q0};
@@ -341,7 +341,7 @@ public:
     SERAC_HOST_DEVICE auto operator()(State& state, const T1& displacement_gradient, const T2& temperature,
                                       param_types... parameters) const
     {
-      auto [theta, dtheta_dX]         = temperature;
+      auto [theta, dtheta_dX] = temperature;
       auto [T, heat_capacity, s0, q0] = mat(state, displacement_gradient, theta, dtheta_dX, parameters...);
       return T;
     }
@@ -399,7 +399,7 @@ public:
    * @param[in] temperature_attributes The boundary attributes on which to enforce a temperature
    * @param[in] prescribed_value The prescribed boundary temperature function
    */
-  void setTemperatureBCs(const std::set<int>&                                   temperature_attributes,
+  void setTemperatureBCs(const std::set<int>& temperature_attributes,
                          std::function<double(const mfem::Vector& x, double t)> prescribed_value)
   {
     thermal_.setTemperatureBCs(temperature_attributes, prescribed_value);
@@ -475,7 +475,8 @@ public:
    *
    * @param displacement The function describing the displacement field
    */
-  void setDisplacement(std::function<void(const mfem::Vector& x, mfem::Vector& u)> displacement)
+  template <typename Callable>
+  void setDisplacement(Callable displacement)
   {
     solid_.setDisplacement(displacement);
   }
@@ -550,9 +551,9 @@ public:
    */
   const serac::FiniteElementState& temperature() const { return thermal_.temperature(); };
 
-protected:
+ protected:
   using displacement_field = H1<order, dim>;  ///< the function space for the displacement field
-  using temperature_field  = H1<order>;       ///< the function space for the temperature field
+  using temperature_field = H1<order>;        ///< the function space for the temperature field
 
   /// Submodule to compute the heat transfer physics
   HeatTransfer<order, dim, Parameters<displacement_field, parameter_space...>> thermal_;

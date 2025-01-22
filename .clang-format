@@ -1,7 +1,5 @@
 BasedOnStyle: Google
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
-AccessModifierOffset: -2
+AccessModifierOffset: -1
 ColumnLimit: 120
 BreakBeforeBraces: Custom
 BraceWrapping:

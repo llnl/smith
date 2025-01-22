@@ -73,21 +73,21 @@ tensor<double, 3, 3> verification_analytic_soln(double t)
 
 TEST(J2SmallStrain, Verification)
 {
-  double tmax      = 2.0;
+  double tmax = 2.0;
   size_t num_steps = 64;
 
   double G = 79000;
   double K = 10 * G;
 
-  double E       = 9 * K * G / (3 * K + G);
-  double nu      = (3 * K - 2 * G) / (2 * (3 * K + G));
+  double E = 9 * K * G / (3 * K + G);
+  double nu = (3 * K - 2 * G) / (2 * (3 * K + G));
   double sigma_y = 165 * std::sqrt(3.0);
 
   using Hardening = solid_mechanics::LinearHardening;
-  using Material  = solid_mechanics::J2SmallStrain<Hardening>;
+  using Material = solid_mechanics::J2SmallStrain<Hardening>;
 
-  Hardening       hardening{.sigma_y = sigma_y, .Hi = 0.0};
-  Material        material{.E = E, .nu = nu, .hardening = hardening, .Hk = 0.0, .density = 1.0};
+  Hardening hardening{.sigma_y = sigma_y, .Hi = 0.0};
+  Material material{.E = E, .nu = nu, .hardening = hardening, .Hk = 0.0, .density = 1.0};
   Material::State initial_state{};
 
   tensor<double, 3> epsilon[2] = {{-0.0030000, -0.003, 0.0060000}, {-0.0103923, 0.000, 0.0103923}};
@@ -114,10 +114,10 @@ TEST(J2SmallStrain, Verification)
 
 TEST(J2, PowerLawHardeningWorksWithDuals)
 {
-  double                             sigma_y = 1.0;
+  double sigma_y = 1.0;
   solid_mechanics::PowerLawHardening hardening_law{.sigma_y = sigma_y, .n = 2.0, .eps0 = 0.01};
-  double                             eqps        = 0.1;
-  auto                               flow_stress = hardening_law(make_dual(eqps));
+  double eqps = 0.1;
+  auto flow_stress = hardening_law(make_dual(eqps));
   EXPECT_GT(flow_stress.value, sigma_y);
   EXPECT_GT(flow_stress.gradient, 0.0);
 };
@@ -133,36 +133,36 @@ TEST(J2SmallStrain, SatisfiesConsistency)
   // clang-format on
 
   using Hardening = solid_mechanics::PowerLawHardening;
-  using Material  = solid_mechanics::J2SmallStrain<Hardening>;
+  using Material = solid_mechanics::J2SmallStrain<Hardening>;
 
-  Hardening            hardening_law{.sigma_y = 0.1, .n = 2.0, .eps0 = 0.01};
-  Material             material{.E = 1.0, .nu = 0.25, .hardening = hardening_law, .Hk = 0.0, .density = 1.0};
-  auto                 internal_state = Material::State{};
-  tensor<double, 3, 3> stress         = material(internal_state, du_dx);
-  double               mises          = std::sqrt(1.5) * norm(dev(stress));
-  double               flow_stress    = hardening_law(internal_state.accumulated_plastic_strain);
+  Hardening hardening_law{.sigma_y = 0.1, .n = 2.0, .eps0 = 0.01};
+  Material material{.E = 1.0, .nu = 0.25, .hardening = hardening_law, .Hk = 0.0, .density = 1.0};
+  auto internal_state = Material::State{};
+  tensor<double, 3, 3> stress = material(internal_state, du_dx);
+  double mises = std::sqrt(1.5) * norm(dev(stress));
+  double flow_stress = hardening_law(internal_state.accumulated_plastic_strain);
   EXPECT_NEAR(mises, flow_stress, 1e-9 * mises);
 
-  double               twoG = material.E / (1 + material.nu);
-  tensor<double, 3, 3> s    = twoG * dev(sym(du_dx) - internal_state.plastic_strain);
+  double twoG = material.E / (1 + material.nu);
+  tensor<double, 3, 3> s = twoG * dev(sym(du_dx) - internal_state.plastic_strain);
   EXPECT_LT(norm(s - dev(stress)) / norm(s), 1e-9);
 };
 
 TEST(J2SmallStrain, Uniaxial)
 {
   using Hardening = solid_mechanics::LinearHardening;
-  using Material  = solid_mechanics::J2SmallStrain<Hardening>;
+  using Material = solid_mechanics::J2SmallStrain<Hardening>;
 
-  double E       = 1.0;
-  double nu      = 0.25;
+  double E = 1.0;
+  double nu = 0.25;
   double sigma_y = 0.01;
-  double Hi      = E / 100.0;
+  double Hi = E / 100.0;
 
   Hardening hardening{.sigma_y = sigma_y, .Hi = Hi};
-  Material  material{.E = E, .nu = nu, .hardening = hardening, .Hk = 0.0, .density = 1.0};
+  Material material{.E = E, .nu = nu, .hardening = hardening, .Hk = 0.0, .density = 1.0};
 
-  auto internal_state   = Material::State{};
-  auto strain           = [=](double t) { return sigma_y / E * t; };
+  auto internal_state = Material::State{};
+  auto strain = [=](double t) { return sigma_y / E * t; };
   auto response_history = uniaxial_stress_test(2.0, 4, material, internal_state, strain);
 
   auto stress_exact = [=](double epsilon) {
@@ -173,8 +173,8 @@ TEST(J2SmallStrain, Uniaxial)
   };
 
   for (auto r : response_history) {
-    double e  = get<1>(r)[0][0];                 // strain
-    double s  = get<2>(r)[0][0];                 // stress
+    double e = get<1>(r)[0][0];                  // strain
+    double s = get<2>(r)[0][0];                  // stress
     double pe = get<3>(r).plastic_strain[0][0];  // plastic strain
     ASSERT_LE(std::abs(s - stress_exact(e)), 1e-10 * std::abs(stress_exact(e)));
     ASSERT_LE(std::abs(pe - plastic_strain_exact(e)), 1e-10 * std::abs(plastic_strain_exact(e)));
@@ -189,17 +189,17 @@ TEST(J2, Uniaxial)
   */
 
   using Hardening = solid_mechanics::LinearHardening;
-  using Material  = solid_mechanics::J2<Hardening>;
+  using Material = solid_mechanics::J2<Hardening>;
 
-  double E       = 1.0;
+  double E = 1.0;
   double sigma_y = 0.01;
-  double Hi      = E / 100.0;
+  double Hi = E / 100.0;
 
   Hardening hardening{.sigma_y = sigma_y, .Hi = Hi};
-  Material  material{.E = E, .nu = 0.25, .hardening = hardening, .density = 1.0};
+  Material material{.E = E, .nu = 0.25, .hardening = hardening, .density = 1.0};
 
-  auto internal_state   = Material::State{};
-  auto strain           = [=](double t) { return sigma_y / E * t; };
+  auto internal_state = Material::State{};
+  auto strain = [=](double t) { return sigma_y / E * t; };
   auto response_history = uniaxial_stress_test(2.0, 4, material, internal_state, strain);
 
   auto stress_exact = [=](double epsilon) {
@@ -211,10 +211,10 @@ TEST(J2, Uniaxial)
 
   for (auto r : response_history) {
     auto [t, dudx, P, state] = r;
-    auto   TK                = dot(P, transpose(dudx + Identity<3>()));
-    double e                 = std::log1p(get<1>(r)[0][0]);       // log strain
-    double s                 = TK[0][0];                          // Kirchhoff stress
-    double pe                = -std::log(get<3>(r).Fpinv[0][0]);  // plastic strain
+    auto TK = dot(P, transpose(dudx + Identity<3>()));
+    double e = std::log1p(get<1>(r)[0][0]);        // log strain
+    double s = TK[0][0];                           // Kirchhoff stress
+    double pe = -std::log(get<3>(r).Fpinv[0][0]);  // plastic strain
     ASSERT_NEAR(s, stress_exact(e), 1e-6 * std::abs(stress_exact(e)));
     ASSERT_NEAR(pe, plastic_strain_exact(e), 1e-6 * std::abs(plastic_strain_exact(e)));
   }
@@ -229,10 +229,10 @@ TEST(J2, DerivativeCorrectness)
   // solve.
 
   using Hardening = solid_mechanics::PowerLawHardening;
-  using Material  = solid_mechanics::J2<Hardening>;
+  using Material = solid_mechanics::J2<Hardening>;
 
   Hardening hardening{.sigma_y = 350e6, .n = 3, .eps0 = 0.00175};
-  Material  material{.E = 200e9, .nu = 0.25, .hardening = hardening, .density = 1.0};
+  Material material{.E = 200e9, .nu = 0.25, .hardening = hardening, .density = 1.0};
 
   // initialize internal state variables
   auto internal_state = Material::State{};
@@ -251,7 +251,7 @@ TEST(J2, DerivativeCorrectness)
   // clang-format on
 
   auto stress_and_tangent = material(internal_state, make_dual(H));
-  auto tangent            = get_gradient(stress_and_tangent);
+  auto tangent = get_gradient(stress_and_tangent);
 
   // make sure that this load case is actually yielding
   ASSERT_GT(internal_state.accumulated_plastic_strain, 1e-3);
@@ -260,10 +260,10 @@ TEST(J2, DerivativeCorrectness)
 
   // finite difference evaluations
   auto internal_state_old_p = Material::State{};
-  auto stress_p             = material(internal_state_old_p, H + epsilon * dH);
+  auto stress_p = material(internal_state_old_p, H + epsilon * dH);
 
   auto internal_state_old_m = Material::State{};
-  auto stress_m             = material(internal_state_old_m, H - epsilon * dH);
+  auto stress_m = material(internal_state_old_m, H - epsilon * dH);
 
   // Make sure the finite difference evaluations all took the same branch (yielding).
   ASSERT_GT(internal_state_old_p.accumulated_plastic_strain, 1e-3);
@@ -278,10 +278,10 @@ TEST(J2, DerivativeCorrectness)
 TEST(J2, FrameIndifference)
 {
   using Hardening = solid_mechanics::VoceHardening;
-  using Material  = solid_mechanics::J2<Hardening>;
+  using Material = solid_mechanics::J2<Hardening>;
 
   Hardening hardening{.sigma_y = 350e6, .sigma_sat = 700e6, .strain_constant = 0.01};
-  Material  material{.E = 200.0e9, .nu = 0.25, .hardening = hardening, .density = 1.0};
+  Material material{.E = 200.0e9, .nu = 0.25, .hardening = hardening, .density = 1.0};
 
   // clang-format off
   const tensor<double, 3, 3> H{{

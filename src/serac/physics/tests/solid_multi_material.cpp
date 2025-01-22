@@ -30,18 +30,18 @@ TEST(Solid, MultiMaterial)
    */
   MPI_Barrier(MPI_COMM_WORLD);
 
-  constexpr int p                   = 2;
-  constexpr int dim                 = 3;
-  int           serial_refinement   = 0;
-  int           parallel_refinement = 0;
+  constexpr int p = 2;
+  constexpr int dim = 3;
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
 
   // Create DataStore
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "solid_mechanics_multimaterial");
 
-  constexpr double L      = 8.0;
-  constexpr double W      = 1.0;
-  constexpr double H      = 1.0;
+  constexpr double L = 8.0;
+  constexpr double W = 1.0;
+  constexpr double H = 1.0;
   constexpr double VOLUME = L * W * H;
 
   auto mesh = mesh::refineAndDistribute(buildCuboidMesh(8, 1, 1, L, W, H), serial_refinement, parallel_refinement);
@@ -51,19 +51,19 @@ TEST(Solid, MultiMaterial)
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // identify the relevant boundary domains on this mesh
-  Domain x_min    = Domain::ofBoundaryElements(pmesh, by_attr<dim>(5));
-  Domain y_min    = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
-  Domain z_min    = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  Domain x_min = Domain::ofBoundaryElements(pmesh, by_attr<dim>(5));
+  Domain y_min = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  Domain z_min = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
   Domain end_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(3));
 
   // _solver_params_start
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
-                                                  .relative_tol   = 1.0e-12,
-                                                  .absolute_tol   = 1.0e-12,
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-12,
+                                                  .absolute_tol = 1.0e-12,
                                                   .max_iterations = 5000,
-                                                  .print_level    = 1};
+                                                  .print_level = 1};
 
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                "solid_mechanics", mesh_tag);
@@ -71,18 +71,18 @@ TEST(Solid, MultiMaterial)
 
   using Material = solid_mechanics::LinearIsotropic;
 
-  constexpr double E_left  = 1.0;
+  constexpr double E_left = 1.0;
   constexpr double nu_left = 0.125;
-  Material         mat_left{.density = 1.0, .K = E_left / 3.0 / (1 - 2 * nu_left), .G = 0.5 * E_left / (1 + nu_left)};
+  Material mat_left{.density = 1.0, .K = E_left / 3.0 / (1 - 2 * nu_left), .G = 0.5 * E_left / (1 + nu_left)};
 
-  constexpr double E_right  = 2.0 * E_left;
+  constexpr double E_right = 2.0 * E_left;
   constexpr double nu_right = 2 * nu_left;
   Material mat_right{.density = 1.0, .K = E_right / 3.0 / (1 - 2 * nu_right), .G = 0.5 * E_right / (1 + nu_right)};
 
   auto is_in_left = [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
     return average(coords)[0] < 0.5 * L;
   };
-  Domain left  = Domain::ofElements(pmesh, is_in_left);
+  Domain left = Domain::ofElements(pmesh, is_in_left);
   Domain right = EntireDomain(pmesh) - left;
 
   solid.setMaterial(mat_left, left);
@@ -147,18 +147,18 @@ TEST(Solid, MultiMaterialWithState)
    */
   MPI_Barrier(MPI_COMM_WORLD);
 
-  constexpr int p                   = 2;
-  constexpr int dim                 = 3;
-  int           serial_refinement   = 0;
-  int           parallel_refinement = 0;
+  constexpr int p = 2;
+  constexpr int dim = 3;
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
 
   // Create DataStore
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "solid_mechanics_multimaterial_with_state");
 
-  constexpr double L      = 8.0;
-  constexpr double W      = 1.0;
-  constexpr double H      = 1.0;
+  constexpr double L = 8.0;
+  constexpr double W = 1.0;
+  constexpr double H = 1.0;
   constexpr double VOLUME = L * W * H;
 
   constexpr double applied_stress = 1.0;
@@ -175,11 +175,11 @@ TEST(Solid, MultiMaterialWithState)
 
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
-                                                  .relative_tol   = 1.0e-12,
-                                                  .absolute_tol   = 1.0e-12,
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-12,
+                                                  .absolute_tol = 1.0e-12,
                                                   .max_iterations = 5000,
-                                                  .print_level    = 1};
+                                                  .print_level = 1};
 
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                "solid_mechanics", mesh_tag);
@@ -187,34 +187,34 @@ TEST(Solid, MultiMaterialWithState)
   auto is_in_left = [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
     return average(coords)[0] < 0.5 * L;
   };
-  Domain left  = Domain::ofElements(pmesh, is_in_left);
+  Domain left = Domain::ofElements(pmesh, is_in_left);
   Domain right = EntireDomain(pmesh) - left;
 
-  using Hardening     = solid_mechanics::LinearHardening;
+  using Hardening = solid_mechanics::LinearHardening;
   using MaterialRight = solid_mechanics::J2SmallStrain<Hardening>;
 
-  constexpr double E_right  = 2.0;
+  constexpr double E_right = 2.0;
   constexpr double nu_right = 0.0;
-  constexpr double Hi       = E_right / 3.6;
-  constexpr double sigma_y  = 0.75 * applied_stress;
+  constexpr double Hi = E_right / 3.6;
+  constexpr double sigma_y = 0.75 * applied_stress;
 
-  Hardening     hardening{.sigma_y = sigma_y, .Hi = Hi};
+  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi};
   MaterialRight mat_right{
-      .E         = E_right,   // Young's modulus
-      .nu        = nu_right,  // Poisson's ratio
+      .E = E_right,    // Young's modulus
+      .nu = nu_right,  // Poisson's ratio
       .hardening = hardening,
-      .Hk        = 0.0,  // kinematic hardening constant
-      .density   = 1.0   // mass density
+      .Hk = 0.0,      // kinematic hardening constant
+      .density = 1.0  // mass density
   };
 
   using MaterialLeft = solid_mechanics::LinearIsotropic;
 
-  constexpr double E_left  = 2.0;
+  constexpr double E_left = 2.0;
   constexpr double nu_left = 0.5 * E_left / Hi * (1 - sigma_y / applied_stress);
-  MaterialLeft     mat_left{.density = 1.0, .K = E_left / 3.0 / (1 - 2 * nu_left), .G = 0.5 * E_left / (1 + nu_left)};
+  MaterialLeft mat_left{.density = 1.0, .K = E_left / 3.0 / (1 - 2 * nu_left), .G = 0.5 * E_left / (1 + nu_left)};
 
   MaterialRight::State initial_state{};
-  auto                 qdata = solid.createQuadratureDataBuffer(initial_state, right);
+  auto qdata = solid.createQuadratureDataBuffer(initial_state, right);
 
   solid.setMaterial(mat_left, left);
   solid.setMaterial(mat_right, right, qdata);

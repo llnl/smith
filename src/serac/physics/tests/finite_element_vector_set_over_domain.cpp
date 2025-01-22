@@ -57,7 +57,7 @@ TEST(FiniteElementVector, SetScalarFieldOver2DDomain)
 
 TEST(FiniteElementVector, SetVectorFieldOver2DDomain)
 {
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -88,9 +88,9 @@ TEST(FiniteElementVector, SetVectorFieldOver2DDomain)
   u = 0.0;
   u.project(func, essential_boundary);
 
-  auto vdim  = u.space().GetVDim();
+  auto vdim = u.space().GetVDim();
   auto ndofs = u.space().GetTrueVSize() / vdim;
-  auto dof   = [ndofs, vdim](auto node, auto component) {
+  auto dof = [ndofs, vdim](auto node, auto component) {
     return mfem::Ordering::Map<serac::ordering>(ndofs, vdim, node, component);
   };
 

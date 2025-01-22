@@ -14,9 +14,9 @@
 
 using namespace serac;
 
-static constexpr auto   I   = Identity<3>();
+static constexpr auto I = Identity<3>();
 static constexpr double rho = 3.0;
-static constexpr double mu  = 2.0;
+static constexpr double mu = 2.0;
 
 static constexpr double epsilon = 1.0e-6;
 
@@ -75,10 +75,10 @@ TEST(TupleArithmeticUnitTests, TensorOutputWithTupleInput)
 
   [[maybe_unused]] constexpr double p = 3.14;
   [[maybe_unused]] constexpr tensor v = {{1.0, 2.0, 3.0}};
-  constexpr tensor<double, 3, 3>    L = {{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}}};
+  constexpr tensor<double, 3, 3> L = {{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}}};
 
-  constexpr double               dp = 1.23;
-  constexpr tensor               dv = {{2.0, 1.0, 4.0}};
+  constexpr double dp = 1.23;
+  constexpr tensor dv = {{2.0, 1.0, 4.0}};
   constexpr tensor<double, 3, 3> dL = {{{3.0, 1.0, 2.0}, {2.0, 7.0, 3.0}, {4.0, 4.0, 3.0}}};
 
   auto dfdp = get_gradient(f(make_dual(p), v, L));
@@ -97,15 +97,15 @@ TEST(TupleArithmeticUnitTests, TensorOutputWithTupleInput)
 TEST(TupleArithmeticUnitTests, ReadTheDocsExample)
 {
   auto f = [=](auto p, auto v, auto L) {
-    auto strain_rate            = 0.5 * (L + transpose(L));
-    auto stress                 = -p * I + 2 * mu * strain_rate;
+    auto strain_rate = 0.5 * (L + transpose(L));
+    auto stress = -p * I + 2 * mu * strain_rate;
     auto kinetic_energy_density = 0.5 * rho * dot(v, v);
     return tuple{stress, kinetic_energy_density};
   };
 
   [[maybe_unused]] constexpr double p = 3.14;
   [[maybe_unused]] constexpr tensor v = {{1.0, 2.0, 3.0}};
-  constexpr tensor<double, 3, 3>    L = {{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}}};
+  constexpr tensor<double, 3, 3> L = {{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}}};
 
   // promote the arguments to dual numbers with make_dual()
   tuple dual_args = make_dual(tuple{p, v, L});

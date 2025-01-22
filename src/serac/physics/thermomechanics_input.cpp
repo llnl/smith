@@ -27,7 +27,7 @@ void ThermomechanicsInputOptions::defineInputFileSchema(axom::inlet::Container& 
   serac::input::CoefficientInputOptions::defineInputFileSchema(coef_therm_expansion);
 
   container.registerVerifier([](const axom::inlet::Container& base) -> bool {
-    bool cte_found      = base.contains("coef_thermal_expansion");
+    bool cte_found = base.contains("coef_thermal_expansion");
     bool ref_temp_found = base.contains("reference_temperature");
 
     if (ref_temp_found && cte_found) {
@@ -57,7 +57,7 @@ serac::ThermomechanicsInputOptions FromInlet<serac::ThermomechanicsInputOptions>
 
   if (base.contains("coef_thermal_expansion")) {
     result.coef_thermal_expansion = base["coef_thermal_expansion"].get<serac::input::CoefficientInputOptions>();
-    result.reference_temperature  = base["reference_temperature"].get<serac::input::CoefficientInputOptions>();
+    result.reference_temperature = base["reference_temperature"].get<serac::input::CoefficientInputOptions>();
   }
 
   return result;

@@ -103,7 +103,7 @@ DenseMat inverse(const DenseMat& a)
 /// @param a matrix
 DenseMat sym(const DenseMat& a)
 {
-  DenseMat b        = a;
+  DenseMat b = a;
   auto [rows, cols] = b.size();
   SLIC_ERROR_IF(rows != cols, "Calling sym on a non-square DenseMat");
 
@@ -141,7 +141,7 @@ struct DenseVec {
   /// @brief constructor standard vector
   DenseVec(const std::vector<double> vin)
   {
-    const auto       sz = vin.size();
+    const auto sz = vin.size();
     std::vector<int> allints(sz);
     for (size_t i = 0; i < sz; ++i) {
       allints[i] = static_cast<int>(i);
@@ -219,9 +219,9 @@ struct DenseVec {
   /// @brief convert to standard vector
   std::vector<double> getValues() const
   {
-    size_t              sz = static_cast<size_t>(size());
+    size_t sz = static_cast<size_t>(size());
     std::vector<double> vout(sz);
-    std::vector<int>    allints(sz);
+    std::vector<int> allints(sz);
     for (size_t i = 0; i < sz; ++i) {
       allints[i] = static_cast<int>(i);
     }
@@ -358,7 +358,7 @@ auto eigh(const DenseMat& Adense)
   EPSGetType(eps, &type);
   EPSGetDimensions(eps, &jsize, NULL, NULL);
 
-  DenseVec              eigenvalues(isize);
+  DenseVec eigenvalues(isize);
   std::vector<DenseVec> eigenvectors;
   for (int i = 0; i < isize; ++i) {
     eigenvectors.emplace_back(isize);

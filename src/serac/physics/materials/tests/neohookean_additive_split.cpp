@@ -22,22 +22,22 @@ namespace serac {
 
 TEST(NeoHookeanSplit, zeroPoint)
 {
-  constexpr int                                   dim = 3;
-  double                                          G   = 1.0;
-  double                                          K   = 2.0;
-  solid_mechanics::NeoHookeanAdditiveSplit        mat{.density = 1.0, .K = K, .G = G};
+  constexpr int dim = 3;
+  double G = 1.0;
+  double K = 2.0;
+  solid_mechanics::NeoHookeanAdditiveSplit mat{.density = 1.0, .K = K, .G = G};
   solid_mechanics::NeoHookeanAdditiveSplit::State state{};
-  tensor<double, dim, dim>                        H{};
-  auto                                            P = mat(state, H);
+  tensor<double, dim, dim> H{};
+  auto P = mat(state, H);
   EXPECT_LT(norm(P), 1e-10);
 };
 
 TEST(NeoHookeanSplit, materialFrameIndifference)
 {
-  constexpr int                                   dim = 3;
-  double                                          G   = 1.0;
-  double                                          K   = 2.0;
-  solid_mechanics::NeoHookeanAdditiveSplit        mat{.density = 1.0, .K = K, .G = G};
+  constexpr int dim = 3;
+  double G = 1.0;
+  double K = 2.0;
+  solid_mechanics::NeoHookeanAdditiveSplit mat{.density = 1.0, .K = K, .G = G};
   solid_mechanics::NeoHookeanAdditiveSplit::State state{};
 
   // clang-format off
@@ -53,10 +53,10 @@ TEST(NeoHookeanSplit, materialFrameIndifference)
                                 {0.68930932313059, 0.19832140905316, 0.90197331346206}}};
   // clang-format on
 
-  auto P      = mat(state, H);
+  auto P = mat(state, H);
   auto H_star = dot(Q, H + Identity<dim>()) - Identity<dim>();
   auto P_star = mat(state, H_star);
-  auto error  = P_star - dot(Q, P);
+  auto error = P_star - dot(Q, P);
   EXPECT_LT(norm(error), 1e-12);
 };
 
@@ -64,10 +64,10 @@ TEST(NeoHookeanSplit, deviatoricPartIsCorrectlySplit)
 {
   // When the bulk modulus is zero, the Cauchy stress should be strictly deviatoric
 
-  constexpr int                                   dim = 3;
-  double                                          G   = 1.0;
-  double                                          K   = 0.0;
-  solid_mechanics::NeoHookeanAdditiveSplit        mat{.density = 1.0, .K = K, .G = G};
+  constexpr int dim = 3;
+  double G = 1.0;
+  double K = 0.0;
+  solid_mechanics::NeoHookeanAdditiveSplit mat{.density = 1.0, .K = K, .G = G};
   solid_mechanics::NeoHookeanAdditiveSplit::State state{};
 
   // clang-format off

@@ -194,9 +194,9 @@ enum class Family
  */
 template <int p, int c = 1>
 struct H1 {
-  static constexpr int    order      = p;           ///< the polynomial order of the elements
-  static constexpr int    components = c;           ///< the number of components at each node
-  static constexpr Family family     = Family::H1;  ///< the family of the basis functions
+  static constexpr int order = p;               ///< the polynomial order of the elements
+  static constexpr int components = c;          ///< the number of components at each node
+  static constexpr Family family = Family::H1;  ///< the family of the basis functions
 };
 
 /**
@@ -206,9 +206,9 @@ struct H1 {
  */
 template <int p, int c = 1>
 struct Hcurl {
-  static constexpr int    order      = p;              ///< the polynomial order of the elements
-  static constexpr int    components = c;              ///< the number of components at each node
-  static constexpr Family family     = Family::HCURL;  ///< the family of the basis functions
+  static constexpr int order = p;                  ///< the polynomial order of the elements
+  static constexpr int components = c;             ///< the number of components at each node
+  static constexpr Family family = Family::HCURL;  ///< the family of the basis functions
 };
 
 /**
@@ -218,27 +218,27 @@ struct Hcurl {
  */
 template <int p, int c = 1>
 struct L2 {
-  static constexpr int    order      = p;           ///< the polynomial order of the elements
-  static constexpr int    components = c;           ///< the number of components at each node
-  static constexpr Family family     = Family::L2;  ///< the family of the basis functions
+  static constexpr int order = p;               ///< the polynomial order of the elements
+  static constexpr int components = c;          ///< the number of components at each node
+  static constexpr Family family = Family::L2;  ///< the family of the basis functions
 };
 
 /**
  * @brief "Quantity of Interest" elements (i.e. elements with a single shape function, 1)
  */
 struct QOI {
-  static constexpr int    order      = 0;            ///< the polynomial order of the elements
-  static constexpr int    components = 1;            ///< the number of components at each node
-  static constexpr Family family     = Family::QOI;  ///< the family of the basis functions
+  static constexpr int order = 0;                ///< the polynomial order of the elements
+  static constexpr int components = 1;           ///< the number of components at each node
+  static constexpr Family family = Family::QOI;  ///< the family of the basis functions
 };
 
 /**
  * @brief a small POD class for tracking function space metadata
  */
 struct FunctionSpace {
-  Family family;      ///< either H1, Hcurl, L2
-  int    order;       ///< polynomial order
-  int    components;  ///< how many values are stored at each node
+  Family family;   ///< either H1, Hcurl, L2
+  int order;       ///< polynomial order
+  int components;  ///< how many values are stored at each node
 
   /**
    * @brief return the data contained in this struct as a tuple
@@ -267,7 +267,7 @@ struct FunctionSpace {
 template <Family f, typename T, int q, int dim>
 SERAC_HOST_DEVICE void parent_to_physical(tensor<T, q>& qf_input, const tensor<double, dim, dim, q>& jacobians)
 {
-  [[maybe_unused]] constexpr int VALUE      = 0;
+  [[maybe_unused]] constexpr int VALUE = 0;
   [[maybe_unused]] constexpr int DERIVATIVE = 1;
 
   for (int k = 0; k < q; k++) {
@@ -284,7 +284,7 @@ SERAC_HOST_DEVICE void parent_to_physical(tensor<T, q>& qf_input, const tensor<d
     }
 
     if constexpr (f == Family::HCURL) {
-      get<VALUE>(qf_input[k])      = dot(get<VALUE>(qf_input[k]), inv(J));
+      get<VALUE>(qf_input[k]) = dot(get<VALUE>(qf_input[k]), inv(J));
       get<DERIVATIVE>(qf_input[k]) = get<DERIVATIVE>(qf_input[k]) / det(J);
       if constexpr (dim == 3) {
         get<DERIVATIVE>(qf_input[k]) = dot(get<DERIVATIVE>(qf_input[k]), transpose(J));
@@ -309,7 +309,7 @@ template <Family f, typename T, int q, int dim>
 SERAC_HOST_DEVICE void physical_to_parent(tensor<T, q>& qf_output, const tensor<double, dim, dim, q>& jacobians)
 {
   [[maybe_unused]] constexpr int SOURCE = 0;
-  [[maybe_unused]] constexpr int FLUX   = 1;
+  [[maybe_unused]] constexpr int FLUX = 1;
 
   for (int k = 0; k < q; k++) {
     tensor<double, dim, dim> J_T;
@@ -323,7 +323,7 @@ SERAC_HOST_DEVICE void physical_to_parent(tensor<T, q>& qf_output, const tensor<
 
     if constexpr (f == Family::H1 || f == Family::L2) {
       get<SOURCE>(qf_output[k]) = get<SOURCE>(qf_output[k]) * dv;
-      get<FLUX>(qf_output[k])   = dot(get<FLUX>(qf_output[k]), inv(J_T)) * dv;
+      get<FLUX>(qf_output[k]) = dot(get<FLUX>(qf_output[k]), inv(J_T)) * dv;
     }
 
     // note: the flux term here is usually divided by detJ, but

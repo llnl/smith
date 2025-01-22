@@ -54,16 +54,16 @@ struct GreenSaintVenantThermoelasticMaterial {
   template <typename T1, typename T2, typename T3>
   auto operator()(State& state, const tensor<T1, 3, 3>& grad_u, T2 theta, const tensor<T3, 3>& grad_theta) const
   {
-    const double          K    = E / (3.0 * (1.0 - 2.0 * nu));
-    const double          G    = 0.5 * E / (1.0 + nu);
-    static constexpr auto I    = Identity<3>();
-    auto                  F    = grad_u + I;
-    const auto            Eg   = greenStrain(grad_u);
-    const auto            trEg = tr(Eg);
+    const double K = E / (3.0 * (1.0 - 2.0 * nu));
+    const double G = 0.5 * E / (1.0 + nu);
+    static constexpr auto I = Identity<3>();
+    auto F = grad_u + I;
+    const auto Eg = greenStrain(grad_u);
+    const auto trEg = tr(Eg);
 
     // stress
-    const auto S     = 2.0 * G * dev(Eg) + K * (trEg - 3.0 * alpha * (theta - theta_ref)) * I;
-    const auto P     = dot(F, S);
+    const auto S = 2.0 * G * dev(Eg) + K * (trEg - 3.0 * alpha * (theta - theta_ref)) * I;
+    const auto P = dot(F, S);
     const auto sigma = dot(P, transpose(F)) / det(F);
 
     // internal heat source
@@ -85,13 +85,13 @@ struct GreenSaintVenantThermoelasticMaterial {
   template <typename T1, typename T2>
   auto calculateFreeEnergy(const tensor<T1, 3, 3>& grad_u, T2 theta) const
   {
-    const double K      = E / (3.0 * (1.0 - 2.0 * nu));
-    const double G      = 0.5 * E / (1.0 + nu);
-    auto         strain = greenStrain(grad_u);
-    auto         trE    = tr(strain);
-    auto         psi_1  = G * squared_norm(dev(strain)) + 0.5 * K * trE * trE;
+    const double K = E / (3.0 * (1.0 - 2.0 * nu));
+    const double G = 0.5 * E / (1.0 + nu);
+    auto strain = greenStrain(grad_u);
+    auto trE = tr(strain);
+    auto psi_1 = G * squared_norm(dev(strain)) + 0.5 * K * trE * trE;
     using std::log;
-    auto logT  = log(theta / theta_ref);
+    auto logT = log(theta / theta_ref);
     auto psi_2 = C_v * (theta - theta_ref - theta * logT);
     auto psi_3 = -3.0 * K * alpha * (theta - theta_ref) * trE;
     return psi_1 + psi_2 + psi_3;
@@ -137,18 +137,18 @@ struct ParameterizedGreenSaintVenantThermoelasticMaterial {
   auto operator()(State& state, const tensor<T1, 3, 3>& grad_u, T2 theta, const tensor<T3, 3>& grad_theta,
                   T4 thermal_expansion_scaling) const
   {
-    auto [scale, unused]        = thermal_expansion_scaling;
-    const double          K     = E / (3.0 * (1.0 - 2.0 * nu));
-    const double          G     = 0.5 * E / (1.0 + nu);
-    static constexpr auto I     = Identity<3>();
-    auto                  F     = grad_u + I;
-    const auto            Eg    = greenStrain(grad_u);
-    const auto            trEg  = tr(Eg);
-    auto                  alpha = alpha0 * scale;
+    auto [scale, unused] = thermal_expansion_scaling;
+    const double K = E / (3.0 * (1.0 - 2.0 * nu));
+    const double G = 0.5 * E / (1.0 + nu);
+    static constexpr auto I = Identity<3>();
+    auto F = grad_u + I;
+    const auto Eg = greenStrain(grad_u);
+    const auto trEg = tr(Eg);
+    auto alpha = alpha0 * scale;
 
     // stress
-    const auto S     = 2.0 * G * dev(Eg) + K * (trEg - 3.0 * alpha * (theta - theta_ref)) * I;
-    const auto P     = dot(F, S);
+    const auto S = 2.0 * G * dev(Eg) + K * (trEg - 3.0 * alpha * (theta - theta_ref)) * I;
+    const auto P = dot(F, S);
     const auto sigma = (dot(P, transpose(F))) / det(F);
 
     // internal heat source
@@ -172,14 +172,14 @@ struct ParameterizedGreenSaintVenantThermoelasticMaterial {
   auto calculateFreeEnergy(const tensor<T1, 3, 3>& grad_u, T2 theta, T3 thermal_expansion_scaling) const
   {
     auto [scale, unused] = thermal_expansion_scaling;
-    const double K       = E / (3.0 * (1.0 - 2.0 * nu));
-    const double G       = 0.5 * E / (1.0 + nu);
-    auto         strain  = greenStrain(grad_u);
-    auto         trE     = tr(strain);
-    const double alpha   = alpha0 * scale;
-    auto         psi_1   = G * squared_norm(dev(strain)) + 0.5 * K * trE * trE;
+    const double K = E / (3.0 * (1.0 - 2.0 * nu));
+    const double G = 0.5 * E / (1.0 + nu);
+    auto strain = greenStrain(grad_u);
+    auto trE = tr(strain);
+    const double alpha = alpha0 * scale;
+    auto psi_1 = G * squared_norm(dev(strain)) + 0.5 * K * trE * trE;
     using std::log;
-    auto logT  = log(theta / theta_ref);
+    auto logT = log(theta / theta_ref);
     auto psi_2 = C_v * (theta - theta_ref - theta * logT);
     auto psi_3 = -3.0 * K * alpha * (theta - theta_ref) * trE;
     return psi_1 + psi_2 + psi_3;

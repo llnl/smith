@@ -48,8 +48,8 @@ struct DependsOn {
 template <typename... T>
 constexpr uint32_t index_of_differentiation()
 {
-  constexpr uint32_t n          = sizeof...(T);
-  bool               matching[] = {std::is_same_v<T, differentiate_wrt_this>...};
+  constexpr uint32_t n = sizeof...(T);
+  bool matching[] = {std::is_same_v<T, differentiate_wrt_this>...};
   for (uint32_t i = 0; i < n; i++) {
     if (matching[i]) {
       return i;
@@ -130,7 +130,7 @@ template <typename function_space>
 inline std::pair<std::unique_ptr<mfem::ParFiniteElementSpace>, std::unique_ptr<mfem::FiniteElementCollection>>
 generateParFiniteElementSpace(mfem::ParMesh* mesh)
 {
-  const int                                      dim = mesh->Dimension();
+  const int dim = mesh->Dimension();
   std::unique_ptr<mfem::FiniteElementCollection> fec;
 
   switch (function_space::family) {
@@ -207,11 +207,11 @@ class Functional;
 template <typename test, typename... trials, ExecutionSpace exec>
 class Functional<test(trials...), exec> {
   static constexpr tuple<trials...> trial_spaces{};
-  static constexpr uint32_t         num_trial_spaces = sizeof...(trials);
-  static constexpr auto             Q                = std::max({test::order, trials::order...}) + 1;
+  static constexpr uint32_t num_trial_spaces = sizeof...(trials);
+  static constexpr auto Q = std::max({test::order, trials::order...}) + 1;
 
-  static constexpr mfem::Geometry::Type elem_geom[4]    = {mfem::Geometry::INVALID, mfem::Geometry::SEGMENT,
-                                                           mfem::Geometry::SQUARE, mfem::Geometry::CUBE};
+  static constexpr mfem::Geometry::Type elem_geom[4] = {mfem::Geometry::INVALID, mfem::Geometry::SEGMENT,
+                                                        mfem::Geometry::SQUARE, mfem::Geometry::CUBE};
   static constexpr mfem::Geometry::Type simplex_geom[4] = {mfem::Geometry::INVALID, mfem::Geometry::SEGMENT,
                                                            mfem::Geometry::TRIANGLE, mfem::Geometry::TETRAHEDRON};
 
@@ -228,13 +228,13 @@ class Functional<test(trials...), exec> {
   };
   // clang-format on
 
-public:
+ public:
   /**
    * @brief Constructs using @p mfem::ParFiniteElementSpace objects corresponding to the test/trial spaces
    * @param[in] test_fes The (non-qoi) test space
    * @param[in] trial_fes The trial space
    */
-  Functional(const mfem::ParFiniteElementSpace*                               test_fes,
+  Functional(const mfem::ParFiniteElementSpace* test_fes,
              std::array<const mfem::ParFiniteElementSpace*, num_trial_spaces> trial_fes)
       : update_qdata_(false), test_space_(test_fes), trial_space_(trial_fes), mem_type(mfem::Device::GetMemoryType())
   {
@@ -252,9 +252,9 @@ public:
 
     test_function_space_ = {test::family, test::order, test::components};
 
-    std::array<Family, num_trial_spaces> trial_families   = {trials::family...};
-    std::array<int, num_trial_spaces>    trial_orders     = {trials::order...};
-    std::array<int, num_trial_spaces>    trial_components = {trials::components...};
+    std::array<Family, num_trial_spaces> trial_families = {trials::family...};
+    std::array<int, num_trial_spaces> trial_orders = {trials::order...};
+    std::array<int, num_trial_spaces> trial_components = {trials::components...};
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
       trial_function_spaces_[i] = {trial_families[i], trial_orders[i], trial_components[i]};
     }
@@ -561,7 +561,7 @@ public:
    */
   void updateQdata(bool update_flag) { update_qdata_ = update_flag; }
 
-private:
+ private:
   /// @brief flag for denoting when a residual evaluation should update the material state buffers
   bool update_qdata_;
 
@@ -571,7 +571,7 @@ private:
    * or assemble the sparse matrix representation through implicit conversion to mfem::HypreParMatrix *
    */
   class Gradient : public mfem::Operator {
-  public:
+   public:
     /**
      * @brief Constructs a Gradient wrapper that references a parent @p Functional
      * @param[in] f The @p Functional to use for gradient calculations
@@ -612,8 +612,8 @@ private:
 
       for (auto& integral : form_.integrals_) {
         if (integral.DependsOn(which_argument)) {
-          Domain&     dom     = integral.domain_;
-          const auto& G_test  = dom.get_restriction(form_.test_function_space_);
+          Domain& dom = integral.domain_;
+          const auto& G_test = dom.get_restriction(form_.test_function_space_);
           const auto& G_trial = dom.get_restriction(form_.trial_function_spaces_[which_argument]);
           for (const auto& [geom, test_restriction] : G_test.restrictions) {
             const auto& trial_restriction = G_trial.restrictions.at(geom);
@@ -649,13 +649,13 @@ private:
         }
       }
 
-      uint64_t nnz   = nonzero_entries.size();
-      int      nrows = form_.output_L_.Size();
+      uint64_t nnz = nonzero_entries.size();
+      int nrows = form_.output_L_.Size();
 
       row_ptr.resize(uint32_t(nrows + 1));
       col_ind.resize(nnz);
 
-      int nz       = 0;
+      int nz = 0;
       int last_row = -1;
       for (auto [row, col] : nonzero_entries) {
         col_ind[uint32_t(nz)] = col;
@@ -675,16 +675,16 @@ private:
       uint64_t max_entries = 0;
       for (auto& integral : form_.integrals_) {
         if (integral.DependsOn(which_argument)) {
-          Domain&     dom     = integral.domain_;
-          const auto& G_test  = dom.get_restriction(form_.test_function_space_);
+          Domain& dom = integral.domain_;
+          const auto& G_test = dom.get_restriction(form_.test_function_space_);
           const auto& G_trial = dom.get_restriction(form_.trial_function_spaces_[which_argument]);
           for (const auto& [geom, test_restriction] : G_test.restrictions) {
-            const auto& trial_restriction   = G_trial.restrictions.at(geom);
-            uint64_t    nrows_per_element   = test_restriction.nodes_per_elem * test_restriction.components;
-            uint64_t    ncols_per_element   = trial_restriction.nodes_per_elem * trial_restriction.components;
-            uint64_t    entries_per_element = nrows_per_element * ncols_per_element;
-            uint64_t    entries_needed      = test_restriction.num_elements * entries_per_element;
-            max_entries                     = std::max(entries_needed, max_entries);
+            const auto& trial_restriction = G_trial.restrictions.at(geom);
+            uint64_t nrows_per_element = test_restriction.nodes_per_elem * test_restriction.components;
+            uint64_t ncols_per_element = trial_restriction.nodes_per_elem * trial_restriction.components;
+            uint64_t entries_per_element = nrows_per_element * ncols_per_element;
+            uint64_t entries_needed = test_restriction.num_elements * entries_per_element;
+            max_entries = std::max(entries_needed, max_entries);
           }
         }
       }
@@ -701,13 +701,13 @@ private:
       // we ask mfem to not deallocate those pointers in the SparseMatrix dtor
       constexpr bool sparse_matrix_frees_graph_ptrs = false;
       constexpr bool sparse_matrix_frees_values_ptr = false;
-      constexpr bool col_ind_is_sorted              = true;
+      constexpr bool col_ind_is_sorted = true;
 
       // note: we make a copy of col_ind since mfem::HypreParMatrix
       //       changes it in the constructor
       std::vector<int> col_ind_copy = col_ind;
 
-      int                 nnz = row_ptr.back();
+      int nnz = row_ptr.back();
       std::vector<double> values(uint32_t(nnz), 0.0);
       auto A_local = mfem::SparseMatrix(row_ptr.data(), col_ind_copy.data(), values.data(), form_.output_L_.Size(),
                                         form_.input_L_[which_argument].Size(), sparse_matrix_frees_graph_ptrs,
@@ -720,11 +720,11 @@ private:
         if (integral.functional_to_integral_index_.count(which_argument) > 0) {
           Domain& dom = integral.domain_;
 
-          uint32_t    id      = integral.functional_to_integral_index_.at(which_argument);
-          const auto& G_test  = dom.get_restriction(form_.test_function_space_);
+          uint32_t id = integral.functional_to_integral_index_.at(which_argument);
+          const auto& G_test = dom.get_restriction(form_.test_function_space_);
           const auto& G_trial = dom.get_restriction(form_.trial_function_spaces_[which_argument]);
           for (const auto& [geom, calculate_element_matrices_func] : integral.element_gradient_[id]) {
-            const auto& test_restriction  = G_test.restrictions.at(geom);
+            const auto& test_restriction = G_test.restrictions.at(geom);
             const auto& trial_restriction = G_trial.restrictions.at(geom);
 
             // prepare a buffer to hold the element matrices
@@ -778,7 +778,7 @@ private:
 
     friend auto assemble(Gradient& g) { return g.assemble(); }
 
-  private:
+   private:
     /// @brief The "parent" @p Functional to calculate gradients with
     Functional<test(trials...), exec>& form_;
 
@@ -814,7 +814,7 @@ private:
   std::array<const mfem::ParFiniteElementSpace*, num_trial_spaces> trial_space_;
 
   std::array<FunctionSpace, num_trial_spaces> trial_function_spaces_;
-  FunctionSpace                               test_function_space_;
+  FunctionSpace test_function_space_;
 
   /**
    * @brief Operator that converts true (global) DOF values to local (current rank) DOF values
@@ -825,12 +825,12 @@ private:
   /// @brief The input set of local DOF values (i.e., on the current rank)
   mutable mfem::Vector input_L_[num_trial_spaces];
 
-  mutable std::vector<mfem::Vector>      input_E_buffer_;
+  mutable std::vector<mfem::Vector> input_E_buffer_;
   mutable std::vector<mfem::BlockVector> input_E_;
 
   mutable std::vector<Integral> integrals_;
 
-  mutable mfem::Vector      output_E_buffer_;
+  mutable mfem::Vector output_E_buffer_;
   mutable mfem::BlockVector output_E_;
 
   /// @brief The output set of local DOF values (i.e., on the current rank)

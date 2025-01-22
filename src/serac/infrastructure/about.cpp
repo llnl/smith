@@ -53,7 +53,7 @@ namespace serac {
 std::string about()
 {
   using namespace axom::fmt;
-  [[maybe_unused]] constexpr std::string_view on  = "ON";
+  [[maybe_unused]] constexpr std::string_view on = "ON";
   [[maybe_unused]] constexpr std::string_view off = "OFF";
 
   std::string about = "\n";
@@ -111,7 +111,7 @@ std::string about()
   // HDF5
 #ifdef SERAC_USE_HDF5
   unsigned int h5_maj, h5_min, h5_rel;
-  std::string  h5_version;
+  std::string h5_version;
   if (H5get_libversion(&h5_maj, &h5_min, &h5_rel) < 0) {
     SLIC_ERROR("Failed to retrieve HDF5 version.");
   } else {

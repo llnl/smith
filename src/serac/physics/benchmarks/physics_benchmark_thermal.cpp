@@ -21,7 +21,7 @@ void functional_test_static()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 2;
 
   // Create DataStore
@@ -42,10 +42,10 @@ void functional_test_static()
   // Define a boundary attribute set
   std::set<int> ess_bdr = {1};
 
-  serac::LinearSolverOptions linear_options = {.linear_solver  = serac::LinearSolver::CG,
+  serac::LinearSolverOptions linear_options = {.linear_solver = serac::LinearSolver::CG,
                                                .preconditioner = serac::Preconditioner::HypreAMG,
-                                               .relative_tol   = 1.0e-6,
-                                               .absolute_tol   = 1.0e-12,
+                                               .relative_tol = 1.0e-6,
+                                               .absolute_tol = 1.0e-12,
                                                .max_iterations = 200};
 
   // Construct a functional-based heat transfer solver
@@ -96,7 +96,7 @@ void functional_test_dynamic()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 2;
 
   // Create DataStore

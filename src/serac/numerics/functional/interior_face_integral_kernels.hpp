@@ -77,7 +77,7 @@ template <typename lambda, typename T, int... i>
 SERAC_HOST_DEVICE auto apply_qf_helper(const lambda& qf, double t, const tensor<double, 3>& x_q, const T& arg_tuple,
                                        std::integer_sequence<int, i...>)
 {
-  constexpr int                dim = 3;
+  constexpr int dim = 3;
   tensor<double, dim, dim - 1> J_q{};
   return qf(t, serac::tuple{x_q, J_q}, serac::get<i>(arg_tuple)...);
 }
@@ -127,7 +127,7 @@ SERAC_HOST_DEVICE auto batch_apply_qf(lambda qf, double t, const tensor<double, 
   using return_type = decltype(qf(double{}, first_arg_t{}, T{}[0]...));
   tensor<return_type, n> outputs{};
   for (int i = 0; i < n; i++) {
-    tensor<double, dim>          x_q;
+    tensor<double, dim> x_q;
     tensor<double, dim, dim - 1> J_q;
     for (int j = 0; j < dim; j++) {
       x_q[j] = positions(j, i);
@@ -154,9 +154,9 @@ void evaluation_kernel_impl(trial_element_type trial_elements, test_element, dou
   // so we reinterpret the pointer with
   constexpr int dim = dimension_of(geom) + 1;
   constexpr int nqp = num_quadrature_points(geom, Q);
-  auto          J   = reinterpret_cast<const tensor<double, dim - 1, dim, nqp>*>(jacobians);
-  auto          x   = reinterpret_cast<const tensor<double, dim, nqp>*>(positions);
-  auto          r   = reinterpret_cast<typename test_element::dof_type_if*>(outputs);
+  auto J = reinterpret_cast<const tensor<double, dim - 1, dim, nqp>*>(jacobians);
+  auto x = reinterpret_cast<const tensor<double, dim, nqp>*>(positions);
+  auto r = reinterpret_cast<typename test_element::dof_type_if*>(outputs);
   static constexpr TensorProductQuadratureRule<Q> rule{};
 
   static constexpr int qpts_per_elem = num_quadrature_points(geom, Q);
@@ -248,15 +248,15 @@ SERAC_HOST_DEVICE auto batch_apply_chain_rule(derivative_type* qf_derivatives, c
 template <int Q, mfem::Geometry::Type geom, typename test, typename trial, typename derivatives_type>
 void action_of_gradient_kernel(const double* dU, double* dR, derivatives_type* qf_derivatives, std::size_t num_elements)
 {
-  using test_element  = finite_element<geom, test>;
+  using test_element = finite_element<geom, test>;
   using trial_element = finite_element<geom, trial>;
 
   // mfem provides this information in 1D arrays, so we reshape it
   // into strided multidimensional arrays before using
-  constexpr bool                                  is_QOI = (test::family == Family::QOI);
-  constexpr int                                   nqp    = num_quadrature_points(geom, Q);
-  auto                                            du = reinterpret_cast<const typename trial_element::dof_type_if*>(dU);
-  auto                                            dr = reinterpret_cast<typename test_element::dof_type_if*>(dR);
+  constexpr bool is_QOI = (test::family == Family::QOI);
+  constexpr int nqp = num_quadrature_points(geom, Q);
+  auto du = reinterpret_cast<const typename trial_element::dof_type_if*>(dU);
+  auto dr = reinterpret_cast<typename test_element::dof_type_if*>(dR);
   static constexpr TensorProductQuadratureRule<Q> rule{};
 
   // for each element in the domain
@@ -295,13 +295,13 @@ void action_of_gradient_kernel(const double* dU, double* dR, derivatives_type* q
  */
 template <mfem::Geometry::Type g, typename test, typename trial, int Q, typename derivatives_type>
 void element_gradient_kernel([[maybe_unused]] ExecArrayView<double, 3, ExecutionSpace::CPU> dK,
-                             [[maybe_unused]] derivatives_type*                             qf_derivatives,
-                             [[maybe_unused]] std::size_t                                   num_elements)
+                             [[maybe_unused]] derivatives_type* qf_derivatives,
+                             [[maybe_unused]] std::size_t num_elements)
 {
-  using test_element  = finite_element<g, test>;
+  using test_element = finite_element<g, test>;
   using trial_element = finite_element<g, trial>;
 
-  constexpr bool is_QOI        = test::family == Family::QOI;
+  constexpr bool is_QOI = test::family == Family::QOI;
   using padded_derivative_type = std::conditional_t<is_QOI, tuple<derivatives_type, zero>, derivatives_type>;
 
   constexpr int nquad = num_quadrature_points(g, Q);
@@ -341,7 +341,7 @@ auto evaluation_kernel(signature s, lambda_type qf, const double* positions, con
                        std::shared_ptr<derivative_type> qf_derivatives, uint32_t num_elements)
 {
   auto trial_elements = trial_elements_tuple<geom>(s);
-  auto test_element   = get_test_element<geom>(s);
+  auto test_element = get_test_element<geom>(s);
   return [=](double time, const std::vector<const double*>& inputs, double* outputs, bool /* update state */) {
     evaluation_kernel_impl<wrt, Q, geom>(trial_elements, test_element, time, inputs, outputs, positions, jacobians, qf,
                                          qf_derivatives.get(), num_elements, s.index_seq);
@@ -353,7 +353,7 @@ std::function<void(const double*, double*)> jacobian_vector_product_kernel(
     signature, std::shared_ptr<derivative_type> qf_derivatives, uint32_t num_elements)
 {
   return [=](const double* du, double* dr) {
-    using test_space  = typename signature::return_type;
+    using test_space = typename signature::return_type;
     using trial_space = typename std::tuple_element<wrt, typename signature::parameter_types>::type;
     action_of_gradient_kernel<Q, geom, test_space, trial_space>(du, dr, qf_derivatives.get(), num_elements);
   };
@@ -364,7 +364,7 @@ std::function<void(ExecArrayView<double, 3, ExecutionSpace::CPU>)> element_gradi
     signature, std::shared_ptr<derivative_type> qf_derivatives, uint32_t num_elements)
 {
   return [=](ExecArrayView<double, 3, ExecutionSpace::CPU> K_elem) {
-    using test_space  = typename signature::return_type;
+    using test_space = typename signature::return_type;
     using trial_space = typename std::tuple_element<wrt, typename signature::parameter_types>::type;
     element_gradient_kernel<geom, test_space, trial_space, Q>(K_elem, qf_derivatives.get(), num_elements);
   };

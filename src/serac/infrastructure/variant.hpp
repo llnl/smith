@@ -276,13 +276,13 @@ struct variant {
       if (storage_.index_ != 0) {
         storage_.clear();
       }
-      storage_.t0_    = std::forward<T>(t);
+      storage_.t0_ = std::forward<T>(t);
       storage_.index_ = 0;
     } else if constexpr (std::is_same_v<std::decay_t<T>, T1> || std::is_assignable_v<T1, T>) {
       if (storage_.index_ != 1) {
         storage_.clear();
       }
-      storage_.t1_    = std::forward<T>(t);
+      storage_.t1_ = std::forward<T>(t);
       storage_.index_ = 1;
     } else {
       static_assert(sizeof(T) < 0, "Type not supported");

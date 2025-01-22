@@ -38,7 +38,7 @@ constexpr tensor<double, 3> B3D{{0.765645367640828, 0.992487355850465, 0.1621993
  */
 template <int dim>
 class AffineSolution {
-public:
+ public:
   AffineSolution()
       : A(make_tensor<dim, dim>([](int i, int j) { return A3D[i][j]; })),
         b(make_tensor<dim>([](int i) { return B3D[i]; })){};
@@ -86,14 +86,14 @@ public:
 
     // natural BCs
     typename Material::State state;
-    tensor<double, dim, dim> P               = material(state, A);
-    auto                     traction        = [P](auto, auto n0, auto) { return dot(P, n0); };
-    Domain                   entire_boundary = EntireBoundary(sf.mesh());
+    tensor<double, dim, dim> P = material(state, A);
+    auto traction = [P](auto, auto n0, auto) { return dot(P, n0); };
+    Domain entire_boundary = EntireBoundary(sf.mesh());
     sf.setTraction(traction, entire_boundary);
   }
 
   const tensor<double, dim, dim> A;  /// Linear part of solution. Equivalently, the displacement gradient
-  const tensor<double, dim>      b;  /// Constant part of solution. Rigid mody displacement.
+  const tensor<double, dim> b;       /// Constant part of solution. Rigid mody displacement.
 };
 
 /**
@@ -163,7 +163,7 @@ double solution_error(PatchBoundaryCondition bc)
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "solid_static_solve");
 
-  constexpr int p   = element_type::order;
+  constexpr int p = element_type::order;
   constexpr int dim = dimension_of(element_type::geometry);
 
   // BT: shouldn't this assertion be in the physics module?
@@ -199,11 +199,11 @@ double solution_error(PatchBoundaryCondition bc)
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // Construct a solid mechanics solver
-  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver  = NonlinearSolver::Newton,
-                                                      .relative_tol   = 0.0,
-                                                      .absolute_tol   = 5.0e-14,
+  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::Newton,
+                                                      .relative_tol = 0.0,
+                                                      .absolute_tol = 5.0e-14,
                                                       .max_iterations = 30,
-                                                      .print_level    = 1};
+                                                      .print_level = 1};
 
   auto equation_solver = std::make_unique<EquationSolver>(
       nonlin_solver_options, serac::solid_mechanics::default_linear_options, pmesh.GetComm());
@@ -212,7 +212,7 @@ double solution_error(PatchBoundaryCondition bc)
                                mesh_tag);
 
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = 1.0, .G = 1.0};
-  Domain                      domain = EntireDomain(pmesh);
+  Domain domain = EntireDomain(pmesh);
 
   solid.setMaterial(mat, domain);
 
@@ -253,7 +253,7 @@ double pressure_error()
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "solid_static_solve");
 
-  constexpr int p   = element_type::order;
+  constexpr int p = element_type::order;
   constexpr int dim = dimension_of(element_type::geometry);
 
   static_assert(dim == 2 || dim == 3, "Dimension must be 2 or 3 for solid test");
@@ -264,29 +264,29 @@ double pressure_error()
     return u;
   };
 
-  std::string   meshdir = std::string(SERAC_REPO_DIR) + "/data/meshes/";
-  std::string   filename;
-  int           driven_attr = -1;
+  std::string meshdir = std::string(SERAC_REPO_DIR) + "/data/meshes/";
+  std::string filename;
+  int driven_attr = -1;
   std::set<int> fixed_y_attrs, fixed_z_attrs;
   switch (element_type::geometry) {
     case mfem::Geometry::TRIANGLE:
-      filename    = meshdir + "patch2D_tris.mesh";
+      filename = meshdir + "patch2D_tris.mesh";
       driven_attr = 4;
       fixed_y_attrs.insert({1, 3});
       break;
     case mfem::Geometry::SQUARE:
-      filename    = meshdir + "patch2D_quads.mesh";
+      filename = meshdir + "patch2D_quads.mesh";
       driven_attr = 1;
       fixed_y_attrs.insert({2, 4});
       break;
     case mfem::Geometry::TETRAHEDRON:
-      filename    = meshdir + "patch3D_tets.mesh";
+      filename = meshdir + "patch3D_tets.mesh";
       driven_attr = 1;
       fixed_y_attrs.insert({2, 5});
       fixed_z_attrs.insert({3, 6});
       break;
     case mfem::Geometry::CUBE:
-      filename    = meshdir + "patch3D_hexes.mesh";
+      filename = meshdir + "patch3D_hexes.mesh";
       driven_attr = 1;
       fixed_y_attrs.insert({2, 5});
       fixed_z_attrs.insert({3, 6});
@@ -301,17 +301,17 @@ double pressure_error()
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  Domain driven         = Domain::ofBoundaryElements(pmesh, by_attr<dim>(driven_attr));
-  Domain fixed_y        = Domain::ofBoundaryElements(pmesh, by_attr<dim>(fixed_y_attrs));
-  Domain fixed_z        = Domain::ofBoundaryElements(pmesh, by_attr<dim>(fixed_z_attrs));
+  Domain driven = Domain::ofBoundaryElements(pmesh, by_attr<dim>(driven_attr));
+  Domain fixed_y = Domain::ofBoundaryElements(pmesh, by_attr<dim>(fixed_y_attrs));
+  Domain fixed_z = Domain::ofBoundaryElements(pmesh, by_attr<dim>(fixed_z_attrs));
   Domain material_block = EntireDomain(pmesh);
-  Domain boundary       = EntireBoundary(pmesh);
+  Domain boundary = EntireBoundary(pmesh);
 
 // Construct a solid mechanics solver
 #ifdef SERAC_USE_SUNDIALS
-  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver  = NonlinearSolver::KINBacktrackingLineSearch,
-                                                      .relative_tol   = 0.0,
-                                                      .absolute_tol   = 1.0e-14,
+  serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::KINBacktrackingLineSearch,
+                                                      .relative_tol = 0.0,
+                                                      .absolute_tol = 1.0e-14,
                                                       .max_iterations = 30};
 #else
   serac::NonlinearSolverOptions nonlin_solver_options{
@@ -338,10 +338,10 @@ double pressure_error()
   });
   // clang-format on
 
-  tensor<double, dim, dim> P        = mat(state, H);
-  auto                     F        = H + Identity<dim>();
-  auto                     sigma    = dot(P, transpose(F)) / det(F);
-  double                   pressure = -sigma[0][0];
+  tensor<double, dim, dim> P = mat(state, H);
+  auto F = H + Identity<dim>();
+  auto sigma = dot(P, transpose(F)) / det(F);
+  double pressure = -sigma[0][0];
 
   // Set the pressure corresponding to 10% uniaxial strain
   solid.setPressure([pressure](auto&, double) { return pressure; }, boundary);
@@ -381,25 +381,25 @@ double pressure_error()
 
 const double tol = 1e-13;
 
-constexpr int LINEAR    = 1;
+constexpr int LINEAR = 1;
 constexpr int QUADRATIC = 2;
-constexpr int CUBIC     = 3;
+constexpr int CUBIC = 3;
 
 TEST(SolidMechanics, PatchTest2dQ1EssentialBcs)
 {
-  using triangle   = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR> >;
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR> >;
   double tri_error = solution_error<triangle>(PatchBoundaryCondition::Essential);
   EXPECT_LT(tri_error, tol);
 
   using quadrilateral = finite_element<mfem::Geometry::SQUARE, H1<LINEAR> >;
-  double quad_error   = solution_error<quadrilateral>(PatchBoundaryCondition::Essential);
+  double quad_error = solution_error<quadrilateral>(PatchBoundaryCondition::Essential);
   EXPECT_LT(quad_error, tol);
 }
 
 TEST(SolidMechanics, PatchTest3dQ1EssentialBcs)
 {
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<LINEAR> >;
-  double tet_error  = solution_error<tetrahedron>(PatchBoundaryCondition::Essential);
+  double tet_error = solution_error<tetrahedron>(PatchBoundaryCondition::Essential);
   EXPECT_LT(tet_error, tol);
 
   using hexahedron = finite_element<mfem::Geometry::CUBE, H1<LINEAR> >;
@@ -409,19 +409,19 @@ TEST(SolidMechanics, PatchTest3dQ1EssentialBcs)
 
 TEST(SolidMechanics, PatchTest2dQ2EssentialBcs)
 {
-  using triangle   = finite_element<mfem::Geometry::TRIANGLE, H1<QUADRATIC> >;
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<QUADRATIC> >;
   double tri_error = solution_error<triangle>(PatchBoundaryCondition::Essential);
   EXPECT_LT(tri_error, tol);
 
   using quadrilateral = finite_element<mfem::Geometry::SQUARE, H1<QUADRATIC> >;
-  double quad_error   = solution_error<quadrilateral>(PatchBoundaryCondition::Essential);
+  double quad_error = solution_error<quadrilateral>(PatchBoundaryCondition::Essential);
   EXPECT_LT(quad_error, tol);
 }
 
 TEST(SolidMechanics, PatchTest3dQ2EssentialBcs)
 {
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<QUADRATIC> >;
-  double tet_error  = solution_error<tetrahedron>(PatchBoundaryCondition::Essential);
+  double tet_error = solution_error<tetrahedron>(PatchBoundaryCondition::Essential);
   EXPECT_LT(tet_error, tol);
 
   using hexahedron = finite_element<mfem::Geometry::CUBE, H1<QUADRATIC> >;
@@ -431,19 +431,19 @@ TEST(SolidMechanics, PatchTest3dQ2EssentialBcs)
 
 TEST(SolidMechanics, PatchTest2dQ3EssentialBcs)
 {
-  using triangle   = finite_element<mfem::Geometry::TRIANGLE, H1<CUBIC> >;
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<CUBIC> >;
   double tri_error = solution_error<triangle>(PatchBoundaryCondition::Essential);
   EXPECT_LT(tri_error, tol);
 
   using quadrilateral = finite_element<mfem::Geometry::SQUARE, H1<CUBIC> >;
-  double quad_error   = solution_error<quadrilateral>(PatchBoundaryCondition::Essential);
+  double quad_error = solution_error<quadrilateral>(PatchBoundaryCondition::Essential);
   EXPECT_LT(quad_error, tol);
 }
 
 TEST(SolidMechanics, PatchTest3dQ3EssentialBcs)
 {
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<CUBIC> >;
-  double tet_error  = solution_error<tetrahedron>(PatchBoundaryCondition::Essential);
+  double tet_error = solution_error<tetrahedron>(PatchBoundaryCondition::Essential);
   EXPECT_LT(tet_error, tol);
 
   using hexahedron = finite_element<mfem::Geometry::CUBE, H1<CUBIC> >;
@@ -455,19 +455,19 @@ TEST(SolidMechanics, PatchTest3dQ3EssentialBcs)
 
 TEST(SolidMechanics, PatchTest2dQ1EssentialAndNaturalBcs)
 {
-  using triangle   = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR> >;
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR> >;
   double tri_error = solution_error<triangle>(PatchBoundaryCondition::EssentialAndNatural);
   EXPECT_LT(tri_error, tol);
 
   using quadrilateral = finite_element<mfem::Geometry::SQUARE, H1<LINEAR> >;
-  double quad_error   = solution_error<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural);
+  double quad_error = solution_error<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural);
   EXPECT_LT(quad_error, tol);
 }
 
 TEST(SolidMechanics, PatchTest3dQ1EssentialAndNaturalBcs)
 {
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<LINEAR> >;
-  double tet_error  = solution_error<tetrahedron>(PatchBoundaryCondition::EssentialAndNatural);
+  double tet_error = solution_error<tetrahedron>(PatchBoundaryCondition::EssentialAndNatural);
   EXPECT_LT(tet_error, tol);
 
   using hexahedron = finite_element<mfem::Geometry::CUBE, H1<LINEAR> >;
@@ -477,19 +477,19 @@ TEST(SolidMechanics, PatchTest3dQ1EssentialAndNaturalBcs)
 
 TEST(SolidMechanics, PatchTest2dQ2EssentialAndNaturalBcs)
 {
-  using triangle   = finite_element<mfem::Geometry::TRIANGLE, H1<QUADRATIC> >;
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<QUADRATIC> >;
   double tri_error = solution_error<triangle>(PatchBoundaryCondition::EssentialAndNatural);
   EXPECT_LT(tri_error, tol);
 
   using quadrilateral = finite_element<mfem::Geometry::SQUARE, H1<QUADRATIC> >;
-  double quad_error   = solution_error<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural);
+  double quad_error = solution_error<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural);
   EXPECT_LT(quad_error, tol);
 }
 
 TEST(SolidMechanics, PatchTest3dQ2EssentialAndNaturalBcs)
 {
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<QUADRATIC> >;
-  double tet_error  = solution_error<tetrahedron>(PatchBoundaryCondition::EssentialAndNatural);
+  double tet_error = solution_error<tetrahedron>(PatchBoundaryCondition::EssentialAndNatural);
   EXPECT_LT(tet_error, tol);
 
   using hexahedron = finite_element<mfem::Geometry::CUBE, H1<QUADRATIC> >;
@@ -499,19 +499,19 @@ TEST(SolidMechanics, PatchTest3dQ2EssentialAndNaturalBcs)
 
 TEST(SolidMechanics, PatchTest2dQ3EssentialAndNaturalBcs)
 {
-  using triangle   = finite_element<mfem::Geometry::TRIANGLE, H1<CUBIC> >;
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<CUBIC> >;
   double tri_error = solution_error<triangle>(PatchBoundaryCondition::EssentialAndNatural);
   EXPECT_LT(tri_error, tol);
 
   using quadrilateral = finite_element<mfem::Geometry::SQUARE, H1<CUBIC> >;
-  double quad_error   = solution_error<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural);
+  double quad_error = solution_error<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural);
   EXPECT_LT(quad_error, tol);
 }
 
 TEST(SolidMechanics, PatchTest3dQ3EssentialAndNaturalBcs)
 {
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<CUBIC> >;
-  double tet_error  = solution_error<tetrahedron>(PatchBoundaryCondition::EssentialAndNatural);
+  double tet_error = solution_error<tetrahedron>(PatchBoundaryCondition::EssentialAndNatural);
   EXPECT_LT(tet_error, tol);
 
   using hexahedron = finite_element<mfem::Geometry::CUBE, H1<CUBIC> >;
@@ -521,19 +521,19 @@ TEST(SolidMechanics, PatchTest3dQ3EssentialAndNaturalBcs)
 
 TEST(SolidMechanics, PatchTest2dQ1Pressure)
 {
-  using triangle   = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR> >;
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR> >;
   double tri_error = pressure_error<triangle>();
   EXPECT_LT(tri_error, tol);
 
   using quadrilateral = finite_element<mfem::Geometry::SQUARE, H1<LINEAR> >;
-  double quad_error   = pressure_error<quadrilateral>();
+  double quad_error = pressure_error<quadrilateral>();
   EXPECT_LT(quad_error, tol);
 }
 
 TEST(SolidMechanics, PatchTest3dQ1Pressure)
 {
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<LINEAR> >;
-  double tet_error  = pressure_error<tetrahedron>();
+  double tet_error = pressure_error<tetrahedron>();
   EXPECT_LT(tet_error, tol);
 
   using hexahedron = finite_element<mfem::Geometry::CUBE, H1<LINEAR> >;

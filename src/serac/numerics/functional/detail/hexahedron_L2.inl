@@ -18,13 +18,13 @@
 /// @cond
 template <int p, int c>
 struct finite_element<mfem::Geometry::CUBE, L2<p, c> > {
-  static constexpr auto geometry   = mfem::Geometry::CUBE;
-  static constexpr auto family     = Family::L2;
-  static constexpr int  components = c;
-  static constexpr int  dim        = 3;
-  static constexpr int  n          = (p + 1);
-  static constexpr int  ndof       = (p + 1) * (p + 1) * (p + 1);
-  static constexpr int  order      = p;
+  static constexpr auto geometry = mfem::Geometry::CUBE;
+  static constexpr auto family = Family::L2;
+  static constexpr int components = c;
+  static constexpr int dim = 3;
+  static constexpr int n = (p + 1);
+  static constexpr int ndof = (p + 1) * (p + 1) * (p + 1);
+  static constexpr int order = p;
 
   static constexpr int VALUE = 0, GRADIENT = 1;
   static constexpr int SOURCE = 0, FLUX = 1;
@@ -42,8 +42,8 @@ struct finite_element<mfem::Geometry::CUBE, L2<p, c> > {
 
   SERAC_HOST_DEVICE static constexpr tensor<double, ndof> shape_functions(tensor<double, dim> xi)
   {
-    auto N_xi   = GaussLobattoInterpolation<p + 1>(xi[0]);
-    auto N_eta  = GaussLobattoInterpolation<p + 1>(xi[1]);
+    auto N_xi = GaussLobattoInterpolation<p + 1>(xi[0]);
+    auto N_eta = GaussLobattoInterpolation<p + 1>(xi[1]);
     auto N_zeta = GaussLobattoInterpolation<p + 1>(xi[2]);
 
     int count = 0;
@@ -61,11 +61,11 @@ struct finite_element<mfem::Geometry::CUBE, L2<p, c> > {
 
   SERAC_HOST_DEVICE static constexpr tensor<double, ndof, dim> shape_function_gradients(tensor<double, dim> xi)
   {
-    auto N_xi    = GaussLobattoInterpolation<p + 1>(xi[0]);
-    auto N_eta   = GaussLobattoInterpolation<p + 1>(xi[1]);
-    auto N_zeta  = GaussLobattoInterpolation<p + 1>(xi[2]);
-    auto dN_xi   = GaussLobattoInterpolationDerivative<p + 1>(xi[0]);
-    auto dN_eta  = GaussLobattoInterpolationDerivative<p + 1>(xi[1]);
+    auto N_xi = GaussLobattoInterpolation<p + 1>(xi[0]);
+    auto N_eta = GaussLobattoInterpolation<p + 1>(xi[1]);
+    auto N_zeta = GaussLobattoInterpolation<p + 1>(xi[2]);
+    auto dN_xi = GaussLobattoInterpolationDerivative<p + 1>(xi[0]);
+    auto dN_eta = GaussLobattoInterpolationDerivative<p + 1>(xi[1]);
     auto dN_zeta = GaussLobattoInterpolationDerivative<p + 1>(xi[2]);
 
     int count = 0;
@@ -100,9 +100,9 @@ struct finite_element<mfem::Geometry::CUBE, L2<p, c> > {
   template <bool apply_weights, int q>
   static constexpr auto calculate_B()
   {
-    constexpr auto                  points1D  = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
+    constexpr auto points1D = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
     [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q, mfem::Geometry::SEGMENT>();
-    tensor<double, q, n>            B{};
+    tensor<double, q, n> B{};
     for (int i = 0; i < q; i++) {
       B[i] = GaussLobattoInterpolation<n>(points1D[i]);
       if constexpr (apply_weights) B[i] = B[i] * weights1D[i];
@@ -123,9 +123,9 @@ struct finite_element<mfem::Geometry::CUBE, L2<p, c> > {
   template <bool apply_weights, int q>
   static constexpr auto calculate_G()
   {
-    constexpr auto                  points1D  = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
+    constexpr auto points1D = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
     [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q, mfem::Geometry::SEGMENT>();
-    tensor<double, q, n>            G{};
+    tensor<double, q, n> G{};
     for (int i = 0; i < q; i++) {
       G[i] = GaussLobattoInterpolationDerivative<n>(points1D[i]);
       if constexpr (apply_weights) G[i] = G[i] * weights1D[i];
@@ -137,26 +137,26 @@ struct finite_element<mfem::Geometry::CUBE, L2<p, c> > {
   static auto batch_apply_shape_fn(int j, tensor<in_t, q * q * q> input, const TensorProductQuadratureRule<q>&)
   {
     static constexpr bool apply_weights = false;
-    static constexpr auto B             = calculate_B<apply_weights, q>();
-    static constexpr auto G             = calculate_G<apply_weights, q>();
+    static constexpr auto B = calculate_B<apply_weights, q>();
+    static constexpr auto G = calculate_G<apply_weights, q>();
 
     int jx = j % n;
     int jy = (j % (n * n)) / n;
     int jz = j / (n * n);
 
     using source_t = decltype(get<0>(get<0>(in_t{})) + dot(get<1>(get<0>(in_t{})), tensor<double, dim>{}));
-    using flux_t   = decltype(get<0>(get<1>(in_t{})) + dot(get<1>(get<1>(in_t{})), tensor<double, dim>{}));
+    using flux_t = decltype(get<0>(get<1>(in_t{})) + dot(get<1>(get<1>(in_t{})), tensor<double, dim>{}));
 
     tensor<tuple<source_t, flux_t>, q * q * q> output;
 
     for (int qz = 0; qz < q; qz++) {
       for (int qy = 0; qy < q; qy++) {
         for (int qx = 0; qx < q; qx++) {
-          double              phi_j      = B(qx, jx) * B(qy, jy) * B(qz, jz);
+          double phi_j = B(qx, jx) * B(qy, jy) * B(qz, jz);
           tensor<double, dim> dphi_j_dxi = {G(qx, jx) * B(qy, jy) * B(qz, jz), B(qx, jx) * G(qy, jy) * B(qz, jz),
                                             B(qx, jx) * B(qy, jy) * G(qz, jz)};
 
-          int         Q   = (qz * q + qy) * q + qx;
+          int Q = (qz * q + qy) * q + qx;
           const auto& d00 = get<0>(get<0>(input(Q)));
           const auto& d01 = get<1>(get<0>(input(Q)));
           const auto& d10 = get<0>(get<1>(input(Q)));
@@ -189,10 +189,10 @@ struct finite_element<mfem::Geometry::CUBE, L2<p, c> > {
     // A2(dz, qy, qx)  := B(qy, dy) * A1(dz, dy, qx)
     // X_q(qz, qy, qx) := B(qz, dz) * A2(dz, qy, qx)
     static constexpr bool apply_weights = false;
-    static constexpr auto B             = calculate_B<apply_weights, q>();
-    static constexpr auto G             = calculate_G<apply_weights, q>();
+    static constexpr auto B = calculate_B<apply_weights, q>();
+    static constexpr auto G = calculate_G<apply_weights, q>();
 
-    tensor<double, c, q, q, q>      value{};
+    tensor<double, c, q, q, q> value{};
     tensor<double, c, dim, q, q, q> gradient{};
 
     for (int i = 0; i < c; i++) {
@@ -203,7 +203,7 @@ struct finite_element<mfem::Geometry::CUBE, L2<p, c> > {
       auto A21 = contract<1, 1>(A11, B);
       auto A22 = contract<1, 1>(A10, G);
 
-      value(i)       = contract<0, 1>(A20, B);
+      value(i) = contract<0, 1>(A20, B);
       gradient(i, 0) = contract<0, 1>(A21, B);
       gradient(i, 1) = contract<0, 1>(A22, B);
       gradient(i, 2) = contract<0, 1>(A20, G);
@@ -211,7 +211,7 @@ struct finite_element<mfem::Geometry::CUBE, L2<p, c> > {
 
     // transpose the quadrature data into a flat tensor of tuples
     union {
-      tensor<qf_input_type, q * q * q>                                   one_dimensional;
+      tensor<qf_input_type, q * q * q> one_dimensional;
       tensor<tuple<tensor<double, c>, tensor<double, c, dim> >, q, q, q> three_dimensional;
     } output;
 
@@ -246,8 +246,8 @@ struct finite_element<mfem::Geometry::CUBE, L2<p, c> > {
     using f_buffer_type = std::conditional_t<is_zero<flux_type>{}, zero, tensor<double, dim, q, q, q> >;
 
     static constexpr bool apply_weights = true;
-    static constexpr auto B             = calculate_B<apply_weights, q>();
-    static constexpr auto G             = calculate_G<apply_weights, q>();
+    static constexpr auto B = calculate_B<apply_weights, q>();
+    static constexpr auto G = calculate_G<apply_weights, q>();
 
     for (int j = 0; j < ntrial; j++) {
       for (int i = 0; i < c; i++) {

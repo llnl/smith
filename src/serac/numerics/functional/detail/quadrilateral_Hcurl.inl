@@ -23,12 +23,12 @@
 /// @cond
 template <int p>
 struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
-  static constexpr auto geometry   = mfem::Geometry::SQUARE;
-  static constexpr auto family     = Family::HCURL;
-  static constexpr int  dim        = 2;
-  static constexpr int  n          = (p + 1);
-  static constexpr int  ndof       = 2 * p * (p + 1);
-  static constexpr int  components = 1;
+  static constexpr auto geometry = mfem::Geometry::SQUARE;
+  static constexpr auto family = Family::HCURL;
+  static constexpr int dim = 2;
+  static constexpr int n = (p + 1);
+  static constexpr int ndof = 2 * p * (p + 1);
+  static constexpr int components = 1;
 
   static constexpr int VALUE = 0, CURL = 1;
   static constexpr int SOURCE = 0, FLUX = 1;
@@ -64,7 +64,7 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
 
   static constexpr auto nodes = [] {
     auto legendre_nodes = GaussLegendreNodes<p, mfem::Geometry::SEGMENT>();
-    auto lobatto_nodes  = GaussLobattoNodes<p + 1>();
+    auto lobatto_nodes = GaussLobattoNodes<p + 1>();
 
     tensor<double, ndof, dim> nodes{};
 
@@ -97,9 +97,9 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
   template <bool apply_weights, int q>
   static constexpr auto calculate_B1()
   {
-    constexpr auto                  points1D  = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
+    constexpr auto points1D = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
     [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q, mfem::Geometry::SEGMENT>();
-    tensor<double, q, p>            B1{};
+    tensor<double, q, p> B1{};
     for (int i = 0; i < q; i++) {
       B1[i] = GaussLegendreInterpolation<p>(points1D[i]);
       if constexpr (apply_weights) B1[i] = B1[i] * weights1D[i];
@@ -120,9 +120,9 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
   template <bool apply_weights, int q>
   static constexpr auto calculate_B2()
   {
-    constexpr auto                  points1D  = GaussLegendreNodes<q>();
+    constexpr auto points1D = GaussLegendreNodes<q>();
     [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q>();
-    tensor<double, q, p + 1>        B2{};
+    tensor<double, q, p + 1> B2{};
     for (int i = 0; i < q; i++) {
       B2[i] = GaussLobattoInterpolation<p + 1>(points1D[i]);
       if constexpr (apply_weights) B2[i] = B2[i] * weights1D[i];
@@ -143,9 +143,9 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
   template <bool apply_weights, int q>
   static constexpr auto calculate_G2()
   {
-    constexpr auto                  points1D  = GaussLegendreNodes<q>();
+    constexpr auto points1D = GaussLegendreNodes<q>();
     [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q>();
-    tensor<double, q, p + 1>        G2{};
+    tensor<double, q, p + 1> G2{};
     for (int i = 0; i < q; i++) {
       G2[i] = GaussLobattoInterpolationDerivative<p + 1>(points1D[i]);
       if constexpr (apply_weights) G2[i] = G2[i] * weights1D[i];
@@ -193,12 +193,12 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
 
   SERAC_HOST_DEVICE static constexpr tensor<double, ndof, dim> shape_functions(tensor<double, dim> xi)
   {
-    int                       count = 0;
+    int count = 0;
     tensor<double, ndof, dim> N{};
 
     // do all the x-facing nodes first
     tensor<double, p + 1> N_closed = GaussLobattoInterpolation<p + 1>(xi[1]);
-    tensor<double, p>     N_open   = GaussLegendreInterpolation<p>(xi[0]);
+    tensor<double, p> N_open = GaussLegendreInterpolation<p>(xi[0]);
     for (int j = 0; j < p + 1; j++) {
       for (int i = 0; i < p; i++) {
         N[count++] = {N_open[i] * N_closed[j], 0.0};
@@ -207,7 +207,7 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
 
     // then all the y-facing nodes
     N_closed = GaussLobattoInterpolation<p + 1>(xi[0]);
-    N_open   = GaussLegendreInterpolation<p>(xi[1]);
+    N_open = GaussLegendreInterpolation<p>(xi[1]);
     for (int j = 0; j < p; j++) {
       for (int i = 0; i < p + 1; i++) {
         N[count++] = {0.0, N_closed[i] * N_open[j]};
@@ -219,12 +219,12 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
   // the curl of a 2D vector field is entirely out-of-plane, so we return just that component
   SERAC_HOST_DEVICE static constexpr tensor<double, ndof> shape_function_curl(tensor<double, dim> xi)
   {
-    int                  count = 0;
+    int count = 0;
     tensor<double, ndof> curl_z{};
 
     // do all the x-facing nodes first
     tensor<double, p + 1> dN_closed = GaussLobattoInterpolationDerivative<p + 1>(xi[1]);
-    tensor<double, p>     N_open    = GaussLegendreInterpolation<p>(xi[0]);
+    tensor<double, p> N_open = GaussLegendreInterpolation<p>(xi[0]);
     for (int j = 0; j < p + 1; j++) {
       for (int i = 0; i < p; i++) {
         curl_z[count++] = -N_open[i] * dN_closed[j];
@@ -233,7 +233,7 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
 
     // then all the y-facing nodes
     dN_closed = GaussLobattoInterpolationDerivative<p + 1>(xi[0]);
-    N_open    = GaussLegendreInterpolation<p>(xi[1]);
+    N_open = GaussLegendreInterpolation<p>(xi[1]);
     for (int j = 0; j < p; j++) {
       for (int i = 0; i < p + 1; i++) {
         curl_z[count++] = dN_closed[i] * N_open[j];
@@ -246,10 +246,10 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
   template <typename in_t, int q>
   static auto batch_apply_shape_fn(int j, tensor<in_t, q * q> input, const TensorProductQuadratureRule<q>&)
   {
-    constexpr bool                     apply_weights = false;
-    constexpr tensor<double, q, p>     B1            = calculate_B1<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> B2            = calculate_B2<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> G2            = calculate_G2<apply_weights, q>();
+    constexpr bool apply_weights = false;
+    constexpr tensor<double, q, p> B1 = calculate_B1<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> B2 = calculate_B2<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> G2 = calculate_G2<apply_weights, q>();
 
     int jx, jy;
     int dir = j / ((p + 1) * p);
@@ -262,7 +262,7 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
     }
 
     using source_t = decltype(dot(get<0>(get<0>(in_t{})), tensor<double, 2>{}) + get<1>(get<0>(in_t{})) * double{});
-    using flux_t   = decltype(dot(get<0>(get<1>(in_t{})), tensor<double, 2>{}) + get<1>(get<1>(in_t{})) * double{});
+    using flux_t = decltype(dot(get<0>(get<1>(in_t{})), tensor<double, 2>{}) + get<1>(get<1>(in_t{})) * double{});
 
     tensor<tuple<source_t, flux_t>, q * q> output;
 
@@ -272,7 +272,7 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
 
         double curl_phi_j = (dir == 0) * -B1(qx, jx) * G2(qy, jy) + (dir == 1) * B1(qy, jy) * G2(qx, jx);
 
-        int         Q   = qy * q + qx;
+        int Q = qy * q + qx;
         const auto& d00 = get<0>(get<0>(input(Q)));
         const auto& d01 = get<1>(get<0>(input(Q)));
         const auto& d10 = get<0>(get<1>(input(Q)));
@@ -288,22 +288,22 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
   template <int q>
   SERAC_HOST_DEVICE static auto interpolate(const dof_type& element_values, const TensorProductQuadratureRule<q>&)
   {
-    constexpr bool                     apply_weights = false;
-    constexpr tensor<double, q, p>     B1            = calculate_B1<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> B2            = calculate_B2<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> G2            = calculate_G2<apply_weights, q>();
+    constexpr bool apply_weights = false;
+    constexpr tensor<double, q, p> B1 = calculate_B1<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> B2 = calculate_B2<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> G2 = calculate_G2<apply_weights, q>();
 
     tensor<double, 2, q, q> value{};
-    tensor<double, q, q>    curl{};
+    tensor<double, q, q> curl{};
 
     // to clarify which contractions correspond to which spatial dimensions
     constexpr int x = 1, y = 0;
 
-    auto A   = contract<x, 1>(element_values.x, B1);
+    auto A = contract<x, 1>(element_values.x, B1);
     value[0] = contract<y, 1>(A, B2);
     curl -= contract<y, 1>(A, G2);
 
-    A        = contract<y, 1>(element_values.y, B1);
+    A = contract<y, 1>(element_values.y, B1);
     value[1] = contract<x, 1>(A, B2);
     curl += contract<x, 1>(A, G2);
 
@@ -328,17 +328,17 @@ struct finite_element<mfem::Geometry::SQUARE, Hcurl<p> > {
                                           const TensorProductQuadratureRule<q>&, dof_type* element_residual,
                                           [[maybe_unused]] int step = 1)
   {
-    constexpr bool                     apply_weights = true;
-    constexpr tensor<double, q, p>     B1            = calculate_B1<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> B2            = calculate_B2<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> G2            = calculate_G2<apply_weights, q>();
+    constexpr bool apply_weights = true;
+    constexpr tensor<double, q, p> B1 = calculate_B1<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> B2 = calculate_B2<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> G2 = calculate_G2<apply_weights, q>();
 
     tensor<double, 2, q, q> source{};
-    tensor<double, q, q>    flux{};
+    tensor<double, q, q> flux{};
 
     for (int qy = 0; qy < q; qy++) {
       for (int qx = 0; qx < q; qx++) {
-        int                 Q = qy * q + qx;
+        int Q = qy * q + qx;
         tensor<double, dim> s{get<SOURCE>(qf_output[Q])};
         for (int i = 0; i < dim; i++) {
           source(i, qy, qx) = s[i];

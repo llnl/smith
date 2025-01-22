@@ -35,7 +35,7 @@ namespace serac {
  * for the container holding all contact interactions and for Tribol API calls acting on all contact interactions.
  **/
 class ContactInteraction {
-public:
+ public:
   /**
    * @brief The constructor
    *
@@ -135,7 +135,7 @@ public:
    */
   const mfem::Array<int>& inactiveDofs() const;
 
-private:
+ private:
   /**
    * @brief Get the Tribol enforcement method given a serac enforcement method
    *

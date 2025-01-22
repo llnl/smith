@@ -1,123 +1,12 @@
-
 spack:
-  # add package specs to the `specs` list
-  view: true
-  concretizer:
-    unify: true
-  packages:
-    all:
-      compiler: [clang, gcc]
-      providers:
-        blas: [netlib-lapack]
-        lapack: [netlib-lapack]
-        mpi: [openmpi]
-    mpi:
-      buildable: false
-    openmpi:
-      buildable: false
-      externals:
-      - spec: openmpi@5.0.3_1
-        prefix: /opt/homebrew
-    netlib-lapack:
-      buildable: false
-      externals:
-      - spec: netlib-lapack@3.12.0
-        prefix: /opt/homebrew/opt/lapack
-    autoconf:
-      buildable: false
-      externals:
-      - spec: autoconf@2.72
-        prefix: /opt/homebrew
-    automake:
-      buildable: false
-      externals:
-      - spec: automake@1.16.5
-        prefix: /opt/homebrew
-    bzip2:
-      buildable: false
-      externals:
-      - spec: bzip2@1.0.8
-        prefix: /opt/homebrew/opt/bzip2
-    cmake:
-      version: [3.29.6]
-      buildable: false
-      externals:
-      - spec: cmake@3.29.5
-        prefix: /opt/homebrew
-    gettext:
-      buildable: false
-      externals:
-      - spec: gettext@0.22.5
-        prefix: /opt/homebrew
-    graphviz:
-      buildable: false
-      externals:
-      - spec: graphviz@11.0.0
-        prefix: /opt/homebrew
-    libtool:
-      buildable: false
-      externals:
-      - spec: libtool@2.4.7
-        prefix: /opt/homebrew
-    libx11:
-      buildable: false
-      externals:
-      - spec: libx11@1.8.9
-        prefix: /opt/homebrew
-    llvm:
-      version: [18.1.8]
-      buildable: false
-      externals:
-      - spec: llvm+clang@18.1.8
-        prefix: /opt/homebrew/opt/llvm
-    m4:
-      buildable: false
-      externals:
-      - spec: m4@1.4.19
-        prefix: /opt/homebrew/opt/m4
-    perl:
-      buildable: false
-      externals:
-      - spec: perl@5.34.1~cpanm+opcode+open+shared+threads
-        prefix: /usr
-    pkg-config:
-      buildable: false
-      externals:
-      - spec: pkg-config@0.29.2_3
-        prefix: /opt/homebrew
-    python:
-      buildable: false
-      externals:
-      - spec: python@3.12.4+bz2+crypt+ctypes+dbm+lzma+nis+pyexpat~pythoncmd+readline+sqlite3+ssl~tkinter+uuid+zlib
-        prefix: /opt/homebrew/opt/python
-    tar:
-      buildable: false
-      externals:
-      - spec: tar@3.5.3
-        prefix: /usr
-    readline:
-      buildable: false
-      externals:
-      - spec: readline@8.2.10
-        prefix: /opt/homebrew
-    unzip:
-      buildable: false
-      externals:
-      - spec: unzip@6.0
-        prefix: /usr
-    zlib:
-      buildable: false
-      externals:
-      - spec: zlib@1.3.1
-        prefix: /opt/homebrew
+  view: false
 
- # The "::" removes all found/known compilers from Spack except for these.
   compilers::
   - compiler:
-      spec: clang@=18.1.8
+      spec: clang@=14.0.6
       paths:
-        cc: /opt/homebrew/opt/llvm/bin/clang
-        cxx: /opt/homebrew/opt/llvm/bin/clang++
+        cc: /opt/homebrew/opt/llvm@14/bin/clang
+        cxx: /opt/homebrew/opt/llvm@14/bin/clang++
         f77: /opt/homebrew/bin/gfortran-14
         fc: /opt/homebrew/bin/gfortran-14
       flags: {}
@@ -127,3 +16,206 @@ spack:
       environment: {}
       extra_rpaths:
       - /opt/homebrew/lib/gcc/14
+
+  packages:
+    all:
+      compiler: [clang, gcc]
+      providers:
+        blas: [openblas]
+        lapack: [netlib-lapack]
+        mpi: [openmpi]
+        zlib-api: [zlib]
+    
+    # Providers
+    mpi:
+      buildable: false
+    openmpi:
+      buildable: false
+      externals:
+      - spec: openmpi@5.0.3_1
+        prefix: /opt/homebrew
+    openblas:
+      buildable: false
+      externals:
+      - spec: openblas@0.3.28
+        prefix: /opt/homebrew
+    netlib-lapack:
+      buildable: false
+      externals:
+      - spec: netlib-lapack@3.12.0
+        prefix: /opt/homebrew/opt/lapack
+    zlib-ng:
+      buildable: false
+      externals:
+      - spec: zlib-ng@1.3.1
+        prefix: /opt/homebrew
+
+    # External packages from Homebrew
+    automake:
+      buildable: false
+      externals:
+      - spec: automake@1.17
+        prefix: /opt/homebrew
+    bzip2:
+      buildable: false
+      externals:
+      - spec: bzip2@1.0.8
+        prefix: /opt/homebrew/opt/bzip2
+    cmake:
+      version: [3.30.4]
+      buildable: false
+      externals:
+      - spec: cmake@3.30.4
+        prefix: /opt/homebrew
+    diffutils:
+      buildable: false
+      externals:
+      - spec: diffutils@3.10
+        prefix: /opt/homebrew
+    expat:
+      buildable: false
+      externals:
+      - spec: expat@2.6.3
+        prefix: /opt/homebrew
+    fmt:
+      buildable: false
+      externals:
+      - spec: fmt@11.0.2
+        prefix: /opt/homebrew
+    gettext:
+      buildable: false
+      externals:
+      - spec: gettext@0.22.5
+        prefix: /opt/homebrew
+    gnuconfig:
+      buildable: false
+      externals:
+      - spec: gnuconfig@2.72
+        prefix: /opt/homebrew
+    graphviz:
+      buildable: false
+      externals:
+      - spec: graphviz@12.1.12
+        prefix: /opt/homebrew
+    libtool:
+      buildable: false
+      externals:
+      - spec: libtool@2.5.3
+        prefix: /opt/homebrew
+    libx11:
+      buildable: false
+      externals:
+      - spec: libx11@1.8.10
+        prefix: /opt/homebrew
+    lua:
+      buildable: false
+      externals:
+      - spec: lua@5.4.7
+        prefix: /opt/homebrew
+    m4:
+      buildable: false
+      externals:
+      - spec: m4@1.4.19
+        prefix: /opt/homebrew/opt/m4
+    ninja:
+      buildable: false
+      externals:
+      - spec: ninja@1.12.1
+        prefix: /opt/homebrew
+    openssh:
+      buildable: false
+      externals:
+      - spec: openssh@3.3.6
+        prefix: /opt/homebrew
+    pkg-config:
+      buildable: false
+      externals:
+      - spec: pkg-config@0.29.2_3
+        prefix: /opt/homebrew
+    pkgconf:
+      buildable: false
+      externals:
+      - spec: pkgconf@0.29.2_3
+        prefix: /opt/homebrew
+    readline:
+      buildable: false
+      externals:
+      - spec: readline@8.2.13
+        prefix: /opt/homebrew
+    sqlite:
+      buildable: false
+      externals:
+      - spec: sqlite@3.46.1
+        prefix: /opt/homebrew
+    xz:
+      buildable: false
+      externals:
+      - spec: xz@5.6.3
+        prefix: /opt/homebrew 
+
+    # External packages in /usr
+    curl:
+      buildable: false
+      externals:
+      - spec: curl@8.7.1
+        prefix: /usr
+    git:
+      buildable: false
+      externals:
+      - spec: git@2.39.3
+        prefix: /usr
+    gmake:
+      buildable: false
+      externals:
+      - spec: gmake@3.8.1
+        prefix: /usr
+    perl:
+      buildable: false
+      externals:
+      - spec: perl@5.34.1~cpanm+opcode+open+shared+threads
+        prefix: /usr
+    python:
+      buildable: false
+      externals:
+      - spec: python@3.9
+        prefix: /usr
+    tar:
+      buildable: false
+      externals:
+      - spec: tar@3.5.3
+        prefix: /usr
+    unzip:
+      buildable: false
+      externals:
+      - spec: unzip@6.0
+        prefix: /usr
+    
+    # Devtools (optional)
+    cppcheck:
+      version: [2.15.0]
+      buildable: false
+      externals:
+      - spec: cppcheck@2.15.0
+        prefix: /opt/homebrew
+    doxygen:
+      version: [1.12.0]
+      buildable: false
+      externals:
+      - spec: doxygen@1.12.0
+        prefix: /opt/homebrew
+    llvm:
+      version: [14.0.6]
+      buildable: false
+      externals:
+      - spec: llvm+clang@14.0.6
+        prefix: /opt/homebrew/opt/llvm@14
+    py-sphinx:
+      buildable: false
+      externals:
+      - spec: py-sphinx@7.4.7
+        prefix: /Users/chapman39/dev/serac/venv
+    py-ats:
+      buildable: false
+      externals:
+      - spec: py-ats@7.0.105
+        prefix: /Users/chapman39/dev/serac/venv

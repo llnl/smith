@@ -19,7 +19,7 @@ namespace serac::heat_transfer {
 
 /// Linear isotropic conductor with a parameterized conductivity
 class ParameterizedLinearIsotropicConductor {
-public:
+ public:
   /**
    * @brief Construct a new Parameterized Linear Isotropic Conductor object
    *
@@ -69,7 +69,7 @@ public:
    */
   static constexpr int numParameters() { return 1; }
 
-private:
+ private:
   /// Density
   double density_;
 
@@ -91,9 +91,9 @@ struct ParameterizedIsotropicConductorWithLinearConductivityVsTemperature {
    * added to the parameter value to get the total conductivity.
    * @param d_conductivity_d_temperature Slope for the thermal conductivity as a function of temperature
    */
-  ParameterizedIsotropicConductorWithLinearConductivityVsTemperature(double density                      = 1.0,
-                                                                     double specific_heat_capacity       = 1.0,
-                                                                     double conductivity_offset          = 1.0,
+  ParameterizedIsotropicConductorWithLinearConductivityVsTemperature(double density = 1.0,
+                                                                     double specific_heat_capacity = 1.0,
+                                                                     double conductivity_offset = 1.0,
                                                                      double d_conductivity_d_temperature = 0.0)
       : density_(density),
         specific_heat_capacity_(specific_heat_capacity),
@@ -138,7 +138,7 @@ struct ParameterizedIsotropicConductorWithLinearConductivityVsTemperature {
    */
   static constexpr int numParameters() { return 1; }
 
-private:
+ private:
   /// Density
   double density_;
 

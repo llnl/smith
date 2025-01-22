@@ -18,10 +18,10 @@ namespace serac {
 TEST(BoundaryCond, SimpleRepeatedDofs)
 {
   MPI_Barrier(MPI_COMM_WORLD);
-  constexpr int      N    = 15;
-  constexpr int      ATTR = 1;
-  auto               mesh = mfem::Mesh::MakeCartesian2D(N, N, mfem::Element::TRIANGLE);
-  mfem::ParMesh      par_mesh(MPI_COMM_WORLD, mesh);
+  constexpr int N = 15;
+  constexpr int ATTR = 1;
+  auto mesh = mfem::Mesh::MakeCartesian2D(N, N, mfem::Element::TRIANGLE);
+  mfem::ParMesh par_mesh(MPI_COMM_WORLD, mesh);
   FiniteElementState state(par_mesh, H1<1>{});
 
   for (int i = 0; i < par_mesh.GetNBE(); i++) {
@@ -29,7 +29,7 @@ TEST(BoundaryCond, SimpleRepeatedDofs)
   }
 
   BoundaryConditionManager bcs(par_mesh);
-  auto                     coef = std::make_shared<mfem::ConstantCoefficient>(1);
+  auto coef = std::make_shared<mfem::ConstantCoefficient>(1);
   bcs.addEssential(std::set<int>{ATTR}, coef, state.space(), 1);
   const auto before_dofs = bcs.allEssentialTrueDofs();
 
@@ -45,9 +45,9 @@ TEST(BoundaryCond, SimpleRepeatedDofs)
 TEST(BoundaryCond, DirectLocalDofs)
 {
   MPI_Barrier(MPI_COMM_WORLD);
-  constexpr int      N    = 15;
-  auto               mesh = mfem::Mesh::MakeCartesian2D(N, N, mfem::Element::TRIANGLE);
-  mfem::ParMesh      par_mesh(MPI_COMM_WORLD, mesh);
+  constexpr int N = 15;
+  auto mesh = mfem::Mesh::MakeCartesian2D(N, N, mfem::Element::TRIANGLE);
+  mfem::ParMesh par_mesh(MPI_COMM_WORLD, mesh);
   FiniteElementState state(par_mesh, H1<1>{});
 
   BoundaryConditionManager bcs(par_mesh);
@@ -99,7 +99,7 @@ TEST(BoundaryCondHelper, ElementAttributeDofListScalar)
   mfem::ParMesh pmesh(MPI_COMM_WORLD, mesh);
 
   mfem::Array<int> elem_attr_is_ess(pmesh.attributes.Max());
-  elem_attr_is_ess                = 0;
+  elem_attr_is_ess = 0;
   elem_attr_is_ess[attribute - 1] = 1;
 
   mfem::Array<int> ess_tdof_list;
@@ -154,8 +154,8 @@ TEST(BoundaryCondHelper, ElementAttributeDofList)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int           attribute = 2;
-  constexpr int dim       = 3;
+  int attribute = 2;
+  constexpr int dim = 3;
 
   auto mesh = mfem::Mesh::MakeCartesian3D(4, 4, 4, mfem::Element::HEXAHEDRON);
   mesh.SetAttribute(2, attribute);
@@ -163,16 +163,16 @@ TEST(BoundaryCondHelper, ElementAttributeDofList)
   mesh.SetAttributes();
 
   mfem::ParMesh pmesh(MPI_COMM_WORLD, mesh);
-  int           sdim = pmesh.SpaceDimension();
+  int sdim = pmesh.SpaceDimension();
 
   mfem::Array<int> elem_attr_is_ess(pmesh.attributes.Max());
-  elem_attr_is_ess                = 0;
+  elem_attr_is_ess = 0;
   elem_attr_is_ess[attribute - 1] = 1;
 
   mfem::Array<int> ess_tdof_list;
 
   // scalar space
-  using scalar_space       = L2<1>;
+  using scalar_space = L2<1>;
   auto [l2_scalar, l2_fec] = serac::generateParFiniteElementSpace<scalar_space>(&pmesh);
 
   serac::mfem_ext::GetEssentialTrueDofsFromElementAttribute(*l2_scalar, elem_attr_is_ess, ess_tdof_list);
@@ -182,13 +182,13 @@ TEST(BoundaryCondHelper, ElementAttributeDofList)
   EXPECT_EQ(global_num_tdof, 16);  // grab only component (scalar)
 
   // set up a gridfunction keyed off element attribute
-  double       attr1value = 3.2;
-  double       attr2value = 1.7;
+  double attr1value = 3.2;
+  double attr2value = 1.7;
   mfem::Vector values(2);
   values[0] = attr1value;
   values[1] = attr2value;
   mfem::PWConstCoefficient attr_coef(values);
-  mfem::ParGridFunction    l2_scalar_gf(l2_scalar.get());
+  mfem::ParGridFunction l2_scalar_gf(l2_scalar.get());
   l2_scalar_gf.ProjectCoefficient(attr_coef);
 
   mfem::Vector& true_values = l2_scalar_gf.GetTrueVector();
@@ -201,12 +201,12 @@ TEST(BoundaryCondHelper, ElementAttributeDofList)
   }
 
   // vector space
-  using vector_space           = L2<1, dim>;
+  using vector_space = L2<1, dim>;
   auto [l2_vector, l2_fec_vec] = serac::generateParFiniteElementSpace<vector_space>(&pmesh);
-  mfem::ParGridFunction           l2_vector_gf(l2_vector.get());
-  mfem::PWVectorCoefficient       attr_vec_coef(sdim);
-  mfem::Vector                    attr1vec({0.0, 1.0, 2.0});
-  mfem::Vector                    attr2vec({3.0, 4.0, 5.0});
+  mfem::ParGridFunction l2_vector_gf(l2_vector.get());
+  mfem::PWVectorCoefficient attr_vec_coef(sdim);
+  mfem::Vector attr1vec({0.0, 1.0, 2.0});
+  mfem::Vector attr2vec({3.0, 4.0, 5.0});
   mfem::VectorConstantCoefficient attr1vCoef(attr1vec);
   mfem::VectorConstantCoefficient attr2vCoef(attr2vec);
   attr_vec_coef.UpdateCoefficient(1, attr1vCoef);

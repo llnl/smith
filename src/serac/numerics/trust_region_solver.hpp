@@ -26,14 +26,14 @@
 namespace serac {
 
 class PetscException : public std::exception {
-public:
+ public:
   /// constructor
   PetscException(const std::string& message) : msg(message) {}
 
   /// what is message
   const char* what() const noexcept override { return msg.c_str(); }
 
-private:
+ private:
   /// message string
   std::string msg;
 };

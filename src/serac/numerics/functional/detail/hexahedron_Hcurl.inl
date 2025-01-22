@@ -21,12 +21,12 @@
 /// @cond
 template <int p>
 struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
-  static constexpr auto geometry   = mfem::Geometry::CUBE;
-  static constexpr auto family     = Family::HCURL;
-  static constexpr int  dim        = 3;
-  static constexpr int  n          = p + 1;
-  static constexpr int  ndof       = 3 * p * (p + 1) * (p + 1);
-  static constexpr int  components = 1;
+  static constexpr auto geometry = mfem::Geometry::CUBE;
+  static constexpr auto family = Family::HCURL;
+  static constexpr int dim = 3;
+  static constexpr int n = p + 1;
+  static constexpr int ndof = 3 * p * (p + 1) * (p + 1);
+  static constexpr int components = 1;
 
   static constexpr int VALUE = 0, CURL = 1;
   static constexpr int SOURCE = 0, FLUX = 1;
@@ -62,7 +62,7 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
 
   static constexpr auto nodes = []() {
     auto legendre_nodes = GaussLegendreNodes<p, mfem::Geometry::SEGMENT>();
-    auto lobatto_nodes  = GaussLobattoNodes<p + 1>();
+    auto lobatto_nodes = GaussLobattoNodes<p + 1>();
 
     tensor<double, ndof, dim> nodes{};
 
@@ -107,9 +107,9 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
   template <bool apply_weights, int q>
   static constexpr auto calculate_B1()
   {
-    constexpr auto                  points1D  = GaussLegendreNodes<q>();
+    constexpr auto points1D = GaussLegendreNodes<q>();
     [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q>();
-    tensor<double, q, p>            B1{};
+    tensor<double, q, p> B1{};
     for (int i = 0; i < q; i++) {
       B1[i] = GaussLegendreInterpolation<p>(points1D[i]);
       if constexpr (apply_weights) B1[i] = B1[i] * weights1D[i];
@@ -130,9 +130,9 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
   template <bool apply_weights, int q>
   static constexpr auto calculate_B2()
   {
-    constexpr auto                  points1D  = GaussLegendreNodes<q>();
+    constexpr auto points1D = GaussLegendreNodes<q>();
     [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q>();
-    tensor<double, q, p + 1>        B2{};
+    tensor<double, q, p + 1> B2{};
     for (int i = 0; i < q; i++) {
       B2[i] = GaussLobattoInterpolation<p + 1>(points1D[i]);
       if constexpr (apply_weights) B2[i] = B2[i] * weights1D[i];
@@ -153,9 +153,9 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
   template <bool apply_weights, int q>
   static constexpr auto calculate_G2()
   {
-    constexpr auto                  points1D  = GaussLegendreNodes<q>();
+    constexpr auto points1D = GaussLegendreNodes<q>();
     [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q>();
-    tensor<double, q, p + 1>        G2{};
+    tensor<double, q, p + 1> G2{};
     for (int i = 0; i < q; i++) {
       G2[i] = GaussLobattoInterpolationDerivative<p + 1>(points1D[i]);
       if constexpr (apply_weights) G2[i] = G2[i] * weights1D[i];
@@ -257,15 +257,15 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
   template <typename in_t, int q>
   static auto batch_apply_shape_fn(int j, tensor<in_t, q * q * q> input, const TensorProductQuadratureRule<q>&)
   {
-    constexpr bool                     apply_weights = false;
-    constexpr tensor<double, q, p>     B1            = calculate_B1<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> B2            = calculate_B2<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> G2            = calculate_G2<apply_weights, q>();
+    constexpr bool apply_weights = false;
+    constexpr tensor<double, q, p> B1 = calculate_B1<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> B2 = calculate_B2<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> G2 = calculate_G2<apply_weights, q>();
 
     // figure out which node and which direction
     // correspond to the dof index "j"
     int jx, jy, jz;
-    int dir       = j / (p * (p + 1) * (p + 1));
+    int dir = j / (p * (p + 1) * (p + 1));
     int remainder = j % (p * (p + 1) * (p + 1));
     switch (dir) {
       case 0:  // x-direction
@@ -288,7 +288,7 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
     }
 
     using source_t = decltype(dot(get<0>(get<0>(in_t{})), vec3{}) + dot(get<1>(get<0>(in_t{})), vec3{}));
-    using flux_t   = decltype(dot(get<0>(get<1>(in_t{})), vec3{}) + dot(get<1>(get<1>(in_t{})), vec3{}));
+    using flux_t = decltype(dot(get<0>(get<1>(in_t{})), vec3{}) + dot(get<1>(get<1>(in_t{})), vec3{}));
 
     tensor<tuple<source_t, flux_t>, q * q * q> output;
 
@@ -300,25 +300,25 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
 
           switch (dir) {
             case 0:
-              phi_j[0]      = B1(qx, jx) * B2(qy, jy) * B2(qz, jz);
+              phi_j[0] = B1(qx, jx) * B2(qy, jy) * B2(qz, jz);
               curl_phi_j[1] = B1(qx, jx) * B2(qy, jy) * G2(qz, jz);
               curl_phi_j[2] = -B1(qx, jx) * G2(qy, jy) * B2(qz, jz);
               break;
 
             case 1:
               curl_phi_j[0] = -B2(qx, jx) * B1(qy, jy) * G2(qz, jz);
-              phi_j[1]      = B2(qx, jx) * B1(qy, jy) * B2(qz, jz);
+              phi_j[1] = B2(qx, jx) * B1(qy, jy) * B2(qz, jz);
               curl_phi_j[2] = G2(qx, jx) * B1(qy, jy) * B2(qz, jz);
               break;
 
             case 2:
               curl_phi_j[0] = B2(qx, jx) * G2(qy, jy) * B1(qz, jz);
               curl_phi_j[1] = -G2(qx, jx) * B2(qy, jy) * B1(qz, jz);
-              phi_j[2]      = B2(qx, jx) * B2(qy, jy) * B1(qz, jz);
+              phi_j[2] = B2(qx, jx) * B2(qy, jy) * B1(qz, jz);
               break;
           }
 
-          int         Q   = (qz * q + qy) * q + qx;
+          int Q = (qz * q + qy) * q + qx;
           const auto& d00 = get<0>(get<0>(input(Q)));
           const auto& d01 = get<1>(get<0>(input(Q)));
           const auto& d10 = get<0>(get<1>(input(Q)));
@@ -335,10 +335,10 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
   template <int q>
   SERAC_HOST_DEVICE static auto interpolate(const dof_type& element_values, const TensorProductQuadratureRule<q>&)
   {
-    constexpr bool                     apply_weights = false;
-    constexpr tensor<double, q, p>     B1            = calculate_B1<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> B2            = calculate_B2<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> G2            = calculate_G2<apply_weights, q>();
+    constexpr bool apply_weights = false;
+    constexpr tensor<double, q, p> B1 = calculate_B1<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> B2 = calculate_B2<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> G2 = calculate_G2<apply_weights, q>();
 
     tensor<tensor<double, q, q, q>, 3> value{};
     tensor<tensor<double, q, q, q>, 3> curl{};
@@ -383,7 +383,7 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
         for (int qx = 0; qx < q; qx++) {
           for (int i = 0; i < 3; i++) {
             get<VALUE>(qf_inputs(count))[i] = value[i](qz, qy, qx);
-            get<CURL>(qf_inputs(count))[i]  = curl[i](qz, qy, qx);
+            get<CURL>(qf_inputs(count))[i] = curl[i](qz, qy, qx);
           }
           count++;
         }
@@ -398,10 +398,10 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
                                           const TensorProductQuadratureRule<q>&, dof_type* element_residual,
                                           [[maybe_unused]] int step = 1)
   {
-    constexpr bool                     apply_weights = true;
-    constexpr tensor<double, q, p>     B1            = calculate_B1<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> B2            = calculate_B2<apply_weights, q>();
-    constexpr tensor<double, q, p + 1> G2            = calculate_G2<apply_weights, q>();
+    constexpr bool apply_weights = true;
+    constexpr tensor<double, q, p> B1 = calculate_B1<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> B2 = calculate_B2<apply_weights, q>();
+    constexpr tensor<double, q, p + 1> G2 = calculate_G2<apply_weights, q>();
 
     tensor<double, 3, q, q, q> source{};
     tensor<double, 3, q, q, q> flux{};
@@ -409,12 +409,12 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
     for (int qz = 0; qz < q; qz++) {
       for (int qy = 0; qy < q; qy++) {
         for (int qx = 0; qx < q; qx++) {
-          int               k = (qz * q + qy) * q + qx;
+          int k = (qz * q + qy) * q + qx;
           tensor<double, 3> s{get<SOURCE>(qf_output[k])};
           tensor<double, 3> f{get<FLUX>(qf_output[k])};
           for (int i = 0; i < 3; i++) {
             source(i, qz, qy, qx) = s[i];
-            flux(i, qz, qy, qx)   = f[i];
+            flux(i, qz, qy, qx) = f[i];
           }
         }
       }

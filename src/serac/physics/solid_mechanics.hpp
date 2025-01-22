@@ -48,14 +48,14 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
  * systems of linear equations that show up in implicit
  * solid mechanics simulations
  */
-const LinearSolverOptions default_linear_options = {.linear_solver  = LinearSolver::GMRES,
+const LinearSolverOptions default_linear_options = {.linear_solver = LinearSolver::GMRES,
                                                     .preconditioner = serac::ordering == mfem::Ordering::byVDIM
                                                                           ? Preconditioner::HypreAMG
                                                                           : Preconditioner::HypreJacobi,
-                                                    .relative_tol   = 1.0e-6,
-                                                    .absolute_tol   = 1.0e-16,
+                                                    .relative_tol = 1.0e-6,
+                                                    .absolute_tol = 1.0e-16,
                                                     .max_iterations = 500,
-                                                    .print_level    = 0};
+                                                    .print_level = 0};
 
 /// the default direct solver option for solving the linear stiffness equations
 #ifdef MFEM_USE_STRUMPACK
@@ -69,11 +69,11 @@ const LinearSolverOptions direct_linear_options = {.linear_solver = LinearSolver
  * systems of nonlinear equations that show up in implicit
  * solid mechanics simulations
  */
-const NonlinearSolverOptions default_nonlinear_options = {.nonlin_solver  = NonlinearSolver::Newton,
-                                                          .relative_tol   = 1.0e-4,
-                                                          .absolute_tol   = 1.0e-8,
+const NonlinearSolverOptions default_nonlinear_options = {.nonlin_solver = NonlinearSolver::Newton,
+                                                          .relative_tol = 1.0e-4,
+                                                          .absolute_tol = 1.0e-8,
                                                           .max_iterations = 10,
-                                                          .print_level    = 1};
+                                                          .print_level = 1};
 
 /// default quasistatic timestepping options for solid mechanics
 const TimesteppingOptions default_quasistatic_options = {TimestepMethod::QuasiStatic};
@@ -101,11 +101,11 @@ class SolidMechanics;
 template <int order, int dim, typename... parameter_space, int... parameter_indices>
 class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_sequence<int, parameter_indices...>>
     : public BasePhysics {
-public:
+ public:
   //! @cond Doxygen_Suppress
-  static constexpr int  VALUE = 0, DERIVATIVE = 1;
-  static constexpr int  SHAPE = 0;
-  static constexpr auto I     = Identity<dim>();
+  static constexpr int VALUE = 0, DERIVATIVE = 1;
+  static constexpr int SHAPE = 0;
+  static constexpr auto I = Identity<dim>();
   //! @endcond
 
   /// @brief The total number of non-parameter state variables (displacement, acceleration) passed to the FEM
@@ -215,7 +215,7 @@ public:
     dual_adjoints_.push_back(&reactions_adjoint_bcs_);
 
     // Create a pack of the primal field and parameter finite element spaces
-    mfem::ParFiniteElementSpace* test_space  = &displacement_.space();
+    mfem::ParFiniteElementSpace* test_space = &displacement_.space();
     mfem::ParFiniteElementSpace* shape_space = &shape_displacement_.space();
 
     std::array<const mfem::ParFiniteElementSpace*, NUM_STATE_VARS + sizeof...(parameter_space)> trial_spaces;
@@ -371,23 +371,23 @@ public:
     time_end_step_ = 0.0;
 
     displacement_ = 0.0;
-    velocity_     = 0.0;
+    velocity_ = 0.0;
     acceleration_ = 0.0;
 
-    adjoint_displacement_      = 0.0;
+    adjoint_displacement_ = 0.0;
     displacement_adjoint_load_ = 0.0;
-    velocity_adjoint_load_     = 0.0;
+    velocity_adjoint_load_ = 0.0;
     acceleration_adjoint_load_ = 0.0;
 
     implicit_sensitivity_displacement_start_of_step_ = 0.0;
-    implicit_sensitivity_velocity_start_of_step_     = 0.0;
+    implicit_sensitivity_velocity_start_of_step_ = 0.0;
 
-    reactions_             = 0.0;
+    reactions_ = 0.0;
     reactions_adjoint_bcs_ = 0.0;
 
-    u_                      = 0.0;
-    v_                      = 0.0;
-    du_                     = 0.0;
+    u_ = 0.0;
+    v_ = 0.0;
+    du_ = 0.0;
     predicted_displacement_ = 0.0;
 
     if (checkpoint_to_disk_) {
@@ -507,12 +507,8 @@ public:
    *
    * @note This method must be called prior to completeSetup()
    */
-  //clang-format off
-  [[deprecated("Please use the boundary condition methods that take Domain objects. This method will be removed.")]]
-  //clang-format on
-  void
-  setDisplacementBCs(std::function<bool(const mfem::Vector&)>           is_node_constrained,
-                     std::function<double(const mfem::Vector&, double)> disp, int component)
+  void setDisplacementBCs(std::function<bool(const mfem::Vector&)> is_node_constrained,
+                          std::function<double(const mfem::Vector&, double)> disp, int component)
   {
     // Get the nodal positions for the displacement vector in grid function form
     mfem::ParGridFunction coordinates(
@@ -764,7 +760,7 @@ public:
     auto SERAC_HOST_DEVICE operator()(double, X, State& state, Displacement displacement, Acceleration acceleration,
                                       Params... params) const
     {
-      auto du_dX   = get<DERIVATIVE>(displacement);
+      auto du_dX = get<DERIVATIVE>(displacement);
       auto d2u_dt2 = get<VALUE>(acceleration);
 
       auto stress = material_(state, du_dX, params...);
@@ -824,30 +820,42 @@ public:
   }
 
   /**
-   * @brief Set the underlying finite element state to a prescribed displacement
+   * @brief Set the underlying finite element state to a prescribed displacement field
    *
-   * @param disp The function describing the displacement field
+   * @param applied_displacement The displacement field as a callable,
+   *   which must have the signature:
+   *   tensor<double, dim> applied_displacement(tensor<double, dim> X)
+   *
+   *   args:
+   *   X: coordinates of the material point in the reference configuration
+   *
+   *   returns: u, the displacement at X.
    */
-  void setDisplacement(std::function<void(const mfem::Vector& x, mfem::Vector& disp)> disp)
+  template <typename AppliedDisplacementFunction>
+  void setDisplacement(AppliedDisplacementFunction applied_displacement)
   {
-    // Project the coefficient onto the grid function
-    mfem::VectorFunctionCoefficient disp_coef(dim, disp);
-    displacement_.project(disp_coef);
+    displacement_.setFromFieldFunction(applied_displacement);
   }
 
   /// @overload
   void setDisplacement(const FiniteElementState& temp) { displacement_ = temp; }
 
   /**
-   * @brief Set the underlying finite element state to a prescribed velocity
+   * @brief Set the underlying finite element state to a prescribed velocity field
    *
-   * @param vel The function describing the velocity field
+   * @param applied_velocity The velocity field as a callable,
+   *   which must have the signature:
+   *   tensor<double, dim> applied_velocity(tensor<double, dim> X)
+   *
+   *   args:
+   *   X: coordinates of the material point in the reference configuration
+   *
+   *   returns: v, the velocity at X.
    */
-  void setVelocity(std::function<void(const mfem::Vector& x, mfem::Vector& vel)> vel)
+  template <typename AppliedVelocityFunction>
+  void setVelocity(AppliedVelocityFunction applied_velocity)
   {
-    // Project the coefficient onto the grid function
-    mfem::VectorFunctionCoefficient vel_coef(dim, vel);
-    velocity_.project(vel_coef);
+    velocity_.setFromFieldFunction(applied_velocity);
   }
 
   /// @overload
@@ -1102,7 +1110,7 @@ public:
             add(1.0, u_, c0_, d2u_dt2, predicted_displacement_);
 
             // K := dR/du
-            auto                                  K = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_,
+            auto K = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_,
                                                          differentiate_wrt(predicted_displacement_), d2u_dt2,
                                                          *parameters_[parameter_indices].state...));
             std::unique_ptr<mfem::HypreParMatrix> k_mat(assemble(K));
@@ -1205,7 +1213,7 @@ public:
     if (cycle_ > max_cycle_) {
       timesteps_.push_back(dt);
       max_cycle_ = cycle_;
-      max_time_  = time_;
+      max_time_ = time_;
     }
   }
 
@@ -1279,8 +1287,8 @@ public:
 
     cycle_--;  // cycle is now at n \in [0,N-1]
 
-    double       dt_np1_to_np2 = getCheckpointedTimestep(cycle_ + 1);
-    const double dt_n_to_np1   = getCheckpointedTimestep(cycle_);
+    double dt_np1_to_np2 = getCheckpointedTimestep(cycle_ + 1);
+    const double dt_n_to_np1 = getCheckpointedTimestep(cycle_);
 
     auto end_step_solution = getCheckpointedStates(cycle_ + 1);
 
@@ -1301,7 +1309,7 @@ public:
 
       mfem::EliminateBC(*J_T, *J_e_, constrained_dofs, reactions_adjoint_bcs_, displacement_adjoint_load_);
       for (int i = 0; i < constrained_dofs.Size(); i++) {
-        int j                         = constrained_dofs[i];
+        int j = constrained_dofs[i];
         displacement_adjoint_load_[j] = reactions_adjoint_bcs_[j];
       }
 
@@ -1316,7 +1324,7 @@ public:
 
       // Load the end of step velo, accel from the previous cycle
 
-      velocity_     = end_step_solution.at("velocity");
+      velocity_ = end_step_solution.at("velocity");
       acceleration_ = end_step_solution.at("acceleration");
 
       // K := dR/du
@@ -1346,7 +1354,7 @@ public:
     SLIC_ASSERT_MSG(parameter_field < sizeof...(parameter_indices),
                     axom::fmt::format("Invalid parameter index '{}' requested for sensitivity."));
 
-    auto drdparam     = serac::get<DERIVATIVE>(d_residual_d_[parameter_field](time_end_step_));
+    auto drdparam = serac::get<DERIVATIVE>(d_residual_d_[parameter_field](time_end_step_));
     auto drdparam_mat = assemble(drdparam);
 
     drdparam_mat->MultTranspose(adjoint_displacement_, *parameters_[parameter_field].sensitivity);
@@ -1399,7 +1407,7 @@ public:
   /// @brief getter for nodal forces (before zeroing-out essential dofs)
   const serac::FiniteElementDual& reactions() const { return reactions_; };
 
-protected:
+ protected:
   /// The compile-time finite element trial space for displacement and velocity (H1 of order p)
   using trial = H1<order, dim>;
 
@@ -1532,14 +1540,14 @@ protected:
    * @return An array of the constrained true dofs
    */
   mfem::Array<int> calculateConstrainedDofs(std::function<bool(const mfem::Vector&)> is_node_constrained,
-                                            std::optional<int>                       component = {}) const
+                                            std::optional<int> component = {}) const
   {
     // Get the nodal positions for the displacement vector in grid function form
     mfem::ParGridFunction nodal_positions(
         const_cast<mfem::ParFiniteElementSpace*>(&displacement_.space()));  // MRT mfem const correctness issue
     mesh_.GetNodes(nodal_positions);
 
-    const int        num_nodes = nodal_positions.Size() / dim;
+    const int num_nodes = nodal_positions.Size() / dim;
     mfem::Array<int> constrained_dofs;
 
     for (int i = 0; i < num_nodes; i++) {
@@ -1548,7 +1556,7 @@ protected:
       int idof = mfem::Ordering::Map<serac::ordering>(nodal_positions.FESpace()->GetNDofs(),
                                                       nodal_positions.FESpace()->GetVDim(), i, 0);
       if (nodal_positions.ParFESpace()->GetLocalTDofNumber(idof) >= 0) {
-        mfem::Vector     node_coords(dim);
+        mfem::Vector node_coords(dim);
         mfem::Array<int> node_dofs;
         for (int d = 0; d < dim; d++) {
           // Get the local dof number for the prescribed component
@@ -1651,7 +1659,7 @@ protected:
       mfem::EliminateBC(*J_, *J_e_, constrained_dofs, du_, r);
       for (int i = 0; i < constrained_dofs.Size(); i++) {
         int j = constrained_dofs[i];
-        r[j]  = du_[j];
+        r[j] = du_[j];
       }
 
       auto& lin_solver = nonlin_solver_->linearSolver();

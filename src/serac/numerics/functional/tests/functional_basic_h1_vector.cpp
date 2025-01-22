@@ -38,8 +38,8 @@ struct MixedModelOne {
     constexpr static auto d11 =
         1.0 * make_tensor<dim + 1, dim, dim + 2, dim>([](int i, int j, int k, int l) { return i - j + 2 * k - 3 * l; });
     auto [u, du_dx] = displacement;
-    auto source     = zero{};
-    auto flux       = double_dot(d11, du_dx);
+    auto source = zero{};
+    auto flux = double_dot(d11, du_dx);
     return serac::tuple{source, flux};
   }
 };
@@ -50,8 +50,8 @@ struct MixedModelTwo {
   SERAC_HOST_DEVICE auto operator()(double, position_type position, displacement_type displacement) const
   {
     constexpr static auto s11 = 1.0 * make_tensor<dim + 1, dim + 2>([](int i, int j) { return i * i - j; });
-    auto [X, dX_dxi]          = position;
-    auto [u, du_dxi]          = displacement;
+    auto [X, dX_dxi] = position;
+    auto [u, du_dxi] = displacement;
     return dot(s11, u) * X[0];
   }
 };
@@ -67,8 +67,8 @@ struct ElasticityTestModelOne {
     constexpr static auto d11 =
         make_tensor<dim, dim, dim, dim>([](int i, int j, int k, int l) { return i - j + 2 * k - 3 * l + 1; });
     auto [u, du_dx] = displacement;
-    auto source     = dot(d00, u) + double_dot(d01, du_dx);
-    auto flux       = dot(d10, u) + double_dot(d11, du_dx);
+    auto source = dot(d00, u) + double_dot(d01, du_dx);
+    auto flux = dot(d10, u) + double_dot(d11, du_dx);
     return serac::tuple{source, flux};
   }
 };
@@ -88,16 +88,17 @@ template <int p, int dim>
 void weird_mixed_test(std::unique_ptr<mfem::ParMesh>& mesh)
 {
   // Define vector-valued test and trial spaces of different sizes
-  using test_space  = H1<p, dim + 1>;
+  using test_space = H1<p, dim + 1>;
   using trial_space = H1<p, dim + 2>;
 
   auto [trial_fes, trial_col] = generateParFiniteElementSpace<trial_space>(mesh.get());
-  auto [test_fes, test_col]   = generateParFiniteElementSpace<test_space>(mesh.get());
+  auto [test_fes, test_col] = generateParFiniteElementSpace<test_space>(mesh.get());
 
   mfem::Vector U(trial_fes->TrueVSize());
 
   Functional<test_space(trial_space), exec_space> residual(test_fes.get(), {trial_fes.get()});
-  U.Randomize();
+  int seed = 5;
+  U.Randomize(seed);
 
   // note: this is not really an elasticity problem, it's testing source and flux
   // terms that have the appropriate shapes to ensure that all the differentiation
@@ -115,14 +116,15 @@ template <int p, int dim>
 void elasticity_test(std::unique_ptr<mfem::ParMesh>& mesh)
 {
   // Define the test and trial spaces for an elasticity-like problem
-  using test_space  = H1<p, dim>;
+  using test_space = H1<p, dim>;
   using trial_space = H1<p, dim>;
 
   auto [trial_fes, trial_col] = generateParFiniteElementSpace<trial_space>(mesh.get());
-  auto [test_fes, test_col]   = generateParFiniteElementSpace<test_space>(mesh.get());
+  auto [test_fes, test_col] = generateParFiniteElementSpace<test_space>(mesh.get());
 
   mfem::Vector U(trial_fes->TrueVSize());
-  U.Randomize();
+  int seed = 6;
+  U.Randomize(seed);
 
   Functional<test_space(trial_space), exec_space> residual(test_fes.get(), {trial_fes.get()});
 

@@ -24,10 +24,10 @@ void shape_test()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 0;
+  int serial_refinement = 0;
   int parallel_refinement = 0;
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Construct the appropriate dimension mesh and give it to the data store
@@ -55,8 +55,8 @@ void shape_test()
 
   // Use tight tolerances as this is a machine precision test
 #ifdef SERAC_USE_PETSC
-  linear_options.linear_solver        = LinearSolver::PetscCG;
-  linear_options.preconditioner       = Preconditioner::Petsc;
+  linear_options.linear_solver = LinearSolver::PetscCG;
+  linear_options.preconditioner = Preconditioner::Petsc;
   linear_options.petsc_preconditioner = PetscPCType::HMG;
 #else
   linear_options.preconditioner = Preconditioner::HypreJacobi;
@@ -66,25 +66,13 @@ void shape_test()
 
   auto nonlinear_options = solid_mechanics::default_nonlinear_options;
 
-  nonlinear_options.absolute_tol   = 8.0e-15;
-  nonlinear_options.relative_tol   = 8.0e-15;
+  nonlinear_options.absolute_tol = 8.0e-15;
+  nonlinear_options.relative_tol = 8.0e-15;
   nonlinear_options.max_iterations = 10;
 
   solid_mechanics::LinearIsotropic mat{1.0, 1.0, 1.0};
 
   double shape_factor = 2.0;
-
-  // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector& x, mfem::Vector& bc_vec) -> void {
-    bc_vec[0] = 0.0;
-    bc_vec[1] = x[0] * 0.1;
-  };
-
-  // Define the function for the initial displacement and boundary condition
-  auto bc_pure = [shape_factor](const mfem::Vector& x, mfem::Vector& bc_vec) -> void {
-    bc_vec[0] = 0.0;
-    bc_vec[1] = (x[0] * 0.1) / (shape_factor + 1.0);
-  };
 
   auto applied_displacement = [](tensor<double, dim> x, double) {
     tensor<double, dim> u{};
@@ -130,9 +118,8 @@ void shape_test()
     solid_solver.setDisplacementBCs(applied_displacement, ess_bdr);
 
     // For consistency of the problem, this value should match the one in the BCs
-    // TODO(Brandon): When the setDisplacement is updated to take a serac::tensor valued callable,
-    // pass the same functor here as is used for the BCs.
-    solid_solver.setDisplacement(bc);
+    solid_solver.setDisplacement(
+        [applied_displacement](tensor<double, dim> X) { return applied_displacement(X, 0.0); });
 
     solid_solver.setShapeDisplacement(user_defined_shape_displacement);
 
@@ -182,7 +169,8 @@ void shape_test()
 
     // Set the initial displacement and boundary condition
     solid_solver_no_shape.setDisplacementBCs(applied_displacement_pure, ess_bdr);
-    solid_solver_no_shape.setDisplacement(bc_pure);
+    solid_solver_no_shape.setDisplacement(
+        [applied_displacement_pure](tensor<double, dim> X) { return applied_displacement_pure(X, 0.0); });
 
     Domain whole_mesh = EntireDomain(StateManager::mesh(new_mesh_tag));
 
@@ -200,7 +188,7 @@ void shape_test()
     visit_dc.Save();
   }
 
-  double error          = pure_displacement.DistanceTo(shape_displacement.GetData());
+  double error = pure_displacement.DistanceTo(shape_displacement.GetData());
   double relative_error = error / pure_displacement.Norml2();
   EXPECT_LT(relative_error, 4.5e-12);
 }

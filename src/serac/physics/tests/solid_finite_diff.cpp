@@ -24,7 +24,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -40,7 +40,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Construct and initialized the user-defined moduli to be used as a differentiable parameter in
@@ -59,7 +59,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
   // Construct a functional-based solid solver
 
-  auto lin_options          = solid_mechanics::default_linear_options;
+  auto lin_options = solid_mechanics::default_linear_options;
   lin_options.linear_solver = LinearSolver::SuperLU;
 
   SolidMechanics<p, dim, Parameters<H1<1>, H1<1>>> solid_solver(
@@ -74,11 +74,8 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   constexpr int bulk_parameter_index = 0;
 
   solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  Domain                                        whole_mesh = EntireDomain(pmesh);
+  Domain whole_mesh = EntireDomain(pmesh);
   solid_solver.setMaterial(DependsOn<0, 1>{}, mat, whole_mesh);
-
-  // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
   Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
@@ -112,7 +109,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
   // Construct a dummy adjoint load (this would come from a QOI downstream).
   // This adjoint load is equivalent to a discrete L1 norm on the displacement.
-  serac::FiniteElementDual              adjoint_load(solid_solver.displacement().space(), "adjoint_load");
+  serac::FiniteElementDual adjoint_load(solid_solver.displacement().space(), "adjoint_load");
   std::unique_ptr<mfem::HypreParVector> assembled_vector(adjoint_load_form.ParallelAssemble());
   adjoint_load = *assembled_vector;
 
@@ -128,10 +125,11 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   // to check if computed qoi sensitivity is consistent
   // with finite difference on the displacement
   double eps = 1.0e-5;
+  FiniteElementState zero_state(pmesh, H1<p, dim>{}, "zero");
   for (int i = 0; i < user_defined_bulk_modulus.gridFunction().Size(); ++i) {
     // Perturb the bulk modulus
     user_defined_bulk_modulus(i) = bulk_modulus_value + eps;
-    solid_solver.setDisplacement(bc);
+    solid_solver.setDisplacement(zero_state);
 
     solid_solver.setParameter(0, user_defined_bulk_modulus);
 
@@ -140,7 +138,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
     user_defined_bulk_modulus(i) = bulk_modulus_value - eps;
 
-    solid_solver.setDisplacement(bc);
+    solid_solver.setDisplacement(zero_state);
 
     solid_solver.setParameter(0, user_defined_bulk_modulus);
     solid_solver.advanceTimestep(1.0);
@@ -189,7 +187,7 @@ void finite_difference_shape_test(LoadingType load)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -205,7 +203,7 @@ void finite_difference_shape_test(LoadingType load)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Define the boundary for essential bcs
@@ -222,7 +220,7 @@ void finite_difference_shape_test(LoadingType load)
                                       solid_mechanics::default_quasistatic_options, "solid_functional", mesh_tag);
 
   solid_mechanics::NeoHookean mat{1.0, 1.0, 1.0};
-  Domain                      whole_mesh = EntireDomain(pmesh);
+  Domain whole_mesh = EntireDomain(pmesh);
   solid_solver.setMaterial(mat, whole_mesh);
 
   FiniteElementState shape_displacement(pmesh, H1<SHAPE_ORDER, dim>{});
@@ -230,12 +228,8 @@ void finite_difference_shape_test(LoadingType load)
   shape_displacement = shape_displacement_value;
   solid_solver.setShapeDisplacement(shape_displacement);
 
-  // Define the function for the initial displacement and boundary condition
-  auto mfem_vector_zero = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
-
   // Set the initial displacement and boundary condition
   solid_solver.setFixedBCs(essential_boundary);
-  solid_solver.setDisplacement(mfem_vector_zero);
 
   Domain top_face = Domain::ofBoundaryElements(pmesh, [](std::vector<vec2> vertices, int /*attr*/) {
     return average(vertices)[1] > 0.99;  // select faces by y-coordinate
@@ -269,7 +263,7 @@ void finite_difference_shape_test(LoadingType load)
 
   // Construct a dummy adjoint load (this would come from a QOI downstream).
   // This adjoint load is equivalent to a discrete L1 norm on the displacement.
-  serac::FiniteElementDual              adjoint_load(solid_solver.displacement().space(), "adjoint_load");
+  serac::FiniteElementDual adjoint_load(solid_solver.displacement().space(), "adjoint_load");
   std::unique_ptr<mfem::HypreParVector> assembled_vector(adjoint_load_form.ParallelAssemble());
   adjoint_load = *assembled_vector;
 

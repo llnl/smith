@@ -26,10 +26,10 @@ void functional_thermal_test_robin_condition()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  constexpr int p                   = 2;
-  constexpr int dim                 = 3;
-  int           serial_refinement   = 0;
-  int           parallel_refinement = 0;
+  constexpr int p = 2;
+  constexpr int dim = 3;
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
 
   // Create DataStore
   axom::sidre::DataStore datastore;
@@ -40,15 +40,15 @@ void functional_thermal_test_robin_condition()
 
   std::string mesh_tag{"mesh"};
 
-  auto  mesh  = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // _solver_params_start
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
-                                                  .relative_tol   = 1.0e-12,
-                                                  .absolute_tol   = 1.0e-12,
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-12,
+                                                  .absolute_tol = 1.0e-12,
                                                   .max_iterations = 5000,
-                                                  .print_level    = 1};
+                                                  .print_level = 1};
 
   HeatTransfer<p, dim> thermal_solver(nonlinear_options, heat_transfer::default_linear_options,
                                       heat_transfer::default_static_options, "heat_transfer", mesh_tag);
@@ -60,7 +60,7 @@ void functional_thermal_test_robin_condition()
       1.0   // isotropic thermal conductivity
   };
 
-  Domain whole_domain   = EntireDomain(pmesh);
+  Domain whole_domain = EntireDomain(pmesh);
   Domain whole_boundary = EntireBoundary(pmesh);
 
   thermal_solver.setMaterial(mat, whole_domain);
@@ -81,7 +81,7 @@ void functional_thermal_test_robin_condition()
 
   // prescribe zero temperature at one end of the beam
   std::set<int> support = {1};
-  auto          zero    = [](const mfem::Vector&, double) -> double { return 0.0; };
+  auto zero = [](const mfem::Vector&, double) -> double { return 0.0; };
   thermal_solver.setTemperatureBCs(support, zero);
 
   // Finalize the data structures
@@ -90,9 +90,9 @@ void functional_thermal_test_robin_condition()
   thermal_solver.outputStateToDisk("robin_condition");
 
   // Perform the quasi-static solve
-  int    num_steps = 1;
-  double tmax      = 1.0;
-  double dt        = tmax / num_steps;
+  int num_steps = 1;
+  double tmax = 1.0;
+  double dt = tmax / num_steps;
   for (int i = 0; i < num_steps; i++) {
     thermal_solver.advanceTimestep(dt);
     thermal_solver.outputStateToDisk("robin_condition");
