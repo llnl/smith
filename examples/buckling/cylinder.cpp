@@ -137,12 +137,19 @@ int main(int argc, char* argv[])
   auto xpos = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(xpos_attr));
   auto bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
   auto top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(4));
+  Domain whole_mesh = EntireDomain(pmesh);
+
+  std::vector<std::string> fieldnames{"disp_old"};
+  FiniteElementState disp_old(StateManager::mesh(mesh_tag), serac::H1<p,dim>{}, "previous_displacement");
+  disp_old = 0.0;
+
+  using ParamT = serac::Parameters<serac::H1<p,dim>>;
 
   // Create solver, either with or without contact
-  std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
+  std::unique_ptr<SolidMechanics<p, dim, ParamT>> solid_solver;
   if (use_contact) {
-    auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim>>(
-        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag);
+    auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim, ParamT>>(
+        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag, fieldnames);
 
     // Add the contact interaction
     serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
@@ -153,16 +160,23 @@ int main(int argc, char* argv[])
     solid_contact_solver->addContactInteraction(contact_interaction_id, {xpos_attr}, {xneg_attr}, contact_options);
     solid_solver = std::move(solid_contact_solver);
   } else {
-    solid_solver = std::make_unique<serac::SolidMechanics<p, dim>>(
-        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag);
+    solid_solver = std::make_unique<serac::SolidMechanics<p, dim, ParamT> > (
+        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag, fieldnames);
     solid_solver->setPressure([&](auto&, double t) { return 0.01 * t; }, xpos);
   }
+
+  solid_solver->setParameter(0, disp_old);
+
+  double ground_stiffness = 1.0;
+  solid_solver->addCustomDomainIntegral(DependsOn<0>{},
+    [ground_stiffness](double /* t */, auto /*position*/, [[maybe_unused]] auto displacement, auto /*acceleration*/, [[maybe_unused]] auto displacement_old) {
+      return ground_stiffness * (displacement - displacement_old);
+    }, whole_mesh);
 
   // Define a Neo-Hookean material
   auto lambda = 1.0;
   auto G = 0.1;
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
-  Domain whole_mesh = EntireDomain(pmesh);
   solid_solver->setMaterial(mat, whole_mesh);
 
   // Set up essential boundary conditions
@@ -197,6 +211,10 @@ int main(int argc, char* argv[])
 
     // Refine dt as contact starts
     auto next_dt = solid_solver->time() < 0.65 ? dt : dt * 0.1;
+
+    disp_old = solid_solver->state("displacement");
+    solid_solver->setParameter(0, disp_old);
+
     solid_solver->advanceTimestep(next_dt);
 
     // Output the sidre-based plot files
