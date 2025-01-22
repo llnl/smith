@@ -40,6 +40,9 @@ enum class ContactType
   Frictionless /**< Enforce gap >= 0, pressure <= 0, gap * pressure = 0 in the normal direction */
 };
 
+/**
+ * @brief Method for computing Jacobian of contact terms
+ */
 enum class ContactJacobian
 {
   Approximate, /**< Ignore higher order contributions to the Jacobian */
