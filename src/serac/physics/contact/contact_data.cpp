@@ -251,10 +251,16 @@ void ContactData::residualFunction(const mfem::Vector& u, mfem::Vector& r)
 
   setDisplacements(u_blk);
   // we need to call update first to update gaps
+  for (auto& interaction : interactions_) {
+    interaction.evalJacobian(false);
+  }
   update(cycle_, time_, dt_);
   // with updated gaps, we can update pressure for contact interactions with penalty enforcement
   setPressures(p_blk);
   // call update again with the right pressures
+  for (auto& interaction : interactions_) {
+    interaction.evalJacobian(true);
+  }
   update(cycle_, time_, dt_);
 
   r_blk += forces();

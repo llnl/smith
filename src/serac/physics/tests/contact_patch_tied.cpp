@@ -77,7 +77,8 @@ TEST_P(ContactPatchTied, patch)
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = GetParam().first,
                                  .type = ContactType::TiedNormal,
-                                 .penalty = 1.0e4};
+                                 .penalty = 1.0e3,
+                                 .jacobian = ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, "patch_mesh");

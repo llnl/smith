@@ -47,15 +47,16 @@ int main(int argc, char* argv[])
 #endif
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
-                                                  .relative_tol = 1.0e-7,
-                                                  .absolute_tol = 1.0e-7,
+                                                  .relative_tol = 1.0e-10,
+                                                  .absolute_tol = 1.0e-10,
                                                   .max_iterations = 200,
                                                   .print_level = 1};
 
   serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                         .enforcement = serac::ContactEnforcement::Penalty,
                                         .type = serac::ContactType::TiedNormal,
-                                        .penalty = 1.0e3};
+                                        .penalty = 1.0e3,
+                                        .jacobian = serac::ContactJacobian::Approximate};
 
   serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
       nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "ironing_mesh",
