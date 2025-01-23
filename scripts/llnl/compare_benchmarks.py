@@ -14,7 +14,6 @@ import sys
 import os
 import platform
 import datetime as dt
-from IPython.display import HTML, display
 from argparse import ArgumentParser
 
 input_deploy_dir_str = "/usr/gapps/spot/live/"
@@ -35,6 +34,10 @@ def parse_args():
                       dest="spot_dir",
                       default=get_shared_spot_dir(),
                       help="Where to put all resulting caliper files to use for SPOT analysis (defaults to a shared location)")
+    parser.add_argument("-md", "--max-diff",
+                      dest="max_diff",
+                      default=10,
+                      help="Maximum difference (in seconds) current benchmarks are allowed to be from associated baseline")
 
     # Parse args
     args, _ = parser.parse_known_args()
@@ -42,31 +45,31 @@ def parse_args():
 
     return args
 
-def get_benchmark_name(gf):
-    """Get benchmark name from a graph frame"""
+def get_benchmark_id(gf):
+    """Get unique benchmark id from a graph frame"""
+    cluster = str(gf.metadata.get("cluster", 1))
+    compiler = str(gf.metadata.get("serac_compiler", 1)).replace(" version ", "_")
     executable = str(gf.metadata.get("executable", 1))
     job_size = int(gf.metadata.get("jobsize", 1)) 
-    return "{0}_{1}".format(executable, job_size)
+    return "{0}_{1}_{2}_{3}".format(cluster, compiler, executable, job_size)
 
 def main():
     # setup
     args = parse_args()
 
-    build_dir = args["build_dir"]
-    spot_dir = args["spot_dir"]
-
-    # TODO
-    gfs_current = [] # build_dir, locally generated caliper files 
+    build_dir = os.path.abspath(args["build_dir"])
+    spot_dir = os.path.abspath(args["spot_dir"])
+    max_diff = int(args["max_diff"])
 
     # Setup baseline (shared SPOT) graph frames
     # Only take caliper files from the previous week
     baseline_calis = os.listdir(spot_dir)
     baseline_calis.sort(reverse=True)
-    baseline_cali_date = baseline_calis[0].split('-')[0]
+    last_weekly_benchmark_date = baseline_calis[0].split('-')[0]
     delete_index = 0
     for i in range(len(baseline_calis)):
-        if baseline_cali_date in baseline_calis[i]:
-            baseline_calis[i] = os.path.join(spot_dir, baseline_calis[0])
+        if last_weekly_benchmark_date in baseline_calis[i]:
+            baseline_calis[i] = os.path.join(spot_dir, baseline_calis[i])
         else:
             delete_index = i
             break
@@ -74,7 +77,36 @@ def main():
     db = spotdb.connect(spot_dir)
     gfs_baseline = hatchet.GraphFrame.from_spotdb(db, baseline_calis)
 
-    # TODO Setup current (local build dir) graph frames
+    # Setup current (local build dir) graph frames
+    current_calis = list()
+    for file in os.listdir(build_dir):
+        if ".cali" in file:
+            current_calis.append(os.path.join(build_dir, file))
+    db = spotdb.connect(build_dir)
+    gfs_current = hatchet.GraphFrame.from_spotdb(db, current_calis)
+
+    # Only keep graph frames that match the current cluster/ machine name
+    gfs_baseline = [gf for gf in gfs_baseline if get_machine_name() == str(gf.metadata.get("cluster"))] 
+    gfs_current = [gf for gf in gfs_current if get_machine_name() == str(gf.metadata.get("cluster"))] 
+
+    # Create dictionary of current graph frames for fast look-ups
+    gfs_current_dict = dict()
+    for gf in gfs_current:
+        id = get_benchmark_id(gf)
+        gfs_current_dict[id] = gf
+
+    # Generate graph frames from the difference between associating current and baseline benchmarks
+    for gf_baseline in gfs_baseline:
+        id = get_benchmark_id(gf_baseline)
+        gf_current = gfs_current_dict.get(id)
+        if gf_current == None:
+            # print("Warning: Failed to find benchmark in build dir with the following id {0}".format(id))
+            continue
+
+        gf_diff = gf_current - gf_baseline
+        print("Hatchet diff tree for {0}:".format(id))
+        print(gf_diff.tree())
+
 
 if __name__ == "__main__":
     sys.exit(main())
