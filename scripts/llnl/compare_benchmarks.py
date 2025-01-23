@@ -8,14 +8,15 @@
 #
 # Original Source: https://llnl-hatchet.readthedocs.io/en/latest/llnl.html#id3
 
-from common_build_functions import *
-
 import sys
 import os
 import platform
 import datetime as dt
 from argparse import ArgumentParser
+from common_build_functions import *
 
+
+# Setup SPOT db and hatchet (LC systems only)
 input_deploy_dir_str = "/usr/gapps/spot/live/"
 machine = platform.uname().machine
 sys.path.append(input_deploy_dir_str + "/hatchet-venv/" + machine + "/lib/python3.7/site-packages")
@@ -24,19 +25,26 @@ sys.path.append(input_deploy_dir_str + "/spotdb")
 import hatchet
 import spotdb
 
+
 def parse_args():
     "Parses args from command line"
     parser = ArgumentParser()
     parser.add_argument("-bd", "--build-directory",
                       dest="build_dir",
+                      required=True,
                       help="Path to a Serac build containing caliper files (make sure it's Release and benchmarks are enabled!)")
     parser.add_argument("-sd", "--spot-directory",
                       dest="spot_dir",
                       default=get_shared_spot_dir(),
                       help="Where to put all resulting caliper files to use for SPOT analysis (defaults to a shared location)")
-    parser.add_argument("-md", "--max-diff",
-                      dest="max_diff",
+    parser.add_argument("-md", "--max-allowance",
+                      dest="max_allowance",
                       default=10,
+                      help="Maximum difference (in seconds) current benchmarks are allowed to be from associated baseline")
+    parser.add_argument("-v", "--verbose",
+                      dest="verbose",
+                      action="store_true",
+                      default=False,
                       help="Maximum difference (in seconds) current benchmarks are allowed to be from associated baseline")
 
     # Parse args
@@ -44,6 +52,7 @@ def parse_args():
     args = vars(args)
 
     return args
+
 
 def get_benchmark_id(gf):
     """Get unique benchmark id from a graph frame"""
@@ -53,13 +62,25 @@ def get_benchmark_id(gf):
     job_size = int(gf.metadata.get("jobsize", 1)) 
     return "{0}_{1}_{2}_{3}".format(cluster, compiler, executable, job_size)
 
+
+def get_max(min_max):
+    """Given a string containing a min and max, return the max value"""
+    return float(min_max.split()[3])
+
+
 def main():
     # setup
     args = parse_args()
 
     build_dir = os.path.abspath(args["build_dir"])
     spot_dir = os.path.abspath(args["spot_dir"])
-    max_diff = int(args["max_diff"])
+    max_allowance = args["max_allowance"]
+    verbose = args["verbose"]
+
+    # Dictionary of summaries for each benchmark
+    # key = benchmark id
+    # val = summary string
+    min_maxes = dict()
 
     # Setup baseline (shared SPOT) graph frames
     # Only take caliper files from the previous week
@@ -100,12 +121,47 @@ def main():
         id = get_benchmark_id(gf_baseline)
         gf_current = gfs_current_dict.get(id)
         if gf_current == None:
-            # print("Warning: Failed to find benchmark in build dir with the following id {0}".format(id))
+            print("Warning: Failed to find benchmark in build dir with the following id {0}".format(id))
             continue
 
         gf_diff = gf_current - gf_baseline
-        print("Hatchet diff tree for {0}:".format(id))
-        print(gf_diff.tree())
+
+        # Print difference tree. Higher difference means local build is X seconds slower.
+        if verbose:
+            print("Hatchet diff tree for {0}:".format(id))
+            print(gf_diff.tree())
+
+        shallow_tree_str = gf_diff.tree(depth=1).splitlines()
+        for line in shallow_tree_str:
+            pos = line.find("Min:")
+            if pos != -1:
+                min_max_str = line[pos:].strip(")")
+                min_maxes[id] = min_max_str
+                break
+
+    # Calculate number of "failed" benchmarks
+    num_failed = 0
+    num_passed = 0
+    num_benchmarks = len(min_maxes)
+    print(f"{'Status':<10} {'Benchmark ID':<60} {'Min/Max (seconds)':<20}")
+    for id, min_max in min_maxes.items():
+        max = get_max(min_max)
+        status_str = ""
+        if max >= max_allowance:
+            num_failed += 1
+            status_str = "❌ Failed"
+        else:
+            num_passed += 1
+            status_str = "✅ Passed"
+
+        # Print whether an individual benchmark passed or failed
+        print(f"{status_str:<10} {id:<60} {min_max:<20}")
+
+    # Print summary
+    print("\n{0} out of {1} benchmarks passed given a max allowance of {2}".format(
+        num_passed, num_benchmarks, max_allowance))
+
+    return num_failed
 
 
 if __name__ == "__main__":
