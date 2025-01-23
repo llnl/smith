@@ -19,7 +19,7 @@ namespace serac {
  */
 enum class ContactMethod
 {
-  SingleMortar /**< Puso and Laursen 2004 w/ approximate tangent */
+  SingleMortar /**< Puso and Laursen 2004 */
 };
 
 /**
