@@ -45,7 +45,7 @@ def parse_args():
                       dest="verbose",
                       action="store_true",
                       default=False,
-                      help="Maximum difference (in seconds) current benchmarks are allowed to be from associated baseline")
+                      help="Additionally print graph frames")
 
     # Parse args
     args, _ = parser.parse_known_args()
