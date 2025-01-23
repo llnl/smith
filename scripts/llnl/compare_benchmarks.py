@@ -37,7 +37,7 @@ def parse_args():
                       dest="spot_dir",
                       default=get_shared_spot_dir(),
                       help="Where to put all resulting caliper files to use for SPOT analysis (defaults to a shared location)")
-    parser.add_argument("-md", "--max-allowance",
+    parser.add_argument("-ma", "--max-allowance",
                       dest="max_allowance",
                       default=10,
                       help="Maximum difference (in seconds) current benchmarks are allowed to be from associated baseline")
