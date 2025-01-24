@@ -16,6 +16,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <type_traits>
 
 #include "mfem.hpp"
 
@@ -73,7 +74,7 @@ decltype(first_argument_helper(&F::operator())) first_argument_helper(F);
  * Extract type of first argument of a free callable
  */
 template <typename T>
-using first_argument = decltype(first_argument_helper(std::declval<T>()));
+using first_argument = std::remove_const<typename std::remove_reference<decltype(first_argument_helper(std::declval<T>()))>::type>::type;
 
 /**
  * @brief Evaluate a function of a tensor with an mfem Vector object
