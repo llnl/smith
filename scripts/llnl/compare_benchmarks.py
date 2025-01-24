@@ -106,9 +106,13 @@ def main():
     db = spotdb.connect(build_dir)
     gfs_current = hatchet.GraphFrame.from_spotdb(db, current_calis)
 
-    # Only keep graph frames that match the current cluster/ machine name
+    # Only keep graph frames that match the current cluster and compiler
     gfs_baseline = [gf for gf in gfs_baseline if get_machine_name() == str(gf.metadata.get("cluster"))] 
     gfs_current = [gf for gf in gfs_current if get_machine_name() == str(gf.metadata.get("cluster"))] 
+
+    # Filter by compiler for baseline as well, based on the local build
+    compiler_current = str(gfs_current[0].metadata.get("serac_compiler", 1))
+    gfs_baseline = [gf for gf in gfs_baseline if compiler_current == str(gf.metadata.get("serac_compiler"))] 
 
     # Create dictionary of current graph frames for fast look-ups
     gfs_current_dict = dict()
@@ -139,7 +143,7 @@ def main():
                 min_maxes[id] = min_max_str
                 break
 
-    # Calculate number of "failed" benchmarks
+    # Print whether an individual benchmark passed or failed
     num_failed = 0
     num_passed = 0
     num_benchmarks = len(min_maxes)
@@ -154,7 +158,6 @@ def main():
             num_passed += 1
             status_str = "✅ Passed"
 
-        # Print whether an individual benchmark passed or failed
         print(f"{status_str:<10} {id:<60} {min_max:<20}")
 
     # Print summary
