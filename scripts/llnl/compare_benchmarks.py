@@ -161,7 +161,7 @@ def main():
         print(f"{status_str:<10} {id:<60} {min_max:<20}")
 
     # Print summary
-    print("\n{0} out of {1} benchmarks passed given a max allowance of {2}".format(
+    print("\n{0} out of {1} benchmarks passed given a max allowance of {2} seconds".format(
         num_passed, num_benchmarks, max_allowance))
 
     return num_failed
