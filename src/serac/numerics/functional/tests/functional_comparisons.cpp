@@ -129,7 +129,8 @@ void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim
 
   // Set a random state to evaluate the residual
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 6;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   u_global.GetTrueDofs(U);
@@ -254,7 +255,8 @@ void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dim
   std::unique_ptr<mfem::HypreParVector> F(f.ParallelAssemble());
 
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 7;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   u_global.GetTrueDofs(U);
@@ -371,7 +373,8 @@ void functional_test(mfem::ParMesh& mesh, Hcurl<p> test, Hcurl<p> trial, Dimensi
   std::unique_ptr<mfem::HypreParVector> F(f.ParallelAssemble());
 
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 8;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   u_global.GetTrueDofs(U);

@@ -88,7 +88,8 @@ void boundary_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim>)
   std::unique_ptr<mfem::HypreParMatrix> J(B.ParallelAssemble());
 
   mfem::Vector U(fespace->TrueVSize());
-  U.Randomize();
+  int seed = 9;
+  U.Randomize(seed);
 
   Functional<test_space(trial_space)> residual(fespace.get(), {fespace.get()});
 
@@ -164,7 +165,8 @@ void boundary_test(mfem::ParMesh& mesh, L2<p> test, L2<p> trial, Dimension<dim>)
   std::unique_ptr<mfem::HypreParMatrix> J(B.ParallelAssemble());
 
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 1;
+  u_global.Randomize(seed);
   mfem::FunctionCoefficient xfunc([](mfem::Vector x) { return x[0]; });
   u_global.ProjectCoefficient(xfunc);
 
