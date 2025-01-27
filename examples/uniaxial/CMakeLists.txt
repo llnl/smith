@@ -10,7 +10,6 @@ blt_add_executable( NAME        uniaxial_tension
                     DEPENDS_ON  serac_physics serac_mesh
                     )
 
-# add serac_functional to DEPENDS_ON 
 
 install(
     FILES
