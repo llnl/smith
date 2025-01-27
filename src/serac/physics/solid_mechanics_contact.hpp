@@ -165,40 +165,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
             J_constraint_e_->SetBlock(0, 0, J_e_.get());
             J_constraint_e_->SetBlock(1, 0, J_e_21_.get());
 
-            // temp debug prints begin
-            mfem::SparseMatrix J11_sparse;
-            J_->MergeDiagAndOffd(J11_sparse);
-            mfem::DenseMatrix J11_dense;
-            J11_sparse.ToDenseMatrix(J11_dense);
-            std::ofstream dense11_mat("dense_J11.mat");
-            J11_dense.PrintMatlab(dense11_mat);
-            dense11_mat.close();
-
-            mfem::SparseMatrix J12_sparse;
-            J_12_->MergeDiagAndOffd(J12_sparse);
-            mfem::DenseMatrix J12_dense;
-            J12_sparse.ToDenseMatrix(J12_dense);
-            std::ofstream dense12_mat("dense_J12.mat");
-            J12_dense.PrintMatlab(dense12_mat);
-            dense12_mat.close();
-
-            mfem::SparseMatrix J21_sparse;
-            J_21_->MergeDiagAndOffd(J21_sparse);
-            mfem::DenseMatrix J21_dense;
-            J21_sparse.ToDenseMatrix(J21_dense);
-            std::ofstream dense21_mat("dense_J21.mat");
-            J21_dense.PrintMatlab(dense21_mat);
-            dense21_mat.close();
-
-            mfem::SparseMatrix J22_sparse;
-            J_22_->MergeDiagAndOffd(J22_sparse);
-            mfem::DenseMatrix J22_dense;
-            J22_sparse.ToDenseMatrix(J22_dense);
-            std::ofstream dense22_mat("dense_J22.mat");
-            J22_dense.PrintMatlab(dense22_mat);
-            dense22_mat.close();
-            // temp debug prints end
-
             J_operator_ = J_constraint_.get();
             return *J_constraint_;
           });
