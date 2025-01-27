@@ -84,7 +84,7 @@ auto uniaxial_stress_test(double t_max, size_t num_steps, const MaterialType mat
  * @brief Drive a rate-dependent material model thorugh a uniaxial tension experiment
  *
  * Drives material model through specified axial displacement gradient history.
- * The time elaspses from 0 up to t_max.
+ * The time elapses from 0 up to t_max.
  * Currently only implemented for isotropic materials (or orthotropic materials with the
  * principal axes aligned with the coordinate directions).
  */
