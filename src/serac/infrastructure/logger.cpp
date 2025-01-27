@@ -34,31 +34,31 @@ bool initialize(MPI_Comm comm)
   }
 
   // Console streams, std::cout for info/debug, std::cerr for warnings/errors
-  slic::LogStream* i_logstream  = nullptr;  // info
-  slic::LogStream* d_logstream  = nullptr;  // debug
+  slic::LogStream* i_logstream = nullptr;   // info
+  slic::LogStream* d_logstream = nullptr;   // debug
   slic::LogStream* we_logstream = nullptr;  // warnings and errors
 
   // Stream formatting strings
-  std::string i_format_string  = "<MESSAGE>\n";
-  std::string d_format_string  = "[<LEVEL>]: <MESSAGE>\n";
+  std::string i_format_string = "<MESSAGE>\n";
+  std::string d_format_string = "[<LEVEL>]: <MESSAGE>\n";
   std::string we_format_string = "[<LEVEL> (<FILE>:<LINE>)]\n<MESSAGE>\n\n";
 
   // Only create a parallel logger when there is more than one rank
   if (num_ranks > 1) {
     // Add rank to format strings if parallel
     // Note: i_format_string's extra space is on purpose due to no space on above string
-    i_format_string  = "[<RANK>] " + i_format_string;
-    d_format_string  = "[<RANK>]" + d_format_string;
+    i_format_string = "[<RANK>] " + i_format_string;
+    d_format_string = "[<RANK>]" + d_format_string;
     we_format_string = "[<RANK>]" + we_format_string;
 
     const int RLIMIT = 8;
 
-    i_logstream  = new slic::LumberjackStream(&std::cout, comm, RLIMIT, i_format_string);
-    d_logstream  = new slic::LumberjackStream(&std::cout, comm, RLIMIT, d_format_string);
+    i_logstream = new slic::LumberjackStream(&std::cout, comm, RLIMIT, i_format_string);
+    d_logstream = new slic::LumberjackStream(&std::cout, comm, RLIMIT, d_format_string);
     we_logstream = new slic::LumberjackStream(&std::cerr, comm, RLIMIT, we_format_string);
   } else {
-    i_logstream  = new slic::GenericOutputStream(&std::cout, i_format_string);
-    d_logstream  = new slic::GenericOutputStream(&std::cout, d_format_string);
+    i_logstream = new slic::GenericOutputStream(&std::cout, i_format_string);
+    d_logstream = new slic::GenericOutputStream(&std::cout, d_format_string);
     we_logstream = new slic::GenericOutputStream(&std::cerr, we_format_string);
   }
 

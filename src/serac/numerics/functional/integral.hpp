@@ -16,6 +16,7 @@
 #include "serac/numerics/functional/function_signature.hpp"
 #include "serac/numerics/functional/domain_integral_kernels.hpp"
 #include "serac/numerics/functional/boundary_integral_kernels.hpp"
+#include "serac/numerics/functional/interior_face_integral_kernels.hpp"
 #include "serac/numerics/functional/differentiate_wrt.hpp"
 
 namespace serac {
@@ -23,7 +24,7 @@ namespace serac {
 /// @brief a class for representing a Integral calculations and their derivatives
 struct Integral {
   /// @brief the number of different kinds of integration domains
-  static constexpr std::size_t num_types = 2;
+  static constexpr std::size_t num_types = 3;
 
   /**
    * @brief Construct an "empty" Integral object, whose kernels are to be initialized later
@@ -83,21 +84,22 @@ struct Integral {
   /**
    * @brief evaluate the jacobian(with respect to some trial space)-vector product of this integral
    *
-   * @param input_E a block vector (block index corresponds to the element geometry) of a specific trial space element
+   * @param dinput_E a block vector (block index corresponds to the element geometry) of a specific trial space element
    * values
-   * @param output_E a block vector (block index corresponds to the element geometry) of the output values for each
+   * @param doutput_E a block vector (block index corresponds to the element geometry) of the output values for each
    * element.
    * @param differentiation_index a non-negative value indicates directional derivative with respect to the trial space
    * with that index.
    */
-  void GradientMult(const mfem::BlockVector& input_E, mfem::BlockVector& output_E, uint32_t differentiation_index) const
+  void GradientMult(const mfem::BlockVector& dinput_E, mfem::BlockVector& doutput_E,
+                    uint32_t differentiation_index) const
   {
-    output_E = 0.0;
+    doutput_E = 0.0;
 
     // if this integral actually depends on the specified variable
     if (functional_to_integral_index_.count(differentiation_index) > 0) {
       for (auto& [geometry, func] : jvp_[functional_to_integral_index_.at(differentiation_index)]) {
-        func(input_E.GetBlock(geometry).Read(), output_E.GetBlock(geometry).ReadWrite());
+        func(dinput_E.GetBlock(geometry).Read(), doutput_E.GetBlock(geometry).ReadWrite());
       }
     }
   }
@@ -118,6 +120,20 @@ struct Integral {
         func(view(K_e[geometry]));
       }
     }
+  }
+
+  /**
+   * @brief returns whether or not this integral depends on argument `which`
+   *
+   * @param which an argument index
+   * @return true when if this Integral object was created with a DependsOn<...> statement that includes `i`
+   */
+  bool DependsOn(uint32_t which) const
+  {
+    for (uint32_t i : active_trial_spaces_) {
+      if (which == i) return true;
+    }
+    return false;
   }
 
   /// @brief information about which elements to integrate over
@@ -187,21 +203,20 @@ void generate_kernels(FunctionSignature<test(trials...)> s, Integral& integral, 
                       std::shared_ptr<QuadratureData<qpt_data_type> > qdata)
 {
   integral.geometric_factors_[geom] = GeometricFactors(integral.domain_, Q, geom);
-  GeometricFactors& gf              = integral.geometric_factors_[geom];
+  GeometricFactors& gf = integral.geometric_factors_[geom];
   if (gf.num_elements == 0) return;
 
-  const double*  positions        = gf.X.Read();
-  const double*  jacobians        = gf.J.Read();
-  const int*     elements         = &integral.domain_.get(geom)[0];
-  const uint32_t num_elements     = uint32_t(gf.num_elements);
+  const double* positions = gf.X.Read();
+  const double* jacobians = gf.J.Read();
+  const uint32_t num_elements = uint32_t(gf.num_elements);
   const uint32_t qpts_per_element = num_quadrature_points(geom, Q);
 
   std::shared_ptr<zero> dummy_derivatives;
   integral.evaluation_[geom] = domain_integral::evaluation_kernel<NO_DIFFERENTIATION, Q, geom>(
-      s, qf, positions, jacobians, qdata, dummy_derivatives, elements, num_elements);
+      s, qf, positions, jacobians, qdata, dummy_derivatives, num_elements);
 
-  constexpr std::size_t                 num_args = s.num_args;
-  [[maybe_unused]] static constexpr int dim      = dimension_of(geom);
+  constexpr std::size_t num_args = s.num_args;
+  [[maybe_unused]] static constexpr int dim = dimension_of(geom);
   for_constexpr<num_args>([&](auto index) {
     // allocate memory for the derivatives of the q-function at each quadrature point
     //
@@ -211,13 +226,12 @@ void generate_kernels(FunctionSignature<test(trials...)> s, Integral& integral, 
     using derivative_type = decltype(domain_integral::get_derivative_type<index, dim, trials...>(qf, qpt_data_type{}));
     auto ptr = accelerator::make_shared_array<ExecutionSpace::CPU, derivative_type>(num_elements * qpts_per_element);
 
-    integral.evaluation_with_AD_[index][geom] = domain_integral::evaluation_kernel<index, Q, geom>(
-        s, qf, positions, jacobians, qdata, ptr, elements, num_elements);
+    integral.evaluation_with_AD_[index][geom] =
+        domain_integral::evaluation_kernel<index, Q, geom>(s, qf, positions, jacobians, qdata, ptr, num_elements);
 
-    integral.jvp_[index][geom] =
-        domain_integral::jacobian_vector_product_kernel<index, Q, geom>(s, ptr, elements, num_elements);
+    integral.jvp_[index][geom] = domain_integral::jacobian_vector_product_kernel<index, Q, geom>(s, ptr, num_elements);
     integral.element_gradient_[index][geom] =
-        domain_integral::element_gradient_kernel<index, Q, geom>(s, ptr, elements, num_elements);
+        domain_integral::element_gradient_kernel<index, Q, geom>(s, ptr, num_elements);
   });
 }
 
@@ -238,7 +252,7 @@ void generate_kernels(FunctionSignature<test(trials...)> s, Integral& integral, 
 template <typename s, int Q, int dim, typename lambda_type, typename qpt_data_type>
 Integral MakeDomainIntegral(const Domain& domain, const lambda_type& qf,
                             std::shared_ptr<QuadratureData<qpt_data_type> > qdata,
-                            std::vector<uint32_t>                           argument_indices)
+                            std::vector<uint32_t> argument_indices)
 {
   FunctionSignature<s> signature;
 
@@ -275,22 +289,21 @@ Integral MakeDomainIntegral(const Domain& domain, const lambda_type& qf,
 template <mfem::Geometry::Type geom, int Q, typename test, typename... trials, typename lambda_type>
 void generate_bdr_kernels(FunctionSignature<test(trials...)> s, Integral& integral, const lambda_type& qf)
 {
-  integral.geometric_factors_[geom] = GeometricFactors(integral.domain_, Q, geom, FaceType::BOUNDARY);
-  GeometricFactors& gf              = integral.geometric_factors_[geom];
+  integral.geometric_factors_[geom] = GeometricFactors(integral.domain_, Q, geom);
+  GeometricFactors& gf = integral.geometric_factors_[geom];
   if (gf.num_elements == 0) return;
 
-  const double*  positions        = gf.X.Read();
-  const double*  jacobians        = gf.J.Read();
-  const uint32_t num_elements     = uint32_t(gf.num_elements);
+  const double* positions = gf.X.Read();
+  const double* jacobians = gf.J.Read();
+  const uint32_t num_elements = uint32_t(gf.num_elements);
   const uint32_t qpts_per_element = num_quadrature_points(geom, Q);
-  const int*     elements         = &gf.elements[0];
 
   std::shared_ptr<zero> dummy_derivatives;
   integral.evaluation_[geom] = boundary_integral::evaluation_kernel<NO_DIFFERENTIATION, Q, geom>(
-      s, qf, positions, jacobians, dummy_derivatives, elements, num_elements);
+      s, qf, positions, jacobians, dummy_derivatives, num_elements);
 
-  constexpr std::size_t                 num_args = s.num_args;
-  [[maybe_unused]] static constexpr int dim      = dimension_of(geom);
+  constexpr std::size_t num_args = s.num_args;
+  [[maybe_unused]] static constexpr int dim = dimension_of(geom);
   for_constexpr<num_args>([&](auto index) {
     // allocate memory for the derivatives of the q-function at each quadrature point
     //
@@ -301,12 +314,12 @@ void generate_bdr_kernels(FunctionSignature<test(trials...)> s, Integral& integr
     auto ptr = accelerator::make_shared_array<ExecutionSpace::CPU, derivative_type>(num_elements * qpts_per_element);
 
     integral.evaluation_with_AD_[index][geom] =
-        boundary_integral::evaluation_kernel<index, Q, geom>(s, qf, positions, jacobians, ptr, elements, num_elements);
+        boundary_integral::evaluation_kernel<index, Q, geom>(s, qf, positions, jacobians, ptr, num_elements);
 
     integral.jvp_[index][geom] =
-        boundary_integral::jacobian_vector_product_kernel<index, Q, geom>(s, ptr, elements, num_elements);
+        boundary_integral::jacobian_vector_product_kernel<index, Q, geom>(s, ptr, num_elements);
     integral.element_gradient_[index][geom] =
-        boundary_integral::element_gradient_kernel<index, Q, geom>(s, ptr, elements, num_elements);
+        boundary_integral::element_gradient_kernel<index, Q, geom>(s, ptr, num_elements);
   });
 }
 
@@ -341,6 +354,92 @@ Integral MakeBoundaryIntegral(const Domain& domain, const lambda_type& qf, std::
   if constexpr (dim == 2) {
     generate_bdr_kernels<mfem::Geometry::TRIANGLE, Q>(signature, integral, qf);
     generate_bdr_kernels<mfem::Geometry::SQUARE, Q>(signature, integral, qf);
+  }
+
+  return integral;
+}
+
+/**
+ * @brief function to generate kernels held by an `Integral` object of type "InteriorFaceDomain", with a specific
+ * element type
+ *
+ * @tparam geom the element geometry
+ * @tparam Q a parameter that controls the number of quadrature points
+ * @tparam test the kind of test functions used in the integral
+ * @tparam trials the trial space(s) of the integral's inputs
+ * @tparam lambda_type a callable object that implements the q-function concept
+ * @param s an object used to pass around test/trial information
+ * @param integral the Integral object to initialize
+ * @param qf the quadrature function
+ */
+template <mfem::Geometry::Type geom, int Q, typename test, typename... trials, typename lambda_type>
+void generate_interior_face_kernels(FunctionSignature<test(trials...)> s, Integral& integral, const lambda_type& qf)
+{
+  integral.geometric_factors_[geom] = GeometricFactors(integral.domain_, Q, geom);
+  GeometricFactors& gf = integral.geometric_factors_[geom];
+  if (gf.num_elements == 0) return;
+
+  const double* positions = gf.X.Read();
+  const double* jacobians = gf.J.Read();
+  const uint32_t num_elements = uint32_t(gf.num_elements);
+  const uint32_t qpts_per_element = num_quadrature_points(geom, Q);
+
+  std::shared_ptr<zero> dummy_derivatives;
+  integral.evaluation_[geom] = interior_face_integral::evaluation_kernel<NO_DIFFERENTIATION, Q, geom>(
+      s, qf, positions, jacobians, dummy_derivatives, num_elements);
+
+  constexpr std::size_t num_args = s.num_args;
+  [[maybe_unused]] static constexpr int dim = dimension_of(geom);
+  for_constexpr<num_args>([&](auto index) {
+    // allocate memory for the derivatives of the q-function at each quadrature point
+    //
+    // Note: ptrs' lifetime is managed in an unusual way! It is captured by-value in the
+    // action_of_gradient functor below to augment the reference count, and extend its lifetime to match
+    // that of the boundaryIntegral that allocated it.
+    using derivative_type = decltype(interior_face_integral::get_derivative_type<index, dim, trials...>(qf));
+    auto ptr = accelerator::make_shared_array<ExecutionSpace::CPU, derivative_type>(num_elements * qpts_per_element);
+
+    integral.evaluation_with_AD_[index][geom] =
+        interior_face_integral::evaluation_kernel<index, Q, geom>(s, qf, positions, jacobians, ptr, num_elements);
+
+    integral.jvp_[index][geom] =
+        interior_face_integral::jacobian_vector_product_kernel<index, Q, geom>(s, ptr, num_elements);
+    integral.element_gradient_[index][geom] =
+        interior_face_integral::element_gradient_kernel<index, Q, geom>(s, ptr, num_elements);
+  });
+}
+
+/**
+ * @brief function to generate kernels held by an `Integral` object of type "Boundary", for all element types
+ *
+ * @tparam s a function signature type containing test/trial space informationa type containing a function signature
+ * @tparam Q a parameter that controls the number of quadrature points
+ * @tparam dim the dimension of the domain
+ * @tparam lambda_type a callable object that implements the q-function concept
+ * @param domain the domain of integration
+ * @param qf the quadrature function
+ * @param argument_indices the indices of trial space arguments used in the Integral
+ * @return Integral the initialized `Integral` object
+ *
+ * @note this function is not meant to be called by users
+ */
+template <typename s, int Q, int dim, typename lambda_type>
+Integral MakeInteriorFaceIntegral(const Domain& domain, const lambda_type& qf, std::vector<uint32_t> argument_indices)
+{
+  FunctionSignature<s> signature;
+
+  SLIC_ERROR_IF(domain.type_ != Domain::Type::InteriorFaces,
+                "Error: trying to evaluate a boundary integral over a non-boundary domain of integration");
+
+  Integral integral(domain, argument_indices);
+
+  if constexpr (dim == 1) {
+    generate_interior_face_kernels<mfem::Geometry::SEGMENT, Q>(signature, integral, qf);
+  }
+
+  if constexpr (dim == 2) {
+    generate_interior_face_kernels<mfem::Geometry::TRIANGLE, Q>(signature, integral, qf);
+    generate_interior_face_kernels<mfem::Geometry::SQUARE, Q>(signature, integral, qf);
   }
 
   return integral;

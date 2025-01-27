@@ -29,10 +29,10 @@ namespace contact {
  * @brief Default contact options: frictionless mortar with penalty = 1000
  * enforcement
  */
-const ContactOptions default_contact_options = {.method      = ContactMethod::SingleMortar,
+const ContactOptions default_contact_options = {.method = ContactMethod::SingleMortar,
                                                 .enforcement = ContactEnforcement::Penalty,
-                                                .type        = ContactType::Frictionless,
-                                                .penalty     = 1.0e3};
+                                                .type = ContactType::Frictionless,
+                                                .penalty = 1.0e3};
 
 }  // namespace contact
 
@@ -41,7 +41,7 @@ const ContactOptions default_contact_options = {.method      = ContactMethod::Si
  * interactions, and agglomerates fields that exist over different ContactInteractions.
  */
 class ContactData {
-public:
+ public:
   /**
    * @brief The constructor
    *
@@ -78,6 +78,8 @@ public:
    * @brief Get the contact constraint residual (i.e. nodal forces) from all contact interactions
    *
    * @return Nodal contact forces on the true DOFs
+   *
+   * @pre update() must be called with the current configuration so the force contributions are up-to-date
    */
   FiniteElementDual forces() const;
 
@@ -101,6 +103,8 @@ public:
    *
    * @param [in] zero_inactive Sets inactive t-dofs to zero gap
    * @return Nodal gap true degrees of freedom on each contact interaction (merged into one mfem::HypreParVector)
+   *
+   * @pre update() must be called with the current configuration so the gap values are up-to-date
    */
   mfem::HypreParVector mergedGaps(bool zero_inactive = false) const;
 
@@ -124,17 +128,22 @@ public:
    * @param [in] u Solution vector ([displacement; pressure] block vector)
    * @param [in,out] r Residual vector ([force; gap] block vector); takes in initialized residual force vector and adds
    * contact contributions
+   *
+   * @pre The current coordinates must be up-to-date
+   *
+   * @note This method calls update() to compute residual and Jacobian contributions based on the current configuration
    */
   void residualFunction(const mfem::Vector& u, mfem::Vector& r);
 
   /**
    * @brief Computes the Jacobian including contact terms, given the non-contact Jacobian terms
    *
-   * @param u Solution vector ([displacement; pressure] block vector)
    * @param orig_J The non-contact terms of the Jacobian, not including essential boundary conditions
    * @return Jacobian with contact terms, not including essential boundary conditions
+   *
+   * @pre update() must be called with the current configuration so the Jacobian contributions are up-to-date
    */
-  std::unique_ptr<mfem::BlockOperator> jacobianFunction(const mfem::Vector& u, mfem::HypreParMatrix* orig_J) const;
+  std::unique_ptr<mfem::BlockOperator> jacobianFunction(mfem::HypreParMatrix* orig_J) const;
 
   /**
    * @brief Set the pressure field
@@ -186,7 +195,7 @@ public:
    */
   int numPressureDofs() const { return num_pressure_dofs_; };
 
-private:
+ private:
 #ifdef SERAC_USE_TRIBOL
   /**
    * @brief Computes interaction pressure T-dof offsets and global pressure T-dof offsets
@@ -266,7 +275,7 @@ private:
    */
   mutable mfem::Array<HYPRE_BigInt> global_pressure_dof_offsets_;
 
-  int    cycle_{0};
+  int cycle_{0};
   double time_{0.0};
   double dt_{1.0};
 };

@@ -59,8 +59,8 @@ template <typename... trials, ExecutionSpace exec>
 class Functional<double(trials...), exec> {
   using test = QOI;
   static constexpr tuple<trials...> trial_spaces{};
-  static constexpr uint32_t         num_trial_spaces = sizeof...(trials);
-  static constexpr auto             Q                = std::max({test::order, trials::order...}) + 1;
+  static constexpr uint32_t num_trial_spaces = sizeof...(trials);
+  static constexpr auto Q = std::max({test::order, trials::order...}) + 1;
 
   class Gradient;
 
@@ -75,7 +75,7 @@ class Functional<double(trials...), exec> {
   };
   // clang-format on
 
-public:
+ public:
   /**
    * @brief Constructs using a @p mfem::ParFiniteElementSpace object corresponding to the trial space
    * @param[in] trial_fes The trial space
@@ -83,51 +83,26 @@ public:
   Functional(std::array<const mfem::ParFiniteElementSpace*, num_trial_spaces> trial_fes)
       : test_fec_(0, trial_fes[0]->GetMesh()->Dimension()),
         test_space_(dynamic_cast<mfem::ParMesh*>(trial_fes[0]->GetMesh()), &test_fec_, 1, serac::ordering),
-        trial_space_(trial_fes)
+        trial_space_(trial_fes),
+        mem_type(mfem::Device::GetMemoryType())
   {
-    auto* mesh = trial_fes[0]->GetMesh();
-
-    auto mem_type = mfem::Device::GetMemoryType();
-
-    for (auto type : {Domain::Type::Elements, Domain::Type::BoundaryElements}) {
-      input_E_[type].resize(num_trial_spaces);
-    }
+    SERAC_MARK_FUNCTION;
 
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
       P_trial_[i] = trial_space_[i]->GetProlongationMatrix();
 
       input_L_[i].SetSize(P_trial_[i]->Height(), mfem::Device::GetMemoryType());
 
-      for (auto type : {Domain::Type::Elements, Domain::Type::BoundaryElements}) {
-        if (type == Domain::Type::Elements) {
-          G_trial_[type][i] = BlockElementRestriction(trial_fes[i]);
-        } else {
-          G_trial_[type][i] = BlockElementRestriction(trial_fes[i], FaceType::BOUNDARY);
-        }
-
-        // note: we have to use "Update" here, as mfem::BlockVector's
-        // copy assignment ctor (operator=) doesn't let you make changes
-        // to the block size
-        input_E_[type][i].Update(G_trial_[type][i].bOffsets(), mem_type);
-      }
+      // create the necessary number of empty mfem::Vectors, to be resized later
+      input_E_.push_back({});
+      input_E_buffer_.push_back({});
     }
 
-    for (auto type : {Domain::Type::Elements, Domain::Type::BoundaryElements}) {
-      std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> counts{};
-      if (type == Domain::Type::Elements) {
-        counts = geometry_counts(*mesh);
-      } else {
-        counts = boundary_geometry_counts(*mesh);
-      }
-
-      mfem::Array<int> offsets(mfem::Geometry::NUM_GEOMETRIES + 1);
-      offsets[0] = 0;
-      for (int i = 0; i < mfem::Geometry::NUM_GEOMETRIES; i++) {
-        auto g         = mfem::Geometry::Type(i);
-        offsets[g + 1] = offsets[g] + int(counts[uint32_t(g)]);
-      }
-
-      output_E_[type].Update(offsets, mem_type);
+    std::array<Family, num_trial_spaces> trial_families = {trials::family...};
+    std::array<int, num_trial_spaces> trial_orders = {trials::order...};
+    std::array<int, num_trial_spaces> trial_components = {trials::components...};
+    for (uint32_t i = 0; i < num_trial_spaces; i++) {
+      trial_function_spaces_[i] = {trial_families[i], trial_orders[i], trial_components[i]};
     }
 
     G_test_ = QoIElementRestriction();
@@ -151,28 +126,12 @@ public:
    * @tparam lambda the type of the integrand functor: must implement operator() with an appropriate function signature
    * @tparam qpt_data_type The type of the data to store for each quadrature point
    * @param[in] integrand The user-provided quadrature function, see @p Integral
-   * @param[in] mesh The domain on which to evaluate the integral
+   * @param[in] domain The domain on which to evaluate the integral
    * @param[in] qdata The data structure containing per-quadrature-point data
    * @note The @p Dimension parameters are used to assist in the deduction of the @a geometry_dim
    * and @a spatial_dim template parameter
    */
-  template <int dim, int... args, typename lambda, typename qpt_data_type = Nothing>
-  void AddDomainIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, mfem::Mesh& mesh,
-                         std::shared_ptr<QuadratureData<qpt_data_type>> qdata = NoQData)
-  {
-    if (mesh.GetNE() == 0) return;
 
-    SLIC_ERROR_ROOT_IF(dim != mesh.Dimension(), "invalid mesh dimension for domain integral");
-
-    check_for_unsupported_elements(mesh);
-    check_for_missing_nodal_gridfunc(mesh);
-
-    using signature = test(decltype(serac::type<args>(trial_spaces))...);
-    integrals_.push_back(
-        MakeDomainIntegral<signature, Q, dim>(EntireDomain(mesh), integrand, qdata, std::vector<uint32_t>{args...}));
-  }
-
-  /// @overload
   template <int dim, int... args, typename lambda, typename qpt_data_type = Nothing>
   void AddDomainIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, Domain& domain,
                          std::shared_ptr<QuadratureData<qpt_data_type>> qdata = NoQData)
@@ -184,6 +143,11 @@ public:
     check_for_unsupported_elements(domain.mesh_);
     check_for_missing_nodal_gridfunc(domain.mesh_);
 
+    std::vector<uint32_t> arg_vec = {args...};
+    for (uint32_t i : arg_vec) {
+      domain.insert_restriction(trial_space_[i], trial_function_spaces_[i]);
+    }
+
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
     integrals_.push_back(
         MakeDomainIntegral<signature, Q, dim>(domain, integrand, qdata, std::vector<uint32_t>{args...}));
@@ -193,29 +157,15 @@ public:
    * @tparam dim The dimension of the boundary element (1 for line, 2 for quad, etc)
    * @tparam lambda the type of the integrand functor: must implement operator() with an appropriate function signature
    * @param[in] integrand The user-provided quadrature function, see @p Integral
-   * @param[in] mesh The domain on which to evaluate the integral
+   * @param[in] domain which elements make up the domain of integration
    *
    * @brief Adds a boundary integral term to the Functional object
    *
    * @note The @p Dimension parameters are used to assist in the deduction of the @a geometry_dim
    * and @a spatial_dim template parameter
    */
-  template <int dim, int... args, typename lambda, typename qpt_data_type = void>
-  void AddBoundaryIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, mfem::Mesh& mesh)
-  {
-    auto num_bdr_elements = mesh.GetNBE();
-    if (num_bdr_elements == 0) return;
-
-    check_for_missing_nodal_gridfunc(mesh);
-
-    using signature = test(decltype(serac::type<args>(trial_spaces))...);
-    integrals_.push_back(
-        MakeBoundaryIntegral<signature, Q, dim>(EntireBoundary(mesh), integrand, std::vector<uint32_t>{args...}));
-  }
-
-  /// @overload
   template <int dim, int... args, typename lambda>
-  void AddBoundaryIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, const Domain& domain)
+  void AddBoundaryIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, Domain& domain)
   {
     auto num_bdr_elements = domain.mesh_.GetNBE();
     if (num_bdr_elements == 0) return;
@@ -224,8 +174,39 @@ public:
 
     check_for_missing_nodal_gridfunc(domain.mesh_);
 
+    std::vector<uint32_t> arg_vec = {args...};
+    for (uint32_t i : arg_vec) {
+      domain.insert_restriction(trial_space_[i], trial_function_spaces_[i]);
+    }
+
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
-    integrals_.push_back(MakeBoundaryIntegral<signature, Q, dim>(domain, integrand, std::vector<uint32_t>{args...}));
+    integrals_.push_back(MakeBoundaryIntegral<signature, Q, dim>(domain, integrand, arg_vec));
+  }
+
+  /**
+   * @tparam dim The dimension of the boundary element (1 for line, 2 for quad, etc)
+   * @tparam lambda the type of the integrand functor: must implement operator() with an appropriate function signature
+   * @param[in] integrand The user-provided quadrature function, see @p Integral
+   * @param[in] domain which elements make up the domain of integration
+   *
+   * @brief Adds a interior face integral term to the Functional object
+   *
+   * @note The @p Dimension parameters are used to assist in the deduction of the @a geometry_dim
+   * and @a spatial_dim template parameter
+   */
+  template <int dim, int... args, typename Integrand>
+  void AddInteriorFaceIntegral(Dimension<dim>, DependsOn<args...>, const Integrand& integrand, Domain& domain)
+  {
+    check_for_missing_nodal_gridfunc(domain.mesh_);
+
+    std::vector<uint32_t> arg_vec = {args...};
+    for (uint32_t i : arg_vec) {
+      domain.insert_restriction(trial_space_[i], trial_function_spaces_[i]);
+      check_interior_face_compatibility(domain.mesh_, trial_function_spaces_[i]);
+    }
+
+    using signature = test(decltype(serac::type<args>(trial_spaces))...);
+    integrals_.push_back(MakeInteriorFaceIntegral<signature, Q, dim>(domain, integrand, arg_vec));
   }
 
   /**
@@ -239,7 +220,7 @@ public:
    * @brief Adds an area integral, i.e., over 2D elements in R^2
    */
   template <int... args, typename lambda, typename qpt_data_type = Nothing>
-  void AddAreaIntegral(DependsOn<args...> which_args, const lambda& integrand, mfem::Mesh& domain,
+  void AddAreaIntegral(DependsOn<args...> which_args, const lambda& integrand, Domain& domain,
                        std::shared_ptr<QuadratureData<qpt_data_type>>& data = NoQData)
   {
     AddDomainIntegral(Dimension<2>{}, which_args, integrand, domain, data);
@@ -256,7 +237,7 @@ public:
    * @brief Adds a volume integral, i.e., over 3D elements in R^3
    */
   template <int... args, typename lambda, typename qpt_data_type = Nothing>
-  void AddVolumeIntegral(DependsOn<args...> which_args, const lambda& integrand, mfem::Mesh& domain,
+  void AddVolumeIntegral(DependsOn<args...> which_args, const lambda& integrand, Domain& domain,
                          std::shared_ptr<QuadratureData<qpt_data_type>>& data = NoQData)
   {
     AddDomainIntegral(Dimension<3>{}, which_args, integrand, domain, data);
@@ -264,7 +245,7 @@ public:
 
   /// @brief alias for Functional::AddBoundaryIntegral(Dimension<2>{}, integrand, domain);
   template <int... args, typename lambda>
-  void AddSurfaceIntegral(DependsOn<args...> which_args, const lambda& integrand, mfem::Mesh& domain)
+  void AddSurfaceIntegral(DependsOn<args...> which_args, const lambda& integrand, Domain& domain)
   {
     AddBoundaryIntegral(Dimension<2>{}, which_args, integrand, domain);
   }
@@ -285,25 +266,26 @@ public:
 
     output_L_ = 0.0;
 
-    // this is used to mark when gather operations have been performed,
-    // to avoid doing them more than once per trial space
-    bool already_computed[Domain::num_types]{};  // default initializes to `false`
-
     for (auto& integral : integrals_) {
-      auto type = integral.domain_.type_;
+      if (integral.DependsOn(which)) {
+        Domain& dom = integral.domain_;
 
-      if (!already_computed[type]) {
-        G_trial_[type][which].Gather(input_L_[which], input_E_[type][which]);
-        already_computed[type] = true;
+        const serac::BlockElementRestriction& G_trial = dom.get_restriction(trial_function_spaces_[which]);
+        input_E_buffer_[which].SetSize(int(G_trial.ESize()));
+        input_E_[which].Update(input_E_buffer_[which], G_trial.bOffsets());
+        G_trial.Gather(input_L_[which], input_E_[which]);
+
+        output_E_buffer_.SetSize(dom.total_elements());
+        output_E_.Update(output_E_buffer_, dom.bOffsets());
+
+        integral.GradientMult(input_E_[which], output_E_, which);
+
+        // scatter-add to compute QoI value for the local processor
+        G_test_.ScatterAdd(output_E_, output_L_);
       }
-
-      integral.GradientMult(input_E_[type][which], output_E_[type], which);
-
-      // scatter-add to compute residuals on the local processor
-      G_test_.ScatterAdd(output_E_[type], output_L_);
     }
 
-    // scatter-add to compute global residuals
+    // compute global QoI value by summing values from different processors
     P_test_.MultTranspose(output_L_, output_T_);
 
     return output_T_[0];
@@ -331,28 +313,27 @@ public:
 
     output_L_ = 0.0;
 
-    // this is used to mark when operations have been performed,
-    // to avoid doing them more than once
-    bool already_computed[Domain::num_types][num_trial_spaces]{};  // default initializes to `false`
-
     for (auto& integral : integrals_) {
-      auto type = integral.domain_.type_;
+      Domain& dom = integral.domain_;
 
       for (auto i : integral.active_trial_spaces_) {
-        if (!already_computed[type][i]) {
-          G_trial_[type][i].Gather(input_L_[i], input_E_[type][i]);
-          already_computed[type][i] = true;
-        }
+        const serac::BlockElementRestriction& G_trial = dom.get_restriction(trial_function_spaces_[i]);
+        input_E_buffer_[i].SetSize(int(G_trial.ESize()));
+        input_E_[i].Update(input_E_buffer_[i], G_trial.bOffsets());
+        G_trial.Gather(input_L_[i], input_E_[i]);
       }
 
-      const bool update_state = false;
-      integral.Mult(t, input_E_[type], output_E_[type], wrt, update_state);
+      output_E_buffer_.SetSize(dom.total_elements());
+      output_E_.Update(output_E_buffer_, dom.bOffsets());
 
-      // scatter-add to compute residuals on the local processor
-      G_test_.ScatterAdd(output_E_[type], output_L_);
+      const bool update_qdata = false;
+      integral.Mult(t, input_E_, output_E_, wrt, update_qdata);
+
+      // scatter-add to compute QoI value for the local processor
+      G_test_.ScatterAdd(output_E_, output_L_);
     }
 
-    // scatter-add to compute global residuals
+    // compute global QoI value by summing values from different processors
     P_test_.MultTranspose(output_L_, output_T_);
 
     if constexpr (wrt != NO_DIFFERENTIATION) {
@@ -391,7 +372,7 @@ public:
     return (*this)(DifferentiateWRT<i>{}, t, args...);
   }
 
-private:
+ private:
   /**
    * @brief Indicates whether to obtain values or gradients from a calculation
    */
@@ -405,7 +386,7 @@ private:
    * @brief mfem::Operator that produces the gradient of a @p Functional from a @p Mult
    */
   class Gradient {
-  public:
+   public:
     /**
      * @brief Constructs a Gradient wrapper that references a parent @p Functional
      * @param[in] f The @p Functional to use for gradient calculations
@@ -415,9 +396,24 @@ private:
     {
     }
 
-    void Mult(const mfem::Vector& x, mfem::Vector& y) const { form_.GradientMult(x, y); }
-
     double operator()(const mfem::Vector& x) const { return form_.ActionOfGradient(x, which_argument); }
+
+    uint64_t max_buffer_size()
+    {
+      uint64_t max_entries = 0;
+      for (auto& integral : form_.integrals_) {
+        if (integral.DependsOn(which_argument)) {
+          Domain& dom = integral.domain_;
+          const auto& G_trial = dom.get_restriction(form_.trial_function_spaces_[which_argument]);
+          for (const auto& [geom, test_restriction] : G_trial.restrictions) {
+            const auto& trial_restriction = G_trial.restrictions.at(geom);
+            uint64_t entries_per_element = trial_restriction.nodes_per_elem * trial_restriction.components;
+            max_entries = std::max(max_entries, trial_restriction.num_elements * entries_per_element);
+          }
+        }
+      }
+      return max_entries;
+    }
 
     std::unique_ptr<mfem::HypreParVector> assemble()
     {
@@ -427,47 +423,47 @@ private:
 
       gradient_L_ = 0.0;
 
+      std::vector<double> K_elem_buffer(max_buffer_size());
+
       std::map<mfem::Geometry::Type, ExecArray<double, 3, exec>> element_gradients[Domain::num_types];
 
+      ////////////////////////////////////////////////////////////////////////////////
+
       for (auto& integral : form_.integrals_) {
-        auto& K_elem             = element_gradients[integral.domain_.type_];
-        auto& trial_restrictions = form_.G_trial_[integral.domain_.type_][which_argument].restrictions;
+        Domain& dom = integral.domain_;
 
-        if (K_elem.empty()) {
-          for (auto& [geom, trial_restriction] : trial_restrictions) {
-            K_elem[geom] = ExecArray<double, 3, exec>(trial_restriction.num_elements, 1,
-                                                      trial_restriction.nodes_per_elem * trial_restriction.components);
+        // if this integral's derivative isn't identically zero
+        if (integral.functional_to_integral_index_.count(which_argument) > 0) {
+          uint32_t id = integral.functional_to_integral_index_.at(which_argument);
+          const auto& G_trial = dom.get_restriction(form_.trial_function_spaces_[which_argument]);
+          for (const auto& [geom, calculate_element_gradients] : integral.element_gradient_[id]) {
+            const auto& trial_restriction = G_trial.restrictions.at(geom);
 
-            detail::zero_out(K_elem[geom]);
-          }
-        }
+            // prepare a buffer to hold the element matrices
+            CPUArrayView<double, 3> K_e(K_elem_buffer.data(), trial_restriction.num_elements, 1,
+                                        trial_restriction.nodes_per_elem * trial_restriction.components);
+            detail::zero_out(K_e);
 
-        integral.ComputeElementGradients(K_elem, which_argument);
-      }
+            calculate_element_gradients(K_e);
 
-      for (auto type : {Domain::Type::Elements, Domain::Type::BoundaryElements}) {
-        auto& K_elem             = element_gradients[type];
-        auto& trial_restrictions = form_.G_trial_[type][which_argument].restrictions;
+            const std::vector<int>& element_ids = integral.domain_.get(geom);
 
-        if (!K_elem.empty()) {
-          for (auto [geom, elem_matrices] : K_elem) {
-            std::vector<DoF> trial_vdofs(trial_restrictions[geom].nodes_per_elem * trial_restrictions[geom].components);
+            uint32_t cols_per_elem = uint32_t(trial_restriction.nodes_per_elem * trial_restriction.components);
+            std::vector<DoF> trial_vdofs(cols_per_elem);
 
-            for (axom::IndexType e = 0; e < elem_matrices.shape()[0]; e++) {
-              trial_restrictions[geom].GetElementVDofs(e, trial_vdofs);
+            for (uint32_t e = 0; e < element_ids.size(); e++) {
+              trial_restriction.GetElementVDofs(int(e), trial_vdofs);
 
-              // note: elem_matrices.shape()[1] is 1 for a QoI
-              for (axom::IndexType i = 0; i < elem_matrices.shape()[1]; i++) {
-                for (axom::IndexType j = 0; j < elem_matrices.shape()[2]; j++) {
-                  int sign = trial_vdofs[uint32_t(j)].sign();
-                  int col  = int(trial_vdofs[uint32_t(j)].index());
-                  gradient_L_[col] += sign * elem_matrices(e, i, j);
-                }
+              for (uint32_t i = 0; i < cols_per_elem; i++) {
+                int col = int(trial_vdofs[i].index());
+                gradient_L_[col] += K_e(e, 0, i);
               }
             }
           }
         }
       }
+
+      ////////////////////////////////////////////////////////////////////////////////
 
       form_.P_trial_[which_argument]->MultTranspose(gradient_L_, *gradient_T);
 
@@ -476,7 +472,7 @@ private:
 
     friend auto assemble(Gradient& g) { return g.assemble(); }
 
-  private:
+   private:
     /**
      * @brief The "parent" @p Functional to calculate gradients with
      */
@@ -488,11 +484,13 @@ private:
   };
 
   /// @brief Manages DOFs for the test space
-  const mfem::L2_FECollection       test_fec_;
+  const mfem::L2_FECollection test_fec_;
   const mfem::ParFiniteElementSpace test_space_;
 
   /// @brief Manages DOFs for the trial space
   std::array<const mfem::ParFiniteElementSpace*, num_trial_spaces> trial_space_;
+
+  std::array<FunctionSpace, num_trial_spaces> trial_function_spaces_;
 
   /**
    * @brief Operator that converts true (global) DOF values to local (current rank) DOF values
@@ -503,13 +501,13 @@ private:
   /// @brief The input set of local DOF values (i.e., on the current rank)
   mutable mfem::Vector input_L_[num_trial_spaces];
 
-  BlockElementRestriction G_trial_[Domain::num_types][num_trial_spaces];
+  mutable std::vector<mfem::Vector> input_E_buffer_;
+  mutable std::vector<mfem::BlockVector> input_E_;
 
-  mutable std::vector<mfem::BlockVector> input_E_[Domain::num_types];
+  mutable std::vector<Integral> integrals_;
 
-  std::vector<Integral> integrals_;
-
-  mutable mfem::BlockVector output_E_[Domain::num_types];
+  mutable mfem::Vector output_E_buffer_;
+  mutable mfem::BlockVector output_E_;
 
   QoIElementRestriction G_test_;
 
@@ -523,6 +521,8 @@ private:
 
   /// @brief The objects representing the gradients w.r.t. each input argument of the Functional
   mutable std::vector<Gradient> grad_;
+
+  const mfem::MemoryType mem_type;
 };
 
 }  // namespace serac

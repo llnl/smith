@@ -25,7 +25,7 @@ static constexpr double tolerance = 4.0e-16;
 
 __global__ void basic_operations(int* error)
 {
-  auto I   = Identity<3>();
+  auto I = Identity<3>();
   auto abs = [](auto x) { return (x < 0) ? -x : x; };
 
   tensor<double, 3> u = {1, 2, 3};
@@ -83,11 +83,11 @@ TEST(Tensor, BasicOperations)
 
 __global__ void elasticity(int* error)
 {
-  auto        I   = Identity<3>();
+  auto I = Identity<3>();
   static auto abs = [](auto x) { return (x < 0) ? -x : x; };
 
-  double                     lambda = 5.0;
-  double                     mu     = 3.0;
+  double lambda = 5.0;
+  double mu = 3.0;
   tensor<double, 3, 3, 3, 3> C;
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
@@ -132,12 +132,12 @@ TEST(Tensor, Elasticity)
 
 __global__ void navier_stokes(int* error)
 {
-  auto        I   = Identity<3>();
+  auto I = Identity<3>();
   static auto abs = [](auto x) { return (x < 0) ? -x : x; };
 
-  static constexpr double rho   = 3.0;
-  static constexpr double mu    = 2.0;
-  auto                    sigma = [&](auto p, auto v, auto L) { return rho * outer(v, v) + 2.0 * mu * sym(L) - p * I; };
+  static constexpr double rho = 3.0;
+  static constexpr double mu = 2.0;
+  auto sigma = [&](auto p, auto v, auto L) { return rho * outer(v, v) + 2.0 * mu * sym(L) - p * I; };
 
   auto dsigma_dp = [&](auto /*p*/, auto /*v*/, auto /*L*/) { return -1.0 * I; };
 
@@ -167,25 +167,25 @@ __global__ void navier_stokes(int* error)
     return A;
   };
 
-  double               p = 3.14;
-  tensor               v = {{1.0, 2.0, 3.0}};
+  double p = 3.14;
+  tensor v = {{1.0, 2.0, 3.0}};
   tensor<double, 3, 3> L = {{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}}};
 
   {
     auto exact = dsigma_dp(p, v, L);
-    auto ad    = get_gradient(sigma(make_dual(p), v, L));
+    auto ad = get_gradient(sigma(make_dual(p), v, L));
     CUDA_EXPECT_LT(abs(squared_norm(exact - ad)), tolerance);
   }
 
   {
     auto exact = dsigma_dv(p, v, L);
-    auto ad    = get_gradient(sigma(p, make_dual(v), L));
+    auto ad = get_gradient(sigma(p, make_dual(v), L));
     CUDA_EXPECT_LT(abs(squared_norm(exact - ad)), tolerance);
   }
 
   {
     auto exact = dsigma_dL(p, v, L);
-    auto ad    = get_gradient(sigma(p, v, make_dual(L)));
+    auto ad = get_gradient(sigma(p, v, make_dual(L)));
     CUDA_EXPECT_LT(abs(squared_norm(exact - ad)), tolerance);
   }
 }
@@ -209,7 +209,7 @@ __global__ void isotropic_operations(int* error)
   auto I = Identity<3>();
 
   double lambda = 5.0;
-  double mu     = 3.0;
+  double mu = 3.0;
 
   tensor<double, 3> u = {1, 2, 3};
 

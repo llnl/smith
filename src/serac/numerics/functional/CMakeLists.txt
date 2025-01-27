@@ -10,7 +10,6 @@ set(functional_depends serac_mesh ${serac_device_depends})
 set(functional_headers
     differentiate_wrt.hpp
     boundary_integral_kernels.hpp
-    dof_numbering.hpp
     element_restriction.hpp
     geometry.hpp
     geometric_factors.hpp
@@ -22,6 +21,7 @@ set(functional_headers
     function_signature.hpp
     functional_qoi.inl
     integral.hpp
+    interior_face_integral_kernels.hpp
     isotropic_tensor.hpp
     polynomials.hpp
     quadrature.hpp
@@ -30,6 +30,7 @@ set(functional_headers
     tensor.hpp
     tuple.hpp
     tuple_tensor_dual_functions.hpp
+    typedefs.hpp
     )
 
 set(functional_sources 

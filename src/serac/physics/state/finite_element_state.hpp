@@ -25,6 +25,71 @@
 
 namespace serac {
 
+namespace detail {
+/**
+ * @brief Helper function to copy a tensor into an mfem Vector
+ */
+template <int dim>
+void setMfemVectorFromTensorOrDouble(mfem::Vector& v_mfem, const tensor<double, dim>& v)
+{
+  SLIC_ERROR_IF(v_mfem.Size() != dim, "Cannot copy tensor into an MFEM Vector with incompatible size.");
+  for (int i = 0; i < dim; i++) v_mfem(i) = v[i];
+}
+
+/**
+ * @brief Helper function to copy a double into a singleton mfem Vector
+ */
+inline void setMfemVectorFromTensorOrDouble(mfem::Vector& v_mfem, double v)
+{
+  SLIC_ERROR_IF(v_mfem.Size() != 1, "Mfem Vector is not a singleton.");
+  v_mfem = v;
+}
+
+/**
+ * @brief Helper for extracting type of first argument of a free function
+ */
+template <typename Ret, typename Arg, typename... Rest>
+Arg first_argument_helper(Ret (*)(Arg, Rest...));
+
+/**
+ * @brief Helper for extracting type of first argument of a class method
+ */
+template <typename Ret, typename F, typename Arg, typename... Rest>
+Arg first_argument_helper(Ret (F::*)(Arg, Rest...));
+
+/**
+ * @brief Helper for extracting type of first argument of a const class method
+ */
+template <typename Ret, typename F, typename Arg, typename... Rest>
+Arg first_argument_helper(Ret (F::*)(Arg, Rest...) const);
+
+/**
+ * Extract type of first argument of a class method
+ */
+template <typename F>
+decltype(first_argument_helper(&F::operator())) first_argument_helper(F);
+
+/**
+ * Extract type of first argument of a free callable
+ */
+template <typename T>
+using first_argument = decltype(first_argument_helper(std::declval<T>()));
+
+/**
+ * @brief Evaluate a function of a tensor with an mfem Vector object
+ */
+template <typename Callable>
+auto evaluateTensorFunctionOnMfemVector(const mfem::Vector& X_mfem, Callable&& f)
+{
+  first_argument<Callable> X;
+  SLIC_ERROR_IF(X_mfem.Size() != size(X),
+                "Size of tensor in callable does not match spatial dimension of MFEM Vector.");
+  for (int i = 0; i < X_mfem.Size(); i++) X[i] = X_mfem[i];
+  return f(X);
+}
+
+}  // namespace detail
+
 /**
  * @brief convenience function for querying the type stored in a GeneralCoefficient
  */
@@ -47,7 +112,7 @@ inline bool is_vector_valued(const GeneralCoefficient& coef)
  * Namely: Mesh, FiniteElementCollection, FiniteElementState, and the true vector of the solution
  */
 class FiniteElementState : public FiniteElementVector {
-public:
+ public:
   using FiniteElementVector::FiniteElementVector;
   using mfem::Vector::Print;
 
@@ -207,13 +272,47 @@ public:
   void project(mfem::VectorCoefficient& coef, const Domain& d);
 
   /**
+   * @brief Set state as interpolant of an analytical function
+   *
+   * In other words, this sets the dofs by direct evaluation of the analytical
+   * field at the nodal points.
+   *
+   * @tparam FieldFunction A callable type
+   * @param field_function A function that should have the signature:
+   *   tensor<double, field_dim> field_function(tensor<double, spatial_dim> X)
+   *
+   *   template params:
+   *     spatial_dim: number of components in the mesh coordinates
+   *     field_dim: number of components of the FiniteElementState field
+   *
+   *   args:
+   *     X: coordinates of the material point
+   *
+   *   returns: the value of the field at X.
+   *
+   *   If the field is scalar-valued, then alternatively the signature may be:
+   *   double field_function(tensor<double, spatial_dim> X)
+   */
+  template <typename FieldFunction>
+  void setFromFieldFunction(FieldFunction&& field_function)
+  {
+    auto evaluate_mfem = [&field_function](const mfem::Vector& X_mfem, mfem::Vector& u_mfem) {
+      auto u = detail::evaluateTensorFunctionOnMfemVector(X_mfem, field_function);
+      detail::setMfemVectorFromTensorOrDouble(u_mfem, u);
+    };
+
+    mfem::VectorFunctionCoefficient coef(space_->GetVDim(), evaluate_mfem);
+    project(coef);
+  }
+
+  /**
    * @brief Construct a grid function from the finite element state true vector
    *
    * @return The constructed grid function
    */
   mfem::ParGridFunction& gridFunction() const;
 
-protected:
+ protected:
   /**
    * @brief An optional container for a grid function (L-vector) view of the finite element state.
    *

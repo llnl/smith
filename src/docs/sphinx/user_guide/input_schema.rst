@@ -212,11 +212,6 @@ Description: Finite deformation solid mechanics module
      - Default Value
      - Range/Valid Values
      - Required
-   * - geometric_nonlin
-     - Flag to include geometric nonlinearities in the residual calculation.
-     - True
-     - 
-     - |uncheck|
    * - order
      - polynomial order of the basis functions.
      - 1
@@ -1479,11 +1474,6 @@ Description: Finite deformation solid mechanics module
      - Default Value
      - Range/Valid Values
      - Required
-   * - geometric_nonlin
-     - Flag to include geometric nonlinearities in the residual calculation.
-     - True
-     - 
-     - |uncheck|
    * - order
      - polynomial order of the basis functions.
      - 1

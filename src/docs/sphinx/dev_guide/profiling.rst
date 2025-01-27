@@ -136,6 +136,20 @@ files:
 - `SPOT CZ <https://lc.llnl.gov/spot2>`_
 - `SPOT RZ <https://rzlc.llnl.gov/spot2>`_
 
+Serac benchmarks are run weekly to track changes over time. The following are steps to visualize this data in a meaningful
+way:
+
+- Go to https://lc.llnl.gov/spot2/?sf=/usr/WS2/smithdev/califiles/serac
+- Click the check mark button on the top right to view additional data categories
+- Ensure ``mpi.world.size``, ``executable``, ``cluster``, and ``compilers`` are enabled
+- Find the pie and bar charts associated with those categories
+- Select one option from each category to filter the graph
+- Scroll down to the table and and select the "compare" tab to view the graph
+
+Filtering benchmarks in this way will allow you to see changes of one benchmark over time, rather than a mix of many
+different ones. When changing the filter options in the pie and bar charts, ensure you deselect the previous options, so
+you don't view two of one single category.
+
 .. note::
   There is a bug in SPOT where if you remove Caliper files from a directory, they still show up on SPOT - if you've
   visualized them previously. The current workaround is by removing the ``llnl.gov`` site cache manually.

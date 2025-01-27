@@ -27,6 +27,7 @@ if(PETSC_FOUND)
     if(SLEPC_FOUND)
         set(slepc_solver_tests
             eigensolver.cpp
+            test_trust_region_solver.cpp
             )
         serac_add_tests(SOURCES       ${slepc_solver_tests}
                         DEPENDS_ON    ${numerics_test_dependencies}

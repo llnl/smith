@@ -28,7 +28,7 @@ namespace serac {
  * @brief Boundary condition information bundle
  */
 class BoundaryCondition {
-public:
+ public:
   /**
    * @brief Constructor for setting up a boundary condition using a set of attributes
    * @param[in] coef Either a mfem::Coefficient or mfem::VectorCoefficient representing the BC
@@ -142,7 +142,7 @@ public:
    */
   void apply(mfem::HypreParMatrix& k_mat, mfem::Vector& rhs, mfem::Vector& state) const;
 
-private:
+ private:
   /**
    * @brief Uses mfem::ParFiniteElementSpace::GetEssentialTrueDofs to
    * determine the DOFs for the boundary condition from the stored attribute marker list

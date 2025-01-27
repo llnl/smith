@@ -44,13 +44,13 @@ serac::HeatTransferInputOptions FromInlet<serac::HeatTransferInputOptions>::oper
   result.order = base["order"];
 
   // Solver parameters
-  auto equation_solver         = base["equation_solver"];
-  result.lin_solver_options    = equation_solver["linear"].get<serac::LinearSolverOptions>();
+  auto equation_solver = base["equation_solver"];
+  result.lin_solver_options = equation_solver["linear"].get<serac::LinearSolverOptions>();
   result.nonlin_solver_options = equation_solver["nonlinear"].get<serac::NonlinearSolverOptions>();
 
   if (base.contains("dynamics")) {
     serac::TimesteppingOptions timestepping_options;
-    auto                       dynamics = base["dynamics"];
+    auto dynamics = base["dynamics"];
 
     // FIXME: Implement all supported methods as part of an ODE schema
     const static std::map<std::string, serac::TimestepMethod> timestep_methods = {

@@ -37,8 +37,8 @@ struct hcurl_qfunction {
   SERAC_HOST_DEVICE auto operator()(x_t x, vector_potential_t vector_potential) const
   {
     auto [A, curl_A] = vector_potential;
-    auto J_term      = a * A - tensor<double, dim>{10 * x[0] * x[1], -5 * (x[0] - x[1]) * x[1]};
-    auto H_term      = b * curl_A;
+    auto J_term = a * A - tensor<double, dim>{10 * x[0] * x[1], -5 * (x[0] - x[1]) * x[1]};
+    auto H_term = b * curl_A;
     return serac::tuple{J_term, H_term};
   }
 };
@@ -55,7 +55,7 @@ void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim
   serac::profiling::initialize();
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = decltype(test);
+  using test_space = decltype(test);
   using trial_space = decltype(trial);
 
   // Create standard MFEM bilinear and linear forms on H1
@@ -63,35 +63,39 @@ void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim
 
   // Set a random state to evaluate the residual
   mfem::Vector U(fespace->TrueVSize());
-  U.Randomize();
+  int seed = 3;
+  U.Randomize(seed);
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = decltype(test);
+  using test_space = decltype(test);
   using trial_space = decltype(trial);
 
   // Construct the new functional object using the known test and trial spaces
   Functional<test_space(trial_space)> residual(fespace.get(), {fespace.get()});
+
+  Domain dom = EntireDomain(mesh);
+  Domain bdr = EntireBoundary(mesh);
 
   // Add the total domain residual term to the functional
   residual.AddDomainIntegral(
       Dimension<dim>{}, DependsOn<0>{},
       [=](double /*t*/, auto position, auto temperature) {
         auto [X, dX_dxi] = position;
-        auto [u, du_dX]  = temperature;
-        auto source      = a * u * u - (100 * X[0] * X[1]);
-        auto flux        = b * du_dX;
+        auto [u, du_dX] = temperature;
+        auto source = a * u * u - (100 * X[0] * X[1]);
+        auto flux = b * du_dX;
         return serac::tuple{source, flux};
       },
-      mesh);
+      dom);
 
   residual.AddBoundaryIntegral(
       Dimension<dim - 1>{}, DependsOn<0>{},
       [=](double /*t*/, auto position, auto temperature) {
         auto [X, dX_dxi] = position;
-        auto u           = get<0>(temperature);
+        auto u = get<0>(temperature);
         return X[0] + X[1] - cos(u);
       },
-      mesh);
+      bdr);
 
   double t = 0.0;
   check_gradient(residual, t, U);
@@ -106,7 +110,7 @@ void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dim
   serac::profiling::initialize();
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = decltype(test);
+  using test_space = decltype(test);
   using trial_space = decltype(trial);
 
   // Create standard MFEM bilinear and linear forms on H1
@@ -114,10 +118,14 @@ void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dim
 
   // Set a random state to evaluate the residual
   mfem::Vector U(fespace->TrueVSize());
-  U.Randomize();
+  int seed = 4;
+  U.Randomize(seed);
 
   // Construct the new functional object using the known test and trial spaces
   Functional<test_space(trial_space)> residual(fespace.get(), {fespace.get()});
+
+  Domain dom = EntireDomain(mesh);
+  Domain bdr = EntireBoundary(mesh);
 
   // Add the total domain residual term to the functional
   residual.AddDomainIntegral(
@@ -125,21 +133,22 @@ void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dim
       [=](double /*t*/, auto /*x*/, auto displacement) {
         // get the value and the gradient from the input tuple
         auto [u, du_dx] = displacement;
-        auto source     = a * u * u[0];
-        auto flux       = b * du_dx;
+        auto source = a * u * u[0];
+        auto flux = b * du_dx;
         return serac::tuple{source, flux};
       },
-      mesh);
+      dom);
 
   residual.AddBoundaryIntegral(
       Dimension<dim - 1>{}, DependsOn<0>{},
       [=](double /*t*/, auto position, auto displacement) {
         auto [X, dX_dxi] = position;
-        auto u           = get<0>(displacement);
-        auto n           = normalize(cross(dX_dxi));
+        std::cout << X << " " << dX_dxi << std::endl;
+        auto u = get<0>(displacement);
+        auto n = normalize(cross(dX_dxi));
         return (X[0] + X[1] - cos(u[0])) * n;
       },
-      mesh);
+      bdr);
 
   double t = 0.0;
   check_gradient(residual, t, U);
@@ -172,7 +181,7 @@ int main(int argc, char* argv[])
 
   axom::slic::SimpleLogger logger;
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   std::string meshfile2D = SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";

@@ -45,7 +45,7 @@ template <typename T1, typename T2>
 auto axiSymmetricDisplacementGradient(const T1& r, const T2& displacement)
 {
   auto [u, du_dx] = displacement;
-  using scalar_t  = decltype(u[0] / r + du_dx[0][0]);
+  using scalar_t = decltype(u[0] / r + du_dx[0][0]);
   scalar_t z{};
   return serac::tensor<scalar_t, 3, 3>{
       {{du_dx[0][0], du_dx[0][1], z}, {du_dx[1][0], du_dx[1][1], z}, {z, z, u[0] / r}}};
@@ -70,13 +70,13 @@ TEST(QoI, BoundaryIntegralWithTangentialShapeDisplacements)
   residual.AddDomainIntegral(
       serac::Dimension<2>{}, serac::DependsOn<0>{},
       [&](auto /*t*/, auto position, auto displacement) {
-        auto r           = serac::get<0>(position)[0];
+        auto r = serac::get<0>(position)[0];
         auto du_dx_prime = axiSymmetricDisplacementGradient(r, displacement);
-        auto stress      = du_dx_prime * 3;
+        auto stress = du_dx_prime * 3;
 
-        using source_type                       = decltype(stress[2][2] * r);
-        serac::tensor<source_type, 2>    source = {stress[2][2] * 6.28, 0.0};
-        serac::tensor<source_type, 2, 2> flux   = {{{stress[0][0], stress[0][1]}, {stress[1][0], stress[1][1]}}};
+        using source_type = decltype(stress[2][2] * r);
+        serac::tensor<source_type, 2> source = {stress[2][2] * 6.28, 0.0};
+        serac::tensor<source_type, 2, 2> flux = {{{stress[0][0], stress[0][1]}, {stress[1][0], stress[1][1]}}};
 
         return serac::tuple{source, flux * 6.28 * r};
       },

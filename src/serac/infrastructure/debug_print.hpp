@@ -13,6 +13,9 @@
 #include <iomanip>
 #include <vector>
 
+#include "serac/infrastructure/memory.hpp"
+#include "serac/numerics/functional/element_restriction.hpp"
+
 /**
  * @brief write an array of values out to file, in a space-separated format
  * @tparam T the type of each value in the array
@@ -61,12 +64,6 @@ std::ostream& operator<<(std::ostream& out, DoF dof)
   return out;
 }
 
-std::ostream& operator<<(std::ostream& out, serac::SignedIndex i)
-{
-  out << "{" << i.index_ << ", " << i.sign_ << "}";
-  return out;
-}
-
 /**
  * @brief write a 2D array of values out to file, in a space-separated format
  * @tparam T the type of each value in the array
@@ -74,7 +71,7 @@ std::ostream& operator<<(std::ostream& out, serac::SignedIndex i)
  * @param filename the name of the output file
  */
 template <typename T>
-void write_to_file(axom::Array<T, 2, axom::MemorySpace::Host> arr, std::string filename)
+void write_to_file(axom::Array<T, 2, serac::detail::host_memory_space> arr, std::string filename)
 {
   std::ofstream outfile(filename);
 
@@ -97,7 +94,7 @@ void write_to_file(axom::Array<T, 2, axom::MemorySpace::Host> arr, std::string f
  * @param filename the name of the output file
  */
 template <typename T>
-void write_to_file(axom::Array<T, 3, axom::MemorySpace::Host> arr, std::string filename)
+void write_to_file(axom::Array<T, 3, serac::detail::host_memory_space> arr, std::string filename)
 {
   std::ofstream outfile(filename);
 

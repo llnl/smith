@@ -25,33 +25,34 @@ terms of the displacement
 
 .. math:: \mathbf{u}(\mathbf{X},t) = \mathbf{x}(\mathbf{X}, t) - \mathbf{X}.
 
-An important quantity characterizing this motion is the *deformation
+The relative motion of material points is measured with the *deformation
 gradient*
 
 .. math:: \mathbf{F} = \frac{\partial\mathbf{x}}{\partial\mathbf{X}} = \frac{\partial \mathbf{u}}{\partial \mathbf{X}} + \mathbf{I}.
 
 We also define the internal forces due to deformation in the solid in
-terms of the *Cauchy stress* :math:`\mathbf{\sigma}`. If the deformed
-body is cut by a surface with normal vector :math:`\mathbf{n}`, the resulting
-traction vector :math:`\mathbf{t}` is defined as
+terms of the *first Piola-Kirchhoff stress* :math:`\mathbf{P}`. If the deformed
+body is cut by a surface with normal vector :math:`\mathbf{n}_0`, the resulting
+traction vector :math:`\mathbf{t}_0` is defined as
 
-.. math:: \mathbf{t} = \mathbf{\sigma} \mathbf{n}.
+.. math:: \mathbf{t}_0 = \mathbf{P} \mathbf{n}_0.
 
 This stress is taken here as a function of the deformation gradient
-:math:`\sigma  = \sigma(\mathbf{F})` by the appropriate hyperelastic constitutive
-(material) model. The conservation of angular momentum implies this
-stress tensor must be symmetric, i.e. :math:`\sigma = \sigma^T`. We can
+:math:`\mathbf{P}  = \hat{\mathbf{P}}(\mathbf{F})` by the appropriate constitutive 
+model. The conservation of angular momentum requires that
+:math:`\mathbf{P} \mathbf{F}^T = \mathbf{F} \mathbf{P}^T`, which is a
+restriction imposed on the constitutive model. We can
 then use the conservation of linear momentum to formulate the boundary
 value problem
 
 .. math::
 
    \begin{align*}
-   \nabla_\mathbf{x} \cdot \mathbf{\sigma}(\mathbf{F}) + \rho \mathbf{b} &= \rho \ddot{\mathbf{u}} \\
+   \nabla_\mathbf{X} \cdot \mathbf{P} + \rho_0 \mathbf{b}_0 &= \rho_0 \ddot{\mathbf{u}} \\
    \mathbf{u} &= \mathbf{u}_D & \text{on } \Gamma_D \\
-   \sigma \mathbf{n} &= \mathbf{t} & \text{on } \Gamma_N \\
-   \mathbf{u}(\mathbf{x}, 0) & = \mathbf{u}_0 \\
-   \dot{\mathbf{u}}(\mathbf{x},0) & = \dot{\mathbf{u}}_0
+   \mathbf{P} \mathbf{n}_0 &= \mathbf{t}_0 & \text{on } \Gamma_N \\
+   \mathbf{u}(\mathbf{X}, 0) & = \mathbf{u}_0 \\
+   \dot{\mathbf{u}}(\mathbf{X},0) & = \mathbf{v}_0
    \end{align*}
 
 where
@@ -59,17 +60,17 @@ where
 .. math::
 
    \begin{align*}
-   \sigma(\mathbf{F}) &= \text{Cauchy stress via constitutive response} \\
-   \rho &= \text{density} \\
-   \mathbf{b} &= \text{body force} \\
-   \mathbf{u}_D & = \text{fixed boundary} \\
-   \mathbf{t} &= \text{boundary traction} \\
+   \mathbf{P} &= \text{first Piola-Kirchhoff stress via constitutive response} \\
+   \rho_0 &= \text{mass per unit volume in the reference configuration} \\
+   \mathbf{b}_0 &= \text{body force per unit volume in the reference configuration} \\
+   \mathbf{u}_D & = \text{prescribed boundary displacement} \\
+   \mathbf{t}_0 &= \text{surface traction per unit area in the reference configuration} \\
    \mathbf{u}_0 &= \text{initial displacement} \\
-   \dot{\mathbf{u}}_0 &= \text{initial velocity}
+   \mathbf{v}_0 &= \text{initial velocity}
    \end{align*}
 
-and :math:`\nabla_\mathbf{x}` implies the gradient with respect to the
-current (deformed) configuration. 
+and :math:`\nabla_\mathbf{X}` implies the gradient with respect to the
+reference configuration. 
 
 Weak Form
 =========
@@ -82,7 +83,8 @@ the weak form
 
    \begin{align*}
    &\text{Find } \mathbf{u} \in \mathbf{U} \text{ such that}\\
-   &\int_{\Omega_t} \left( \sigma(\mathbf{u}) \cdot \nabla_\mathbf{x} \delta \mathbf{v} - \rho \mathbf{b} \cdot \delta \mathbf{v}\right) dV - \int_{\Gamma_{N_t}} \delta\mathbf{v}\cdot \mathbf{t}\, dA + \int_{\Omega_t} \rho\ddot{\mathbf{u}} \cdot \delta\mathbf{v} \,dV = 0, & & \forall \delta\mathbf{v} \in \hat{\mathbf{U}}
+   &\int_{\Omega_0} \left( \mathbf{P}(\nabla_\mathbf{X} \mathbf{u}) \cdot \nabla_\mathbf{X} \delta \mathbf{v} - \rho_0 \mathbf{b}_0 \cdot \delta \mathbf{v}\right) dV - \int_{\Gamma_{N}} \delta\mathbf{v}\cdot \mathbf{t}_0\, dA 
+   + \int_{\Omega_0} \rho_0 \ddot{\mathbf{u}} \cdot \delta\mathbf{v} \, dV = 0, & & \forall \delta\mathbf{v} \in \hat{\mathbf{U}}
    \end{align*}
 
 where
@@ -94,59 +96,20 @@ where
    \hat{\mathbf{U}} &= \left\{\mathbf{u} \in H_1^\text{dim}(\Omega):\mathbf{u}=\mathbf{0} \text{ on } \Gamma_D \right\}.
    \end{align*}
 
-and :math:`\Omega` is the current (deformed) configuration. In
-mechanics, the weak form is often referred to as the *principle of
-virtual power*. As Serac uses hyperelastic models, it is convenient to
-write this equation in the reference (undeformed) configuration
-
-.. math::
-
-   \begin{align*}
-   &\int_{\Omega_0} \sigma(\mathbf{u}) \cdot \left(\nabla_\mathbf{X} \delta \mathbf{v} \mathbf{F}^{-1} \right) \text{det}\mathbf{F}\, dV_0  - \int_{\Omega_0} \rho_0 \mathbf{b} \cdot \delta \mathbf{v} dV_0 \\ 
-   & \;\;\;\;\;\;\;\;\;\;\;\; - \int_{\Gamma_{N_0}} \delta\mathbf{v}\cdot \mathbf{t}\,||\mathbf{F}^{-T}\mathbf{n}_0||\text{det}\mathbf{F}\, dA_0 + \int_{\Omega_0} \rho_0\ddot{\mathbf{u}} \cdot \delta\mathbf{v}\, dV_0= 0, & & \forall \delta\mathbf{v} \in \hat{\mathbf{U}}
-   \end{align*}
-
-where :math:`\nabla_X` is the gradient with respect to the reference (material) coordinates.
+In mechanics, the weak form is often referred to as the *principle of
+virtual power*.
 
 Material Models
 ===============
 
-Serac currently is restricted to *hyperelastic* material formulations, i.e. materials that behave in a reversibly elastic fashion 
-under large deformations. Mathematically, this implies they are derived from a *strain energy density* function 
-:math:`W=W(\mathbf{F})`. It can be shown that
+Serac has a small but growing library of material models, which currently includes
 
-.. math::
+- Linear elasticity
+- Neo-Hookean and Green-St. Venant hyperelastic models
+- J2 plasticity models in both linear kinematics and finite deformation mechanics,
+  with modular hardening laws
 
-   \sigma(\mathbf{F}) = \frac{1}{\text{det}\mathbf{F}} \frac{\partial W}{\partial \mathbf{F}} \mathbf{F}^T  = \frac{1}{\text{det}\mathbf{F}} \mathbf{P}  \mathbf{F}^T
-
-where
-
-.. math::
-
-   \mathbf{P} =  \frac{\partial W}{\partial \mathbf{F}} = {\text{det}}\mathbf{F} \sigma \mathbf{F}^{-T}
-
-is the *first Piola-Kirchhoff stress*. Serac currently only has two material models. First, a neo-Hookean material where
-   
-.. math::
-
-   \begin{align*}
-   W(\mathbf{F}) &= \frac{\mu}{2}(\bar{I}_1 - \text{dim}) + \frac{K}{2}(\text{det}\mathbf{F} - 1)^2 \\
-   \bar{I}_1 &= \frac{\text{trace}(\mathbf{F}\mathbf{F}^T)}{(\text{det}\mathbf{F})^{2/\text{dim}}}
-   \end{align*}
-
-and :math:`\mu` and :math:`K` are the shear and bulk modulus, respectively. This definition also
-implies that the 2D simulations are using a plane strain assumption. The second model is a small strain isotropic linear elastic material where
-
-.. math::
-
-   \begin{align*}
-   \sigma(\epsilon) &= \lambda \text{trace}(\epsilon) \mathbf{I} + 2\mu \epsilon \\
-   \epsilon &= \frac{1}{2}\left(\mathbf{F} + \mathbf{F}^T \right) - \mathbf{I} \\
-   \lambda &= K - \frac{2}{\text{dim}} \mu
-   \end{align*}
-
-and :math:`\epsilon` is the linearized strain tensor. Note that this model is only valid for small strains 
-where the neo-Hookean model is nearly equivalent. It is included mostly for testing purposes.
+You can define your own custom materials as well.
 
 Discretization
 ==============
@@ -167,12 +130,10 @@ and substitute these quantities back into the weak form to obtain the vector-val
 
 .. math::
 
-   \int_{\Omega_0} \sigma \frac{\partial N^a}{\partial \mathbf{X}} \mathbf{F}^{-1} \text{det}\mathbf{F} \, dV_0  - \int_{\Omega_0} \rho_0 \mathbf{b} N^a dV_0  - \int_{\Gamma_{N_0}} \mathbf{t}^* N^a \, dA_0 + \int_{\Omega_0} \rho_0\ddot{\mathbf{u}}N^a\, dV_0 = 0
-
-where :math:`\mathbf{t}^*` is the traction applied in the reference configuration. 
-
-Optionally, we allow disabling the geometric nonlinearities by setting :math:`\mathbf{F} = \mathbf{I}` everywhere
-in this residual evaluation except for the material response (stress) function. 
+   \int_{\Omega_0} \mathbf{P} \frac{\partial N^a}{\partial \mathbf{X}} \, dV  
+   - \int_{\Omega_0} \rho_0 \mathbf{b}_0 N^a dV  
+   - \int_{\Gamma_{N}} \mathbf{t}_0 N^a \, dA + \int_{\Omega_0} \rho_0 \ddot{\mathbf{u}}N^a\, dV 
+   = \mathbf{0}.
 
 Performing these integrals yields the discrete equations
 

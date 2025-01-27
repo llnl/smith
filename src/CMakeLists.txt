@@ -6,6 +6,7 @@
 
 add_subdirectory(serac)
 add_subdirectory(drivers)
+add_subdirectory(tools)
 
 if (ENABLE_DOCS)
     add_subdirectory(docs)

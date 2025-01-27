@@ -24,7 +24,7 @@ namespace serac {
 #ifndef MFEM_USE_AMGX
 TEST(ErrorHandling, EquationSolverAmgxNotAvailable)
 {
-  LinearSolverOptions    options;
+  LinearSolverOptions options;
   NonlinearSolverOptions nonlin;
   options.preconditioner = Preconditioner::AMGX;
   EXPECT_THROW(EquationSolver(nonlin, options, MPI_COMM_WORLD), SlicErrorException);
@@ -34,7 +34,7 @@ TEST(ErrorHandling, EquationSolverAmgxNotAvailable)
 TEST(ErrorHandling, BcOneComponentVectorCoef)
 {
   mfem::Vector vec;
-  auto         coef = std::make_shared<mfem::VectorConstantCoefficient>(vec);
+  auto coef = std::make_shared<mfem::VectorConstantCoefficient>(vec);
 
   auto mesh = mesh::refineAndDistribute(buildDiskMesh(10), 0, 0);
 
@@ -45,8 +45,8 @@ TEST(ErrorHandling, BcOneComponentVectorCoef)
 
 TEST(ErrorHandling, BcOneComponentVectorCoefDofs)
 {
-  mfem::Vector     vec;
-  auto             coef = std::make_shared<mfem::VectorConstantCoefficient>(vec);
+  mfem::Vector vec;
+  auto coef = std::make_shared<mfem::VectorConstantCoefficient>(vec);
   mfem::Array<int> dofs(1);
   dofs[0] = 1;
 
@@ -61,13 +61,13 @@ TEST(ErrorHandling, InvalidCmdlineArg)
 {
   // The command is actually --input-file
   char const* fake_argv[] = {"serac", "--file", "input.lua"};
-  const int   fake_argc   = 3;
+  const int fake_argc = 3;
   EXPECT_THROW(cli::defineAndParse(fake_argc, const_cast<char**>(fake_argv), ""), SlicErrorException);
 }
 
 TEST(ErrorHandling, NonexistentMeshPath)
 {
-  std::string mesh_path       = "nonexistent.mesh";
+  std::string mesh_path = "nonexistent.mesh";
   std::string input_file_path = std::string(SERAC_REPO_DIR) + "/data/input_files/default.lua";
   EXPECT_THROW(input::findMeshFilePath(mesh_path, input_file_path), SlicErrorException);
 }

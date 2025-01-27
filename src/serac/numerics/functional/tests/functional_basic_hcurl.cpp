@@ -29,18 +29,19 @@ template <int p>
 void hcurl_test_2D()
 {
   constexpr int dim = 2;
-  using test_space  = Hcurl<p>;
+  using test_space = Hcurl<p>;
   using trial_space = Hcurl<p>;
 
   std::string meshfile = SERAC_REPO_DIR "/data/meshes/patch2D.mesh";
 
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 1);
 
-  auto                        fec = mfem::ND_FECollection(p, dim);
+  auto fec = mfem::ND_FECollection(p, dim);
   mfem::ParFiniteElementSpace fespace(mesh.get(), &fec);
 
   mfem::Vector U(fespace.TrueVSize());
-  U.Randomize();
+  int seed = 7;
+  U.Randomize(seed);
 
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space)> residual(&fespace, {&fespace});
@@ -54,8 +55,8 @@ void hcurl_test_2D()
       Dimension<dim>{}, DependsOn<0>{},
       [=](double /*t*/, auto /*x*/, auto vector_potential) {
         auto [A, curl_A] = vector_potential;
-        auto source      = dot(d00, A) + d01 * curl_A;
-        auto flux        = dot(d10, A) + d11 * curl_A;
+        auto source = dot(d00, A) + d01 * curl_A;
+        auto flux = dot(d10, A) + d11 * curl_A;
         return serac::tuple{source, flux};
       },
       *mesh);
@@ -73,14 +74,15 @@ void hcurl_test_3D()
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 1);
 
   // Create standard MFEM bilinear and linear forms on H1
-  auto                        fec = mfem::ND_FECollection(p, dim);
+  auto fec = mfem::ND_FECollection(p, dim);
   mfem::ParFiniteElementSpace fespace(mesh.get(), &fec);
 
   mfem::Vector U(fespace.TrueVSize());
-  U.Randomize();
+  int seed = 8;
+  U.Randomize(seed);
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = Hcurl<p>;
+  using test_space = Hcurl<p>;
   using trial_space = Hcurl<p>;
 
   // Construct the new functional object using the known test and trial spaces
@@ -95,8 +97,8 @@ void hcurl_test_3D()
       Dimension<dim>{}, DependsOn<0>{},
       [=](double /*t*/, auto /*x*/, auto vector_potential) {
         auto [A, curl_A] = vector_potential;
-        auto source      = dot(d00, A) + dot(d01, curl_A);
-        auto flux        = dot(d10, A) + dot(d11, curl_A);
+        auto source = dot(d00, A) + dot(d01, curl_A);
+        auto flux = dot(d10, A) + dot(d11, curl_A);
         return serac::tuple{source, flux};
       },
       *mesh);

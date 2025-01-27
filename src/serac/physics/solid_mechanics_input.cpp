@@ -16,10 +16,6 @@ void SolidMechanicsInputOptions::defineInputFileSchema(axom::inlet::Container& c
   auto& material_container = container.addStructArray("materials", "Container for array of materials");
   SolidMaterialInputOptions::defineInputFileSchema(material_container);
 
-  // Geometric nonlinearities flag
-  container.addBool("geometric_nonlin", "Flag to include geometric nonlinearities in the residual calculation.")
-      .defaultValue(true);
-
   auto& equation_solver_container =
       container.addStruct("equation_solver", "Linear and Nonlinear stiffness Solver Parameters.");
   EquationSolver::defineInputFileSchema(equation_solver_container);
@@ -47,13 +43,13 @@ serac::SolidMechanicsInputOptions FromInlet<serac::SolidMechanicsInputOptions>::
   result.order = base["order"];
 
   // Solver parameters
-  auto equation_solver         = base["equation_solver"];
-  result.lin_solver_options    = equation_solver["linear"].get<serac::LinearSolverOptions>();
+  auto equation_solver = base["equation_solver"];
+  result.lin_solver_options = equation_solver["linear"].get<serac::LinearSolverOptions>();
   result.nonlin_solver_options = equation_solver["nonlinear"].get<serac::NonlinearSolverOptions>();
 
   if (base.contains("dynamics")) {
     serac::TimesteppingOptions timestepping_options;
-    auto                       dynamics = base["dynamics"];
+    auto dynamics = base["dynamics"];
 
     // FIXME: Implement all supported methods as part of an ODE schema
     const static std::map<std::string, serac::TimestepMethod> timestep_methods = {
@@ -77,14 +73,6 @@ serac::SolidMechanicsInputOptions FromInlet<serac::SolidMechanicsInputOptions>::
   }
 
   result.materials = base["materials"].get<std::vector<serac::var_solid_material_t>>();
-
-  // Set the geometric nonlinearities flag
-  bool input_geom_nonlin = base["geometric_nonlin"];
-  if (input_geom_nonlin) {
-    result.geom_nonlin = serac::GeometricNonlinearities::On;
-  } else {
-    result.geom_nonlin = serac::GeometricNonlinearities::Off;
-  }
 
   if (base.contains("boundary_conds")) {
     result.boundary_conditions =

@@ -52,7 +52,7 @@ namespace domain_integral {
 template <typename derivatives_type, typename rule_type, bool row_major = true>
 SERAC_HOST_DEVICE constexpr derivatives_type& AccessDerivatives(derivatives_type* derivatives_ptr, int e, int q,
                                                                 [[maybe_unused]] rule_type& rule,
-                                                                [[maybe_unused]] int        num_elements)
+                                                                [[maybe_unused]] int num_elements)
 {
   if constexpr (row_major) {
     return derivatives_ptr[e * static_cast<int>(rule.size()) + q];
@@ -101,11 +101,11 @@ __global__ void eval_cuda_element(const solution_type u, residual_type r, deriva
                                   jacobian_type J, position_type X, int num_elements, lambda qf,
                                   QuadratureData<qpt_data_type> data)
 {
-  using test_element          = finite_element<g, test>;
-  using trial_element         = finite_element<g, trial>;
+  using test_element = finite_element<g, test>;
+  using trial_element = finite_element<g, trial>;
   using element_residual_type = typename trial_element::residual_type;
-  static constexpr auto rule  = GaussQuadratureRule<g, Q>();
-  static constexpr int  dim   = dimension_of(g);
+  static constexpr auto rule = GaussQuadratureRule<g, Q>();
+  static constexpr int dim = dimension_of(g);
 
   // for each element in the domain
   const int grid_stride = blockDim.x * gridDim.x;
@@ -118,11 +118,11 @@ __global__ void eval_cuda_element(const solution_type u, residual_type r, deriva
 
     // for each quadrature point in the element
     for (int q = 0; q < static_cast<int>(rule.size()); q++) {
-      auto   xi  = rule.points[q];
-      auto   dxi = rule.weights[q];
-      auto   x_q = make_tensor<dim>([&](int i) { return X(q, i, e); });  // Physical coords of qpt
-      auto   J_q = make_tensor<dim, dim>([&](int i, int j) { return J(q, i, j, e); });
-      double dx  = det(J_q) * dxi;
+      auto xi = rule.points[q];
+      auto dxi = rule.weights[q];
+      auto x_q = make_tensor<dim>([&](int i) { return X(q, i, e); });  // Physical coords of qpt
+      auto J_q = make_tensor<dim, dim>([&](int i, int j) { return J(q, i, j, e); });
+      double dx = det(J_q) * dxi;
 
       // evaluate the value/derivatives needed for the q-function at this quadrature point
       auto arg = Preprocess<trial_element>(u_elem, xi, J_q);
@@ -195,11 +195,11 @@ __global__ void eval_cuda_quadrature(const solution_type u, residual_type r,
                                      GPUArrayView<derivatives_type, 2> qf_derivatives, jacobian_type J, position_type X,
                                      int num_elements, lambda qf, QuadratureData<qpt_data_type> data)
 {
-  using test_element          = finite_element<g, test>;
-  using trial_element         = finite_element<g, trial>;
+  using test_element = finite_element<g, test>;
+  using trial_element = finite_element<g, trial>;
   using element_residual_type = typename test_element::residual_type;
-  static constexpr auto rule  = GaussQuadratureRule<g, Q>();
-  static constexpr int  dim   = dimension_of(g);
+  static constexpr auto rule = GaussQuadratureRule<g, Q>();
+  static constexpr int dim = dimension_of(g);
 
   const int grid_stride = blockDim.x * gridDim.x;
   // launch a thread for each quadrature x element point
@@ -215,11 +215,11 @@ __global__ void eval_cuda_quadrature(const solution_type u, residual_type r,
     element_residual_type r_elem{};
 
     // for each quadrature point in the element
-    auto   xi  = rule.points[q];
-    auto   dxi = rule.weights[q];
-    auto   x_q = make_tensor<dim>([&](int i) { return X(q, i, e); });  // Physical coords of qpt
-    auto   J_q = make_tensor<dim, dim>([&](int i, int j) { return J(q, i, j, e); });
-    double dx  = det(J_q) * dxi;
+    auto xi = rule.points[q];
+    auto dxi = rule.weights[q];
+    auto x_q = make_tensor<dim>([&](int i) { return X(q, i, e); });  // Physical coords of qpt
+    auto J_q = make_tensor<dim, dim>([&](int i, int j) { return J(q, i, j, e); });
+    double dx = det(J_q) * dxi;
 
     // evaluate the value/derivatives needed for the q-function at this quadrature point
     auto arg = Preprocess<trial_element>(u_elem, xi, J_q);
@@ -282,13 +282,13 @@ void evaluation_kernel_cuda(serac::detail::GPULaunchConfiguration config, const 
                             const mfem::Vector& X_, int num_elements, lambda qf,
                             std::shared_ptr<QuadratureData<qpt_data_type>> data = NoQData)
 {
-  using test_element               = finite_element<g, test>;
-  using trial_element              = finite_element<g, trial>;
-  using element_residual_type      = typename test_element::residual_type;
-  static constexpr int  test_ndof  = test_element::ndof;
-  static constexpr int  trial_ndof = trial_element::ndof;
-  static constexpr auto rule       = GaussQuadratureRule<g, Q>();
-  static constexpr int  dim        = dimension_of(g);
+  using test_element = finite_element<g, test>;
+  using trial_element = finite_element<g, trial>;
+  using element_residual_type = typename test_element::residual_type;
+  static constexpr int test_ndof = test_element::ndof;
+  static constexpr int trial_ndof = trial_element::ndof;
+  static constexpr auto rule = GaussQuadratureRule<g, Q>();
+  static constexpr int dim = dimension_of(g);
 
   // Note: Since we cannot call Reshape (__host__) within a kernel we pass in the resulting mfem::DeviceTensors which
   // should be pointing to Device pointers via .Read() and .ReadWrite()
@@ -348,14 +348,14 @@ void evaluation_kernel_cuda(serac::detail::GPULaunchConfiguration config, const 
 template <mfem::Geometry::Type g, typename test, typename trial, int Q, typename derivatives_type,
           typename dsolution_type, typename dresidual_type>
 __global__ void gradient_cuda_element(const dsolution_type du, dresidual_type dr,
-                                      GPUArrayView<derivatives_type, 2>         qf_derivatives,
+                                      GPUArrayView<derivatives_type, 2> qf_derivatives,
                                       const mfem::DeviceTensor<4, const double> J, int num_elements)
 {
-  using test_element          = finite_element<g, test>;
-  using trial_element         = finite_element<g, trial>;
+  using test_element = finite_element<g, test>;
+  using trial_element = finite_element<g, trial>;
   using element_residual_type = typename trial_element::residual_type;
-  static constexpr auto rule  = GaussQuadratureRule<g, Q>();
-  static constexpr int  dim   = dimension_of(g);
+  static constexpr auto rule = GaussQuadratureRule<g, Q>();
+  static constexpr int dim = dimension_of(g);
 
   const int grid_stride = blockDim.x * gridDim.x;
 #pragma unroll
@@ -370,10 +370,10 @@ __global__ void gradient_cuda_element(const dsolution_type du, dresidual_type dr
     for (int q = 0; q < static_cast<int>(rule.size()); q++) {
       // get the position of this quadrature point in the parent and physical space,
       // and calculate the measure of that point in physical space.
-      auto   xi  = rule.points[q];
-      auto   dxi = rule.weights[q];
-      auto   J_q = make_tensor<dim, dim>([&](int i, int j) { return J(q, i, j, e); });
-      double dx  = det(J_q) * dxi;
+      auto xi = rule.points[q];
+      auto dxi = rule.weights[q];
+      auto J_q = make_tensor<dim, dim>([&](int i, int j) { return J(q, i, j, e); });
+      double dx = det(J_q) * dxi;
 
       // evaluate the (change in) value/derivatives at this quadrature point
       auto darg = Preprocess<trial_element>(du_elem, xi, J_q);
@@ -425,18 +425,18 @@ __global__ void gradient_cuda_element(const dsolution_type du, dresidual_type dr
 template <mfem::Geometry::Type g, typename test, typename trial, int Q, typename derivatives_type,
           typename dsolution_type, typename dresidual_type>
 __global__ void gradient_cuda_quadrature(const dsolution_type du, dresidual_type dr,
-                                         GPUArrayView<derivatives_type, 2>         qf_derivatives,
+                                         GPUArrayView<derivatives_type, 2> qf_derivatives,
                                          const mfem::DeviceTensor<4, const double> J, int num_elements)
 {
-  using test_element          = finite_element<g, test>;
-  using trial_element         = finite_element<g, trial>;
+  using test_element = finite_element<g, test>;
+  using trial_element = finite_element<g, trial>;
   using element_residual_type = typename trial_element::residual_type;
-  static constexpr auto rule  = GaussQuadratureRule<g, Q>();
-  static constexpr int  dim   = dimension_of(g);
+  static constexpr auto rule = GaussQuadratureRule<g, Q>();
+  static constexpr int dim = dimension_of(g);
 
-  const int grid_stride           = blockDim.x * gridDim.x;
-  auto      thread_id             = blockIdx.x * blockDim.x + threadIdx.x;
-  auto      num_quadrature_points = num_elements * rule.size();
+  const int grid_stride = blockDim.x * gridDim.x;
+  auto thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+  auto num_quadrature_points = num_elements * rule.size();
 #pragma unroll
   for (int qe = thread_id; qe < num_quadrature_points; qe += grid_stride) {
     int e = qe / rule.size();
@@ -449,10 +449,10 @@ __global__ void gradient_cuda_quadrature(const dsolution_type du, dresidual_type
 
     // get the position of this quadrature point in the parent and physical space,
     // and calculate the measure of that point in physical space.
-    auto   xi  = rule.points[q];
-    auto   dxi = rule.weights[q];
-    auto   J_q = make_tensor<dim, dim>([&](int i, int j) { return J(q, i, j, e); });
-    double dx  = det(J_q) * dxi;
+    auto xi = rule.points[q];
+    auto dxi = rule.weights[q];
+    auto J_q = make_tensor<dim, dim>([&](int i, int j) { return J(q, i, j, e); });
+    double dx = det(J_q) * dxi;
 
     // evaluate the (change in) value/derivatives at this quadrature point
     auto darg = Preprocess<trial_element>(du_elem, xi, J_q);
@@ -504,17 +504,17 @@ void action_of_gradient_kernel(serac::detail::GPULaunchConfiguration config, con
                                GPUArrayView<derivatives_type, 2> qf_derivatives, const mfem::Vector& J_,
                                int num_elements)
 {
-  using test_element               = finite_element<g, test>;
-  using trial_element              = finite_element<g, trial>;
-  using element_residual_type      = typename trial_element::residual_type;
-  static constexpr int  test_ndof  = test_element::ndof;
-  static constexpr int  trial_ndof = trial_element::ndof;
-  static constexpr auto rule       = GaussQuadratureRule<g, Q>();
-  static constexpr int  dim        = dimension_of(g);
+  using test_element = finite_element<g, test>;
+  using trial_element = finite_element<g, trial>;
+  using element_residual_type = typename trial_element::residual_type;
+  static constexpr int test_ndof = test_element::ndof;
+  static constexpr int trial_ndof = trial_element::ndof;
+  static constexpr auto rule = GaussQuadratureRule<g, Q>();
+  static constexpr int dim = dimension_of(g);
 
   // mfem provides this information in 1D arrays, so we reshape it
   // into strided multidimensional arrays before using
-  auto J  = mfem::Reshape(J_.Read(), rule.size(), dim, dim, num_elements);
+  auto J = mfem::Reshape(J_.Read(), rule.size(), dim, dim, num_elements);
   auto du = detail::Reshape<trial>(dU.Read(), trial_ndof, num_elements);
   auto dr = detail::Reshape<test>(dR.ReadWrite(), test_ndof, num_elements);
 

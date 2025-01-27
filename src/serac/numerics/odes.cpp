@@ -82,8 +82,8 @@ void SecondOrderODE::Step(mfem::Vector& x, mfem::Vector& dxdt, double& time, dou
 
     if (enforcement_method_ == DirichletEnforcementMethod::FullControl) {
       U_minus_ = 0.0;
-      U_       = 0.0;
-      U_plus_  = 0.0;
+      U_ = 0.0;
+      U_plus_ = 0.0;
       for (const auto& bc : bcs_.essentials()) {
         bc.setDofs(U_minus_, t - epsilon);
         bc.setDofs(U_, t);
@@ -92,7 +92,7 @@ void SecondOrderODE::Step(mfem::Vector& x, mfem::Vector& dxdt, double& time, dou
 
       auto constrained_dofs = bcs_.allEssentialTrueDofs();
       for (int i = 0; i < constrained_dofs.Size(); i++) {
-        x[i]    = U_[i];
+        x[i] = U_[i];
         dxdt[i] = (U_plus_[i] - U_minus_[i]) / (2.0 * epsilon);
       }
     }
@@ -110,7 +110,7 @@ void SecondOrderODE::Step(mfem::Vector& x, mfem::Vector& dxdt, double& time, dou
     first_order_system_ode_solver_->Step(bx, time, dt);
 
     // Copy back
-    x    = bx.GetBlock(0);
+    x = bx.GetBlock(0);
     dxdt = bx.GetBlock(1);
   } else {
     SLIC_ERROR_ROOT("Neither second_order_ode_solver_ nor first_order_system_ode_solver_ specified");
@@ -154,10 +154,10 @@ void SecondOrderODE::Solve(const double time, const double c0, const double c1, 
 {
   // assign these values to variables with greater scope,
   // so that the residual operator can see them
-  state_.time  = time;
-  state_.c0    = c0;
-  state_.c1    = c1;
-  state_.u     = u;
+  state_.time = time;
+  state_.c0 = c0;
+  state_.c1 = c1;
+  state_.u = u;
   state_.du_dt = du_dt;
 
   // evaluate the constraint functions at a 3-point
@@ -165,8 +165,8 @@ void SecondOrderODE::Solve(const double time, const double c0, const double c1, 
   // in order to compute finite-difference approximations
   // to the time derivatives that appear in the residual
   U_minus_ = 0.0;
-  U_       = 0.0;
-  U_plus_  = 0.0;
+  U_ = 0.0;
+  U_plus_ = 0.0;
   for (const auto& bc : bcs_.essentials()) {
     bc.setDofs(U_minus_, time - epsilon);
     bc.setDofs(U_, time);
@@ -181,7 +181,7 @@ void SecondOrderODE::Solve(const double time, const double c0, const double c1, 
       // d2U_dt2_ = (U_ - u) / c0;
       subtract(1.0 / c0, U_, u, d2U_dt2_);
       dU_dt_ = du_dt;
-      U_     = u;
+      U_ = u;
     }
 
     if (enforcement_method_ == DirichletEnforcementMethod::RateControl) {
@@ -192,7 +192,7 @@ void SecondOrderODE::Solve(const double time, const double c0, const double c1, 
       d2U_dt2_ /= c1;
 
       dU_dt_ = du_dt;
-      U_     = u;
+      U_ = u;
     }
 
     if (enforcement_method_ == DirichletEnforcementMethod::FullControl) {
@@ -304,16 +304,16 @@ void FirstOrderODE::Solve(const double time, const double dt, const mfem::Vector
   // assign these values to variables with greater scope,
   // so that the residual operator can see them
   state_.time = time;
-  state_.dt   = dt;
-  state_.u    = u;
+  state_.dt = dt;
+  state_.u = u;
 
   // evaluate the constraint functions at a 3-point
   // stencil of times centered on the time of interest
   // in order to compute finite-difference approximations
   // to the time derivatives that appear in the residual
   U_minus_ = 0.0;
-  U_       = 0.0;
-  U_plus_  = 0.0;
+  U_ = 0.0;
+  U_plus_ = 0.0;
   for (const auto& bc : bcs_.essentials()) {
     bc.setDofs(U_minus_, time - epsilon);
     bc.setDofs(U_, time);
@@ -360,7 +360,7 @@ void FirstOrderODE::Solve(const double time, const double dt, const mfem::Vector
   solver_.solve(du_dt);
   SLIC_WARNING_ROOT_IF(!solver_.nonlinearSolver().GetConverged(), "Newton Solver did not converge.");
 
-  state_.du_dt       = du_dt;
+  state_.du_dt = du_dt;
   state_.previous_dt = dt;
 }
 

@@ -1,0 +1,106 @@
+name: CI Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+    - develop
+
+# Cancel previous jobs if an update has been made to the pull request
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' }}
+
+env:
+  CLANG_DOCKER_IMAGE: seracllnl/tpls:clang-14_08-15-24_21h-49m
+  CUDA_DOCKER_IMAGE: seracllnl/tpls:cuda-12_08-15-24_21h-49m
+  GCC_DOCKER_IMAGE: seracllnl/tpls:gcc-13_08-15-24_21h-49m
+
+jobs:
+  # Hacky solution to reference env variables outside of `run` steps https://stackoverflow.com/a/74217028
+  set_image_vars:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Do Nothing
+      run: echo
+    outputs:
+      clang_docker_image: ${{ env.CLANG_DOCKER_IMAGE }}
+      cuda_docker_image: ${{ env.CUDA_DOCKER_IMAGE }}
+      gcc_docker_image: ${{ env.GCC_DOCKER_IMAGE }}
+  build_and_test:
+    runs-on: ubuntu-22.04
+    needs:
+    - set_image_vars
+    strategy:
+      matrix:
+        build_type: [ Debug, Release ]
+        config:
+        - host_config: clang@14.0.0.cmake
+          compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
+          cmake_opts: "-DBUILD_SHARED_LIBS=ON"
+        - host_config: gcc@12.3.0_cuda.cmake
+          compiler_image: ${{ needs.set_image_vars.outputs.cuda_docker_image }}
+          cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_WARNINGS_AS_ERRORS=OFF"
+          build_src_opts: "--skip-install --skip-tests"
+        - host_config: gcc@13.1.0.cmake
+          compiler_image: ${{ needs.set_image_vars.outputs.gcc_docker_image }}
+          cmake_opts: "-DBUILD_SHARED_LIBS=ON"
+        include:
+        - build_type: Debug
+          config:
+            host_config: clang@14.0.0.cmake
+            compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
+            cmake_opts: "-DSERAC_ENABLE_CODEVELOP=ON"
+            build_src_opts: "--skip-install"
+    container:
+      image: ${{ matrix.config.compiler_image }}
+      volumes:
+      - /home/serac/serac
+    steps:
+      - name: Checkout Serac
+        uses: actions/checkout@v4
+        with: 
+          submodules: recursive
+      - name: Print Matrix Variables
+        run: |
+          echo "build_src_opts ${{ matrix.config.build_src_opts }}"
+          echo "build_type     ${{ matrix.build_type }}"
+          echo "cmake_opts     ${{ matrix.config.cmake_opts }}"
+          echo "compiler_image ${{ matrix.config.compiler_image }}"
+          echo "host_config    ${{ matrix.config.host_config }}"
+      - name: Build and Test ${{ matrix.config.host_config }} ${{ matrix.build_type }}
+        timeout-minutes: 30
+        run: |
+          ./scripts/llnl/build_src.py ${{ matrix.config.build_src_opts }} \
+            --verbose \
+            --host-config ${{ matrix.config.host_config }} \
+            --extra-cmake-options "${{ matrix.config.cmake_opts }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}" \
+            --jobs 4
+      - name: Upload Test Results
+        # CUDA containers do not run tests, because runners don't have GPUs, so skip upload in that case
+        if: ${{ matrix.config.compiler_image != needs.set_image_vars.outputs.cuda_docker_image }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Results ${{ matrix.config.host_config }} ${{ matrix.build_type }} ${{ matrix.config.cmake_opts }}
+          path: "**/Test.xml"
+  check_code:
+    runs-on: ubuntu-22.04
+    needs:
+    - set_image_vars
+    strategy:
+      matrix:
+        check_type: [coverage, docs, style, header]
+    container:
+      image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
+      volumes:
+      - /home/serac/serac
+      env:
+        CHECK_TYPE: ${{ matrix.check_type }}
+        HOST_CONFIG: clang@14.0.0.cmake
+    steps:
+    - name: Checkout Serac
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Check ${{ matrix.check_type }}
+      run: ./scripts/github-actions/linux-check.sh 

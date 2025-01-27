@@ -33,8 +33,10 @@ void functional_test(int parallel_refinement)
       serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), serial_refinement, parallel_refinement);
 
   // Create standard MFEM bilinear and linear forms on H1
-  using space         = serac::H1<p, components>;
+  using space = serac::H1<p, components>;
   auto [fespace, fec] = serac::generateParFiniteElementSpace<space>(mesh.get());
+
+  serac::Domain whole_domain = serac::EntireDomain(*mesh);
 
   serac::Functional<space(space)> residual(fespace.get(), {fespace.get()});
 
@@ -46,11 +48,12 @@ void functional_test(int parallel_refinement)
         auto [u, du_dx] = phi;
         return serac::tuple{u, du_dx};
       },
-      *mesh);
+      whole_domain);
 
   // Set a random state to evaluate the residual
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 1;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   u_global.GetTrueDofs(U);
