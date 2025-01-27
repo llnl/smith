@@ -137,13 +137,13 @@ int main(int argc, char* argv[])
       // Jacobian from reference to the physical/current space (i.e., dx_dxi)
       auto Amat = dXdxi + serac::dot(du_dX, dXdxi); // (I + du/dX) * dX/dxi
 
-      // auto mu = 0.5 * (serac::inner(Tmat, Tmat) / abs(serac::det(Tmat))) - 1.0;
-      // triangular correction = [ 1, -1/sqrt(3); 0, -2/sqrt(3)]
+      // auto mu = 0.5 * (serac:: = [ 1, -1/sqrt(3); 0, -2/sqrt(3)]
       serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
       // serac::mat2 WInvMat = {{{1.0, -1.0/std::sqrt(3.0)}, {0.0, -2.0/std::sqrt(3.0)}}};
       // serac::mat2 WInvMat = {{{0.0, 1.0}, {1.0, 0.0}}};
       // Need to compute dmu/dTmat : dTmat/dx, with mu = mu(Tmat)
-      // Tmat = Amat * WInvMat; WInvMat -> constant
+      // Tmat = Amat * WInvMinner(Tmat, Tmat) / abs(serac::det(Tmat))) - 1.0;
+      // triangular correctionat; WInvMat -> constant
       // dmu/dTmat is mu specific
       // dTmat/dx = dAmat/dx * WInvMat
 

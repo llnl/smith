@@ -77,8 +77,8 @@ struct CuboidLSF3D {
     // dphi[1] = (x[1] - y0)* pow( pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent) + pow(x[2]-z0, exponent), 1.0/exponent-1);
     // dphi[2] = (x[2] - z0)* pow( pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent) + pow(x[2]-z0, exponent), 1.0/exponent-1);
 
-    dphi[0] = (x[0] - x0)* pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
-    dphi[1] = (x[1] - y0)* pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
+    dphi[0] = pow(x[0] - x0, exponent-1) * pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
+    dphi[1] = pow(x[1] - y0, exponent-1) * pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
     // dphi[2] = (x[2] - z0)* pow( pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
     return dphi;
   }
@@ -130,10 +130,8 @@ int main(int argc, char* argv[])
   // Define the spatial dimension of the problem and the type of finite elements used.
   static constexpr int ORDER {1};
   static constexpr int DIM {3};
-  // auto inputFilename = "../../data/meshes/cylOneElemThickness.g";
-  // int numElements = 354;
   auto inputFilename = "../../data/meshes/cylOneElemThicknessTets.g";
-  int numElements = 2485;// 9280;
+  int numElements = 2485;
 
   auto mesh = serac::buildMeshFromFile(inputFilename);
 
@@ -188,7 +186,6 @@ int main(int argc, char* argv[])
       if (serac::det(Tmat) <= 0.0)
       {
         scale = 0.0;
-// std::cout<<".......... warning ........... "<<std::endl;
       }
 
       // static constexpr auto I = serac::DenseIdentity<DIM>();
@@ -209,6 +206,7 @@ int main(int argc, char* argv[])
   auto radius = 0.85;
   auto x0 = 0.0;
   auto y0 = 0.0;
+  auto exponent = 2.0;
 
   serac::Domain radial_boundary = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<DIM>(1));
   residual.AddBoundaryIntegral(
@@ -219,30 +217,11 @@ int main(int argc, char* argv[])
       auto [u, dudX] = nodeDisp;
       auto x = X + u;
       // auto z0 = 0.0;
-      auto phi_value = CuboidLSF3D{x0, y0, 1.0*radius, 2};
+      auto phi_value = CuboidLSF3D{x0, y0, radius, exponent};
       auto phiVal = phi_value.SDF(x);
       auto dphi = phi_value.GRAD(x);
 
       return 2.0 * omega * phiVal * dphi;
-      // auto dxdxi = dXdxi + dot(serac::transpose(dudX), dXdxi);
-      // auto dA = norm(cross(dXdxi));
-      // auto da = norm(cross(dxdxi));
-      // auto area_correction = da / dA;
-      // return 2.0 * omega * phiVal * dphi * area_correction;
-
-      // serac::mat3 WInvMat = {{{1.00000, -0.577350, -0.408248}, {0, 1.15470, -0.408248}, {0, 0, 1.22474}}};
-//       serac::mat2 WInvMat = {{{1.00000000000000, -0.577350269189626}, {0, 1.15470053837925}}};
-// std::cout<<"... dXdxi = "<<dXdxi<<std::endl;
-// std::cout<<"... dphi = "<<dphi<<std::endl;
-// std::cout<<"... WInvMat = "<<WInvMat<<std::endl;
-// std::cout<<"... serac::transpose(dXdxi*WInvMat) = "<<serac::transpose(dXdxi*WInvMat)<<std::endl;
-// // std::cout<<"... serac::transpose(dXdxi*WInvMat)*dphi = "<<serac::transpose(dXdxi*WInvMat) * dphi<<std::endl;
-// std::cout<<"... serac::transpose(dXdxi*WInvMat)*dphi = "<<serac::dot(serac::transpose(dXdxi*WInvMat), dphi)<<std::endl;
-// // std::cout<<"... serac::dot(dphi, serac::transpose(WInvMat*dXdxi)) = "<<serac::dot(dphi, serac::transpose(WInvMat*dXdxi))<<std::endl;
-// // std::cout<<"... serac::dot(dphi, serac::transpose(WInvMat*dXdxi)) = "<<serac::dot(serac::transpose(WInvMat*dXdxi), serac::transpose(dphi))<<std::endl;
-// exit(0);
-      // return 2.0 * omega * phiVal * serac::dot(dphi, serac::transpose(WInvMat*dXdxi));
-      // return 2.0 * omega * phiVal * dphi;
     },
     radial_boundary // whole_boundary
   );
@@ -252,46 +231,17 @@ int main(int argc, char* argv[])
   // Get dofs in z direction for all elements (pseudo 2D problem)
   mfem::Array<int> ess_tdof_list, ess_bdr(mesh.bdr_attributes.Max());
   ess_bdr = 0;
-// ess_bdr[0] = 1;
   ess_bdr[1] = 1;
   ess_bdr[2] = 1;
   shape_fes->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
 
-  // mfem::Array<int> ess_tdof_list_2, ess_bdr_2(mesh.bdr_attributes.Max());
-  // ess_bdr_2[0] = 1;
-  // shape_fes->GetEssentialTrueDofs(ess_bdr, ess_tdof_list_2);
-  // int totNumDofs2 = ess_tdof_list_2.Size();
-
-  // mfem::Array<int> constrainedDofs(ess_tdof_list.Size() + ess_tdof_list_2.Size());
-// std::cout<<"....................."<<std::endl;
   mfem::Array<int> constrainedDofs(ess_tdof_list.Size());
   int counter = 0;
   for(auto iDof=DIM-1; iDof<ess_tdof_list.Size(); iDof += DIM){
     constrainedDofs[counter] = ess_tdof_list[iDof];
     counter++;
   }
-constrainedDofs.SetSize(counter);
-// std::cout<<".......... 2 ..........."<<std::endl;
-// std::cout<<".......... totNumDofs = "<<totNumDofs<<std::endl;
-// std::cout<<".......... ess_tdof_list.Size() = "<<ess_tdof_list.Size()<<std::endl;
-// std::cout<<".......... counter = "<<counter<<std::endl;
-// exit(0);
-
-  // for(int iDof=0; iDof<counter; iDof++){
-// std::cout<<".......... 3a ..........."<<std::endl;
-    // constrainedDofs[iDof] = ess_tdof_list[(DIM-1)+iDof*DIM];
-// std::cout<<".......... iDof ..........."<< iDof <<std::endl;
-// std::cout<<".......... (DIM-1)+iDof*DIM ..........."<< (DIM-1)+iDof*DIM <<std::endl;
-  // }
-// std::cout<<"... constrainedDofs.Size() = "<<constrainedDofs.Size()<<std::endl;
-// std::cout<<"... ess_tdof_list.Size() = "<<ess_tdof_list.Size()<<std::endl;
-// std::cout<<"... totNumDofs = "<<totNumDofs<<std::endl;
-// std::cout<<"... counter = "<<counter<<std::endl;
-// exit(0);
-  // for(auto iDof=0; iDof<ess_tdof_list_2.Size(); iDof ++){
-  //   constrainedDofs[counter] = ess_tdof_list_2[iDof];
-  //   counter++;
-  // }
+  constrainedDofs.SetSize(counter);
 
   // wrap residual and provide Jacobian
   serac::mfem_ext::StdFunctionOperator residual_opr(
@@ -310,9 +260,9 @@ constrainedDofs.SetSize(counter);
       dresidualdu       = assemble(dr_du);
       dresidualdu->EliminateBC(constrainedDofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
 
-// double asymmetryError = skewMatrixNorm(dresidualdu) / matrixNorm(dresidualdu);
-// std::cout<<"... asymmetryError = "<<asymmetryError<<std::endl;
-// exit(0);
+      // double asymmetryError = skewMatrixNorm(dresidualdu) / matrixNorm(dresidualdu);
+      // std::cout<<"... asymmetryError = "<<asymmetryError<<std::endl;
+      // exit(0);
       return *dresidualdu;
     }
   );
@@ -343,7 +293,7 @@ constrainedDofs.SetSize(counter);
 
   mfem::ParGridFunction nodeSolGF(shape_fes.get());
   nodeSolGF.SetFromTrueDofs(node_disp_computed);
-// nodeSolGF.Print();
+
   auto pd = mfem::ParaViewDataCollection("sol_mesh_morphing_serac_3D", &pmesh);
   pd.RegisterField("solution", &nodeSolGF);
   pd.SetCycle(1);
