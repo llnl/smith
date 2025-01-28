@@ -20,7 +20,9 @@ variables:
 # Run src build each push
 .src_workflow:
   rules:
-    - if: $SERAC_CI_WORKFLOW_TYPE != "full" && $SERAC_CI_WORKFLOW_TYPE != "benchmarks"
+    - if: $SERAC_CI_WORKFLOW_TYPE != "full" &&
+          $SERAC_CI_WORKFLOW_TYPE != "benchmarks" &&
+          $SERAC_CI_WORKFLOW_TYPE != "comparison"
 
 # Run full build as a nightly scheduled pipeline
 .full_workflow:
@@ -31,6 +33,12 @@ variables:
 .benchmarks_workflow:
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "benchmarks"
+
+# Run benchmarks on your branch and compare them against develop
+.comparison_workflow:
+  rules:
+    - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
+      when: manual
 
 ####
 # Templates
@@ -81,6 +89,23 @@ variables:
       Benchmarks Build ${CI_PROJECT_NAME}"
     - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py
     - echo -e "section_end:$(date +%s):benchmarks_build\r\e[0K"
+  artifacts:
+    expire_in: 2 weeks
+    when: always
+    paths:
+      - _serac_build_and_test_*/output.log*.txt
+      - _serac_build_and_test_*/build-*/output.log*.txt
+      - _serac_build_and_test_*/build-*/*.cali
+
+
+.comparison_script:
+  script:
+    # Builds src, runs benchmarks, and compares benchmarks against develop
+    - echo -e "section_start:$(date +%s):comparison\r\e[0K
+      Benchmark Comparison ${CI_PROJECT_NAME}"
+    - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py --spot-dir califiles
+    - ${ALLOC_COMMAND} python3 scripts/llnl/compare_benchmarks.py --build-directory califiles
+    - echo -e "section_end:$(date +%s):comparison\r\e[0K"
   artifacts:
     expire_in: 2 weeks
     when: always

@@ -36,7 +36,7 @@ def parse_args():
     parser.add_argument("-sd", "--spot-directory",
                       dest="spot_dir",
                       default=get_shared_spot_dir(),
-                      help="Where to put all resulting caliper files to use for SPOT analysis (defaults to a shared location)")
+                      help="Shared caliper files to used for SPOT analysis (defaults to a shared location)")
     parser.add_argument("-ma", "--max-allowance",
                       dest="max_allowance",
                       default=10,
@@ -79,7 +79,7 @@ def main():
 
     # Dictionary of summaries for each benchmark
     # key = benchmark id
-    # val = summary string
+    # val = minimum and maximum difference between current vs baseline benchmark
     min_maxes = dict()
 
     # Setup baseline (shared SPOT) graph frames

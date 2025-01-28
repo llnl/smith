@@ -32,6 +32,9 @@
   extends: [.benchmarks_build_script, .on_toss4, .benchmarks_workflow]
   needs: []
 
+.comparison_build_on_toss4:
+  extends: [.comparison_build_script, .on_toss4, .comparison_workflow]
+  needs: []
 
 ####
 # Build jobs
@@ -113,3 +116,21 @@ toss4-gcc_10_3_1-benchmarks:
     ALLOC_TIME: "120"
     ALLOC_DEADLINE: "180"
   extends: .benchmarks_build_on_toss4
+
+toss4-clang_14_0_6-comparison:
+  variables:
+    COMPILER: "clang@14.0.6"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "120"
+    ALLOC_DEADLINE: "180"
+  extends: .comparison_build_on_toss4
+
+toss4-gcc_10_3_1-comparison:
+  variables:
+    COMPILER: "gcc@10.3.1"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "120"
+    ALLOC_DEADLINE: "180"
+  extends: .comparison_build_on_toss4
