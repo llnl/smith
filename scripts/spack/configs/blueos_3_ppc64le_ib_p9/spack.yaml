@@ -241,7 +241,7 @@ spack:
     hdf5:
       variants: ~shared~mpi
     mfem:
-      require: "@4.7.0.1"
+      require: "@4.7.0.2"
     raja:
       require: "@2024.07.0~shared~examples~exercises"
     tribol:
