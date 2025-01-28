@@ -352,4 +352,3 @@ double computeL2Error(const FiniteElementState& state, mfem::VectorCoefficient& 
 double computeL2Error(const FiniteElementState& state, mfem::Coefficient& exact_solution);
 
 }  // namespace serac
-
