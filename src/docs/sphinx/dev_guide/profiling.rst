@@ -114,10 +114,11 @@ Benchmarking Serac
 
 To run all of Serac's benchmarks in one command, first make sure Serac is configured
 with benchmarking enabled (off by default). Then, run the build target ``run_benchmarks``.
+Make sure benchmarks are enabled and the build type is release.
 
 .. code-block:: bash
 
-  ./config-build.py -hc <host config file> -DENABLE_BENCHMARKS=ON
+  ./config-build.py -hc <host config file> -bt Release -DENABLE_BENCHMARKS=ON
   cd <serac build location>
   make -j
   make run_benchmarks
@@ -164,3 +165,17 @@ on LC, since the baseline benchmarks are generated on LC systems.
 1. Go to the following CZ GitLab page to create a new pipeline https://lc.llnl.gov/gitlab/smith/serac/-/pipelines/new
 2. Choose your branch
 3. Under variables, add "SERAC_CI_WORKFLOW_TYPE" and "comparison" for the key and value, respectively
+
+It's possible to perform this comparison locally. Since baseline benchmarks are generated across different machines and
+compilers, a single build won't compare against all baselines. The benchmarks can be compared using ruby-gcc,
+ruby-clang, and lassen-clang builds.
+
+1. Run benchmarks (see "Benchmarking Serac" above)
+2. ``../scripts/llnl/compare_benchmarks.py --build-directory /path/to/caliper/files``
+
+The script generates Hatchet graph frames by calculating the difference between each associated baseline and local
+benchmark (``gf_diff = gf_current - gf_baseline``). If there is a positive difference, that means your baseline ran
+that many seconds slower.
+
+By default, ``compare_benchmarks.py`` will print a table containing the status, id, difference, baseline, and current
+times. Running with the verbose option will additionally print the "difference" Hatchet graph frame for each benchmark.

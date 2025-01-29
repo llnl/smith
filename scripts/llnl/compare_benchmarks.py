@@ -187,7 +187,7 @@ def main():
     num_failed = 0
     num_passed = 0
     num_benchmarks = len(benchmark_times)
-    print(f"{'Status':<10} {'Benchmark ID':<60} {'Diff (seconds)':<20} {'Baseline (seconds)':<20} {'Current (seconds)':<20}")
+    print(f"{'Status':<10} {'Benchmark ID':<60} {'Current (seconds)':<20} {'Baseline (seconds)':<20} {'Diff (current - baseline)':<20}")
     for id, benchmark_time in benchmark_times.items():
         status_str = ""
         if benchmark_time["diff"] >= max_allowance:
@@ -197,7 +197,7 @@ def main():
             num_passed += 1
             status_str = "✅ Passed"
 
-        print(f"{status_str:<10} {id:<60} {benchmark_time['diff']:<20.2f} {benchmark_time['baseline']:<20.2f} {benchmark_time['current']:<20.2f}")
+        print(f"{status_str:<10} {id:<60} {benchmark_time['current']:<20.2f} {benchmark_time['baseline']:<20.2f} {benchmark_time['diff']:<20.2f} ")
 
     # Print summary
     print(f"\n{num_passed} out of {num_benchmarks} benchmarks passed given a max allowance of {max_allowance} seconds")
