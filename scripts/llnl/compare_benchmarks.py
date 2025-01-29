@@ -30,14 +30,14 @@ import spotdb
 def parse_args():
     "Parses args from command line"
     parser = ArgumentParser()
-    parser.add_argument("-bd", "--build-directory",
-                      dest="build_dir",
+    parser.add_argument("-c", "--current-cali-dir",
+                      dest="current_cali_dir",
                       required=True,
-                      help="Path to a Serac build containing caliper files (make sure it's Release and benchmarks are enabled!)")
-    parser.add_argument("-sd", "--spot-directory",
-                      dest="spot_dir",
+                      help="Directory containing caliper files you with to compare against a baseline")
+    parser.add_argument("-b", "--baseline-cali-dir",
+                      dest="baseline_cali_dir",
                       default=get_shared_spot_dir(),
-                      help="Shared caliper files to used for SPOT analysis (defaults to a shared location)")
+                      help="Directory containing caliper files that will be considered the baseline (defaults to a shared location)")
     parser.add_argument("-ma", "--max-allowance",
                       dest="max_allowance",
                       default=10,
@@ -79,8 +79,7 @@ def remove_color_codes(text):
 
 
 def get_clean_gf_tree(gf, metric_column, depth, keep_color=False):
-    """Clean up a graph frame tree and return as string. Keeping the color
-       will also keep the color legend."""
+    """Clean up a graph frame tree and return as string."""
     gf_tree = gf.tree(depth=depth, render_header=False, metric_column=metric_column)
     if not keep_color:
         gf_tree = remove_color_codes(gf_tree)
@@ -91,7 +90,7 @@ def get_clean_gf_tree(gf, metric_column, depth, keep_color=False):
 
 
 def get_gf_tree_sum(gf, metric_column, info_type):
-    """Get the sum of the graph tree depth=1. Info type can be diff, baseline, or current."""
+    """Get the sum of the graph tree depth=1."""
     shallow_tree_str = get_clean_gf_tree(gf, metric_column, 1).splitlines()
     sum = 0 
     for line in shallow_tree_str:
@@ -105,45 +104,43 @@ def main():
     # setup
     args = parse_args()
 
-    build_dir = os.path.abspath(args["build_dir"])
-    spot_dir = os.path.abspath(args["spot_dir"])
+    # args
+    current_cali_dir = os.path.abspath(args["current_cali_dir"])
+    baseline_cali_dir = os.path.abspath(args["baseline_cali_dir"])
     max_allowance = args["max_allowance"]
     verbose = args["verbose"]
     depth = int(args["depth"])
     metric_column = args["metric_column"]
 
-    # Dictionary of summaries for each benchmark
-    benchmark_times = dict()
-
     # Setup baseline (shared SPOT) graph frames
     # Only take caliper files from the previous week
-    baseline_calis = os.listdir(spot_dir)
+    baseline_calis = os.listdir(baseline_cali_dir)
     baseline_calis.sort(reverse=True)
     last_weekly_benchmark_date = baseline_calis[0].split('-')[0]
     delete_index = 0
     for i in range(len(baseline_calis)):
         if last_weekly_benchmark_date in baseline_calis[i]:
-            baseline_calis[i] = os.path.join(spot_dir, baseline_calis[i])
+            baseline_calis[i] = os.path.join(baseline_cali_dir, baseline_calis[i])
         else:
             delete_index = i
             break
     del baseline_calis[delete_index:]
-    db = spotdb.connect(spot_dir)
+    db = spotdb.connect(baseline_cali_dir)
     gfs_baseline = hatchet.GraphFrame.from_spotdb(db, baseline_calis)
 
     # Setup current (local build dir) graph frames
     current_calis = list()
-    for file in os.listdir(build_dir):
-        if ".cali" in file:
-            current_calis.append(os.path.join(build_dir, file))
-    db = spotdb.connect(build_dir)
+    for file in os.listdir(current_cali_dir):
+        if file.endswith(".cali"):
+            current_calis.append(os.path.join(current_cali_dir, file))
+    db = spotdb.connect(current_cali_dir)
     gfs_current = hatchet.GraphFrame.from_spotdb(db, current_calis)
 
     # Only keep graph frames that match the current cluster and compiler
     gfs_baseline = [gf for gf in gfs_baseline if get_machine_name() == str(gf.metadata.get("cluster"))] 
     gfs_current = [gf for gf in gfs_current if get_machine_name() == str(gf.metadata.get("cluster"))] 
 
-    # Filter by compiler for baseline as well, based on the local build
+    # Filter baseline by compiler, based on the local build
     compiler_current = str(gfs_current[0].metadata.get("serac_compiler", 1))
     gfs_baseline = [gf for gf in gfs_baseline if compiler_current == str(gf.metadata.get("serac_compiler"))] 
 
@@ -153,12 +150,15 @@ def main():
         id = get_benchmark_id(gf)
         gfs_current_dict[id] = gf
 
+    # Dictionary of total times for each benchmark (diff, current, and baseline)
+    benchmark_times = dict()
+
     # Generate graph frames from the difference between associating current and baseline benchmarks
     for gf_baseline in gfs_baseline:
         id = get_benchmark_id(gf_baseline)
         gf_current = gfs_current_dict.get(id)
         if gf_current == None:
-            print("Warning: Failed to find benchmark in build dir with the following id {0}".format(id))
+            print(f"Warning: Failed to find associated benchmark {id} in specified location: {current_cali_dir}")
             continue
 
         gf_diff = gf_current - gf_baseline
@@ -170,7 +170,7 @@ def main():
             print("=" * 80)
             print(get_clean_gf_tree(gf_diff, metric_column, depth, keep_color=True))
 
-        # Store time info between baseline and current main (or total of depth=1)
+        # Store total time info for each benchmark
         benchmark_times[id] = {
             "diff": get_gf_tree_sum(gf_diff, metric_column, "diff"),
             "current": get_gf_tree_sum(gf_current, metric_column, "current"),
@@ -183,7 +183,7 @@ def main():
         print(gfs_baseline[0].show_metric_columns())
         print()
 
-    # Print whether an individual benchmark passed or failed
+    # Print time table and if benchmark passed or failed
     num_failed = 0
     num_passed = 0
     num_benchmarks = len(benchmark_times)
