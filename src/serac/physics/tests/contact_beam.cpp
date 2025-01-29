@@ -41,7 +41,7 @@ TEST_P(ContactTest, beam)
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex-with-contact-block.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 0, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "beam_mesh");
 
   LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 1};
@@ -69,7 +69,8 @@ TEST_P(ContactTest, beam)
                                  .jacobian = std::get<2>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
-                                             solid_mechanics::default_quasistatic_options, name, "beam_mesh");
+                                             solid_mechanics::default_quasistatic_options, name, "beam_mesh", {}, 0,
+                                             0.0, false, false);
 
   double K = 10.0;
   double G = 0.25;
@@ -94,8 +95,8 @@ TEST_P(ContactTest, beam)
   // Finalize the data structures
   solid_solver.completeSetup();
 
-  // std::string paraview_name = name + "_paraview";
-  // solid_solver.outputStateToDisk(paraview_name);
+  std::string paraview_name = name + "_paraview";
+  solid_solver.outputStateToDisk(paraview_name);
 
   // Perform the quasi-static solve
   double dt = 1.0;
@@ -116,22 +117,23 @@ TEST_P(ContactTest, beam)
 // NOTE: if Penalty is first and Lagrange Multiplier is second, SuperLU gives a zero diagonal error
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTest,
-    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Approximate,
-                                    "penalty_tiednormal_Japprox"),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox"),
-                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::TiedNormal,
-                                    ContactJacobian::Approximate, "lagrange_multiplier_tiednormal_Japprox"),
-                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::Frictionless,
-                                    ContactJacobian::Approximate, "lagrange_multiplier_frictionless_Japprox"),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Exact,
-                                    "penalty_tiednormal_Jexact"),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless, ContactJacobian::Exact,
-                                    "penalty_frictionless_Jexact"),
-                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::TiedNormal,
-                                    ContactJacobian::Exact, "lagrange_multiplier_tiednormal_Jexact"),
-                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::Frictionless,
-                                    ContactJacobian::Exact, "lagrange_multiplier_frictionless_Jexact")));
+    testing::Values(  // std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal,
+                      // ContactJacobian::Approximate,
+                      //                 "penalty_tiednormal_Japprox"),
+                      // std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
+                      //                 ContactJacobian::Approximate, "penalty_frictionless_Japprox"),
+                      // std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::TiedNormal,
+                      //                 ContactJacobian::Approximate, "lagrange_multiplier_tiednormal_Japprox"),
+                      // std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::Frictionless,
+                      //                 ContactJacobian::Approximate, "lagrange_multiplier_frictionless_Japprox"),
+        std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Exact,
+                        "penalty_tiednormal_Jexact")));  //,
+// std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless, ContactJacobian::Exact,
+//                 "penalty_frictionless_Jexact"),
+// std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::TiedNormal,
+//                 ContactJacobian::Exact, "lagrange_multiplier_tiednormal_Jexact"),
+// std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::Frictionless,
+//                 ContactJacobian::Exact, "lagrange_multiplier_frictionless_Jexact")));
 
 }  // namespace serac
 

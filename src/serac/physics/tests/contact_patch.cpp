@@ -132,11 +132,12 @@ TEST_P(ContactTest, patch)
 
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTest,
-    testing::Values(  // std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ"),
-                      // std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Approximate,
-                      //                 "lagrange_multiplier_approxJ"),
-        // std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ"),
-        std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Exact, "lagrange_multiplier_exactJ")));
+    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ"),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Approximate,
+                                    "lagrange_multiplier_approxJ"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ"),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Exact,
+                                    "lagrange_multiplier_exactJ")));
 
 }  // namespace serac
 
