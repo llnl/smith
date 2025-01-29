@@ -80,7 +80,7 @@ TEST(LiquidCrystalElastomer, Brighenti)
 
   // Construct a solid mechanics solver
   LinearSolverOptions linear_options = {
-      .linear_solver = LinearSolver::GMRES,
+      .linear_solver = LinearSolver::CG,
       .preconditioner = Preconditioner::HypreAMG,
       .relative_tol = 1.0e-6,
       .absolute_tol = 1.0e-14,

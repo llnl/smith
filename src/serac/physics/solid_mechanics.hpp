@@ -138,10 +138,10 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   SolidMechanics(const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
                  const serac::TimesteppingOptions timestepping_opts, const std::string& physics_name,
                  std::string mesh_tag, std::vector<std::string> parameter_names = {}, int cycle = 0, double time = 0.0,
-                 bool checkpoint_to_disk = false, bool use_warm_start = true)
+                 bool checkpoint_to_disk = false, bool use_warm_start = true, int max_timestep_cutbacks = 5)
       : SolidMechanics(
             std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start)
+            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start, max_timestep_cutbacks)
   {
   }
 
@@ -164,7 +164,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    */
   SolidMechanics(std::unique_ptr<serac::EquationSolver> solver, const serac::TimesteppingOptions timestepping_opts,
                  const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {},
-                 int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
+                 int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true, int max_timestep_cutbacks = 5)
       : BasePhysics(physics_name, mesh_tag, cycle, time, checkpoint_to_disk),
         displacement_(
             StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_tag_)),
@@ -184,7 +184,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
         ode2_(displacement_.space().TrueVSize(),
               {.time = time_, .c0 = c0_, .c1 = c1_, .u = u_, .du_dt = v_, .d2u_dt2 = acceleration_}, *nonlin_solver_,
               bcs_),
-        use_warm_start_(use_warm_start)
+        use_warm_start_(use_warm_start),
+        max_timestep_cutbacks_(max_timestep_cutbacks)
   {
     SERAC_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(mesh_.Dimension() != dim,
@@ -1176,7 +1177,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     }
 
     if (is_quasistatic_) {
-      quasiStaticSolve(dt);
+      quasiStaticSolve(dt, 1.0, 0);
     } else {
       // The current ode interface tracks 2 times, one internally which we have a handle to via time_,
       // and one here via the step interface.
@@ -1500,6 +1501,9 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// @brief A flag denoting whether to compute the warm start for improved robustness
   bool use_warm_start_;
 
+  /// @brief The maximum number of cut-back in the supplied time-step increment before the solver will give up
+  int max_timestep_cutbacks_;
+
   /// @brief Coefficient containing the essential boundary values
   std::shared_ptr<mfem::VectorCoefficient> disp_bdr_coef_;
 
@@ -1518,16 +1522,44 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       }...};
 
   /// @brief Solve the Quasi-static Newton system
-  virtual void quasiStaticSolve(double dt)
+  virtual void quasiStaticSolve(double dt, double step_fraction_of_dt_to_try, int level)
   {
-    // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
-    // throughout.
-    warmStartDisplacement(dt);
-    time_ += dt;
+    if (level > max_timestep_cutbacks_) {
+      if (mpi_rank_ == 0)
+        std::cout << "Too many boundary condition cutbacks, accepting solution even though there may be issues. Try "
+                     "increasing the number of load steps "
+                  << std::endl;
+      return;
+    }
 
-    // this method is essentially equivalent to the 1-liner
-    // u += dot(inv(J), dot(J_elim[:, dofs], (U(t + dt) - u)[dofs]));
-    nonlin_solver_->solve(displacement_);
+    static constexpr bool solver_info_print=false;
+
+    bool solver_success = true;
+    try {
+      // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
+      // throughout.
+      if (level == 0) time_ += dt;
+      warmStartDisplacement(dt, step_fraction_of_dt_to_try);
+      nonlin_solver_->solve(displacement_);
+    } catch (const std::exception& e) {
+      if (mpi_rank_ == 0 && solver_info_print) { mfem::out << "Caught nonlinear solver exception: " << e.what() << std::endl; }
+      displacement_ -= du_;
+      solver_success = false;
+      quasiStaticSolve(dt, 0.5 * step_fraction_of_dt_to_try, level + 1);
+      quasiStaticSolve(dt, 1.0, level + 1);
+    }
+
+    if (solver_success) {
+      if (step_fraction_of_dt_to_try == 1.0) {
+        if (mpi_rank_ == 0 && solver_info_print) {
+          mfem::out << "SolidMechanics solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+        }
+      } else {
+        if (mpi_rank_ == 0 && solver_info_print) {
+          mfem::out << "SolidMechanics substep solve succeeded for time " << time_ << " dt = " << dt << std::endl;
+        }
+      }
+    }
   }
 
   /**
@@ -1625,14 +1657,14 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    nonlinear solvers will ensure positive definiteness at equilibrium. *Once any parameter is changed, it is no longer
    certain to be positive definite, which will cause issues for many types linear solvers.
    */
-  void warmStartDisplacement(double dt)
+  void warmStartDisplacement(double dt, double displacement_scale_factor)
   {
     SERAC_MARK_FUNCTION;
 
     du_ = 0.0;
     for (auto& bc : bcs_.essentials()) {
       // apply the future boundary conditions, but use the most recent Jacobians stiffness.
-      bc.setDofs(du_, time_ + dt);
+      bc.setDofs(du_, time_);
     }
 
     auto& constrained_dofs = bcs_.allEssentialTrueDofs();
@@ -1641,13 +1673,17 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       du_[j] -= displacement_(j);
     }
 
+    if (displacement_scale_factor != 1.0) {
+      du_ *= displacement_scale_factor;
+    }
+
     if (use_warm_start_) {
       // Update the linearized Jacobian matrix
-      auto r = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
+      auto r = (*residual_)(time_, shape_displacement_, displacement_, acceleration_,
                             *parameters_[parameter_indices].state...);
 
       // use the most recently evaluated Jacobian
-      auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
+      auto [_, drdu] = (*residual_)(time_ - dt, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
                                     *parameters_[parameter_indices].previous_state...);
       J_.reset();
       J_ = assemble(drdu);
@@ -1665,11 +1701,23 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       auto& lin_solver = nonlin_solver_->linearSolver();
 
       lin_solver.SetOperator(*J_);
-
       lin_solver.Mult(r, du_);
     }
 
     displacement_ += du_;
+
+    // due to solver inaccuracies, the end of step boundary conditions may not be exact at this point
+    if (displacement_scale_factor == 1.0) {
+      du_ = 0.0;
+      for (auto& bc : bcs_.essentials()) {
+        bc.setDofs(du_, time_);
+      }
+      for (int i = 0; i < constrained_dofs.Size(); i++) {
+        int j = constrained_dofs[i];
+        du_[j] -= displacement_(j);
+      }
+      displacement_ += du_;
+    }
   }
 };
 

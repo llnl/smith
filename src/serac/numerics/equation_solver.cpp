@@ -19,6 +19,20 @@
 
 namespace serac {
 
+/// @brief A simple exception class for recording Newton and TrustRegion failures
+class SolverException : public std::exception {
+public:
+  /// constructor
+  SolverException(const std::string& message) : msg(message) {}
+
+  /// the message returned by the exception
+  const char* what() const noexcept override { return msg.c_str(); }
+
+private:
+  /// message string
+  std::string msg;
+};
+
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
 class NewtonSolver : public mfem::NewtonSolver {
  protected:
@@ -108,8 +122,11 @@ class NewtonSolver : public mfem::NewtonSolver {
       }
 
       if (norm != norm) {
-        mfem::out << "Initial residual for Newton iteration is undefined/nan." << std::endl;
-        mfem::out << "Newton: No convergence!\n";
+        if (print_options.first_and_last) {
+          mfem::out << "Initial residual for Newton iteration is undefined/nan." << std::endl;
+          mfem::out << "Newton: No convergence!\n";
+        }
+        throw SolverException("Initial residual for Newton iteration is undefined/nan.");
         return;
       }
 
@@ -198,6 +215,9 @@ class NewtonSolver : public mfem::NewtonSolver {
     }
     if (!converged && (print_options.summary || print_options.warnings)) {
       mfem::out << "Newton: No convergence!\n";
+    }
+    if (!converged) {
+      throw SolverException("Newton algorithm failed to converge.");
     }
   }
 };
@@ -665,14 +685,17 @@ class TrustRegion : public mfem::NewtonSolver {
           mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
           mfem::out << ", x_incr = " << std::setw(13) << trResults.d.Norml2();
         } else {
-          mfem::out << ", norm goal = " << std::setw(13) << norm_goal << "\n";
+          mfem::out << ", norm goal = " << std::setw(13) << norm_goal;
         }
-        mfem::out << '\n';
+        mfem::out << "\n";
       }
 
       if (norm != norm) {
-        mfem::out << "Initial residual for trust-region iteration is undefined/nan." << std::endl;
-        mfem::out << "Newton: No convergence!\n";
+        if (print_options.first_and_last) {
+          mfem::out << "Initial residual for trust-region iteration is undefined/nan." << std::endl;
+          mfem::out << "Trust-Region: No convergence!\n";
+        }
+        throw SolverException("Initial residual for trust-region iteration is undefined/nan.");
         return;
       }
 
@@ -791,8 +814,8 @@ class TrustRegion : public mfem::NewtonSolver {
           happyAboutTrSize = true;
           if (print_options.iterations) {
             printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
-            trResults.cg_iterations_count =
-                0;  // zero this output so it doesn't look like the linesearch is doing cg iterations
+            // zero this output so it doesn't look like the linesearch is doing cg iterations
+            trResults.cg_iterations_count = 0;
           }
           break;
         }
@@ -862,6 +885,10 @@ class TrustRegion : public mfem::NewtonSolver {
       mfem::out << "num residuals = " << num_residuals << "\n";
       mfem::out << "num subspace solves = " << num_subspace_solves << "\n";
       mfem::out << "num jacobian_assembles = " << num_jacobian_assembles << "\n";
+    }
+
+    if (!converged) {
+      throw SolverException("Trust-region algorithm failed to converge.");
     }
   }
 };
