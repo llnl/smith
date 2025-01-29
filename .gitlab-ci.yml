@@ -103,7 +103,7 @@ variables:
     - echo -e "section_start:$(date +%s):comparison\r\e[0K
       Benchmark Comparison ${CI_PROJECT_NAME}"
     - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py --spot-dir califiles
-    - ${ALLOC_COMMAND} python3 scripts/llnl/compare_benchmarks.py --build-directory califiles --verbose
+    - ${ALLOC_COMMAND} python3 scripts/llnl/compare_benchmarks.py --current-cali-dir califiles --verbose
     - echo -e "section_end:$(date +%s):comparison\r\e[0K"
   artifacts:
     expire_in: 2 weeks
