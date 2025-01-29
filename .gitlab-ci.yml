@@ -21,8 +21,7 @@ variables:
 .src_workflow:
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE != "full" &&
-          $SERAC_CI_WORKFLOW_TYPE != "benchmarks" &&
-          $SERAC_CI_WORKFLOW_TYPE != "comparison"
+          $SERAC_CI_WORKFLOW_TYPE != "benchmarks"
 
 # Run full build as a nightly scheduled pipeline
 .full_workflow:
@@ -37,8 +36,7 @@ variables:
 # Run benchmarks on your branch and compare them against develop
 .comparison_workflow:
   rules:
-    - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
-      when: manual
+    - when: manual
 
 ####
 # Templates
