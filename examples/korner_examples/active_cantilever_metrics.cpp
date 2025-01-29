@@ -191,8 +191,8 @@ std::vector<mfem::Vector> run_beam_contact(const running_parameters & rp){
 
     // Output the sidre-based plot files
     solid_solver.outputStateToDisk(paraview_name);
-    all_data[cnt] = displacement_t;
     solids_fespace->GetRestrictionMatrix()->Mult(solid_solver.displacement().gridFunction(), displacement_t);
+    all_data[cnt] = displacement_t;
     cnt++;
   }
 
@@ -536,6 +536,7 @@ int main(int argc, char* argv[])
     std::string error_file_name = "errors.csv";
     file.open(error_file_name);
   }
+  file << "error,norm\n";
   // Calculating the errors
   for (size_t i = 0; i < standard_contact.size(); i++){
     auto error_vector = standard_contact[i];
@@ -544,11 +545,19 @@ int main(int argc, char* argv[])
     double local_error_2 = norm_squared(error_vector);
     double global_error_2 = 0.0;
 
+    double local_standard_mag = norm_squared(standard_contact[i]);
+    double global_standard_mag = 0.0;
+
     MPI_Allreduce(&local_error_2, &global_error_2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&local_standard_mag, &global_standard_mag, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     if (rank == 0){
       double error = sqrt(global_error_2) / standard_contact[i].Size();
+      double standard_mag =  sqrt(global_standard_mag) / standard_contact[i].Size();
       std::cout << error << std::endl;
-      file << error << "\n";
+      file << error << "," << standard_mag;
+      if (i < standard_contact.size() - 1){
+        file << "\n";
+      }
     }
   }
   file.close();

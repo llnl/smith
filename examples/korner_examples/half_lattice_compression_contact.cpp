@@ -163,14 +163,14 @@ void run_lattice_compression(const running_parameters& rp)
 {
   constexpr int p    = 1;
   constexpr int dim  = 3;
-  std::string   name = "lattice_compression";
+  std::string   name = "half_lattice_compression";
 
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, name + "_data");
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  std::string filename = SERAC_REPO_DIR "/data/meshes/lattice_contact2.g";
+  std::string filename = SERAC_REPO_DIR "/data/meshes/korner_half_lattice.g";
   // std::string filename = "/p/lustre1/korner1/serac_test/meshes/korner_lattice/hexmesh3.g";
 
   auto  mesh  = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 0, 0);
@@ -243,11 +243,9 @@ void run_lattice_compression(const running_parameters& rp)
     u.SetSize(dim);
     u = 0.0;
   });
-  solid_solver.setDisplacementBCs({2}, [](const mfem::Vector&, double t, mfem::Vector& u) {
-    u.SetSize(dim);
-    u    = 0.0;
-    u[1] = -0.5 * t;
-  });
+  solid_solver.setDisplacementBCs({3}, [](const mfem::Vector&, double t) {
+    return  -0.5 * t;
+  }, 1);
 
 
   if (rp.constrain_3D){
@@ -264,14 +262,26 @@ void run_lattice_compression(const running_parameters& rp)
 
   // Add the contact interaction
   #ifdef USING_CONTACT
-  auto          contact_interaction_id = 0;
-  std::set<int> surface_1_boundary_attributes;
-  std::set<int> surface_2_boundary_attributes;
-    surface_1_boundary_attributes = std::set<int>({5});
-    surface_2_boundary_attributes = std::set<int>({4});
+  {
+    auto          contact_interaction_id = 0;
+    std::set<int> surface_1_boundary_attributes;
+    std::set<int> surface_2_boundary_attributes;
+    surface_1_boundary_attributes = std::set<int>({7, 8});
+    surface_2_boundary_attributes = std::set<int>({7, 8});
 
-  solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,
-                                     surface_2_boundary_attributes, contact_options);
+    solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,
+                                       surface_2_boundary_attributes, contact_options);
+  }
+  // {
+  //   auto          contact_interaction_id = 1;
+  //   std::set<int> surface_1_boundary_attributes;
+  //   std::set<int> surface_2_boundary_attributes;
+  //   surface_1_boundary_attributes = std::set<int>({8});
+  //   surface_2_boundary_attributes = std::set<int>({8});
+  //
+  //   solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,
+  //                                      surface_2_boundary_attributes, contact_options);
+  // }
   #endif
   // Finalize the data structures
   solid_solver.completeSetup();
