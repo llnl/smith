@@ -153,3 +153,14 @@ you don't view two of one single category.
 .. note::
   There is a bug in SPOT where if you remove Caliper files from a directory, they still show up on SPOT - if you've
   visualized them previously. The current workaround is by removing the ``llnl.gov`` site cache manually.
+
+Compare a PR's benchmarks vs Develop
+------------------------------------
+
+Utilizing Hatchet, it is possible to view the performance changes of a prospective PR before it merges into
+develop. This process has been conveniently wrapped in a CI pipeline. This Hatchet comparison can only be performed
+on LC, since the baseline benchmarks are generated on LC systems.
+
+1. Go to the following CZ GitLab page to create a new pipeline https://lc.llnl.gov/gitlab/smith/serac/-/pipelines/new
+2. Choose your branch
+3. Under variables, add "SERAC_CI_WORKFLOW_TYPE" and "comparison" for the key and value, respectively
