@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument("-c", "--current-cali-dir",
                       dest="current_cali_dir",
                       required=True,
-                      help="Directory containing caliper files you with to compare against a baseline")
+                      help="Directory containing caliper files to compare against a baseline")
     parser.add_argument("-b", "--baseline-cali-dir",
                       dest="baseline_cali_dir",
                       default=get_shared_spot_dir(),
