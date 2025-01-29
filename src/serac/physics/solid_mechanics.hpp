@@ -141,7 +141,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
                  bool checkpoint_to_disk = false, bool use_warm_start = true, int max_timestep_cutbacks = 5)
       : SolidMechanics(
             std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start, max_timestep_cutbacks)
+            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start,
+            max_timestep_cutbacks)
   {
   }
 
@@ -164,7 +165,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    */
   SolidMechanics(std::unique_ptr<serac::EquationSolver> solver, const serac::TimesteppingOptions timestepping_opts,
                  const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {},
-                 int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true, int max_timestep_cutbacks = 5)
+                 int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true,
+                 int max_timestep_cutbacks = 5)
       : BasePhysics(physics_name, mesh_tag, cycle, time, checkpoint_to_disk),
         displacement_(
             StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_tag_)),
@@ -1532,7 +1534,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       return;
     }
 
-    static constexpr bool solver_info_print=false;
+    static constexpr bool solver_info_print = false;
 
     bool solver_success = true;
     try {
@@ -1542,7 +1544,9 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       warmStartDisplacement(dt, step_fraction_of_dt_to_try);
       nonlin_solver_->solve(displacement_);
     } catch (const std::exception& e) {
-      if (mpi_rank_ == 0 && solver_info_print) { mfem::out << "Caught nonlinear solver exception: " << e.what() << std::endl; }
+      if (mpi_rank_ == 0 && solver_info_print) {
+        mfem::out << "Caught nonlinear solver exception: " << e.what() << std::endl;
+      }
       displacement_ -= du_;
       solver_success = false;
       quasiStaticSolve(dt, 0.5 * step_fraction_of_dt_to_try, level + 1);
