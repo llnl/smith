@@ -131,6 +131,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    * @param checkpoint_to_disk Flag to save the transient states on disk instead of memory for transient adjoint solver
    * @param use_warm_start Flag to turn on or off the displacement warm start predictor which helps robustness for
    * large deformation problems
+   * @param max_timestep_cutbacks The maximum number of times the supplied timestep can be cutback before the solver
+   * gives up
    *
    * @note On parallel file systems (e.g. lustre), significant slowdowns and occasional errors were observed when
    *       writing and reading the needed trainsient states to disk for adjoint solves
@@ -159,6 +161,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    * @param checkpoint_to_disk Flag to save the transient states on disk instead of memory for transient adjoint solves
    * @param use_warm_start A flag to turn on or off the displacement warm start predictor which helps robustness for
    * large deformation problems
+   * @param max_timestep_cutbacks The maximum number of times the supplied timestep can be cutback before the solver
+   * gives up
    *
    * @note On parallel file systems (e.g. lustre), significant slowdowns and occasional errors were observed when
    *       writing and reading the needed trainsient states to disk for adjoint solves
