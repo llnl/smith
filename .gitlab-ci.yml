@@ -98,7 +98,7 @@ variables:
       - _serac_build_and_test_*/build-*/*.cali
 
 
-.comparison_script:
+.comparison_build_script:
   script:
     # Builds src, runs benchmarks, and compares benchmarks against develop
     - echo -e "section_start:$(date +%s):comparison\r\e[0K
