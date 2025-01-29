@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
 #endif
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
-                                                  .relative_tol = 1.0e-8,
+                                                  .relative_tol = 1.0e-5,
                                                   .absolute_tol = 1.0e-5,
                                                   .max_iterations = 200,
                                                   .print_level = 1};
@@ -73,7 +73,8 @@ int main(int argc, char* argv[])
   serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                         .enforcement = serac::ContactEnforcement::Penalty,
                                         .type = serac::ContactType::Frictionless,
-                                        .penalty = 1.0e4};
+                                        .penalty = 1.0e4,
+                                        .jacobian = serac::ContactJacobian::Exact};
 
   serac::SolidMechanicsContact<p, dim> solid_solver(
       nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "sphere_mesh");

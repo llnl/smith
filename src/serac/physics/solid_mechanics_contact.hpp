@@ -124,12 +124,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       mfem::Vector r_blk(r, 0, displacement_.Size());
       r_blk = res;
       contact_.residualFunction(u, r);
-      FiniteElementDual r_dual(displacement_.space());
-      mfem::ParLinearForm r_lf(&displacement_.space(), r.GetData());
-      r_dual.setFromLinearForm(r_lf);
-      std::cout << "[RANK " << mesh_.GetMyRank() << "]" << std::endl;
-      r_dual.Print();
-      std::cout << "[END RANK " << mesh_.GetMyRank() << "]" << std::endl;
+      // FiniteElementDual r_dual(displacement_.space());
+      // mfem::ParLinearForm r_lf(&displacement_.space(), r.GetData());
+      // r_dual.setFromLinearForm(r_lf);
+      // std::cout << "[RANK " << mesh_.GetMyRank() << "]" << std::endl;
+      // r_dual.Print();
+      // std::cout << "[END RANK " << mesh_.GetMyRank() << "]" << std::endl;
       r_blk.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
     };
     // This if-block below breaks up building the Jacobian operator depending if there is Lagrange multiplier
