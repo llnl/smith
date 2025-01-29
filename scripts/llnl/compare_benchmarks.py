@@ -11,6 +11,7 @@
 import sys
 import os
 import platform
+import re
 import datetime as dt
 from argparse import ArgumentParser
 from common_build_functions import *
@@ -46,6 +47,14 @@ def parse_args():
                       action="store_true",
                       default=False,
                       help="Additionally print graph frames")
+    parser.add_argument("-d", "--depth",
+                      dest="depth",
+                      default=10000,
+                      help="Depth of graph frames (if verbose is on). The default shows the full graph.")
+    parser.add_argument("-mc", "--metric-column",
+                      dest="metric_column",
+                      default="Avg time/rank (inc)",
+                      help="Set the metric column to display")
 
     # Parse args
     args, _ = parser.parse_known_args()
@@ -63,9 +72,33 @@ def get_benchmark_id(gf):
     return "{0}_{1}_{2}_{3}".format(cluster, compiler, executable, job_size)
 
 
-def get_max(min_max):
-    """Given a string containing a min and max, return the max value"""
-    return float(min_max.split()[3])
+def remove_color_codes(text):
+    """Remove color codes from a string"""
+    ansi_escape = re.compile(r'\x1b\[[0-9;]*[mG]')
+    return ansi_escape.sub('', text)
+
+
+def get_clean_gf_tree(gf, metric_column, depth, keep_color=False):
+    """Clean up a graph frame tree and return as string. Keeping the color
+       will also keep the color legend."""
+    gf_tree = gf.tree(depth=depth, render_header=False, metric_column=metric_column)
+    if not keep_color:
+        gf_tree = remove_color_codes(gf_tree)
+        gf_tree = gf_tree.split("\nLegend")[0]
+    else:
+        gf_tree = gf_tree.split("\n\x1b[4mLegend\x1b[0m")[0]
+    return gf_tree
+
+
+def get_gf_tree_sum(gf, metric_column, info_type):
+    """Get the sum of the graph tree depth=1. Info type can be diff, baseline, or current."""
+    shallow_tree_str = get_clean_gf_tree(gf, metric_column, 1).splitlines()
+    sum = 0 
+    for line in shallow_tree_str:
+        pos = line.find(" ")
+        if pos != -1:
+           sum += float(line[:pos])
+    return sum
 
 
 def main():
@@ -76,11 +109,11 @@ def main():
     spot_dir = os.path.abspath(args["spot_dir"])
     max_allowance = args["max_allowance"]
     verbose = args["verbose"]
+    depth = int(args["depth"])
+    metric_column = args["metric_column"]
 
     # Dictionary of summaries for each benchmark
-    # key = benchmark id
-    # val = minimum and maximum difference between current vs baseline benchmark
-    min_maxes = dict()
+    benchmark_times = dict()
 
     # Setup baseline (shared SPOT) graph frames
     # Only take caliper files from the previous week
@@ -132,37 +165,42 @@ def main():
 
         # Print difference tree. Higher difference means local build is X seconds slower.
         if verbose:
+            print("=" * 80)
             print("Hatchet diff tree for {0}:".format(id))
-            print(gf_diff.tree())
+            print("=" * 80)
+            print(get_clean_gf_tree(gf_diff, metric_column, depth, keep_color=True))
 
-        shallow_tree_str = gf_diff.tree(depth=1).splitlines()
-        for line in shallow_tree_str:
-            pos = line.find("Min:")
-            if pos != -1:
-                min_max_str = line[pos:].strip(")")
-                min_maxes[id] = min_max_str
-                break
+        # Store time info between baseline and current main (or total of depth=1)
+        benchmark_times[id] = {
+            "diff": get_gf_tree_sum(gf_diff, metric_column, "diff"),
+            "current": get_gf_tree_sum(gf_current, metric_column, "current"),
+            "baseline": get_gf_tree_sum(gf_baseline, metric_column, "baseline"),
+        }
+
+    # Print metric column info
+    if verbose:
+        print(f"Using metric columns of '{metric_column}'. Other metric column options are:")
+        print(gfs_baseline[0].show_metric_columns())
+        print()
 
     # Print whether an individual benchmark passed or failed
     num_failed = 0
     num_passed = 0
-    num_benchmarks = len(min_maxes)
-    print(f"{'Status':<10} {'Benchmark ID':<60} {'Min/Max (seconds)':<20}")
-    for id, min_max in min_maxes.items():
-        max = get_max(min_max)
+    num_benchmarks = len(benchmark_times)
+    print(f"{'Status':<10} {'Benchmark ID':<60} {'Diff (seconds)':<20} {'Baseline (seconds)':<20} {'Current (seconds)':<20}")
+    for id, benchmark_time in benchmark_times.items():
         status_str = ""
-        if max >= max_allowance:
+        if benchmark_time["diff"] >= max_allowance:
             num_failed += 1
             status_str = "❌ Failed"
         else:
             num_passed += 1
             status_str = "✅ Passed"
 
-        print(f"{status_str:<10} {id:<60} {min_max:<20}")
+        print(f"{status_str:<10} {id:<60} {benchmark_time['diff']:<20.2f} {benchmark_time['baseline']:<20.2f} {benchmark_time['current']:<20.2f}")
 
     # Print summary
-    print("\n{0} out of {1} benchmarks passed given a max allowance of {2} seconds".format(
-        num_passed, num_benchmarks, max_allowance))
+    print(f"\n{num_passed} out of {num_benchmarks} benchmarks passed given a max allowance of {max_allowance} seconds")
 
     return num_failed
 
