@@ -75,10 +75,11 @@ blueos-clang_10_0_1-benchmarks:
     ALLOC_TIME: "120"
   extends: [.benchmarks_build_on_blueos, .with_cuda]
 
-blueos-clang_10_0_1-comparison:
-  variables:
-    COMPILER: "clang@10.0.1"
-    HOST_CONFIG: "lassen-blueos_3_ppc64le_ib_p9-${COMPILER}_cuda.cmake"
-    ALLOC_NODES: "1"
-    ALLOC_TIME: "120"
-  extends: [.comparison_build_on_blueos, .with_cuda]
+# https://github.com/LLNL/hatchet/issues/155
+# blueos-clang_10_0_1-comparison:
+#   variables:
+#     COMPILER: "clang@10.0.1"
+#     HOST_CONFIG: "lassen-blueos_3_ppc64le_ib_p9-${COMPILER}_cuda.cmake"
+#     ALLOC_NODES: "1"
+#     ALLOC_TIME: "120"
+#   extends: [.comparison_build_on_blueos, .with_cuda]
