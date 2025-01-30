@@ -52,14 +52,15 @@ int main(int argc, char* argv[])
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-7,
-                                                  .absolute_tol = 1.0e-4,
+                                                  .absolute_tol = 1.0e-8,
                                                   .max_iterations = 200,
                                                   .print_level = 1};
 
   serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                         .enforcement = serac::ContactEnforcement::Penalty,
                                         .type = serac::ContactType::Frictionless,
-                                        .penalty = 1.0e5};
+                                        .penalty = 1.0e4,
+                                        .jacobian = serac::ContactJacobian::Exact};
 
   serac::SolidMechanicsContact<p, dim> solid_solver(
       nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "twist_mesh");

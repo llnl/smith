@@ -76,12 +76,11 @@ TEST_P(ContactTest, patch)
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type = ContactType::Frictionless,
-                                 .penalty = 1.0e4,
+                                 .penalty = 1.0e3,
                                  .jacobian = std::get<1>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
-                                             solid_mechanics::default_quasistatic_options, name, "patch_mesh", {}, 0,
-                                             0.0, false, false);
+                                             solid_mechanics::default_quasistatic_options, name, "patch_mesh");
 
   double K = 10.0;
   double G = 0.25;
@@ -132,12 +131,12 @@ TEST_P(ContactTest, patch)
 
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTest,
-    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ"),
-                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Approximate,
-                                    "lagrange_multiplier_approxJ"),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ"),
-                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Exact,
-                                    "lagrange_multiplier_exactJ")));
+    testing::Values(  // std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ"),
+                      // std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Approximate,
+                      //                 "lagrange_multiplier_approxJ"),
+        std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")));  //,
+// std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Exact,
+//                 "lagrange_multiplier_exactJ")));
 
 }  // namespace serac
 

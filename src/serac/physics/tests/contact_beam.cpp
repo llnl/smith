@@ -94,8 +94,8 @@ TEST_P(ContactTest, beam)
   // Finalize the data structures
   solid_solver.completeSetup();
 
-  // std::string paraview_name = name + "_paraview";
-  // solid_solver.outputStateToDisk(paraview_name);
+  std::string paraview_name = name + "_paraview";
+  solid_solver.outputStateToDisk(paraview_name);
 
   // Perform the quasi-static solve
   double dt = 1.0;
