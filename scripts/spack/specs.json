@@ -15,7 +15,8 @@
 
     "toss_4_x86_64_ib":
     [ "gcc@10.3.1+devtools+profiling",
-      "clang@14.0.6+devtools+profiling" ],
+      "clang@14.0.6+devtools+profiling",
+      "clang@16.0.6+devtools+profiling~openmp" ],
 
     "toss_4_x86_64_ib_cray":
     [ "clang@17.0.0~openmp+profiling+rocm+raja+umpire+strumpack~petsc amdgpu_target=gfx90a ^hdf5 cflags=-Wno-int-conversion"],
