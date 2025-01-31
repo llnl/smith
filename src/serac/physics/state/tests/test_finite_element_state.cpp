@@ -47,7 +47,7 @@ TEST_F(TestFiniteElementState, SetScalarStateFromFieldFunction)
   // Set state with field function.
   // Check that lambda captures work with this.
   double c = 2.0;
-  auto scalar_field = [c](tensor<double, spatial_dim> X) -> double { return c * X[0]; };
+  auto scalar_field = [c](const tensor<double, spatial_dim>& X) -> double { return c * X[0]; };
   scalar_state.setFromFieldFunction(scalar_field);
 
   // Get the nodal positions corresponding to state dofs in a grid function
