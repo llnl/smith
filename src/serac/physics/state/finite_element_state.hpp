@@ -74,7 +74,7 @@ decltype(first_argument_helper(&F::operator())) first_argument_helper(F);
  * Extract type of first argument of a free callable
  */
 template <typename T>
-using first_argument = std::decay_t< decltype(first_argument_helper(std::declval<T>())) >;
+using first_argument = std::decay_t<decltype(first_argument_helper(std::declval<T>()))>;
 
 /**
  * @brief Evaluate a function of a tensor with an mfem Vector object
