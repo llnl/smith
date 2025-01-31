@@ -52,8 +52,8 @@ spack:
       - clang/16.0.6
       operating_system: rhel8
       paths:
-        cc: /usr/WS2/smithdev/llvm/16.0.6/bin/clang
-        cxx: /usr/WS2/smithdev/llvm/16.0.6/bin/clang++
+        cc: /usr/WS2/smithdev/toss_4_x86_64_ib/llvm/16.0.6/bin/clang
+        cxx: /usr/WS2/smithdev/toss_4_x86_64_ib/llvm/16.0.6/bin/clang++
         f77: /usr/tce/packages/gcc/gcc-10.3.1/bin/gfortran
         fc: /usr/tce/packages/gcc/gcc-10.3.1/bin/gfortran
       spec: clang@16.0.6
