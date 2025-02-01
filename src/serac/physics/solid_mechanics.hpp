@@ -1158,9 +1158,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// @overload
   void completeSetup() override
   {
-    // Build the dof array lookup tables
-    displacement_.space().BuildDofToArrays();
-
     if (is_quasistatic_) {
       residual_with_bcs_ = buildQuasistaticOperator();
     } else {
