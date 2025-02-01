@@ -693,9 +693,6 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    */
   void completeSetup() override
   {
-    // Build the dof array lookup tables
-    temperature_.space().BuildDofToArrays();
-
     if (is_quasistatic_) {
       residual_with_bcs_ = mfem_ext::StdFunctionOperator(
           temperature_.space().TrueVSize(),
