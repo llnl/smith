@@ -54,7 +54,9 @@ stages:
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
   dependencies:
-    - .benchmarks_workflow
+    - blueos-clang_10_0_1-benchmarks
+    - toss4-gcc_10_3_1-benchmarks
+    - toss4-clang_14_0_6-benchmarks
 
 ####
 # Templates
