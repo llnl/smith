@@ -120,16 +120,18 @@ void BasePhysics::CreateParaviewDataCollection() const
   }
 
   paraview_dc_ =
-      std::make_unique<mfem::ParaViewDataCollection>(output_name, const_cast<mfem::ParMesh*>(&states_.front()->mesh()));
+      std::make_unique<mfem::ParaViewDataCollection>(output_name, const_cast<mfem::ParMesh*>(&mesh_));
   int max_order_in_fields = 0;
 
   // Find the maximum polynomial order in the physics module's states
   for (const FiniteElementState* state : states_) {
+    std::cout << "registering state " << state->name() << std::endl;
     paraview_dc_->RegisterField(state->name(), &state->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
   }
 
   for (const FiniteElementDual* dual : duals_) {
+    std::cout << "registering dual " << dual->name() << std::endl;
     paraview_dual_grid_functions_[dual->name()] =
         std::make_unique<mfem::ParGridFunction>(const_cast<mfem::ParFiniteElementSpace*>(&dual->space()));
     max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
@@ -137,6 +139,7 @@ void BasePhysics::CreateParaviewDataCollection() const
   }
 
   for (auto& parameter : parameters_) {
+    std::cout << "registering param " << std::endl;
     paraview_dc_->RegisterField(parameter.state->name(), &parameter.state->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, parameter.state->space().GetOrder(0));
   }
@@ -180,22 +183,33 @@ void BasePhysics::UpdateParaviewDataCollection(const std::string& paraview_outpu
 
 void BasePhysics::outputStateToDisk(std::optional<std::string> paraview_output_dir) const
 {
+  printf("basedisk\n");
   // Update the states and duals in the state manager
   for (auto& state : states_) {
+    std::cout << "name = " << state->name() << std::endl;
     StateManager::updateState(*state);
   }
+
+  printf("a\n");
 
   for (auto& dual : duals_) {
     StateManager::updateDual(*dual);
   }
 
+  printf("b\n");
+
   for (auto& parameter : parameters_) {
+    printf("in param loop\n");
     StateManager::updateState(*parameter.state);
     StateManager::updateDual(*parameter.sensitivity);
   }
 
+  printf("c\n");
+
   StateManager::updateState(shape_displacement_);
+  printf("d\n");
   StateManager::updateDual(*shape_displacement_sensitivity_);
+  printf("e\n");
 
   // Save the restart/Sidre file
   StateManager::save(time_, cycle_, mesh_tag_);
