@@ -322,6 +322,9 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         set(tmp_cmake_runtime_output_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
         unset(CMAKE_RUNTIME_OUTPUT_DIRECTORY CACHE)
 
+        # MFEM sets CMAKE_CXX_STANDARD if it is not CACHE variable
+        set(CMAKE_CXX_STANDARD ${CMAKE_CXX_STANDARD} CACHE STRING "")
+
         if(${PROJECT_NAME} STREQUAL "smith")
             add_subdirectory(${PROJECT_SOURCE_DIR}/serac/mfem  ${CMAKE_BINARY_DIR}/mfem)
         else()
