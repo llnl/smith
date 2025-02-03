@@ -12,13 +12,21 @@ variables:
   BUILD_ROOT: ${CI_PROJECT_DIR}
   FULL_BUILD_ROOT: ${CI_BUILDS_DIR}/serac/${CI_JOB_NAME}
   ALLOC_BANK: eng
+  SPOT_DIR: ${BUILD_ROOT}/califiles
 
 # Whether and how to update uberenv
 .run_update_uberenv: &run_update_uberenv |
   [[ -n "${UPDATE_UBERENV}" ]] && ./scripts/gitlab/update-uberenv.sh "${UPDATE_UBERENV}"
 
+stages:
+  - src
+  - full
+  - benchmarks
+  - comparison
+
 # Run src build each push
 .src_workflow:
+  stage: src
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE != "full" &&
           $SERAC_CI_WORKFLOW_TYPE != "benchmarks" &&
@@ -26,27 +34,25 @@ variables:
 
 # Run full build as a nightly scheduled pipeline
 .full_workflow:
+  stage: full
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "full"
 
 # Run benchmarks build as a weekly scheduled pipeline
 # or, run benchmarks and save them in tmp location for comparison
 .benchmarks_workflow:
+  stage: benchmarks
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "benchmarks"
       variables:
         SPOT_DIR: /usr/workspace/smithdev/califiles/serac
     - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
-      variables:
-        SPOT_DIR: $FULL_BUILD_ROOT/califiles
 
 # Compare caliper files (generated from .benchmarks_workflow) against develop
 .comparison_workflow:
+  stage: comparison
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
-  needs: ["toss4-gcc_10_3_1-benchmarks",
-          "toss4-clang_14_0_6-benchmarks",
-          "blueos-clang_10_0_1-benchmarks"]
 
 ####
 # Templates
