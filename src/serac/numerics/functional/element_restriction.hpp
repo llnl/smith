@@ -7,6 +7,7 @@
 #include "geometry.hpp"
 #include "domain.hpp"
 
+#include "serac/infrastructure/memory.hpp"
 #include "serac/numerics/functional/typedefs.hpp"
 
 inline bool isH1(const mfem::FiniteElementSpace& fes)
@@ -197,7 +198,7 @@ struct ElementRestriction {
   uint64_t nodes_per_elem;
 
   /// a 2D array (num_elements-by-nodes_per_elem) holding the dof info extracted from the finite element space
-  axom::Array<DoF, 2, axom::MemorySpace::Host> dof_info;
+  axom::Array<DoF, 2, serac::detail::host_memory_space> dof_info;
 
   /// whether the underlying dofs are arranged "byNodes" or "byVDim"
   mfem::Ordering::Type ordering;
@@ -242,7 +243,8 @@ struct BlockElementRestriction {
  * @param fes the finite element space containing the dof information
  * @param geom the kind of element geometry
  */
-axom::Array<DoF, 2, axom::MemorySpace::Host> GetElementDofs(const serac::fes_t* fes, mfem::Geometry::Type geom);
+axom::Array<DoF, 2, serac::detail::host_memory_space> GetElementDofs(const serac::fes_t* fes,
+                                                                     mfem::Geometry::Type geom);
 
 /**
  * @brief Get the list of dofs for each face element (of the specified geometry) from the fes_t
@@ -251,9 +253,10 @@ axom::Array<DoF, 2, axom::MemorySpace::Host> GetElementDofs(const serac::fes_t* 
  * @param geom the kind of element geometry
  * @param type whether the face is of interior or boundary type
  */
-axom::Array<DoF, 2, axom::MemorySpace::Host> GetFaceDofs(const serac::fes_t* fes, mfem::Geometry::Type face_geom,
-                                                         FaceType type);
+axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::fes_t* fes,
+                                                                  mfem::Geometry::Type face_geom, FaceType type);
 
 /// @overload
-axom::Array<DoF, 2, axom::MemorySpace::Host> GetFaceDofs(const serac::fes_t* fes, mfem::Geometry::Type face_geom,
-                                                         const std::vector<int>& mfem_face_ids);
+axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::fes_t* fes,
+                                                                  mfem::Geometry::Type face_geom,
+                                                                  const std::vector<int>& mfem_face_ids);

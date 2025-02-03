@@ -40,7 +40,8 @@ void hcurl_test_2D()
   mfem::ParFiniteElementSpace fespace(mesh.get(), &fec);
 
   mfem::Vector U(fespace.TrueVSize());
-  U.Randomize();
+  int seed = 7;
+  U.Randomize(seed);
 
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space)> residual(&fespace, {&fespace});
@@ -77,7 +78,8 @@ void hcurl_test_3D()
   mfem::ParFiniteElementSpace fespace(mesh.get(), &fec);
 
   mfem::Vector U(fespace.TrueVSize());
-  U.Randomize();
+  int seed = 8;
+  U.Randomize(seed);
 
   // Define the types for the test and trial spaces using the function arguments
   using test_space = Hcurl<p>;

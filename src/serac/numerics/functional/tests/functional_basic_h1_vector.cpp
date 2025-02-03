@@ -97,7 +97,8 @@ void weird_mixed_test(std::unique_ptr<mfem::ParMesh>& mesh)
   mfem::Vector U(trial_fes->TrueVSize());
 
   Functional<test_space(trial_space), exec_space> residual(test_fes.get(), {trial_fes.get()});
-  U.Randomize();
+  int seed = 5;
+  U.Randomize(seed);
 
   // note: this is not really an elasticity problem, it's testing source and flux
   // terms that have the appropriate shapes to ensure that all the differentiation
@@ -122,7 +123,8 @@ void elasticity_test(std::unique_ptr<mfem::ParMesh>& mesh)
   auto [test_fes, test_col] = generateParFiniteElementSpace<test_space>(mesh.get());
 
   mfem::Vector U(trial_fes->TrueVSize());
-  U.Randomize();
+  int seed = 6;
+  U.Randomize(seed);
 
   Functional<test_space(trial_space), exec_space> residual(test_fes.get(), {trial_fes.get()});
 

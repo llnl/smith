@@ -63,7 +63,8 @@ void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim
 
   // Set a random state to evaluate the residual
   mfem::Vector U(fespace->TrueVSize());
-  U.Randomize();
+  int seed = 3;
+  U.Randomize(seed);
 
   // Define the types for the test and trial spaces using the function arguments
   using test_space = decltype(test);
@@ -117,7 +118,8 @@ void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dim
 
   // Set a random state to evaluate the residual
   mfem::Vector U(fespace->TrueVSize());
-  U.Randomize();
+  int seed = 4;
+  U.Randomize(seed);
 
   // Construct the new functional object using the known test and trial spaces
   Functional<test_space(trial_space)> residual(fespace.get(), {fespace.get()});

@@ -39,7 +39,8 @@ void L2_test(std::string meshfile)
   mfem::ParFiniteElementSpace fespace(mesh.get(), &fec, dim, serac::ordering);
 
   mfem::Vector U(fespace.TrueVSize());
-  U.Randomize();
+  int seed = 1;
+  U.Randomize(seed);
 
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space)> residual(&fespace, {&fespace});
@@ -96,8 +97,8 @@ void L2_qoi_test(std::string meshfile)
   auto fec = mfem::L2_FECollection(p, dim, mfem::BasisType::GaussLobatto);
   mfem::ParFiniteElementSpace fespace(mesh.get(), &fec, dim, serac::ordering);
 
-  int seed = 0;
   mfem::HypreParVector U = *fespace.NewTrueDofVector();
+  int seed = 2;
   U.Randomize(seed);
 
   // Construct the new functional object using the specified test and trial spaces
@@ -162,10 +163,12 @@ void L2_scalar_valued_test(std::string meshfile)
   mfem::ParFiniteElementSpace fespace_1(mesh.get(), &H1fec, dim, serac::ordering);
 
   mfem::Vector U0(fespace_0.TrueVSize());
-  U0.Randomize();
+  int seed = 3;
+  U0.Randomize(seed);
 
   mfem::Vector U1(fespace_1.TrueVSize());
-  U1.Randomize();
+  seed = 4;
+  U1.Randomize(seed);
 
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space_0, trial_space_1)> residual(&fespace_0, {&fespace_0, &fespace_1});

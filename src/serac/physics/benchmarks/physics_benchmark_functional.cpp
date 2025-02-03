@@ -52,7 +52,8 @@ void functional_test(int parallel_refinement)
 
   // Set a random state to evaluate the residual
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 1;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   u_global.GetTrueDofs(U);
