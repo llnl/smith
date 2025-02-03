@@ -53,6 +53,7 @@ stages:
   stage: comparison
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
+  needs: [".benchmarks_workflow"]
 
 ####
 # Templates
