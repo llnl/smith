@@ -114,7 +114,7 @@ toss4-gcc_10_3_1-benchmarks:
   extends: .benchmarks_build_on_toss4
 
 # This comparison job simply runs Hatchet and compares against benchmarks generated across all configurations
-toss4-gcc_10_3_1-comparison:
+toss4-comparison:
   variables:
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
