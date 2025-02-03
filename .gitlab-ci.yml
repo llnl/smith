@@ -17,12 +17,6 @@ variables:
 .run_update_uberenv: &run_update_uberenv |
   [[ -n "${UPDATE_UBERENV}" ]] && ./scripts/gitlab/update-uberenv.sh "${UPDATE_UBERENV}"
 
-stages:
-  - .src_workflow
-  - .full_workflow
-  - .benchmarks_workflow
-  - .comparison_workflow
-
 # Run src build each push
 .src_workflow:
   rules:
