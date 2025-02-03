@@ -53,6 +53,10 @@ stages:
   stage: comparison
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
+  dependencies:
+    - blueos-clang_10_0_1-benchmarks
+    - toss4-gcc_10_3_1-benchmarks
+    - toss4-clang_14_0_6-benchmarks
 
 ####
 # Templates
@@ -118,10 +122,6 @@ stages:
     - find . -name "*.cali" -exec mv {} ${SPOT_DIR} \;
     - ${ALLOC_COMMAND} python3 scripts/llnl/compare_benchmarks.py --current-cali-dir ${SPOT_DIR} --verbose
     - echo -e "section_end:$(date +%s):comparison\r\e[0K"
-  dependencies:
-    - blueos-clang_10_0_1-benchmarks
-    - toss4-gcc_10_3_1-benchmarks
-    - toss4-clang_14_0_6-benchmarks
 
 # This is where jobs are included for each system
 include:
