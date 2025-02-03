@@ -44,6 +44,9 @@ variables:
 .comparison_workflow:
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
+  needs: ["toss4-gcc_10_3_1-benchmarks",
+          "toss4-clang_14_0_6-benchmarks",
+          "blueos-clang_10_0_1-benchmarks"]
 
 ####
 # Templates

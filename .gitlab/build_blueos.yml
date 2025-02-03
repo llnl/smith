@@ -41,10 +41,6 @@
   extends: [.benchmarks_build_script, .on_blueos, .benchmarks_workflow]
   needs: []
 
-.comparison_build_on_blueos:
-  extends: [.comparison_build_script, .on_blueos, .comparison_workflow]
-  needs: []
-
 ####
 # Build jobs
 blueos-clang_10_0_1-src:
