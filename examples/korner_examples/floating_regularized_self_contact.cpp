@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
   linear_options.max_iterations = 2000;
 #endif
 
-double penalty = 1.0e1;
+double penalty = 1.0e3;
 auto contact_type = serac::ContactEnforcement::Penalty;
 
 serac::initialize(argc, argv);
