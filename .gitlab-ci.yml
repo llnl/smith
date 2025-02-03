@@ -17,6 +17,12 @@ variables:
 .run_update_uberenv: &run_update_uberenv |
   [[ -n "${UPDATE_UBERENV}" ]] && ./scripts/gitlab/update-uberenv.sh "${UPDATE_UBERENV}"
 
+stages:
+  - .src_workflow
+  - .full_workflow
+  - .benchmarks_workflow
+  - .comparison_workflow
+
 # Run src build each push
 .src_workflow:
   rules:
@@ -30,11 +36,17 @@ variables:
     - if: $SERAC_CI_WORKFLOW_TYPE == "full"
 
 # Run benchmarks build as a weekly scheduled pipeline
+# or, run benchmarks and save them in tmp location for comparison
 .benchmarks_workflow:
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "benchmarks"
+      variables:
+        SPOT_DIR: /usr/workspace/smithdev/califiles/serac
+    - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
+      variables:
+        SPOT_DIR: $FULL_BUILD_ROOT/califiles
 
-# Run benchmarks on your branch and compare them against develop
+# Compare caliper files (generated from .benchmarks_workflow) against develop
 .comparison_workflow:
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
@@ -80,13 +92,13 @@ variables:
     reports:
       junit: ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_serac_build_and_test_*/build-*/junit.xml
 
-
 .benchmarks_build_script:
   script:
     # Builds src, runs benchmarks, and stores Caliper files in shared location
     - echo -e "section_start:$(date +%s):benchmarks_build\r\e[0K
       Benchmarks Build ${CI_PROJECT_NAME}"
-    - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py
+    - echo "Spot directory ${SPOT_DIR}"
+    - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py --spot-dir ${SPOT_DIR}
     - echo -e "section_end:$(date +%s):benchmarks_build\r\e[0K"
   artifacts:
     expire_in: 2 weeks
@@ -96,22 +108,12 @@ variables:
       - _serac_build_and_test_*/build-*/output.log*.txt
       - _serac_build_and_test_*/build-*/*.cali
 
-
 .comparison_build_script:
   script:
-    # Builds src, runs benchmarks, and compares benchmarks against develop
     - echo -e "section_start:$(date +%s):comparison\r\e[0K
       Benchmark Comparison ${CI_PROJECT_NAME}"
-    - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py --spot-dir califiles
-    - ${ALLOC_COMMAND} python3 scripts/llnl/compare_benchmarks.py --current-cali-dir califiles --verbose
+    - ${ALLOC_COMMAND} python3 scripts/llnl/compare_benchmarks.py --current-cali-dir ${SPOT_DIR} --verbose
     - echo -e "section_end:$(date +%s):comparison\r\e[0K"
-  artifacts:
-    expire_in: 2 weeks
-    when: always
-    paths:
-      - _serac_build_and_test_*/output.log*.txt
-      - _serac_build_and_test_*/build-*/output.log*.txt
-      - _serac_build_and_test_*/build-*/*.cali
 
 # This is where jobs are included for each system
 include:
