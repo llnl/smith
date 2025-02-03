@@ -1,6 +1,7 @@
 
 #include <set>
 #include <string>
+#include <cfenv>
 
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "axom/inlet.hpp"
@@ -24,13 +25,14 @@ std::function<std::string(const std::string&)> petscPCTypeValidator = [](const s
 
 int main(int argc, char* argv[])
 {
+    feenableexcept(FE_INVALID | FE_DIVBYZERO);
   constexpr int dim = 3;
   constexpr int p = 1;
 
   // Mesh Options
   int serial_refinement = 0;
   int parallel_refinement = 0;
-//   double dt = 0.05;
+  //   double dt = 0.05;
 
   // Solver Options
   NonlinearSolverOptions nonlinear_options = solid_mechanics::default_nonlinear_options;
@@ -53,69 +55,72 @@ int main(int argc, char* argv[])
   linear_options.max_iterations = 2000;
 #endif
 
-double penalty = 1.0e3;
-auto contact_type = serac::ContactEnforcement::Penalty;
+  double penalty = 1.0e3;
+  auto contact_type = serac::ContactEnforcement::Penalty;
 
-serac::initialize(argc, argv);
+  serac::initialize(argc, argv);
 
   nonlinear_options.force_monolithic = linear_options.preconditioner != Preconditioner::Petsc;
 
-    std::string name = "regularized_floating_contact";
-    std::string mesh_tag = "mesh";
-    axom::sidre::DataStore datastore;
-    serac::StateManager::initialize(datastore, name + "_data");
+  std::string name = "regularized_floating_contact";
+  std::string mesh_tag = "mesh";
+  axom::sidre::DataStore datastore;
+  serac::StateManager::initialize(datastore, name + "_data");
 
-    // Create and Refine Mesh
-    // std::string filename = SERAC_REPO_DIR "/data/meshes/twobodies.g";
-    std::string filename = SERAC_REPO_DIR "/data/meshes/block.g";
-    auto mesh = serac::buildMeshFromFile(filename);
-    auto refined_mesh = mesh::refineAndDistribute(std::move(mesh), serial_refinement, parallel_refinement);
-    auto& pmesh = serac::StateManager::setMesh(std::move(refined_mesh), mesh_tag);
-    //MFEM_ABORT("Got here"); 
+  // Create and Refine Mesh
+  // std::string filename = SERAC_REPO_DIR "/data/meshes/twobodies.g";
+  std::string filename = SERAC_REPO_DIR "/data/meshes/block.g";
+  auto mesh = serac::buildMeshFromFile(filename);
+  auto refined_mesh = mesh::refineAndDistribute(std::move(mesh), serial_refinement, parallel_refinement);
+  auto& pmesh = serac::StateManager::setMesh(std::move(refined_mesh), mesh_tag);
+  // MFEM_ABORT("Got here");
 
-    // Surfaces for boundary conditions
-    constexpr int bottom_attr{1};
-//    constexpr int top_attr{3};
+  // Surfaces for boundary conditions
+  constexpr int bottom_attr{1};
+  //    constexpr int top_attr{3};
 
-    auto bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(bottom_attr));
-//    auto top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(top_attr));
+  auto bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(bottom_attr));
+  //    auto top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(top_attr));
 
-    Domain whole_mesh = EntireDomain(pmesh);
+  Domain whole_mesh = EntireDomain(pmesh);
 
-    std::vector<std::string> fieldnames{"disp_old"};
-    FiniteElementState disp_old(StateManager::mesh(mesh_tag), serac::H1<p, dim>{});
-    disp_old = 0.0;
+  std::vector<std::string> fieldnames{"disp_old"};
+  FiniteElementState disp_old(StateManager::mesh(mesh_tag), serac::H1<p, dim>{});
+  disp_old = 0.0;
 
-    using ParamT = serac::Parameters<serac::H1<p,dim>>;
+  using ParamT = serac::Parameters<serac::H1<p, dim>>;
 
-    // Creating Solver
-    std::unique_ptr<SolidMechanics<p, dim, ParamT>> solid_solver;
-    auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim, ParamT>>(nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag, fieldnames);
+  // Creating Solver
+  std::unique_ptr<SolidMechanics<p, dim, ParamT>> solid_solver;
+  auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim, ParamT>>(
+      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag,
+      fieldnames);
 
-    // Add the contact interaction
-    serac::ContactOptions contact_options{.method = 
-    serac::ContactMethod::SingleMortar,
-        .enforcement = contact_type,
-        .type = serac::ContactType::Frictionless,
-        .penalty = penalty
-    };
+  // Add the contact interaction
+  serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
+                                        .enforcement = contact_type,
+                                        .type = serac::ContactType::Frictionless,
+                                        .penalty = penalty};
 
-    auto bodyring1_id = 0;
-    solid_contact_solver->addContactInteraction(bodyring1_id, {1}, {3}, contact_options);
-    auto bodyring2_id = 1;
-    solid_contact_solver->addContactInteraction(bodyring2_id, {2}, {3}, contact_options);
-    // auto ring1ring2_id = 2;
-    //solid_contact_solver->addContactInteraction(ring1ring2_id, {3}, {4}, contact_options);
-    solid_solver = std::move(solid_contact_solver);
+  auto bodyring1_id = 0;
+  solid_contact_solver->addContactInteraction(bodyring1_id, {1}, {3}, contact_options);
+  auto bodyring2_id = 1;
+  solid_contact_solver->addContactInteraction(bodyring2_id, {2}, {3}, contact_options);
+  // auto ring1ring2_id = 2;
+  // solid_contact_solver->addContactInteraction(ring1ring2_id, {3}, {4}, contact_options);
+  solid_solver = std::move(solid_contact_solver);
 
-    solid_solver->setParameter(0, disp_old);
+  solid_solver->setParameter(0, disp_old);
 
   double ground_stiffness = 1.0e-1;
-  solid_solver->addCustomDomainIntegral(DependsOn<0>{},
-    [ground_stiffness](double /* t */, auto /*position*/, [[maybe_unused]] auto displacement, auto /*acceleration*/, [[maybe_unused]] auto displacement_old) {
-      return ground_stiffness * (displacement - displacement_old);
-    }, whole_mesh);
-    
+  solid_solver->addCustomDomainIntegral(
+      DependsOn<0>{},
+      [ground_stiffness](double /* t */, auto /*position*/, [[maybe_unused]] auto displacement, auto /*acceleration*/,
+                         [[maybe_unused]] auto displacement_old) {
+        return ground_stiffness * (displacement - displacement_old);
+      },
+      whole_mesh);
+
   tensor<double, dim> constant_force{};
   constant_force[1] = 1.0e-3;
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
@@ -127,24 +132,23 @@ serac::initialize(argc, argv);
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
   solid_solver->setMaterial(mat, whole_mesh);
 
-// Set up essential boundary conditions
-const double reverse_time = 7.0;
-auto compress = [&](const serac::tensor<double, dim>, double t){
+  // Set up essential boundary conditions
+  const double reverse_time = 7.0;
+  auto compress = [&](const serac::tensor<double, dim>, double t) {
     serac::tensor<double, dim> u{};
     u[0] = u[2] = 0.0;
     double ramp = 0.0;
-    if (t < reverse_time){
-        u[1] = ramp * t;
+    if (t < reverse_time) {
+      u[1] = ramp * t;
     } else {
-        u[1] = ramp * (2.0 * reverse_time - t);
+      u[1] = ramp * (2.0 * reverse_time - t);
     }
     return u;
-};
-solid_solver->setDisplacementBCs(compress, bottom);
+  };
+  solid_solver->setDisplacementBCs(compress, bottom);
 
-// Finalize the data structures
-solid_solver->completeSetup();
-
+  // Finalize the data structures
+  solid_solver->completeSetup();
 
   // Save initial state
   std::string paraview_name = name + "_paraview";
