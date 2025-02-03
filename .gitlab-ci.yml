@@ -105,6 +105,7 @@ stages:
     - echo -e "section_start:$(date +%s):benchmarks_build\r\e[0K
       Benchmarks Build ${CI_PROJECT_NAME}"
     - echo "Spot directory ${SPOT_DIR}"
+    - mkdir ${SPOT_DIR}
     # - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py --spot-dir ${SPOT_DIR}
     - echo "Dummy caliper file" > ${SPOT_DIR}/dummy.cali
     - echo -e "section_end:$(date +%s):benchmarks_build\r\e[0K"
