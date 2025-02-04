@@ -105,10 +105,8 @@ stages:
     # Builds src, runs benchmarks, and stores Caliper files in shared location
     - echo -e "section_start:$(date +%s):benchmarks_build\r\e[0K
       Benchmarks Build ${CI_PROJECT_NAME}"
-    - echo "Spot Directory = ${SPOT_DIR}"
-    - mkdir ${SPOT_DIR}
-    # - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py --spot-dir ${SPOT_DIR}
-    - echo "Dummy caliper file" > ${SPOT_DIR}/dummy.cali
+    - mkdir -v ${SPOT_DIR}
+    - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py --spot-dir ${SPOT_DIR}
     - echo -e "section_end:$(date +%s):benchmarks_build\r\e[0K"
   artifacts:
     expire_in: 2 weeks
@@ -122,8 +120,7 @@ stages:
   script:
     - echo -e "section_start:$(date +%s):comparison\r\e[0K
       Benchmark Comparison ${CI_PROJECT_NAME}"
-    - echo "Spot Directory = ${SPOT_DIR}"
-    - mkdir ${SPOT_DIR}
+    - mkdir -v ${SPOT_DIR}
     - find . -name "*.cali" -exec mv {} ${SPOT_DIR} \;
     - ls ${SPOT_DIR}
     - ${ALLOC_COMMAND} python3 scripts/llnl/compare_benchmarks.py --current-cali-dir ${SPOT_DIR} --verbose
