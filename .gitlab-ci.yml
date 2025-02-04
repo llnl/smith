@@ -105,7 +105,7 @@ stages:
     # Builds src, runs benchmarks, and stores Caliper files in shared location
     - echo -e "section_start:$(date +%s):benchmarks_build\r\e[0K
       Benchmarks Build ${CI_PROJECT_NAME}"
-    - mkdir -v ${SPOT_DIR}
+    - mkdir -vf ${SPOT_DIR}
     - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py --spot-dir ${SPOT_DIR}
     - echo -e "section_end:$(date +%s):benchmarks_build\r\e[0K"
   artifacts:
@@ -118,9 +118,10 @@ stages:
 
 .comparison_build_script:
   script:
+    # Takes Caliper files from previous jobs and performs benchmark analysis
     - echo -e "section_start:$(date +%s):comparison\r\e[0K
-      Benchmark Comparison ${CI_PROJECT_NAME}"
-    - mkdir -v ${SPOT_DIR}
+      Comparison Build ${CI_PROJECT_NAME}"
+    - mkdir -vf ${SPOT_DIR}
     - find . -name "*.cali" -exec mv {} ${SPOT_DIR} \;
     - ls ${SPOT_DIR}
     - ${ALLOC_COMMAND} python3 scripts/llnl/compare_benchmarks.py --current-cali-dir ${SPOT_DIR} --verbose
