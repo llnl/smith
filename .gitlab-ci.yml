@@ -116,7 +116,7 @@ stages:
     paths:
       - _serac_build_and_test_*/output.log*.txt
       - _serac_build_and_test_*/build-*/output.log*.txt
-      - ${SPOT_DIR}/califiles/*.cali
+      - ${SPOT_DIR}/*.cali
 
 .comparison_build_script:
   script:
