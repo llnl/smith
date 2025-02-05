@@ -125,13 +125,11 @@ void BasePhysics::CreateParaviewDataCollection() const
 
   // Find the maximum polynomial order in the physics module's states
   for (const FiniteElementState* state : states_) {
-    std::cout << "registering state " << state->name() << std::endl;
     paraview_dc_->RegisterField(state->name(), &state->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
   }
 
   for (const FiniteElementDual* dual : duals_) {
-    std::cout << "registering dual " << dual->name() << std::endl;
     paraview_dual_grid_functions_[dual->name()] =
         std::make_unique<mfem::ParGridFunction>(const_cast<mfem::ParFiniteElementSpace*>(&dual->space()));
     max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
@@ -139,7 +137,6 @@ void BasePhysics::CreateParaviewDataCollection() const
   }
 
   for (auto& parameter : parameters_) {
-    std::cout << "registering param " << std::endl;
     paraview_dc_->RegisterField(parameter.state->name(), &parameter.state->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, parameter.state->space().GetOrder(0));
   }
