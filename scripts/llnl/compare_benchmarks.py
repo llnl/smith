@@ -63,6 +63,11 @@ def parse_args():
     return args
 
 
+def get_gf_configuration(gf):
+    """Get configuration string (compiler and cluster) of a given graph frame"""
+    return f"{gf.metadata.get('serac_compiler')} {gf.metadata.get('cluster')}"
+
+
 def get_benchmark_id(gf):
     """Get unique benchmark id from a graph frame"""
     cluster = str(gf.metadata.get("cluster", 1))
@@ -136,13 +141,10 @@ def main():
     db = spotdb.connect(current_cali_dir)
     gfs_current = hatchet.GraphFrame.from_spotdb(db, current_calis)
 
-    # Only keep graph frames that match the current cluster and compiler
-    gfs_baseline = [gf for gf in gfs_baseline if get_machine_name() == str(gf.metadata.get("cluster"))] 
-    gfs_current = [gf for gf in gfs_current if get_machine_name() == str(gf.metadata.get("cluster"))] 
-
-    # Filter baseline by compiler, based on the local build
-    compiler_current = str(gfs_current[0].metadata.get("serac_compiler", 1))
-    gfs_baseline = [gf for gf in gfs_baseline if compiler_current == str(gf.metadata.get("serac_compiler"))] 
+    # Generate dictionary of configurations (cluster and compiler) from current (local) caliper files and
+    # filter baseline based off current's configurations
+    current_configurations = {get_gf_configuration(gf) for gf in gfs_current}
+    gfs_baseline = [gf for gf in gfs_baseline if get_gf_configuration(gf) in current_configurations]
 
     # Create dictionary of current graph frames for fast look-ups
     gfs_current_dict = dict()
@@ -187,7 +189,7 @@ def main():
     num_failed = 0
     num_passed = 0
     num_benchmarks = len(benchmark_times)
-    print(f"{'Status':<10} {'Benchmark ID':<60} {'Current (seconds)':<20} {'Baseline (seconds)':<20} {'Diff (current - baseline)':<20}")
+    print(f"{'Status':<10} {'Benchmark ID':<65} {'Current (seconds)':<20} {'Baseline (seconds)':<20} {'Diff (current - baseline)':<20}")
     for id, benchmark_time in benchmark_times.items():
         status_str = ""
         if benchmark_time["diff"] >= max_allowance:
@@ -197,7 +199,7 @@ def main():
             num_passed += 1
             status_str = "✅ Passed"
 
-        print(f"{status_str:<10} {id:<60} {benchmark_time['current']:<20.2f} {benchmark_time['baseline']:<20.2f} {benchmark_time['diff']:<20.2f} ")
+        print(f"{status_str:<10} {id:<65} {benchmark_time['current']:<20.2f} {benchmark_time['baseline']:<20.2f} {benchmark_time['diff']:<20.2f} ")
 
     # Print summary
     print(f"\n{num_passed} out of {num_benchmarks} benchmarks passed given a max allowance of {max_allowance} seconds")
