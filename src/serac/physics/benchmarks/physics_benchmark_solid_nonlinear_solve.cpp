@@ -64,7 +64,7 @@ std::map<std::string, Prec> precMap = {
 std::map<std::string, NonlinSolve> nonlinSolveMap = {
     {"newton", NonlinSolve::NEWTON},
     {"linesearch", NonlinSolve::LINESEARCH},
-    {"critialpoint", NonlinSolve::CRITICALPOINT},
+    {"criticalpoint", NonlinSolve::CRITICALPOINT},
     {"trustregion", NonlinSolve::TRUSTREGION},
     {"none", NonlinSolve::NONE},
 };

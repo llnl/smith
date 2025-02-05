@@ -274,7 +274,7 @@ class BasePhysics {
    *
    * @return The parameter names
    */
-  std::vector<std::string> parameterNames()
+  virtual std::vector<std::string> parameterNames() const
   {
     std::vector<std::string> parameter_names;
 
