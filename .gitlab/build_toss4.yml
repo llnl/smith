@@ -2,7 +2,7 @@
 # This is the shared configuration of jobs for toss4
 .on_toss4:
   variables:
-    SCHEDULER_PARAMETERS: "--res=ci --exclusive=user --deadline=now+${ALLOC_DEADLINE}minutes -N ${ALLOC_NODES} -t ${ALLOC_TIME} -A ${ALLOC_BANK}"
+    SCHEDULER_PARAMETERS: "--reservation=ci --exclusive=user --deadline=now+${ALLOC_DEADLINE}minutes -N ${ALLOC_NODES} -t ${ALLOC_TIME} -A ${ALLOC_BANK}"
   tags:
     - batch
     - ruby
