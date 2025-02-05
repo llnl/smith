@@ -183,33 +183,22 @@ void BasePhysics::UpdateParaviewDataCollection(const std::string& paraview_outpu
 
 void BasePhysics::outputStateToDisk(std::optional<std::string> paraview_output_dir) const
 {
-  printf("basedisk\n");
   // Update the states and duals in the state manager
   for (auto& state : states_) {
-    std::cout << "name = " << state->name() << std::endl;
     StateManager::updateState(*state);
   }
-
-  printf("a\n");
 
   for (auto& dual : duals_) {
     StateManager::updateDual(*dual);
   }
 
-  printf("b\n");
-
   for (auto& parameter : parameters_) {
-    printf("in param loop\n");
     StateManager::updateState(*parameter.state);
     StateManager::updateDual(*parameter.sensitivity);
   }
 
-  printf("c\n");
-
   StateManager::updateState(shape_displacement_);
-  printf("d\n");
   StateManager::updateDual(*shape_displacement_sensitivity_);
-  printf("e\n");
 
   // Save the restart/Sidre file
   StateManager::save(time_, cycle_, mesh_tag_);
