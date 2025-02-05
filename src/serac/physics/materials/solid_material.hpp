@@ -203,7 +203,7 @@ struct PowerLawHardening {
   double sigma_y;    ///< yield strength
   double n;          ///< hardening index in reciprocal form
   double eps0;       ///< reference value of accumulated plastic strain
-  double eta = 0.0;  ///< viscosity for linear rate sensitivity
+  double eta;        ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
@@ -232,7 +232,7 @@ struct VoceHardening {
   double sigma_y;          ///< yield strength
   double sigma_sat;        ///< saturation value of flow strength
   double strain_constant;  ///< The constant dictating how fast the exponential decays
-  double eta = 0.0;        ///< viscosity for linear rate sensitivity
+  double eta;              ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
