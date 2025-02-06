@@ -174,7 +174,7 @@ ruby-clang, and lassen-clang builds.
 2. ``../scripts/llnl/compare_benchmarks.py --current-cali-dir /path/to/caliper/files``
 
 The script generates Hatchet graph frames by calculating the difference between each associated baseline and local
-benchmark (``gf_diff = gf_current - gf_baseline``). If there is a positive difference, that means your baseline ran
+benchmark (``gf_diff = gf_current - gf_baseline``). If there is a positive difference, that means your benchmarks ran
 that many seconds slower.
 
 By default, ``compare_benchmarks.py`` will print a table containing the status, id, difference, baseline, and current
