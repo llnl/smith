@@ -171,7 +171,7 @@ compilers, a single build won't compare against all baselines. The benchmarks ca
 ruby-clang, and lassen-clang builds.
 
 1. Run benchmarks (see "Benchmarking Serac" above)
-2. ``../scripts/llnl/compare_benchmarks.py --build-directory /path/to/caliper/files``
+2. ``../scripts/llnl/compare_benchmarks.py --current-cali-dir /path/to/caliper/files``
 
 The script generates Hatchet graph frames by calculating the difference between each associated baseline and local
 benchmark (``gf_diff = gf_current - gf_baseline``). If there is a positive difference, that means your baseline ran
