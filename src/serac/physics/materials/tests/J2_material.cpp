@@ -236,7 +236,7 @@ TEST(J2, DerivativeCorrectness)
   using Hardening = solid_mechanics::PowerLawHardening;
   using Material = solid_mechanics::J2<Hardening>;
 
-  Hardening hardening{.sigma_y = 350e6, .n = 3, .eps0 = 0.00175};
+  Hardening hardening{.sigma_y = 350e6, .n = 3, .eps0 = 0.00175, .eta = 0.0};
   Material material{.E = 200e9, .nu = 0.25, .hardening = hardening, .density = 1.0};
 
   // initialize internal state variables
@@ -287,7 +287,7 @@ TEST(J2, FrameIndifference)
   using Hardening = solid_mechanics::VoceHardening;
   using Material = solid_mechanics::J2<Hardening>;
 
-  Hardening hardening{.sigma_y = 350e6, .sigma_sat = 700e6, .strain_constant = 0.01};
+  Hardening hardening{.sigma_y = 350e6, .sigma_sat = 700e6, .strain_constant = 0.01, .eta = 0.0};
   Material material{.E = 200.0e9, .nu = 0.25, .hardening = hardening, .density = 1.0};
 
   // clang-format off
