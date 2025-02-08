@@ -198,7 +198,7 @@ TEST(Solid, MultiMaterialWithState)
   constexpr double Hi = E_right / 3.6;
   constexpr double sigma_y = 0.75 * applied_stress;
 
-  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi, .eta = 0};
+  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi, .eta = 0.0};
   MaterialRight mat_right{
       .E = E_right,    // Young's modulus
       .nu = nu_right,  // Poisson's ratio
