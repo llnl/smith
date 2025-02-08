@@ -21,6 +21,9 @@
 
 namespace serac {
 
+/**
+ * Element-wise logarithm
+ */
 template <typename T, int n>
 tensor<T, n> log(tensor<T, n> v)
 {
@@ -28,6 +31,9 @@ tensor<T, n> log(tensor<T, n> v)
   return make_tensor<n>([&v](int i) { return log(v[i]); });
 }
 
+/**
+ * Arithmetic mean
+ */
 template <int n>
 double mean(tensor<double, n> v)
 {
@@ -36,6 +42,9 @@ double mean(tensor<double, n> v)
   return sum/n;
 }
 
+/**
+ * Find slope for least-square fit of a linear function to data
+ */
 template <int n>
 double best_fit_slope(tensor<double, n> x, tensor<double, n> y)
 {
@@ -49,14 +58,6 @@ double best_fit_slope(tensor<double, n> x, tensor<double, n> y)
   }
   return numer/denom;
 }
-
-template <int n>
-double compute_convergence_rate(tensor<double, n> h, tensor<double, n> e)
-{
-  auto log_h = log(h);
-  auto log_e = log(e);
-  return best_fit_slope(log_h, log_e);
-};
 
 /**
  * @brief a verification problem for the J2 material model, taken from example 2 of
@@ -378,11 +379,12 @@ TEST(J2, FrameIndifference)
 TEST(J2, UniaxialRateDependentMaterial)
 {
   /* 
-  Uniaxial stress with a rate-dependent material (J2 finite deformation)
-  Linear hardening, linear rate dependence.
-  There exists an exact solution. This test verifies that the numerically
-  integrated plasticity solution converges at first order with timestep
-  refinement.
+  Verify that the constitutive model converges to exact solution at first order
+  with timestep refinement.
+
+  Uses the trick that an exact solution for small strain plasticity can be used
+  for the log strain finite deformation model if the strains are interpreted as
+  log strain and the stress is interpreted as the Mandel stress.
   */
 
   using Hardening = solid_mechanics::LinearHardening;
@@ -402,7 +404,7 @@ TEST(J2, UniaxialRateDependentMaterial)
 
   auto strain = [=](double t) {
     double true_strain = strain_rate*t;
-    // convert true strain to nominal strain (that is, to du_dX)
+    // convert true strain to nominal strain (that is, to du_dX[0][0])
     return std::expm1(true_strain);
   };
 
@@ -412,7 +414,7 @@ TEST(J2, UniaxialRateDependentMaterial)
       return 0.0;
     } else {
       double rate_independent_part = (E * epsilon - sigma_y) / (E + Hi);
-      double t_y = sigma_y/(E * strain_rate);
+      double t_y = sigma_y/(E * strain_rate); // time at first yield
       double rate_dependent_part = E*eta*strain_rate/std::pow(E + Hi, 2)*std::expm1((t_y - t)/tau);
       return rate_independent_part + rate_dependent_part;
     }
@@ -444,20 +446,18 @@ TEST(J2, UniaxialRateDependentMaterial)
     return tuple{max_stress_error, max_plastic_strain_error, dt};
   };
 
-  constexpr int max_refinements = 4;
-  tensor<double, max_refinements> stress_errors;
-  tensor<double, max_refinements> dt_sizes;
+  constexpr int refinements = 4;
+  tensor<double, refinements> stress_errors;
+  tensor<double, refinements> dt_sizes;
   int timesteps = 21;
-  for (int i = 0; i < max_refinements; i++) {
+  for (int i = 0; i < refinements; i++) {
     auto [stress_error, plastic_strain_error, dt] = compute_solution_errors(timesteps);
-    // std::cout << "dt = " << dt << " stress error = " << stress_error << std::endl;
     stress_errors[i] = stress_error;
     dt_sizes[i] = dt;
     timesteps *= 2;
   }
 
-  double convergence_rate = compute_convergence_rate(dt_sizes, stress_errors);
-  std::cout << "convergence rate is  " << convergence_rate << std::endl;
+  double convergence_rate = best_fit_slope(log(dt_sizes), log(stress_errors));
   EXPECT_NEAR(convergence_rate, 1.0, 0.05);
 };
 
