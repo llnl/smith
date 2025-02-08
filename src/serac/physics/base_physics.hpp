@@ -619,6 +619,11 @@ class BasePhysics {
   double time_;
 
   /**
+   * @brief Current time step
+   */
+  double dt_;
+
+  /**
    * @brief The maximum time reached for the forward solver
    */
   double max_time_;

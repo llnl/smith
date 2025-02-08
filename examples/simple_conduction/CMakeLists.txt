@@ -10,6 +10,13 @@ blt_add_executable( NAME        simple_conduction_without_input_file
                     DEPENDS_ON  serac_physics serac_mesh serac_functional
                     )
 
+install(
+    FILES
+        without_input_file.cpp
+    DESTINATION
+        examples/serac/simple_conduction
+)
+
 if(SERAC_ENABLE_TESTS)
     blt_add_test(NAME          simple_conduction_without_input_file
                  COMMAND       simple_conduction_without_input_file

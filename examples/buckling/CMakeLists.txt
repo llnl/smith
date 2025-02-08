@@ -10,4 +10,12 @@ if(TRIBOL_FOUND AND PETSC_FOUND)
                         OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                         DEPENDS_ON  serac_physics serac_mesh
                         )
+
+    install(
+        FILES
+            cylinder.cpp
+        DESTINATION
+            examples/serac/buckling
+    )
+
 endif()
