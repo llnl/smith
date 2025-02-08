@@ -430,7 +430,7 @@ TEST(J2, UniaxialRateDependentMaterial)
   auto compute_solution_errors = [&](int timesteps) {
     const double time_span = 5.0;
     double dt = time_span/(timesteps - 1);
-    auto response_history = uniaxial_stress_test_rate_dependent(time_span, timesteps, material, internal_state, strain);
+    auto response_history = uniaxial_stress_test_rate_dependent(time_span, size_t(timesteps), material, internal_state, strain);
     double max_plastic_strain_error{}, max_stress_error{};
     for (auto r : response_history) {
       auto [t, dudx, P, state] = r;
