@@ -21,7 +21,42 @@
 
 namespace serac {
 
-using namespace serac;
+template <typename T, int n>
+tensor<T, n> log(tensor<T, n> v)
+{
+  using std::log; 
+  return make_tensor<n>([&v](int i) { return log(v[i]); });
+}
+
+template <int n>
+double mean(tensor<double, n> v)
+{
+  double sum = 0;
+  for (int i = 0; i < n; i++) sum += v[i];
+  return sum/n;
+}
+
+template <int n>
+double best_fit_slope(tensor<double, n> x, tensor<double, n> y)
+{
+  double x_bar = mean(x);
+  double y_bar = mean(y);
+  double numer = 0;
+  double denom = 0;
+  for (int i = 0; i < n; i++) {
+    numer += (x[i] - x_bar)*(y[i] - y_bar);
+    denom += (x[i] - x_bar)*(x[i] - x_bar);
+  }
+  return numer/denom;
+}
+
+template <int n>
+double compute_convergence_rate(tensor<double, n> h, tensor<double, n> e)
+{
+  auto log_h = log(h);
+  auto log_e = log(e);
+  return best_fit_slope(log_h, log_e);
+};
 
 /**
  * @brief a verification problem for the J2 material model, taken from example 2 of
@@ -339,6 +374,92 @@ TEST(J2, FrameIndifference)
   error = internal_state.Fpinv - internal_state_star.Fpinv;
   ASSERT_LT(norm(error), 1e-13*norm(internal_state.Fpinv));
 }
+
+TEST(J2, UniaxialRateDependentMaterial)
+{
+  /* 
+  Uniaxial stress with a rate-dependent material (J2 finite deformation)
+  Linear hardening, linear rate dependence.
+  There exists an exact solution. This test verifies that the numerically
+  integrated plasticity solution converges at first order with timestep
+  refinement.
+  */
+
+  using Hardening = solid_mechanics::LinearHardening;
+  using Material = solid_mechanics::J2<Hardening>;
+
+  double E = 1.0;
+  double sigma_y = 0.1;
+  double Hi = E/20.0;
+  double eta = 0.5;
+  double tau = eta/(Hi + E);
+  constexpr double strain_rate = 1.0;
+
+  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi, .eta = eta};
+  Material material{.E = E, .nu = 0.25, .hardening = hardening, .density = 1.0};
+
+  auto internal_state = Material::State{};
+
+  auto strain = [=](double t) {
+    double true_strain = strain_rate*t;
+    // convert true strain to nominal strain (that is, to du_dX)
+    return std::expm1(true_strain);
+  };
+
+  auto plastic_strain_exact = [=](double t) {
+    double epsilon = strain_rate*t; // true strain
+    if (epsilon < (sigma_y / E)) {
+      return 0.0;
+    } else {
+      double rate_independent_part = (E * epsilon - sigma_y) / (E + Hi);
+      double t_y = sigma_y/(E * strain_rate);
+      double rate_dependent_part = E*eta*strain_rate/std::pow(E + Hi, 2)*std::expm1((t_y - t)/tau);
+      return rate_independent_part + rate_dependent_part;
+    }
+  };
+
+  // exact solution for Mandel/Kirchhoff stresses (they coincide in this problem)
+  auto stress_exact = [=](double t) {
+    double epsilon_p = plastic_strain_exact(t);
+    double epsilon = strain_rate*t;
+    return E*(epsilon - epsilon_p);
+  };
+
+  auto compute_solution_errors = [&](int timesteps) {
+    const double time_span = 5.0;
+    double dt = time_span/(timesteps - 1);
+    auto response_history = uniaxial_stress_test_rate_dependent(time_span, timesteps, material, internal_state, strain);
+    double max_plastic_strain_error{}, max_stress_error{};
+    for (auto r : response_history) {
+      auto [t, dudx, P, state] = r;
+
+      auto TK = dot(P, transpose(dudx + Identity<3>())); // Kirchhoff stress
+      double stress_error = std::abs(TK[0][0] - stress_exact(t));
+      max_stress_error = std::max(max_stress_error, stress_error);
+
+      auto ep = state.accumulated_plastic_strain;
+      double plastic_strain_error = std::abs(ep - plastic_strain_exact(t));
+      max_plastic_strain_error = std::max(max_plastic_strain_error, plastic_strain_error);
+    }
+    return tuple{max_stress_error, max_plastic_strain_error, dt};
+  };
+
+  constexpr int max_refinements = 4;
+  tensor<double, max_refinements> stress_errors;
+  tensor<double, max_refinements> dt_sizes;
+  int timesteps = 21;
+  for (int i = 0; i < max_refinements; i++) {
+    auto [stress_error, plastic_strain_error, dt] = compute_solution_errors(timesteps);
+    // std::cout << "dt = " << dt << " stress error = " << stress_error << std::endl;
+    stress_errors[i] = stress_error;
+    dt_sizes[i] = dt;
+    timesteps *= 2;
+  }
+
+  double convergence_rate = compute_convergence_rate(dt_sizes, stress_errors);
+  std::cout << "convergence rate is  " << convergence_rate << std::endl;
+  EXPECT_NEAR(convergence_rate, 1.0, 0.05);
+};
 
 }  // namespace serac
 
