@@ -790,7 +790,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    * @param qdata the buffer of material internal variables at each quadrature point
    *
    * @pre MaterialType must have a public member variable `density`
-   * @pre MaterialType must define operator() that returns the Cauchy stress
+   * @pre MaterialType must define operator() that returns the First Piola stress
    *
    * @note This method must be called prior to completeSetup()
    */

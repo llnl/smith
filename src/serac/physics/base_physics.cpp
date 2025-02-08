@@ -120,8 +120,7 @@ void BasePhysics::CreateParaviewDataCollection() const
     output_name = "default";
   }
 
-  paraview_dc_ =
-      std::make_unique<mfem::ParaViewDataCollection>(output_name, const_cast<mfem::ParMesh*>(&states_.front()->mesh()));
+  paraview_dc_ = std::make_unique<mfem::ParaViewDataCollection>(output_name, const_cast<mfem::ParMesh*>(&mesh_));
   int max_order_in_fields = 0;
 
   // Find the maximum polynomial order in the physics module's states
