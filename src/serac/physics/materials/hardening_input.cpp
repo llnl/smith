@@ -37,7 +37,8 @@ void HardeningInputOptions::defineInputFileSchema(axom::inlet::Container& contai
     if (law == "PowerLawHardening") {
       return sigma_y_present && n_present && eps0_present && eta_present && !sigma_sat_present && !sigma_sat_present;
     } else if (law == "VoceHardening") {
-      return sigma_y_present && eta_present && !n_present && !eps0_present && sigma_sat_present && strain_constant_present;
+      return sigma_y_present && eta_present && !n_present && !eps0_present && sigma_sat_present &&
+             strain_constant_present;
     }
 
     return false;
@@ -51,11 +52,13 @@ serac::var_hardening_t FromInlet<serac::var_hardening_t>::operator()(const axom:
   serac::var_hardening_t result;
   std::string law = base["law"];
   if (law == "PowerLawHardening") {
-    result =
-        serac::solid_mechanics::PowerLawHardening{.sigma_y = base["sigma_y"], .n = base["n"], .eps0 = base["eps0"], .eta = base["eta"]};
+    result = serac::solid_mechanics::PowerLawHardening{
+        .sigma_y = base["sigma_y"], .n = base["n"], .eps0 = base["eps0"], .eta = base["eta"]};
   } else if (law == "VoceHardening") {
-    result = serac::solid_mechanics::VoceHardening{
-        .sigma_y = base["sigma_y"], .sigma_sat = base["sigma_sat"], .strain_constant = base["strain_constant"], .eta = base["eta"]};
+    result = serac::solid_mechanics::VoceHardening{.sigma_y = base["sigma_y"],
+                                                   .sigma_sat = base["sigma_sat"],
+                                                   .strain_constant = base["strain_constant"],
+                                                   .eta = base["eta"]};
   }
   return result;
 }
