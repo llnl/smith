@@ -33,7 +33,7 @@ struct LinearIsotropic {
    * @tparam T Number-like type for the displacement gradient components
    * @tparam dim Dimensionality of space
    * @param du_dX Displacement gradient with respect to the reference configuration
-   * @return The Cauchy stress
+   * @return The stress
    */
   template <typename T, int dim>
   SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
@@ -69,7 +69,7 @@ struct StVenantKirchhoff {
    *
    * @param[in] grad_u Displacement gradient
    *
-   * @return The Cauchy stress
+   * @return The first Piola stress
    */
   template <typename T, int dim>
   auto operator()(State&, const tensor<T, dim, dim>& grad_u) const
@@ -104,7 +104,7 @@ struct NeoHookean {
    * @tparam T Number-like type for the displacement gradient components
    * @tparam dim Dimensionality of space
    * @param du_dX displacement gradient with respect to the reference configuration (displacement_grad)
-   * @return The Cauchy stress
+   * @return The first Piola stress
    */
   template <typename T, int dim>
   SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
@@ -273,7 +273,7 @@ struct J2SmallStrain {
     double accumulated_plastic_strain;        ///< uniaxial equivalent plastic strain
   };
 
-  /** @brief calculate the Cauchy stress, given the displacement gradient and previous material state */
+  /** @brief calculate the first Piola stress, given the displacement gradient and previous material state */
   template <typename T>
   auto operator()(State& state, double dt, const tensor<T, dim, dim>& du_dX) const
   {
@@ -335,7 +335,7 @@ struct J2 {
     double accumulated_plastic_strain;                    ///< uniaxial equivalent plastic strain
   };
 
-  /** @brief calculate the Cauchy stress, given the displacement gradient and previous material state */
+  /** @brief calculate the first Piola stress, given the displacement gradient and previous material state */
   template <typename T>
   auto operator()(State& state, double dt, const tensor<T, dim, dim>& du_dX) const
   {
