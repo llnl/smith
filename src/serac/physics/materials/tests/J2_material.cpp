@@ -27,7 +27,7 @@ namespace serac {
 template <typename T, int n>
 tensor<T, n> log(tensor<T, n> v)
 {
-  using std::log; 
+  using std::log;
   return make_tensor<n>([&v](int i) { return log(v[i]); });
 }
 
@@ -39,7 +39,7 @@ double mean(tensor<double, n> v)
 {
   double sum = 0;
   for (int i = 0; i < n; i++) sum += v[i];
-  return sum/n;
+  return sum / n;
 }
 
 /**
@@ -53,10 +53,10 @@ double best_fit_slope(tensor<double, n> x, tensor<double, n> y)
   double numer = 0;
   double denom = 0;
   for (int i = 0; i < n; i++) {
-    numer += (x[i] - x_bar)*(y[i] - y_bar);
-    denom += (x[i] - x_bar)*(x[i] - x_bar);
+    numer += (x[i] - x_bar) * (y[i] - y_bar);
+    denom += (x[i] - x_bar) * (x[i] - x_bar);
   }
-  return numer/denom;
+  return numer / denom;
 }
 
 /**

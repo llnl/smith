@@ -200,10 +200,10 @@ struct LinearHardening {
  * @brief Power-law isotropic hardening law
  */
 struct PowerLawHardening {
-  double sigma_y;    ///< yield strength
-  double n;          ///< hardening index in reciprocal form
-  double eps0;       ///< reference value of accumulated plastic strain
-  double eta;        ///< viscosity for linear rate sensitivity
+  double sigma_y;  ///< yield strength
+  double n;        ///< hardening index in reciprocal form
+  double eps0;     ///< reference value of accumulated plastic strain
+  double eta;      ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
