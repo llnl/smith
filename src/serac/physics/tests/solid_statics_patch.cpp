@@ -216,6 +216,8 @@ double solution_error(PatchBoundaryCondition bc)
 
   solid.setMaterial(mat, domain);
 
+  constexpr double dt = 1.0;
+
   Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
   exact_displacement.applyLoads(mat, solid, essential_boundary);
 
@@ -223,7 +225,7 @@ double solution_error(PatchBoundaryCondition bc)
   solid.completeSetup();
 
   // Perform the quasi-static solve
-  solid.advanceTimestep(1.0);
+  solid.advanceTimestep(dt);
 
   // Output solution for debugging
   // solid.outputStateToDisk("paraview_output");
@@ -358,7 +360,8 @@ double pressure_error()
   solid.completeSetup();
 
   // Perform the quasi-static solve
-  solid.advanceTimestep(1.0);
+  constexpr double dt = 1.0;
+  solid.advanceTimestep(dt);
 
   solid.outputStateToDisk();
 

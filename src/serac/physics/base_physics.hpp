@@ -274,7 +274,7 @@ class BasePhysics {
    *
    * @return The parameter names
    */
-  std::vector<std::string> parameterNames()
+  virtual std::vector<std::string> parameterNames() const
   {
     std::vector<std::string> parameter_names;
 
@@ -617,6 +617,11 @@ class BasePhysics {
    * @brief Current time for the forward pass
    */
   double time_;
+
+  /**
+   * @brief Current time step
+   */
+  double dt_;
 
   /**
    * @brief The maximum time reached for the forward solver

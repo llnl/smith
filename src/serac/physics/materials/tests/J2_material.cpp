@@ -16,9 +16,48 @@
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/physics/materials/material_verification_tools.hpp"
 
+#include <fstream>
+#include <string>
+
 namespace serac {
 
-using namespace serac;
+/**
+ * Element-wise logarithm
+ */
+template <typename T, int n>
+tensor<T, n> log(tensor<T, n> v)
+{
+  using std::log;
+  return make_tensor<n>([&v](int i) { return log(v[i]); });
+}
+
+/**
+ * Arithmetic mean
+ */
+template <int n>
+double mean(tensor<double, n> v)
+{
+  double sum = 0;
+  for (int i = 0; i < n; i++) sum += v[i];
+  return sum / n;
+}
+
+/**
+ * Find slope for least-square fit of a linear function to data
+ */
+template <int n>
+double best_fit_slope(tensor<double, n> x, tensor<double, n> y)
+{
+  double x_bar = mean(x);
+  double y_bar = mean(y);
+  double numer = 0;
+  double denom = 0;
+  for (int i = 0; i < n; i++) {
+    numer += (x[i] - x_bar) * (y[i] - y_bar);
+    denom += (x[i] - x_bar) * (x[i] - x_bar);
+  }
+  return numer / denom;
+}
 
 /**
  * @brief a verification problem for the J2 material model, taken from example 2 of
@@ -86,7 +125,7 @@ TEST(J2SmallStrain, Verification)
   using Hardening = solid_mechanics::LinearHardening;
   using Material = solid_mechanics::J2SmallStrain<Hardening>;
 
-  Hardening hardening{.sigma_y = sigma_y, .Hi = 0.0};
+  Hardening hardening{.sigma_y = sigma_y, .Hi = 0.0, .eta = 0.0};
   Material material{.E = E, .nu = nu, .hardening = hardening, .Hk = 0.0, .density = 1.0};
   Material::State initial_state{};
 
@@ -115,9 +154,10 @@ TEST(J2SmallStrain, Verification)
 TEST(J2, PowerLawHardeningWorksWithDuals)
 {
   double sigma_y = 1.0;
-  solid_mechanics::PowerLawHardening hardening_law{.sigma_y = sigma_y, .n = 2.0, .eps0 = 0.01};
+  solid_mechanics::PowerLawHardening hardening_law{.sigma_y = sigma_y, .n = 2.0, .eps0 = 0.01, .eta = 0.0};
   double eqps = 0.1;
-  auto flow_stress = hardening_law(make_dual(eqps));
+  double eqps_dot = 1.0;
+  auto flow_stress = hardening_law(make_dual(eqps), eqps_dot);
   EXPECT_GT(flow_stress.value, sigma_y);
   EXPECT_GT(flow_stress.gradient, 0.0);
 };
@@ -135,12 +175,13 @@ TEST(J2SmallStrain, SatisfiesConsistency)
   using Hardening = solid_mechanics::PowerLawHardening;
   using Material = solid_mechanics::J2SmallStrain<Hardening>;
 
-  Hardening hardening_law{.sigma_y = 0.1, .n = 2.0, .eps0 = 0.01};
+  Hardening hardening_law{.sigma_y = 0.1, .n = 2.0, .eps0 = 0.01, .eta = 0.0};
   Material material{.E = 1.0, .nu = 0.25, .hardening = hardening_law, .Hk = 0.0, .density = 1.0};
   auto internal_state = Material::State{};
-  tensor<double, 3, 3> stress = material(internal_state, du_dx);
+  const double dt = 1.0;
+  tensor<double, 3, 3> stress = material(internal_state, dt, du_dx);
   double mises = std::sqrt(1.5) * norm(dev(stress));
-  double flow_stress = hardening_law(internal_state.accumulated_plastic_strain);
+  double flow_stress = hardening_law(internal_state.accumulated_plastic_strain, 0.0);
   EXPECT_NEAR(mises, flow_stress, 1e-9 * mises);
 
   double twoG = material.E / (1 + material.nu);
@@ -158,12 +199,12 @@ TEST(J2SmallStrain, Uniaxial)
   double sigma_y = 0.01;
   double Hi = E / 100.0;
 
-  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi};
+  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi, .eta = 0.0};
   Material material{.E = E, .nu = nu, .hardening = hardening, .Hk = 0.0, .density = 1.0};
 
   auto internal_state = Material::State{};
   auto strain = [=](double t) { return sigma_y / E * t; };
-  auto response_history = uniaxial_stress_test(2.0, 4, material, internal_state, strain);
+  auto response_history = uniaxial_stress_test_rate_dependent(2.0, 4, material, internal_state, strain);
 
   auto stress_exact = [=](double epsilon) {
     return epsilon < sigma_y / E ? E * epsilon : E / (E + Hi) * (sigma_y + Hi * epsilon);
@@ -195,12 +236,12 @@ TEST(J2, Uniaxial)
   double sigma_y = 0.01;
   double Hi = E / 100.0;
 
-  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi};
+  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi, .eta = 0.0};
   Material material{.E = E, .nu = 0.25, .hardening = hardening, .density = 1.0};
 
   auto internal_state = Material::State{};
   auto strain = [=](double t) { return sigma_y / E * t; };
-  auto response_history = uniaxial_stress_test(2.0, 4, material, internal_state, strain);
+  auto response_history = uniaxial_stress_test_rate_dependent(2.0, 4, material, internal_state, strain);
 
   auto stress_exact = [=](double epsilon) {
     return epsilon < sigma_y / E ? E * epsilon : E / (E + Hi) * (sigma_y + Hi * epsilon);
@@ -231,7 +272,7 @@ TEST(J2, DerivativeCorrectness)
   using Hardening = solid_mechanics::PowerLawHardening;
   using Material = solid_mechanics::J2<Hardening>;
 
-  Hardening hardening{.sigma_y = 350e6, .n = 3, .eps0 = 0.00175};
+  Hardening hardening{.sigma_y = 350e6, .n = 3, .eps0 = 0.00175, .eta = 0.0};
   Material material{.E = 200e9, .nu = 0.25, .hardening = hardening, .density = 1.0};
 
   // initialize internal state variables
@@ -250,7 +291,9 @@ TEST(J2, DerivativeCorrectness)
   }};
   // clang-format on
 
-  auto stress_and_tangent = material(internal_state, make_dual(H));
+  const double dt = 1.0;
+
+  auto stress_and_tangent = material(internal_state, dt, make_dual(H));
   auto tangent = get_gradient(stress_and_tangent);
 
   // make sure that this load case is actually yielding
@@ -260,10 +303,10 @@ TEST(J2, DerivativeCorrectness)
 
   // finite difference evaluations
   auto internal_state_old_p = Material::State{};
-  auto stress_p = material(internal_state_old_p, H + epsilon * dH);
+  auto stress_p = material(internal_state_old_p, dt, H + epsilon * dH);
 
   auto internal_state_old_m = Material::State{};
-  auto stress_m = material(internal_state_old_m, H - epsilon * dH);
+  auto stress_m = material(internal_state_old_m, dt, H - epsilon * dH);
 
   // Make sure the finite difference evaluations all took the same branch (yielding).
   ASSERT_GT(internal_state_old_p.accumulated_plastic_strain, 1e-3);
@@ -280,7 +323,7 @@ TEST(J2, FrameIndifference)
   using Hardening = solid_mechanics::VoceHardening;
   using Material = solid_mechanics::J2<Hardening>;
 
-  Hardening hardening{.sigma_y = 350e6, .sigma_sat = 700e6, .strain_constant = 0.01};
+  Hardening hardening{.sigma_y = 350e6, .sigma_sat = 700e6, .strain_constant = 0.01, .eta = 0.0};
   Material material{.E = 200.0e9, .nu = 0.25, .hardening = hardening, .density = 1.0};
 
   // clang-format off
@@ -298,6 +341,8 @@ TEST(J2, FrameIndifference)
   }};
   //clang-format on
 
+  const double dt = 1.0;
+
   // before we check frame indifference, make sure Q is a rotation
   constexpr auto I = Identity<3>();
   ASSERT_LT(norm(dot(transpose(Q), Q) - I), 1e-14);
@@ -306,7 +351,7 @@ TEST(J2, FrameIndifference)
   auto internal_state = Material::State{};
 
   // Piola stress components in original coordinate frame
-  auto P = material(internal_state, H);
+  auto P = material(internal_state, dt, H);
 
   // make sure that this load case is actually yielding
   ASSERT_GT(internal_state.accumulated_plastic_strain, 1e-3);
@@ -321,7 +366,7 @@ TEST(J2, FrameIndifference)
   auto internal_state_star = Material::State{};
 
   // stress in second coordinate frame
-  auto P_star = material(internal_state_star, H_star);
+  auto P_star = material(internal_state_star, dt, H_star);
 
   auto error = P_star - dot(Q, P);
   ASSERT_LT(norm(error), 1e-13*norm(P));
@@ -330,6 +375,91 @@ TEST(J2, FrameIndifference)
   error = internal_state.Fpinv - internal_state_star.Fpinv;
   ASSERT_LT(norm(error), 1e-13*norm(internal_state.Fpinv));
 }
+
+TEST(J2, UniaxialRateDependentMaterial)
+{
+  /* 
+  Verify that the constitutive model converges to exact solution at first order
+  with timestep refinement.
+
+  Uses the trick that an exact solution for small strain plasticity can be used
+  for the log strain finite deformation model if the strains are interpreted as
+  log strain and the stress is interpreted as the Mandel stress.
+  */
+
+  using Hardening = solid_mechanics::LinearHardening;
+  using Material = solid_mechanics::J2<Hardening>;
+
+  double E = 1.0;
+  double sigma_y = 0.1;
+  double Hi = E/20.0;
+  double eta = 0.5;
+  double tau = eta/(Hi + E);
+  constexpr double strain_rate = 1.0;
+
+  Hardening hardening{.sigma_y = sigma_y, .Hi = Hi, .eta = eta};
+  Material material{.E = E, .nu = 0.25, .hardening = hardening, .density = 1.0};
+
+  auto internal_state = Material::State{};
+
+  auto strain = [=](double t) {
+    double true_strain = strain_rate*t;
+    // convert true strain to nominal strain (that is, to du_dX[0][0])
+    return std::expm1(true_strain);
+  };
+
+  auto plastic_strain_exact = [=](double t) {
+    double epsilon = strain_rate*t; // true strain
+    if (epsilon < (sigma_y / E)) {
+      return 0.0;
+    } else {
+      double rate_independent_part = (E * epsilon - sigma_y) / (E + Hi);
+      double t_y = sigma_y/(E * strain_rate); // time at first yield
+      double rate_dependent_part = E*eta*strain_rate/std::pow(E + Hi, 2)*std::expm1((t_y - t)/tau);
+      return rate_independent_part + rate_dependent_part;
+    }
+  };
+
+  // exact solution for Mandel/Kirchhoff stresses (they coincide in this problem)
+  auto stress_exact = [=](double t) {
+    double epsilon_p = plastic_strain_exact(t);
+    double epsilon = strain_rate*t;
+    return E*(epsilon - epsilon_p);
+  };
+
+  auto compute_solution_errors = [&](int timesteps) {
+    const double time_span = 5.0;
+    double dt = time_span/(timesteps - 1);
+    auto response_history = uniaxial_stress_test_rate_dependent(time_span, size_t(timesteps), material, internal_state, strain);
+    double max_plastic_strain_error{}, max_stress_error{};
+    for (auto r : response_history) {
+      auto [t, dudx, P, state] = r;
+
+      auto TK = dot(P, transpose(dudx + Identity<3>())); // Kirchhoff stress
+      double stress_error = std::abs(TK[0][0] - stress_exact(t));
+      max_stress_error = std::max(max_stress_error, stress_error);
+
+      auto ep = state.accumulated_plastic_strain;
+      double plastic_strain_error = std::abs(ep - plastic_strain_exact(t));
+      max_plastic_strain_error = std::max(max_plastic_strain_error, plastic_strain_error);
+    }
+    return tuple{max_stress_error, max_plastic_strain_error, dt};
+  };
+
+  constexpr int refinements = 4;
+  tensor<double, refinements> stress_errors;
+  tensor<double, refinements> dt_sizes;
+  int timesteps = 21;
+  for (int i = 0; i < refinements; i++) {
+    auto [stress_error, plastic_strain_error, dt] = compute_solution_errors(timesteps);
+    stress_errors[i] = stress_error;
+    dt_sizes[i] = dt;
+    timesteps *= 2;
+  }
+
+  double convergence_rate = best_fit_slope(log(dt_sizes), log(stress_errors));
+  EXPECT_NEAR(convergence_rate, 1.0, 0.05);
+};
 
 }  // namespace serac
 
