@@ -154,7 +154,7 @@ void StateManager::storeState(FiniteElementState& state)
     // Create a new grid function with unallocated data. This will be managed by sidre.
     grid_function = new mfem::ParGridFunction(&state.space(), static_cast<double*>(nullptr));
     datacoll.RegisterField(name, grid_function);
-    state.setFromGridFunction(*grid_function);
+    state.fillGridFunction(*grid_function);
   }
   named_states_[name] = grid_function;
 }
