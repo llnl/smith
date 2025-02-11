@@ -471,8 +471,14 @@ class BasePhysics {
    * @brief Returns a reference to the mesh object
    */
   const mfem::ParMesh& mesh() const { return mesh_; }
+
   /// @overload
   mfem::ParMesh& mesh() { return mesh_; }
+
+  /**
+   * @brief Return the name of the physics
+   */
+  std::string name() const { return name_; }
 
  protected:
   /**
