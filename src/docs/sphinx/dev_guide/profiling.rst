@@ -164,7 +164,7 @@ on LC, since the baseline benchmarks are generated on LC systems.
 
 1. Go to the following CZ GitLab page to create a new pipeline https://lc.llnl.gov/gitlab/smith/serac/-/pipelines/new
 2. Choose your branch
-3. Under variables, add "SERAC_CI_WORKFLOW_TYPE" and "comparison" for the key and value, respectively
+3. Under variables, add ``SERAC_CI_WORKFLOW_TYPE`` and ``comparison`` for the key and value, respectively
 
 It's possible to perform this comparison locally. Since baseline benchmarks are generated across different machines and
 compilers, a single build won't compare against all baselines. The benchmarks can be compared using ruby-gcc,
