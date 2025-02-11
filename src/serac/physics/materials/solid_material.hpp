@@ -123,12 +123,6 @@ struct NeoHookean {
     return dot(TK, inv(transpose(F)));
   }
 
-  auto density_func() const
-  {
-    return density;
-  }
-
-
   double density;  ///< mass density
   double K;        ///< bulk modulus
   double G;        ///< shear modulus
