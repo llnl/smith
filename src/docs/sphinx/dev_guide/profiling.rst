@@ -170,7 +170,7 @@ It's possible to perform this comparison locally. Since baseline benchmarks are 
 compilers, a single build won't compare against all baselines. The benchmarks can be compared using ruby-gcc,
 ruby-clang, and lassen-clang builds.
 
-1. Run benchmarks (see "Benchmarking Serac" above)
+1. Run benchmarks (see :ref:`Benchmarking Serac` above)
 2. ``../scripts/llnl/compare_benchmarks.py --current-cali-dir /path/to/caliper/files``
 
 The script generates Hatchet graph frames by calculating the difference between each associated baseline and local
