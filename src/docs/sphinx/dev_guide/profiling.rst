@@ -109,6 +109,8 @@ of this file, use `cali-query <https://software.llnl.gov/Caliper/tools.html#cali
 
 To view this data with SPOT, open a browser, navigate to the SPOT server (e.g. `LC <https://lc.llnl.gov/spot2>`_), and open the directory containing one or more ``.cali`` files.  For more information, watch this recorded `tutorial <https://www.youtube.com/watch?v=p8gjA6rbpvo>`_.
 
+.. _benchmarking-label:
+
 Benchmarking Serac
 ------------------
 
@@ -170,7 +172,7 @@ It's possible to perform this comparison locally. Since baseline benchmarks are 
 compilers, a single build won't compare against all baselines. The benchmarks can be compared using ruby-gcc,
 ruby-clang, and lassen-clang builds.
 
-1. Run benchmarks (see :ref:`Benchmarking Serac` above)
+1. Run benchmarks (see :ref:`Benchmarking Serac <benchmarking-label>` above)
 2. ``../scripts/llnl/compare_benchmarks.py --current-cali-dir /path/to/caliper/files``
 
 The script generates Hatchet graph frames by calculating the difference between each associated baseline and local

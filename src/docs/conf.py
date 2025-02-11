@@ -54,8 +54,7 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.doctest',
               'sphinx.ext.todo',
               'sphinx.ext.mathjax',
-              'sphinx.ext.ifconfig',
-              'sphinx.ext.autosectionlabel']
+              'sphinx.ext.ifconfig']
 if read_the_docs_build:
     # Note: The Spack Sphinx does not have this extension and I think its only
     # used in RTD
