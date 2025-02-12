@@ -1,4 +1,4 @@
-  // Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -346,7 +346,8 @@ class BasePhysics {
    * @pre `reverseAdjointTimestep` with an appropriate adjoint load must be called prior to this method as many times as
    * the forward advance is called.
    */
-  virtual const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity() const
+  virtual const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity()
+      const
   {
     SLIC_WARNING_ROOT(axom::fmt::format("Initial condition sensitivities not enabled in physics module {}", name_));
     return {};

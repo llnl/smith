@@ -1454,7 +1454,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   }
 
   /// @overload
-  const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity() const override
+  const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity()
+      const override
   {
     return {{"displacement", implicit_sensitivity_displacement_start_of_step_},
             {"velocity", implicit_sensitivity_velocity_start_of_step_}};
