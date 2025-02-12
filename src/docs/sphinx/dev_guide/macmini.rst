@@ -5,9 +5,13 @@
 
 .. _macmini-label:
 
-==========================================
+==============
+Serac Mac Mini
+==============
+
+------------------------------------------
 Adding an Additional User to Serac MacMini
-==========================================
+------------------------------------------
 
 This page assumes you are a Serac developer who requires access to the team's shared MacMini. This machine
 tests Serac Mac builds on a regular basis via cron. If you have any questions, reach out to either
@@ -49,9 +53,9 @@ how to do this, instructions can be found on
 You're now able to clone Serac and get started with the installation process. Further instructions for doing so are currently on 
 the `quickstart page <https://serac.readthedocs.io/en/latest/sphinx/quickstart.html#quickstart-label>`_ of the Serac documentation.
 
-================
+----------------
 Cron Job Example
-================
+----------------
 
 The following is an example of a cron job that could be used to test a Mac build, assuming TPLs have been built for Serac. Run
 ``crontab -e`` to edit the cron file.
