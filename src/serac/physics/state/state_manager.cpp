@@ -193,7 +193,7 @@ void StateManager::storeDual(FiniteElementDual& dual)
     grid_function = new mfem::ParGridFunction(&dual.space(), static_cast<double*>(nullptr));
     datacoll.RegisterField(name, grid_function);
     std::unique_ptr<mfem::HypreParVector> true_dofs(grid_function->GetTrueDofs());
-    dual = *true_dofs;
+    *true_dofs = dual;
   }
   named_duals_[name] = grid_function;
 }

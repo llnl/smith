@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+  // Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -237,7 +237,7 @@ class BasePhysics {
    * @note The input parameter name should not contain the base physics name. It should be identical to what
    * is in the physics module constructor argument list.
    */
-  const FiniteElementState& parameter(const std::string& parameter_name) const
+  virtual const FiniteElementState& parameter(const std::string& parameter_name) const
   {
     std::string appended_name = detail::addPrefix(name_, parameter_name);
 
@@ -259,7 +259,7 @@ class BasePhysics {
    * @param parameter_index The index of the Finite Element State parameter to retrieve
    * @return The indexed parameter Finite Element State
    */
-  const FiniteElementState& parameter(std::size_t parameter_index) const
+  virtual const FiniteElementState& parameter(std::size_t parameter_index) const
   {
     SLIC_ERROR_ROOT_IF(
         parameter_index >= parameters_.size(),
@@ -346,7 +346,7 @@ class BasePhysics {
    * @pre `reverseAdjointTimestep` with an appropriate adjoint load must be called prior to this method as many times as
    * the forward advance is called.
    */
-  virtual const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity()
+  virtual const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity() const
   {
     SLIC_WARNING_ROOT(axom::fmt::format("Initial condition sensitivities not enabled in physics module {}", name_));
     return {};
