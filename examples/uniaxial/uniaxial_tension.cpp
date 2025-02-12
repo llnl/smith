@@ -30,7 +30,6 @@ void output(double u, double f, const Physics& solid, const std::string& paravie
 
 int main(int argc, char* argv[])
 {
-  feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
   serac::initialize(argc, argv);
 
   constexpr int p = 2;
