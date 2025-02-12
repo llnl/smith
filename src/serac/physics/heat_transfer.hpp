@@ -961,7 +961,8 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    *
    * @pre `reverseAdjointTimestep` must be called as many times as the forward solver was advanced before this is called
    */
-  const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity() const override
+  const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity()
+      const override
   {
     return {{"temperature", implicit_sensitivity_temperature_start_of_step_}};
   }
