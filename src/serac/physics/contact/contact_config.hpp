@@ -19,8 +19,12 @@ namespace serac {
  */
 enum class ContactMethod
 {
-  SingleMortar /**< Puso and Laursen 2004 */
+  SingleMortar, /**< Puso and Laursen 2004 */
+  SmoothMortar
 };
+
+// start 2D
+// smoothed 'variational' mortar with penalty
 
 /**
  * @brief Describes how to enforce the contact constraint equations

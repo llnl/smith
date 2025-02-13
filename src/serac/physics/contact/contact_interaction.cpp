@@ -162,6 +162,9 @@ tribol::ContactMethod ContactInteraction::getMethod() const
     case ContactMethod::SingleMortar:
       return tribol::SINGLE_MORTAR;
       break;
+    case ContactMethod::SmoothMortar:
+      return tribol::SMOOTH_MORTAR;
+      break;
     default:
       SLIC_ERROR_ROOT("Unsupported contact method.");
       // return something so we don't get an error
