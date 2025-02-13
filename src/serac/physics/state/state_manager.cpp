@@ -192,6 +192,7 @@ void StateManager::storeDual(FiniteElementDual& dual)
     // Create a new grid function with unallocated data. This will be managed by sidre.
     grid_function = new mfem::ParGridFunction(&dual.space(), static_cast<double*>(nullptr));
     datacoll.RegisterField(name, grid_function);
+    grid_function->SetFromTrueDofs(dual);
   }
   named_duals_[name] = grid_function;
 }
