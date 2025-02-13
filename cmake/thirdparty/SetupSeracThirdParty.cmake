@@ -508,6 +508,11 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
             $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
             $<INSTALL_INTERFACE:include>
         )
+        target_include_directories(tribol_shared PUBLIC
+            $<BUILD_INTERFACE:${tribol_repo_dir}/src>
+            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
+            $<INSTALL_INTERFACE:include>
+        )
         
         set(TRIBOL_FOUND TRUE CACHE BOOL "" FORCE)
         set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
