@@ -19,6 +19,8 @@
 
 namespace serac {
 
+using real_t = double;//mfem::real_t;
+
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
 class NewtonSolver : public mfem::NewtonSolver {
  protected:
@@ -83,8 +85,6 @@ class NewtonSolver : public mfem::NewtonSolver {
   {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
-
-    using real_t = mfem::real_t;
 
     real_t norm, norm_goal;
     norm = initial_norm = evaluateNorm(x, r);
@@ -588,7 +588,7 @@ class TrustRegion : public mfem::NewtonSolver {
   }
 
   /// evaluate the nonlinear residual
-  mfem::real_t computeResidual(const mfem::Vector& x_, mfem::Vector& r_) const
+  real_t computeResidual(const mfem::Vector& x_, mfem::Vector& r_) const
   {
     SERAC_MARK_FUNCTION;
     ++num_residuals;
@@ -617,8 +617,6 @@ class TrustRegion : public mfem::NewtonSolver {
   {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
-
-    using real_t = mfem::real_t;
 
     num_hess_vecs = 0;
     num_preconds = 0;
@@ -922,7 +920,8 @@ std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOpe
 
   SLIC_ERROR_ROOT_IF(row_blocks != col_blocks, "Attempted to use a direct solver on a non-square block system.");
 
-  mfem::Array2D<const mfem::HypreParMatrix*> hypre_blocks(row_blocks, col_blocks);
+  //mfem::Array2D<const mfem::HypreParMatrix*> hypre_blocks(row_blocks, col_blocks);
+  mfem::Array2D<mfem::HypreParMatrix*> hypre_blocks(row_blocks, col_blocks);
 
   for (int i = 0; i < row_blocks; ++i) {
     for (int j = 0; j < col_blocks; ++j) {
@@ -932,7 +931,7 @@ std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOpe
         SLIC_ERROR_ROOT_IF(!hypre_block,
                            "Trying to use SuperLU on a block operator that does not contain HypreParMatrix blocks.");
 
-        hypre_blocks(i, j) = hypre_block;
+        hypre_blocks(i, j) = const_cast<mfem::HypreParMatrix*>(hypre_block);
       } else {
         hypre_blocks(i, j) = nullptr;
       }

@@ -95,15 +95,15 @@ std::unique_ptr<SolidMechanics<p, dim>> createNonlinearSolidMechanicsSolver(
   const LinearSolverOptions linear_options = {.linear_solver = LinearSolver::CG,
                                               //.preconditioner = Preconditioner::HypreJacobi,
                                               .preconditioner = Preconditioner::HypreAMG,
-                                              .relative_tol = 1.0e-12,
-                                              .absolute_tol = 1.0e-16,
+                                              .relative_tol = 1.0e-13,
+                                              .absolute_tol = 1.0e-17,
                                               .max_iterations = 2000,
                                               .print_level = 0};
 
-  //bool checkpoint_to_disk = true;
+  bool checkpoint_to_disk = true;
   auto solid = std::make_unique<SolidMechanics<p, dim>>(nonlinear_opts, linear_options, dyn_opts,
                                                         physics_prefix + std::to_string(iter++), mesh_tag,
-                                                        std::vector<std::string>{}, 0, 0.0); //, checkpoint_to_disk, false);
+                                                        std::vector<std::string>{}, 0, 0.0, checkpoint_to_disk, false);
   solid->setMaterial(mat, whole_domain);
 
   auto applied_displacement = [](tensor<double, dim>, double t) {
@@ -203,7 +203,8 @@ std::tuple<double, FiniteElementDual, FiniteElementDual, FiniteElementDual> comp
 double computeSolidMechanicsQoiAdjustingShape(SolidMechanics<p, dim>& solid_solver, const TimeSteppingInfo& ts_info,
                                               const FiniteElementState& shape_derivative_direction, double pertubation)
 {
-  FiniteElementState shape_disp(StateManager::mesh(mesh_tag), H1<SHAPE_ORDER, dim>{}, "input_shape_displacement");
+  FiniteElementState shape_disp(shape_derivative_direction); //StateManager::mesh(mesh_tag), H1<SHAPE_ORDER, dim>{}, "input_shape_displacement");
+  shape_disp = 0.0;
   SLIC_ASSERT_MSG(shape_disp.Size() == shape_derivative_direction.Size(),
                   "Shape displacement and intended derivative direction FiniteElementState sizes do not agree.");
 
@@ -267,7 +268,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
   mfem::ParMesh* mesh;
 
   NonlinearSolverOptions nonlinear_opts{
-      .nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1.0e-15, .absolute_tol = 1.0e-14};
+      .nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1.0e-15, .absolute_tol = 1.0e-15, .print_level=1};
 
   bool dispBc = true;
   TimesteppingOptions dyn_opts{.timestepper = TimestepMethod::Newmark,
@@ -325,10 +326,11 @@ TEST_F(SolidMechanicsSensitivityFixture, ShapeSensitivities)
   applyInitialAndBoundaryConditions(*solid_solver);
   FiniteElementState derivative_direction(shape_sensitivity.space(), "derivative_direction");
   fillDirection(derivative_direction);
-  solid_solver->zeroEssentials(derivative_direction);
+  //solid_solver->zeroEssentials(derivative_direction);
 
   double qoi_plus = computeSolidMechanicsQoiAdjustingShape(*solid_solver, tsInfo, derivative_direction, eps);
   double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
+  std::cout << "direction deriv = " << directional_deriv << std::endl;
   EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, 100 * eps);
 }
 

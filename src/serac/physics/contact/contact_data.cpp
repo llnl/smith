@@ -177,7 +177,15 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
   }
   if (haveLagrangeMultipliers()) {
     // merge all of the contributions from all of the contact interactions
-    block_J->SetBlock(1, 0, mfem::HypreParMatrixFromBlocks(constraint_matrices));
+
+    mfem::Array2D<mfem::HypreParMatrix*> nonconst_constraint_matrices(static_cast<int>(interactions_.size()) , 1);
+
+    for (size_t i = 0 ; i < interactions_.size(); ++i) {
+      nonconst_constraint_matrices(static_cast<int>(i),0) = const_cast<mfem::HypreParMatrix*>(constraint_matrices(static_cast<int>(i),0));
+    }
+
+    block_J->SetBlock(1, 0, mfem::HypreParMatrixFromBlocks(nonconst_constraint_matrices));
+    //block_J->SetBlock(1, 0, mfem::HypreParMatrixFromBlocks(constraint_matrices));
     // store the transpose explicitly (rather than as a TransposeOperator) for solvers that need HypreParMatrixs
     block_J->SetBlock(0, 1, static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(1, 0)).Transpose());
     // build I_(inactive): a diagonal matrix with ones on inactive dofs and zeros elsewhere
