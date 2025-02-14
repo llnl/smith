@@ -57,7 +57,8 @@ TEST_F(ContactTest, Contact2D)
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
-                                 .enforcement = ContactEnforcement::Penalty};
+                                 .enforcement = ContactEnforcement::Penalty,
+                                 .jacobian = ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, "beam_mesh");
