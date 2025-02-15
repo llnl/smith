@@ -260,18 +260,8 @@ must be specified using either:
 
 ``python3 scripts/uberenv/uberenv.py --spack-env-file=scripts/spack/configs/linux_ubuntu_20/spack.yaml --prefix=../path/to/install``
 
-<<<<<<< HEAD
-**Ubuntu 18.04**
-
-``python3 scripts/uberenv/uberenv.py --spack-env-file=scripts/spack/configs/linux_ubuntu_18/spack.yaml --prefix=../path/to/install``
-
 Building Serac Dependencies on MacOS
 ------------------------------------
-
-=======
-Building Serac Dependencies on MacOS with Homebrew
----------------------------------------------------
->>>>>>> 87eadd1d5 (remove implication that ubuntu 18 is tested)
 .. warning::
    These instructions are in development, but have been tested for M2 MacBooks.
 
