@@ -12,7 +12,7 @@ class Mfem(BuiltinMfem):
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
     # branch tupek/newmark_bugfix until it is merged
-    version("4.7.0.2", commit="cdc4a92c5774cdb66c110ed5a067663cf5808d2a")
+    version("4.7.0.2", commit="a360e2a86062d98c6ef354f90e5b00ca3e09fb07")
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 
