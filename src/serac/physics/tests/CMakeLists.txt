@@ -39,6 +39,7 @@ set(physics_parallel_test_sources
     dynamic_thermal_adjoint.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
+    thermomech_mono.cpp
     )
 blt_list_append(TO physics_parallel_test_sources ELEMENTS contact_patch.cpp contact_beam.cpp IF TRIBOL_FOUND)
 

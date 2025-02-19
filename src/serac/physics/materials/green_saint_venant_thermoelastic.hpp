@@ -12,8 +12,8 @@ namespace serac {
 /**
  * @brief Compute Green's strain from the displacement gradient
  */
-template <typename T>
-auto greenStrain(const tensor<T, 3, 3>& grad_u)
+template <typename T, int dim>
+auto greenStrain(const tensor<T, dim, dim>& grad_u)
 {
   return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
 }
@@ -51,12 +51,12 @@ struct GreenSaintVenantThermoelasticMaterial {
    * step (units of energy), and the referential heat flux (units of
    * energy per unit time and per unit area).
    */
-  template <typename T1, typename T2, typename T3>
-  auto operator()(State& state, const tensor<T1, 3, 3>& grad_u, T2 theta, const tensor<T3, 3>& grad_theta) const
+  template <typename T1, typename T2, typename T3, int dim>
+  auto operator()(State& state, const tensor<T1, dim, dim>& grad_u, T2 theta, const tensor<T3, dim>& grad_theta) const
   {
     const double          K    = E / (3.0 * (1.0 - 2.0 * nu));
     const double          G    = 0.5 * E / (1.0 + nu);
-    static constexpr auto I    = Identity<3>();
+    static constexpr auto I    = Identity<dim>();
     auto                  F    = grad_u + I;
     const auto            Eg   = greenStrain(grad_u);
     const auto            trEg = tr(Eg);
@@ -82,8 +82,8 @@ struct GreenSaintVenantThermoelasticMaterial {
    * @param[in] grad_u displacement gradient
    * @param[in] theta temperature
    */
-  template <typename T1, typename T2>
-  auto calculateFreeEnergy(const tensor<T1, 3, 3>& grad_u, T2 theta) const
+  template <typename T1, typename T2, int dim>
+  auto calculateFreeEnergy(const tensor<T1, dim, dim>& grad_u, T2 theta) const
   {
     const double K      = E / (3.0 * (1.0 - 2.0 * nu));
     const double G      = 0.5 * E / (1.0 + nu);
