@@ -6,6 +6,7 @@
 
 #include "serac/physics/thermomechanics_monolithic.hpp"
 #include "serac/physics/materials/green_saint_venant_thermoelastic.hpp"
+#include "serac/physics/materials/solid_material.hpp"
 #include <fstream>
 
 #include <gtest/gtest.h>
@@ -40,8 +41,8 @@ void ThermoMechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
 
   auto linear_opts = thermomech::direct_linear_options;
   auto nonlinear_opts = thermomech::default_nonlinear_options;
-  ThermoMechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, GeometricNonlinearities::Off,
-                                                     "thermoMechHeatedDeform", meshtag);
+  ThermoMechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts,
+    GeometricNonlinearities::On, "thermoMechHeatedDeform", meshtag);
 
   double                                       rho       = 1.0;
   double                                       E         = 100.0;
@@ -71,8 +72,6 @@ void ThermoMechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
   thermomech_solver.completeSetup();
 
   thermomech_solver.advanceTimestep(1.0);
-
-  thermomech_solver.outputStateToDisk("./");
 }
 
 /**
@@ -191,8 +190,9 @@ public:
    * @tparam p Polynomial degree of the finite element approximation
    *
    * @param material Material model used in the problem
-   * @param sf The SolidMechanics module for the problem
-   * @param essential_boundaries Boundary attributes on which essential boundary conditions are desired
+   * @param tm The ThermoMechanics module for the problem
+   * @param temp_ess_bcs Boundary attributes on which essential boundary conditions are desired on temperature field
+   * @param disp_ess_bcs Boundary attributes on which essential boundary conditions are desired on displacement field
    */
   template <typename MaterialType, int p>
   void applyLoads(const MaterialType &material, ThermoMechanicsMonolithic<p, dim>& tm, std::set<int> temp_ess_bcs, std::set<int> disp_ess_bcs) const
@@ -224,7 +224,8 @@ public:
       auto du_dX = gradU(get_value(X));
 
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
-      return dot(stress, n0);
+      auto P = solid_mechanics::CauchyToPiola(stress, du_dX);
+      return dot(P, n0);
     };
     tm.setTraction(traction, EntireBoundary(tm.mesh()));
 
@@ -234,20 +235,33 @@ public:
 
       auto X_val_temp = get<0>(X);
       auto X_val = get_value(X_val_temp);
-      // auto theta = Texact(make_dual(X_val));
       auto theta = Texact(X_val);
       auto dtheta_dX = gradT(make_dual(X_val));
-      // auto du_dX = gradU(make_dual(X_val));
       auto du_dX = gradU(X_val);
 
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
       auto dFluxdX = get_gradient(heat_flux);
       auto divFlux = tr(dFluxdX);
-      return (divFlux + internal_heat_source);
+      return (divFlux - internal_heat_source);
     };
     tm.setSource(heat_source, EntireDomain(tm.mesh()));
 
-    // auto body_force = [=](auto X, auto)
+    auto body_force = [=](auto X, auto /* time */) {
+      typename MaterialType::State state{};
+
+      auto X_val = get_value(X);
+      auto theta = Texact(make_dual(X_val));
+      auto dtheta_dX = gradT(X_val);
+      auto du_dX = gradU(make_dual(X_val));
+
+      auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
+      auto P = solid_mechanics::CauchyToPiola(stress, du_dX);
+      auto dPdX = get_gradient(P);
+      tensor<double, dim> divP{};
+      for (int i = 0; i < dim; ++i) { divP[i] = tr(dPdX[i]); }
+      return (-1.0 * divP);
+    };
+    tm.addBodyForce(body_force, EntireDomain(tm.mesh()));
   }
 
 private:
@@ -326,6 +340,11 @@ std::array<double, 2> SolutionError(PatchBoundaryCondition temp_bc, PatchBoundar
   constexpr int p = ElementType::order;
   constexpr int dim = dimension_of(ElementType::geometry);
 
+  // Hanyu: polynomial order is set to 1 to pass all tests.
+  //        same issue as the solid_statics_patch tests.
+  //
+  //        relevant issue: https://github.com/LLNL/serac/issues/926
+  // constexpr int solution_polynomial_order = ElementType::order;
   constexpr int solution_polynomial_order = 1;
   auto exact_solution = ManufacturedSolution<dim>(solution_polynomial_order,
     std::get<0>(coef), std::get<1>(coef), std::get<2>(coef), std::get<3>(coef));
@@ -339,7 +358,14 @@ std::array<double, 2> SolutionError(PatchBoundaryCondition temp_bc, PatchBoundar
     case mfem::Geometry::CUBE:        filename = meshdir + "patch3D_hexes.mesh"; break;
     default: SLIC_ERROR_ROOT("unsupported element type for patch test"); break;
   }
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
+
+  int serial_refinement;
+  if (dim == 2)
+    serial_refinement = 1;
+  else if (dim == 3)
+    serial_refinement = 0;
+
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, 0);
 
   const std::string meshtag = "mesh";
   serac::StateManager::setMesh(std::move(mesh), meshtag);
@@ -350,8 +376,9 @@ std::array<double, 2> SolutionError(PatchBoundaryCondition temp_bc, PatchBoundar
   auto nonlinear_opts = thermomech::default_nonlinear_options;
   nonlinear_opts.relative_tol = 1e-14;
   nonlinear_opts.absolute_tol = 1e-14;
-  ThermoMechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, GeometricNonlinearities::On,
-                                                     "thermomech_patch_test", meshtag);
+  nonlinear_opts.print_level = 0;
+  ThermoMechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts,
+    GeometricNonlinearities::On, "thermomech_patch_test", meshtag);
 
   double                                       rho       = 1.0;
   double                                       E         = 100.0;
@@ -378,6 +405,7 @@ std::array<double, 2> SolutionError(PatchBoundaryCondition temp_bc, PatchBoundar
           computeL2Error(thermomech_solver.displacement(), exact_displacement_coef)};
 }
 
+/////////////////////////////////Smoke Tests//////////////////////////////////////////////
 TEST(ThermoMechanics, VolumetricHeating) { ThermoMechHeatedDeform<1, 2>(
   std::set<int>{2, 4}, [](auto /* X */, auto /* time */) -> double { return 0.0; },
   [](auto /* X */, auto /* n */, auto /* time */, auto /* T */) { return 0.0; },
@@ -396,56 +424,479 @@ TEST(ThermoMechanics, BCFluxHeating) { ThermoMechHeatedDeform<1, 2>(
   [](auto /* X */, auto /* time */, auto /* T */, auto /* dT_dx */) { return 0.0; }
 );}
 
+///////////////////////////////////Patch Tests (Essential BC)/////////////////////////////
 const double tol = 1e-12;
 constexpr int LINEAR = 1;
 constexpr int QUADRATIC = 2;
 constexpr int CUBIC = 3;
 
-// Predefined coefficients 
-// A3d(0, 0) = 0.110791568544027; A3d(0, 1) = 0.230421268325901; A3d(0, 2) = 0.15167673653354;
-// A3d(1, 0) = 0.198344644470483; A3d(1, 1) = 0.060514559793513; A3d(1, 2) = 0.084137393813728;
-// A3d(2, 0) = 0.011544253485023; A3d(2, 1) = 0.060942846497753; A3d(2, 2) = 0.186383473579596;
-// 
-// B3d(0) = 0.765645367640828; B3d(1) = 0.992487355850465; B3d(2) = 0.162199373722092;
-// 
-// C3d(0) = 0.639707923874072; C3d(1) =0.3301482067142397; C3d(2) = 0.1098652982167019;
-
-TEST(ThermoMechanics, Patch2dQ1TempEssentialSolo)
+TEST(ThermoMechanics, Patch2dQ1TempEssentialDispConst)
 {
-  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
   mfem::DenseMatrix A(2);
   mfem::Vector B(2);
-  B(0) = 0.0; B(1) = 0.0;
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
 
   mfem::Vector C(2);
   C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
   double D = 0.1289548360319865;
 
-  auto err_arr = SolutionError<triangle>(PatchBoundaryCondition::Essential, PatchBoundaryCondition::Essential,
-    std::tuple{A, B, C, D}, 0.0);
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
 
-  EXPECT_LT(err_arr[0], tol);
-  EXPECT_LT(err_arr[1], tol);
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<LINEAR>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ1DispEssentialSolo)
+TEST(ThermoMechanics, Patch2dQ1DispEssentialTempConst)
 {
-  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
   mfem::DenseMatrix A(2);
   A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
   A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
   mfem::Vector B(2);
-  B(0) = 0.765645367640828; B(1) = 0.992487355850465;
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  A *= 0.1;
 
   mfem::Vector C(2);
   C(0) = 0.0; C(1) = 0.0;
-  double D = 0.0;
+  double D = 0.1289548360319865;
 
-  auto err_arr = SolutionError<triangle>(PatchBoundaryCondition::Essential, PatchBoundaryCondition::Essential,
-    std::tuple{A, B, C, D}, 0.0);
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
 
-  EXPECT_LT(err_arr[0], tol);
-  EXPECT_LT(err_arr[1], tol);
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<LINEAR>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch2dQ1EssentialDecoupled)
+{
+  mfem::DenseMatrix A(2);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
+  mfem::Vector B(2);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  A *= 0.1;
+
+  mfem::Vector C(2);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  double D = 0.1289548360319865;
+
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D}, 0.0);
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
+
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<LINEAR>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D}, 0.0);
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch2dQ1EssentialCoupled)
+{
+  mfem::DenseMatrix A(2);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
+  mfem::Vector B(2);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  A *= 0.1;
+
+  mfem::Vector C(2);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  double D = 0.1289548360319865;
+
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
+
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<LINEAR>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch3dQ1EssentialCoupled)
+{
+  mfem::DenseMatrix A(3);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
+  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
+  mfem::Vector B(3);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
+  A *= 0.1;
+
+  mfem::Vector C(3);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  double D = 0.1289548360319865;
+
+  using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<LINEAR>>;
+  auto tet_err_arr = SolutionError<tetrahedron>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(tet_err_arr[0], tol);
+  EXPECT_LT(tet_err_arr[1], tol);
+
+  using hexahedron = finite_element< mfem::Geometry::CUBE, H1<LINEAR>>;
+  auto hex_err_arr = SolutionError<hexahedron>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(hex_err_arr[0], tol);
+  EXPECT_LT(hex_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch2dQ2EssentialCoupled)
+{
+  mfem::DenseMatrix A(2);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
+  mfem::Vector B(2);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  A *= 0.1;
+
+  mfem::Vector C(2);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  double D = 0.1289548360319865;
+
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<QUADRATIC>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
+
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<QUADRATIC>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch3dQ2EssentialCoupled)
+{
+  mfem::DenseMatrix A(3);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
+  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
+  mfem::Vector B(3);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
+  A *= 0.1;
+
+  mfem::Vector C(3);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  double D = 0.1289548360319865;
+
+  using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<QUADRATIC>>;
+  auto tet_err_arr = SolutionError<tetrahedron>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(tet_err_arr[0], tol);
+  EXPECT_LT(tet_err_arr[1], tol);
+
+  using hexahedron = finite_element< mfem::Geometry::CUBE, H1<QUADRATIC>>;
+  auto hex_err_arr = SolutionError<hexahedron>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(hex_err_arr[0], tol);
+  EXPECT_LT(hex_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch2dQ3EssentialCoupled)
+{
+  mfem::DenseMatrix A(2);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
+  mfem::Vector B(2);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  A *= 0.1;
+
+  mfem::Vector C(2);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  double D = 0.1289548360319865;
+
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<CUBIC>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
+
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<CUBIC>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch3dQ3EssentialCoupled)
+{
+  mfem::DenseMatrix A(3);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
+  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
+  mfem::Vector B(3);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
+  A *= 0.1;
+
+  mfem::Vector C(3);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  double D = 0.1289548360319865;
+
+  using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<CUBIC>>;
+  auto tet_err_arr = SolutionError<tetrahedron>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(tet_err_arr[0], tol);
+  EXPECT_LT(tet_err_arr[1], tol);
+
+  using hexahedron = finite_element< mfem::Geometry::CUBE, H1<CUBIC>>;
+  auto hex_err_arr = SolutionError<hexahedron>(PatchBoundaryCondition::Essential,
+    PatchBoundaryCondition::Essential, std::tuple{A, B, C, D});
+  EXPECT_LT(hex_err_arr[0], tol);
+  EXPECT_LT(hex_err_arr[1], tol);
+}
+
+//////////////////////////Patch Tests (Essential and natural BC)/////////////////////////////
+TEST(ThermoMechanics, Patch2dQ1TempEssentialAndNaturalDispConst)
+{
+  mfem::DenseMatrix A(2);
+  mfem::Vector B(2);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+
+  mfem::Vector C(2);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  double D = 0.1289548360319865;
+
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
+
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<LINEAR>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch2dQ1DispEssentialAndNaturalTempConst)
+{
+  mfem::DenseMatrix A(2);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
+  mfem::Vector B(2);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  A *= 0.1;
+
+  mfem::Vector C(2);
+  C(0) = 0.0; C(1) = 0.0;
+  double D = 0.1289548360319865;
+
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
+
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<LINEAR>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch2dQ1EssentialAndNaturalDecoupled)
+{
+  mfem::DenseMatrix A(2);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
+  mfem::Vector B(2);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  A *= 0.1;
+
+  mfem::Vector C(2);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  double D = 0.1289548360319865;
+
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D}, 0.0);
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
+
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<LINEAR>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D}, 0.0);
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch2dQ1EssentialAndNaturalCoupled)
+{
+  mfem::DenseMatrix A(2);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
+  mfem::Vector B(2);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  A *= 0.1;
+
+  mfem::Vector C(2);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  double D = 0.1289548360319865;
+
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
+
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<LINEAR>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch3dQ1EssentialAndNaturalCoupled)
+{
+  mfem::DenseMatrix A(3);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
+  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
+  mfem::Vector B(3);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
+  A *= 0.1;
+
+  mfem::Vector C(3);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  double D = 0.1289548360319865;
+
+  using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<LINEAR>>;
+  auto tet_err_arr = SolutionError<tetrahedron>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(tet_err_arr[0], tol);
+  EXPECT_LT(tet_err_arr[1], tol);
+
+  using hexahedron = finite_element< mfem::Geometry::CUBE, H1<LINEAR>>;
+  auto hex_err_arr = SolutionError<hexahedron>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(hex_err_arr[0], tol);
+  EXPECT_LT(hex_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch2dQ2EssentialAndNaturalCoupled)
+{
+  mfem::DenseMatrix A(2);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
+  mfem::Vector B(2);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  A *= 0.1;
+
+  mfem::Vector C(2);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  double D = 0.1289548360319865;
+
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<QUADRATIC>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
+
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<QUADRATIC>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch3dQ2EssentialAndNaturalCoupled)
+{
+  mfem::DenseMatrix A(3);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
+  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
+  mfem::Vector B(3);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
+  A *= 0.1;
+
+  mfem::Vector C(3);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  double D = 0.1289548360319865;
+
+  using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<QUADRATIC>>;
+  auto tet_err_arr = SolutionError<tetrahedron>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(tet_err_arr[0], tol);
+  EXPECT_LT(tet_err_arr[1], tol);
+
+  using hexahedron = finite_element< mfem::Geometry::CUBE, H1<QUADRATIC>>;
+  auto hex_err_arr = SolutionError<hexahedron>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(hex_err_arr[0], tol);
+  EXPECT_LT(hex_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch2dQ3EssentialAndNaturalCoupled)
+{
+  mfem::DenseMatrix A(2);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
+  mfem::Vector B(2);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  A *= 0.1;
+
+  mfem::Vector C(2);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  double D = 0.1289548360319865;
+
+  using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<CUBIC>>;
+  auto tri_err_arr = SolutionError<triangle>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(tri_err_arr[0], tol);
+  EXPECT_LT(tri_err_arr[1], tol);
+
+  using quadrilateral = finite_element< mfem::Geometry::SQUARE, H1<CUBIC>>;
+  auto quad_err_arr = SolutionError<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(quad_err_arr[0], tol);
+  EXPECT_LT(quad_err_arr[1], tol);
+}
+
+TEST(ThermoMechanics, Patch3dQ3EssentialAndNaturalCoupled)
+{
+  mfem::DenseMatrix A(3);
+  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
+  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
+  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
+  mfem::Vector B(3);
+  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
+  A *= 0.1;
+
+  mfem::Vector C(3);
+  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  double D = 0.1289548360319865;
+
+  using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<CUBIC>>;
+  auto tet_err_arr = SolutionError<tetrahedron>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(tet_err_arr[0], tol);
+  EXPECT_LT(tet_err_arr[1], tol);
+
+  using hexahedron = finite_element< mfem::Geometry::CUBE, H1<CUBIC>>;
+  auto hex_err_arr = SolutionError<hexahedron>(PatchBoundaryCondition::EssentialAndNatural,
+    PatchBoundaryCondition::EssentialAndNatural, std::tuple{A, B, C, D});
+  EXPECT_LT(hex_err_arr[0], tol);
+  EXPECT_LT(hex_err_arr[1], tol);
 }
 
 } // namespace serac

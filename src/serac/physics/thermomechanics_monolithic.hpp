@@ -74,19 +74,19 @@ public:
   /**
    * @brief Construct a new Thermomechanics object
    * 
-   * @param thermomech_nonlin_opts The options for solving the nonlinear thermomechanics residual equations
-   * @param thermomech_lin_opts The options for solving the linearized Jacobian thermomechanics equations
+   * @param nonlinear_opts The options for solving the nonlinear thermomechanics residual equations
+   * @param lin_opts The options for solving the linearized Jacobian thermomechanics equations
    * @param geom_nonlin Flag to include geometric nonlinearities
    * @param physics_name A name for the physics module instance
    * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
    */
   ThermoMechanicsMonolithic(
-    const NonlinearSolverOptions thermomech_nonlin_opts, const LinearSolverOptions thermomech_lin_opts,
+    const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
     const GeometricNonlinearities geom_nonlin,
     const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {})
   :
   ThermoMechanicsMonolithic(
-    std::make_unique<EquationSolver>(thermomech_nonlin_opts, thermomech_lin_opts, StateManager::mesh(mesh_tag).GetComm()),
+    std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
     geom_nonlin, physics_name, mesh_tag, parameter_names)
   {}
 
@@ -94,12 +94,12 @@ public:
   /**
    * @brief Construct a new Thermal-SolidMechanics object
    *
-   * @param thermomech_solver The nonlinear equation solver for the heat conduction equations
+   * @param solver The nonlinear equation solver for the heat conduction equations
    * @param geom_nonlin Flag to include geometric nonlinearities
    * @param physics_name A name for the physics module instance
    * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
    */
-  ThermoMechanicsMonolithic(std::unique_ptr<EquationSolver> thermomech_solver, const GeometricNonlinearities geom_nonlin,
+  ThermoMechanicsMonolithic(std::unique_ptr<EquationSolver> solver, const GeometricNonlinearities geom_nonlin,
                             const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {})
       : BasePhysics(physics_name, mesh_tag),
         temperature_(StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature"), mesh_tag_)),
@@ -112,7 +112,7 @@ public:
                                                          mesh_tag_)),
         bcs_displacement_(mesh_),
         block_residual_with_bcs_(temperature_.space().TrueVSize() + displacement_.space().TrueVSize()),
-        nonlin_solver_(std::move(thermomech_solver)),
+        nonlin_solver_(std::move(solver)),
         geom_nonlin_(geom_nonlin)
   {
     SERAC_MARK_FUNCTION;
@@ -617,49 +617,12 @@ public:
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material_(state, du_dX, theta, dtheta_dX, params...);
 
       // return serac::tuple{heat_capacity * du_dt, -1.0 * heat_flux};
-      return serac::tuple{internal_heat_source, -1.0 * heat_flux};
+      return serac::tuple{-1.0 * internal_heat_source, -1.0 * heat_flux};
     }
 
   private:
     MaterialType material_;
   };
-
-  // /**
-  //  * @brief Set the thermal material model for the physics solver
-  //  *
-  //  * @tparam MaterialType The thermal material type
-  //  * @param material A material containing heat capacity and thermal flux evaluation information
-  //  *
-  //  * @pre material must be a object that can be called with the following arguments:
-  //  *    1. `tensor<T,dim> x` the spatial position of the material evaluation call
-  //  *    2. `T temperature` the current temperature at the quadrature point
-  //  *    3. `tensor<T,dim>` the spatial gradient of the temperature at the quadrature point
-  //  *    4. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
-  //  *            specified in the `DependsOn<...>` argument.
-  //  *
-  //  * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
-  //  *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
-  //  *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
-  //  * 3>`)
-  //  *
-  //  * @pre MaterialType must return a serac::tuple of volumetric heat capacity and thermal flux when operator() is called
-  //  * with the arguments listed above.
-  //  *
-  //  * @note This method must be called prior to completeSetup()
-  //  */
-  // template <int... active_parameters, typename MaterialType>
-  // void setThermalMaterial(DependsOn<active_parameters...>, const MaterialType& material)
-  // {
-  //   residual_T_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, NUM_STATE_VARS + active_parameters...>{},
-  //                                  ThermalMaterialIntegrand<MaterialType>(material), mesh_);
-  // }
-
-  // /// @overload
-  // template <typename MaterialType>
-  // void setThermalMaterial(const MaterialType& material)
-  // {
-  //   setThermalMaterial(DependsOn<>{}, material);
-  // }
 
   /**
    * @brief Functor representing a material stress.  A functor is used here instead of an
@@ -693,44 +656,6 @@ public:
     MaterialType material_;
     GeometricNonlinearities geom_nonlin_;
   };
-
-  // /**
-  //  * @brief Set the material stress response and mass properties for the physics module
-  //  *
-  //  * @tparam MaterialType The solid material type
-  //  * @tparam StateType the type that contains the internal variables for MaterialType
-  //  * @param material A material that provides a function to evaluate stress
-  //  * @pre material must be a object that can be called with the following arguments:
-  //  *    1. `MaterialType::State & state` an mutable reference to the internal variables for this quadrature point
-  //  *    2. `tensor<T,dim,dim> du_dx` the displacement gradient at this quadrature point
-  //  *    3. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
-  //  *            specified in the `DependsOn<...>` argument.
-  //  *
-  //  * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
-  //  *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
-  //  *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
-  //  * 3>`)
-  //  *
-  //  * @param qdata the buffer of material internal variables at each quadrature point
-  //  *
-  //  * @pre MaterialType must have a public member variable `density`
-  //  * @pre MaterialType must define operator() that returns the Cauchy stress
-  //  *
-  //  * @note This method must be called prior to completeSetup()
-  //  */
-  // template <int... active_parameters, typename MaterialType>
-  // void setSolidMaterial(DependsOn<active_parameters...>, const MaterialType& material)
-  // {
-  //   residual_u_->AddDomainIntegral(Dimension<dim>{}, DependsOn<1, NUM_STATE_VARS + active_parameters...>{},
-  //                                  MaterialStressFunctor<MaterialType>(material, GeometricNonlinearities::Off), mesh_);
-  // }
-
-  // /// @overload
-  // template <typename MaterialType>
-  // void setSolidMaterial(const MaterialType& material)
-  // {
-  //   setSolidMaterial(DependsOn<>{}, material);
-  // }
 
   template <int... active_parameters, typename MaterialType>
   void setMaterial(DependsOn<active_parameters...>, const MaterialType& material)
@@ -796,6 +721,47 @@ public:
   void setSource(SourceType source_function, const std::optional<Domain>& optional_domain = std::nullopt)
   {
     setSource(DependsOn<>{}, source_function, optional_domain);
+  }
+
+  /**
+   * @brief Set the body force function
+   *
+   * @tparam BodyForceType The type of the body force load
+   * @param body_force A function describing the body force applied
+   * @param optional_domain The domain over which the body force is applied. If nothing is supplied the entire domain is
+   * used.
+   * @pre body_force must be a object that can be called with the following arguments:
+   *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
+   *    2. `double t` the time (note: time will be handled differently in the future)
+   *    3. `tuple{value, derivative}`, a variadic list of tuples (each with a values and derivative),
+   *            one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
+   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
+   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
+   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
+   * 3>`)
+   *
+   * @note This method must be called prior to completeSetup()
+   */
+  template <int... active_parameters, typename BodyForceType>
+  void addBodyForce(DependsOn<active_parameters...>, BodyForceType body_force,
+                    const std::optional<Domain>& optional_domain = std::nullopt)
+  {
+    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
+
+    residual_u_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<active_parameters + NUM_STATE_VARS...>{},
+        [body_force](double t, auto x, auto... params) {
+          auto bf = body_force(get<VALUE>(x), t, params...);
+          return serac::tuple{-1.0 * bf, serac::zero{}};
+        },
+        domain);
+  }
+
+  /// @overload
+  template <typename BodyForceType>
+  void addBodyForce(BodyForceType body_force, const std::optional<Domain>& optional_domain = std::nullopt)
+  {
+    addBodyForce(DependsOn<>{}, body_force, optional_domain);
   }
 
   /// @overload
