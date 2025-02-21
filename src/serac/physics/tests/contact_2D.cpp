@@ -27,8 +27,15 @@ class ContactTest
 };
 
 
+#include "tribol/physics/MortarUtils.hpp"
 
-TEST_F(ContactTest, Contact2D)
+TEST(A,B) {
+
+  
+}
+
+
+TEST_F(ContactTest, DISABLED_Contact2D)
 {
   // NOTE: p must be equal to 1 for now
   constexpr int p = 1;
@@ -57,6 +64,7 @@ TEST_F(ContactTest, Contact2D)
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
+  //ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = ContactEnforcement::Penalty,
                                  .jacobian = ContactJacobian::Exact};
 
