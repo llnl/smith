@@ -24,13 +24,13 @@ std::function<std::string(const std::string&)> petscPCTypeValidator = [](const s
 
 int main(int argc, char* argv[])
 {
-    feenableexcept(FE_INVALID | FE_DIVBYZERO);
+  feenableexcept(FE_INVALID | FE_DIVBYZERO);
   constexpr int dim = 3;
   constexpr int p = 1;
 
   // Mesh Options
   int serial_refinement = 0;
-  int parallel_refinement = 0;
+  int parallel_refinement = 1;
   //   double dt = 0.05;
 
   // Solver Options
@@ -54,21 +54,17 @@ int main(int argc, char* argv[])
   linear_options.max_iterations = 2000;
 #endif
 
-  double penalty = 1.0e3;
-  auto contact_type = serac::ContactEnforcement::Penalty;
-
   serac::initialize(argc, argv);
 
   nonlinear_options.force_monolithic = linear_options.preconditioner != Preconditioner::Petsc;
 
-  std::string name = "regularized_floating_contact";
+  std::string name = "viscous_lattice6";
   std::string mesh_tag = "mesh";
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, name + "_data");
 
   // Create and Refine Mesh
-  // std::string filename = SERAC_REPO_DIR "/data/meshes/twobodies.g";
-  std::string filename = SERAC_REPO_DIR "/data/meshes/block.g";
+  std::string filename = SERAC_REPO_DIR "/data/meshes/larger_lattice.g";
   auto mesh = serac::buildMeshFromFile(filename);
   auto refined_mesh = mesh::refineAndDistribute(std::move(mesh), serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(refined_mesh), mesh_tag);
@@ -76,9 +72,10 @@ int main(int argc, char* argv[])
 
   // Surfaces for boundary conditions
   constexpr int bottom_attr{1};
-  //    constexpr int top_attr{3};
+  constexpr int top_attr{2};
 
   auto bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(bottom_attr));
+  auto top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(top_attr));
   //    auto top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(top_attr));
 
   Domain whole_mesh = EntireDomain(pmesh);
@@ -90,25 +87,10 @@ int main(int argc, char* argv[])
   using ParamT = serac::Parameters<serac::H1<p, dim>>;
 
   // Creating Solver
-  std::unique_ptr<SolidMechanics<p, dim, ParamT>> solid_solver;
-  auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim, ParamT>>(
-      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag,
-      fieldnames);
-
-  // Add the contact interaction
-  serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
-                                        .enforcement = contact_type,
-                                        .type = serac::ContactType::Frictionless,
-                                        .penalty = penalty};
-
-  auto bodyring1_id = 0;
-  solid_contact_solver->addContactInteraction(bodyring1_id, {1}, {3}, contact_options);
-  auto bodyring2_id = 1;
-  solid_contact_solver->addContactInteraction(bodyring2_id, {2}, {3}, contact_options);
-  // auto ring1ring2_id = 2;
-  // solid_contact_solver->addContactInteraction(ring1ring2_id, {3}, {4}, contact_options);
-  solid_solver = std::move(solid_contact_solver);
-
+  std::unique_ptr<SolidMechanics<p, dim, ParamT>> solid_solver =
+      std::make_unique<serac::SolidMechanics<p, dim, ParamT>>(nonlinear_options, linear_options,
+                                                              serac::solid_mechanics::default_quasistatic_options, name,
+                                                              mesh_tag, fieldnames);
   solid_solver->setParameter(0, disp_old);
 
   double ground_stiffness = 1.0e-1;
@@ -121,12 +103,12 @@ int main(int argc, char* argv[])
       whole_mesh);
 
   tensor<double, dim> constant_force{};
-  double force_val = -1.0e-3;
-  constant_force[1] = force_val;
+  double force_val = -1.0e-4;
+  // constant_force[1] = force_val;
   constant_force[0] = force_val;
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
   solid_solver->addBodyForce(force, whole_mesh);
-
+  // MFEM_ABORT("testing here");
   // Define a Neo-Hookean material
   auto lambda = 1.0;
   auto G = 0.1;
@@ -134,20 +116,21 @@ int main(int argc, char* argv[])
   solid_solver->setMaterial(mat, whole_mesh);
 
   // Set up essential boundary conditions
-  const double reverse_time = 7.0;
-  auto compress = [&](const serac::tensor<double, dim>, double t) {
+  const double ramp = -0.3;
+  auto top_compress = [&](const serac::tensor<double, dim>, double t) {
     serac::tensor<double, dim> u{};
     u[0] = u[2] = 0.0;
-    double ramp = 0.0;
-    if (t < reverse_time) {
-      u[1] = ramp * t;
-    } else {
-      u[1] = ramp * (2.0 * reverse_time - t);
-    }
+    u[1] = 0.5 * ramp * t;
     return u;
   };
-  solid_solver->setDisplacementBCs(compress, bottom);
-
+  auto bottom_compress = [&](const serac::tensor<double, dim>, double t) {
+    serac::tensor<double, dim> u{};
+    u[0] = u[2] = 0.0;
+    u[1] = -0.5 * ramp * t;
+    return u;
+  };
+  solid_solver->setDisplacementBCs(top_compress, top,Component::ALL);
+  solid_solver->setDisplacementBCs(bottom_compress, bottom,Component::ALL);
   // Finalize the data structures
   solid_solver->completeSetup();
 
@@ -156,18 +139,18 @@ int main(int argc, char* argv[])
   solid_solver->outputStateToDisk(paraview_name);
 
   // Perform the quasi-static solve
-  SLIC_INFO_ROOT(axom::fmt::format("Running floating regularized self contact example with {} displacement dofs",
+  SLIC_INFO_ROOT(axom::fmt::format("Running viscous lattice example with {} displacement dofs",
                                    solid_solver->displacement().GlobalSize()));
   SLIC_INFO_ROOT("Starting pseudo-timestepping.");
   serac::logger::flush();
-  constexpr double T = 100.0;
+  constexpr double T = 10.0;
   while (solid_solver->time() < T && std::abs(solid_solver->time() - T) > DBL_EPSILON) {
-    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of 1.0)", solid_solver->time()));
+    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of 10.0)", solid_solver->time()));
     serac::logger::flush();
 
     // Refine dt as contact starts
     // auto next_dt = solid_solver->time() < 0.65 ? dt : dt * 0.1;
-    auto next_dt = 0.2;
+    auto next_dt = 0.05;
 
     disp_old = solid_solver->state("displacement");
     solid_solver->setParameter(0, disp_old);
