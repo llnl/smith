@@ -121,6 +121,10 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("slepc+arpack", when="+slepc")
 
     depends_on("tribol", when="+tribol")
+    depends_on("tribol+raja", when="+raja")
+    depends_on("tribol~raja", when="~raja")
+    depends_on("tribol+umpire", when="+umpire")
+    depends_on("tribol~umpire", when="~umpire")
 
     # Needs to be first due to a bug with the Spack concretizer
     # Note: Certain combinations of CMake and Conduit do not like +mpi
@@ -139,7 +143,9 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("umpire+openmp", when="+umpire+openmp")
 
     depends_on("axom@0.9:~fortran~tools~examples+mfem+lua")
+    depends_on("axom+raja", when="+raja")
     depends_on("axom~raja", when="~raja")
+    depends_on("axom+umpire", when="+umpire")
     depends_on("axom~umpire", when="~umpire")
     depends_on("axom~openmp", when="~openmp")
     depends_on("axom+openmp", when="+openmp")
@@ -372,28 +378,36 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
         if spec.satisfies("+rocm"):
             entries.append(cmake_cache_option("ENABLE_HIP", True))
 
-            hip_root = spec["hip"].prefix
-            rocm_root = hip_root + "/.."
+            rocm_root = os.path.dirname(spec["llvm-amdgpu"].prefix)
+            entries.append(cmake_cache_path("ROCM_PATH", rocm_root))
 
-            # Fix blt_hip getting HIP_CLANG_INCLUDE_PATH-NOTFOUND bad include directory
-            if (self.spec.satisfies('%cce') or self.spec.satisfies('%clang')) and 'toss_4' in self._get_sys_type(spec):
-                # Set the patch version to 0 if not already
-                clang_version= str(self.compiler.version)[:-1] + "0"
-                hip_clang_include_path = rocm_root + "/llvm/lib/clang/" + clang_version + "/include"
-                if os.path.isdir(hip_clang_include_path):
-                    entries.append(cmake_cache_path("HIP_CLANG_INCLUDE_PATH", hip_clang_include_path))
+            hip_link_flags = "-L{0}/lib -Wl,-rpath,{0}/lib ".format(rocm_root)
+
+            # Recommended MPI flags
+            hip_link_flags += "-lxpmem "
+            hip_link_flags += "-L/opt/cray/pe/mpich/{0}/gtl/lib ".format(spec["mpi"].version)
+            hip_link_flags += "-Wl,-rpath,/opt/cray/pe/mpich/{0}/gtl/lib ".format(spec["mpi"].version)
+            hip_link_flags += "-lmpi_gtl_hsa "
+
+            # Fixes for mpi for rocm until wrapper paths are fixed
+            # These flags are already part of the wrapped compilers on TOSS4 systems
+            if "+fortran" in spec and self.is_fortran_compiler("amdflang"):
+                hip_link_flags += "-Wl,--disable-new-dtags "
+
+                if spec.satisfies("^hip@6.0.0:"):
+                    hip_link_flags += "-L{0}/lib/llvm/lib -Wl,-rpath,{0}/lib/llvm/lib ".format(rocm_root)
+                else:
+                    hip_link_flags += "-L{0}/llvm/lib -Wl,-rpath,{0}/llvm/lib ".format(rocm_root)
+                hip_link_flags += "-lpgmath -lflang -lflangrti -lompstub "
+
+            # Remove extra link library for crayftn
+            if "+fortran" in spec and self.is_fortran_compiler("crayftn"):
+                entries.append(
+                    cmake_cache_string("BLT_CMAKE_IMPLICIT_LINK_LIBRARIES_EXCLUDE", "unwind")
+                )
 
             # Additional libraries for TOSS4
-            hip_link_flags = ""
-            hip_link_flags += "-L{0}/../llvm/lib -L{0}/lib ".format(hip_root)
-            hip_link_flags += "-Wl,-rpath,{0}/../llvm/lib:{0}/lib ".format(hip_root)
-            hip_link_flags += "-lpgmath -lflang -lflangrti -lompstub -lamdhip64 "
-            hip_link_flags += "-L{0}/../lib64 -Wl,-rpath,{0}/../lib64 ".format(hip_root)
-            hip_link_flags += "-L{0}/../lib -Wl,-rpath,{0}/../lib ".format(hip_root)
-            hip_link_flags += "-lamd_comgr -lhsa-runtime64 "
-
-            if spec.satisfies("+strumpack"):
-                hip_link_flags += "-lhipblas -lrocblas -lrocsolver "
+            hip_link_flags += "-lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr "
 
             entries.append(cmake_cache_string("CMAKE_EXE_LINKER_FLAGS", hip_link_flags))
 
