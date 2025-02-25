@@ -25,7 +25,6 @@ ContactData::ContactData(const mfem::ParMesh& mesh)
       num_pressure_dofs_{0},
       offsets_up_to_date_{false}
 {
-  tribol::initialize(mesh_.SpaceDimension(), mesh_.GetComm());
 }
 
 ContactData::~ContactData() { tribol::finalize(); }

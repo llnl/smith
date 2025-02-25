@@ -180,6 +180,8 @@ class ContactData {
 #endif
   }
 
+  const std::vector<ContactInteraction>& getContactInteractions() const { return interactions_; }
+
   /**
    * @brief Are any contact interactions enforced using Lagrange multipliers?
    *

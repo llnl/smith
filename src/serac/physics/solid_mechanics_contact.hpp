@@ -219,6 +219,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     SolidMechanicsBase::completeSetup();
   }
 
+  mfem::HypreParVector pressure() const { return contact_.mergedPressures(); }
+
  protected:
   /// @brief Solve the Quasi-static Newton system
   void quasiStaticSolve(double dt) override
