@@ -123,10 +123,7 @@ struct NeoHookean {
     return dot(TK, inv(transpose(F)));
   }
 
-  SERAC_HOST_DEVICE auto density_func() const
-  {
-    return density;
-  }
+  SERAC_HOST_DEVICE auto density_func() const { return density; }
 
   double density;  ///< mass density
   double K;        ///< bulk modulus
