@@ -164,8 +164,6 @@ TEST_P(ContactFiniteDiff, patch)
   constexpr int n_steps = 3;
   double dt = 1.0 / static_cast<double>(n_steps);
   for (int i{0}; i < n_steps; ++i) {
-    solid_solver.advanceTimestep(dt);
-
     double max_diff = 0.0;
     auto oper = solid_solver.buildQuasistaticOperator();
     auto& u = solid_solver.displacement();
@@ -212,6 +210,9 @@ TEST_P(ContactFiniteDiff, patch)
       }
     }
     std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
+
+    solid_solver.advanceTimestep(dt);
+    solid_solver.displacement().Print(mfem::out, 17);
   }
 }
 
