@@ -344,8 +344,8 @@ std::array<double, 2> SolutionError(PatchBoundaryCondition temp_bc, PatchBoundar
   //        same issue as the solid_statics_patch tests.
   //
   //        relevant issue: https://github.com/LLNL/serac/issues/926
-  // constexpr int solution_polynomial_order = ElementType::order;
   constexpr int solution_polynomial_order = 1;
+  // constexpr int solution_polynomial_order = ElementType::order;
   auto exact_solution = ManufacturedSolution<dim>(solution_polynomial_order,
     std::get<0>(coef), std::get<1>(coef), std::get<2>(coef), std::get<3>(coef));
 

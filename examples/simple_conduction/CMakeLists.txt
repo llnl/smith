@@ -10,6 +10,18 @@ blt_add_executable( NAME        simple_conduction_without_input_file
                     DEPENDS_ON  serac_physics serac_mesh serac_functional
                     )
 
+blt_add_executable( NAME        thermal_goal_oriented_estimates
+                    SOURCES     thermal_goal_oriented_estimates.cpp
+                    OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                    DEPENDS_ON  serac_physics serac_mesh serac_functional
+                    )
+
+blt_add_executable( NAME        thermal_pino_example
+                    SOURCES     thermal_pino_example.cpp
+                    OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                    DEPENDS_ON  serac_physics serac_mesh serac_functional
+                    )
+
 if(SERAC_ENABLE_TESTS)
     blt_add_test(NAME          simple_conduction_without_input_file
                  COMMAND       simple_conduction_without_input_file
