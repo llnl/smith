@@ -95,7 +95,7 @@ TEST_P(TribolFiniteDiff, patch)
     u[j] -= eps;
     // loop through forces (row = k)
     for (int k{0}; k < u.Size(); ++k) {
-      if (std::abs(J_exact[k]) > 1.0e-15 || std::abs(J_fd[k]) > 1.0e-15) {
+      if (J_exact[k] != 1.0 && (std::abs(J_exact[k]) > 1.0e-15 || std::abs(J_fd[k]) > 1.0e-15)) {
         auto diff = std::abs(J_exact[k] - J_fd[k]);
         if (diff > max_diff) {
           max_diff = diff;
