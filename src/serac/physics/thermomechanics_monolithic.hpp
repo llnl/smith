@@ -18,6 +18,7 @@
 
 #include "serac/physics/base_physics.hpp"
 #include "serac/physics/thermomechanics_input.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/physics/state/state_manager.hpp"
@@ -76,18 +77,16 @@ public:
    * 
    * @param nonlinear_opts The options for solving the nonlinear thermomechanics residual equations
    * @param lin_opts The options for solving the linearized Jacobian thermomechanics equations
-   * @param geom_nonlin Flag to include geometric nonlinearities
    * @param physics_name A name for the physics module instance
    * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
    */
   ThermoMechanicsMonolithic(
     const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
-    const GeometricNonlinearities geom_nonlin,
     const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {})
   :
   ThermoMechanicsMonolithic(
     std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-    geom_nonlin, physics_name, mesh_tag, parameter_names)
+    physics_name, mesh_tag, parameter_names)
   {}
 
 
@@ -95,11 +94,10 @@ public:
    * @brief Construct a new Thermal-SolidMechanics object
    *
    * @param solver The nonlinear equation solver for the heat conduction equations
-   * @param geom_nonlin Flag to include geometric nonlinearities
    * @param physics_name A name for the physics module instance
    * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
    */
-  ThermoMechanicsMonolithic(std::unique_ptr<EquationSolver> solver, const GeometricNonlinearities geom_nonlin,
+  ThermoMechanicsMonolithic(std::unique_ptr<EquationSolver> solver,
                             const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {})
       : BasePhysics(physics_name, mesh_tag),
         temperature_(StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature"), mesh_tag_)),
@@ -112,8 +110,7 @@ public:
                                                          mesh_tag_)),
         bcs_displacement_(mesh_),
         block_residual_with_bcs_(temperature_.space().TrueVSize() + displacement_.space().TrueVSize()),
-        nonlin_solver_(std::move(solver)),
-        geom_nonlin_(geom_nonlin)
+        nonlin_solver_(std::move(solver))
   {
     SERAC_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(mesh_.Dimension() != dim,
@@ -222,9 +219,32 @@ public:
   void setTemperatureBCs(const std::set<int>& temp_bdr, std::function<double(const mfem::Vector& x, double t)> temp)
   {
     // Project the coefficient onto the grid function
-    auto temp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(temp);
+    temp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(temp);
 
     bcs_.addEssential(temp_bdr, temp_bdr_coef_, temperature_.space());
+  }
+
+  /**
+   * @brief Set essential temperature boundary conditions (strongly enforced) matching setDisplacementBCs signature
+   *
+   * @param[in] applied_temperature Function specifying the applied temperature.
+   * @param[in] domain Domain over which to apply the boundary condition.
+   *
+   * @note This should be called prior to completeSetup()
+   */
+  template<typename AppliedTemperatureFunction>
+  void setTemperatureBCs(AppliedTemperatureFunction applied_temperature, Domain& domain)
+  {
+    auto mfem_coefficient_function = [applied_temperature](const mfem::Vector X_mfem, double t) {
+      auto X = make_tensor<dim>([&X_mfem](int i) { return X_mfem[i]; });
+      return applied_temperature(X, t);
+    };
+
+    temp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
+
+    auto dof_list = domain.dof_list(&temperature_.space());
+
+    bcs_.addEssential(dof_list, temp_bdr_coef_, temperature_.space(), 0);
   }
 
   /**
@@ -232,8 +252,7 @@ public:
    *
    * @tparam FluxType The type of the thermal flux object
    * @param flux_function A function describing the flux applied to a boundary
-   * @param optional_domain The domain over which the flux is applied. If nothing is supplied the entire boundary is
-   * used.
+   * @param domain The domain over which the flux is applied.
    *
    * @pre FluxType must be a object that can be called with the following arguments:
    *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
@@ -251,11 +270,8 @@ public:
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename FluxType>
-  void setFluxBCs(DependsOn<active_parameters...>, FluxType flux_function,
-                  const std::optional<Domain>& optional_domain = std::nullopt)
+  void setFluxBCs(DependsOn<active_parameters...>, FluxType flux_function, Domain& domain)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh_);
-
     residual_T_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<0, active_parameters + NUM_STATE_VARS...>{},
         [flux_function](double t, auto X, auto u, auto... params) {
@@ -269,251 +285,85 @@ public:
 
   /// @overload
   template <typename FluxType>
-  void setFluxBCs(FluxType flux_function, const std::optional<Domain>& optional_domain = std::nullopt)
+  void setFluxBCs(FluxType flux_function, Domain& domain)
   {
-    setFluxBCs(DependsOn<>{}, flux_function, optional_domain);
+    setFluxBCs(DependsOn<>{}, flux_function, domain);
   }
 
   /**
-   * @brief Set essential displacement boundary conditions (strongly enforced)
+   * @brief Set essential displacement boundary conditions on selected components
    *
-   * @param[in] disp_bdr The boundary attributes from the mesh on which to enforce a displacement
-   * @param[in] disp The prescribed boundary displacement function
+   * @param[in] applied_displacement Function specifying the applied displacement vector.
+   * @param[in] domain Domain over which to apply the boundary condition.
+   * @param[in] components (optional) Indicator of vector components to be constrained.
+   *            If argument is omitted, the default is to constrain all components.
    *
    * @note This method must be called prior to completeSetup()
    *
-   * For the displacement function, the first argument is the input position and the second argument is the output
-   * prescribed displacement.
+   * The signature of the applied_displacement callable is:
+   * tensor<double, dim> applied_displacement(tensor<double, dim> X, double t)
+   * Parameters:
+   *   X - coordinates of node
+   *   t - time
+   * Returns:
+   *   u, vector of applied displacements
+   *
+   * Usage examples:
+   *
+   * To constrain the Y component:
+   * setDisplacementBCs(applied_displacement, domain, Component::Y);
+   *
+   * To constrain the X and Z components:
+   * setDisplacementBCs(applied_displacement, domain, Component::X + Component::Z);
+   *
+   * To constrain all components:
+   * setDisplacementBCs((applied_displacement, domain);
    */
-  void setDisplacementBCs(const std::set<int>& disp_bdr, std::function<void(const mfem::Vector&, mfem::Vector&)> disp)
+  template <typename AppliedDisplacementFunction>
+  void setDisplacementBCs(AppliedDisplacementFunction applied_displacement, Domain& domain,
+                          Components components = Component::ALL)
   {
-    // Project the coefficient onto the grid function
-    auto disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, disp);
+    for (int i = 0; i < dim; ++i) {
+      if (components[size_t(i)]) {
+        auto mfem_coefficient_function = [applied_displacement, i](const mfem::Vector& X_mfem, double t) {
+          auto X = make_tensor<dim>([&X_mfem](int k) { return X_mfem[k]; });
+          return applied_displacement(X, t)[i];
+        };
 
-    bcs_displacement_.addEssential(disp_bdr, disp_bdr_coef_, displacement_.space());
+        component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
+
+        auto dof_list = domain.dof_list(&displacement_.space());
+
+        // scalar ldofs -> vector ldofs
+        displacement_.space().DofsToVDofs(i, dof_list);
+
+        bcs_displacement_.addEssential(dof_list, component_disp_bdr_coef_, displacement_.space(), i);
+      }
+    }
   }
 
   /**
-   * @brief Set essential displacement boundary conditions (strongly enforced)
+   * @brief Shortcut to set selected components of displacements to zero for all time
    *
-   * @param[in] disp_bdr The boundary attributes from the mesh on which to enforce a displacement
-   * @param[in] disp The prescribed boundary displacement function
-   *
-   * For the displacement function, the first argument is the input position, the second argument is the time, and the
-   * third argument is the output prescribed displacement.
+   * @param[in] domain Domain to apply the homogeneous boundary condition to
+   * @param[in] components (optional) Indicator of vector components to be constrained.
+   *            If argument is omitted, the default is to constrain all components.
    *
    * @note This method must be called prior to completeSetup()
    */
-  void setDisplacementBCs(const std::set<int>&                                            disp_bdr,
-                          std::function<void(const mfem::Vector&, double, mfem::Vector&)> disp)
+  void setFixedBCs(Domain& domain, Components components = Component::ALL)
   {
-    // Project the coefficient onto the grid function
-    auto disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, disp);
-
-    bcs_displacement_.addEssential(disp_bdr, disp_bdr_coef_, displacement_.space());
+    auto zero_vector_function = [](tensor<double, dim>, double) { return tensor<double, dim>{}; };
+    setDisplacementBCs(zero_vector_function, domain, components);
   }
-
-  /**
-   * @brief Set the displacement essential boundary conditions on a single component
-   *
-   * @param[in] disp_bdr The set of boundary attributes to set the displacement on
-   * @param[in] disp The vector function containing the set displacement values
-   * @param[in] component The component to set the displacment on
-   *
-   * For the displacement function, the argument is the input position and the output is the value of the component of
-   * the displacement.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCs(const std::set<int>& disp_bdr, std::function<double(const mfem::Vector& x)> disp,
-                          int component)
-  {
-    // Project the coefficient onto the grid function
-    auto component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(disp);
-
-    bcs_displacement_.addEssential(disp_bdr, component_disp_bdr_coef_, displacement_.space(), component);
-  }
-
-  /**
-   * @brief Set the displacement essential boundary conditions on a single component
-   *
-   * @param[in] disp_bdr The set of boundary attributes to set the displacement on
-   * @param[in] disp The vector function containing the set displacement values
-   * @param[in] component The component to set the displacment on
-   *
-   * For the displacement function, the argument is the input position and the output is the value of the component of
-   * the displacement.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCs(const std::set<int>& disp_bdr, std::function<double(const mfem::Vector& x, double)> disp,
-                          int component)
-  {
-    // Project the coefficient onto the grid function
-    auto component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(disp);
-
-    bcs_displacement_.addEssential(disp_bdr, component_disp_bdr_coef_, displacement_.space(), component);
-  }
-
-  /**
-   * @brief Set the displacement essential boundary conditions on a set of true degrees of freedom
-   *
-   * @param true_dofs A set of true degrees of freedom to set the displacement on
-   * @param disp The vector function containing the prescribed displacement values
-   *
-   * The @a true_dofs list can be determined using functions from the @a mfem::ParFiniteElementSpace class.
-   *
-   * @note The coefficient is required to be vector-valued. However, only the dofs specified in the @a true_dofs
-   * array will be set. This means that if the @a true_dofs array only contains dofs for a specific vector component in
-   * a vector-valued finite element space, only that component will be set.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCsByDofList(const mfem::Array<int>                                  true_dofs,
-                                   std::function<void(const mfem::Vector&, mfem::Vector&)> disp)
-  {
-    auto disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, disp);
-
-    bcs_displacement_.addEssential(true_dofs, disp_bdr_coef_, displacement_.space());
-  }
-
-  /**
-   * @brief Set the displacement essential boundary conditions on a set of true degrees of freedom
-   *
-   * @param true_dofs A set of true degrees of freedom to set the displacement on
-   * @param disp The vector function containing the prescribed displacement values
-   *
-   * The @a true_dofs list can be determined using functions from the @a mfem::ParFiniteElementSpace related to the
-   * displacement @a serac::FiniteElementState .
-   *
-   * For the displacement function, the first argument is the input position, the second argument is time,
-   * and the third argument is the prescribed output displacement vector.
-   *
-   * @note The displacement function is required to be vector-valued. However, only the dofs specified in the @a
-   * true_dofs array will be set. This means that if the @a true_dofs array only contains dofs for a specific vector
-   * component in a vector-valued finite element space, only that component will be set.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCsByDofList(const mfem::Array<int>                                          true_dofs,
-                                   std::function<void(const mfem::Vector&, double, mfem::Vector&)> disp)
-  {
-    auto disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, disp);
-
-    bcs_displacement_.addEssential(true_dofs, disp_bdr_coef_, displacement_.space());
-  }
-
-//  /**
-//   * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area
-//   *
-//   * @param is_node_constrained A callback function that returns true if displacement nodes at a certain position should
-//   * be constrained by this boundary condition
-//   * @param disp The vector function containing the prescribed displacement values
-//   *
-//   * The displacement function takes a spatial position as the first argument and time as the second argument. It
-//   * computes the desired displacement and fills the third argument with these displacement values.
-//   *
-//   * @note This method searches over the entire mesh, not just the boundary nodes.
-//   *
-//   * @note This method must be called prior to completeSetup()
-//   */
-//  void setDisplacementBCs(std::function<bool(const mfem::Vector&)>                        is_node_constrained,
-//                          std::function<void(const mfem::Vector&, double, mfem::Vector&)> disp)
-//  {
-//    auto constrained_dofs = calculateConstrainedDofs(is_node_constrained);
-//
-//    setDisplacementBCsByDofList(constrained_dofs, disp);
-//  }
-//
-//  /**
-//   * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area
-//   *
-//   * @param is_node_constrained A callback function that returns true if displacement nodes at a certain position should
-//   * be constrained by this boundary condition
-//   * @param disp The vector function containing the prescribed displacement values
-//   *
-//   * The displacement function takes a spatial position as the first argument. It computes the desired displacement
-//   * and fills the second argument with these displacement values.
-//   *
-//   * @note This method searches over the entire mesh, not just the boundary nodes.
-//   *
-//   * @note This method must be called prior to completeSetup()
-//   */
-//  void setDisplacementBCs(std::function<bool(const mfem::Vector&)>                is_node_constrained,
-//                          std::function<void(const mfem::Vector&, mfem::Vector&)> disp)
-//  {
-//    auto constrained_dofs = calculateConstrainedDofs(is_node_constrained);
-//
-//    setDisplacementBCsByDofList(constrained_dofs, disp);
-//  }
-//
-//  /**
-//   * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area for a single
-//   * displacement vector component
-//   *
-//   * @param is_node_constrained A callback function that returns true if displacement nodes at a certain position should
-//   * be constrained by this boundary condition
-//   * @param disp The scalar function containing the prescribed component displacement values
-//   * @param component The component of the displacement vector that should be set by this boundary condition. The other
-//   * components of displacement are unconstrained.
-//   *
-//   * The displacement function takes a spatial position as the first argument and current time as the second argument.
-//   * It computes the desired displacement scalar for the given component and returns that value.
-//   *
-//   * @note This method searches over the entire mesh, not just the boundary nodes.
-//   *
-//   * @note This method must be called prior to completeSetup()
-//   */
-//  void setDisplacementBCs(std::function<bool(const mfem::Vector&)>           is_node_constrained,
-//                          std::function<double(const mfem::Vector&, double)> disp, int component)
-//  {
-//    auto constrained_dofs = calculateConstrainedDofs(is_node_constrained, component);
-//
-//    auto vector_function = [disp, component](const mfem::Vector& x, double time, mfem::Vector& displacement) {
-//      displacement            = 0.0;
-//      displacement(component) = disp(x, time);
-//    };
-//
-//    setDisplacementBCsByDofList(constrained_dofs, vector_function);
-//  }
-//
-//  /**
-//   * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area for a single
-//   * displacement vector component
-//   *
-//   * @param is_node_constrained A callback function that returns true if displacement nodes at a certain position should
-//   * be constrained by this boundary condition
-//   * @param disp The scalar function containing the prescribed component displacement values
-//   * @param component The component of the displacement vector that should be set by this boundary condition. The other
-//   * components of displacement are unconstrained.
-//   *
-//   * The displacement function takes a spatial position as an argument. It computes the desired displacement scalar for
-//   * the given component and returns that value.
-//   *
-//   * @note This method searches over the entire mesh, not just the boundary nodes.
-//   *
-//   * @note This method must be called prior to completeSetup()
-//   */
-//  void setDisplacementBCs(std::function<bool(const mfem::Vector& x)>   is_node_constrained,
-//                          std::function<double(const mfem::Vector& x)> disp, int component)
-//  {
-//    auto constrained_dofs = calculateConstrainedDofs(is_node_constrained, component);
-//
-//    auto vector_function = [disp, component](const mfem::Vector& x, mfem::Vector& displacement) {
-//      displacement            = 0.0;
-//      displacement(component) = disp(x);
-//    };
-//
-//    setDisplacementBCsByDofList(constrained_dofs, vector_function);
-//  }
 
   /**
    * @brief Set the traction boundary condition
    *
    * @tparam TractionType The type of the traction load
    * @param traction_function A function describing the traction applied to a boundary
-   * @param optional_domain The domain over which the traction is applied. If nothing is supplied the entire boundary is
-   * used.
+   * @param domain The domain over which the traction is applied.
+   * 
    * @pre TractionType must be a object that can be called with the following arguments:
    *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
    *    2. `tensor<T,dim> n` the outward-facing unit normal for the quadrature point
@@ -531,11 +381,8 @@ public:
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename TractionType>
-  void setTraction(DependsOn<active_parameters...>, TractionType traction_function,
-                   const std::optional<Domain>& optional_domain = std::nullopt)
+  void setTraction(DependsOn<active_parameters...>, TractionType traction_function, Domain& domain)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh_);
-
     residual_u_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<NUM_STATE_VARS + active_parameters...>{},
         [traction_function](double t, auto X, auto... params) {
@@ -548,9 +395,9 @@ public:
 
   /// @overload
   template <typename TractionType>
-  void setTraction(TractionType traction_function, const std::optional<Domain>& optional_domain = std::nullopt)
+  void setTraction(TractionType traction_function, Domain& domain)
   {
-    setTraction(DependsOn<>{}, traction_function, optional_domain);
+    setTraction(DependsOn<>{}, traction_function, domain);
   }
 
   /**
@@ -631,7 +478,7 @@ public:
   template <typename MaterialType>
   struct SolidMaterialInterface {
     /// @brief Constructor for the functor
-    SolidMaterialInterface(MaterialType material, GeometricNonlinearities gn) : material_(material), geom_nonlin_(gn) {}
+    SolidMaterialInterface(MaterialType material) : material_(material) {}
 
     /**
      * @brief Material stress response call
@@ -643,34 +490,30 @@ public:
 
       auto [theta, dtheta_dX] = temperature;
       auto du_dX = get<DERIVATIVE>(displacement);
+
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material_(state, du_dX, theta, dtheta_dX, params...);
 
-      auto dx_dX = 0.0 * du_dX + I;
-      if (geom_nonlin_ == GeometricNonlinearities::On) { dx_dX += du_dX; }
-
-      auto flux = dot(stress, transpose(inv(dx_dX))) * det(dx_dX);
-      return serac::tuple{serac::zero{}, flux};
+      return serac::tuple{serac::zero{}, stress};
     }
 
   private:
     MaterialType material_;
-    GeometricNonlinearities geom_nonlin_;
   };
 
   template <int... active_parameters, typename MaterialType>
-  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material)
+  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material, Domain& domain)
   {
     residual_T_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 1, NUM_STATE_VARS + active_parameters...>{},
-                                   ThermalMaterialInterface<MaterialType>(material), mesh_);
+                                   ThermalMaterialInterface<MaterialType>(material), domain);
     residual_u_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 1, NUM_STATE_VARS + active_parameters...>{},
-                                   SolidMaterialInterface<MaterialType>(material, geom_nonlin_), mesh_);
+                                   SolidMaterialInterface<MaterialType>(material), domain);
   }
 
   /// @overload
   template <typename MaterialType>
-  void setMaterial(const MaterialType& material)
+  void setMaterial(const MaterialType& material, Domain& domain)
   {
-    setMaterial(DependsOn<>{}, material);
+    setMaterial(DependsOn<>{}, material, domain);
   }
 
   /**
@@ -678,8 +521,7 @@ public:
    *
    * @tparam SourceType The type of the source function
    * @param source_function A source function for a prescribed thermal load
-   * @param optional_domain The domain over which the source is applied. If nothing is supplied the entire domain is
-   * used.
+   * @param domain The domain over which the source is applied.
    *
    * @pre source_function must be a object that can be called with the following arguments:
    *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
@@ -697,11 +539,8 @@ public:
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename SourceType>
-  void setSource(DependsOn<active_parameters...>, SourceType source_function,
-                 const std::optional<Domain>& optional_domain = std::nullopt)
+  void setSource(DependsOn<active_parameters...>, SourceType source_function, Domain& domain)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
-
     residual_T_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, active_parameters + NUM_STATE_VARS...>{},
         [source_function](double t, auto x, auto temperature, auto... params) {
@@ -718,9 +557,9 @@ public:
 
   /// @overload
   template <typename SourceType>
-  void setSource(SourceType source_function, const std::optional<Domain>& optional_domain = std::nullopt)
+  void setSource(SourceType source_function, Domain& domain)
   {
-    setSource(DependsOn<>{}, source_function, optional_domain);
+    setSource(DependsOn<>{}, source_function, domain);
   }
 
   /**
@@ -728,8 +567,8 @@ public:
    *
    * @tparam BodyForceType The type of the body force load
    * @param body_force A function describing the body force applied
-   * @param optional_domain The domain over which the body force is applied. If nothing is supplied the entire domain is
-   * used.
+   * @param domain The domain over which the body force is applied.
+   * 
    * @pre body_force must be a object that can be called with the following arguments:
    *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
    *    2. `double t` the time (note: time will be handled differently in the future)
@@ -743,11 +582,8 @@ public:
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename BodyForceType>
-  void addBodyForce(DependsOn<active_parameters...>, BodyForceType body_force,
-                    const std::optional<Domain>& optional_domain = std::nullopt)
+  void addBodyForce(DependsOn<active_parameters...>, BodyForceType body_force, Domain& domain)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
-
     residual_u_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<active_parameters + NUM_STATE_VARS...>{},
         [body_force](double t, auto x, auto... params) {
@@ -759,9 +595,9 @@ public:
 
   /// @overload
   template <typename BodyForceType>
-  void addBodyForce(BodyForceType body_force, const std::optional<Domain>& optional_domain = std::nullopt)
+  void addBodyForce(BodyForceType body_force, Domain& domain)
   {
-    addBodyForce(DependsOn<>{}, body_force, optional_domain);
+    addBodyForce(DependsOn<>{}, body_force, domain);
   }
 
   /// @overload
@@ -892,6 +728,8 @@ public:
    */
   void setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&> adjoint_loads) override
   {
+    SLIC_ERROR_ROOT(axom::fmt::format("Do not use. Method not yet tested"));
+
     SLIC_ERROR_ROOT_IF(adjoint_loads.size() != 2,
                        "Adjoint load container is not the expected size of 2 in the thermomechanics module");
     auto temperature_adjoint_load_ptr = adjoint_loads.find("temperature");
@@ -914,6 +752,8 @@ public:
   /// @overload
   void reverseAdjointTimestep()
   {
+    SLIC_ERROR_ROOT(axom::fmt::format("Do not use. Method not yet tested"));
+
     auto [r1, dr1_dT] =
         (*residual_T_)(time_, shape_displacement_, differentiate_wrt(temperature_), displacement_,
                        *parameters_[parameter_indices].state...);
@@ -988,6 +828,8 @@ public:
   /// @overload
   FiniteElementDual& computeTimestepSensitivity(size_t parameter_field) override
   {
+    SLIC_ERROR_ROOT(axom::fmt::format("Do not use. Method not yet tested"));
+
     SLIC_ASSERT_MSG(parameter_field < sizeof...(parameter_indices),
                     axom::fmt::format("Invalid parameter index '{}' requested for sensitivity."));
 
@@ -1011,6 +853,8 @@ public:
   /// @overload
   FiniteElementDual& computeTimestepShapeSensitivity() override
   {
+    SLIC_ERROR_ROOT(axom::fmt::format("Do not use. Method not yet tested"));
+
     auto dr1_dshape = serac::get<DERIVATIVE>(
         (*residual_T_)(time_end_step_, differentiate_wrt(shape_displacement_), temperature_,
                        displacement_, *parameters_[parameter_indices].state...));
@@ -1191,8 +1035,11 @@ private:
   /// @note This time is important to save to evaluate various parameter sensitivities after each reverse step
   double time_end_step_;
 
-  /// @brief A flag denoting whether to compute geometric nonlinearities in the residual
-  GeometricNonlinearities geom_nonlin_;
+  /// Coefficient containing the essential boundary values
+  std::shared_ptr<mfem::Coefficient> temp_bdr_coef_;
+
+  /// @brief Coefficient containing the displacement essential boundary values
+  std::shared_ptr<mfem::Coefficient> component_disp_bdr_coef_;
 
   /// @brief Array functions computing the derivative of the residual with respect to each given parameter
   /// @note This is needed so the user can ask for a specific sensitivity at runtime as opposed to it being a

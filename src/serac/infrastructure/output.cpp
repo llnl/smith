@@ -41,7 +41,7 @@ void outputSummary(const axom::sidre::DataStore& datastore, const std::string& o
   std::string file_format_string = detail::file_format_string(file_format);
 
   const std::string file_name = axom::fmt::format("summary.{0}", file_format_string);
-  const std::string path      = axom::utilities::filesystem::joinPath(output_directory, file_name);
+  const std::string path = axom::utilities::filesystem::joinPath(output_directory, file_name);
   datastore.getRoot()->getGroup("serac_summary")->save(path, file_format_string);
 }
 

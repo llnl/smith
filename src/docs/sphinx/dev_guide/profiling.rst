@@ -109,15 +109,18 @@ of this file, use `cali-query <https://software.llnl.gov/Caliper/tools.html#cali
 
 To view this data with SPOT, open a browser, navigate to the SPOT server (e.g. `LC <https://lc.llnl.gov/spot2>`_), and open the directory containing one or more ``.cali`` files.  For more information, watch this recorded `tutorial <https://www.youtube.com/watch?v=p8gjA6rbpvo>`_.
 
+.. _benchmarking-label:
+
 Benchmarking Serac
 ------------------
 
 To run all of Serac's benchmarks in one command, first make sure Serac is configured
 with benchmarking enabled (off by default). Then, run the build target ``run_benchmarks``.
+Make sure benchmarks are enabled and the build type is release.
 
 .. code-block:: bash
 
-  ./config-build.py -hc <host config file> -DENABLE_BENCHMARKS=ON
+  ./config-build.py -hc <host config file> -bt Release -DENABLE_BENCHMARKS=ON
   cd <serac build location>
   make -j
   make run_benchmarks
@@ -136,6 +139,45 @@ files:
 - `SPOT CZ <https://lc.llnl.gov/spot2>`_
 - `SPOT RZ <https://rzlc.llnl.gov/spot2>`_
 
+Serac benchmarks are run weekly to track changes over time. The following are steps to visualize this data in a meaningful
+way:
+
+- Go to https://lc.llnl.gov/spot2/?sf=/usr/workspace/smithdev/califiles/serac
+- Click the check mark button on the top right to view additional data categories
+- Ensure ``mpi.world.size``, ``executable``, ``cluster``, and ``compilers`` are enabled
+- Find the pie and bar charts associated with those categories
+- Select one option from each category to filter the graph
+- Scroll down to the table and and select the "compare" tab to view the graph
+
+Filtering benchmarks in this way will allow you to see changes of one benchmark over time, rather than a mix of many
+different ones. When changing the filter options in the pie and bar charts, ensure you deselect the previous options, so
+you don't view two of one single category.
+
 .. note::
   There is a bug in SPOT where if you remove Caliper files from a directory, they still show up on SPOT - if you've
   visualized them previously. The current workaround is by removing the ``llnl.gov`` site cache manually.
+
+Compare a PR's benchmarks vs Develop
+------------------------------------
+
+Utilizing Hatchet, it is possible to view the performance changes of a prospective PR before it merges into
+develop. This process has been conveniently wrapped in a CI pipeline. This Hatchet comparison can only be performed
+on LC, since the baseline benchmarks are generated on LC systems.
+
+1. Go to the following CZ GitLab page to create a new pipeline https://lc.llnl.gov/gitlab/smith/serac/-/pipelines/new
+2. Choose your branch
+3. Under variables, add ``SERAC_CI_WORKFLOW_TYPE`` and ``comparison`` for the key and value, respectively
+
+It's possible to perform this comparison locally. Since baseline benchmarks are generated across different machines and
+compilers, a single build won't compare against all baselines. The benchmarks can be compared using ruby-gcc,
+ruby-clang, and lassen-clang builds.
+
+1. Run benchmarks (see :ref:`Benchmarking Serac <benchmarking-label>` above)
+2. ``../scripts/llnl/compare_benchmarks.py --current-cali-dir /path/to/caliper/files``
+
+The script generates Hatchet graph frames by calculating the difference between each associated baseline and local
+benchmark (``gf_diff = gf_current - gf_baseline``). If there is a positive difference, that means your benchmarks ran
+that many seconds slower.
+
+By default, ``compare_benchmarks.py`` will print a table containing the status, id, difference, baseline, and current
+times. Running with the verbose option will additionally print the "difference" Hatchet graph frame for each benchmark.

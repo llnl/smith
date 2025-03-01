@@ -306,28 +306,28 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
                         output_file = tst_output_file,
                         print_output = report_to_stdout,
                         echo=True)
+
+        # Convert CTest output to JUnit, do not overwrite previous res
+        print("[Checking to see if xsltproc exists...]")
+        test_xsltproc_res = shell_exec("xsltproc --version", echo=True)
+        if test_xsltproc_res != 0:
+            print("[WARNING: xsltproc does not exist skipping JUnit conversion]")
+        else:
+            junit_file = pjoin(build_dir, "junit.xml")
+            xsl_file = pjoin(get_blt_dir(), "tests/ctest-to-junit.xsl")
+            ctest_file = pjoin(build_dir, "Testing/*/Test.xml")
+
+            print("[Converting CTest XML to JUnit XML]")
+            convert_cmd  = "xsltproc -o {0} {1} {2}".format(junit_file, xsl_file, ctest_file)
+            convert_res = shell_exec(convert_cmd, echo=True)
+            if convert_res != 0:
+                print("[WARNING: Converting to JUnit failed.]")
+
+        if res != 0:
+            print("[ERROR: Tests for host-config: %s failed]\n" % host_config)
+            return res
     else:
         print("[skipping unit tests]")
-
-    # Convert CTest output to JUnit, do not overwrite previous res
-    print("[Checking to see if xsltproc exists...]")
-    test_xsltproc_res = shell_exec("xsltproc --version", echo=True)
-    if test_xsltproc_res != 0:
-        print("[WARNING: xsltproc does not exist skipping JUnit conversion]")
-    else:
-        junit_file = pjoin(build_dir, "junit.xml")
-        xsl_file = pjoin(get_blt_dir(), "tests/ctest-to-junit.xsl")
-        ctest_file = pjoin(build_dir, "Testing/*/Test.xml")
-
-        print("[Converting CTest XML to JUnit XML]")
-        convert_cmd  = "xsltproc -o {0} {1} {2}".format(junit_file, xsl_file, ctest_file)
-        convert_res = shell_exec(convert_cmd, echo=True)
-        if convert_res != 0:
-            print("[WARNING: Converting to JUnit failed.]")
-
-    if res != 0:
-        print("[ERROR: Tests for host-config: %s failed]\n" % host_config)
-        return res
 
     # build the docs
     docs_output_file = pjoin(build_dir,"output.log.make.docs.txt")
@@ -634,8 +634,7 @@ def get_build_dir(prefix, host_config):
 
 
 def get_repo_dir():
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-    return os.path.abspath(pjoin(script_dir, "../.."))
+    return os.path.abspath(pjoin(get_script_dir(), "../.."))
 
 
 def get_build_and_test_root(prefix, timestamp):
@@ -677,11 +676,11 @@ def get_shared_libs_dir():
 
 
 def get_shared_spot_dir():
-    return pjoin(get_shared_base_dir(), "califiles")
+    return pjoin(get_shared_base_dir(), "califiles", get_project_name())
 
 
 def get_uberenv_path():
-    return pjoin(get_script_dir(), "../uberenv/uberenv.py")
+    return pjoin(get_repo_dir(), "scripts/uberenv/uberenv.py")
 
 
 def on_rz():
@@ -699,7 +698,7 @@ _project_name = ""
 def get_project_name():
     global _project_name
     if not _project_name:
-        uberenv_config_path = os.path.abspath(os.path.join(get_script_dir(), "../../.uberenv_config.json"))
+        uberenv_config_path = pjoin(get_repo_dir(), ".uberenv_config.json")
         _project_name = "UNKNOWN_PROJECT"
         if os.path.exists(uberenv_config_path):
             with open(uberenv_config_path) as json_file:
@@ -713,3 +712,27 @@ def convertSecondsToReadableTime(seconds):
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     return "%d:%02d:%02d" % (h, m, s)
+
+
+def get_host_config_path(repo_dir, host_config):
+    # First try with where uberenv generates host-configs.
+    host_config_path = os.path.join(repo_dir, host_config)
+    if not os.path.isfile(host_config_path):
+        print("[INFO: Looking for host_config at %s]" % host_config_path)
+        print("[WARNING: Spack generated host-config not found, trying with predefined]")
+
+        # Then look into project predefined host-configs.
+        host_config_path = os.path.join(repo_dir, "host-configs", host_config)
+        if not os.path.isfile(host_config_path):
+            print("[INFO: Looking for host_config at %s]" % host_config_path)
+            print("[WARNING: Predefined host-config not found, trying with Docker]")
+
+            # Otherwise look into project predefined Docker host-configs.
+            host_config_path = os.path.join(repo_dir, "host-configs", "docker", host_config)
+            if not os.path.isfile(host_config_path):
+                print("[INFO: Looking for host_config at %s]" % host_config_path)
+                print("[WARNING: Predefined Docker host-config not found]")
+                print("[ERROR: Could not find any host-configs in any known path. Try giving fully qualified path.]")
+                sys.exit(1)
+
+    return host_config_path

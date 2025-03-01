@@ -12,10 +12,13 @@ set(numerics_headers
     solver_config.hpp
     stdfunction_operator.hpp
     petsc_solvers.hpp
+    trust_region_solver.hpp
+    dense_petsc.hpp
     )
 
 set(numerics_sources
     equation_solver.cpp
+    trust_region_solver.cpp
     odes.cpp
     petsc_solvers.cpp
     )

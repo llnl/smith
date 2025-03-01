@@ -77,7 +77,7 @@ template <typename element_type>
 void verify_kronecker_delta_property(double tolerance)
 {
   auto nodes = lagrange_nodes<element_type>();
-  auto I     = DenseIdentity<element_type::ndof>();
+  auto I = DenseIdentity<element_type::ndof>();
 
   for (int i = 0; i < element_type::ndof; i++) {
     double error = norm(I[i] - element_type::shape_functions(nodes[uint32_t(i)]));
@@ -119,8 +119,8 @@ template <typename element_type>
 void verify_basis_function_gradients(double tolerance)
 {
   constexpr double eps = 1.0e-7;
-  constexpr int    dim = element_type::dim;
-  using vec            = tensor<double, dim>;
+  constexpr int dim = element_type::dim;
+  using vec = tensor<double, dim>;
 
   std::vector<vec> random_points;
   if constexpr (dim == 2) {
@@ -137,7 +137,7 @@ void verify_basis_function_gradients(double tolerance)
 
   auto I = DenseIdentity<dim>();
 
-  auto phi      = element_type::shape_function;
+  auto phi = element_type::shape_function;
   auto dphi_dxi = element_type::shape_function_gradient;
 
   double max_error = 0;
@@ -636,10 +636,10 @@ void verify_mass_matrix_integration(double tolerance)
 {
   auto phi = element_type::shape_function;
 
-  constexpr int  num_dofs              = element_type::ndof;
-  constexpr auto points                = GaussLegendreNodes<q, element_type::geometry>();
-  constexpr auto weights               = GaussLegendreWeights<q, element_type::geometry>();
-  constexpr int  num_quadrature_points = leading_dimension(points);
+  constexpr int num_dofs = element_type::ndof;
+  constexpr auto points = GaussLegendreNodes<q, element_type::geometry>();
+  constexpr auto weights = GaussLegendreWeights<q, element_type::geometry>();
+  constexpr int num_quadrature_points = leading_dimension(points);
 
   tensor<double, element_type::ndof, element_type::ndof> M{};
   for (int i = 0; i < num_quadrature_points; i++) {

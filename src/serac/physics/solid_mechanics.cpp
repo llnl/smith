@@ -21,7 +21,7 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
                        mfem::Solver& lin_solver)
 {
   // there are hard-coded here for now
-  static constexpr double beta  = 0.25;
+  static constexpr double beta = 0.25;
   static constexpr double gamma = 0.5;
   // reminder, gathering info from the various layers of time integration
   // c0 = fac3 * dt * dt
@@ -33,7 +33,7 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
   double fac4 = gamma;
 
   // J = M + c0 * K
-  auto J_  = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(1.0, *m_mat, fac3 * dt_n * dt_n, *k_mat));
+  auto J_ = std::unique_ptr<mfem::HypreParMatrix>(mfem::Add(1.0, *m_mat, fac3 * dt_n * dt_n, *k_mat));
   auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
 
   // recall that temperature_adjoint_load_vector and d_temperature_dt_adjoint_load_vector were already multiplied by

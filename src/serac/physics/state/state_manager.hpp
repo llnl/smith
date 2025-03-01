@@ -39,7 +39,7 @@ constexpr H1<SHAPE_ORDER, 3> SHAPE_DIM_3;
  * from physics modules
  */
 class StateManager {
-public:
+ public:
   /**
    * @brief Initializes the StateManager with a sidre DataStore (into which state will be written/read)
    * @param[in] ds The DataStore to use
@@ -73,7 +73,7 @@ public:
     SLIC_ERROR_ROOT_IF(hasState(state_name),
                        axom::fmt::format("StateManager already contains a state named '{}'", state_name));
 
-    auto state = FiniteElementState(mesh(mesh_tag), space, state_name);
+    FiniteElementState state(mesh(mesh_tag), space, state_name);
 
     storeState(state);
     return state;
@@ -99,21 +99,19 @@ public:
    * @brief Create a shared ptr to a quadrature data buffer for the given material type
    *
    * @tparam T the type to be created at each quadrature point
-   * @param mesh_tag The tag for the stored mesh used to construct the finite element state
-   * @param order The order of the discretization of the displacement and velocity fields
+   * @param domain The spatial domain over which to allocate the quadrature data
+   * @param order The order of the discretization of the primal fields
    * @param dim The spatial dimension of the mesh
    * @param initial_state the value to be broadcast to each quadrature point
    * @return shared pointer to quadrature data buffer
    */
   template <typename T>
-  static std::shared_ptr<QuadratureData<T>> newQuadratureDataBuffer(const std::string& mesh_tag, int order, int dim,
+  static std::shared_ptr<QuadratureData<T>> newQuadratureDataBuffer(const Domain& domain, int order, int dim,
                                                                     T initial_state)
   {
-    SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag '{}' not found in the data store", mesh_tag));
-
     int Q = order + 1;
 
-    std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> elems = geometry_counts(mesh(mesh_tag));
+    std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> elems = geometry_counts(domain);
     std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> qpts_per_elem{};
 
     std::vector<mfem::Geometry::Type> geometries;
@@ -247,7 +245,7 @@ public:
     datacolls_.clear();
     output_dir_.clear();
     is_restart_ = false;
-    ds_         = nullptr;
+    ds_ = nullptr;
   };
 
   /**
@@ -335,7 +333,7 @@ public:
    */
   static double time(std::string mesh_tag);
 
-private:
+ private:
   /**
    * @brief Creates a new datacollection based on a registered mesh
    * @param[in] name The name of the new datacollection

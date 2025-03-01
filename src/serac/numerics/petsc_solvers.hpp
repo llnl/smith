@@ -21,7 +21,7 @@ class PetscKSPSolver;
  * @brief Wrapper around mfem::Preconditioner to allow for better interoperability with HYPRE-based mfem solvers
  */
 class PetscPCSolver : public mfem::PetscPreconditioner {
-protected:
+ protected:
   /// @brief Flag used to prevent extra checks for conversion to MATAIJ
   mutable bool checked_for_convert_ = false;
   /// @brief Matrix passed to SetOperator() converted to MATAIJ format, if such a conversion was needed.  Mutable, as
@@ -45,7 +45,7 @@ protected:
   friend PetscErrorCode convertKSPPreSolve(KSP, Vec, Vec, void*);
   friend class PetscKSPSolver;
 
-public:
+ public:
   /**
    * @brief Construct a PETSc-based preconditioner of a particular PCType. The operator must be set with
    * SetOperator().
@@ -94,11 +94,11 @@ public:
  * @brief A PETSC-based preconditioner which requires information about the underlying finite element space
  */
 class PetscPreconditionerSpaceDependent : public PetscPCSolver {
-protected:
+ protected:
   /// @brief Finite element space defining the operator
   mfem::ParFiniteElementSpace* fespace_ = nullptr;
 
-public:
+ public:
   /**
    * @brief Construct a PetscPreconditionerSpaceDependent without an explicit operator (must be set later with
    * SetOperator())
@@ -165,7 +165,7 @@ public:
  * @brief Wrapper for applying the PETSc algebraic multigrid preconditioner PCGAMG
  */
 class PetscGAMGSolver : public PetscPreconditionerSpaceDependent {
-public:
+ public:
   /**
    * @brief Construct a PetscGAMGSolver without an explicit operator (must be set later with SetOperator())
    *
@@ -234,7 +234,7 @@ PetscPCType stringToPetscPCType(const std::string& type_str);
  * @brief Wrapper around mfem::PetscLinearSolver supporting the mfem::IterativeSolver interface
  */
 class PetscKSPSolver : virtual public mfem::IterativeSolver, public mfem::PetscLinearSolver {
-private:
+ private:
   /// @brief Flag determining whether the mfem::Operator is wrapped or converted
   bool wrap_ = false;
   /// @brief Flag indicating whether convertKSPPreSolve has been called
@@ -261,13 +261,13 @@ private:
 
   friend PetscErrorCode convertKSPPreSolve(KSP ksp, [[maybe_unused]] Vec rhs, [[maybe_unused]] Vec x, void* ctx);
 
-protected:
+ protected:
   /**
    * @brief Set the tolerances on the underlying PETSc nonlinear operator
    */
   virtual void SetTolerances();
 
-public:
+ public:
   /**
    * @brief Construct a wrapper for using a PETSc linear solver
    *
@@ -369,20 +369,20 @@ public:
    */
   virtual mfem::Solver* GetPreconditioner() { return prec; }
 
-  void         SetMaxIter(int max_its) { mfem::IterativeSolver::SetMaxIter(max_its); }
-  void         SetRelTol(mfem::real_t rtol) { mfem::IterativeSolver::SetRelTol(rtol); }
-  void         SetAbsTol(mfem::real_t atol) { mfem::IterativeSolver::SetAbsTol(atol); }
-  int          GetConverged() { return mfem::PetscLinearSolver::GetConverged(); }
+  void SetMaxIter(int max_its) { mfem::IterativeSolver::SetMaxIter(max_its); }
+  void SetRelTol(mfem::real_t rtol) { mfem::IterativeSolver::SetRelTol(rtol); }
+  void SetAbsTol(mfem::real_t atol) { mfem::IterativeSolver::SetAbsTol(atol); }
+  int GetConverged() { return mfem::PetscLinearSolver::GetConverged(); }
   mfem::real_t GetFinalNorm() { return mfem::PetscLinearSolver::GetFinalNorm(); }
-  int          GetNumIterations() { return mfem::PetscLinearSolver::GetNumIterations(); }
-  void         SetPrintLevel(int print_lev) override { mfem::PetscLinearSolver::SetPrintLevel(print_lev); }
+  int GetNumIterations() { return mfem::PetscLinearSolver::GetNumIterations(); }
+  void SetPrintLevel(int print_lev) override { mfem::PetscLinearSolver::SetPrintLevel(print_lev); }
 };
 
 /**
  * @brief Wrapper for PETSc based nonlinear solvers
  */
 class PetscNewtonSolver : public mfem::NewtonSolver, public mfem::PetscNonlinearSolver {
-protected:
+ protected:
   /// @brief Convergence tolerance for norm of solution update
   mfem::real_t step_tol_ = PETSC_DEFAULT;
   /// @brief Type of PETSc nonlinear solver
@@ -447,9 +447,9 @@ protected:
    */
   PetscNewtonSolver(MPI_Comm comm, SNESType snes_type = SNESNEWTONLS,
                     SNESLineSearchType linesearch_type = SNESLINESEARCHBASIC,
-                    const std::string& prefix          = std::string());
+                    const std::string& prefix = std::string());
 
-public:
+ public:
   /**
    * @brief Public constructor for PETSc nonlinear solvers from a NonlinearSolverOptions object
    * @param comm The MPI communicator used by the vectors and matrices in the solve
@@ -502,13 +502,13 @@ public:
    */
   MPI_Comm GetComm() const { return NewtonSolver::GetComm(); }
 
-  void         SetMaxIter(int max_its) { mfem::NewtonSolver::SetMaxIter(max_its); }
-  void         SetRelTol(mfem::real_t rtol) { mfem::NewtonSolver::SetRelTol(rtol); }
-  void         SetAbsTol(mfem::real_t atol) { mfem::NewtonSolver::SetAbsTol(atol); }
-  int          GetConverged() { return mfem::PetscNonlinearSolver::GetConverged(); }
+  void SetMaxIter(int max_its) { mfem::NewtonSolver::SetMaxIter(max_its); }
+  void SetRelTol(mfem::real_t rtol) { mfem::NewtonSolver::SetRelTol(rtol); }
+  void SetAbsTol(mfem::real_t atol) { mfem::NewtonSolver::SetAbsTol(atol); }
+  int GetConverged() { return mfem::PetscNonlinearSolver::GetConverged(); }
   mfem::real_t GetFinalNorm() { return mfem::PetscNonlinearSolver::GetFinalNorm(); }
-  int          GetNumIterations() { return mfem::PetscNonlinearSolver::GetNumIterations(); }
-  void         SetPrintLevel(int print_lev) override { mfem::PetscNonlinearSolver::SetPrintLevel(print_lev); }
+  int GetNumIterations() { return mfem::PetscNonlinearSolver::GetNumIterations(); }
+  void SetPrintLevel(int print_lev) override { mfem::PetscNonlinearSolver::SetPrintLevel(print_lev); }
 };
 
 }  // namespace serac::mfem_ext

@@ -202,7 +202,7 @@ auto grad_monomials([[maybe_unused]] tensor<T, dim> X)
 template <int p, typename X>
 constexpr tensor<double, 2, (p + 1) * (p + 2) / 2> get_test_tensor_dim2()
 {
-  constexpr int dim  = 2;
+  constexpr int dim = 2;
   constexpr int dim2 = (p + 1) * (p + 2) / 2;
   return make_tensor<dim, dim2>([] SERAC_HOST_DEVICE(int i, int j) { return double(i + 1) / (j + 1); });
 }
@@ -210,7 +210,7 @@ constexpr tensor<double, 2, (p + 1) * (p + 2) / 2> get_test_tensor_dim2()
 template <int p, typename X>
 constexpr tensor<double, 3, ((p + 1) * (p + 2) * (p + 3)) / 6> get_test_tensor_dim3()
 {
-  constexpr int dim  = 3;
+  constexpr int dim = 3;
   constexpr int dim2 = ((p + 1) * (p + 2) * (p + 3)) / 6;
   return make_tensor<dim, dim2>([] SERAC_HOST_DEVICE(int i, int j) { return double(i + 1) / (j + 1); });
 }
@@ -254,7 +254,7 @@ struct TestFunctorTwo {
   SERAC_HOST_DEVICE auto operator()(double, Postition position) const
   {
     auto [X, dX_dxi] = position;
-    auto n           = normalize(cross(dX_dxi));
+    auto n = normalize(cross(dX_dxi));
     return -dot(f<dim, p>(X), n);
   }
 };
@@ -265,7 +265,7 @@ void functional_test_2D(mfem::ParMesh& mesh, double tolerance)
   constexpr int dim = 2;
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = H1<p>;
+  using test_space = H1<p>;
   using trial_space = H1<p>;
   using shape_space = H1<p, dim>;
 
@@ -278,23 +278,28 @@ void functional_test_2D(mfem::ParMesh& mesh, double tolerance)
   ones = 1;
 
   mfem::Vector U1(fespace1->TrueVSize());
-  U1.Randomize();
+  int seed = 6;
+  U1.Randomize(seed);
 
   mfem::Vector U2(fespace2->TrueVSize());
-  U2.Randomize();
+  seed = 7;
+  U2.Randomize(seed);
   U2 *= 0.1;
 
   mfem::Vector dU2(fespace2->TrueVSize());
-  dU2.Randomize();
+  seed = 8;
+  dU2.Randomize(seed);
 
   // Construct the new functional object using the known test and trial spaces
   ShapeAwareFunctional<shape_space, test_space(trial_space)> residual(fespace2.get(), fespace1.get(), {fespace1.get()});
 
-  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<>{}, TestFunctorOne<dim, p>{}, mesh);
+  Domain whole_domain = EntireDomain(mesh);
+  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<>{}, TestFunctorOne<dim, p>{}, whole_domain);
 
-  residual.AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<>{}, TestFunctorTwo<dim, p>{}, mesh);
+  Domain whole_boundary = EntireBoundary(mesh);
+  residual.AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<>{}, TestFunctorTwo<dim, p>{}, whole_boundary);
 
-  double t        = 0.0;
+  double t = 0.0;
   auto [r, drdU2] = residual(t, serac::differentiate_wrt(U2), U1);
   EXPECT_NEAR(mfem::InnerProduct(r, ones), 0.0, tolerance);
 
@@ -308,7 +313,7 @@ void functional_test_3D(mfem::ParMesh& mesh, double tolerance)
   constexpr int dim = 3;
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = H1<p>;
+  using test_space = H1<p>;
   using trial_space = H1<p>;
   using shape_space = H1<p, dim>;
 
@@ -321,23 +326,28 @@ void functional_test_3D(mfem::ParMesh& mesh, double tolerance)
   ones = 1;
 
   mfem::Vector U1(fespace1->TrueVSize());
-  U1.Randomize();
+  int seed = 9;
+  U1.Randomize(seed);
 
   mfem::Vector U2(fespace2->TrueVSize());
-  U2.Randomize();
+  seed = 1;
+  U2.Randomize(seed);
   U2 *= 0.1;
 
   mfem::Vector dU2(fespace2->TrueVSize());
-  dU2.Randomize();
+  seed = 2;
+  dU2.Randomize(seed);
 
   // Construct the new functional object using the known test and trial spaces
   ShapeAwareFunctional<shape_space, test_space(trial_space)> residual(fespace2.get(), fespace1.get(), {fespace1.get()});
 
-  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<>{}, TestFunctorOne<dim, p>{}, mesh);
+  Domain whole_domain = EntireDomain(mesh);
+  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<>{}, TestFunctorOne<dim, p>{}, whole_domain);
 
-  residual.AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<>{}, TestFunctorTwo<dim, p>{}, mesh);
+  Domain whole_boundary = EntireBoundary(mesh);
+  residual.AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<>{}, TestFunctorTwo<dim, p>{}, whole_boundary);
 
-  double t        = 0.0;
+  double t = 0.0;
   auto [r, drdU2] = residual(t, serac::differentiate_wrt(U2), U1);
   EXPECT_NEAR(mfem::InnerProduct(r, ones), 0.0, tolerance);
 
@@ -362,7 +372,7 @@ int main(int argc, char* argv[])
 
   axom::slic::SimpleLogger logger;
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   std::string meshfile2D = SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";

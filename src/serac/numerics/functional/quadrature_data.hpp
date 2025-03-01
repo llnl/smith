@@ -55,14 +55,14 @@ namespace axom {
 /// @cond
 template <>
 class Array<serac::Nothing, 2, MemorySpace::Dynamic> {
-public:
+ public:
   Array() {}
   Array(uint32_t, uint32_t) {}
 };
 
 template <>
 class ArrayView<serac::Nothing, 2, MemorySpace::Dynamic> {
-public:
+ public:
   ArrayView(Array<serac::Nothing, 2, MemorySpace::Dynamic> /* unused */) {}
 
   /// dummy accessor to satisfy interface requirements
@@ -76,14 +76,14 @@ public:
 
 template <>
 class Array<serac::Empty, 2, MemorySpace::Dynamic> {
-public:
+ public:
   Array() {}
   Array(uint32_t, uint32_t) {}
 };
 
 template <>
 class ArrayView<serac::Empty, 2, MemorySpace::Dynamic> {
-public:
+ public:
   ArrayView(Array<serac::Empty, 2, MemorySpace::Dynamic> /* unused */) {}
 
   /// dummy accessor to satisfy interface requirements
@@ -169,6 +169,6 @@ struct QuadratureData<Empty> {
 
 /// these values exist to serve as default arguments for materials without material state
 extern std::shared_ptr<QuadratureData<Nothing> > NoQData;
-extern std::shared_ptr<QuadratureData<Empty> >   EmptyQData;
+extern std::shared_ptr<QuadratureData<Empty> > EmptyQData;
 
 }  // namespace serac

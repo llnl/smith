@@ -33,13 +33,13 @@ struct LinearIsotropic {
    * @tparam T Number-like type for the displacement gradient components
    * @tparam dim Dimensionality of space
    * @param du_dX Displacement gradient with respect to the reference configuration
-   * @return The Cauchy stress
+   * @return The stress
    */
   template <typename T, int dim>
   SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
   {
-    auto I       = Identity<dim>();
-    auto lambda  = K - (2.0 / 3.0) * G;
+    auto I = Identity<dim>();
+    auto lambda = K - (2.0 / 3.0) * G;
     auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
     return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
   }
@@ -69,21 +69,18 @@ struct StVenantKirchhoff {
    *
    * @param[in] grad_u Displacement gradient
    *
-   * @return The Cauchy stress
+   * @return The first Piola stress
    */
   template <typename T, int dim>
   auto operator()(State&, const tensor<T, dim, dim>& grad_u) const
   {
     static constexpr auto I = Identity<dim>();
-    auto                  F = grad_u + I;
-    const auto            E = greenStrain(grad_u);
+    auto F = grad_u + I;
+    const auto E = greenStrain(grad_u);
 
     // stress
-    const auto S     = K * tr(E) * I + 2.0 * G * dev(E);
-    const auto P     = dot(F, S);
-    const auto sigma = dot(P, transpose(F)) / det(F);
-
-    return sigma;
+    const auto S = K * tr(E) * I + 2.0 * G * dev(E);
+    return dot(F, S);
   }
 
   double density;  ///< density
@@ -107,18 +104,58 @@ struct NeoHookean {
    * @tparam T Number-like type for the displacement gradient components
    * @tparam dim Dimensionality of space
    * @param du_dX displacement gradient with respect to the reference configuration (displacement_grad)
-   * @return The Cauchy stress
+   * @return The first Piola stress
    */
   template <typename T, int dim>
   SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
   {
     using std::log1p;
-    constexpr auto I         = Identity<dim>();
-    auto           lambda    = K - (2.0 / 3.0) * G;
-    auto           B_minus_I = du_dX * transpose(du_dX) + transpose(du_dX) + du_dX;
-    auto           J_minus_1 = detApIm1(du_dX);
-    auto           J         = J_minus_1 + 1;
-    return (lambda * log1p(J_minus_1) * I + G * B_minus_I) / J;
+    constexpr auto I = Identity<dim>();
+    auto lambda = K - (2.0 / 3.0) * G;
+    auto B_minus_I = dot(du_dX, transpose(du_dX)) + transpose(du_dX) + du_dX;
+
+    auto logJ = log1p(detApIm1(du_dX));
+    // Kirchoff stress, in form that avoids cancellation error when F is near I
+    auto TK = lambda * logJ * I + G * B_minus_I;
+
+    // Pull back to Piola
+    auto F = du_dX + I;
+    return dot(TK, inv(transpose(F)));
+  }
+
+  double density;  ///< mass density
+  double K;        ///< bulk modulus
+  double G;        ///< shear modulus
+};
+
+/// Neo-Hookean material version with additive split of deviatoric and volumetric behavior
+struct NeoHookeanAdditiveSplit {
+  using State = Empty;  ///< this material has no internal variables
+
+  /**
+   * @brief Piola stress calculation
+   *
+   * @tparam dim Dimensionality of space
+   * @param du_dX displacement gradient with respect to the reference configuration
+   * @return The first Piola stress
+   */
+  template <typename T, int dim>
+  SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
+  {
+    using std::pow;
+    constexpr auto I = Identity<dim>();
+    auto F = I + du_dX;
+    auto J = det(F);
+    auto Jm13 = pow(J, -1.0 / 3.0);
+    auto F_bar = Jm13 * F;
+    auto Pdev = G * Jm13 * (F_bar - 1.0 / 3.0 * inner(F_bar, F_bar) * inv(transpose(F_bar)));
+
+    // any volumetric model could be substituted here
+    using std::log1p;
+    auto logJ = log1p(detApIm1(du_dX));
+    auto Pvol = K * logJ * inv(transpose(F));
+
+    return Pdev + Pvol;
   }
 
   double density;  ///< mass density
@@ -127,23 +164,35 @@ struct NeoHookean {
 };
 
 /**
+ * Overstress for linear viscosity
+ */
+template <typename T>
+auto overstress(double viscosity, T accumulated_plastic_strain_rate)
+{
+  return viscosity * accumulated_plastic_strain_rate;
+}
+
+/**
  * @brief Linear isotropic hardening law
  */
 struct LinearHardening {
   double sigma_y;  ///< yield strength
   double Hi;       ///< Isotropic hardening modulus
+  double eta;      ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
    *
-   * @tparam T Number-like type for the argument
+   * @tparam T1 Number-like type
+   * @tparam T2 Number-like type
    * @param accumulated_plastic_strain The uniaxial equivalent accumulated plastic strain
+   * @param accumulated_plastic_strain_rate The rate of the uniaxial equivalent accumulated plastic strain
    * @return Flow stress value
    */
-  template <typename T>
-  auto operator()(const T accumulated_plastic_strain) const
+  template <typename T1, typename T2>
+  auto operator()(T1 accumulated_plastic_strain, T2 accumulated_plastic_strain_rate) const
   {
-    return sigma_y + Hi * accumulated_plastic_strain;
+    return sigma_y + Hi * accumulated_plastic_strain + overstress(eta, accumulated_plastic_strain_rate);
   };
 };
 
@@ -154,19 +203,23 @@ struct PowerLawHardening {
   double sigma_y;  ///< yield strength
   double n;        ///< hardening index in reciprocal form
   double eps0;     ///< reference value of accumulated plastic strain
+  double eta;      ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
    *
-   * @tparam T Number-like type for the argument
+   * @tparam T1 Number-like type
+   * @tparam T2 Number-like type
    * @param accumulated_plastic_strain The uniaxial equivalent accumulated plastic strain
+   * @param accumulated_plastic_strain_rate The rate of the uniaxial equivalent accumulated plastic strain
    * @return Flow stress value
    */
-  template <typename T>
-  auto operator()(const T accumulated_plastic_strain) const
+  template <typename T1, typename T2>
+  auto operator()(T1 accumulated_plastic_strain, T2 accumulated_plastic_strain_rate) const
   {
     using std::pow;
-    return sigma_y * pow(1.0 + accumulated_plastic_strain / eps0, 1.0 / n);
+    return sigma_y * pow(1.0 + accumulated_plastic_strain / eps0, 1.0 / n) +
+           overstress(eta, accumulated_plastic_strain_rate);
   };
 };
 
@@ -179,61 +232,69 @@ struct VoceHardening {
   double sigma_y;          ///< yield strength
   double sigma_sat;        ///< saturation value of flow strength
   double strain_constant;  ///< The constant dictating how fast the exponential decays
+  double eta;              ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
    *
-   * @tparam T Number-like type for the argument
+   * @tparam T1 Number-like type
+   * @tparam T2 Number-like type
    * @param accumulated_plastic_strain The uniaxial equivalent accumulated plastic strain
+   * @param accumulated_plastic_strain_rate The rate of the uniaxial equivalent accumulated plastic strain
    * @return Flow stress value
    */
-  template <typename T>
-  auto operator()(const T accumulated_plastic_strain) const
+  template <typename T1, typename T2>
+  auto operator()(T1 accumulated_plastic_strain, T2 accumulated_plastic_strain_rate) const
   {
     using std::exp;
-    return sigma_sat - (sigma_sat - sigma_y) * exp(-accumulated_plastic_strain / strain_constant);
+    auto& epsilon_p = accumulated_plastic_strain;
+    auto Y_eq = sigma_sat - (sigma_sat - sigma_y) * exp(-epsilon_p / strain_constant);
+    auto& epsilon_p_dot = accumulated_plastic_strain_rate;
+    auto Y_vis = overstress(eta, epsilon_p_dot);
+    return Y_eq + Y_vis;
   };
 };
 
 /// @brief J2 material with nonlinear isotropic hardening and linear kinematic hardening
 template <typename HardeningType>
 struct J2SmallStrain {
-  static constexpr int    dim = 3;      ///< spatial dimension
+  static constexpr int dim = 3;         ///< spatial dimension
   static constexpr double tol = 1e-10;  ///< relative tolerance on residual mag to judge convergence of return map
 
-  double        E;          ///< Young's modulus
-  double        nu;         ///< Poisson's ratio
+  double E;                 ///< Young's modulus
+  double nu;                ///< Poisson's ratio
   HardeningType hardening;  ///< Flow stress hardening model
-  double        Hk;         ///< Kinematic hardening modulus
-  double        density;    ///< Mass density
+  double Hk;                ///< Kinematic hardening modulus
+  double density;           ///< Mass density
 
   /// @brief variables required to characterize the hysteresis response
   struct State {
-    tensor<double, dim, dim> plastic_strain;              ///< plastic strain
-    double                   accumulated_plastic_strain;  ///< uniaxial equivalent plastic strain
+    tensor<double, dim, dim> plastic_strain;  ///< plastic strain
+    double accumulated_plastic_strain;        ///< uniaxial equivalent plastic strain
   };
 
-  /** @brief calculate the Cauchy stress, given the displacement gradient and previous material state */
+  /** @brief calculate the first Piola stress, given the displacement gradient and previous material state */
   template <typename T>
-  auto operator()(State& state, const T du_dX) const
+  auto operator()(State& state, double dt, const tensor<T, dim, dim>& du_dX) const
   {
     using std::sqrt;
     constexpr auto I = Identity<dim>();
-    const double   K = E / (3.0 * (1.0 - 2.0 * nu));
-    const double   G = 0.5 * E / (1.0 + nu);
+    const double K = E / (3.0 * (1.0 - 2.0 * nu));
+    const double G = 0.5 * E / (1.0 + nu);
 
     // (i) elastic predictor
     auto el_strain = sym(du_dX) - state.plastic_strain;
-    auto p         = K * tr(el_strain);
-    auto s         = 2.0 * G * dev(el_strain);
-    auto sigma_b   = 2.0 / 3.0 * Hk * state.plastic_strain;
-    auto eta       = s - sigma_b;
-    auto q         = sqrt(1.5) * norm(eta);
+    auto p = K * tr(el_strain);
+    auto s = 2.0 * G * dev(el_strain);
+    auto sigma_b = 2.0 / 3.0 * Hk * state.plastic_strain;
+    auto eta = s - sigma_b;
+    auto q = sqrt(1.5) * norm(eta);
 
     // (ii) admissibility
     const double eqps_old = state.accumulated_plastic_strain;
-    auto         residual = [eqps_old, G, *this](auto delta_eqps, auto trial_q) {
-      return trial_q - (3.0 * G + Hk) * delta_eqps - this->hardening(eqps_old + delta_eqps);
+    auto residual = [eqps_old, G, dt, *this](auto delta_eqps, auto trial_q) {
+      auto eqps_dot = dt > 0.0 ? delta_eqps / dt : 0.0 * delta_eqps;
+      return trial_q - (3.0 * G + Hk) * delta_eqps - this->hardening(eqps_old + delta_eqps, eqps_dot);
     };
     if (residual(0.0, get_value(q)) > tol * hardening.sigma_y) {
       // (iii) return mapping
@@ -242,9 +303,9 @@ struct J2SmallStrain {
       // This ensures that if the constitutive update is called again with the updated internal
       // variables, the return map won't be repeated.
       ScalarSolverOptions opts{.xtol = 0, .rtol = tol * hardening.sigma_y, .max_iter = 25};
-      double              lower_bound = 0.0;
-      double              upper_bound = (get_value(q) - hardening(eqps_old)) / (3.0 * G + Hk);
-      auto [delta_eqps, status]       = solve_scalar_equation(residual, 0.0, lower_bound, upper_bound, opts, q);
+      double lower_bound = 0.0;
+      double upper_bound = (get_value(q) - hardening(eqps_old, 0.0)) / (3.0 * G + Hk);
+      auto [delta_eqps, status] = solve_scalar_equation(residual, 0.0, lower_bound, upper_bound, opts, q);
 
       auto Np = 1.5 * eta / q;
 
@@ -260,68 +321,86 @@ struct J2SmallStrain {
 /// @brief Finite deformation version of J2 material with nonlinear isotropic hardening.
 template <typename HardeningType>
 struct J2 {
-  static constexpr int    dim = 3;      ///< spatial dimension
+  static constexpr int dim = 3;         ///< spatial dimension
   static constexpr double tol = 1e-10;  ///< relative tolerance on residual mag to judge convergence of return map
 
-  double        E;          ///< Young's modulus
-  double        nu;         ///< Poisson's ratio
+  double E;                 ///< Young's modulus
+  double nu;                ///< Poisson's ratio
   HardeningType hardening;  ///< Flow stress hardening model
-  double        density;    ///< mass density
+  double density;           ///< mass density
 
   /// @brief variables required to characterize the hysteresis response
   struct State {
     tensor<double, dim, dim> Fpinv = DenseIdentity<3>();  ///< inverse of plastic distortion tensor
-    double                   accumulated_plastic_strain;  ///< uniaxial equivalent plastic strain
+    double accumulated_plastic_strain;                    ///< uniaxial equivalent plastic strain
   };
 
-  /** @brief calculate the Cauchy stress, given the displacement gradient and previous material state */
+  /** @brief calculate the first Piola stress, given the displacement gradient and previous material state */
   template <typename T>
-  auto operator()(State& state, const T du_dX) const
+  auto operator()(State& state, double dt, const tensor<T, dim, dim>& du_dX) const
   {
     using std::sqrt;
     constexpr auto I = Identity<dim>();
-    const double   K = E / (3.0 * (1.0 - 2.0 * nu));
-    const double   G = 0.5 * E / (1.0 + nu);
+    const double K = E / (3.0 * (1.0 - 2.0 * nu));
+    const double G = 0.5 * E / (1.0 + nu);
 
     // (i) elastic predictor
-    auto F  = du_dX + I;
+    auto F = du_dX + I;
     auto Fe = dot(F, state.Fpinv);
     auto Ee = 0.5 * log_symm(dot(transpose(Fe), Fe));
     // From this point until the state variable update, the algorithm exactly coincides with the
     // small strain one.
     auto p = K * tr(Ee);
     auto s = 2.0 * G * dev(Ee);
-    auto q = sqrt(1.5) * norm(s);
+    double q_val = sqrt(1.5) * norm(get_value(s));
 
     // (ii) admissibility
     const double eqps_old = state.accumulated_plastic_strain;
-    auto         residual = [eqps_old, G, *this](auto delta_eqps, auto trial_mises) {
-      return trial_mises - 3.0 * G * delta_eqps - this->hardening(eqps_old + delta_eqps);
+    auto residual = [eqps_old, G, dt, *this](auto delta_eqps, auto trial_mises) {
+      auto eqps_dot = dt > 0.0 ? delta_eqps / dt : 0.0 * delta_eqps;
+      return trial_mises - 3.0 * G * delta_eqps - this->hardening(eqps_old + delta_eqps, eqps_dot);
     };
-    if (residual(0.0, get_value(q)) > tol * hardening.sigma_y) {
+    if (residual(0.0, q_val) > tol * hardening.sigma_y) {
       // (iii) return mapping
 
       // Note the tolerance for convergence is the same as the tolerance for entering the return map.
       // This ensures that if the constitutive update is called again with the updated internal
       // variables, the return map won't be repeated.
       ScalarSolverOptions opts{.xtol = 0, .rtol = tol * hardening.sigma_y, .max_iter = 25};
-      double              lower_bound = 0.0;
-      double              upper_bound = (get_value(q) - hardening(eqps_old)) / (3.0 * G);
-      auto [delta_eqps, status]       = solve_scalar_equation(residual, 0.0, lower_bound, upper_bound, opts, q);
+      double lower_bound = 0.0;
+      double upper_bound = (q_val - hardening(eqps_old, 0.0)) / (3.0 * G);
+      // safe to compute derivative of mises stress now that we're in yielding branch
+      auto q = sqrt(1.5) * norm(s);
+      auto [delta_eqps, status] = solve_scalar_equation(residual, 0.0, lower_bound, upper_bound, opts, q);
+
+      if (!status.converged) {
+        SLIC_WARNING("J2 solve failed to converge.");
+      }
 
       auto Np = 1.5 * s / q;
 
-      s      = s - 2.0 * G * delta_eqps * Np;
+      s = s - 2.0 * G * delta_eqps * Np;
       auto A = exp_symm(-delta_eqps * Np);
-      Fe     = dot(Fe, A);
+
+      auto Fpinv = dot(state.Fpinv, A);
+
       state.accumulated_plastic_strain += get_value(delta_eqps);
-      state.Fpinv = dot(state.Fpinv, get_value(A));
+      state.Fpinv = get_value(Fpinv);
+      // Mandel stress
+      auto M = s + p * I;
+      // convert to Piola
+      Fe = dot(Fe, A);
+      auto P = transpose(dot(dot(Fpinv, M), inv(Fe)));
+      return P;
+    } else {
+      // I want to unify this branch with the yielding branch, but I'd need to declare Fpinv above,
+      // and I don't know how to declare its type. BT 11/5/24
+      // Mandel stress
+      auto M = s + p * I;
+      // convert to Piola
+      auto P = transpose(dot(dot(state.Fpinv, M), inv(Fe)));
+      return P;
     }
-    // Mandel stress
-    auto M = s + p * I;
-    // convert to Cauchy
-    auto FeT = transpose(Fe);
-    return dot(dot(inv(FeT), M), FeT) / det(F);
   }
 };
 

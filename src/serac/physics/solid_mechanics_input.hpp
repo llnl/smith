@@ -55,12 +55,6 @@ struct SolidMechanicsInputOptions {
   TimesteppingOptions timestepping_options;
 
   /**
-   * @brief Geometric nonlinearities flag
-   *
-   */
-  GeometricNonlinearities geom_nonlin;
-
-  /**
    * @brief The material options
    *
    */

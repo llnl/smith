@@ -23,10 +23,10 @@ TEST(HeatTransfer, MoveShape)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 2;
+  int serial_refinement = 2;
   int parallel_refinement = 0;
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Construct the appropriate dimension mesh and give it to the data store
@@ -48,7 +48,7 @@ TEST(HeatTransfer, MoveShape)
   // Define a boundary attribute set
   std::set<int> ess_bdr = {1};
 
-  auto nonlinear_options         = heat_transfer::default_nonlinear_options;
+  auto nonlinear_options = heat_transfer::default_nonlinear_options;
   nonlinear_options.absolute_tol = 1.0e-14;
   nonlinear_options.relative_tol = 1.0e-14;
 
@@ -57,13 +57,13 @@ TEST(HeatTransfer, MoveShape)
   // Sam: we're setting a really small abs tolerance here to
   //      work around https://github.com/mfem/mfem/issues/3641
   // TODO: adopt solution to issue above once implemented
-  auto linear_options         = heat_transfer::default_linear_options;
+  auto linear_options = heat_transfer::default_linear_options;
   linear_options.absolute_tol = 1.0e-30;
 
   auto time_integration_options = TimesteppingOptions{TimestepMethod::QuasiStatic};
 
   // Define an anisotropic conductor material model
-  tensor<double, 2, 2>                cond{{{5.0, 0.4}, {0.4, 1.0}}};
+  tensor<double, 2, 2> cond{{{5.0, 0.4}, {0.4, 1.0}}};
   heat_transfer::LinearConductor<dim> mat(1.0, 1.0, cond);
 
   heat_transfer::ConstantSource source{1.0};
@@ -94,9 +94,9 @@ TEST(HeatTransfer, MoveShape)
     shape_displacement.project(shape_coef);
     thermal_solver.setShapeDisplacement(shape_displacement);
 
-    thermal_solver.setMaterial(mat);
-
-    thermal_solver.setSource(source, EntireDomain(StateManager::mesh(mesh_tag)));
+    Domain whole_domain = EntireDomain(pmesh);
+    thermal_solver.setMaterial(mat, whole_domain);
+    thermal_solver.setSource(source, whole_domain);
 
     // Finalize the data structures
     thermal_solver.completeSetup();
@@ -138,9 +138,9 @@ TEST(HeatTransfer, MoveShape)
     thermal_solver_no_shape.setTemperatureBCs(ess_bdr, zero);
     thermal_solver_no_shape.setTemperature(zero);
 
-    thermal_solver_no_shape.setMaterial(mat);
-
-    thermal_solver_no_shape.setSource(source, EntireDomain(StateManager::mesh(pure_mesh_tag)));
+    Domain whole_domain = EntireDomain(new_pmesh);
+    thermal_solver_no_shape.setMaterial(mat, whole_domain);
+    thermal_solver_no_shape.setSource(source, whole_domain);
 
     // Finalize the data structures
     thermal_solver_no_shape.completeSetup();
@@ -153,7 +153,7 @@ TEST(HeatTransfer, MoveShape)
     pure_temperature = thermal_solver_no_shape.temperature().gridFunction();
   }
 
-  double error          = pure_temperature.DistanceTo(shape_temperature.GetData());
+  double error = pure_temperature.DistanceTo(shape_temperature.GetData());
   double relative_error = error / pure_temperature.Norml2();
   EXPECT_LT(relative_error, 5.0e-14);
 }

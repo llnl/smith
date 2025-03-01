@@ -29,7 +29,7 @@ namespace serac::mfem_ext {
  * without having to manually define a separate functor class.
  */
 class StdFunctionOperator : public mfem::Operator {
-public:
+ public:
   /**
    * @brief Default constructor for creating a square uninitialized StdFunctionOperator
    *
@@ -113,7 +113,7 @@ public:
    */
   mfem::Operator& GetGradient(const mfem::Vector& k) const { return jacobian_(k); };
 
-private:
+ private:
   /**
    * @brief the function that is used to implement mfem::Operator::Mult
    */

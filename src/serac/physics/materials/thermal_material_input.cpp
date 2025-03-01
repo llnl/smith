@@ -27,29 +27,29 @@ void ThermalMaterialInputOptions::defineInputFileSchema(axom::inlet::Container& 
 
   // Verify
   container.registerVerifier([](const axom::inlet::Container& c) -> bool {
-    axom::inlet::InletType double_type          = axom::inlet::InletType::Double;
-    axom::inlet::InletType int_type             = axom::inlet::InletType::Integer;
-    axom::inlet::InletType obj_type             = axom::inlet::InletType::Object;
-    axom::inlet::InletType coll_type            = axom::inlet::InletType::Collection;
-    std::string            model                = c["model"];
-    bool                   density_present      = c.contains("density") && (c["density"].type() == double_type);
-    bool                   cp_present           = c.contains("cp") && (c["cp"].type() == double_type);
-    bool                   kappa_present        = c.contains("kappa") && (c["kappa"].type() == double_type);
-    bool                   dim_present          = c.contains("dim") && (c["dim"].type() == int_type);
-    bool                   kappa_tensor_present = c.contains("kappa_tensor") && (c["kappa_tensor"].type() == obj_type);
+    axom::inlet::InletType double_type = axom::inlet::InletType::Double;
+    axom::inlet::InletType int_type = axom::inlet::InletType::Integer;
+    axom::inlet::InletType obj_type = axom::inlet::InletType::Object;
+    axom::inlet::InletType coll_type = axom::inlet::InletType::Collection;
+    std::string model = c["model"];
+    bool density_present = c.contains("density") && (c["density"].type() == double_type);
+    bool cp_present = c.contains("cp") && (c["cp"].type() == double_type);
+    bool kappa_present = c.contains("kappa") && (c["kappa"].type() == double_type);
+    bool dim_present = c.contains("dim") && (c["dim"].type() == int_type);
+    bool kappa_tensor_present = c.contains("kappa_tensor") && (c["kappa_tensor"].type() == obj_type);
 
     if (model == "LinearIsotropicConductor") {
       return density_present && cp_present && kappa_present && !dim_present && !kappa_tensor_present;
     } else if (model == "LinearConductor") {
       if (density_present && cp_present && !kappa_present && dim_present && kappa_tensor_present) {
         // Verify rows of kappa tensor struct is an array of doubles and is of proper size
-        int  dim          = c["dim"];
+        int dim = c["dim"];
         bool row1_present = c.contains("kappa_tensor/row1") && (c["kappa_tensor/row1"].type() == coll_type);
         bool row2_present = c.contains("kappa_tensor/row2") && (c["kappa_tensor/row2"].type() == coll_type);
         bool row3_present = c.contains("kappa_tensor/row3") && (c["kappa_tensor/row3"].type() == coll_type);
-        auto row1_size    = c["kappa_tensor/row1"].get<std::vector<double>>().size();
-        auto row2_size    = c["kappa_tensor/row2"].get<std::vector<double>>().size();
-        auto row3_size    = c["kappa_tensor/row3"].get<std::vector<double>>().size();
+        auto row1_size = c["kappa_tensor/row1"].get<std::vector<double>>().size();
+        auto row2_size = c["kappa_tensor/row2"].get<std::vector<double>>().size();
+        auto row3_size = c["kappa_tensor/row3"].get<std::vector<double>>().size();
 
         if (dim == 2) {
           return row1_present && (row1_size == 2) && row2_present && (row2_size == 2) && !row3_present;
@@ -81,7 +81,7 @@ std::vector<std::vector<double>> FromInlet<std::vector<std::vector<double>>>::op
 serac::var_thermal_material_t FromInlet<serac::var_thermal_material_t>::operator()(const axom::inlet::Container& base)
 {
   serac::var_thermal_material_t result;
-  std::string                   model = base["model"];
+  std::string model = base["model"];
 
   if (model == "LinearIsotropicConductor") {
     result = serac::heat_transfer::LinearIsotropicConductor(base["density"], base["cp"], base["kappa"]);
@@ -90,14 +90,14 @@ serac::var_thermal_material_t FromInlet<serac::var_thermal_material_t>::operator
     // set the tensor values and material result based on the dimension
     int dim = base["dim"];
     if (dim == 2) {
-      std::vector<std::vector<double>> v    = {base["kappa_tensor"]["row1"], base["kappa_tensor"]["row2"]};
-      serac::tensor<double, 2, 2>      cond = {{{v[0][0], v[0][1]}, {v[1][0], v[1][1]}}};
+      std::vector<std::vector<double>> v = {base["kappa_tensor"]["row1"], base["kappa_tensor"]["row2"]};
+      serac::tensor<double, 2, 2> cond = {{{v[0][0], v[0][1]}, {v[1][0], v[1][1]}}};
       result = serac::heat_transfer::LinearConductor<2>(base["density"], base["cp"], cond);
     } else if (dim == 3) {
-      std::vector<std::vector<double>> v    = {base["kappa_tensor"]["row1"], base["kappa_tensor"]["row2"],
-                                               base["kappa_tensor"]["row3"]};
-      serac::tensor<double, 3, 3>      cond = {
-               {{v[0][0], v[0][1], v[0][2]}, {v[1][0], v[1][1], v[1][2]}, {v[2][0], v[2][1], v[2][2]}}};
+      std::vector<std::vector<double>> v = {base["kappa_tensor"]["row1"], base["kappa_tensor"]["row2"],
+                                            base["kappa_tensor"]["row3"]};
+      serac::tensor<double, 3, 3> cond = {
+          {{v[0][0], v[0][1], v[0][2]}, {v[1][0], v[1][1], v[1][2]}, {v[2][0], v[2][1], v[2][2]}}};
       result = serac::heat_transfer::LinearConductor<3>(base["density"], base["cp"], cond);
     }
   }

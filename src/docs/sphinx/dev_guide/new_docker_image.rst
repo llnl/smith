@@ -41,9 +41,9 @@ Update/Add Docker Image
 #. Once the "Docker TPL Build" action completes, it will produce artifacts for each of the generated host-configs.
    Download these artifacts and rename them to just the compiler spec.  For example, ``buildkitsandbox-linux-clang@14.0.0.cmake``
    to ``clang@14.0.0.cmake`` and commit them to your branch under ``host-configs/docker``.  You will also have to update
-   ``azure-pipelines.yml`` if you added or change the existing compiler specs. These are all in variables called ``HOST_CONFIG``.
+   ``.github/workflows/build-and-test.yml`` if you added or change the existing compiler specs. These are all in variables called ``host_config``.
 #. Copy the new docker image names from each job under the ``Get dockerhub repo name`` step.  For example,
-   ``seracllnl/tpls:clang-14_06-02-22_04h-11m``. This will replace the previous image name at the top of ``azure-pipelines.yml``
+   ``seracllnl/tpls:clang-14_06-02-22_04h-11m``. This will replace the previous image name at the top of ``.github/workflows/build-and-test.yml``
    under the ``matrix`` section or add a new entry if you are adding a new docker image.
-#. To include the new image in CI jobs, add/update the ``matrix`` entry to ``azure-pipelines.yml``, modifying its 
+#. To include the new image in CI jobs, add/update the ``matrix`` entry to ``.github/workflows/build-and-test.yml``, modifying its 
    attributes with the appropriate new image name (which is timestamped) and new host-config file.

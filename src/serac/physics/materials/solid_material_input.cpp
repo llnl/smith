@@ -27,15 +27,15 @@ void SolidMaterialInputOptions::defineInputFileSchema(axom::inlet::Container& co
 
   // Verify
   container.registerVerifier([](const axom::inlet::Container& c) -> bool {
-    axom::inlet::InletType double_type       = axom::inlet::InletType::Double;
-    axom::inlet::InletType obj_type          = axom::inlet::InletType::Object;
-    bool                   density_present   = c.contains("density") && (c["density"].type() == double_type);
-    bool                   mu_present        = c.contains("mu") && (c["mu"].type() == double_type);
-    bool                   K_present         = c.contains("K") && (c["K"].type() == double_type);
-    bool                   E_present         = c.contains("E") && (c["E"].type() == double_type);
-    bool                   nu_present        = c.contains("nu") && (c["nu"].type() == double_type);
-    bool                   Hk_present        = c.contains("Hk") && (c["Hk"].type() == double_type);
-    bool                   hardening_present = c.contains("hardening") && (c["hardening"].type() == obj_type);
+    axom::inlet::InletType double_type = axom::inlet::InletType::Double;
+    axom::inlet::InletType obj_type = axom::inlet::InletType::Object;
+    bool density_present = c.contains("density") && (c["density"].type() == double_type);
+    bool mu_present = c.contains("mu") && (c["mu"].type() == double_type);
+    bool K_present = c.contains("K") && (c["K"].type() == double_type);
+    bool E_present = c.contains("E") && (c["E"].type() == double_type);
+    bool nu_present = c.contains("nu") && (c["nu"].type() == double_type);
+    bool Hk_present = c.contains("Hk") && (c["Hk"].type() == double_type);
+    bool hardening_present = c.contains("hardening") && (c["hardening"].type() == obj_type);
 
     std::string model = c["model"];
     if (model == "NeoHookean" || model == "LinearIsotropic") {
@@ -53,7 +53,7 @@ void SolidMaterialInputOptions::defineInputFileSchema(axom::inlet::Container& co
 serac::var_solid_material_t FromInlet<serac::var_solid_material_t>::operator()(const axom::inlet::Container& base)
 {
   serac::var_solid_material_t result;
-  std::string                 model = base["model"];
+  std::string model = base["model"];
 
   if (model == "NeoHookean") {
     result = serac::solid_mechanics::NeoHookean{.density = base["density"], .K = base["K"], .G = base["mu"]};
@@ -64,25 +64,25 @@ serac::var_solid_material_t FromInlet<serac::var_solid_material_t>::operator()(c
 
     if (std::holds_alternative<serac::solid_mechanics::LinearHardening>(hardening)) {
       result = serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::LinearHardening>{
-          .E         = base["E"],
-          .nu        = base["nu"],
+          .E = base["E"],
+          .nu = base["nu"],
           .hardening = std::get<serac::solid_mechanics::LinearHardening>(hardening),
-          .Hk        = base["Hk"],
-          .density   = base["density"]};
+          .Hk = base["Hk"],
+          .density = base["density"]};
     } else if (std::holds_alternative<serac::solid_mechanics::PowerLawHardening>(hardening)) {
       result = serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::PowerLawHardening>{
-          .E         = base["E"],
-          .nu        = base["nu"],
+          .E = base["E"],
+          .nu = base["nu"],
           .hardening = std::get<serac::solid_mechanics::PowerLawHardening>(hardening),
-          .Hk        = base["Hk"],
-          .density   = base["density"]};
+          .Hk = base["Hk"],
+          .density = base["density"]};
     } else if (std::holds_alternative<serac::solid_mechanics::VoceHardening>(hardening)) {
       result = serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::VoceHardening>{
-          .E         = base["E"],
-          .nu        = base["nu"],
+          .E = base["E"],
+          .nu = base["nu"],
           .hardening = std::get<serac::solid_mechanics::VoceHardening>(hardening),
-          .Hk        = base["Hk"],
-          .density   = base["density"]};
+          .Hk = base["Hk"],
+          .density = base["density"]};
     }
   }
 

@@ -37,12 +37,12 @@ void ThermoMechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
   const std::string meshtag = "mesh";
 
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-  serac::StateManager::setMesh(std::move(mesh), meshtag);
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), meshtag);
 
   auto linear_opts = thermomech::direct_linear_options;
   auto nonlinear_opts = thermomech::default_nonlinear_options;
   ThermoMechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts,
-    GeometricNonlinearities::On, "thermoMechHeatedDeform", meshtag);
+    "thermoMechHeatedDeform", meshtag);
 
   double                                       rho       = 1.0;
   double                                       E         = 100.0;
@@ -52,21 +52,28 @@ void ThermoMechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
   double                                       theta_ref = 0.0;
   double                                       k         = 1.0;
   GreenSaintVenantThermoelasticMaterial        material{rho, E, nu, c, alpha, theta_ref, k};
-  thermomech_solver.setMaterial(material);
+
+  Domain domain = EntireDomain(pmesh);
+  Domain boundary = EntireBoundary(pmesh);
+
+  thermomech_solver.setMaterial(material, domain);
 
   auto zero = [](const mfem::Vector&, double) -> double { return 0.0; };
   thermomech_solver.setTemperatureBCs(temp_ess_bcs, temp_bc_function);
-  thermomech_solver.setFluxBCs(flux_bc_function, EntireBoundary(thermomech_solver.mesh()));
+  thermomech_solver.setFluxBCs(flux_bc_function, boundary);
 
-  thermomech_solver.setSource(source_function);
+  thermomech_solver.setSource(source_function, domain);
   thermomech_solver.setTemperature(zero);
 
   std::set<int> disp_ess_bdr_y = {1};
   std::set<int> disp_ess_bdr_x = {3};
-  auto zeroComponent = [](const mfem::Vector&) -> double { return 0.0; };
+  Domain ess_y_bdr = Domain::ofBoundaryElements(pmesh, by_attr<dim>(disp_ess_bdr_y));
+  Domain ess_x_bdr = Domain::ofBoundaryElements(pmesh, by_attr<dim>(disp_ess_bdr_x));
+
+  thermomech_solver.setFixedBCs(ess_y_bdr, Component::Y);
+  thermomech_solver.setFixedBCs(ess_x_bdr, Component::X);
+
   auto zeroVector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
-  thermomech_solver.setDisplacementBCs(disp_ess_bdr_y, zeroComponent, 1);
-  thermomech_solver.setDisplacementBCs(disp_ess_bdr_x, zeroComponent, 0);
   thermomech_solver.setDisplacement(zeroVector);
 
   thermomech_solver.completeSetup();
@@ -86,56 +93,21 @@ void ThermoMechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
 template <int dim>
 class ManufacturedSolution {
 public:
-  ManufacturedSolution(int order, mfem::DenseMatrix A, mfem::Vector B, mfem::Vector C, double D)
+  ManufacturedSolution(int order, tensor<double, dim, dim> A, tensor<double, dim> B, tensor<double, dim> C, double D)
   : p(order), A_(A), B_(B), C_(C), D_(D)
   {}
-
-  /**
-   * @brief MFEM-style coefficient function corresponding to the displacement solution
-   *
-   * @param X Coordinates of point in reference configuration at which solution is sought
-   * @param u Exact solution evaluated at \p X
-   */
-  void operator()(const mfem::Vector& X, mfem::Vector& u) const
-  {
-    mfem::Vector x(dim);
-    x = 1.0;
-    for (int n = 0; n < p; ++n) { x *= X; }
-
-    A_.Mult(x, u);
-    u += B_;
-  }
-
-  /**
-   * @brief MFEM-style coefficient function corresponding to the temperature solution
-   *
-   * @param X Coordinates of point in reference configuration at which solution is sought
-   * @param T Exact solution evaluated at \p X
-   */
-  double operator()(const mfem::Vector& X) const
-  {
-    double T;
-    mfem::Vector x(dim);
-    x = 1.0;
-    for (int n = 0; n < p; ++n) { x *= X; }
-
-    T = C_ * x;
-    T += D_;
-
-    return T;
-  }
 
   /**
    * @brief computes u_exact. Different from operator().
    * Takes a tensor as input to be compatible with applyLoad
    */
   template<typename T>
-  auto Uexact(const tensor<T, dim>& X) const
+  auto evalU(const tensor<T, dim>& X) const
   {
     return make_tensor<dim>([&](int i){
       decltype(double{} * T{}) val{};
       using std::pow;
-      for (int j = 0; j < dim; ++j) { val += A_(i, j) * pow(X[j], p); }
+      for (int j = 0; j < dim; ++j) { val += A_[i][j] * pow(X[j], p); }
       val += B_[i];
       return val;
     });
@@ -146,13 +118,38 @@ public:
    * Takes a tensor as input to be compatible with applyLoad
    */
   template<typename T>
-  auto Texact(const tensor<T, dim>& X) const
+  auto evalT(const tensor<T, dim>& X) const
   {
     decltype(double{} * T{}) val{};
     using std::pow;
-    for (int i = 0; i < dim; ++i) { val += C_(i) * pow(X[i], p); }
+    for (int i = 0; i < dim; ++i) { val += C_[i] * pow(X[i], p); }
     val += D_;
     return val;
+  }
+
+  /**
+   * @brief MFEM-style coefficient function corresponding to the displacement solution
+   *
+   * @param X Coordinates of point in reference configuration at which solution is sought
+   * @param u Exact solution evaluated at \p X
+   */
+  void operator()(const mfem::Vector& X, mfem::Vector& u) const
+  {
+    auto Xt = make_tensor<dim>([&X](int i){ return X[i]; });
+    auto ut = this->evalU(Xt);
+    for (int i = 0; i < dim; ++i) { u[i] = ut[i]; }
+  }
+
+  /**
+   * @brief MFEM-style coefficient function corresponding to the temperature solution
+   *
+   * @param X Coordinates of point in reference configuration at which solution is sought
+   * @param T Exact solution evaluated at \p X
+   */
+  double operator()(const mfem::Vector& X) const
+  {
+    auto Xt = make_tensor<dim>([&X](int i){ return X[i]; });
+    return this->evalT(Xt);
   }
 
   /// @brief computes du/dX
@@ -161,7 +158,7 @@ public:
   {
     return make_tensor<dim, dim>([&](int i, int j){
       using std::pow;
-      return A_(i, j) * p * pow(X[j], p - 1);
+      return A_[i][j] * p * pow(X[j], p - 1);
     });
   }
 
@@ -171,7 +168,7 @@ public:
   {
     return make_tensor<dim>([&](int i){
       using std::pow;
-      return C_(i) * p * pow(X[i], p - 1);
+      return C_[i] * p * pow(X[i], p - 1);
     });
   }
 
@@ -195,39 +192,41 @@ public:
    * @param disp_ess_bcs Boundary attributes on which essential boundary conditions are desired on displacement field
    */
   template <typename MaterialType, int p>
-  void applyLoads(const MaterialType &material, ThermoMechanicsMonolithic<p, dim>& tm, std::set<int> temp_ess_bcs, std::set<int> disp_ess_bcs) const
+  void applyLoads(const MaterialType &material, ThermoMechanicsMonolithic<p, dim>& tm, Domain& temp_ess_bdr, Domain& disp_ess_bdr) const
   {
     // essential BCs
-    auto temp_ebc_func = [*this](const auto& X, auto){ return this->operator()(X); };
-    tm.setTemperatureBCs(temp_ess_bcs, temp_ebc_func);
-    auto disp_ebc_func = [*this](const auto& X, auto& u){ this->operator()(X, u); };
-    tm.setDisplacementBCs(disp_ess_bcs, disp_ebc_func);
+    auto temp_ebc_func = [*this](const auto& X, auto){ return this->evalT(X); };
+    tm.setTemperatureBCs(temp_ebc_func, temp_ess_bdr);
+    auto disp_ebc_func = [*this](const auto& X, auto){ return this->evalU(X); };
+    tm.setDisplacementBCs(disp_ebc_func, disp_ess_bdr);
+
+    Domain entire_domain = EntireDomain(tm.mesh());
+    Domain entire_boundary = EntireBoundary(tm.mesh());
 
     // natural BCs
     auto flux = [=](auto X, auto n0, auto /* time */, auto /* T */) {
       typename MaterialType::State state{};
 
-      auto theta = Texact(get<0>(X));
+      auto theta = evalT(get<0>(X));
       auto dtheta_dX = gradT(get<0>(X));
       auto du_dX = gradU(get<0>(X));
 
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
       return dot(heat_flux, n0);
     };
-    tm.setFluxBCs(flux, EntireBoundary(tm.mesh()));
+    tm.setFluxBCs(flux, entire_boundary);
 
     auto traction = [=](auto X, auto n0, auto /* time */) {
       typename MaterialType::State state{};
 
-      auto theta = Texact(get_value(X));
+      auto theta = evalT(get_value(X));
       auto dtheta_dX = gradT(get_value(X));
       auto du_dX = gradU(get_value(X));
 
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
-      auto P = solid_mechanics::CauchyToPiola(stress, du_dX);
-      return dot(P, n0);
+      return dot(stress, n0);
     };
-    tm.setTraction(traction, EntireBoundary(tm.mesh()));
+    tm.setTraction(traction, entire_boundary);
 
     // Forcing functions
     auto heat_source = [=](auto X, auto /* time */, auto /* T */, auto /* dTdX*/) {
@@ -235,7 +234,7 @@ public:
 
       auto X_val_temp = get<0>(X);
       auto X_val = get_value(X_val_temp);
-      auto theta = Texact(X_val);
+      auto theta = evalT(X_val);
       auto dtheta_dX = gradT(make_dual(X_val));
       auto du_dX = gradU(X_val);
 
@@ -244,30 +243,29 @@ public:
       auto divFlux = tr(dFluxdX);
       return (divFlux - internal_heat_source);
     };
-    tm.setSource(heat_source, EntireDomain(tm.mesh()));
+    tm.setSource(heat_source, entire_domain);
 
     auto body_force = [=](auto X, auto /* time */) {
       typename MaterialType::State state{};
 
       auto X_val = get_value(X);
-      auto theta = Texact(make_dual(X_val));
+      auto theta = evalT(make_dual(X_val));
       auto dtheta_dX = gradT(X_val);
       auto du_dX = gradU(make_dual(X_val));
 
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
-      auto P = solid_mechanics::CauchyToPiola(stress, du_dX);
-      auto dPdX = get_gradient(P);
+      auto dPdX = get_gradient(stress);
       tensor<double, dim> divP{};
       for (int i = 0; i < dim; ++i) { divP[i] = tr(dPdX[i]); }
       return (-1.0 * divP);
     };
-    tm.addBodyForce(body_force, EntireDomain(tm.mesh()));
+    tm.addBodyForce(body_force, entire_domain);
   }
 
 private:
   int p;
-  mfem::DenseMatrix A_;
-  mfem::Vector B_, C_;
+  tensor<double, dim, dim> A_;
+  tensor<double, dim> B_, C_;
   double D_;
 };
 
@@ -328,8 +326,10 @@ std::set<int> essentialBoundaryAttributes(PatchBoundaryCondition bc)
  */
 template <typename ElementType>
 std::array<double, 2> SolutionError(PatchBoundaryCondition temp_bc, PatchBoundaryCondition disp_bc,
-                                    std::tuple<mfem::DenseMatrix, mfem::Vector, mfem::Vector, double> coef,
-                                    double alpha = 1e-3)
+  std::tuple<tensor<double, dimension_of(ElementType::geometry), dimension_of(ElementType::geometry)>,
+             tensor<double, dimension_of(ElementType::geometry)>,
+             tensor<double, dimension_of(ElementType::geometry)>, double> coef,
+  double alpha = 1e-3)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -368,7 +368,7 @@ std::array<double, 2> SolutionError(PatchBoundaryCondition temp_bc, PatchBoundar
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, 0);
 
   const std::string meshtag = "mesh";
-  serac::StateManager::setMesh(std::move(mesh), meshtag);
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), meshtag);
 
   auto linear_opts = thermomech::direct_linear_options;
   linear_opts.relative_tol = 1e-14;
@@ -378,7 +378,7 @@ std::array<double, 2> SolutionError(PatchBoundaryCondition temp_bc, PatchBoundar
   nonlinear_opts.absolute_tol = 1e-14;
   nonlinear_opts.print_level = 0;
   ThermoMechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts,
-    GeometricNonlinearities::On, "thermomech_patch_test", meshtag);
+    "thermomech_patch_test", meshtag);
 
   double                                       rho       = 1.0;
   double                                       E         = 100.0;
@@ -387,10 +387,13 @@ std::array<double, 2> SolutionError(PatchBoundaryCondition temp_bc, PatchBoundar
   double                                       theta_ref = std::get<3>(coef);
   double                                       k         = 1.0;
   GreenSaintVenantThermoelasticMaterial        material{rho, E, nu, c, alpha, theta_ref, k};
-  thermomech_solver.setMaterial(material);
+  Domain domain = EntireDomain(pmesh);
 
-  exact_solution.applyLoads(material, thermomech_solver,
-    essentialBoundaryAttributes<dim>(temp_bc), essentialBoundaryAttributes<dim>(disp_bc));
+  thermomech_solver.setMaterial(material, domain);
+
+  Domain temp_ess_bdr = Domain::ofBoundaryElements(pmesh, by_attr<dim>(essentialBoundaryAttributes<dim>(temp_bc)));
+  Domain disp_ess_bdr = Domain::ofBoundaryElements(pmesh, by_attr<dim>(essentialBoundaryAttributes<dim>(disp_bc)));
+  exact_solution.applyLoads(material, thermomech_solver, temp_ess_bdr, disp_ess_bdr);
 
   // Finalize the data structures
   thermomech_solver.completeSetup();
@@ -432,12 +435,10 @@ constexpr int CUBIC = 3;
 
 TEST(ThermoMechanics, Patch2dQ1TempEssentialDispConst)
 {
-  mfem::DenseMatrix A(2);
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  tensor<double, 2, 2> A{{{0.0, 0.0}, {0.0, 0.0}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  tensor<double, 2> C{{0.639707923874072, 0.3301482067142397}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
@@ -455,15 +456,11 @@ TEST(ThermoMechanics, Patch2dQ1TempEssentialDispConst)
 
 TEST(ThermoMechanics, Patch2dQ1DispEssentialTempConst)
 {
-  mfem::DenseMatrix A(2);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
-  A *= 0.1;
+  tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901},
+                          {0.198344644470483, 0.060514559793513}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.0; C(1) = 0.0;
+  tensor<double, 2> C{{0.0, 0.0}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
@@ -481,15 +478,11 @@ TEST(ThermoMechanics, Patch2dQ1DispEssentialTempConst)
 
 TEST(ThermoMechanics, Patch2dQ1EssentialDecoupled)
 {
-  mfem::DenseMatrix A(2);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
-  A *= 0.1;
+  tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901},
+                          {0.198344644470483, 0.060514559793513}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  tensor<double, 2> C{{0.639707923874072, 0.3301482067142397}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
@@ -507,15 +500,11 @@ TEST(ThermoMechanics, Patch2dQ1EssentialDecoupled)
 
 TEST(ThermoMechanics, Patch2dQ1EssentialCoupled)
 {
-  mfem::DenseMatrix A(2);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
-  A *= 0.1;
+  tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901},
+                          {0.198344644470483, 0.060514559793513}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  tensor<double, 2> C{{0.639707923874072, 0.3301482067142397}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
@@ -533,16 +522,12 @@ TEST(ThermoMechanics, Patch2dQ1EssentialCoupled)
 
 TEST(ThermoMechanics, Patch3dQ1EssentialCoupled)
 {
-  mfem::DenseMatrix A(3);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
-  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
-  mfem::Vector B(3);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
-  A *= 0.1;
+  tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
+                          {0.198344644470483, 0.060514559793513, 0.084137393813728},
+                          {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+  tensor<double, 3> B{{0.226645549201083, 0.39746067373029, 0.152779218111711}};
 
-  mfem::Vector C(3);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  tensor<double, 3> C{{0.639707923874072, 0.3301482067142397, 0.1098652982167019}};
   double D = 0.1289548360319865;
 
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<LINEAR>>;
@@ -560,15 +545,11 @@ TEST(ThermoMechanics, Patch3dQ1EssentialCoupled)
 
 TEST(ThermoMechanics, Patch2dQ2EssentialCoupled)
 {
-  mfem::DenseMatrix A(2);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
-  A *= 0.1;
+  tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901},
+                          {0.198344644470483, 0.060514559793513}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  tensor<double, 2> C{{0.639707923874072, 0.3301482067142397}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<QUADRATIC>>;
@@ -586,16 +567,12 @@ TEST(ThermoMechanics, Patch2dQ2EssentialCoupled)
 
 TEST(ThermoMechanics, Patch3dQ2EssentialCoupled)
 {
-  mfem::DenseMatrix A(3);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
-  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
-  mfem::Vector B(3);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
-  A *= 0.1;
+  tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
+                          {0.198344644470483, 0.060514559793513, 0.084137393813728},
+                          {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+  tensor<double, 3> B{{0.226645549201083, 0.39746067373029, 0.152779218111711}};
 
-  mfem::Vector C(3);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  tensor<double, 3> C{{0.639707923874072, 0.3301482067142397, 0.1098652982167019}};
   double D = 0.1289548360319865;
 
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<QUADRATIC>>;
@@ -613,15 +590,11 @@ TEST(ThermoMechanics, Patch3dQ2EssentialCoupled)
 
 TEST(ThermoMechanics, Patch2dQ3EssentialCoupled)
 {
-  mfem::DenseMatrix A(2);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
-  A *= 0.1;
+  tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901},
+                          {0.198344644470483, 0.060514559793513}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  tensor<double, 2> C{{0.639707923874072, 0.3301482067142397}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<CUBIC>>;
@@ -639,16 +612,12 @@ TEST(ThermoMechanics, Patch2dQ3EssentialCoupled)
 
 TEST(ThermoMechanics, Patch3dQ3EssentialCoupled)
 {
-  mfem::DenseMatrix A(3);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
-  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
-  mfem::Vector B(3);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
-  A *= 0.1;
+  tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
+                          {0.198344644470483, 0.060514559793513, 0.084137393813728},
+                          {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+  tensor<double, 3> B{{0.226645549201083, 0.39746067373029, 0.152779218111711}};
 
-  mfem::Vector C(3);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  tensor<double, 3> C{{0.639707923874072, 0.3301482067142397, 0.1098652982167019}};
   double D = 0.1289548360319865;
 
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<CUBIC>>;
@@ -667,12 +636,10 @@ TEST(ThermoMechanics, Patch3dQ3EssentialCoupled)
 //////////////////////////Patch Tests (Essential and natural BC)/////////////////////////////
 TEST(ThermoMechanics, Patch2dQ1TempEssentialAndNaturalDispConst)
 {
-  mfem::DenseMatrix A(2);
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
+  tensor<double, 2, 2> A{{{0.0, 0.0}, {0.0, 0.0}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  tensor<double, 2> C{{0.639707923874072, 0.3301482067142397}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
@@ -690,15 +657,11 @@ TEST(ThermoMechanics, Patch2dQ1TempEssentialAndNaturalDispConst)
 
 TEST(ThermoMechanics, Patch2dQ1DispEssentialAndNaturalTempConst)
 {
-  mfem::DenseMatrix A(2);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
-  A *= 0.1;
+  tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901},
+                          {0.198344644470483, 0.060514559793513}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.0; C(1) = 0.0;
+  tensor<double, 2> C{{0.0, 0.0}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
@@ -716,15 +679,11 @@ TEST(ThermoMechanics, Patch2dQ1DispEssentialAndNaturalTempConst)
 
 TEST(ThermoMechanics, Patch2dQ1EssentialAndNaturalDecoupled)
 {
-  mfem::DenseMatrix A(2);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
-  A *= 0.1;
+  tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901},
+                          {0.198344644470483, 0.060514559793513}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  tensor<double, 2> C{{0.639707923874072, 0.3301482067142397}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
@@ -742,15 +701,11 @@ TEST(ThermoMechanics, Patch2dQ1EssentialAndNaturalDecoupled)
 
 TEST(ThermoMechanics, Patch2dQ1EssentialAndNaturalCoupled)
 {
-  mfem::DenseMatrix A(2);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
-  A *= 0.1;
+  tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901},
+                          {0.198344644470483, 0.060514559793513}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  tensor<double, 2> C{{0.639707923874072, 0.3301482067142397}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<LINEAR>>;
@@ -768,16 +723,12 @@ TEST(ThermoMechanics, Patch2dQ1EssentialAndNaturalCoupled)
 
 TEST(ThermoMechanics, Patch3dQ1EssentialAndNaturalCoupled)
 {
-  mfem::DenseMatrix A(3);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
-  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
-  mfem::Vector B(3);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
-  A *= 0.1;
+  tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
+                          {0.198344644470483, 0.060514559793513, 0.084137393813728},
+                          {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+  tensor<double, 3> B{{0.226645549201083, 0.39746067373029, 0.152779218111711}};
 
-  mfem::Vector C(3);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  tensor<double, 3> C{{0.639707923874072, 0.3301482067142397, 0.1098652982167019}};
   double D = 0.1289548360319865;
 
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<LINEAR>>;
@@ -795,15 +746,11 @@ TEST(ThermoMechanics, Patch3dQ1EssentialAndNaturalCoupled)
 
 TEST(ThermoMechanics, Patch2dQ2EssentialAndNaturalCoupled)
 {
-  mfem::DenseMatrix A(2);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
-  A *= 0.1;
+  tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901},
+                          {0.198344644470483, 0.060514559793513}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  tensor<double, 2> C{{0.639707923874072, 0.3301482067142397}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<QUADRATIC>>;
@@ -821,16 +768,12 @@ TEST(ThermoMechanics, Patch2dQ2EssentialAndNaturalCoupled)
 
 TEST(ThermoMechanics, Patch3dQ2EssentialAndNaturalCoupled)
 {
-  mfem::DenseMatrix A(3);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
-  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
-  mfem::Vector B(3);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
-  A *= 0.1;
+  tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
+                          {0.198344644470483, 0.060514559793513, 0.084137393813728},
+                          {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+  tensor<double, 3> B{{0.226645549201083, 0.39746067373029, 0.152779218111711}};
 
-  mfem::Vector C(3);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  tensor<double, 3> C{{0.639707923874072, 0.3301482067142397, 0.1098652982167019}};
   double D = 0.1289548360319865;
 
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<QUADRATIC>>;
@@ -848,15 +791,11 @@ TEST(ThermoMechanics, Patch3dQ2EssentialAndNaturalCoupled)
 
 TEST(ThermoMechanics, Patch2dQ3EssentialAndNaturalCoupled)
 {
-  mfem::DenseMatrix A(2);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513;
-  mfem::Vector B(2);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029;
-  A *= 0.1;
+  tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901},
+                          {0.198344644470483, 0.060514559793513}}};
+  tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
 
-  mfem::Vector C(2);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397;
+  tensor<double, 2> C{{0.639707923874072, 0.3301482067142397}};
   double D = 0.1289548360319865;
 
   using triangle = finite_element<mfem::Geometry::TRIANGLE, H1<CUBIC>>;
@@ -874,16 +813,12 @@ TEST(ThermoMechanics, Patch2dQ3EssentialAndNaturalCoupled)
 
 TEST(ThermoMechanics, Patch3dQ3EssentialAndNaturalCoupled)
 {
-  mfem::DenseMatrix A(3);
-  A(0, 0) = 0.110791568544027; A(0, 1) = 0.230421268325901; A(0, 2) = 0.15167673653354;
-  A(1, 0) = 0.198344644470483; A(1, 1) = 0.060514559793513; A(1, 2) = 0.084137393813728;
-  A(2, 0) = 0.011544253485023; A(2, 1) = 0.060942846497753; A(2, 2) = 0.186383473579596;
-  mfem::Vector B(3);
-  B(0) = 0.226645549201083; B(1) = 0.39746067373029; B(2) = 0.152779218111711; 
-  A *= 0.1;
+  tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
+                          {0.198344644470483, 0.060514559793513, 0.084137393813728},
+                          {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+  tensor<double, 3> B{{0.226645549201083, 0.39746067373029, 0.152779218111711}};
 
-  mfem::Vector C(3);
-  C(0) = 0.639707923874072; C(1) = 0.3301482067142397; C(2) = 0.1098652982167019;
+  tensor<double, 3> C{{0.639707923874072, 0.3301482067142397, 0.1098652982167019}};
   double D = 0.1289548360319865;
 
   using tetrahedron = finite_element<mfem::Geometry::TETRAHEDRON, H1<CUBIC>>;

@@ -24,14 +24,4 @@ struct Parameters {
   static constexpr int n = sizeof...(T);  ///< how many parameters were specified
 };
 
-/**
- * @brief Enum to set the geometric nonlinearity flag
- *
- */
-enum class GeometricNonlinearities
-{
-  On, /**< Include geometric nonlinearities */
-  Off /**< Do not include geometric nonlinearities */
-};
-
 }  // namespace serac
