@@ -50,17 +50,17 @@ TEST_P(ContactTest, patch)
   Domain z0_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
   Domain zmax_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
 
-#ifdef SERAC_USE_PETSC
-  LinearSolverOptions linear_options{
-      .linear_solver = LinearSolver::PetscGMRES,
-      .preconditioner = Preconditioner::Petsc,
-      .petsc_preconditioner = PetscPCType::HMG,
-      .absolute_tol = 1e-16,
-      .print_level = 1,
-  };
-#elif defined(MFEM_USE_STRUMPACK)
-  // #ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 1};
+  // #ifdef SERAC_USE_PETSC
+  //   LinearSolverOptions linear_options{
+  //       .linear_solver = LinearSolver::PetscGMRES,
+  //       .preconditioner = Preconditioner::Petsc,
+  //       .petsc_preconditioner = PetscPCType::HMG,
+  //       .absolute_tol = 1e-16,
+  //       .print_level = 1,
+  //   };
+  // #elif defined(MFEM_USE_STRUMPACK)
+#ifdef MFEM_USE_STRUMPACK
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #else
   LinearSolverOptions linear_options{};
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -68,15 +68,15 @@ TEST_P(ContactTest, patch)
 #endif
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
-                                           .relative_tol = 1.0e-12,
-                                           .absolute_tol = 1.0e-12,
+                                           .relative_tol = 1.0e-13,
+                                           .absolute_tol = 1.0e-13,
                                            .max_iterations = 20,
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type = ContactType::Frictionless,
-                                 .penalty = 1.0e3,
+                                 .penalty = 8.0e2,
                                  .jacobian = std::get<1>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,

@@ -62,7 +62,7 @@ TEST_P(TribolFiniteDiff, patch)
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = GetParam().first,
                                  .type = ContactType::TiedNormal,
-                                 .penalty = 1.0e3,
+                                 .penalty = 1.0,
                                  .jacobian = ContactJacobian::Exact};
   ContactData contact_data(pmesh);
   constexpr int interaction_id = 0;
@@ -100,11 +100,12 @@ TEST_P(TribolFiniteDiff, patch)
         if (diff > max_diff) {
           max_diff = diff;
         }
-        if (diff > 1.0e-5) {  // eps) {
+        if (diff > eps) {
           std::cout << "(" << k << ", " << j << "):  J_exact = " << std::setprecision(15) << J_exact[k]
                     << "   J_fd = " << std::setprecision(15) << J_fd[k] << "   |diff| = " << std::setprecision(15)
                     << diff << std::endl;
         }
+        EXPECT_NEAR(J_exact[k], J_fd[k], eps);
       }
     }
   }
@@ -112,8 +113,8 @@ TEST_P(TribolFiniteDiff, patch)
 }
 
 INSTANTIATE_TEST_SUITE_P(tribol, TribolFiniteDiff,
-                         testing::Values(  // std::make_pair(ContactEnforcement::Penalty, "penalty"),
-                             std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
+                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty"),
+                                         std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
 
 }  // namespace serac
 

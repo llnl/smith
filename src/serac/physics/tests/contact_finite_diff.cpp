@@ -34,7 +34,7 @@ TEST_P(ContactFiniteDiff, patch)
   constexpr int p = 1;
   constexpr int dim = 3;
 
-  constexpr double eps = 1.0e-8;
+  constexpr double eps = 1.0e-7;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -62,23 +62,12 @@ TEST_P(ContactFiniteDiff, patch)
   // clang-format on
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "patch_mesh");
-  pmesh.GetNodes()->Print();
 
   Domain x0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(5));
   Domain y0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
   Domain z0_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
   Domain zmax_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(8));
 
-// TODO: investigate performance with Petsc
-// #ifdef SERAC_USE_PETSC
-//   LinearSolverOptions linear_options{
-//       .linear_solver        = LinearSolver::PetscGMRES,
-//       .preconditioner       = Preconditioner::Petsc,
-//       .petsc_preconditioner = PetscPCType::HMG,
-//       .absolute_tol         = 1e-12,
-//       .print_level          = 1,
-//   };
-// #elif defined(MFEM_USE_STRUMPACK)
 #ifdef MFEM_USE_STRUMPACK
   LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #else
@@ -97,7 +86,7 @@ TEST_P(ContactFiniteDiff, patch)
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = GetParam().first,
                                  .type = ContactType::TiedNormal,
-                                 .penalty = 1.0e3,
+                                 .penalty = 1.0,
                                  .jacobian = ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
@@ -160,23 +149,25 @@ TEST_P(ContactFiniteDiff, patch)
   std::string paraview_name = name + "_paraview";
   solid_solver.outputStateToDisk(paraview_name);
 
+  auto oper = solid_solver.buildQuasistaticOperator();
+
   // Perform the quasi-static solve
   constexpr int n_steps = 3;
   double dt = 1.0 / static_cast<double>(n_steps);
   for (int i{0}; i < n_steps; ++i) {
     double max_diff = 0.0;
-    auto oper = solid_solver.buildQuasistaticOperator();
     auto& u = solid_solver.displacement();
     auto pressure = solid_solver.pressure();
     mfem::Vector merged_sol(u.Size() + pressure.Size());
     merged_sol.SetVector(u, 0);
     merged_sol.SetVector(pressure, u.Size());
-    auto* J_op = &oper->GetGradient(u);
     mfem::Vector f(merged_sol.Size());
     f = 0.0;
     oper->Mult(merged_sol, f);
+    auto* J_op = &oper->GetGradient(merged_sol);
     mfem::Vector u_dot(merged_sol.Size());
     u_dot = 0.0;
+    // wiggle displacement (col = j)
     dof_ct = 0;
     for (int j{0}; j < merged_sol.Size(); ++j) {
       if (dof_ct < bc_vdofs.Size() && bc_vdofs[dof_ct] == j) {
@@ -195,30 +186,31 @@ TEST_P(ContactFiniteDiff, patch)
       J_fd -= f;
       J_fd /= eps;
       merged_sol[j] -= eps;
+      // loop through forces (row = k)
       for (int k{0}; k < merged_sol.Size(); ++k) {
-        if (std::abs(J_exact[k]) > 1.0e-15 || std::abs(J_fd[k]) > 1.0e-15) {
+        if (J_exact[k] != 1.0 && (std::abs(J_exact[k]) > 1.0e-15 || std::abs(J_fd[k]) > 1.0e-15)) {
           auto diff = std::abs(J_exact[k] - J_fd[k]);
           if (diff > max_diff) {
             max_diff = diff;
           }
-          if (diff > 1.0e-5) {  // eps) {
-            std::cout << "(" << j << ", " << k << "):  J_exact = " << std::setprecision(15) << J_exact[k]
+          if (diff > eps) {
+            std::cout << "(" << k << ", " << j << "):  J_exact = " << std::setprecision(15) << J_exact[k]
                       << "   J_fd = " << std::setprecision(15) << J_fd[k] << "   |diff| = " << std::setprecision(15)
                       << diff << std::endl;
           }
+          EXPECT_NEAR(J_exact[k], J_fd[k], eps);
         }
       }
     }
     std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
 
     solid_solver.advanceTimestep(dt);
-    solid_solver.displacement().Print(mfem::out, 17);
   }
 }
 
 INSTANTIATE_TEST_SUITE_P(tribol, ContactFiniteDiff,
-                         testing::Values(  // std::make_pair(ContactEnforcement::Penalty, "penalty"),
-                             std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
+                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty"),
+                                         std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
 
 }  // namespace serac
 

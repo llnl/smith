@@ -103,7 +103,7 @@ class NewtonSolver : public mfem::NewtonSolver {
         mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
         if (it > 0) {
           mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
-          mfem::out << ", Ratio = " << std::setw(13) << std::log10(prev_norm / norm);
+          mfem::out << ", Rate = " << std::setw(10) << std::log10(prev_norm / norm);
         }
         mfem::out << '\n';
       }

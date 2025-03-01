@@ -44,16 +44,16 @@ TEST_P(ContactTest, beam)
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "beam_mesh");
 
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 1};
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
   return;
 #endif
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
-                                           .relative_tol = 1.0e-12,
-                                           .absolute_tol = 1.0e-12,
-                                           .max_iterations = 200,
+                                           .relative_tol = 1.0e-13,
+                                           .absolute_tol = 1.0e-13,
+                                           .max_iterations = 20,
                                            .print_level = 1};
   // #ifdef SERAC_USE_SUNDIALS
   //   // KINFullStep is preferred, but has issues when active set is enabled
@@ -65,7 +65,7 @@ TEST_P(ContactTest, beam)
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type = std::get<1>(GetParam()),
-                                 .penalty = 1.0e2,
+                                 .penalty = 8.0e2,
                                  .jacobian = std::get<2>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,

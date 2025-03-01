@@ -24,7 +24,7 @@ blt_list_append(TO physics_serial_test_sources
                 ELEMENTS 
                     contact_finite_diff.cpp
                     tribol_finite_diff.cpp
-                IF TRIBOL_FOUND)
+                IF TRIBOL_FOUND AND TRIBOL_USE_ENZYME)
 
 serac_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}

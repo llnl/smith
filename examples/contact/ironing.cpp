@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
   auto mesh = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 2, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "ironing_mesh");
 
-  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
+  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -47,8 +47,8 @@ int main(int argc, char* argv[])
 #endif
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
-                                                  .relative_tol = 1.0e-7,
-                                                  .absolute_tol = 1.0e-7,
+                                                  .relative_tol = 1.0e-13,
+                                                  .absolute_tol = 1.0e-13,
                                                   .max_iterations = 200,
                                                   .print_level = 1};
 

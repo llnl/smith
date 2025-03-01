@@ -131,13 +131,9 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
       if (block_J->IsZeroBlock(0, 0)) {
         block_J->SetBlock(0, 0, &interaction_J->GetBlock(0, 0));
       } else {
-        if (block_J->IsZeroBlock(0, 0)) {
-          block_J->SetBlock(0, 0, &interaction_J->GetBlock(0, 0));
-        } else {
-          block_J->SetBlock(0, 0,
-                            mfem::Add(1.0, static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(0, 0)), 1.0,
-                                      static_cast<mfem::HypreParMatrix&>(interaction_J->GetBlock(0, 0))));
-        }
+        block_J->SetBlock(0, 0,
+                          mfem::Add(1.0, static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(0, 0)), 1.0,
+                                    static_cast<mfem::HypreParMatrix&>(interaction_J->GetBlock(0, 0))));
         delete &interaction_J->GetBlock(0, 0);
       }
     }
