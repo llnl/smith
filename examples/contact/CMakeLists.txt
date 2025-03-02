@@ -12,7 +12,7 @@ if(TRIBOL_FOUND)
         twist.cpp
     )
 
-    foreach(filename ${arg_CONTACT_EXAMPLES_SOURCES})
+    foreach(filename ${CONTACT_EXAMPLES_SOURCES})
         get_filename_component(example_name ${filename} NAME_WE)
 
         blt_add_executable(NAME        contact_${example_name}

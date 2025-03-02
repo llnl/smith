@@ -219,6 +219,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     SolidMechanicsBase::completeSetup();
   }
 
+  /**
+   " @brief Get the contact pressures from all contact interactions, merged into a single HypreParVector
+   *
+   * @return The merged contact pressures
+   */
   mfem::HypreParVector pressure() const { return contact_.mergedPressures(); }
 
  protected:

@@ -180,6 +180,11 @@ class ContactData {
 #endif
   }
 
+  /**
+   * @brief Get the contact interactions
+   *
+   * @return The contact interactions
+   */
   const std::vector<ContactInteraction>& getContactInteractions() const { return interactions_; }
 
   /**
