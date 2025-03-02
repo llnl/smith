@@ -61,7 +61,7 @@ def main():
     args = parse_args()
     cmake_options = args["extra_cmake_options"] + " -DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Release"
     host_config = args["host_config"]
-    spot_dir = args["spot_dir"]
+    spot_dir = os.path.abspath(args["spot_dir"])
     timestamp = args["timestamp"]
 
     # Vars

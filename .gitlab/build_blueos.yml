@@ -31,15 +31,12 @@
 # Template
 .src_build_on_blueos:
   extends: [.src_build_script, .on_blueos, .src_workflow]
-  needs: []
 
 .full_build_on_blueos:
   extends: [.full_build_script, .on_blueos, .full_workflow]
-  needs: []
 
 .benchmarks_build_on_blueos:
   extends: [.benchmarks_build_script, .on_blueos, .benchmarks_workflow]
-  needs: []
 
 ####
 # Build jobs

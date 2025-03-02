@@ -33,7 +33,7 @@ struct LinearIsotropic {
    * @tparam T Number-like type for the displacement gradient components
    * @tparam dim Dimensionality of space
    * @param du_dX Displacement gradient with respect to the reference configuration
-   * @return The Cauchy stress
+   * @return The stress
    */
   template <typename T, int dim>
   SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
@@ -69,7 +69,7 @@ struct StVenantKirchhoff {
    *
    * @param[in] grad_u Displacement gradient
    *
-   * @return The Cauchy stress
+   * @return The first Piola stress
    */
   template <typename T, int dim>
   auto operator()(State&, const tensor<T, dim, dim>& grad_u) const
@@ -104,7 +104,7 @@ struct NeoHookean {
    * @tparam T Number-like type for the displacement gradient components
    * @tparam dim Dimensionality of space
    * @param du_dX displacement gradient with respect to the reference configuration (displacement_grad)
-   * @return The Cauchy stress
+   * @return The first Piola stress
    */
   template <typename T, int dim>
   SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
@@ -164,23 +164,35 @@ struct NeoHookeanAdditiveSplit {
 };
 
 /**
+ * Overstress for linear viscosity
+ */
+template <typename T>
+auto overstress(double viscosity, T accumulated_plastic_strain_rate)
+{
+  return viscosity * accumulated_plastic_strain_rate;
+}
+
+/**
  * @brief Linear isotropic hardening law
  */
 struct LinearHardening {
   double sigma_y;  ///< yield strength
   double Hi;       ///< Isotropic hardening modulus
+  double eta;      ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
    *
-   * @tparam T Number-like type for the argument
+   * @tparam T1 Number-like type
+   * @tparam T2 Number-like type
    * @param accumulated_plastic_strain The uniaxial equivalent accumulated plastic strain
+   * @param accumulated_plastic_strain_rate The rate of the uniaxial equivalent accumulated plastic strain
    * @return Flow stress value
    */
-  template <typename T>
-  auto operator()(const T accumulated_plastic_strain) const
+  template <typename T1, typename T2>
+  auto operator()(T1 accumulated_plastic_strain, T2 accumulated_plastic_strain_rate) const
   {
-    return sigma_y + Hi * accumulated_plastic_strain;
+    return sigma_y + Hi * accumulated_plastic_strain + overstress(eta, accumulated_plastic_strain_rate);
   };
 };
 
@@ -191,19 +203,23 @@ struct PowerLawHardening {
   double sigma_y;  ///< yield strength
   double n;        ///< hardening index in reciprocal form
   double eps0;     ///< reference value of accumulated plastic strain
+  double eta;      ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
    *
-   * @tparam T Number-like type for the argument
+   * @tparam T1 Number-like type
+   * @tparam T2 Number-like type
    * @param accumulated_plastic_strain The uniaxial equivalent accumulated plastic strain
+   * @param accumulated_plastic_strain_rate The rate of the uniaxial equivalent accumulated plastic strain
    * @return Flow stress value
    */
-  template <typename T>
-  auto operator()(const T accumulated_plastic_strain) const
+  template <typename T1, typename T2>
+  auto operator()(T1 accumulated_plastic_strain, T2 accumulated_plastic_strain_rate) const
   {
     using std::pow;
-    return sigma_y * pow(1.0 + accumulated_plastic_strain / eps0, 1.0 / n);
+    return sigma_y * pow(1.0 + accumulated_plastic_strain / eps0, 1.0 / n) +
+           overstress(eta, accumulated_plastic_strain_rate);
   };
 };
 
@@ -216,19 +232,26 @@ struct VoceHardening {
   double sigma_y;          ///< yield strength
   double sigma_sat;        ///< saturation value of flow strength
   double strain_constant;  ///< The constant dictating how fast the exponential decays
+  double eta;              ///< viscosity for linear rate sensitivity
 
   /**
    * @brief Computes the flow stress
    *
-   * @tparam T Number-like type for the argument
+   * @tparam T1 Number-like type
+   * @tparam T2 Number-like type
    * @param accumulated_plastic_strain The uniaxial equivalent accumulated plastic strain
+   * @param accumulated_plastic_strain_rate The rate of the uniaxial equivalent accumulated plastic strain
    * @return Flow stress value
    */
-  template <typename T>
-  auto operator()(const T accumulated_plastic_strain) const
+  template <typename T1, typename T2>
+  auto operator()(T1 accumulated_plastic_strain, T2 accumulated_plastic_strain_rate) const
   {
     using std::exp;
-    return sigma_sat - (sigma_sat - sigma_y) * exp(-accumulated_plastic_strain / strain_constant);
+    auto& epsilon_p = accumulated_plastic_strain;
+    auto Y_eq = sigma_sat - (sigma_sat - sigma_y) * exp(-epsilon_p / strain_constant);
+    auto& epsilon_p_dot = accumulated_plastic_strain_rate;
+    auto Y_vis = overstress(eta, epsilon_p_dot);
+    return Y_eq + Y_vis;
   };
 };
 
@@ -250,9 +273,9 @@ struct J2SmallStrain {
     double accumulated_plastic_strain;        ///< uniaxial equivalent plastic strain
   };
 
-  /** @brief calculate the Cauchy stress, given the displacement gradient and previous material state */
+  /** @brief calculate the first Piola stress, given the displacement gradient and previous material state */
   template <typename T>
-  auto operator()(State& state, const T du_dX) const
+  auto operator()(State& state, double dt, const tensor<T, dim, dim>& du_dX) const
   {
     using std::sqrt;
     constexpr auto I = Identity<dim>();
@@ -269,8 +292,9 @@ struct J2SmallStrain {
 
     // (ii) admissibility
     const double eqps_old = state.accumulated_plastic_strain;
-    auto residual = [eqps_old, G, *this](auto delta_eqps, auto trial_q) {
-      return trial_q - (3.0 * G + Hk) * delta_eqps - this->hardening(eqps_old + delta_eqps);
+    auto residual = [eqps_old, G, dt, *this](auto delta_eqps, auto trial_q) {
+      auto eqps_dot = dt > 0.0 ? delta_eqps / dt : 0.0 * delta_eqps;
+      return trial_q - (3.0 * G + Hk) * delta_eqps - this->hardening(eqps_old + delta_eqps, eqps_dot);
     };
     if (residual(0.0, get_value(q)) > tol * hardening.sigma_y) {
       // (iii) return mapping
@@ -280,7 +304,7 @@ struct J2SmallStrain {
       // variables, the return map won't be repeated.
       ScalarSolverOptions opts{.xtol = 0, .rtol = tol * hardening.sigma_y, .max_iter = 25};
       double lower_bound = 0.0;
-      double upper_bound = (get_value(q) - hardening(eqps_old)) / (3.0 * G + Hk);
+      double upper_bound = (get_value(q) - hardening(eqps_old, 0.0)) / (3.0 * G + Hk);
       auto [delta_eqps, status] = solve_scalar_equation(residual, 0.0, lower_bound, upper_bound, opts, q);
 
       auto Np = 1.5 * eta / q;
@@ -311,9 +335,9 @@ struct J2 {
     double accumulated_plastic_strain;                    ///< uniaxial equivalent plastic strain
   };
 
-  /** @brief calculate the Cauchy stress, given the displacement gradient and previous material state */
+  /** @brief calculate the first Piola stress, given the displacement gradient and previous material state */
   template <typename T>
-  auto operator()(State& state, const T du_dX) const
+  auto operator()(State& state, double dt, const tensor<T, dim, dim>& du_dX) const
   {
     using std::sqrt;
     constexpr auto I = Identity<dim>();
@@ -328,14 +352,15 @@ struct J2 {
     // small strain one.
     auto p = K * tr(Ee);
     auto s = 2.0 * G * dev(Ee);
-    auto q = sqrt(1.5) * norm(s);
+    double q_val = sqrt(1.5) * norm(get_value(s));
 
     // (ii) admissibility
     const double eqps_old = state.accumulated_plastic_strain;
-    auto residual = [eqps_old, G, *this](auto delta_eqps, auto trial_mises) {
-      return trial_mises - 3.0 * G * delta_eqps - this->hardening(eqps_old + delta_eqps);
+    auto residual = [eqps_old, G, dt, *this](auto delta_eqps, auto trial_mises) {
+      auto eqps_dot = dt > 0.0 ? delta_eqps / dt : 0.0 * delta_eqps;
+      return trial_mises - 3.0 * G * delta_eqps - this->hardening(eqps_old + delta_eqps, eqps_dot);
     };
-    if (residual(0.0, get_value(q)) > tol * hardening.sigma_y) {
+    if (residual(0.0, q_val) > tol * hardening.sigma_y) {
       // (iii) return mapping
 
       // Note the tolerance for convergence is the same as the tolerance for entering the return map.
@@ -343,8 +368,14 @@ struct J2 {
       // variables, the return map won't be repeated.
       ScalarSolverOptions opts{.xtol = 0, .rtol = tol * hardening.sigma_y, .max_iter = 25};
       double lower_bound = 0.0;
-      double upper_bound = (get_value(q) - hardening(eqps_old)) / (3.0 * G);
+      double upper_bound = (q_val - hardening(eqps_old, 0.0)) / (3.0 * G);
+      // safe to compute derivative of mises stress now that we're in yielding branch
+      auto q = sqrt(1.5) * norm(s);
       auto [delta_eqps, status] = solve_scalar_equation(residual, 0.0, lower_bound, upper_bound, opts, q);
+
+      if (!status.converged) {
+        SLIC_WARNING("J2 solve failed to converge.");
+      }
 
       auto Np = 1.5 * s / q;
 

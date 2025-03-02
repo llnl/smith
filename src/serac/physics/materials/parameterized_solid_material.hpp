@@ -35,7 +35,7 @@ struct ParameterizedLinearIsotropicSolid {
    * @param du_dX Displacement gradient with respect to the reference configuration (displacement_grad)
    * @param DeltaK The bulk modulus offset
    * @param DeltaG The shear modulus offset
-   * @return The calculated material response (Cauchy stress) for the material
+   * @return The calculated material response (stress) for the material
    */
   template <int dim, typename DispGradType, typename BulkType, typename ShearType>
   SERAC_HOST_DEVICE auto operator()(State& /*state*/, const serac::tensor<DispGradType, dim, dim>& du_dX,
@@ -78,7 +78,7 @@ struct ParameterizedNeoHookeanSolid {
    * @param du_dX Displacement gradient with respect to the reference configuration (displacement_grad)
    * @param DeltaK The bulk modulus offset
    * @param DeltaG The shear modulus offset
-   * @return The calculated material response (Cauchy stress) for the material
+   * @return The calculated material response (first Piola stress) for the material
    */
   template <int dim, typename DispGradType, typename BulkType, typename ShearType>
   SERAC_HOST_DEVICE auto operator()(State& /*state*/, const serac::tensor<DispGradType, dim, dim>& du_dX,
@@ -137,7 +137,7 @@ struct ParameterizedJ2Nonlinear {
     double accumulated_plastic_strain;        ///< uniaxial equivalent plastic strain
   };
 
-  /// @brief calculate the Cauchy stress, given the displacement gradient and previous material state
+  /// @brief calculate the first Piola stress, given the displacement gradient and previous material state
   template <typename DisplacementGradient, typename YieldStrength, typename SaturationStrength, typename StrainConstant>
   auto operator()(State& state, const DisplacementGradient du_dX, const YieldStrength sigma_y,
                   const SaturationStrength sigma_sat, const StrainConstant strain_constant) const
