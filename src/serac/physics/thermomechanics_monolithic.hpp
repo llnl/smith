@@ -36,13 +36,13 @@ const serac::LinearSolverOptions direct_linear_options = {.linear_solver = Linea
 /**
  * @brief Reasonable defaults for most thermal nonlinear solver options
  */
-const serac::NonlinearSolverOptions default_nonlinear_options = {.nonlin_solver  = NonlinearSolver::Newton,
-                                                                 .relative_tol   = 1.0e-4,
-                                                                 .absolute_tol   = 1.0e-8,
+const serac::NonlinearSolverOptions default_nonlinear_options = {.nonlin_solver = NonlinearSolver::Newton,
+                                                                 .relative_tol = 1.0e-4,
+                                                                 .absolute_tol = 1.0e-8,
                                                                  .max_iterations = 500,
-                                                                 .print_level    = 1};
+                                                                 .print_level = 1};
 
-}
+}  // namespace thermomech
 
 template <int order, int dim, typename parameters = Parameters<>,
           typename parameter_indices = std::make_integer_sequence<int, parameters::n>>
@@ -54,13 +54,13 @@ class ThermoMechanicsMonolithic;
  * Uses Functional to compute action of operators
  */
 template <int order, int dim, typename... parameter_space, int... parameter_indices>
-class ThermoMechanicsMonolithic<order, dim, Parameters<parameter_space...>, std::integer_sequence<int, parameter_indices...>>
-    : public BasePhysics {
-public:
+class ThermoMechanicsMonolithic<order, dim, Parameters<parameter_space...>,
+                                std::integer_sequence<int, parameter_indices...>> : public BasePhysics {
+ public:
   //! @cond Doxygen_Suppress
-  static constexpr int  VALUE = 0, DERIVATIVE = 1;
-  static constexpr int  SHAPE = 0;
-  static constexpr auto I     = Identity<dim>();
+  static constexpr int VALUE = 0, DERIVATIVE = 1;
+  static constexpr int SHAPE = 0;
+  static constexpr auto I = Identity<dim>();
   //! @endcond
 
   /// @brief The total number of non-parameter state variables (displacement, temperature) passed to the FEM
@@ -74,21 +74,20 @@ public:
 
   /**
    * @brief Construct a new Thermomechanics object
-   * 
+   *
    * @param nonlinear_opts The options for solving the nonlinear thermomechanics residual equations
    * @param lin_opts The options for solving the linearized Jacobian thermomechanics equations
    * @param physics_name A name for the physics module instance
    * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
    */
-  ThermoMechanicsMonolithic(
-    const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
-    const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {})
-  :
-  ThermoMechanicsMonolithic(
-    std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-    physics_name, mesh_tag, parameter_names)
-  {}
-
+  ThermoMechanicsMonolithic(const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
+                            const std::string& physics_name, std::string mesh_tag,
+                            std::vector<std::string> parameter_names = {})
+      : ThermoMechanicsMonolithic(
+            std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
+            physics_name, mesh_tag, parameter_names)
+  {
+  }
 
   /**
    * @brief Construct a new Thermal-SolidMechanics object
@@ -97,17 +96,20 @@ public:
    * @param physics_name A name for the physics module instance
    * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
    */
-  ThermoMechanicsMonolithic(std::unique_ptr<EquationSolver> solver,
-                            const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {})
+  ThermoMechanicsMonolithic(std::unique_ptr<EquationSolver> solver, const std::string& physics_name,
+                            std::string mesh_tag, std::vector<std::string> parameter_names = {})
       : BasePhysics(physics_name, mesh_tag),
         temperature_(StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature"), mesh_tag_)),
-        displacement_(StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_tag_)),
-        temperature_adjoint_(StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature_adjoint"), mesh_tag_)),
-        displacement_adjoint_(StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "dispacement_adjoint"), mesh_tag_)),
-        temperature_adjoint_load_(StateManager::newDual(H1<order>{}, detail::addPrefix(physics_name, "temperature_adjoint_load"),
-                                                        mesh_tag_)),
-        displacement_adjoint_load_(StateManager::newDual(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement_adjoint_load"),
-                                                         mesh_tag_)),
+        displacement_(
+            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_tag_)),
+        temperature_adjoint_(
+            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature_adjoint"), mesh_tag_)),
+        displacement_adjoint_(StateManager::newState(
+            H1<order, dim>{}, detail::addPrefix(physics_name, "dispacement_adjoint"), mesh_tag_)),
+        temperature_adjoint_load_(
+            StateManager::newDual(H1<order>{}, detail::addPrefix(physics_name, "temperature_adjoint_load"), mesh_tag_)),
+        displacement_adjoint_load_(StateManager::newDual(
+            H1<order, dim>{}, detail::addPrefix(physics_name, "displacement_adjoint_load"), mesh_tag_)),
         bcs_displacement_(mesh_),
         block_residual_with_bcs_(temperature_.space().TrueVSize() + displacement_.space().TrueVSize()),
         nonlin_solver_(std::move(solver))
@@ -150,9 +152,11 @@ public:
       });
     }
 
-    residual_T_ = std::make_unique<ShapeAwareFunctional<shape_trial, scalar_test(scalar_trial, vector_trial, parameter_space...)>>(
+    residual_T_ = std::make_unique<
+        ShapeAwareFunctional<shape_trial, scalar_test(scalar_trial, vector_trial, parameter_space...)>>(
         shape_space, test_space_1, trial_spaces);
-    residual_u_ = std::make_unique<ShapeAwareFunctional<shape_trial, vector_test(scalar_trial, vector_trial, parameter_space...)>>(
+    residual_u_ = std::make_unique<
+        ShapeAwareFunctional<shape_trial, vector_test(scalar_trial, vector_trial, parameter_space...)>>(
         shape_space, test_space_2, trial_spaces);
 
     block_thermomech_offsets_.SetSize(NUM_STATE_VARS + 1);
@@ -172,7 +176,7 @@ public:
 
     nonlin_solver_->setOperator(block_residual_with_bcs_);
 
-    block_nonlinear_oper_           = std::make_unique<mfem::BlockOperator>(block_thermomech_offsets_);
+    block_nonlinear_oper_ = std::make_unique<mfem::BlockOperator>(block_thermomech_offsets_);
     block_nonlinear_oper_transpose_ = std::make_unique<mfem::BlockOperator>(block_thermomech_offsets_);
 
     shape_displacement_ = 0.0;
@@ -183,7 +187,8 @@ public:
   virtual ~ThermoMechanicsMonolithic() {}
 
   /**
-   * @brief Non virtual method to reset temperature and displacement states to zero.  This does not reset design parameters or shape.
+   * @brief Non virtual method to reset temperature and displacement states to zero.  This does not reset design
+   * parameters or shape.
    *
    */
   void initializeThermoMechanicsStates()
@@ -232,7 +237,7 @@ public:
    *
    * @note This should be called prior to completeSetup()
    */
-  template<typename AppliedTemperatureFunction>
+  template <typename AppliedTemperatureFunction>
   void setTemperatureBCs(AppliedTemperatureFunction applied_temperature, Domain& domain)
   {
     auto mfem_coefficient_function = [applied_temperature](const mfem::Vector X_mfem, double t) {
@@ -276,7 +281,7 @@ public:
         Dimension<dim - 1>{}, DependsOn<0, active_parameters + NUM_STATE_VARS...>{},
         [flux_function](double t, auto X, auto u, auto... params) {
           auto temp = get<VALUE>(u);
-          auto n    = cross(get<DERIVATIVE>(X));
+          auto n = cross(get<DERIVATIVE>(X));
 
           return flux_function(X, normalize(n), t, temp, params...);
         },
@@ -363,7 +368,7 @@ public:
    * @tparam TractionType The type of the traction load
    * @param traction_function A function describing the traction applied to a boundary
    * @param domain The domain over which the traction is applied.
-   * 
+   *
    * @pre TractionType must be a object that can be called with the following arguments:
    *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
    *    2. `tensor<T,dim> n` the outward-facing unit normal for the quadrature point
@@ -461,13 +466,14 @@ public:
       auto du_dX = get<DERIVATIVE>(displacement);
       // auto du_dt = get<VALUE>(dtemp_dt);
 
-      auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material_(state, du_dX, theta, dtheta_dX, params...);
+      auto [stress, heat_accumulation, internal_heat_source, heat_flux] =
+          material_(state, du_dX, theta, dtheta_dX, params...);
 
       // return serac::tuple{heat_capacity * du_dt, -1.0 * heat_flux};
       return serac::tuple{-1.0 * internal_heat_source, -1.0 * heat_flux};
     }
 
-  private:
+   private:
     MaterialType material_;
   };
 
@@ -491,12 +497,13 @@ public:
       auto [theta, dtheta_dX] = temperature;
       auto du_dX = get<DERIVATIVE>(displacement);
 
-      auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material_(state, du_dX, theta, dtheta_dX, params...);
+      auto [stress, heat_accumulation, internal_heat_source, heat_flux] =
+          material_(state, du_dX, theta, dtheta_dX, params...);
 
       return serac::tuple{serac::zero{}, stress};
     }
 
-  private:
+   private:
     MaterialType material_;
   };
 
@@ -568,7 +575,7 @@ public:
    * @tparam BodyForceType The type of the body force load
    * @param body_force A function describing the body force applied
    * @param domain The domain over which the body force is applied.
-   * 
+   *
    * @pre body_force must be a object that can be called with the following arguments:
    *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
    *    2. `double t` the time (note: time will be handled differently in the future)
@@ -605,84 +612,82 @@ public:
   {
     // Block operator representing the nonlinear system of equations
     block_residual_with_bcs_ = mfem_ext::StdFunctionOperator(
-      temperature_.space().TrueVSize() + displacement_.space().TrueVSize(),
+        temperature_.space().TrueVSize() + displacement_.space().TrueVSize(),
 
-      // A lambda representing the residual R(T, u, params...)
-      // The input is the current state (T, u) in block vector form and the output is the block residual vector (r1, r2)
-      [this](const mfem::Vector& u, mfem::Vector& r) {
-        mfem::BlockVector block_u(const_cast<mfem::Vector&>(u), block_thermomech_offsets_);
-        mfem::BlockVector block_r(r, block_thermomech_offsets_);
+        // A lambda representing the residual R(T, u, params...)
+        // The input is the current state (T, u) in block vector form and the output is the block residual vector (r1,
+        // r2)
+        [this](const mfem::Vector& u, mfem::Vector& r) {
+          mfem::BlockVector block_u(const_cast<mfem::Vector&>(u), block_thermomech_offsets_);
+          mfem::BlockVector block_r(r, block_thermomech_offsets_);
 
-        auto temperature = block_u.GetBlock(0);
-        auto displacement = block_u.GetBlock(1);
+          auto temperature = block_u.GetBlock(0);
+          auto displacement = block_u.GetBlock(1);
 
-        auto r_1 = (*residual_T_)(time_, shape_displacement_, temperature, displacement,
-                                  *parameters_[parameter_indices].state...);
-        r_1.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
+          auto r_1 = (*residual_T_)(time_, shape_displacement_, temperature, displacement,
+                                    *parameters_[parameter_indices].state...);
+          r_1.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
 
-        auto r_2 = (*residual_u_)(time_, shape_displacement_, temperature, displacement,
-                                  *parameters_[parameter_indices].state...);
-        r_2.SetSubVector(bcs_displacement_.allEssentialTrueDofs(), 0.0);
+          auto r_2 = (*residual_u_)(time_, shape_displacement_, temperature, displacement,
+                                    *parameters_[parameter_indices].state...);
+          r_2.SetSubVector(bcs_displacement_.allEssentialTrueDofs(), 0.0);
 
-        block_r.GetBlock(0) = r_1;
-        block_r.GetBlock(1) = r_2;
-      },
+          block_r.GetBlock(0) = r_1;
+          block_r.GetBlock(1) = r_2;
+        },
 
-      [this](const mfem::Vector& u) -> mfem::Operator& {
-        mfem::BlockVector block_u(const_cast<mfem::Vector&>(u), block_thermomech_offsets_);
+        [this](const mfem::Vector& u) -> mfem::Operator& {
+          mfem::BlockVector block_u(const_cast<mfem::Vector&>(u), block_thermomech_offsets_);
 
-        auto temperature = block_u.GetBlock(0);
-        auto displacement = block_u.GetBlock(1);
+          auto temperature = block_u.GetBlock(0);
+          auto displacement = block_u.GetBlock(1);
 
-        // Get the components of the block Jacobian via auto differentiation
-        auto [r1, dr1_dT] =
-            (*residual_T_)(time_, shape_displacement_, differentiate_wrt(temperature), displacement,
-                           *parameters_[parameter_indices].state...);
-        auto [r1_again, dr1_du] = 
-            (*residual_T_)(time_, shape_displacement_, temperature, differentiate_wrt(displacement),
-                           *parameters_[parameter_indices].state...);
+          // Get the components of the block Jacobian via auto differentiation
+          auto [r1, dr1_dT] = (*residual_T_)(time_, shape_displacement_, differentiate_wrt(temperature), displacement,
+                                             *parameters_[parameter_indices].state...);
+          auto [r1_again, dr1_du] =
+              (*residual_T_)(time_, shape_displacement_, temperature, differentiate_wrt(displacement),
+                             *parameters_[parameter_indices].state...);
 
-        auto [r2, dr2_dT] =
-            (*residual_u_)(time_, shape_displacement_, differentiate_wrt(temperature), displacement,
-                           *parameters_[parameter_indices].state...);
-        auto [r2_again, dr2_du] =
-            (*residual_u_)(time_, shape_displacement_, temperature, differentiate_wrt(displacement),
-                           *parameters_[parameter_indices].state...);
+          auto [r2, dr2_dT] = (*residual_u_)(time_, shape_displacement_, differentiate_wrt(temperature), displacement,
+                                             *parameters_[parameter_indices].state...);
+          auto [r2_again, dr2_du] =
+              (*residual_u_)(time_, shape_displacement_, temperature, differentiate_wrt(displacement),
+                             *parameters_[parameter_indices].state...);
 
-        // Assemble the matrix-free Jacobian operators into hypre matrices
-        J_11_ = assemble(dr1_dT);
-        J_12_ = assemble(dr1_du);
-        J_21_ = assemble(dr2_dT);
-        J_22_ = assemble(dr2_du);
+          // Assemble the matrix-free Jacobian operators into hypre matrices
+          J_11_ = assemble(dr1_dT);
+          J_12_ = assemble(dr1_du);
+          J_21_ = assemble(dr2_dT);
+          J_22_ = assemble(dr2_du);
 
-        // Eliminate the essential DoFs from the matrix
-        auto ess_tdofs_T = bcs_.allEssentialTrueDofs();
+          // Eliminate the essential DoFs from the matrix
+          auto ess_tdofs_T = bcs_.allEssentialTrueDofs();
 
-        mfem::HypreParMatrix* JTempTemp = J_11_->EliminateRowsCols(ess_tdofs_T);
-        mfem::HypreParMatrix* JDispTemp = J_21_->EliminateCols(ess_tdofs_T);
-        J_12_->EliminateRows(ess_tdofs_T);
+          mfem::HypreParMatrix* JTempTemp = J_11_->EliminateRowsCols(ess_tdofs_T);
+          mfem::HypreParMatrix* JDispTemp = J_21_->EliminateCols(ess_tdofs_T);
+          J_12_->EliminateRows(ess_tdofs_T);
 
-        delete JTempTemp;
-        delete JDispTemp;
+          delete JTempTemp;
+          delete JDispTemp;
 
-        auto ess_tdofs_u = bcs_displacement_.allEssentialTrueDofs();
+          auto ess_tdofs_u = bcs_displacement_.allEssentialTrueDofs();
 
-        mfem::HypreParMatrix* JDispDisp = J_22_->EliminateRowsCols(ess_tdofs_u);
-        mfem::HypreParMatrix* JTempDisp = J_12_->EliminateCols(ess_tdofs_u);
-        J_21_->EliminateRows(ess_tdofs_u);
+          mfem::HypreParMatrix* JDispDisp = J_22_->EliminateRowsCols(ess_tdofs_u);
+          mfem::HypreParMatrix* JTempDisp = J_12_->EliminateCols(ess_tdofs_u);
+          J_21_->EliminateRows(ess_tdofs_u);
 
-        delete JDispDisp;
-        delete JTempDisp;
+          delete JDispDisp;
+          delete JTempDisp;
 
-        // Fill the block operator with the individual Jacobian blocks
-        block_nonlinear_oper_->SetBlock(0, 0, J_11_.get());
-        block_nonlinear_oper_->SetBlock(0, 1, J_12_.get());
-        block_nonlinear_oper_->SetBlock(1, 0, J_21_.get());
-        block_nonlinear_oper_->SetBlock(1, 1, J_22_.get());
+          // Fill the block operator with the individual Jacobian blocks
+          block_nonlinear_oper_->SetBlock(0, 0, J_11_.get());
+          block_nonlinear_oper_->SetBlock(0, 1, J_12_.get());
+          block_nonlinear_oper_->SetBlock(1, 0, J_21_.get());
+          block_nonlinear_oper_->SetBlock(1, 1, J_22_.get());
 
-        return *block_nonlinear_oper_;
-      }
-    );
+          return *block_nonlinear_oper_;
+        });
   }
 
   /// @overload
@@ -734,13 +739,15 @@ public:
                        "Adjoint load container is not the expected size of 2 in the thermomechanics module");
     auto temperature_adjoint_load_ptr = adjoint_loads.find("temperature");
 
-    SLIC_ERROR_ROOT_IF(temperature_adjoint_load_ptr == adjoint_loads.end(), "Adjoint load for \"temperature\" not found.");
+    SLIC_ERROR_ROOT_IF(temperature_adjoint_load_ptr == adjoint_loads.end(),
+                       "Adjoint load for \"temperature\" not found.");
 
     temperature_adjoint_load_ = temperature_adjoint_load_ptr->second;
 
     auto displacement_adjoint_load_ptr = adjoint_loads.find("displacement");
 
-    SLIC_ERROR_ROOT_IF(displacement_adjoint_load_ptr == adjoint_loads.end(), "Adjoint load for \"displacement\" not found.");
+    SLIC_ERROR_ROOT_IF(displacement_adjoint_load_ptr == adjoint_loads.end(),
+                       "Adjoint load for \"displacement\" not found.");
 
     auto displacement_ajoint_load_ = displacement_adjoint_load_ptr->second;
 
@@ -754,19 +761,15 @@ public:
   {
     SLIC_ERROR_ROOT(axom::fmt::format("Do not use. Method not yet tested"));
 
-    auto [r1, dr1_dT] =
-        (*residual_T_)(time_, shape_displacement_, differentiate_wrt(temperature_), displacement_,
-                       *parameters_[parameter_indices].state...);
-    auto [_1, dr1_du] =
-        (*residual_T_)(time_, shape_displacement_, temperature_, differentiate_wrt(displacement_),
-                       *parameters_[parameter_indices].state...);
+    auto [r1, dr1_dT] = (*residual_T_)(time_, shape_displacement_, differentiate_wrt(temperature_), displacement_,
+                                       *parameters_[parameter_indices].state...);
+    auto [_1, dr1_du] = (*residual_T_)(time_, shape_displacement_, temperature_, differentiate_wrt(displacement_),
+                                       *parameters_[parameter_indices].state...);
 
-    auto [r2, dr2_dT] =
-        (*residual_u_)(time_, shape_displacement_, differentiate_wrt(temperature_), displacement_,
-                       *parameters_[parameter_indices].state...);
-    auto [_2, dr2_du] =
-        (*residual_u_)(time_, shape_displacement_, temperature_, differentiate_wrt(displacement_),
-                       *parameters_[parameter_indices].state...);
+    auto [r2, dr2_dT] = (*residual_u_)(time_, shape_displacement_, differentiate_wrt(temperature_), displacement_,
+                                       *parameters_[parameter_indices].state...);
+    auto [_2, dr2_du] = (*residual_u_)(time_, shape_displacement_, temperature_, differentiate_wrt(displacement_),
+                                       *parameters_[parameter_indices].state...);
 
     J_11_ = assemble(dr1_dT);
     J_12_ = assemble(dr1_du);
@@ -855,12 +858,12 @@ public:
   {
     SLIC_ERROR_ROOT(axom::fmt::format("Do not use. Method not yet tested"));
 
-    auto dr1_dshape = serac::get<DERIVATIVE>(
-        (*residual_T_)(time_end_step_, differentiate_wrt(shape_displacement_), temperature_,
-                       displacement_, *parameters_[parameter_indices].state...));
-    auto dr2_dshape = serac::get<DERIVATIVE>(
-        (*residual_u_)(time_end_step_, differentiate_wrt(shape_displacement_), temperature_,
-                       displacement_, *parameters_[parameter_indices].state...));
+    auto dr1_dshape =
+        serac::get<DERIVATIVE>((*residual_T_)(time_end_step_, differentiate_wrt(shape_displacement_), temperature_,
+                                              displacement_, *parameters_[parameter_indices].state...));
+    auto dr2_dshape =
+        serac::get<DERIVATIVE>((*residual_u_)(time_end_step_, differentiate_wrt(shape_displacement_), temperature_,
+                                              displacement_, *parameters_[parameter_indices].state...));
 
     auto dr1_dshape_mat = assemble(dr1_dshape);
     auto dr2_dshape_mat = assemble(dr2_dshape);
@@ -885,7 +888,7 @@ public:
       return displacement_;
     } else {
       SLIC_ERROR_ROOT(axom::fmt::format("State '{}' requested from thermomechanics solver '{}', but it doesn't exist",
-                                       state_name, name_));
+                                        state_name, name_));
     }
 
     return temperature_;
@@ -939,7 +942,7 @@ public:
    */
   const serac::FiniteElementState& displacement() const { return displacement_; };
 
-private:
+ private:
   /// The compile-time finite element trial space for displacement (H1 of dimension dim and order p)
   using vector_trial = H1<order, dim>;
 
@@ -978,10 +981,12 @@ private:
   serac::BoundaryConditionManager bcs_displacement_;
 
   /// serac::Functional that is used to calculate the displacement residual and its derivatives
-  std::unique_ptr<serac::ShapeAwareFunctional<shape_trial, scalar_test(scalar_trial, vector_trial, parameter_space...)>> residual_T_;
+  std::unique_ptr<serac::ShapeAwareFunctional<shape_trial, scalar_test(scalar_trial, vector_trial, parameter_space...)>>
+      residual_T_;
 
   /// serac::Functional that is used to calculate the temperature residual and its derivatives
-  std::unique_ptr<serac::ShapeAwareFunctional<shape_trial, vector_test(scalar_trial, vector_trial, parameter_space...)>> residual_u_;
+  std::unique_ptr<serac::ShapeAwareFunctional<shape_trial, vector_test(scalar_trial, vector_trial, parameter_space...)>>
+      residual_u_;
 
   /**
    * @brief The residual operator representing the PDE-based block residual operator
@@ -1045,7 +1050,7 @@ private:
   /// @note This is needed so the user can ask for a specific sensitivity at runtime as opposed to it being a
   /// template parameter.
   std::array<std::function<decltype((*residual_T_)(DifferentiateWRT<1>{}, 0.0, shape_displacement_, temperature_,
-                                                 displacement_, *parameters_[parameter_indices].state...))(double)>,
+                                                   displacement_, *parameters_[parameter_indices].state...))(double)>,
              sizeof...(parameter_indices)>
       d_residual_T_d_ = {[&](double _t) {
         return (*residual_T_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, _t, shape_displacement_,
@@ -1053,13 +1058,12 @@ private:
       }...};
 
   std::array<std::function<decltype((*residual_u_)(DifferentiateWRT<1>{}, 0.0, shape_displacement_, temperature_,
-                                                 displacement_, *parameters_[parameter_indices].state...))(double)>,
+                                                   displacement_, *parameters_[parameter_indices].state...))(double)>,
              sizeof...(parameter_indices)>
       d_residual_u_d_ = {[&](double _t) {
         return (*residual_u_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, _t, shape_displacement_,
                               temperature_, displacement_, *parameters_[parameter_indices].state...);
       }...};
-
 };
 
-} // namespace serac
+}  // namespace serac

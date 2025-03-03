@@ -54,12 +54,12 @@ struct GreenSaintVenantThermoelasticMaterial {
   template <typename T1, typename T2, typename T3, int dim>
   auto operator()(State& state, const tensor<T1, dim, dim>& grad_u, T2 theta, const tensor<T3, dim>& grad_theta) const
   {
-    const double          K    = E / (3.0 * (1.0 - 2.0 * nu));
-    const double          G    = 0.5 * E / (1.0 + nu);
-    static constexpr auto I    = Identity<dim>();
-    auto                  F    = grad_u + I;
-    const auto            Eg   = greenStrain(grad_u);
-    const auto            trEg = tr(Eg);
+    const double K = E / (3.0 * (1.0 - 2.0 * nu));
+    const double G = 0.5 * E / (1.0 + nu);
+    static constexpr auto I = Identity<dim>();
+    auto F = grad_u + I;
+    const auto Eg = greenStrain(grad_u);
+    const auto trEg = tr(Eg);
 
     // stress
     const auto S = 2.0 * G * dev(Eg) + K * (trEg - 3.0 * alpha * (theta - theta_ref)) * I;
