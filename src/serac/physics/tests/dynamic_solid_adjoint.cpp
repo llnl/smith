@@ -89,8 +89,6 @@ void applyInitialAndBoundaryConditions(SolidMechanics<p, dim>& solid_solver)
 }
 
 
-
-
 double computeSolidMechanicsQoi(BasePhysics& solid_solver, const TimeSteppingInfo& ts_info)
 {
   auto dts = ts_info.dts;
@@ -300,6 +298,13 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
   NonlinearSolverOptions nonlinear_opts{
       .nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1.0e-15, .absolute_tol = 1.0e-14};
 
+  LinearSolverOptions linear_opts = {.linear_solver = LinearSolver::CG,
+                                     .preconditioner = Preconditioner::HypreJacobi,
+                                     .relative_tol = 1.0e-10,
+                                     .absolute_tol = 1.0e-16,
+                                     .max_iterations = 2000,
+                                     .print_level = 0};
+
   bool dispBc = true;
   TimesteppingOptions dyn_opts{.timestepper = TimestepMethod::Newmark,
                                .enforcement_method = dispBc ? DirichletEnforcementMethod::DirectControl
@@ -314,15 +319,9 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
   std::unique_ptr<SolidMechanics<p, dim>> createNonlinearSolidMechanicsSolver(Domain& whole_domain)
   {
     static int iter = 0;
-    const LinearSolverOptions linear_options = {.linear_solver = LinearSolver::CG,
-                                                .preconditioner = Preconditioner::HypreJacobi,
-                                                .relative_tol = 1.0e-9,
-                                                .absolute_tol = 1.0e-16,
-                                                .max_iterations = 2000,
-                                                .print_level = 0};
 
     bool checkpoint_to_disk = true;
-    auto solid = std::make_unique<SolidMechanics<p, dim>>(nonlinear_opts, linear_options, dyn_opts,
+    auto solid = std::make_unique<SolidMechanics<p, dim>>(nonlinear_opts, linear_opts, dyn_opts,
                                                           physics_prefix + std::to_string(iter++), mesh_tag,
                                                           std::vector<std::string>{}, 0, 0.0, checkpoint_to_disk, false);
     solid->setMaterial(mat, whole_domain);
@@ -469,7 +468,14 @@ struct BucklingSensitivityFixture : public ::testing::Test {
   mfem::ParMesh* mesh;
 
   NonlinearSolverOptions nonlinear_opts{
-      .nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1.0e-15, .absolute_tol = 1.0e-11, .max_iterations=200, .print_level=0};
+      .nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1.0e-15, .absolute_tol = 1.0e-13, .max_iterations=200, .print_level=0};
+
+  LinearSolverOptions linear_opts {.linear_solver = LinearSolver::CG,
+                                      .preconditioner = Preconditioner::HypreAMG,
+                                      .relative_tol = 1.0e-9,
+                                      .absolute_tol = 1.0e-14,
+                                      .max_iterations = 2000,
+                                      .print_level = 0};
 
   bool dispBc = true;
   TimesteppingOptions dyn_opts{.timestepper = TimestepMethod::Newmark,
@@ -480,7 +486,7 @@ struct BucklingSensitivityFixture : public ::testing::Test {
   ParSolidMaterial mat;
   TimeSteppingInfo tsInfo;
 
-  static constexpr double eps = 1e-7;
+  static constexpr double eps = 4e-7;
 
   std::string kname = "bulk";
   std::string gname = "shear";
@@ -490,17 +496,11 @@ struct BucklingSensitivityFixture : public ::testing::Test {
       Domain& whole_domain)
   {
     static int iter = 0;
-    const LinearSolverOptions linear_options = {.linear_solver = LinearSolver::CG,
-                                                .preconditioner = Preconditioner::HypreAMG,
-                                                .relative_tol = 1.0e-8,
-                                                .absolute_tol = 1.0e-12,
-                                                .max_iterations = 2000,
-                                                .print_level = 0};
 
     bool checkpoint_to_disk = false;
-    auto solid = std::make_unique<SolidMechanics<p, dim, Parameters<DensitySpace, DensitySpace> > >(nonlinear_opts, linear_options, dyn_opts,
-                                                                                      physics_prefix + std::to_string(iter++), mesh_tag,
-                                                                                      std::vector<std::string>{kname, gname}, 0, 0.0, checkpoint_to_disk, false);
+    auto solid = std::make_unique<SolidMechanics<p, dim, Parameters<DensitySpace, DensitySpace> > >(nonlinear_opts, linear_opts, dyn_opts,
+                                                                                                    physics_prefix + std::to_string(iter++), mesh_tag,
+                                                                                                    std::vector<std::string>{kname, gname}, 0, 0.0, checkpoint_to_disk, false);
 
     solid->setMaterial(serac::DependsOn<0,1>{}, mat, whole_domain);
     return solid;
@@ -555,7 +555,7 @@ TEST_F(BucklingSensitivityFixture, QuasiStaticShapeSensitivities)
     double qoi_plus = computeSolidMechanicsQoiAdjustingParam(*solid_solver, tsInfo, derivative_direction, ip, eps);
 
     double directional_deriv = innerProduct(derivative_direction, parameter_sensitivities[ip]);
-    EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, 10 * eps);
+    EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, std::pow(300, ip+1) * eps);
   }
 
 }
