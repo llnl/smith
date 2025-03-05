@@ -88,7 +88,6 @@ void applyInitialAndBoundaryConditions(SolidMechanics<p, dim>& solid_solver)
   solid_solver.setDisplacement(disp);
 }
 
-
 double computeSolidMechanicsQoi(BasePhysics& solid_solver, const TimeSteppingInfo& ts_info)
 {
   auto dts = ts_info.dts;
@@ -173,7 +172,7 @@ std::tuple<double, std::vector<FiniteElementDual>> computeSolidMechanicsQoiParam
   std::vector<FiniteElementDual> parameter_sensitivities;
   size_t num_params = solid_solver.parameterNames().size();
 
-  for (size_t ip=0; ip < num_params; ++ip) {
+  for (size_t ip = 0; ip < num_params; ++ip) {
     parameter_sensitivities.emplace_back(solid_solver.parameter(ip).space(), "param_" + std::to_string(ip));
     parameter_sensitivities.back() = 0.0;
   }
@@ -195,7 +194,7 @@ std::tuple<double, std::vector<FiniteElementDual>> computeSolidMechanicsQoiParam
     solid_solver.setDualAdjointBcs({{"reactions", adjoint_bcs}});
     solid_solver.reverseAdjointTimestep();
 
-    for (size_t ip=0; ip < num_params; ++ip) {
+    for (size_t ip = 0; ip < num_params; ++ip) {
       parameter_sensitivities[ip] += solid_solver.computeTimestepSensitivity(ip);
     }
 
@@ -220,8 +219,7 @@ double computeSolidMechanicsQoiAdjustingShape(BasePhysics& solid_solver, const T
   return computeSolidMechanicsQoi(solid_solver, ts_info);
 }
 
-double computeSolidMechanicsQoiAdjustingInitialDisplacement(BasePhysics& solid_solver,
-                                                            const TimeSteppingInfo& ts_info,
+double computeSolidMechanicsQoiAdjustingInitialDisplacement(BasePhysics& solid_solver, const TimeSteppingInfo& ts_info,
                                                             const FiniteElementState& derivative_direction,
                                                             double pertubation)
 {
@@ -235,8 +233,7 @@ double computeSolidMechanicsQoiAdjustingInitialDisplacement(BasePhysics& solid_s
   return computeSolidMechanicsQoi(solid_solver, ts_info);
 }
 
-double computeSolidMechanicsQoiAdjustingInitialVelocity(BasePhysics& solid_solver,
-                                                        const TimeSteppingInfo& ts_info,
+double computeSolidMechanicsQoiAdjustingInitialVelocity(BasePhysics& solid_solver, const TimeSteppingInfo& ts_info,
                                                         const FiniteElementState& derivative_direction,
                                                         double pertubation)
 {
@@ -250,10 +247,8 @@ double computeSolidMechanicsQoiAdjustingInitialVelocity(BasePhysics& solid_solve
   return computeSolidMechanicsQoi(solid_solver, ts_info);
 }
 
-double computeSolidMechanicsQoiAdjustingParam(BasePhysics& solid_solver,
-                                              const TimeSteppingInfo& ts_info,
-                                              const FiniteElementState& derivative_direction,
-                                              size_t param_index,
+double computeSolidMechanicsQoiAdjustingParam(BasePhysics& solid_solver, const TimeSteppingInfo& ts_info,
+                                              const FiniteElementState& derivative_direction, size_t param_index,
                                               double pertubation)
 {
   std::string param_name = solid_solver.parameterNames()[param_index];
@@ -315,15 +310,14 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
 
   static constexpr double eps = 1e-7;
 
-
   std::unique_ptr<SolidMechanics<p, dim>> createNonlinearSolidMechanicsSolver(Domain& whole_domain)
   {
     static int iter = 0;
 
     bool checkpoint_to_disk = true;
-    auto solid = std::make_unique<SolidMechanics<p, dim>>(nonlinear_opts, linear_opts, dyn_opts,
-                                                          physics_prefix + std::to_string(iter++), mesh_tag,
-                                                          std::vector<std::string>{}, 0, 0.0, checkpoint_to_disk, false);
+    auto solid = std::make_unique<SolidMechanics<p, dim>>(
+        nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh_tag,
+        std::vector<std::string>{}, 0, 0.0, checkpoint_to_disk, false);
     solid->setMaterial(mat, whole_domain);
 
     auto applied_displacement = [](tensor<double, dim>, double t) {
@@ -346,7 +340,6 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
 
     return solid;
   }
-
 };
 
 TEST_F(SolidMechanicsSensitivityFixture, InitialDisplacementSensitivities)
@@ -439,15 +432,16 @@ TEST_F(SolidMechanicsSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSa
   EXPECT_EQ(directional_deriv1, directional_deriv2);
 }
 
-
 struct BucklingSensitivityFixture : public ::testing::Test {
   void SetUp() override
   {
     MPI_Barrier(MPI_COMM_WORLD);
     StateManager::initialize(dataStore, "solid_mechanics_solve");
-    int Nx = 24; int Ny = 12;
-    //double Lx = 1.0; double Ly = 5.0;
-    double Lx = 5.0; double Ly = 5.0;
+    int Nx = 24;
+    int Ny = 12;
+    // double Lx = 1.0; double Ly = 5.0;
+    double Lx = 5.0;
+    double Ly = 5.0;
     mfem::Mesh smesh = mfem::Mesh::MakeCartesian2D(Nx, Ny, mfem::Element::QUADRILATERAL, true, Lx, Ly);
     auto pmesh = mesh::refineAndDistribute(std::move(smesh), 0, 0);
     mesh = &serac::StateManager::setMesh(std::move(pmesh), mesh_tag);
@@ -467,15 +461,18 @@ struct BucklingSensitivityFixture : public ::testing::Test {
   axom::sidre::DataStore dataStore;
   mfem::ParMesh* mesh;
 
-  NonlinearSolverOptions nonlinear_opts{
-      .nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1.0e-15, .absolute_tol = 1.0e-13, .max_iterations=200, .print_level=0};
+  NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
+                                        .relative_tol = 1.0e-15,
+                                        .absolute_tol = 1.0e-13,
+                                        .max_iterations = 200,
+                                        .print_level = 0};
 
-  LinearSolverOptions linear_opts {.linear_solver = LinearSolver::CG,
-                                      .preconditioner = Preconditioner::HypreAMG,
-                                      .relative_tol = 1.0e-9,
-                                      .absolute_tol = 1.0e-14,
-                                      .max_iterations = 2000,
-                                      .print_level = 0};
+  LinearSolverOptions linear_opts{.linear_solver = LinearSolver::CG,
+                                  .preconditioner = Preconditioner::HypreAMG,
+                                  .relative_tol = 1.0e-9,
+                                  .absolute_tol = 1.0e-14,
+                                  .max_iterations = 2000,
+                                  .print_level = 0};
 
   bool dispBc = true;
   TimesteppingOptions dyn_opts{.timestepper = TimestepMethod::Newmark,
@@ -492,28 +489,25 @@ struct BucklingSensitivityFixture : public ::testing::Test {
   std::string gname = "shear";
 
   template <typename DensitySpace>
-  auto createBucklingSolidMechanicsSolver(
-      Domain& whole_domain)
+  auto createBucklingSolidMechanicsSolver(Domain& whole_domain)
   {
     static int iter = 0;
 
     bool checkpoint_to_disk = false;
-    auto solid = std::make_unique<SolidMechanics<p, dim, Parameters<DensitySpace, DensitySpace> > >(nonlinear_opts, linear_opts, dyn_opts,
-                                                                                                    physics_prefix + std::to_string(iter++), mesh_tag,
-                                                                                                    std::vector<std::string>{kname, gname}, 0, 0.0, checkpoint_to_disk, false);
+    auto solid = std::make_unique<SolidMechanics<p, dim, Parameters<DensitySpace, DensitySpace>>>(
+        nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh_tag,
+        std::vector<std::string>{kname, gname}, 0, 0.0, checkpoint_to_disk, false);
 
-    solid->setMaterial(serac::DependsOn<0,1>{}, mat, whole_domain);
+    solid->setMaterial(serac::DependsOn<0, 1>{}, mat, whole_domain);
     return solid;
   }
-
 };
-
 
 TEST_F(BucklingSensitivityFixture, QuasiStaticShapeSensitivities)
 {
   Domain whole_domain = EntireDomain(*mesh);
   dyn_opts.timestepper = TimestepMethod::QuasiStatic;
-  
+
   using DensitySpace = serac::L2<0>;
 
   auto solid_solver = createBucklingSolidMechanicsSolver<DensitySpace>(whole_domain);
@@ -526,13 +520,13 @@ TEST_F(BucklingSensitivityFixture, QuasiStaticShapeSensitivities)
   solid_solver->setFixedBCs(applied_displacement_surface);
 
   auto K = serac::StateManager::newState(DensitySpace{}, kname, mesh_tag);
-  K.setFromFieldFunction([=](serac::tensor<double,dim> x) {
+  K.setFromFieldFunction([=](serac::tensor<double, dim> x) {
     double scaling = ((x[0] < 3) && (x[0] > 2)) ? 0.99 : 0.001;
     return scaling * mat.K0;
   });
 
   auto G = serac::StateManager::newState(DensitySpace{}, gname, mesh_tag);
-  G.setFromFieldFunction([=](serac::tensor<double,dim> x) {
+  G.setFromFieldFunction([=](serac::tensor<double, dim> x) {
     double scaling = ((x[0] <= 3) && (x[0] >= 2)) ? 0.99 : 0.001;
     return scaling * mat.G0;
   });
@@ -544,7 +538,7 @@ TEST_F(BucklingSensitivityFixture, QuasiStaticShapeSensitivities)
 
   auto [qoi_base, parameter_sensitivities] = computeSolidMechanicsQoiParameterSensitivities(*solid_solver, tsInfo);
 
-  for (size_t ip=0; ip < solid_solver->parameterNames().size(); ++ip) {
+  for (size_t ip = 0; ip < solid_solver->parameterNames().size(); ++ip) {
     auto param_name = solid_solver->parameterNames()[ip];
     auto param_field = solid_solver->parameter(ip);
 
@@ -555,9 +549,8 @@ TEST_F(BucklingSensitivityFixture, QuasiStaticShapeSensitivities)
     double qoi_plus = computeSolidMechanicsQoiAdjustingParam(*solid_solver, tsInfo, derivative_direction, ip, eps);
 
     double directional_deriv = innerProduct(derivative_direction, parameter_sensitivities[ip]);
-    EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, std::pow(300, ip+1) * eps);
+    EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, std::pow(300, ip + 1) * eps);
   }
-
 }
 
 }  // namespace serac
