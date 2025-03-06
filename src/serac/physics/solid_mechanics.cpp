@@ -17,7 +17,7 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
                        mfem::HypreParVector& accel_adjoint_load_vector, mfem::HypreParVector& adjoint_displacement_,
                        mfem::HypreParVector& implicit_sensitivity_displacement_start_of_step_,
                        mfem::HypreParVector& implicit_sensitivity_velocity_start_of_step_,
-                       mfem::HypreParVector& adjoint_essential, BoundaryConditionManager& bcs_,
+                       mfem::HypreParVector& adjoint_essential_, BoundaryConditionManager& bcs_,
                        mfem::Solver& lin_solver)
 {
   // there are hard-coded here for now
@@ -48,7 +48,7 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
                   implicit_sensitivity_displacement_start_of_step_);
 
   for (const auto& bc : bcs_.essentials()) {
-    bc.apply(*J_T, adjoint_rhs, adjoint_essential);
+    bc.apply(*J_T, adjoint_rhs, adjoint_essential_);
   }
 
   lin_solver.SetOperator(*J_T);

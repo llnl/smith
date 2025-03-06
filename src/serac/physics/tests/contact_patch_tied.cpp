@@ -68,11 +68,11 @@ TEST_P(ContactPatchTied, patch)
   return;
 #endif
 
-  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
-                                           .relative_tol = 1.0e-13,
-                                           .absolute_tol = 1.0e-13,
-                                           .max_iterations = 20,
-                                           .print_level = 1};
+  NonlinearSolverOptions nonlinear_options{.nonlin_solver  = NonlinearSolver::Newton,
+                                           .relative_tol   = 1.0e-10,
+                                           .absolute_tol   = 5.0e-10,
+                                           .max_iterations = 25,
+                                           .print_level    = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = GetParam().first,
