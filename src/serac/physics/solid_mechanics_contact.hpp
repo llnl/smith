@@ -114,6 +114,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   void resetStates(int cycle = 0, double time = 0.0) override
   {
     SolidMechanicsBase::resetStates(cycle, time);
+    printf("resetting state\n");
     forces_ = 0.0;
     contact_.setDisplacements(shape_displacement_, displacement_);
     contact_.reset();
@@ -314,6 +315,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     }
 
     if (use_warm_start_) {
+
       // Update the system residual
       mfem::Vector augmented_residual(displacement_.Size() + contact_.numPressureDofs());
       augmented_residual     = 0.0;
@@ -337,6 +339,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       J_.reset();
       J_ = assemble(drdu);
 
+      contact_.update(cycle_, time_, dt);
       if (contact_.haveLagrangeMultipliers()) {
         J_offsets_ = mfem::Array<int>({0, displacement_.Size(), displacement_.Size() + contact_.numPressureDofs()});
         J_constraint_ = contact_.jacobianFunction(J_.release());
@@ -368,18 +371,18 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
         J_operator_ = J_.get();
       }
 
-      // Update the linearized Jacobian matrix
-      mfem::Vector augmented_residual(displacement_.space().TrueVSize() + contact_.numPressureDofs());
-      augmented_residual = 0.0;
-      const mfem::Vector res = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
-                                            *parameters_[parameter_indices].state...);
+      // // Update the linearized Jacobian matrix
+      // mfem::Vector augmented_residual(displacement_.space().TrueVSize() + contact_.numPressureDofs());
+      // augmented_residual = 0.0;
+      // const mfem::Vector res = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
+      //                                       *parameters_[parameter_indices].state...);
 
-      // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
-      // tracking strategy
-      // See https://github.com/mfem/mfem/issues/3531
-      mfem::Vector r(augmented_residual, 0, displacement_.space().TrueVSize());
-      r = res;
-      r += contact_.forces();
+      // // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
+      // // tracking strategy
+      // // See https://github.com/mfem/mfem/issues/3531
+      // mfem::Vector r(augmented_residual, 0, displacement_.space().TrueVSize());
+      // r = res;
+      // r += contact_.forces();
 
       augmented_residual *= -1.0;
 
@@ -390,7 +393,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       mfem::EliminateBC(*J_, *J_e_, constrained_dofs, du, r_blk);
       for (int i = 0; i < constrained_dofs.Size(); i++) {
         int j = constrained_dofs[i];
-        r[j] = du[j];
+        r_blk[j] = du[j];
       }
 
       auto& lin_solver = nonlin_solver_->linearSolver();

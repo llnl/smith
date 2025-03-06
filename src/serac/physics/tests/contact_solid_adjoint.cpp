@@ -68,11 +68,20 @@ std::unique_ptr<SolidMechT> createContactSolver(const NonlinearSolverOptions& no
   Domain whole_mesh = EntireDomain(StateManager::mesh(mesh_tag));
   solid->setMaterial(mat, whole_mesh);
 
-  solid->setDisplacementBCs({2}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) { disp = 0.0; });
-  solid->setDisplacementBCs({4}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) {
-    disp    = 0.0;
-    disp[1] = -0.1;
-  });
+  Domain two = serac::Domain::ofBoundaryElements(StateManager::mesh(mesh_tag), by_attr<dim>(2));
+  Domain four = serac::Domain::ofBoundaryElements(StateManager::mesh(mesh_tag), by_attr<dim>(4));
+
+  solid->setFixedBCs(two);
+  solid->setDisplacementBCs([](tensor<double,dim> x, double) {
+    auto r = 0.0*x;
+    r[1] -= 0.1;
+    return r;
+  }, four, Component::Y);
+  //solid->setDisplacementBCs({2}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) { disp = 0.0; });
+  //solid->setDisplacementBCs({4}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) {
+  //  disp    = 0.0;
+  //  disp[1] = -0.1;
+  //});
 
   auto   contact_type   = serac::ContactEnforcement::Penalty;
   double element_length = 1.0;
