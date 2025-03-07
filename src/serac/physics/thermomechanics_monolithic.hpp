@@ -761,6 +761,10 @@ class ThermoMechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   {
     SLIC_ERROR_ROOT(axom::fmt::format("Do not use. Method not yet tested"));
 
+    cycle_--;  // cycle is now at n \in [0,N-1]
+
+    double dt = getCheckpointedTimestep(cycle_);
+
     auto [r1, dr1_dT] = (*residual_T_)(time_, shape_displacement_, differentiate_wrt(temperature_), displacement_,
                                        *parameters_[parameter_indices].state...);
     auto [_1, dr1_du] = (*residual_T_)(time_, shape_displacement_, temperature_, differentiate_wrt(displacement_),
@@ -825,7 +829,7 @@ class ThermoMechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     nonlin_solver_->setOperator(block_residual_with_bcs_);
 
     time_end_step_ = time_;
-    time_ -= time_;
+    time_ -= dt;
   }
 
   /// @overload
