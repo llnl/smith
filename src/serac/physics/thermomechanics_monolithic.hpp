@@ -514,7 +514,8 @@ class ThermoMechanicsMonolithic<order, dim, Parameters<parameter_space...>,
    * @brief Set the thermomechanical material model for the physics solver
    *
    * @tparam MaterialType The thermomechanical material type
-   * @param material A material containing heat capacity, thermal flux, stress, and internal heat source evaluation information
+   * @param material A material containing heat capacity, thermal flux, stress, and internal heat source evaluation
+   * information
    * @param domain which elements in the mesh are described by the specified material
    *
    * @pre material must be a object that can be called with the following arguments:
