@@ -27,6 +27,7 @@ namespace serac {
 
 namespace thermomech {
 
+/// @brief the default direct solver option for solving the linear stiffness equations
 #ifdef MFEM_USE_STRUMPACK
 const serac::LinearSolverOptions direct_linear_options = {.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #else
@@ -34,7 +35,7 @@ const serac::LinearSolverOptions direct_linear_options = {.linear_solver = Linea
 #endif
 
 /**
- * @brief Reasonable defaults for most thermal nonlinear solver options
+ * @brief Reasonable defaults for most thermomechanics nonlinear solver options
  */
 const serac::NonlinearSolverOptions default_nonlinear_options = {.nonlin_solver = NonlinearSolver::Newton,
                                                                  .relative_tol = 1.0e-4,
@@ -79,6 +80,7 @@ class ThermoMechanicsMonolithic<order, dim, Parameters<parameter_space...>,
    * @param lin_opts The options for solving the linearized Jacobian thermomechanics equations
    * @param physics_name A name for the physics module instance
    * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param parameter_names A vector of the names of the requested parameter fields
    */
   ThermoMechanicsMonolithic(const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
                             const std::string& physics_name, std::string mesh_tag,
@@ -95,6 +97,7 @@ class ThermoMechanicsMonolithic<order, dim, Parameters<parameter_space...>,
    * @param solver The nonlinear equation solver for the heat conduction equations
    * @param physics_name A name for the physics module instance
    * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param parameter_names A vector of the names of the requested parameter fields
    */
   ThermoMechanicsMonolithic(std::unique_ptr<EquationSolver> solver, const std::string& physics_name,
                             std::string mesh_tag, std::vector<std::string> parameter_names = {})
@@ -507,6 +510,31 @@ class ThermoMechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     MaterialType material_;
   };
 
+  /**
+   * @brief Set the thermomechanical material model for the physics solver
+   *
+   * @tparam MaterialType The thermomechanical material type
+   * @param material A material containing heat capacity, thermal flux, stress, and internal heat source evaluation information
+   * @param domain which elements in the mesh are described by the specified material
+   *
+   * @pre material must be a object that can be called with the following arguments:
+   *    1. `MaterialType::State & state` an mutable reference to the internal variables for this quadrature point
+   *    2. `tensor<T,dim,dim> du_dx` the displacement gradient at this quadrature point
+   *    3. `T temperature` the current temperature at the quadrature point
+   *    4. `tensor<T,dim> dT_dx` the spatial gradient of the temperature at the quadrature point
+   *    5. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
+   *            specified in the `DependsOn<...>` argument.
+   *
+   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
+   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
+   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
+   * 3>`)
+   *
+   * @pre MaterialType must return a serac::tuple of volumetric heat capacity, thermal flux, stress,
+   * and internal heat source when operator() is called with the arguments listed above.
+   *
+   * @note This method must be called prior to completeSetup()
+   */
   template <int... active_parameters, typename MaterialType>
   void setMaterial(DependsOn<active_parameters...>, const MaterialType& material, Domain& domain)
   {
@@ -722,7 +750,7 @@ class ThermoMechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   /**
    * @brief Set the loads for the adjoint reverse timestep solve
    *
-   * @param loads The loads (e.g. right hand sides) for the adjoint problem
+   * @param adjoint_loads The loads (e.g. right hand sides) for the adjoint problem
    *
    * @pre The adjoint load map is expected to contain an entry named "temperature" and "displacement"
    *
