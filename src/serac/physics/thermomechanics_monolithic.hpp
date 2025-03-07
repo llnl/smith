@@ -757,7 +757,7 @@ class ThermoMechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   }
 
   /// @overload
-  void reverseAdjointTimestep()
+  void reverseAdjointTimestep() override
   {
     SLIC_ERROR_ROOT(axom::fmt::format("Do not use. Method not yet tested"));
 

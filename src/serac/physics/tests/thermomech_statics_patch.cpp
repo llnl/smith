@@ -6,7 +6,6 @@
 
 #include "serac/physics/thermomechanics_monolithic.hpp"
 #include "serac/physics/materials/green_saint_venant_thermoelastic.hpp"
-#include "serac/physics/materials/solid_material.hpp"
 #include <fstream>
 
 #include <gtest/gtest.h>
