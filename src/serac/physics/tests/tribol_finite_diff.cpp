@@ -71,9 +71,10 @@ TEST_P(TribolFiniteDiff, patch)
   auto pressure_space = contact_data.getContactInteractions()[0].pressureSpace();
   mfem::Vector u(pmesh.GetNodes()->Size() + pressure_space.GetVSize());
   u = 0.0;
+  mfem::Vector u_shape = u;
   mfem::Vector f(u.Size());
   f = 0.0;
-  contact_data.residualFunction(u, f);
+  contact_data.residualFunction(u_shape, u, f);
 
   double max_diff = 0.0;
   auto J_op = contact_data.mergedJacobian();
@@ -89,7 +90,7 @@ TEST_P(TribolFiniteDiff, patch)
     u[j] += eps;
     mfem::Vector J_fd(u.Size());
     J_fd = 0.0;
-    contact_data.residualFunction(u, J_fd);
+    contact_data.residualFunction(u_shape, u, J_fd);
     J_fd -= f;
     J_fd /= eps;
     u[j] -= eps;

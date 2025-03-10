@@ -118,8 +118,9 @@ std::unique_ptr<SolidMechT> createContactSolver(const Mesh& mesh, const Nonlinea
 
   serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                         .enforcement = contact_type,
-                                        .type = serac::ContactType::Frictionless,
-                                        .penalty = penalty};
+                                        .type = serac::ContactType::TiedNormal,
+                                        .penalty = penalty,
+                                        .jacobian = serac::ContactJacobian::Exact};
   auto contact_interaction_id = 0;
   solid->addContactInteraction(contact_interaction_id, {3}, {5}, contact_options);
 #endif
@@ -240,7 +241,7 @@ TEST_F(ContactSensitivityFixture, QuasiStaticShapeSensitivities)
 
   double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
   double directional_deriv_fd = (qoi_plus - qoi_base) / eps;
-  EXPECT_NEAR(directional_deriv, directional_deriv_fd, 0.2);  // These are very large tolerances
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, eps);
 }
 
 }  // namespace serac
