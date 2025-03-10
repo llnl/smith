@@ -324,9 +324,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
       contact_.setPressures(mfem::Vector(augmented_residual, displacement_.Size(), contact_.numPressureDofs()));
       contact_.update(cycle_, time_, dt);
-      // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
-      // tracking strategy
-      // See https://github.com/mfem/mfem/issues/3531
       mfem::Vector r_blk(augmented_residual, 0, displacement_.space().TrueVSize());
       r_blk = res;
 
@@ -370,19 +367,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
         J_operator_ = J_.get();
       }
-
-      // // Update the linearized Jacobian matrix
-      // mfem::Vector augmented_residual(displacement_.space().TrueVSize() + contact_.numPressureDofs());
-      // augmented_residual = 0.0;
-      // const mfem::Vector res = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
-      //                                       *parameters_[parameter_indices].state...);
-
-      // // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
-      // // tracking strategy
-      // // See https://github.com/mfem/mfem/issues/3531
-      // mfem::Vector r(augmented_residual, 0, displacement_.space().TrueVSize());
-      // r = res;
-      // r += contact_.forces();
 
       augmented_residual *= -1.0;
 

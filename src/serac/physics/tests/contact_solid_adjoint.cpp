@@ -21,6 +21,79 @@
 
 namespace serac {
 
+/// Serac wrapper for mfem mesh to handle construction of parallel mesh
+/// and also management of domains
+class Mesh 
+{
+public:
+
+  Mesh(const std::string& mesh_path, const std::string& mesh_tag, 
+       int serial_refine , int parallel_refine) { 
+    pmesh = &StateManager::setMesh(mesh::refineAndDistribute(buildMeshFromFile(mesh_path), serial_refine, parallel_refine), mesh_tag);
+    domains.insert({"entire_domain", EntireDomain(*pmesh)});
+  }
+
+  mfem::ParMesh& parallelMesh() { return *pmesh; }
+  const mfem::ParMesh& parallelMesh() const { return *pmesh; }
+
+  Domain& domain(const std::string& domain_name) const {
+    SLIC_ERROR_IF(domains.find(domain_name)== domains.end(),
+      axom::fmt::format("Domain named '{} is not registered on the serac mesh", domain_name));
+    return domains.at(domain_name);
+  }
+
+  Domain& entire_domain() const {
+    return domain("entire_domain");
+  }
+
+  Domain& addDomainOfBoundaryElements(const std::string& domain_name, std::function<bool(std::vector<vec3>, int)> func)
+  {
+    domains.insert({domain_name, Domain::ofBoundaryElements(*pmesh, func)});
+    return domain(domain_name);
+  }
+
+private:
+
+  mutable std::map<std::string, serac::Domain> domains;
+  mfem::ParMesh* pmesh;
+};
+
+/*
+void setFromFieldFunction(FiniteElementState& field, Domain& domain, FieldFunction&& field_function)
+{
+  
+  for (int i = 0; i < dim; ++i) {
+    auto mfem_coefficient_function = [field, i](const mfem::Vector& X_mfem, double t) {
+      auto X = make_tensor<dim>([&X_mfem](int k) { return X_mfem[k]; });
+      return applied_displacement(X, t)[i];
+    };
+
+    auto component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
+
+    auto dof_list = domain.dof_list(&field.space());
+
+    // scalar ldofs -> vector ldofs
+    displacement_.space().DofsToVDofs(i, dof_list);
+
+    field.
+
+    bcs_.addEssential(dof_list, component_disp_bdr_coef_, displacement_.space(), i);
+  }
+
+  //auto evaluate_mfem = [&field_function](const mfem::Vector& X_mfem, mfem::Vector& u_mfem) {
+  //  auto u = detail::evaluateTensorFunctionOnMfemVector(X_mfem, field_function);
+  //  detail::setMfemVectorFromTensorOrDouble(u_mfem, u);
+  //};
+
+  //mfem::VectorFunctionCoefficient coef(space_->GetVDim(), evaluate_mfem);
+  //project(coef);
+}
+*/
+
+}
+
+namespace serac {
+
 constexpr int dim = 3;
 constexpr int p   = 1;
 
@@ -29,17 +102,15 @@ const std::string physics_prefix = "solid";
 
 using SolidMaterial = solid_mechanics::NeoHookean;
 
+
 struct TimeSteppingInfo {
   TimeSteppingInfo() : dts({0.0, 0.2, 0.4, 0.24, 0.12, 0.0}) {}
-
   int numTimesteps() const { return dts.Size() - 2; }
-
   mfem::Vector dts;
 };
 
 constexpr double disp_target = -0.34;
 
-// MRT: add explicit velocity dependence
 double computeStepQoi(const FiniteElementState& displacement)
 {
   FiniteElementState displacement_error(displacement);
@@ -55,9 +126,12 @@ void computeStepAdjointLoad(const FiniteElementState& displacement, FiniteElemen
 }
 
 using SolidMechT = serac::SolidMechanicsContact<p, dim>;
+//using SolidMechT = serac::SolidMechanics<p, dim>;
 
-std::unique_ptr<SolidMechT> createContactSolver(const NonlinearSolverOptions& nonlinear_opts,
-                                                const TimesteppingOptions& dyn_opts, const SolidMaterial& mat)
+std::unique_ptr<SolidMechT> createContactSolver(const Mesh& mesh,
+                                                const NonlinearSolverOptions& nonlinear_opts,
+                                                const TimesteppingOptions& dyn_opts,
+                                                const SolidMaterial& mat)
 {
   static int iter = 0;
 
@@ -65,24 +139,15 @@ std::unique_ptr<SolidMechT> createContactSolver(const NonlinearSolverOptions& no
                                             physics_prefix + std::to_string(iter++), mesh_tag,
                                             std::vector<std::string>{}, 0, 0.0, false, true);
 
-  Domain whole_mesh = EntireDomain(StateManager::mesh(mesh_tag));
-  solid->setMaterial(mat, whole_mesh);
-
-  Domain two = serac::Domain::ofBoundaryElements(StateManager::mesh(mesh_tag), by_attr<dim>(2));
-  Domain four = serac::Domain::ofBoundaryElements(StateManager::mesh(mesh_tag), by_attr<dim>(4));
-
-  solid->setFixedBCs(two);
+  solid->setMaterial(mat, mesh.entire_domain());
+  solid->setFixedBCs(mesh.domain("two"));
   solid->setDisplacementBCs([](tensor<double,dim> x, double) {
     auto r = 0.0*x;
     r[1] -= 0.1;
     return r;
-  }, four, Component::Y);
-  //solid->setDisplacementBCs({2}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) { disp = 0.0; });
-  //solid->setDisplacementBCs({4}, [](const mfem::Vector& /*X*/, double /*t*/, mfem::Vector& disp) {
-  //  disp    = 0.0;
-  //  disp[1] = -0.1;
-  //});
+  }, mesh.domain("four"), Component::ALL);
 
+#if 1
   auto   contact_type   = serac::ContactEnforcement::Penalty;
   double element_length = 1.0;
   double penalty        = 105.1 * mat.K / element_length;
@@ -93,6 +158,7 @@ std::unique_ptr<SolidMechT> createContactSolver(const NonlinearSolverOptions& no
                                         .penalty     = penalty};
   auto                  contact_interaction_id = 0;
   solid->addContactInteraction(contact_interaction_id, {3}, {5}, contact_options);
+#endif
 
   solid->completeSetup();
 
@@ -146,23 +212,28 @@ struct ContactSensitivityFixture : public ::testing::Test {
     MPI_Barrier(MPI_COMM_WORLD);
     StateManager::initialize(dataStore, "contact_solve");
     std::string filename = std::string(SERAC_REPO_DIR) + "/data/meshes/contact_two_blocks.g";
-    mesh                 = &StateManager::setMesh(mesh::refineAndDistribute(buildMeshFromFile(filename), 0), mesh_tag);
+
+    mesh = std::make_unique<Mesh>(filename, mesh_tag, 0, 0);
+    mesh->addDomainOfBoundaryElements("two", by_attr<dim>(2));
+    mesh->addDomainOfBoundaryElements("four", by_attr<dim>(4));
 
     mat.density = 1.0;
     mat.K       = 1.0;
     mat.G       = 0.1;
   }
 
-  void fillDirection(FiniteElementState& direction) const
+  void fillDirection(const SolidMechT& solid_solver, FiniteElementState& direction) const
   {
     auto sz = direction.Size();
     for (int i = 0; i < sz; ++i) {
       direction(i) = -1.2 + 2.02 * (double(i) / sz);
+      //direction(i) = 0.0;
     }
+    solid_solver.zeroEssentials(direction);
   }
 
   axom::sidre::DataStore dataStore;
-  mfem::ParMesh*         mesh;
+  std::unique_ptr<Mesh> mesh;
 
   NonlinearSolverOptions nonlinear_opts{.relative_tol = 1.0e-10, .absolute_tol = 1.0e-12};
 
@@ -177,7 +248,7 @@ struct ContactSensitivityFixture : public ::testing::Test {
 
 TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjectiveAndGradient)
 {
-  auto solid_solver               = createContactSolver(nonlinear_opts, dyn_opts, mat);
+  auto solid_solver               = createContactSolver(*mesh, nonlinear_opts, dyn_opts, mat);
   auto [qoi1, shape_sensitivity1] = computeContactQoiSensitivities(*solid_solver, tsInfo);
   auto [qoi2, shape_sensitivity2] = computeContactQoiSensitivities(*solid_solver, tsInfo);
 
@@ -185,7 +256,7 @@ TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjec
 
   solid_solver->resetStates();
   FiniteElementState derivative_direction(shape_sensitivity1.space(), "derivative_direction");
-  fillDirection(derivative_direction);
+  fillDirection(*solid_solver, derivative_direction);
 
   double directional_deriv1 = innerProduct(derivative_direction, shape_sensitivity1);
   double directional_deriv2 = innerProduct(derivative_direction, shape_sensitivity2);
@@ -194,12 +265,12 @@ TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjec
 
 TEST_F(ContactSensitivityFixture, QuasiStaticShapeSensitivities)
 {
-  auto solid_solver                  = createContactSolver(nonlinear_opts, dyn_opts, mat);
+  auto solid_solver                  = createContactSolver(*mesh, nonlinear_opts, dyn_opts, mat);
   auto [qoi_base, shape_sensitivity] = computeContactQoiSensitivities(*solid_solver, tsInfo);
 
   solid_solver->resetStates();
   FiniteElementState derivative_direction(shape_sensitivity.space(), "derivative_direction");
-  fillDirection(derivative_direction);
+  fillDirection(*solid_solver, derivative_direction);
 
   double qoi_plus = computeSolidMechanicsQoiAdjustingShape(*solid_solver, tsInfo, derivative_direction, eps);
 

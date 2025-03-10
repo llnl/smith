@@ -1757,7 +1757,11 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
     displacement_ += du_;
     dt_ = dt;
+
+    std::cout << "disp with bcs = " << displacement_.Norml2() << std::endl;
+
   }
+
 };
 
 }  // namespace serac
