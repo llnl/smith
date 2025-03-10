@@ -1179,7 +1179,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
             // tracking strategy
             // See https://github.com/mfem/mfem/issues/3531
             r = res;
-
             r.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
           },
 

@@ -58,38 +58,6 @@ private:
   mfem::ParMesh* pmesh;
 };
 
-/*
-void setFromFieldFunction(FiniteElementState& field, Domain& domain, FieldFunction&& field_function)
-{
-  
-  for (int i = 0; i < dim; ++i) {
-    auto mfem_coefficient_function = [field, i](const mfem::Vector& X_mfem, double t) {
-      auto X = make_tensor<dim>([&X_mfem](int k) { return X_mfem[k]; });
-      return applied_displacement(X, t)[i];
-    };
-
-    auto component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
-
-    auto dof_list = domain.dof_list(&field.space());
-
-    // scalar ldofs -> vector ldofs
-    displacement_.space().DofsToVDofs(i, dof_list);
-
-    field.
-
-    bcs_.addEssential(dof_list, component_disp_bdr_coef_, displacement_.space(), i);
-  }
-
-  //auto evaluate_mfem = [&field_function](const mfem::Vector& X_mfem, mfem::Vector& u_mfem) {
-  //  auto u = detail::evaluateTensorFunctionOnMfemVector(X_mfem, field_function);
-  //  detail::setMfemVectorFromTensorOrDouble(u_mfem, u);
-  //};
-
-  //mfem::VectorFunctionCoefficient coef(space_->GetVDim(), evaluate_mfem);
-  //project(coef);
-}
-*/
-
 }
 
 namespace serac {
@@ -276,7 +244,6 @@ TEST_F(ContactSensitivityFixture, QuasiStaticShapeSensitivities)
 
   double directional_deriv    = innerProduct(derivative_direction, shape_sensitivity);
   double directional_deriv_fd = (qoi_plus - qoi_base) / eps;
-  // std::cout << "qoi, derivs = " << qoi_base << " " << directional_deriv << " " << directional_deriv_fd << std::endl;
   EXPECT_NEAR(directional_deriv, directional_deriv_fd, 0.2);  // These are very large tolerances
 }
 
