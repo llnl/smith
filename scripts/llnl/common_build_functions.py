@@ -691,7 +691,7 @@ def on_rz():
 
 
 def get_script_dir():
-    return os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
 _project_name = ""
