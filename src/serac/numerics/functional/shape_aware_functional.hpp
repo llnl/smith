@@ -18,13 +18,6 @@
 
 namespace serac {
 
-/// @cond
-constexpr int SOURCE = 0;
-constexpr int FLUX = 1;
-constexpr int VALUE = 0;
-constexpr int DERIVATIVE = 1;
-/// @endcond
-
 namespace detail {
 
 /**

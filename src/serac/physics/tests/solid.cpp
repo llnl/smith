@@ -66,7 +66,7 @@ void functional_solid_test_static_J2()
   using Hardening = solid_mechanics::LinearHardening;
   using Material = solid_mechanics::J2SmallStrain<Hardening>;
 
-  Hardening hardening{.sigma_y = 50.0, .Hi = 50.0};
+  Hardening hardening{.sigma_y = 50.0, .Hi = 50.0, .eta = 0.0};
   Material mat{
       .E = 10000,  // Young's modulus
       .nu = 0.25,  // Poisson's ratio
@@ -80,7 +80,7 @@ void functional_solid_test_static_J2()
   auto qdata = solid_solver.createQuadratureDataBuffer(initial_state);
 
   Domain whole_domain = EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, whole_domain, qdata);
+  solid_solver.setRateDependentMaterial(mat, whole_domain, qdata);
 
   // prescribe zero displacement at the supported end of the beam,
   auto support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));

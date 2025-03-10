@@ -73,7 +73,7 @@ class StateManager {
     SLIC_ERROR_ROOT_IF(hasState(state_name),
                        axom::fmt::format("StateManager already contains a state named '{}'", state_name));
 
-    auto state = FiniteElementState(mesh(mesh_tag), space, state_name);
+    FiniteElementState state(mesh(mesh_tag), space, state_name);
 
     storeState(state);
     return state;
