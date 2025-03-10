@@ -128,14 +128,11 @@ TEST(Evaluate2dIntersections, WhenBIsSmaller) {
   edgeB[0] = Vec2{0.2, fixed_gap};
   edgeB[1] = Vec2{0.8, fixed_gap};
 
-  auto [xia, xib, g] = mortar_utils::compute_intersection(edgeA, edgeB,
-    [](const Edge& edgeA, const Edge& edgeB) { return mortar_utils::compute_average_normal(edgeA, edgeB); });
+  auto [xia, g] = mortar_utils::compute_intersection(edgeA, edgeB, -mortar_utils::compute_normal(edgeB));
 
   constexpr double tol = 1e-13;
   EXPECT_NEAR(xia[0], 0.2, tol);
   EXPECT_NEAR(xia[1], 0.8, tol);
-  EXPECT_NEAR(xib[0], 1.0, tol);
-  EXPECT_NEAR(xib[1], 0.0, tol);
   EXPECT_NEAR(g[0], fixed_gap, tol);
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
@@ -150,14 +147,11 @@ TEST(Evaluate2dIntersections, WhenAIsSmaller) {
   edgeB[0] = Vec2{0.0, fixed_gap};
   edgeB[1] = Vec2{1.0, fixed_gap};
 
-  auto [xia, xib, g] = mortar_utils::compute_intersection(edgeA, edgeB,
-    [](const Edge& edgeA, const Edge& edgeB) { return mortar_utils::compute_average_normal(edgeA, edgeB); });
+  auto [xia, g] = mortar_utils::compute_intersection(edgeA, edgeB, -mortar_utils::compute_normal(edgeB));
 
   constexpr double tol = 1e-13;
   EXPECT_NEAR(xia[0], 0.0, tol);
   EXPECT_NEAR(xia[1], 1.0, tol);
-  EXPECT_NEAR(xib[0], 0.9, tol);
-  EXPECT_NEAR(xib[1], 0.3, tol);
   EXPECT_NEAR(g[0], fixed_gap, tol);
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
@@ -175,14 +169,11 @@ TEST(Evaluate2dIntersections, WhenASlidesRightRelativelySlightly) {
   edgeB[0] = Vec2{0.0 - (1.0-alpha) * sliding, fixed_gap};
   edgeB[1] = Vec2{1.0 - (1.0-alpha) * sliding, fixed_gap};
 
-  auto [xia, xib, g] = mortar_utils::compute_intersection(edgeA, edgeB,
-    [](const Edge& edgeA, const Edge& edgeB) { return mortar_utils::compute_average_normal(edgeA, edgeB); });
+  auto [xia, g] = mortar_utils::compute_intersection(edgeA, edgeB, -mortar_utils::compute_normal(edgeB));
 
   constexpr double tol = 1e-13;
   EXPECT_NEAR(xia[0], sliding, tol);
   EXPECT_NEAR(xia[1], 1.0, tol);
-  EXPECT_NEAR(xib[0], 1.0, tol);
-  EXPECT_NEAR(xib[1], sliding, tol);
   EXPECT_NEAR(g[0], fixed_gap, tol);
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
@@ -200,14 +191,11 @@ TEST(Evaluate2dIntersections, WhenASlideLeftRelativelySlightly) {
   edgeB[0] = Vec2{0.0 + (1.0-alpha) * sliding, fixed_gap};
   edgeB[1] = Vec2{1.0 + (1.0-alpha) * sliding, fixed_gap};
 
-  auto [xia, xib, g] = mortar_utils::compute_intersection(edgeA, edgeB,
-    [](const Edge& edgeA, const Edge& edgeB) { return mortar_utils::compute_average_normal(edgeA, edgeB); });
+  auto [xia, g] = mortar_utils::compute_intersection(edgeA, edgeB, -mortar_utils::compute_normal(edgeB));
 
   constexpr double tol = 1e-13;
   EXPECT_NEAR(xia[0], 0.0, tol);
   EXPECT_NEAR(xia[1], 1.0-sliding, tol);
-  EXPECT_NEAR(xib[0], 1.0-sliding, tol);
-  EXPECT_NEAR(xib[1], 0.0, tol);
   EXPECT_NEAR(g[0], fixed_gap, tol);
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
@@ -224,14 +212,11 @@ TEST(Evaluate2dIntersections, WhenASlidesRightALot) {
   edgeB[0] = Vec2{0.0, fixed_gap};
   edgeB[1] = Vec2{1.0, fixed_gap};
 
-  auto [xia, xib, g] = mortar_utils::compute_intersection(edgeA, edgeB,
-    [](const Edge& edgeA, const Edge& edgeB) { return mortar_utils::compute_average_normal(edgeA, edgeB); });
+  auto [xia, g] = mortar_utils::compute_intersection(edgeA, edgeB, -mortar_utils::compute_normal(edgeB));
 
   constexpr double tol = 1e-13;
   EXPECT_NEAR(xia[0], 1.0, tol);
   EXPECT_NEAR(xia[1], 1.0, tol);
-  EXPECT_NEAR(xib[0], 1.0, tol);
-  EXPECT_NEAR(xib[1], 1.0, tol);
   EXPECT_NEAR(g[0], fixed_gap, tol);
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
@@ -248,14 +233,30 @@ TEST(Evaluate2dIntersections, WhenASlidesLeftALot) {
   edgeB[0] = Vec2{0.0, fixed_gap};
   edgeB[1] = Vec2{1.0, fixed_gap};
 
-  auto [xia, xib, g] = mortar_utils::compute_intersection(edgeA, edgeB,
-    [](const Edge& edgeA, const Edge& edgeB) { return mortar_utils::compute_average_normal(edgeA, edgeB); });
+  auto [xia, g] = mortar_utils::compute_intersection(edgeA, edgeB, -mortar_utils::compute_normal(edgeB));
 
   constexpr double tol = 1e-13;
   EXPECT_NEAR(xia[0], 0.0, tol);
   EXPECT_NEAR(xia[1], 0.0, tol);
-  EXPECT_NEAR(xib[0], 0.0, tol);
-  EXPECT_NEAR(xib[1], 0.0, tol);
   EXPECT_NEAR(g[0], fixed_gap, tol);
   EXPECT_NEAR(g[1], fixed_gap, tol);
+}
+
+TEST(Evaluate2dContactPotential, CanMatchReferenceSolution) {
+  double penalty_length = 0.1;
+  double edge_smoothing = 0.2;
+
+  Edge edgeA;
+  edgeA[0] = Vec2{0.55,  0.05};
+  edgeA[1] = Vec2{0.50, -0.01};
+
+  Edge edgeB;
+  edgeB[0] = Vec2{0.0, 0.};
+  edgeB[1] = Vec2{1.0, 0.};
+
+  double pair_energy = integrate_with_active_mortar(edgeA, edgeB, penalty_length, edge_smoothing);
+
+  double known_energy = 1.5436369434496916e-05;
+
+  ASSERT_NEAR(pair_energy, known_energy, 1e-14);
 }
