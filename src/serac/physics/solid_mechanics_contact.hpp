@@ -315,10 +315,9 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     }
 
     if (use_warm_start_) {
-
       // Update the system residual
       mfem::Vector augmented_residual(displacement_.Size() + contact_.numPressureDofs());
-      augmented_residual     = 0.0;
+      augmented_residual = 0.0;
       const mfem::Vector res = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
                                             *parameters_[parameter_indices].state...);
 
@@ -404,9 +403,9 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
     auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
                                   *parameters_[parameter_indices].state...);
-    auto jacobian  = assemble(drdu);
+    auto jacobian = assemble(drdu);
 
-    auto block_J         = contact_.jacobianFunction(jacobian.release());
+    auto block_J = contact_.jacobianFunction(jacobian.release());
     block_J->owns_blocks = false;
     jacobian = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
     auto J_T = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
@@ -429,7 +428,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
     auto drdshape_mat = assemble(drdshape);
 
-    auto block_J         = contact_.jacobianFunction(drdshape_mat.release());
+    auto block_J = contact_.jacobianFunction(drdshape_mat.release());
     block_J->owns_blocks = false;
     drdshape_mat = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 

@@ -1588,7 +1588,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// @brief Solve the Quasi-static adjoint linear
   virtual void quasiStaticAdjointSolve(double /*dt*/)
   {
-
     auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
                                   *parameters_[parameter_indices].state...);
     J_.reset();
@@ -1603,7 +1602,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
     mfem::EliminateBC(*J_T, *J_e_, constrained_dofs, reactions_adjoint_bcs_, displacement_adjoint_load_);
     for (int i = 0; i < constrained_dofs.Size(); i++) {
-      int j                         = constrained_dofs[i];
+      int j = constrained_dofs[i];
       displacement_adjoint_load_[j] = reactions_adjoint_bcs_[j];
     }
 
@@ -1758,9 +1757,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     dt_ = dt;
 
     std::cout << "disp with bcs = " << displacement_.Norml2() << std::endl;
-
   }
-
 };
 
 }  // namespace serac
