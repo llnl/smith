@@ -22,6 +22,15 @@ template <int order, int dim, typename parameters = Parameters<>,
           typename parameter_indices = std::make_integer_sequence<int, parameters::n>>
 class SolidResidual;
 
+/**
+ * @brief The nonlinear residual class
+ *
+ * This uses Functional to compute the solid mechanics residuals and tangent
+ * stiffness matrices.
+ *
+ * @tparam order The order of the discretization of the displacement and velocity fields
+ * @tparam dim The spatial dimension of the mesh
+ */
 template <int order, int dim, typename... parameter_space, int... parameter_indices>
 class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_sequence<int, parameter_indices...>>
     : public Residual {
@@ -35,6 +44,17 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
   template <typename T>
   using qdata_type = std::shared_ptr<QuadratureData<T>>;
 
+  /**
+   * @brief Construct a new SolidResidual object
+   *
+   * @param physics_name A name for the physics module instance
+   * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param shape_disp_space Shape displacement space
+   * @param test_space Test space
+   * @param parameter_fe_spaces Vector of parameters spaces
+   * @param parameter_names Vector of parameter names, must match size of parameter_fe_spaces
+   * @param parameter_names The simulation cycle (i.e. timestep iteration) to intialize the physics module to
+   */
   SolidResidual(std::string physics_name, std::string mesh_tag, const mfem::ParFiniteElementSpace& shape_disp_space,
                 const mfem::ParFiniteElementSpace& test_space,
                 std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {},
@@ -352,7 +372,7 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
     setPressure(DependsOn<>{}, pressure_function, optional_domain);
   }
 
-  // computes residual outputs
+  /// @overload
   mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
@@ -365,6 +385,7 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
     return (*residual_)(time, shape_disp, disp, velo, acceleration, *fields[parameter_indices + NUM_FIELD_OFFSET]...);
   }
 
+  /// @overload
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, const std::vector<FieldPtr>& fields,
                                                  const std::vector<double>& argument_tangents,
                                                  int block_row = 0) const override
@@ -414,7 +435,7 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
     return J;
   }
 
-  // computes for each residual output: dr/du * fieldsV + dr/dp * parametersV
+  /// @overload
   void jvp([[maybe_unused]] double time, [[maybe_unused]] const std::vector<FieldPtr>& fields,
            [[maybe_unused]] const std::vector<FieldPtr>& fieldsV,
            [[maybe_unused]] std::vector<DualFieldPtr>& jacobianVectorProducts) const override
@@ -422,9 +443,7 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
     return;
   }
 
-  // computes for each input field  (dr/du).T * vResidual
-  // computes for each input parameter (dr/dp).T * vResidual
-  // can early out if the vectors being requested are sized to 0?
+  /// @overload
   void vjp([[maybe_unused]] double time, [[maybe_unused]] const std::vector<FieldPtr>& fields,
            [[maybe_unused]] const std::vector<DualFieldPtr>& vResiduals,
            [[maybe_unused]] std::vector<DualFieldPtr>& fieldSensitivities) const override
