@@ -28,6 +28,7 @@ set(physics_headers
     solid_mechanics_input.hpp
     thermomechanics.hpp
     thermomechanics_input.hpp
+    thermomechanics_monolithic.hpp
     )
 
 set(physics_depends
