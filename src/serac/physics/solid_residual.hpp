@@ -535,9 +535,9 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
       auto du_dX = get<DERIVATIVE>(displacement);
       auto d2u_dt2 = get<VALUE>(acceleration);
 
-      auto stress = material_(state, du_dX, params...);
+      auto stress = material_.pkStress(state, du_dX, params...);
 
-      return serac::tuple{material_.density_func(params...) * d2u_dt2, stress};
+      return serac::tuple{material_.density(params...) * d2u_dt2, stress};
     }
   };
 

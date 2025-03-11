@@ -143,7 +143,7 @@ struct NeoHookeanWithFieldDensity {
    * @return The first Piola stress
    */
   template <typename T, int dim, typename Density>
-  SERAC_HOST_DEVICE auto pkStress()(State& /* state */, const tensor<T, dim, dim>& du_dX, const Density&) const
+  SERAC_HOST_DEVICE auto pkStress(State& /* state */, const tensor<T, dim, dim>& du_dX, const Density&) const
   {
     using std::log1p;
     constexpr auto I = Identity<dim>();
@@ -159,7 +159,7 @@ struct NeoHookeanWithFieldDensity {
     return dot(TK, inv(transpose(F)));
   }
 
-  /// @brief interpolates density field for density
+  /// @brief interpolates density field
   template <typename Density>
   SERAC_HOST_DEVICE auto density(const Density& density) const
   {
