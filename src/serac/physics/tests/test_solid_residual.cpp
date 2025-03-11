@@ -46,11 +46,9 @@ struct MeshFixture : public testing::Test {
     auto mfem_shape = SHAPE == serac::ELEMENT_SHAPE::TRIANGLE ? mfem::Element::TRIANGLE : mfem::Element::QUADRILATERAL;
     double length = 0.5;
     double width = 2.0;
-    // MRT: ,make shared_ptr, have Mechanics hold it
     mesh = std::make_unique<serac::Mesh>(mfem::Mesh::MakeCartesian2D(6, 20, mfem_shape, true, length, width), MESHTAG,
                                          0, 0);
 
-    // create residual evaluator
     const double density_scalar = 1.0;
     std::string physics_name = "solid";
 

@@ -26,32 +26,62 @@ class Residual {
   Residual(std::string name) : name_(name) {}
   virtual ~Residual() {}
 
+  /// @brief 
   using FieldPtr = FiniteElementState*;
+
+  /// @brief 
   using DualFieldPtr = FiniteElementDual*;
 
-  /// provided  computes residual outputs
+  /** @brief Virtual interface for computing residual from a vector of serac::FiniteElementState*
+   * 
+   * @param time time
+   * @param fields vector of serac::FiniteElementState* as arguments to the residual
+   * @param block_row integer which specifies which row of a block system to get the residual for, defaults to 0
+   */
   virtual mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row = 0) const = 0;
 
-  // computes jacobian terms
+  /** @brief Derivative of the residual with respect to specified field arguments: sum_j d{r}_i/d{fields}_j * argument_tangents[j], i is row, j are input fields (columns)
+   * @param time time
+   * @param fields vector of serac::FiniteElementState* as arguments to the residual
+   * @param argument_tangents specifies the weighting of the residual derivative with respect to each field
+   * @param block_row specifies which block row of the residual to compute the jacobian for
+   * the call will error if a non-zero argument_tangent weight is provided for two input fields with different sizes
+   * @return std::unique_ptr<mfem::HypreParMatrix> returns sum_j d{r}_i/d{fields}_j * argument_tangents[j], where {fields}_j is the jth field, {r}_i is the ith residual block row
+   */
   virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, const std::vector<FieldPtr>& fields,
                                                          const std::vector<double>& argument_tangents,
                                                          int block_row = 0) const = 0;
 
-  // computes for each residual output: dr/du * fieldsV + dr/dp * parametersV
+  /**
+   * @brief Jacobian-vector product
+   * @param time time
+   * @param fields vector of serac::FiniteElementState* as arguments to the residual
+   * @param fieldsV right hand-side 'v' fields
+   * @param jacobianVectorProducts output vjps, 1 per row of a block system: d{r}_i / d{fields}_j * fieldsV[j] 
+   * nullptr fieldsV are assumed to be all zero to avoid extra calculations
+   */
   virtual void jvp(
       double time, const std::vector<FieldPtr>& fields,
-      const std::vector<FieldPtr>& fieldsV,  // consider a way to turn off components? through nullptrs? yikes?
+      const std::vector<FieldPtr>& fieldsV,
       std::vector<DualFieldPtr>& jacobianVectorProducts) const = 0;
 
-  // computes for each input field  (dr/du).T * vResidual
-  // computes for each input parameter (dr/dp).T * vResidual
-  // can early out if the vectors being requested are sized to 0?
+  /**
+   * @brief Vector-Jacobian product
+   * @param time time
+   * @param fields vector of serac::FiniteElementState* as arguments to the residual
+   * @param vResiduals right hand-side 'v' fields
+   * @param fieldSensitivities output jvps, 1 per input field: vResiduals[i] * d{r}_i / d{fields}_j
+   */
   virtual void vjp(double time, const std::vector<FieldPtr>& fields, const std::vector<DualFieldPtr>& vResiduals,
                    std::vector<DualFieldPtr>& fieldSensitivities) const = 0;
 
+
+  /// @brief name
   std::string name() const { return name_; }
 
  private:
+
+  /// name
   std::string name_;
 };
 
