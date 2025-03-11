@@ -61,7 +61,7 @@ class Mesh {
   /// @brief create domain of boundary elements with specified name
   /// The second argument is a function taking a std::vector<vec3> corresponding
   /// to the nodal coordinates of the boundary element as well as an integer corresponding to the attribute id
-  Domain& addDomainOfBoundaryElements(const std::string& domain_name, std::function<bool(std::vector<vec3>, int)> func);
+  serac::Domain& addDomainOfBoundaryElements(const std::string& domain_name, std::function<bool(std::vector<vec3>, int)> func);
 
  private:
   /// @brief

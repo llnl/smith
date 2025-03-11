@@ -71,11 +71,6 @@ struct MeshFixture : public testing::Test {
     mat.K = 1.0;
     mat.G = 0.5;
     solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mat, mesh->entireDomain());
-
-    // specify dirichlet bcs
-    // auto bc_manager = std::make_shared<serac::BoundaryConditionManager>(mesh->mfemParMesh());
-    // auto zero_bcs = std::make_shared<mfem::FunctionCoefficient>([](const mfem::Vector&) { return 0.0; });
-    // bc_manager->addEssential({1}, zero_bcs, states[0].space());
   }
 
   std::string velo_name = "solid_velocity";
