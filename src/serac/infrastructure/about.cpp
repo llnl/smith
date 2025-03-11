@@ -92,7 +92,7 @@ std::string about()
   about += format("Axom Version:    {0}\n", axom::getVersion());
 
   // Camp
-          about += format("Camp Version:    {0}\n", CAMP_VERSION);
+  about += format("Camp Version:    {0}\n", CAMP_VERSION);
 
   // Caliper
 #ifdef SERAC_USE_CALIPER
