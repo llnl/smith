@@ -39,7 +39,8 @@ serac::Domain& Mesh::domain(const std::string& domain_name) const
   return domains_.at(domain_name);
 }
 
-serac::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name, std::function<bool(std::vector<vec3>, int)> func)
+serac::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name,
+                                                 std::function<bool(std::vector<vec3>, int)> func)
 {
   domains_.insert({domain_name, Domain::ofBoundaryElements(*mfem_mesh, func)});
   return domain(domain_name);

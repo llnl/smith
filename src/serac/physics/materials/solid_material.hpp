@@ -128,7 +128,6 @@ struct NeoHookean {
   double G;        ///< shear modulus
 };
 
-
 /**
  * @brief Neo-Hookean material model
  *
@@ -167,8 +166,8 @@ struct NeoHookeanWithFieldDensity {
     return get<VALUE>(density);
   }
 
-  double K;        ///< bulk modulus
-  double G;        ///< shear modulus
+  double K;  ///< bulk modulus
+  double G;  ///< shear modulus
 };
 
 /// Neo-Hookean material version with additive split of deviatoric and volumetric behavior

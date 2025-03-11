@@ -36,7 +36,6 @@ enum class ELEMENT_SHAPE
  */
 class Mesh {
  public:
-
   /// @brief Construct from existing serial mfem mesh
   /// @param mesh serial mfem mesh
   /// @param meshtag string tag name for mesh
@@ -77,16 +76,16 @@ class Mesh {
   Domain& addDomainOfBoundaryElements(const std::string& domain_name, std::function<bool(std::vector<vec3>, int)> func);
 
  private:
-  /// @brief 
+  /// @brief
   void createDomains();
 
-  /// @brief 
+  /// @brief
   std::string mesh_tag;
 
   /// @brief
   mfem::ParMesh* mfem_mesh;
 
-  /// @brief 
+  /// @brief
   mutable std::map<std::string, serac::Domain> domains_;
 };
 

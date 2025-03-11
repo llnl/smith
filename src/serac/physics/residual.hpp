@@ -22,7 +22,7 @@ class FiniteElementDual;
 
 /// Abstract residual class
 class Residual {
-  public:
+ public:
   Residual(std::string name) : name_(name) {}
   virtual ~Residual() {}
 
@@ -30,29 +30,29 @@ class Residual {
   using DualFieldPtr = FiniteElementDual*;
 
   /// provided  computes residual outputs
-  virtual mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row=0) const = 0;
+  virtual mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row = 0) const = 0;
 
   // computes jacobian terms
-  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, const std::vector<FieldPtr>& fields, const std::vector<double>& argument_tangents, int block_row=0) const = 0;
+  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, const std::vector<FieldPtr>& fields,
+                                                         const std::vector<double>& argument_tangents,
+                                                         int block_row = 0) const = 0;
 
   // computes for each residual output: dr/du * fieldsV + dr/dp * parametersV
-  virtual void jvp(double time,
-                   const std::vector<FieldPtr>& fields,
-                   const std::vector<FieldPtr>& fieldsV, // consider a way to turn off components? through nullptrs? yikes?
-                   std::vector<DualFieldPtr>& jacobianVectorProducts) const = 0;
+  virtual void jvp(
+      double time, const std::vector<FieldPtr>& fields,
+      const std::vector<FieldPtr>& fieldsV,  // consider a way to turn off components? through nullptrs? yikes?
+      std::vector<DualFieldPtr>& jacobianVectorProducts) const = 0;
 
   // computes for each input field  (dr/du).T * vResidual
   // computes for each input parameter (dr/dp).T * vResidual
   // can early out if the vectors being requested are sized to 0?
-  virtual void vjp(double time, 
-                   const std::vector<FieldPtr>& fields,
-                   const std::vector<DualFieldPtr>& vResiduals,
+  virtual void vjp(double time, const std::vector<FieldPtr>& fields, const std::vector<DualFieldPtr>& vResiduals,
                    std::vector<DualFieldPtr>& fieldSensitivities) const = 0;
 
- std::string name() const { return name_; }
+  std::string name() const { return name_; }
 
  private:
   std::string name_;
 };
 
-}
+}  // namespace serac

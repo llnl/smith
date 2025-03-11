@@ -362,8 +362,7 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
     auto& acceleration = *fields[2];
     auto& shape_disp = *fields[3];
 
-    return (*residual_)(time, shape_disp, disp, velo, acceleration,
-                        *fields[parameter_indices + NUM_FIELD_OFFSET]...);
+    return (*residual_)(time, shape_disp, disp, velo, acceleration, *fields[parameter_indices + NUM_FIELD_OFFSET]...);
   }
 
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, const std::vector<FieldPtr>& fields,
@@ -581,24 +580,21 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
 };
 
 template <int order, int dim, typename... parameter_space>
-auto create_solid_residual(const std::string& physics_name,
-                           const serac::Mesh& mesh,
-                           const std::vector<std::string>& parameter_names, 
+auto create_solid_residual(const std::string& physics_name, const serac::Mesh& mesh,
+                           const std::vector<std::string>& parameter_names,
                            const std::vector<const serac::FiniteElementState*>& params)
 {
-  FiniteElementState field(mesh.mfemParMesh(), serac::H1<order,dim>{}, "temporary");
+  FiniteElementState field(mesh.mfemParMesh(), serac::H1<order, dim>{}, "temporary");
 
   std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces;
   if constexpr (sizeof...(parameter_space) > 0) {
-    for_constexpr<sizeof...(parameter_space)>([&](auto) {
-      parameter_fe_spaces.push_back(&params.back()->space());
-    });
+    for_constexpr<sizeof...(parameter_space)>([&](auto) { parameter_fe_spaces.push_back(&params.back()->space()); });
   }
 
   using ResidualT = SolidResidual<order, dim, Parameters<parameter_space...>>;
 
-  return std::make_shared<ResidualT>(physics_name, mesh.tag(), field.space(),
-                                     field.space(), parameter_fe_spaces, parameter_names);
+  return std::make_shared<ResidualT>(physics_name, mesh.tag(), field.space(), field.space(), parameter_fe_spaces,
+                                     parameter_names);
 }
 
 }  // namespace serac
