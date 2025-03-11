@@ -32,6 +32,7 @@ jobs:
     needs:
     - set_image_vars
     strategy:
+      fail-fast: false
       matrix:
         build_type: [ Debug, Release ]
         config:
@@ -88,6 +89,7 @@ jobs:
     needs:
     - set_image_vars
     strategy:
+      fail-fast: false
       matrix:
         check_type: [coverage, docs, style, header]
     container:
@@ -104,5 +106,3 @@ jobs:
         submodules: recursive
     - name: Check ${{ matrix.check_type }}
       run: ./scripts/github-actions/linux-check.sh 
-      # Continue workflow even if checks (e.g. style) fail
-      continue-on-error: true
