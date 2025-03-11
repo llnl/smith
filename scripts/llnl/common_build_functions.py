@@ -691,7 +691,9 @@ def on_rz():
 
 
 def get_script_dir():
-    return os.path.dirname(os.path.abspath(__file__))
+    # NOTE: sys.argv[0] is based-on the script that is calling get_script_dir (e.g. build_tpls.py). This is to properly
+    # handle the case where this `scripts/llnl` directory is being symlinked by Smith. 
+    return os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
 _project_name = ""
