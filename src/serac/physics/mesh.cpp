@@ -1,7 +1,8 @@
-#include "serac/physics/common.hpp"
+#include "serac/physics/mesh.hpp"
+
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
-#include "mfem.hpp"
+#include "serac/numerics/functional/domain.hpp"
 
 namespace serac {
 

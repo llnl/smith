@@ -13,7 +13,7 @@
 #pragma once
 
 #include "serac/physics/residual.hpp"
-#include "serac/physics/common.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
 namespace serac {

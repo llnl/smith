@@ -4,6 +4,8 @@
 #include "serac/infrastructure/terminator.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/materials/solid_material.hpp"
+#include "serac/physics/mesh.hpp"
+#include "serac/physics/common.hpp"
 
 #include "serac/physics/solid_residual.hpp"
 

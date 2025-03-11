@@ -11,7 +11,7 @@ add_subdirectory(contact)
 
 set(physics_sources
     base_physics.cpp
-    common.cpp
+    mesh.cpp
     solid_mechanics.cpp
     heat_transfer_input.cpp
     solid_mechanics_input.cpp
@@ -21,6 +21,7 @@ set(physics_sources
 set(physics_headers
     base_physics.hpp
     common.hpp
+    mesh.hpp
     fit.hpp
     heat_transfer.hpp
     heat_transfer_input.hpp
