@@ -40,6 +40,7 @@ set(physics_parallel_test_sources
     dynamic_thermal_adjoint.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
+    thermomech_statics_patch.cpp
     )
 blt_list_append(TO physics_parallel_test_sources 
                 ELEMENTS 
