@@ -1,5 +1,10 @@
-#include "serac/physics/mesh.hpp"
+// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
 
+#include "serac/physics/mesh.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/numerics/functional/domain.hpp"
