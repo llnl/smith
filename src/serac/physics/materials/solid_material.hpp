@@ -128,6 +128,49 @@ struct NeoHookean {
   double G;        ///< shear modulus
 };
 
+
+/**
+ * @brief Neo-Hookean material model
+ *
+ */
+struct NeoHookeanWithFieldDensity {
+  using State = Empty;  ///< this material has no internal variables
+
+  /**
+   * @brief stress calculation for a NeoHookean material model
+   *
+   * When applied to 2D displacement gradients, the stress is computed in plane strain,
+   * returning only the in-plane components.
+   * @return The first Piola stress
+   */
+  template <typename T, int dim, typename Density>
+  SERAC_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX, const Density&) const
+  {
+    using std::log1p;
+    constexpr auto I = Identity<dim>();
+    auto lambda = K - (2.0 / 3.0) * G;
+    auto B_minus_I = dot(du_dX, transpose(du_dX)) + transpose(du_dX) + du_dX;
+
+    auto logJ = log1p(detApIm1(du_dX));
+    // Kirchoff stress, in form that avoids cancellation error when F is near I
+    auto TK = lambda * logJ * I + G * B_minus_I;
+
+    // Pull back to Piola
+    auto F = du_dX + I;
+    return dot(TK, inv(transpose(F)));
+  }
+
+  /// @brief interpolates density field for density
+  template <typename Density>
+  SERAC_HOST_DEVICE auto density_func(const Density& density) const
+  {
+    return get<VALUE>(density);
+  }
+
+  double K;        ///< bulk modulus
+  double G;        ///< shear modulus
+};
+
 /// Neo-Hookean material version with additive split of deviatoric and volumetric behavior
 struct NeoHookeanAdditiveSplit {
   using State = Empty;  ///< this material has no internal variables

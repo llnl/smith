@@ -11,6 +11,7 @@ add_subdirectory(contact)
 
 set(physics_sources
     base_physics.cpp
+    common.cpp
     solid_mechanics.cpp
     heat_transfer_input.cpp
     solid_mechanics_input.cpp
@@ -29,6 +30,8 @@ set(physics_headers
     thermomechanics.hpp
     thermomechanics_input.hpp
     thermomechanics_monolithic.hpp
+    residual.hpp
+    solid_residual.hpp
     )
 
 set(physics_depends
