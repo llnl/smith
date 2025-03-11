@@ -20,7 +20,7 @@ using timer = axom::utilities::Timer;
 // partition the range {0, 1, 2, ... , n - 1} into
 // `num_blocks` roughly equal-sized contiguous chunks
 std::vector<uint32_t> partition_range(uint32_t n, uint32_t num_blocks)
-{
+      {
   uint32_t quotient = n / num_blocks;
   uint32_t remainder = n % num_blocks;
 
