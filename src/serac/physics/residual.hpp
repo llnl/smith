@@ -26,10 +26,10 @@ class Residual {
   Residual(std::string name) : name_(name) {}
   virtual ~Residual() {}
 
-  /// @brief 
+  /// @brief using
   using FieldPtr = FiniteElementState*;
 
-  /// @brief 
+  /// @brief using
   using DualFieldPtr = FiniteElementDual*;
 
   /** @brief Virtual interface for computing residual from a vector of serac::FiniteElementState*
@@ -37,6 +37,7 @@ class Residual {
    * @param time time
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
    * @param block_row integer which specifies which row of a block system to get the residual for, defaults to 0
+   * @return mfem::Vector
    */
   virtual mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row = 0) const = 0;
 

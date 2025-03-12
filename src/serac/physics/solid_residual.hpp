@@ -598,6 +598,10 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
   std::unique_ptr<ShapeAwareFunctional<shape_trial, test(trial, trial, trial, parameter_space...)>> residual_;
 };
 
+
+/**
+ * @brief Utility function for creating a shared_ptr<SolidResidual<>>
+ */
 template <int order, int dim, typename... parameter_space>
 auto create_solid_residual(const std::string& physics_name, const serac::Mesh& mesh,
                            const std::vector<std::string>& parameter_names,
