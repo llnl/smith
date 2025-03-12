@@ -53,7 +53,6 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
    * @param test_space Test space
    * @param parameter_fe_spaces Vector of parameters spaces
    * @param parameter_names Vector of parameter names, must match size of parameter_fe_spaces
-   * @param parameter_names The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    */
   SolidResidual(std::string physics_name, std::string mesh_tag, const mfem::ParFiniteElementSpace& shape_disp_space,
                 const mfem::ParFiniteElementSpace& test_space,

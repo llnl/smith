@@ -83,7 +83,9 @@ struct MeshFixture : public testing::Test {
   const size_t num_steps = 2;
 };
 
-TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL) { SERAC_MARK_FUNCTION; }
+TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL) {
+  
+}
 
 int main(int argc, char* argv[])
 {

@@ -20,10 +20,14 @@ namespace serac {
 class FiniteElementState;
 class FiniteElementDual;
 
-/// Abstract residual class
+/// @brief Abstract residual class
 class Residual {
  public:
+
+  /// @brief base constructor takes the name of the physics
   Residual(std::string name) : name_(name) {}
+
+  /// @brief destructor
   virtual ~Residual() {}
 
   /// @brief using
