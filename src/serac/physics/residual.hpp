@@ -61,24 +61,24 @@ class Residual {
    * @brief Jacobian-vector product
    * @param time time
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
-   * @param fieldsV right hand-side 'v' fields
-   * @param jacobianVectorProducts output vjps, 1 per row of a block system: d{r}_i / d{fields}_j * fieldsV[j] 
+   * @param vFields right hand side 'v' fields
+   * @param jvpReactions output vjps, 1 per row of a block system: d{r}_i / d{fields}_j * fieldsV[j] 
    * nullptr fieldsV are assumed to be all zero to avoid extra calculations
    */
   virtual void jvp(
       double time, const std::vector<FieldPtr>& fields,
-      const std::vector<FieldPtr>& fieldsV,
-      std::vector<DualFieldPtr>& jacobianVectorProducts) const = 0;
+      const std::vector<FieldPtr>& vFields,
+      std::vector<DualFieldPtr>& jvpReactions) const = 0;
 
   /**
    * @brief Vector-Jacobian product
    * @param time time
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
-   * @param vResiduals right hand-side 'v' fields
-   * @param fieldSensitivities output jvps, 1 per input field: vResiduals[i] * d{r}_i / d{fields}_j
+   * @param vReactions left hand side 'v' fields
+   * @param vjpFields output jvps, 1 per input field: vResiduals[i] * d{r}_i / d{fields}_j
    */
-  virtual void vjp(double time, const std::vector<FieldPtr>& fields, const std::vector<DualFieldPtr>& vResiduals,
-                   std::vector<DualFieldPtr>& fieldSensitivities) const = 0;
+  virtual void vjp(double time, const std::vector<FieldPtr>& fields, const std::vector<DualFieldPtr>& vReactions,
+                   std::vector<FieldPtr>& vjpFields) const = 0;
 
 
   /// @brief name

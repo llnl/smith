@@ -22,11 +22,4 @@ struct Parameters {
   static constexpr int n = sizeof...(T);  ///< how many parameters were specified
 };
 
-/// @brief enumerate of possible element shapes
-enum class ELEMENT_SHAPE
-{
-  TRIANGLE,
-  QUADRILATERAL
-};
-
 }  // namespace serac

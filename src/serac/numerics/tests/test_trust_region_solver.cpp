@@ -29,7 +29,7 @@ const std::string MESHTAG = "mesh";
 
 static constexpr int scalar_field_order = 1;
 
-struct MeshFixture : public testing::Test {
+struct ResidualFixture : public testing::Test {
   void SetUp()
   {
     serac::StateManager::initialize(datastore, "hydro_dynamics");
@@ -120,7 +120,7 @@ auto createDiagonalTestMatrix(mfem::Vector& x)
   return A;
 }
 
-TEST_F(MeshFixture, QR)
+TEST_F(ResidualFixture, QR)
 {
   SERAC_MARK_FUNCTION;
 

@@ -35,9 +35,9 @@ template <int order, int dim, typename... parameter_space, int... parameter_indi
 class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_sequence<int, parameter_indices...>>
     : public Residual {
  public:
-  static constexpr auto NUM_STATE_VARS = 3;  // displacement, velocity, acceleration
-  static constexpr auto NUM_PRE_PARAMS = 1;  // shape_displacement
-  static constexpr auto NUM_FIELD_OFFSET = NUM_STATE_VARS + NUM_PRE_PARAMS;
+  static constexpr auto NUM_STATE_VARS = 3;  /// displacement, velocity, acceleration
+  static constexpr auto NUM_PRE_PARAMS = 1;  /// shape_displacement
+  static constexpr auto NUM_FIELD_OFFSET = NUM_STATE_VARS + NUM_PRE_PARAMS; /// sum of num states and num params
 
   /// @brief a container holding quadrature point data of the specified type
   /// @tparam T the type of data to store at each quadrature point
@@ -116,7 +116,7 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
    * @tparam MaterialType The solid material type
    * @tparam StateType the type that contains the internal variables for MaterialType
    * @param material A material that provides a function to evaluate stress
-   * @param domain Domain for material to integrated over
+   * @param domain Domain for material to be integrated over
    * @pre material must be a object that can be called with the following arguments:
    *    1. `MaterialType::State & state` an mutable reference to the internal variables for this quadrature point
    *    2. `tensor<T,dim,dim> du_dx` the displacement gradient at this quadrature point
@@ -159,6 +159,7 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
    * @tparam MaterialType The solid material type
    * @tparam StateType the type that contains the internal variables for MaterialType
    * @param material A material that provides a function to evaluate stress
+   * @param domain Domain for material to be integrated over
    * @pre material must be a object that can be called with the following arguments:
    *    1. `MaterialType::State & state` an mutable reference to the internal variables for this quadrature point
    *    2. `tensor<T,dim,dim> du_dx` the displacement gradient at this quadrature point
@@ -372,34 +373,31 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
     setPressure(DependsOn<>{}, pressure_function, optional_domain);
   }
 
+
   /// @overload
   mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
-    // SLIC_ERROR_IF(fields.size()!=4 + sizeof(parameter_indices), "Invalid number of input fields");
     auto& disp = *fields[0];
     auto& velo = *fields[1];
     auto& acceleration = *fields[2];
     auto& shape_disp = *fields[3];
-
     return (*residual_)(time, shape_disp, disp, velo, acceleration, *fields[parameter_indices + NUM_FIELD_OFFSET]...);
   }
 
   /// @overload
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, const std::vector<FieldPtr>& fields,
-                                                 const std::vector<double>& argument_tangents,
+                                                 const std::vector<double>& jacobian_weights,
                                                  int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
-    auto& disp = *fields[0];
-    auto& velo = *fields[1];
-    auto& acceleration = *fields[2];
-    auto& shape_disp = *fields[3];
 
     std::unique_ptr<mfem::HypreParMatrix> J;
 
     auto addToJ = [&J](double factor, std::unique_ptr<mfem::HypreParMatrix> jac_contrib) {
       if (J) {
+        SLIC_ERROR_IF(J->N() != jac_contrib->N(), "Multiple nonzero jacobian weights are being used on inconsistently sized input arguments.");
+        SLIC_ERROR_IF(J->M() != jac_contrib->M(), "Multiple nonzero jacobian weights are being used on inconsistently sized input arguments.");
         J->Add(factor, *jac_contrib);
       } else {
         J.reset(jac_contrib.release());
@@ -407,28 +405,14 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
       }
     };
 
-    for (size_t col = 0; col < argument_tangents.size(); ++col) {
-      if (argument_tangents[col] != 0.0) {
-        if (col == 0) {
-          auto K = serac::get<DERIVATIVE>((*residual_)(time, shape_disp, differentiate_wrt(disp), velo, acceleration,
-                                                       *fields[parameter_indices + NUM_FIELD_OFFSET]...));
-          addToJ(argument_tangents[col], assemble(K));
-        } else if (col == 1) {
-          // MRT: assume not velocity dependence for now
-          // auto C = serac::get<DERIVATIVE>((*residual_)(time, shape_disp,
-          //                                              disp, differentiate_wrt(velo), acceleration,
-          //                                              *fields[parameter_indices+NUM_FIELD_OFFSET].get()...));
-          // addToJ(argument_tangents[col], assemble(C));
-        } else if (col == 2) {
-          auto M = serac::get<DERIVATIVE>((*residual_)(time, shape_disp, disp, velo, differentiate_wrt(acceleration),
-                                                       *fields[parameter_indices + NUM_FIELD_OFFSET]...));
-          addToJ(argument_tangents[col], assemble(M));
-        } else if (col == 3) {
-          auto shape_K =
-              serac::get<DERIVATIVE>((*residual_)(time, differentiate_wrt(shape_disp), disp, velo, acceleration,
-                                                  *fields[parameter_indices + NUM_FIELD_OFFSET]...));
-          addToJ(argument_tangents[col], assemble(shape_K));
-        }
+    auto fields_in_residual_order = reorder_fields(fields);
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{},
+                                  time, fields_in_residual_order);
+
+    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
+      if (jacobian_weights[input_col] != 0.0) {
+        auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
+        addToJ(jacobian_weights[input_col], assemble(K));
       }
     }
 
@@ -437,70 +421,70 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
 
   /// @overload
   void jvp([[maybe_unused]] double time, [[maybe_unused]] const std::vector<FieldPtr>& fields,
-           [[maybe_unused]] const std::vector<FieldPtr>& fieldsV,
-           [[maybe_unused]] std::vector<DualFieldPtr>& jacobianVectorProducts) const override
+           [[maybe_unused]] const std::vector<FieldPtr>& vFields,
+           [[maybe_unused]] std::vector<DualFieldPtr>& jvpReactions) const override
   {
+    SLIC_ERROR_IF(vFields.size() != fields.size(),
+                  "Invalid number of field sensitivities relative to the number of fields");
+    SLIC_ERROR_IF(jvpReactions.size() != 1, "Solid mechanics nonlinear system only supports 1 output residual");
+
+    auto fields_in_residual_order = reorder_fields(fields);
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{},
+                                  time, fields_in_residual_order);
+
+    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
+      if (vFields[input_col]!=nullptr) {
+        auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
+        K.Mult(*vFields[input_col], *jvpReactions[0]);
+      }
+    }
     return;
   }
 
   /// @overload
   void vjp([[maybe_unused]] double time, [[maybe_unused]] const std::vector<FieldPtr>& fields,
-           [[maybe_unused]] const std::vector<DualFieldPtr>& vResiduals,
-           [[maybe_unused]] std::vector<DualFieldPtr>& fieldSensitivities) const override
+           [[maybe_unused]] const std::vector<DualFieldPtr>& vReactions,
+           [[maybe_unused]] std::vector<FieldPtr>& vjpFields) const override
   {
-    SLIC_ERROR_IF(fieldSensitivities.size() != fields.size(),
+    SLIC_ERROR_IF(vjpFields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(vResiduals.size() != 1, "Solid mechanics nonlinear system only support 1 output residual");
+    SLIC_ERROR_IF(vReactions.size() != 1, "Solid mechanics nonlinear system only supports 1 output residual");
 
-    auto& disp = *fields[0];
-    auto& velo = *fields[1];
-    auto& acceleration = *fields[2];
-    auto& shape_disp = *fields[3];
+    auto fields_in_residual_order = reorder_fields(fields);
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{},
+                                  time, fields_in_residual_order);
 
-    size_t num_fields = fields.size();
-
-    /// @brief to get parameter sensitivities
-    std::array<std::function<decltype((*residual_)(DifferentiateWRT<1>{}, time, shape_disp, disp, velo, acceleration,
-                                                   *fields[parameter_indices + NUM_FIELD_OFFSET]...))()>,
-               sizeof...(parameter_indices)>
-        d_residual_d_ = {[&]() {
-          return (*residual_)(DifferentiateWRT<parameter_indices + NUM_FIELD_OFFSET>{}, time, shape_disp, disp, velo,
-                              acceleration, *fields[parameter_indices + NUM_FIELD_OFFSET]...);
-        }...};
-
-    for (size_t col = 0; col < num_fields; ++col) {
-      if (col == 0) {
-        auto K = serac::get<DERIVATIVE>((*residual_)(time, shape_disp, differentiate_wrt(disp), velo, acceleration,
-                                                     *fields[parameter_indices + NUM_FIELD_OFFSET]...));
-        std::unique_ptr<mfem::HypreParMatrix> J = assemble(K);
-        J->MultTranspose(*vResiduals[0], *fieldSensitivities[col]);
-      } else if (col == 1) {
-        auto C = serac::get<DERIVATIVE>((*residual_)(time, shape_disp, disp, differentiate_wrt(velo), acceleration,
-                                                     *fields[parameter_indices + NUM_FIELD_OFFSET]...));
-        std::unique_ptr<mfem::HypreParMatrix> J = assemble(C);
-        J->MultTranspose(*vResiduals[0], *fieldSensitivities[col]);
-      } else if (col == 2) {
-        auto M = serac::get<DERIVATIVE>((*residual_)(time, shape_disp, disp, velo, differentiate_wrt(acceleration),
-                                                     *fields[parameter_indices + NUM_FIELD_OFFSET]...));
-        std::unique_ptr<mfem::HypreParMatrix> J = assemble(M);
-        J->MultTranspose(*vResiduals[0], *fieldSensitivities[col]);
-      } else if (col == 3) {
-        auto shape_K =
-            serac::get<DERIVATIVE>((*residual_)(time, differentiate_wrt(shape_disp), disp, velo, acceleration,
-                                                *fields[parameter_indices + NUM_FIELD_OFFSET]...));
-        std::unique_ptr<mfem::HypreParMatrix> J = assemble(shape_K);
-        J->MultTranspose(*vResiduals[0], *fieldSensitivities[col]);
-      } else {
-        auto param_K = serac::get<DERIVATIVE>(d_residual_d_[col - 4]());
-        std::unique_ptr<mfem::HypreParMatrix> J = assemble(param_K);
-        J->MultTranspose(*vResiduals[0], *fieldSensitivities[col]);
-      }
+    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
+      auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
+      std::unique_ptr<mfem::HypreParMatrix> J = assemble(K);
+      //J->MultTranspose(1.0, *vReactions[0], 1.0, *vjpFields[input_col]);
+      J->MultTranspose(1.0, *vReactions[0], 1.0, *vjpFields[input_col]);
     }
 
     return;
   }
 
  private:
+
+
+  /// @brief Utility to evaluate residual using all fields in vector
+  template <int... i>
+  auto evaluateResidual(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
+  {
+    return (*residual_)(time, *fs[i]...);
+  };
+
+  /// @brief Utility to get array of jacobian functions, one for each input field in fs
+  template <int... i>
+  auto jacobianFunctions(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
+  {
+    using JacFuncType = std::function<decltype((*residual_)(DifferentiateWRT<1>{}, time, *fs[i]...))(
+        double, const std::vector<FieldPtr>&)>;
+    return std::array<JacFuncType, sizeof...(i)>{[=](double _time, const std::vector<FieldPtr>& _fs) {
+      return (*residual_)(DifferentiateWRT<i>{}, _time, *_fs[i]...);
+    }...};
+  };
+
   /**
    * @brief Functor representing a material stress.  A functor is used here instead of an
    * extended, generic lambda for compatibility with NVCC.
@@ -578,15 +562,36 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
       auto dv_dX = get<DERIVATIVE>(velocity);
       auto d2u_dt2 = get<VALUE>(acceleration);
 
-      auto stress = material_(dt, state, du_dX, dv_dX, params...);
+      auto stress = material_.pkStress(dt, state, du_dX, dv_dX, params...);
 
-      return serac::tuple{material_.density_func(params...) * d2u_dt2, stress};
+      return serac::tuple{material_.density(params...) * d2u_dt2, stress};
     }
   };
 
-  using trial = H1<order, dim>;
-  using test = H1<order, dim>;
-  using shape_trial = H1<order, dim>;
+  /// convert between the input argument order and the argument order expected by the residual call
+  /// here we go from u, v, a, shape_u to shape_u, u, v, a
+  static constexpr std::array<size_t, 4> input_to_residual_index_map{1, 2, 3, 0};
+
+  /// @brief reorder fields from input into residual order
+  std::vector<FieldPtr> reorder_fields(const std::vector<FieldPtr>& fields) const
+  {
+    std::vector<FieldPtr> residual_fields = fields;
+    for (size_t input_col = 0; input_col < input_to_residual_index_map.size(); ++input_col) {
+      size_t res_index = input_to_residual_index_map[input_col];
+      residual_fields[res_index] = fields[input_col];
+    }
+    return residual_fields;
+  }
+
+  /// @brief convert from input ordering to ordering expected by shapeAwareFunctional
+  constexpr size_t residual_index(size_t input_index) const
+  {
+    return input_index < input_to_residual_index_map.size() ? input_to_residual_index_map[input_index] : input_index;
+  }
+
+  using trial = H1<order, dim>; /// typedef
+  using test = H1<order, dim>; /// typedef
+  using shape_trial = H1<order, dim>; /// typedef
 
   /// @brief string tag for the mesh
   std::string mesh_tag_;
@@ -604,11 +609,10 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
  */
 template <int order, int dim, typename... parameter_space>
 auto create_solid_residual(const std::string& physics_name, const serac::Mesh& mesh,
-                           const std::vector<std::string>& parameter_names,
-                           const std::vector<const serac::FiniteElementState*>& params)
+                           const std::vector<serac::FiniteElementState*>& states,
+                           const std::vector<serac::FiniteElementState*>& params,
+                           const std::vector<std::string>& parameter_names)
 {
-  FiniteElementState field(mesh.mfemParMesh(), serac::H1<order, dim>{}, "temporary");
-
   std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces;
   if constexpr (sizeof...(parameter_space) > 0) {
     for_constexpr<sizeof...(parameter_space)>([&](auto) { parameter_fe_spaces.push_back(&params.back()->space()); });
@@ -616,7 +620,7 @@ auto create_solid_residual(const std::string& physics_name, const serac::Mesh& m
 
   using ResidualT = SolidResidual<order, dim, Parameters<parameter_space...>>;
 
-  return std::make_shared<ResidualT>(physics_name, mesh.tag(), field.space(), field.space(), parameter_fe_spaces,
+  return std::make_shared<ResidualT>(physics_name, mesh.tag(), states[3]->space(), states[0]->space(), parameter_fe_spaces,
                                      parameter_names);
 }
 
