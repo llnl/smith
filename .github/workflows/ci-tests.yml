@@ -32,6 +32,7 @@ jobs:
     needs:
     - set_image_vars
     strategy:
+      fail-fast: true
       matrix:
         build_type: [ Debug, Release ]
         config:
@@ -88,6 +89,8 @@ jobs:
     needs:
     - set_image_vars
     strategy:
+      # If any of checks (e.g. style) fail, allow other jobs to continue running.
+      fail-fast: false
       matrix:
         check_type: [coverage, docs, style, header]
     container:
