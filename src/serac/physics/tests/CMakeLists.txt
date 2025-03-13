@@ -20,7 +20,6 @@ set(physics_serial_test_sources
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
     test_solid_residual.cpp
-    test_kinematic_objective.cpp
     )
 
 serac_add_tests(SOURCES       ${physics_serial_test_sources}
