@@ -58,7 +58,7 @@ class Residual {
                                                          int block_row = 0) const = 0;
 
   /**
-   * @brief Jacobian-vector product
+   * @brief Jacobian-vector product, will overwrite any existing values in jvpReactions
    * @param time time
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
    * @param vFields right hand side 'v' fields
@@ -71,7 +71,7 @@ class Residual {
       std::vector<DualFieldPtr>& jvpReactions) const = 0;
 
   /**
-   * @brief Vector-Jacobian product
+   * @brief Vector-Jacobian product, will += into existing values in vjpFields
    * @param time time
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
    * @param vReactions left hand side 'v' fields

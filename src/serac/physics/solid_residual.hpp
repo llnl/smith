@@ -432,10 +432,15 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
     auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{},
                                   time, fields_in_residual_order);
 
+    *jvpReactions[0] = 0.0;
+    serac::FiniteElementDual tmp = *jvpReactions[0];
+    
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vFields[input_col]!=nullptr) {
         auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
-        K.Mult(*vFields[input_col], *jvpReactions[0]);
+        tmp = 0.0;
+        K.Mult(*vFields[input_col], tmp);
+        *jvpReactions[0] += tmp;
       }
     }
     return;
@@ -457,7 +462,6 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
       std::unique_ptr<mfem::HypreParMatrix> J = assemble(K);
-      //J->MultTranspose(1.0, *vReactions[0], 1.0, *vjpFields[input_col]);
       J->MultTranspose(1.0, *vReactions[0], 1.0, *vjpFields[input_col]);
     }
 

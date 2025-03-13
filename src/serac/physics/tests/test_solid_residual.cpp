@@ -102,7 +102,7 @@ struct ResidualFixture : public testing::Test
       pseudoRand(p);
     }
 
-    // adjoint_states[0] = 1.0; // MRT, this should break it.
+    adjoint_states[0] = 1.0; // used to test that vjp acts via +=
 
     states[0].setFromFieldFunction([](serac::tensor<double,dim> x) {
       auto u = 0.1*x;
@@ -144,8 +144,7 @@ struct ResidualFixture : public testing::Test
   std::vector<serac::FiniteElementState> v_rhs_params;
 };
 
-TEST_F(ResidualFixture, VjpConsistencyå) {
-
+TEST_F(ResidualFixture, VjpConsistency) {
   // initialize the displacement and acceleration to a non-trivial field
   double time = 0.0;
   auto all_states = getPointers(states, params);
@@ -171,13 +170,13 @@ TEST_F(ResidualFixture, VjpConsistencyå) {
     serac::FiniteElementState vjp = *all_states[i]; vjp = 0.0;
     auto J = residual->jacobian(time, all_states, jacobian_weights(i));
     J->MultTranspose(v, vjp);
+    if (i==0) vjp += 1.0; // make sure jvp uses +=
     EXPECT_NEAR(vjp.Norml2(), all_jvps[i]->Norml2(), 1e-12);
   }
 }
 
 
 TEST_F(ResidualFixture, JvpConsistency) {
-
   // initialize the displacement and acceleration to a non-trivial field
   double time = 0.0;
   auto all_states = getPointers(states, params);
@@ -186,7 +185,7 @@ TEST_F(ResidualFixture, JvpConsistency) {
   res_vector = residual->residual(time, all_states);
   EXPECT_NE(0.0, res_vector.Norml2());
 
-  auto jacobian_weights = [&](size_t i) {
+  auto jacobianWeights = [&](size_t i) {
     std::vector<double> tangents(all_states.size());
     tangents[i] = 1.0;
     return tangents;
@@ -204,23 +203,37 @@ TEST_F(ResidualFixture, JvpConsistency) {
 
   serac::FiniteElementDual jvp_slow(states[0].space(), "jvp_slow");
   serac::FiniteElementDual jvp(states[0].space(), "jvp");
+  jvp = 4.0; // set to some value to test jvp resets these values
   std::vector<serac::FiniteElementDual*> jvps = getPointers(jvp);
+
+
 
   auto all_v_rhs_states = getPointers(v_rhs_states, v_rhs_params);
 
   for (size_t i=0; i < all_states.size(); ++i) {
-    auto J = residual->jacobian(time, all_states, jacobian_weights(i));
-
-    jvp_slow = 0.0;
+    auto J = residual->jacobian(time, all_states, jacobianWeights(i));
     J->Mult(*all_v_rhs_states[i], jvp_slow);
-
-    jvp = 0.0;
     residual->jvp(time, all_states, selectStates(i), jvps);
-
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 
-  //residual->jacobian(time, all_inputs, std::vector<double>{1.0, 0.0, 0.0, 0.0, 0.2});
+  // test jacobians in weighted combinations
+  {
+    all_v_rhs_states[1] = nullptr;
+    all_v_rhs_states[3] = nullptr;
+    all_v_rhs_states[4] = nullptr;
+
+    double acceleration_factor = 0.2;
+    std::vector<double> jacobian_weights = {1.0, 0.0, acceleration_factor, 0.0, 0.0};
+
+    auto J = residual->jacobian(time, all_states, jacobian_weights);
+    J->Mult(*all_v_rhs_states[0], jvp_slow);
+
+    *all_v_rhs_states[2] = *all_v_rhs_states[0];
+    *all_v_rhs_states[2] *= acceleration_factor;
+    residual->jvp(time, all_states, all_v_rhs_states, jvps);
+    EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
+  }
 
 }
 
