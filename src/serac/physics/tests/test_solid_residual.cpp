@@ -97,6 +97,30 @@ struct ResidualFixture : public testing::Test {
     v_rhs_states = states;
     v_rhs_params = params;
 
+    std::vector<std::string> param_names{"density"};
+    std::string physics_name = "solid";
+
+    auto solid_mechanics_residual = serac::create_solid_residual<disp_order, dim, DensitySpace>(
+        physics_name, *mesh, getPointers(states), getPointers(params), param_names);
+
+    // setup material model
+
+    SolidMaterial mat;
+    mat.K = 1.0;
+    mat.G = 0.5;
+    solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mat, mesh->entireDomain());
+    
+    // apply some traction boundary conditions
+
+    std::string surface_name = "side";
+    mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
+
+    solid_mechanics_residual->setTraction([](auto /*x*/, auto n, auto /*t*/) {
+      return -1.0 * n;
+    }, mesh->domain(surface_name));
+
+    // initialize fields for testing
+
     for (auto& s : v_rhs_states) {
       pseudoRand(s);
     }
@@ -117,16 +141,7 @@ struct ResidualFixture : public testing::Test {
     });
     params[0] = 1.2;
 
-    std::vector<std::string> param_names{"density"};
-    std::string physics_name = "solid";
-
-    auto solid_mechanics_residual = serac::create_solid_residual<disp_order, dim, DensitySpace>(
-        physics_name, *mesh, getPointers(states), getPointers(params), param_names);
-
-    SolidMaterial mat;
-    mat.K = 1.0;
-    mat.G = 0.5;
-    solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mat, mesh->entireDomain());
+    // residual is abstract Residual class to ensure usage only through BasePhysics interface
     residual = solid_mechanics_residual;
   }
 
@@ -154,7 +169,7 @@ TEST_F(ResidualFixture, VjpConsistency)
 
   serac::FiniteElementDual res_vector(states[0].space(), "residual");
   res_vector = residual->residual(time, all_states);
-  EXPECT_NE(0.0, res_vector.Norml2());
+  ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {
     std::vector<double> tangents(all_states.size());
@@ -187,7 +202,7 @@ TEST_F(ResidualFixture, JvpConsistency)
 
   serac::FiniteElementDual res_vector(states[0].space(), "residual");
   res_vector = residual->residual(time, all_states);
-  EXPECT_NE(0.0, res_vector.Norml2());
+  ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobianWeights = [&](size_t i) {
     std::vector<double> tangents(all_states.size());
