@@ -35,9 +35,9 @@ template <int order, int dim, typename... parameter_space, int... parameter_indi
 class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_sequence<int, parameter_indices...>>
     : public Residual {
  public:
-  static constexpr auto NUM_STATE_VARS = 3;  /// displacement, velocity, acceleration
-  static constexpr auto NUM_PRE_PARAMS = 1;  /// shape_displacement
-  static constexpr auto NUM_FIELD_OFFSET = NUM_STATE_VARS + NUM_PRE_PARAMS; /// sum of num states and num params
+  static constexpr auto NUM_STATE_VARS = 3;                                  ///< displacement, velocity, acceleration
+  static constexpr auto NUM_PRE_PARAMS = 1;                                  ///< shape_displacement
+  static constexpr auto NUM_FIELD_OFFSET = NUM_STATE_VARS + NUM_PRE_PARAMS;  ///< sum of num states and num params
 
   /// @brief a container holding quadrature point data of the specified type
   /// @tparam T the type of data to store at each quadrature point
@@ -373,7 +373,6 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
     setPressure(DependsOn<>{}, pressure_function, optional_domain);
   }
 
-
   /// @overload
   mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row = 0) const override
   {
@@ -396,8 +395,10 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
 
     auto addToJ = [&J](double factor, std::unique_ptr<mfem::HypreParMatrix> jac_contrib) {
       if (J) {
-        SLIC_ERROR_IF(J->N() != jac_contrib->N(), "Multiple nonzero jacobian weights are being used on inconsistently sized input arguments.");
-        SLIC_ERROR_IF(J->M() != jac_contrib->M(), "Multiple nonzero jacobian weights are being used on inconsistently sized input arguments.");
+        SLIC_ERROR_IF(J->N() != jac_contrib->N(),
+                      "Multiple nonzero jacobian weights are being used on inconsistently sized input arguments.");
+        SLIC_ERROR_IF(J->M() != jac_contrib->M(),
+                      "Multiple nonzero jacobian weights are being used on inconsistently sized input arguments.");
         J->Add(factor, *jac_contrib);
       } else {
         J.reset(jac_contrib.release());
@@ -434,9 +435,9 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
 
     *jvpReactions[0] = 0.0;
     serac::FiniteElementDual tmp = *jvpReactions[0];
-    
+
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      if (vFields[input_col]!=nullptr) {
+      if (vFields[input_col] != nullptr) {
         auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
         tmp = 0.0;
         K.Mult(*vFields[input_col], tmp);
@@ -469,8 +470,6 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
   }
 
  private:
-
-
   /// @brief Utility to evaluate residual using all fields in vector
   template <int... i>
   auto evaluateResidual(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
@@ -593,9 +592,9 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
     return input_index < input_to_residual_index_map.size() ? input_to_residual_index_map[input_index] : input_index;
   }
 
-  using trial = H1<order, dim>; /// typedef
-  using test = H1<order, dim>; /// typedef
-  using shape_trial = H1<order, dim>; /// typedef
+  using trial = H1<order, dim>;        /// typedef
+  using test = H1<order, dim>;         /// typedef
+  using shape_trial = H1<order, dim>;  /// typedef
 
   /// @brief string tag for the mesh
   std::string mesh_tag_;
@@ -606,7 +605,6 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
   /// @brief functional
   std::unique_ptr<ShapeAwareFunctional<shape_trial, test(trial, trial, trial, parameter_space...)>> residual_;
 };
-
 
 /**
  * @brief Utility function for creating a shared_ptr<SolidResidual<>>
@@ -624,8 +622,8 @@ auto create_solid_residual(const std::string& physics_name, const serac::Mesh& m
 
   using ResidualT = SolidResidual<order, dim, Parameters<parameter_space...>>;
 
-  return std::make_shared<ResidualT>(physics_name, mesh.tag(), states[3]->space(), states[0]->space(), parameter_fe_spaces,
-                                     parameter_names);
+  return std::make_shared<ResidualT>(physics_name, mesh.tag(), states[3]->space(), states[0]->space(),
+                                     parameter_fe_spaces, parameter_names);
 }
 
 }  // namespace serac
