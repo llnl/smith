@@ -109,15 +109,14 @@ struct ResidualFixture : public testing::Test {
     mat.K = 1.0;
     mat.G = 0.5;
     solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mat, mesh->entireDomain());
-    
+
     // apply some traction boundary conditions
 
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
 
-    solid_mechanics_residual->setTraction([](auto /*x*/, auto n, auto /*t*/) {
-      return -1.0 * n;
-    }, mesh->domain(surface_name));
+    solid_mechanics_residual->setTraction([](auto /*x*/, auto n, auto /*t*/) { return -1.0 * n; },
+                                          mesh->domain(surface_name));
 
     // initialize fields for testing
 

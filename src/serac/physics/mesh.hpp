@@ -71,7 +71,8 @@ class Mesh {
                                              std::function<bool(std::vector<vec2>, int)> func);
 
  private:
-  /// @brief
+  /// @brief Sets up some initial domains, for now just the 'entire_domain', but eventually we can read of
+  /// names/blocks/attributes from the mesh and create default domains
   void createDomains();
 
   /// @brief
