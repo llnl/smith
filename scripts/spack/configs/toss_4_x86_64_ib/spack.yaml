@@ -296,6 +296,9 @@ spack:
         prefix: /usr/tce/packages/python/python-3.9.12
 
     # Globally lock version of third party libraries
+    arpack-ng:
+      # 3.9.1 has this error: undefined reference to `pdsaupd_'
+      require: "@3.9.0"
     axom:
       require: "@0.10.1.1"
     camp:
