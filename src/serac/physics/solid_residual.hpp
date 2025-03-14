@@ -21,7 +21,7 @@ template <int order, int dim, typename InputSpaces = Parameters<>>
 class SolidResidual;
 
 /**
- * @brief The nonlinear residual class
+ * @brief Nonlinear residual class for solid mechanics
  *
  * This uses Functional to compute the solid mechanics residuals and tangent
  * stiffness matrices.

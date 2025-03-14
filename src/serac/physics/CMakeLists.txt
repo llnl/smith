@@ -34,6 +34,8 @@ set(physics_headers
     residual.hpp
     functional_residual.hpp
     solid_residual.hpp
+    objective.hpp
+    motion_objectives.hpp
     )
 
 set(physics_depends

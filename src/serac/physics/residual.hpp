@@ -12,8 +12,13 @@
 
 #pragma once
 
+#include <vector>
 #include "serac/physics/common.hpp"
-#include "serac/numerics/functional/shape_aware_functional.hpp"
+
+namespace mfem {
+class Vector;
+class HypreParMatrix;
+}  // namespace mfem
 
 namespace serac {
 
