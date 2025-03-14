@@ -21,5 +21,5 @@
     [ "rocmcc@6.2.1~openmp+profiling+rocm+raja+umpire+strumpack~petsc amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion"],
 
     "blueos_3_ppc64le_ib_p9":
-    [ "clang@10.0.1+devtools+cuda+raja+umpire+profiling~strumpack cuda_arch=70" ]
+    [ "clang@14.0.5+devtools+cuda+raja+umpire+profiling~strumpack cuda_arch=70" ]
 }

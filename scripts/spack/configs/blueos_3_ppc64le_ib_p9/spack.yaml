@@ -23,11 +23,11 @@ spack:
       modules: []
       operating_system: rhel7
       paths:
-        cc:  /usr/tce/packages/clang/clang-ibm-10.0.1-gcc-8.3.1/bin/clang
-        cxx: /usr/tce/packages/clang/clang-ibm-10.0.1-gcc-8.3.1/bin/clang++
+        cc:  /usr/tce/packages/clang/clang-ibm-14.0.5-gcc-8.3.1/bin/clang
+        cxx: /usr/tce/packages/clang/clang-ibm-14.0.5-gcc-8.3.1/bin/clang++
         f77: /usr/tce/packages/gcc/gcc-8.3.1/bin/gfortran
         fc:  /usr/tce/packages/gcc/gcc-8.3.1/bin/gfortran
-      spec: clang@10.0.1
+      spec: clang@14.0.5
       target: ppc64le
 
   packages:
@@ -61,8 +61,8 @@ spack:
     # LLNL blueos CUDA
     cuda:
       externals:
-        - spec: cuda@11.2.0
-          prefix: /usr/tce/packages/cuda/cuda-11.2.0
+        - spec: cuda@11.8.0
+          prefix: /usr/tce/packages/cuda/cuda-11.8.0
       buildable: false
 
     # LLNL blueos mpi
@@ -70,8 +70,8 @@ spack:
       buildable: false
     spectrum-mpi:
       externals:
-        - spec: spectrum-mpi@release%clang@10.0.1
-          prefix: /usr/tce/packages/spectrum-mpi/spectrum-mpi-rolling-release-clang-10.0.1-gcc-8.3.1
+        - spec: spectrum-mpi@release%clang@14.0.5
+          prefix: /usr/tce/packages/spectrum-mpi/spectrum-mpi-rolling-release-clang-14.0.5-gcc-8.3.1
 
     netlib-lapack:
       externals:
@@ -232,6 +232,9 @@ spack:
       buildable: false
 
     # Globally lock version of third party libraries
+    arpack-ng:
+      # 3.9.1 has this error: undefined reference to `pdsaupd_'
+      require: "@3.9.0"
     axom:
       require: "@0.10.1.1"
     camp:
@@ -242,8 +245,12 @@ spack:
       variants: ~shared~mpi
     mfem:
       require: "@4.7.0.2"
+    petsc:
+      require: "@3.21.5"
     raja:
       require: "@2024.07.0~shared~examples~exercises"
+    sundials:
+      require: "@6.7.0"
     tribol:
       require: "@0.1.0.17~examples~tests"
     umpire:
