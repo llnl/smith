@@ -33,6 +33,8 @@ set(physics_headers
     thermomechanics_monolithic.hpp
     residual.hpp
     solid_residual.hpp
+    objective.hpp
+    motion_objectives.hpp
     )
 
 set(physics_depends

@@ -5,62 +5,17 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <gtest/gtest.h>
-#include "mfem.hpp"
+#include "serac/physics/solid_residual.hpp"
 #include "serac/infrastructure/initialize.hpp"
 #include "serac/infrastructure/terminator.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/common.hpp"
-
-#include "serac/physics/solid_residual.hpp"
+#include "mfem.hpp"
+#include "serac/physics/tests/physics_test_utils.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
-
-template <typename T>
-auto getPointers(std::vector<T>& values)
-{
-  std::vector<T*> pointers;
-  for (auto& t : values) {
-    pointers.push_back(&t);
-  }
-  return pointers;
-}
-
-template <typename T>
-auto getPointers(std::vector<T>& states, std::vector<T>& params)
-{
-  std::vector<T*> pointers;
-  for (auto& t : states) {
-    pointers.push_back(&t);
-  }
-  for (auto& t : params) {
-    pointers.push_back(&t);
-  }
-  return pointers;
-}
-
-template <typename T>
-auto getPointers(T& v)
-{
-  return std::vector<T*>{&v};
-}
-
-void pseudoRand(serac::FiniteElementState& dual)
-{
-  int sz = dual.Size();
-  for (int i = 0; i < sz; ++i) {
-    dual(i) = -1.2 + 2.02 * (double(i) / sz);
-  }
-}
-
-void pseudoRand(serac::FiniteElementDual& dual)
-{
-  int sz = dual.Size();
-  for (int i = 0; i < sz; ++i) {
-    dual(i) = -1.2 + 2.02 * (double(i) / sz);
-  }
-}
 
 struct ResidualFixture : public testing::Test {
   static constexpr int dim = 2;
@@ -143,8 +98,6 @@ struct ResidualFixture : public testing::Test {
     // residual is abstract Residual class to ensure usage only through BasePhysics interface
     residual = solid_mechanics_residual;
   }
-
-  std::string velo_name = "solid_velocity";
 
   axom::sidre::DataStore datastore;
   std::unique_ptr<serac::Mesh> mesh;

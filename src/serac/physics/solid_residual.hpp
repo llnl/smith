@@ -14,6 +14,7 @@
 
 #include "serac/physics/residual.hpp"
 #include "serac/physics/mesh.hpp"
+#include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
 namespace serac {
@@ -23,7 +24,7 @@ template <int order, int dim, typename parameters = Parameters<>,
 class SolidResidual;
 
 /**
- * @brief The nonlinear residual class
+ * @brief Nonlinear residual class for solid mechanics
  *
  * This uses Functional to compute the solid mechanics residuals and tangent
  * stiffness matrices.
