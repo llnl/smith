@@ -278,7 +278,6 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
   }
 
  private:
- 
   /// @brief Utility to evaluate residual using all fields in vector
   template <int... i>
   auto evaluateResidual(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
