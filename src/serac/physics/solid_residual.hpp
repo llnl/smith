@@ -226,6 +226,78 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
     return all_spaces;
   }
 
+<<<<<<< HEAD
+=======
+  /// @overload
+  void jvp([[maybe_unused]] double time, [[maybe_unused]] const std::vector<FieldPtr>& fields,
+           [[maybe_unused]] const std::vector<FieldPtr>& vFields,
+           [[maybe_unused]] std::vector<DualFieldPtr>& jvpReactions) const override
+  {
+    SLIC_ERROR_IF(vFields.size() != fields.size(),
+                  "Invalid number of field sensitivities relative to the number of fields");
+    SLIC_ERROR_IF(jvpReactions.size() != 1, "Solid mechanics nonlinear system only supports 1 output residual");
+
+    auto fields_in_residual_order = reorder_fields(fields);
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{},
+                                  time, fields_in_residual_order);
+
+    *jvpReactions[0] = 0.0;
+    serac::FiniteElementDual tmp = *jvpReactions[0];
+
+    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
+      if (vFields[input_col] != nullptr) {
+        auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
+        tmp = 0.0;
+        K.Mult(*vFields[input_col], tmp);
+        *jvpReactions[0] += tmp;
+      }
+    }
+    return;
+  }
+
+  /// @overload
+  void vjp([[maybe_unused]] double time, [[maybe_unused]] const std::vector<FieldPtr>& fields,
+           [[maybe_unused]] const std::vector<DualFieldPtr>& vReactions,
+           [[maybe_unused]] std::vector<FieldPtr>& vjpFields) const override
+  {
+    SLIC_ERROR_IF(vjpFields.size() != fields.size(),
+                  "Invalid number of field sensitivities relative to the number of fields");
+    SLIC_ERROR_IF(vReactions.size() != 1, "Solid mechanics nonlinear system only supports 1 output residual");
+
+    auto fields_in_residual_order = reorder_fields(fields);
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{},
+                                  time, fields_in_residual_order);
+
+    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
+      auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
+      std::unique_ptr<mfem::HypreParMatrix> J = assemble(K);
+      J->MultTranspose(1.0, *vReactions[0], 1.0, *vjpFields[input_col]);
+    }
+
+    return;
+  }
+
+ private:
+ 
+  /// @brief Utility to evaluate residual using all fields in vector
+  template <int... i>
+  auto evaluateResidual(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
+  {
+    return (*residual_)(time, *fs[i]...);
+  };
+
+  /// @brief Utility to get array of jacobian functions, one for each input field in fs
+  template <int... i>
+  auto jacobianFunctions(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
+  {
+    using JacFuncType = std::function<decltype((*residual_)(DifferentiateWRT<1>{}, time, *fs[i]...))(
+        double, const std::vector<FieldPtr>&)>;
+    return std::array<JacFuncType, sizeof...(i)>{[=](double _time, const std::vector<FieldPtr>& _fs) {
+      return (*residual_)(DifferentiateWRT<i>{}, _time, *_fs[i]...);
+    }...};
+  };
+
+>>>>>>> d44aa2f57 (Rename some things regarding the objective.)
   /**
    * @brief Functor representing a material stress.  A functor is used here instead of an
    * extended, generic lambda for compatibility with NVCC.
