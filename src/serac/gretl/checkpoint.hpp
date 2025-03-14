@@ -1,0 +1,245 @@
+// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+/**
+ * @file checkpoint.hpp
+ */
+
+#pragma once
+
+#include <set>
+#include <map>
+#include <ostream>
+#include <iostream>
+#include <cassert>
+
+#define UNUSED [[maybe_unused]]
+
+#define USE_DYNAMIC_CHECKPOINTING 1
+
+namespace gretl {
+
+struct Checkpoint {
+  size_t level;
+  size_t step;
+  static constexpr size_t infinity() { return std::numeric_limits<size_t>::max(); }
+};
+
+inline bool operator<(const Checkpoint& a, const Checkpoint& b)
+{
+  if (a.level == Checkpoint::infinity() && b.level == Checkpoint::infinity()) {
+    return a.step > b.step;
+  }
+  if (a.level == Checkpoint::infinity()) return false;
+  if (b.level == Checkpoint::infinity()) return true;
+  return a.step > b.step;
+}
+
+inline std::ostream& operator<<(std::ostream& stream, const Checkpoint& p);
+
+struct CheckpointManager;
+
+inline std::ostream& operator<<(std::ostream& stream, const CheckpointManager& set);
+
+#if USE_DYNAMIC_CHECKPOINTING
+
+struct CheckpointManager {
+  static constexpr size_t invalidCheckpointIndex = std::numeric_limits<size_t>::max();
+
+  bool valid_checkpoint_index(size_t i) const { return i != invalidCheckpointIndex; }
+
+  std::set<gretl::Checkpoint>::const_iterator most_dispensable() const
+  {
+    size_t maxHigherTimeLevel = 0;
+    for (auto rIter = cps.begin(); rIter != cps.end(); ++rIter) {
+      if (rIter->level < maxHigherTimeLevel) {
+        return rIter;
+      }
+      maxHigherTimeLevel = std::max(rIter->level, maxHigherTimeLevel);
+    }
+    return cps.end();
+  }
+
+  // this does multiple things
+  // 1. it adds checkpoints into the database, and updates internal data structures
+  // 2. it determines if a checkpoint needs to be removed
+  // 3. if a checkpoint needs to be removed, it returns the index for that checkpoint
+  // 4. otherwise, it returns zero
+  size_t add_checkpoint_and_get_index_to_remove(size_t step, bool persistent = false,
+                                                [[maybe_unused]] double relativeCost = 1.0)
+  {
+    size_t levelupAmount = 1;  //= relativeCost >= 2.0 ? 3 : 1;
+
+    // printf("levelup = %zu\n", levelupAmount);
+
+    Checkpoint nextStep{.level = levelupAmount - 1, .step = step};
+
+    if (step == 0) assert(persistent);
+
+    size_t nextEraseStep = invalidCheckpointIndex;
+
+    // don't include persistent data in data quota.  MRT, this might change
+    if (persistent) {
+      maxNumStates++;
+      nextStep.level = Checkpoint::infinity();
+      assert(cps.size() < maxNumStates);
+    }
+
+    if (cps.size() < maxNumStates) {
+      cps.insert(nextStep);
+    } else {
+      auto iterToMostDispensable = most_dispensable();
+      if (iterToMostDispensable != cps.end()) {
+        nextEraseStep = iterToMostDispensable->step;
+        cps.erase(iterToMostDispensable);
+        cps.insert(nextStep);
+      } else {
+        nextEraseStep = cps.begin()->step;
+
+        // if (nextEraseStep%2 == 0) {
+        //   std::cout << "prev level = " << cps.begin()->level << std::endl;
+        // }
+
+        // std::cout << "stuff = " << cps.begin()->step << " " << levelupAmount << " " << cps.begin()->level <<
+        // std::endl;
+        nextStep.level = cps.begin()->level + levelupAmount;
+        // nextStep.level = cps.begin()->level + 1;
+
+        cps.erase(cps.begin());
+        cps.insert(nextStep);
+      }
+    }
+
+    return nextEraseStep;
+  }
+
+  size_t last_checkpoint_step() const { return cps.begin()->step; }
+
+  bool erase_step(size_t stepIndex)
+  {
+    for (std::set<Checkpoint>::iterator it = cps.begin(); it != cps.end(); ++it) {
+      if (it->step == stepIndex) {
+        if (it->level != Checkpoint::infinity()) {
+          cps.erase(it);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool contains_step(size_t stepIndex) const
+  {
+    for (auto& c : cps) {
+      if (c.step == stepIndex) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Checkpoint remove_checkpoint(size_t stepIndex)
+  {
+    maxNumStates--;
+    for (std::set<Checkpoint>::iterator it = cps.begin(); it != cps.end(); ++it) {
+      if (it->step == stepIndex) {
+        auto cp = *it;
+        cps.erase(it);
+        return cp;
+      }
+    }
+    assert(false);
+    return *cps.begin();
+  }
+
+  void insert_checkpoint(const Checkpoint& cp)
+  {
+    maxNumStates++;
+    cps.insert(cp);
+  }
+
+  std::set<Checkpoint> cps;
+  size_t maxNumStates = 20;
+};
+
+#else
+
+struct CheckpointManager {
+  static constexpr size_t invalidCheckpointIndex = std::numeric_limits<size_t>::max();
+
+  bool valid_checkpoint_index(UNUSED size_t i) const { return true; }
+
+  size_t add_checkpoint_and_get_index_to_remove(UNUSED size_t step, UNUSED bool persistent = false,
+                                                UNUSED double relativeCost = 1.0)
+  {
+    return 0;
+  }
+
+  size_t last_checkpoint_step() const { return cps.empty() ? 0 : cps.back().step; }
+
+  bool erase_step(UNUSED size_t stepIndex) { return true; }
+
+  std::vector<Checkpoint> cps;
+  size_t maxNumStates = std::numeric_limits<size_t>::max();
+};
+
+#endif
+
+template <typename T>
+T advance_and_reverse_steps(size_t numSteps, size_t storageSize, T x, std::function<T(size_t n, const T&)> update_func,
+                            std::function<void(size_t n, const T&)> reverse_callback)
+{
+  gretl::CheckpointManager cps{.cps = {}, .maxNumStates = storageSize};
+  std::map<size_t, T> savedCps;
+  savedCps[0] = x;
+
+  cps.add_checkpoint_and_get_index_to_remove(0, true);
+  for (size_t i = 0; i < numSteps; ++i) {
+    x = update_func(i, savedCps[i]);
+    size_t eraseStep = cps.add_checkpoint_and_get_index_to_remove(i + 1, false);
+    if (cps.valid_checkpoint_index(eraseStep)) {
+      savedCps.erase(eraseStep);
+    }
+
+    savedCps[i + 1] = x;
+  }
+
+  double xf = x;
+
+  for (size_t i = numSteps; i + 1 > 0; --i) {
+    while (cps.last_checkpoint_step() < i) {
+      size_t lastCp = cps.last_checkpoint_step();
+      x = update_func(lastCp, savedCps[lastCp]);
+      size_t eraseStep = cps.add_checkpoint_and_get_index_to_remove(lastCp + 1, false);
+      if (cps.valid_checkpoint_index(eraseStep)) {
+        savedCps.erase(eraseStep);
+      }
+      savedCps[lastCp + 1] = x;
+    }
+    reverse_callback(i, savedCps[i]);
+
+    cps.erase_step(i);
+    savedCps.erase(i);
+  }
+
+  return xf;
+}
+
+inline std::ostream& operator<<(std::ostream& stream, const Checkpoint& p)
+{
+  return stream << "   lvl=" << p.level << ", step=" << p.step;
+}
+
+inline std::ostream& operator<<(std::ostream& stream, const CheckpointManager& set)
+{
+  stream << "CHECKPOINTS: capacity = " << set.maxNumStates << std::endl;
+  for (const auto& s : set.cps) {
+    stream << s << "\n";
+  }
+  return stream;
+}
+
+}  // namespace gretl
