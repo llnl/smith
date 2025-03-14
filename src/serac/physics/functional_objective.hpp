@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file motion_objectives.hpp
+ * @file functional_objective.hpp
  *
  * @brief Implements the objective interface for some average motion constraints
  */
