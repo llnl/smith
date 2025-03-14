@@ -83,7 +83,7 @@ class FunctionalObjective<order, dim, Parameters<parameter_space...>, std::integ
   }
 
   /// @overload
-  virtual double objective(double time, const std::vector<FieldPtr>& fields) const
+  virtual double evaluate(double time, const std::vector<FieldPtr>& fields) const
   {
     return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{}, time,
                              fields);

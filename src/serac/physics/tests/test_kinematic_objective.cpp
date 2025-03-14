@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 #include "serac/physics/solid_residual.hpp"
-#include "serac/physics/motion_objectives.hpp"
+#include "serac/physics/functional_objective.hpp"
 
 #include "serac/infrastructure/initialize.hpp"
 #include "serac/infrastructure/terminator.hpp"
@@ -75,7 +75,7 @@ struct ConstrainedResidualFixture : public testing::Test {
     mass_objective.addDomainIntegral(serac::DependsOn<1>{}, mesh->entireDomain(),
                                      [](double /*time*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
 
-    double mass = mass_objective.objective(time, objective_states);
+    double mass = mass_objective.evaluate(time, objective_states);
 
     serac::tensor<double, dim> initial_cg;
 
@@ -87,7 +87,7 @@ struct ConstrainedResidualFixture : public testing::Test {
               /*time*/,
               auto X, auto U,
               auto RHO) { return (get<serac::VALUE>(X)[i] + get<serac::VALUE>(U)[i]) * get<serac::VALUE>(RHO); });
-      initial_cg[i] = cg_objective->objective(0.0, objective_states) / mass;
+      initial_cg[i] = cg_objective->evaluate(time, objective_states) / mass;
       constraint_evaluators.push_back(cg_objective);
     }
 
@@ -162,7 +162,7 @@ TEST_F(ConstrainedResidualFixture, CanComputeResidualObjectivesAndTheirGradients
 
   auto objective_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[DENSITY]};
   for (const auto& c : constraints) {
-    ASSERT_NE(0.0, c->objective(time, objective_states));
+    ASSERT_NE(0.0, c->evaluate(time, objective_states));
     for (int i = 0; i < dim; ++i) {
       ASSERT_NE(0.0, c->gradient(time, objective_states, i).Norml2());
     }

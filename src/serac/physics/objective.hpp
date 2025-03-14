@@ -42,7 +42,7 @@ class Objective {
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
    * @return double
    */
-  virtual double objective(double time, const std::vector<FieldPtr>& fields) const = 0;
+  virtual double evaluate(double time, const std::vector<FieldPtr>& fields) const = 0;
 
   /** @brief Virtual interface for computing objective gradient from a vector of serac::FiniteElementState*
    *
