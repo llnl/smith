@@ -108,7 +108,6 @@ struct CheckpointManager {
     for (std::set<Checkpoint>::iterator it = cps.begin(); it != cps.end(); ++it) {
       if (it->step == stepIndex) {
         if (it->level != Checkpoint::infinity()) {
-          //auto cp = *it;
           cps.erase(it);
           return true;
         }
@@ -167,7 +166,6 @@ T advance_and_reverse_steps(size_t numSteps, size_t storageSize, T x, std::funct
       savedCps.erase(eraseStep);
     }
 
-    const auto& y = x;
     savedCps[i + 1] = x;
   }
 
