@@ -9,32 +9,33 @@ namespace gretl {
 static constexpr bool debugPrint = false;
 
 struct StateBase;
-template <typename T>
+template <typename T, typename D=T>
 struct State;
 
-class StateDataBase;
+struct StateDataBase;
 
-template <typename T>
-using ZeroClone = std::function<T(const T&)>;
+template <typename T, typename D>
+using ZeroClone = std::function<D(const T&)>;
 
 struct DataStore {
   DataStore(size_t maxStates);
   virtual ~DataStore() {}
 
   // create a new state in the graph, store it, return it
-  template <typename T>
-  State<T> create_state(const T& t)
+  template <typename T, typename D=T>
+  State<T,D> create_state(const T& t)
   {
-    auto zero_clone = [](const T&) -> T { return T(); };
-    return create_state(t, zero_clone);
+    auto zero_clone = [](const T&) -> D { return D(); };
+    return create_state<T, D, decltype(zero_clone)>(t, zero_clone);
+    //auto zero_clone = [](const T&) -> T { return T(); };
+    //return create_state(t, zero_clone);
   }
 
   // create a new state in the graph, store it, return it
-  template <typename T, typename ZeroCloneFromT>
-  State<T> create_state(const T& t, ZeroCloneFromT zero_clone)
+  template <typename T, typename D, typename ZeroCloneFromT>
+  State<T, D> create_state(const T& t, ZeroCloneFromT zero_clone)
   {
-    bool persistent = true;
-    State<T> newState(*this, t, states.size(), zero_clone, {});
+    State<T, D> newState(*this, t, states.size(), zero_clone, {});
     add_state(newState);
     return newState;
   }
@@ -52,24 +53,24 @@ struct DataStore {
   void check_consistency() const;
   void check_consistency_except_last(size_t) const;
 
-  friend class StateBase;
+  friend struct StateBase;
 
-  template <typename T>
+  template <typename T, typename D>
   friend struct State;  // MRT, try to get all dataStore access off State, into StateData
 
-  template <typename T>
-  friend class StateData;
+  template <typename T, typename D>
+  friend struct StateData;
 
   using GhostState = std::shared_ptr<StateDataBase>;
   using Measure = std::pair<StateBase, std::vector<GhostState> >;
 
  protected:
   // create a new state in the graph, store it, return it
-  template <typename T, typename ZeroCloneFromT>
-  State<T> create_empty_state(ZeroCloneFromT zero_clone, const std::vector<StateBase>& upstreams)
+  template <typename T, typename D, typename ZeroCloneFromT>
+  State<T, D> create_empty_state(ZeroCloneFromT zero_clone, const std::vector<StateBase>& upstreams)
   {
     assert(!upstreams.empty());
-    State<T> newState(*this, states.size(), zero_clone, upstreams);
+    State<T,D> newState(*this, states.size(), zero_clone, upstreams);
     add_state(newState);
     return newState;
   }

@@ -1,14 +1,24 @@
+// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+/**
+ * @file state_data_base.hpp
+ */
+
 #pragma once
 
 #include "data_store.hpp"
 
 namespace gretl {
 
-class UpstreamState;
-class DownstreamState;
+struct UpstreamState;
+struct DownstreamState;
 using UpstreamStates = std::vector<UpstreamState>;
 
-template <typename T>
+template <typename T, typename D>
 struct StateData;
 
 struct StateDataBase {
@@ -17,52 +27,52 @@ struct StateDataBase {
   StateDataBase(const StateDataBase&) = delete;
   StateDataBase& operator=(const StateDataBase&) = delete;
 
-  template <typename T>
+  template <typename T, typename D>
   T& get() const
   {
-    auto typedStateData = dynamic_cast<const StateData<T>*>(this);
+    auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
     assert(typedStateData);
     return typedStateData->get_primal();
   }
 
-  template <typename T>
-  T& get_dual() const
+  template <typename T, typename D>
+  D& get_dual() const
   {
-    auto typedStateData = dynamic_cast<const StateData<T>*>(this);
+    auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
     assert(typedStateData);
     return typedStateData->get_dual();
   }
 
-  template <typename T>
+  template <typename T, typename D>
   void set_primal(const T& t) const
   {
-    auto typedStateData = dynamic_cast<const StateData<T>*>(this);
+    auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
     assert(typedStateData);
     typedStateData->set_primal(t);
   }
 
-  template <typename T>
-  void set_primal_move(T&& t) const
+  template <typename T, typename D>
+  void move_primal(T&& t) const
   {
-    auto typedStateData = dynamic_cast<const StateData<T>*>(this);
+    auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
     assert(typedStateData);
-    typedStateData->set_primal_move(std::move(t));
+    typedStateData->move_primal(std::move(t));
   }
 
-  template <typename T>
-  void set_dual(const T& t) const
+  template <typename T, typename D>
+  void set_dual(const D& d) const
   {
-    auto typedStateData = dynamic_cast<const StateData<T>*>(this);
+    auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
     assert(typedStateData);
-    typedStateData->set_dual(t);
+    typedStateData->set_dual(d);
   }
 
-  template <typename T>
-  void set_dual(T&& t) const
+  template <typename T, typename D>
+  void move_dual(D&& d) const
   {
-    auto typedStateData = dynamic_cast<const StateData<T>*>(this);
+    auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
     assert(typedStateData);
-    typedStateData->set_dual(std::move(t));
+    typedStateData->move_dual(std::move(d));
   }
 
   virtual void evaluate() = 0;
@@ -90,7 +100,7 @@ struct StateDataBase {
   float computeCost;
   float memorySize;
 
-  friend class DataStore;
+  friend struct DataStore;
 
  protected:
   StateDataBase(DataStore& cpd, size_t step, const std::vector<StateBase>& ustreams);
