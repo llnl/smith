@@ -1,53 +1,27 @@
-// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
-// details.
-//
-// SPDX-License-Identifier: (BSD-3-Clause)
-
 #include "data_store.hpp"
 #include "state.hpp"
 #include <iostream>
 
 namespace gretl {
 
-DataStore::DataStore(size_t maxStates) : checkpoints{.cps = {}, .maxNumStates = maxStates} {}
+DataStore::DataStore(size_t maxStates) : checkpoints{.maxNumStates = maxStates} {}
 
 void DataStore::back_prop()
 {
-  currentStep = states.size() - 1;
-  while (currentStep > 0) {
-    reverse_state();
+  for (size_t n = states.size(); n > 0; --n) {
+    reverse_state(n - 1);
   }
 }
 
 void DataStore::reset()
 {
-  currentStep = 0;
-  for (size_t n = states.size() - 1; n > 0; --n) {
-    auto stateDataPtr = states[n].first.stateData;
-    // std::cout << "state data ptr = " << stateDataPtr << std::endl;
-    if (checkpoints.erase_step(n) && stateDataPtr) {
-      if (!states[n].first.stateData->persistent()) {
-        clear_measure(states[n]);
-        clear_measure_dual(states[n]);
-      }
+  for (size_t n = states.size(); n > 0; --n) {
+    if (checkpoints.erase_step(n)) {
+      clear_measure(states[n]);
+      clear_measure_dual(states[n]);
     }
   }
 }
-
-void DataStore::delete_graph()
-{
-  size_t firstComputedStep = 0;
-  for (size_t n = 0; n < states.size(); ++n) {
-    if (!states[n].first.stateData->persistent()) {
-      firstComputedStep = n;
-      break;
-    }
-  }
-  states.erase(states.begin() + static_cast<long>(firstComputedStep), states.end());
-}
-
-void DataStore::reset_for_backprop() { currentStep = states.size() - 1; }
 
 void DataStore::clear_measure(Measure& measure)
 {
@@ -85,23 +59,18 @@ bool DataStore::measure_dual_active(const Measure& measure) const
   return measure.first.stateData->dual_active();
 }
 
-StateBase DataStore::get_state() const { return states[currentStep].first; }
-
 // This function should really only be publically available for testing
 // back_prop is the desired interface
-StateBase DataStore::reverse_state()
+StateBase DataStore::reverse_state(size_t step)
 {
-  size_t step = currentStep;
   vjp_measure(states[step]);
-  if (checkpoints.erase_step(step) && !states[step].first.stateData->persistent()) {
+
+  if (checkpoints.erase_step(step)) {
     clear_measure(states[step]);
     clear_measure_dual(states[step]);
   }
 
-  if (currentStep > 0) {
-    --currentStep;
-  }
-  return get_state();
+  return states[step > 0 ? step - 1 : step].first;  // return step earlier, unless at 0
 }
 
 std::pair<bool, size_t> ghost_already_exists(const std::vector<DataStore::GhostState>& ghosts,
@@ -133,24 +102,15 @@ std::shared_ptr<StateDataBase> DataStore::add_ghost_state(const std::shared_ptr<
 
 void DataStore::add_state(StateBase& newState)
 {
-#if USE_DYNAMIC_CHECKPOINTING
   if (newState.stateData->persistent()) {
     if (!states.empty()) {
       assert(states.back().first.stateData->persistent());  // persistents must be added first
     }
   }
 
-  bool isGood = check_consistency();
-  if (!isGood) {
-    // printf("invalid a");
-    // exit(1);
-  }
+  check_consistency();
   states.emplace_back(std::make_pair(newState, std::vector<GhostState>{}));
-  isGood = check_consistency_except_last(1);
-  if (!isGood) {
-    // printf("invalid b\n");
-    // exit(2);
-  }
+  check_consistency_except_last(1);
 
   // loop over upstreams, see if they are not in last step
   // if they are not, go back and add a copy state all the way back from the upstreams
@@ -209,15 +169,10 @@ void DataStore::add_state(StateBase& newState)
   if (checkpoints.valid_checkpoint_index(nextStepToClear)) {
     assert(nextStepToClear < stateStepAdded);  // MRT this should fail with 1 less
   }
-
-#else
-  states.emplace_back(std::make_pair(newState, std::vector<GhostState>{}));
-#endif
 }
 
 void DataStore::fetch_state_data(size_t stepIndex)
 {
-#if USE_DYNAMIC_CHECKPOINTING
   // this can be called when an upstream is from a previous step
   // and it happens to not currently be a checkpoint
   // so ensure we dont lose the last known step on the forward pass
@@ -259,26 +214,15 @@ void DataStore::fetch_state_data(size_t stepIndex)
         1.0);  // this call deletes disposable state, MRT, think about cost factor estimate here?
 
     if (savingSecondToLast) {
-      bool isGood = check_consistency_except_last(2);
-      if (!isGood) {
-        // printf("invalid saving second\n");
-        // exit(1);
-      }
+      check_consistency_except_last(2);
     } else {
-      bool isGood = check_consistency();
-      if (!isGood) {
-        // printf("invalid not saving second\n");
-        // exit(1);
-      }
+      check_consistency();
     }
   }
 
   if (savingSecondToLast) {
     checkpoints.insert_checkpoint(secondToLastCp);
   }
-#else
-  states[stepIndex].first.stateData->evaluate();
-#endif
 }
 
 size_t DataStore::num_active_states() const
@@ -299,14 +243,12 @@ size_t DataStore::num_dual_states() const
   return numStates;
 }
 
-void DataStore::clear_disposable_state(UNUSED double costFactor)
+void DataStore::clear_disposable_state(double costFactor)
 {
-#if USE_DYNAMIC_CHECKPOINTING
   if (checkpoints.valid_checkpoint_index(nextStepToClear)) {
     clear_measure(states[nextStepToClear]);
   }
   nextStepToClear = checkpoints.invalidCheckpointIndex;
-#endif
 }
 
 void DataStore::print_state_info() const
@@ -320,33 +262,26 @@ void DataStore::print_state_info() const
   }
 }
 
-bool DataStore::check_consistency() const { return check_consistency_except_last(0); }
+void DataStore::check_consistency() const { check_consistency_except_last(0); }
 
-bool DataStore::check_consistency_except_last([[maybe_unused]] size_t fromBack) const
+void DataStore::check_consistency_except_last(size_t fromBack) const
 {
-#if USE_DYNAMIC_CHECKPOINTING
   for (size_t i = 0; i < states.size() - fromBack; ++i) {
     const auto& s = states[i];
     const auto& parent = s.first;
     bool cpHasState = checkpoints.contains_step(parent.step_index());
-    // assert(cpHasState == parent.stateData->primal_active());
-    if (cpHasState != parent.stateData->primal_active()) {
-      std::cout << "invalid state" << std::endl;
-      return false;
-    }
+    // EXPECT_EQ(cpHasState, parent.stateData->primal_active()) << "parent step = " << parent.step_index() << "\n" <<
+    // checkpoints << std::endl;
+    assert(cpHasState == parent.stateData->primal_active());
     for (auto& ghost : s.second) {
-      // assert(cpHasState == ghost->primal_active()); // << "parent step = " << parent.step_index() << ", ghost = " <<
+      // EXPECT_EQ(cpHasState, ghost->primal_active()) << "parent step = " << parent.step_index() << ", ghost = " <<
       // ghost->parent_step_index() << "\n" << checkpoints << std::endl;
       if (cpHasState != ghost->primal_active()) {
-        std::cout << "an error has occured" << std::endl;
         print_state_info();
-        return false;
       }
-      // assert(cpHasState == ghost->primal_active());
+      assert(cpHasState == ghost->primal_active());
     }
   }
-#endif
-  return true;
 }
 
 }  // namespace gretl

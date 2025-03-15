@@ -165,7 +165,7 @@ TEST_F(CheckpointFixture, Automated)
   reverseStates[N] = X.get();
   EXPECT_EQ(X.get_dual(), 1.0);
   for (size_t n = N; n > 0; --n) {
-    auto rev = dataStore.reverse_state();
+    auto rev = dataStore.reverse_state(n);
     reverseStates[n - 1] = rev.get<double>();
     ASSERT_NEAR(rev.get_dual<double>(), std::pow(1. / 3., (N - n + 1)), 1e-14);
   }
