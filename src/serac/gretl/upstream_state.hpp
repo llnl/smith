@@ -1,6 +1,17 @@
+// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+/**
+ * @file upstream_state.hpp
+ */
+
 #pragma once
 
-#include "state_data_base.hpp"
+#include <memory>
+#include "upstream_state.hpp"
 
 namespace gretl {
 
@@ -10,63 +21,70 @@ struct UpstreamState {
   bool valid() const { return state->primal_active(); }
   bool dual_valid() const { return state->dual_active(); }
 
-  template <typename T>
+  template <typename T, typename D = T>
   const T& get() const
   {
-    return state->template get<T>();
+    return state->template get<T, D>();
   }
-  template <typename T>
-  T& get_dual()
+  template <typename D, typename T = D>
+  D& get_dual()
   {
-    return state->template get_dual<T>();
+    return state->template get_dual<T, D>();
   }
-  template <typename T>
-  void set_dual(const T& t)
+  template <typename D, typename T = D>
+  const D& get_dual() const
   {
-    return state->set_dual(t);
+    return state->template get_dual<T, D>();
   }
-  template <typename T>
-  void set_dual(T&& t)
+  template <typename D, typename T = D>
+  void set_dual(const D& d)
   {
-    return state->set_dual(std::move(t));
+    return state->set_dual<T, D>(d);
+  }
+  template <typename D, typename T = D>
+  void move_dual(D&& d)
+  {
+    return state->move_dual<T, D>(std::move(d));
   }
 
-  friend class DataStore;
+  friend struct DataStore;
 
  private:
   std::shared_ptr<StateDataBase> state;
 };
 
 struct DownstreamState {
-  DownstreamState(StateDataBase& s) : state(s) {}
+  DownstreamState(StateDataBase& s) : stateDataBase(s) {}
 
-  bool dual_valid() const { return state.dual_active(); }
+  bool dual_valid() const { return stateDataBase.dual_active(); }
 
-  template <typename T>
+  template <typename T, typename D = T>
   void set(const T& t)
   {
-    return state.set_primal(t);
+    return stateDataBase.set_primal<T, D>(t);
   }
-  template <typename T>
-  void set(T&& t)
+  template <typename T, typename D = T>
+  void move(T&& t)
   {
-    return state.set_primal_move(std::move(t));
+    return stateDataBase.move_primal<T, D>(std::move(t));
   }
-  template <typename T>
+  // this call will give incorrect behavior if called on the forward pass.  Consider adding ConstDownStreamState type to
+  // allow this on reverse, but not forward
+  template <typename T, typename D = T>
   const T& get() const
   {
-    return state.template get<T>();
+    return stateDataBase.template get<T, D>();
   }
-  template <typename T>
-  const T& get_dual() const
+  template <typename D, typename T = D>
+  const D& get_dual() const
   {
-    return state.template get_dual<T>();
+    return stateDataBase.template get_dual<T, D>();
   }
 
-  friend class DataStore;
+  friend struct DataStore;
 
  private:
-  StateDataBase& state;
+  StateDataBase& stateDataBase;
 };
 
 }  // namespace gretl

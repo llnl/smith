@@ -1,3 +1,9 @@
+// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #include "vector_state.hpp"
 
 namespace gretl {
@@ -7,29 +13,29 @@ VectorState testing_update(const VectorState& a)
   VectorState b = a.clone({a});
 
   b.set_eval([](const UpstreamStates& upstreams, DownstreamState& downstream) {
-    const auto& a = upstreams[0];
-    auto& b = downstream;
+    const auto& a_ = upstreams[0];
+    auto& b_ = downstream;
 
-    const Vector& A = a.get<Vector>();
+    const Vector& A = a_.get<Vector>();
     size_t sz = A.size();
     Vector B(sz);
     for (size_t i = 0; i < sz; ++i) {
       B[i] = A[i] / 3.0 + 2.0;
     }
-    b.set(std::move(B));
+    b_.set(std::move(B));
 
     assert(B.size() == 0);
   });
 
   b.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
-    auto& a = upstreams[0];
-    const auto& b = downstream;
+    auto& a_ = upstreams[0];
+    const auto& b_ = downstream;
 
-    const Vector& Bbar = b.get_dual<Vector>();
+    const Vector& Bbar = b_.get_dual<Vector>();
     size_t sz = Bbar.size();
 
-    if (a.dual_valid()) {
-      Vector& Abar = a.get_dual<Vector>();
+    if (a_.dual_valid()) {
+      Vector& Abar = a_.get_dual<Vector>();
       for (size_t i = 0; i < sz; ++i) {
         Abar[i] += Bbar[i] / 3.0;
       }
@@ -38,7 +44,7 @@ VectorState testing_update(const VectorState& a)
       for (size_t i = 0; i < sz; ++i) {
         Abar[i] = Bbar[i] / 3.0;
       }
-      a.set_dual(std::move(Abar));
+      a_.set_dual(std::move(Abar));
 
       assert(Abar.size() == 0);
     }
@@ -52,10 +58,10 @@ VectorState operator+(const VectorState& a, const VectorState& b)
   VectorState c = a.clone({a, b});
 
   c.set_eval([](const UpstreamStates& upstreams, DownstreamState& downstream) {
-    auto a = upstreams[0];
-    auto b = upstreams[1];
-    Vector C = a.get<Vector>();  // copy from a
-    const Vector& B = b.get<Vector>();
+    auto a_ = upstreams[0];
+    auto b_ = upstreams[1];
+    Vector C = a_.get<Vector>();  // copy from a
+    const Vector& B = b_.get<Vector>();
     size_t sz = C.size();
     for (size_t i = 0; i < sz; ++i) {
       C[i] += B[i];
@@ -65,25 +71,25 @@ VectorState operator+(const VectorState& a, const VectorState& b)
 
   c.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
     const Vector& Cbar = downstream.get_dual<Vector>();
-    auto a = upstreams[0];
-    auto b = upstreams[1];
+    auto a_ = upstreams[0];
+    auto b_ = upstreams[1];
 
-    if (a.dual_valid()) {
-      Vector& Abar = a.get_dual<Vector>();
+    if (a_.dual_valid()) {
+      Vector& Abar = a_.get_dual<Vector>();
       for (size_t i = 0; i < Abar.size(); ++i) {
         Abar[i] += Cbar[i];
       }
     } else {
-      a.set_dual(Cbar);
+      a_.set_dual(Cbar);
     }
 
-    if (b.dual_valid()) {
-      Vector& Bbar = b.get_dual<Vector>();
+    if (b_.dual_valid()) {
+      Vector& Bbar = b_.get_dual<Vector>();
       for (size_t i = 0; i < Bbar.size(); ++i) {
         Bbar[i] += Cbar[i];
       }
     } else {
-      b.set_dual(Cbar);
+      b_.set_dual(Cbar);
     }
   });
 
@@ -104,9 +110,9 @@ VectorState operator*(const VectorState& a, double b)
 
   c.set_vjp([b](UpstreamStates& upstreams, const DownstreamState& downstream) {
     const Vector& Cbar = downstream.get_dual<Vector>();
-    auto& a = upstreams[0];
-    if (a.dual_valid()) {
-      Vector& Abar = a.get_dual<Vector>();
+    auto& a_ = upstreams[0];
+    if (a_.dual_valid()) {
+      Vector& Abar = a_.get_dual<Vector>();
       for (size_t i = 0; i < Abar.size(); ++i) {
         Abar[i] += b * Cbar[i];
       }
@@ -115,7 +121,7 @@ VectorState operator*(const VectorState& a, double b)
       for (auto&& v : Abar) {
         v *= b;
       }
-      a.set_dual(std::move(Abar));
+      a_.set_dual(std::move(Abar));
     }
   });
 
@@ -142,15 +148,15 @@ State<double> inner_product(const VectorState& a, const VectorState& b)
   c.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
     double Cbar = downstream.get_dual<double>();
 
-    auto& a = upstreams[0];
-    auto& b = upstreams[1];
+    auto& a_ = upstreams[0];
+    auto& b_ = upstreams[1];
 
-    const Vector& A = a.get<Vector>();
-    const Vector& B = b.get<Vector>();
+    const Vector& A = a_.get<Vector>();
+    const Vector& B = b_.get<Vector>();
     size_t sz = get_same_size<double>({&A, &B});
 
-    if (a.dual_valid()) {
-      Vector& Abar = a.get_dual<Vector>();
+    if (a_.dual_valid()) {
+      Vector& Abar = a_.get_dual<Vector>();
       for (size_t i = 0; i < sz; ++i) {
         Abar[i] += B[i] * Cbar;
       }
@@ -159,12 +165,12 @@ State<double> inner_product(const VectorState& a, const VectorState& b)
       for (size_t i = 0; i < sz; ++i) {
         Abar[i] = B[i] * Cbar;
       }
-      a.set_dual(std::move(Abar));
+      a_.set_dual(std::move(Abar));
       assert(Abar.empty());
     }
 
-    if (b.dual_valid()) {
-      Vector& Bbar = b.get_dual<Vector>();
+    if (b_.dual_valid()) {
+      Vector& Bbar = b_.get_dual<Vector>();
       for (size_t i = 0; i < sz; ++i) {
         Bbar[i] += A[i] * Cbar;
       }
@@ -173,7 +179,7 @@ State<double> inner_product(const VectorState& a, const VectorState& b)
       for (size_t i = 0; i < sz; ++i) {
         Bbar[i] = A[i] * Cbar;
       }
-      b.set_dual(std::move(Bbar));
+      b_.set_dual(std::move(Bbar));
       assert(Bbar.empty());
     }
   });
@@ -190,14 +196,14 @@ VectorState copy(const VectorState& a)
 
   b.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
     const Vector& Bbar = downstream.get_dual<Vector>();
-    auto& a = upstreams[0];
-    if (a.dual_valid()) {
-      Vector& Abar = a.get_dual<Vector>();
+    auto& a_ = upstreams[0];
+    if (a_.dual_valid()) {
+      Vector& Abar = a_.get_dual<Vector>();
       for (size_t i = 0; i < Abar.size(); ++i) {
         Abar[i] += Bbar[i];
       }
     } else {
-      a.set_dual(Bbar);
+      a_.set_dual(Bbar);
     }
   });
 

@@ -1,8 +1,20 @@
+// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+/**
+ * @file upstream_state.hpp
+ */
+
 #pragma once
 
+#include <vector>
 #include "state.hpp"
 
 namespace gretl {
+
 using Vector = std::vector<double>;
 using VectorState = State<Vector>;
 
@@ -26,7 +38,7 @@ template <typename T>
 size_t get_same_size(const std::vector<const std::vector<T>*>& vs)
 {
   size_t size = vs[0]->size();
-  for (int n = 1; n < vs.size(); ++n) {
+  for (size_t n = 1; n < vs.size(); ++n) {
     assert(size == vs[n]->size());
   }
   return size;

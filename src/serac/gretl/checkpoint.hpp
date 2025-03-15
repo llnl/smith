@@ -54,7 +54,7 @@ struct CheckpointManager {
   // 2. it determines if a checkpoint needs to be removed
   // 3. if a checkpoint needs to be removed, it returns the index for that checkpoint
   // 4. otherwise, it returns zero
-  size_t add_checkpoint_and_get_index_to_remove(size_t step, bool persistent = false, double relativeCost = 1.0)
+  size_t add_checkpoint_and_get_index_to_remove(size_t step, bool persistent = false)
   {
     size_t levelupAmount = 1;  //= relativeCost >= 2.0 ? 3 : 1;
 

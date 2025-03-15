@@ -13,6 +13,7 @@
 #include "gtest/gtest.h"
 #include "serac/gretl/checkpoint.hpp"
 #include "serac/gretl/state.hpp"
+#include "serac/gretl/vector_state.hpp"
 #include "serac/gretl/data_store_for_testing.hpp"
 
 static constexpr size_t numParams = 4;
@@ -37,7 +38,7 @@ State rk4(const State& state0, double time, double dt, std::function<State(State
   return state3 + tau * k4;
 }
 
-State state_rate_equation(const State& state, const Param& params, UNUSED double time)
+State state_rate_equation(const State& state, const Param& params, [[maybe_unused]] double time)
 {
   auto newState = state.clone(std::vector<gretl::StateBase>{state, params});
 
