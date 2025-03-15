@@ -1,13 +1,3 @@
-// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
-// details.
-//
-// SPDX-License-Identifier: (BSD-3-Clause)
-
-/**
- * @file state_base.hpp
- */
-
 #pragma once
 
 #include <vector>
@@ -21,77 +11,74 @@ struct StateBase {
   StateBase& operator=(const StateBase&) = default;
   virtual ~StateBase() = default;
 
-  template <typename T, typename D = T>
+  template <typename T>
   const T& get() const
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
+    auto typedStateData = std::dynamic_pointer_cast<StateData<T>>(stateData);
     assert(typedStateData);
     return typedStateData->get_primal();
   }
 
-  template <typename D, typename T = D>
-  const D& get_dual() const
+  template <typename T>
+  const T& get_dual() const
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
+    auto typedStateData = std::dynamic_pointer_cast<StateData<T>>(stateData);
     assert(typedStateData);
     return typedStateData->get_dual();
   }
 
-  template <typename T, typename D = T>
+  template <typename T>
   void set(const T& t)
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
+    auto typedStateData = std::dynamic_pointer_cast<StateData<T>>(stateData);
     assert(typedStateData);
     typedStateData->set(t);
   }
 
-  template <typename T, typename D = T>
+  template <typename T>
   void set(T&& t)
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
+    auto typedStateData = std::dynamic_pointer_cast<StateData<T>>(stateData);
     assert(typedStateData);
     typedStateData->set(std::move(t));
   }
 
-  template <typename D, typename T = D>
-  void set_dual(const D& d)
+  template <typename T>
+  void set_dual(const T& t)
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
+    auto typedStateData = std::dynamic_pointer_cast<StateData<T>>(stateData);
     assert(typedStateData);
-    typedStateData->set_dual(d);
+    typedStateData->set_dual(t);
   }
 
-  template <typename D, typename T = D>
-  void set_dual(D&& d)
+  template <typename T>
+  void set_dual(T&& t)
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
+    auto typedStateData = std::dynamic_pointer_cast<StateData<T>>(stateData);
     assert(typedStateData);
-    typedStateData->set_dual(std::move(d));
+    typedStateData->set_dual(std::move(t));
   }
 
-  template <typename T, typename D, typename ZeroCopyT>
-  State<T, D> create_state(const std::vector<StateBase>& upstreams, const ZeroCopyT zero_clone)
+  template <typename T, typename ZeroCopyT>
+  State<T> create_state(const std::vector<StateBase>& upstreams, const ZeroCopyT zero_clone)
   {
-    return stateData->dataStore.create_empty_state<T, D>(zero_clone, upstreams);
+    return stateData->dataStore.create_empty_state(zero_clone, upstreams);
   }
 
-  template <typename T, typename D = T>
-  State<T, D> create_state(const std::vector<StateBase>& upstreams) const
+  template <typename S>
+  State<S> create_state(const std::vector<StateBase>& upstreams) const
   {
-    auto zero_clone = [](const T&) -> T { return T(); };
-    return stateData->dataStore.create_empty_state<T, D>(zero_clone, upstreams);
+    auto zero_clone = [](const S&) -> S { return S(); };
+    return stateData->dataStore.create_empty_state<S>(zero_clone, upstreams);
   }
 
-  const StateDataBase* data() const { return stateData.get(); }
-
-  void clear_dual();
-
-  friend struct DataStore;
-  friend struct StateDataBase;
+  friend class DataStore;
+  friend class StateDataBase;
 
  protected:
   size_t step_index() const;
   void clear();
+  void clear_dual();
 
   void evaluate_and_remove_disposable(double costFactor);
   void evaluate_vjp();
