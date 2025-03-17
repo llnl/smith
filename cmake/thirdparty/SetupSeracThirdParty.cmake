@@ -204,11 +204,8 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
                                     DIR_VARIABLE MFEM_DIR)
 
         if (SERAC_ENABLE_HIP AND STRUMPACK_DIR)
-            find_package(rocblas REQUIRED)
-            target_link_libraries(mfem INTERFACE roc::rocblas)
-
-            find_package(rocsolver REQUIRED)
-            target_link_libraries(mfem INTERFACE roc::rocsolver)
+            string(APPEND MFEM_LIBRARIES " -lrocblas -lrocsolver")
+            target_link_libraries(mfem INTERFACE rocblas rocsolver)
         endif()
     else()
         message(STATUS "Using MFEM submodule")
