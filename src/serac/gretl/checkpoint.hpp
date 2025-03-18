@@ -5,6 +5,7 @@
 #include <ostream>
 #include <iostream>
 #include <cassert>
+#include <limits>
 
 namespace gretl {
 
