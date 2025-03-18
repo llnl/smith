@@ -117,8 +117,8 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto h = a + 3 * c;
   auto f = c * g;
 
-  for (int j=0; j < 7; ++j) {
-    for (int i=0; i < 13; ++i) {
+  for (int j = 0; j < 7; ++j) {
+    for (int i = 0; i < 13; ++i) {
       auto tmp = h + g;
       g = a * tmp;
       h = f + g;
