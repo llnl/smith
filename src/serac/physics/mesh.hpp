@@ -7,7 +7,7 @@
 /**
  * @file mesh.hpp
  *
- * @brief Serac mesh class which assists in constructing the appropriate parallel mfem meshes 
+ * @brief Serac mesh class which assists in constructing the appropriate parallel mfem meshes
  * and registering and accessing Domains for use in serac::Functional operations
  */
 #pragma once
