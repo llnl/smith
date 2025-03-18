@@ -133,9 +133,8 @@ TEST(Graph, LargeNonlinearGraphGradients)
 
   dataStore.back_prop();
 
-  double constexpr eps = 1e-6;
-  gretl::check_array_gradients(qoi, a, dataStore, eps, 400 * eps * std::abs(qoi.get()));
-  gretl::check_array_gradients(qoi, b, dataStore, eps, 100 * eps * std::abs(qoi.get()));
-  gretl::check_array_gradients(qoi, c, dataStore, eps, 100 * eps * std::abs(qoi.get()));
-
+  double constexpr eps = 1e-7;
+  gretl::check_array_gradients(qoi, a, dataStore, eps, 800 * eps);
+  gretl::check_array_gradients(qoi, b, dataStore, eps, 100 * eps);
+  gretl::check_array_gradients(qoi, c, dataStore, eps, 100 * eps);
 }
