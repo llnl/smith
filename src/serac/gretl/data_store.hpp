@@ -15,25 +15,23 @@ struct State;
 struct StateDataBase;
 
 template <typename T, typename D>
-using ZeroClone = std::function<D(const T&)>;
+using InitializeZeroDual = std::function<D(const T&)>;
+
+
+template <typename T>
+struct defaultInitializeZeroDual {
+  T operator()(const T&) { return T(0.0); }
+};
 
 struct DataStore {
   DataStore(size_t maxStates);
   virtual ~DataStore() {}
 
   // create a new state in the graph, store it, return it
-  template <typename T, typename D=T>
-  State<T, D> create_state(const T& t)
+  template <typename T, typename D=T, typename InitDualFromValue>
+  State<T, D> create_state(const T& t, InitDualFromValue initial_zero_dual)
   {
-    auto zero_clone = [](const T&) -> D { return D(); };
-    return create_state<T, D, decltype(zero_clone)>(t, zero_clone);
-  }
-
-  // create a new state in the graph, store it, return it
-  template <typename T, typename D=T, typename ZeroCloneFromT>
-  State<T, D> create_state(const T& t, ZeroCloneFromT zero_clone)
-  {
-    State<T, D> newState(*this, t, states.size(), zero_clone, {});
+    State<T, D> newState(*this, t, states.size(), initial_zero_dual, {});
     add_state(newState);
     return newState;
   }
@@ -64,11 +62,11 @@ struct DataStore {
 
  protected:
   // create a new state in the graph, store it, return it
-  template <typename T, typename D, typename ZeroCloneFromT>
-  State<T, D> create_empty_state(ZeroCloneFromT zero_clone, const std::vector<StateBase>& upstreams)
+  template <typename T, typename D, typename InitDualFromValue>
+  State<T, D> create_empty_state(InitDualFromValue initial_zero_dual, const std::vector<StateBase>& upstreams)
   {
     assert(!upstreams.empty());
-    State<T,D> newState(*this, states.size(), zero_clone, upstreams);
+    State<T,D> newState(*this, states.size(), initial_zero_dual, upstreams);
     add_state(newState);
     return newState;
   }

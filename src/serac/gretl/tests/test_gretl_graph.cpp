@@ -34,9 +34,9 @@ TEST(Graph, NonlinearGraphGradients)
 
   gretl::DataStore dataStore(3);
 
-  auto a = dataStore.create_state(dataA, gretl::vec::zero_clone());
-  auto b = dataStore.create_state(dataB, gretl::vec::zero_clone());
-  auto z = dataStore.create_state(dataZ, gretl::vec::zero_clone());
+  auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual());
+  auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual());
+  auto z = dataStore.create_state(dataZ, gretl::vec::initialize_zero_dual());
   auto c = a + b;      // a + b
   auto d = c + c + b;  // 2a + 3b
   auto e = c + d;      // 3a + 4b
@@ -84,7 +84,7 @@ TEST(Graph, Linear_Gradients)
 
   gretl::DataStore dataStore(6);
 
-  auto initial = dataStore.create_state(dataA, gretl::vec::zero_clone());
+  auto initial = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual());
   auto a = gretl::copy(initial);
 
   int N = 3;
@@ -99,4 +99,56 @@ TEST(Graph, Linear_Gradients)
   EXPECT_EQ(initial.get()[1], dataA[1]);
   EXPECT_NEAR(initial.get_dual()[0], std::pow(1. / 3., N), 1e-14);
   EXPECT_NEAR(initial.get_dual()[1], 0.0, 1e-14);
+}
+
+TEST(Graph, LargeNonlinearGraphGradients)
+{
+  std::vector<double> dataA = {1.3, 3.5};
+  std::vector<double> dataB = {1.7, 1.1};
+  std::vector<double> dataZ = {-0.7, 3.1};
+
+  gretl::DataStore dataStore(3);
+
+  auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual());
+  auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual());
+  auto z = dataStore.create_state(dataZ, gretl::vec::initialize_zero_dual());
+  auto c = a + b;      // a + b
+  auto d = c + c + b;  // 2a + 3b
+  auto e = c + d;      // 3a + 4b
+  auto g = d + c;      // 3a + 4b
+  auto h = g + c;      // 4a + 5b  // completely unused
+  h = a + d;           // 3a + 3b
+  g = c + d;           // 3a + 4b
+  h = h + a;           // 4a + 3b
+  e = e + g;           // 6a + 8b
+  h = a + e;           // 7a + 8b
+  e = d + e;           // 8a + 11b
+  e = z + e;
+
+  for (size_t i = 0; i < 2; ++i) {
+    EXPECT_NEAR(g.get()[i], 3 * dataA[i] + 4 * dataB[i], 1e-14);
+  }
+
+  for (size_t i = 0; i < 2; ++i) {
+    EXPECT_NEAR(e.get()[i], 8 * dataA[i] + 11 * dataB[i] + dataZ[i], 1e-14);
+  }
+
+  auto f = gretl::inner_product(e, g);  // 3a+4b dot (8a+11b+z)
+  // da = 3 * (8*a + 11*b + z) + 8 * (3a+4b)
+  // db = 4 * (8*a + 11*b + z) + 11 * (3a+4b)
+  double fFirstTime = f.get();
+  f.set_dual(1);
+
+  dataStore.back_prop();
+
+  for (int i = 0; i < 2; ++i) {
+    double A = a.get()[i];
+    double B = b.get()[i];
+    double Z = z.get()[i];
+    ASSERT_NEAR(a.get_dual()[i], 3 * (8 * A + 11 * B + Z) + 8 * (3 * A + 4 * B), 1e-13);
+    ASSERT_NEAR(b.get_dual()[i], 4 * (8 * A + 11 * B + Z) + 11 * (3 * A + 4 * B), 1e-13);
+    ASSERT_NEAR(z.get_dual()[i], 3 * A + 4 * B, 1e-13);
+  }
+
+  ASSERT_EQ(fFirstTime, f.get());
 }

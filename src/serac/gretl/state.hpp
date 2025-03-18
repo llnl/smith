@@ -54,16 +54,16 @@ struct State : public StateBase {
   friend struct DataStore;
 
  protected:
-  template <typename ZeroCloneFromT>
-  State(DataStore& store, const T& t, size_t step, ZeroCloneFromT zero_clone, const std::vector<StateBase>& ustreams)
+  template <typename InitDualFromValue>
+  State(DataStore& store, const T& t, size_t step, InitDualFromValue initialize_zero_dual, const std::vector<StateBase>& ustreams)
   {
-    stateData = std::make_shared<StateData<T, D>>(store, t, step, zero_clone, ustreams);
+    stateData = std::make_shared<StateData<T, D>>(store, t, step, initialize_zero_dual, ustreams);
   }
 
-  template <typename ZeroCloneFromT>
-  State(DataStore& store, size_t step, ZeroCloneFromT zero_clone, const std::vector<StateBase>& ustreams)
+  template <typename InitDualFromValue>
+  State(DataStore& store, size_t step, InitDualFromValue initialize_zero_dual, const std::vector<StateBase>& ustreams)
   {
-    stateData = std::make_shared<StateData<T, D>>(store, step, zero_clone, ustreams);
+    stateData = std::make_shared<StateData<T, D>>(store, step, initialize_zero_dual, ustreams);
   }
 
   StateData<T, D>& get_data() const
