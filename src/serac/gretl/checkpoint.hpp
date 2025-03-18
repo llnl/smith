@@ -154,7 +154,7 @@ template <typename T>
 T advance_and_reverse_steps(size_t numSteps, size_t storageSize, T x, std::function<T(size_t n, const T&)> update_func,
                             std::function<void(size_t n, const T&)> reverse_callback)
 {
-  gretl::CheckpointManager cps{.maxNumStates = storageSize};
+  gretl::CheckpointManager cps{.maxNumStates = storageSize, .cps{}};
   std::map<size_t, T> savedCps;
   savedCps[0] = x;
 

@@ -9,14 +9,13 @@ namespace gretl {
 static constexpr bool debugPrint = false;
 
 struct StateBase;
-template <typename T, typename D=T>
+template <typename T, typename D = T>
 struct State;
 
 struct StateDataBase;
 
 template <typename T, typename D>
 using InitializeZeroDual = std::function<D(const T&)>;
-
 
 template <typename T>
 struct defaultInitializeZeroDual {
@@ -28,7 +27,7 @@ struct DataStore {
   virtual ~DataStore() {}
 
   // create a new state in the graph, store it, return it
-  template <typename T, typename D=T, typename InitDualFromValue>
+  template <typename T, typename D = T, typename InitDualFromValue>
   State<T, D> create_state(const T& t, InitDualFromValue initial_zero_dual)
   {
     State<T, D> newState(*this, t, states.size(), initial_zero_dual, {});
@@ -66,7 +65,7 @@ struct DataStore {
   State<T, D> create_empty_state(InitDualFromValue initial_zero_dual, const std::vector<StateBase>& upstreams)
   {
     assert(!upstreams.empty());
-    State<T,D> newState(*this, states.size(), initial_zero_dual, upstreams);
+    State<T, D> newState(*this, states.size(), initial_zero_dual, upstreams);
     add_state(newState);
     return newState;
   }
@@ -75,7 +74,7 @@ struct DataStore {
   void fetch_state_data(size_t stepIndex);
 
   // recompute primary state at the specificied step
-  void clear_disposable_state(double costFactor);
+  void clear_disposable_state();
 
   // reverse back a single state, updating the duals along the way
   StateBase virtual reverse_state(size_t);

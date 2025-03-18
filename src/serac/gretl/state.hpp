@@ -45,9 +45,9 @@ struct State : public StateBase {
     get_data().vjp = v;
   }
 
-  State<T, D> finalize(double costFactor = 1.0)
+  State<T, D> finalize()
   {
-    this->evaluate_and_remove_disposable(costFactor);
+    this->evaluate_and_remove_disposable();
     return *this;
   }
 
@@ -55,7 +55,8 @@ struct State : public StateBase {
 
  protected:
   template <typename InitDualFromValue>
-  State(DataStore& store, const T& t, size_t step, InitDualFromValue initialize_zero_dual, const std::vector<StateBase>& ustreams)
+  State(DataStore& store, const T& t, size_t step, InitDualFromValue initialize_zero_dual,
+        const std::vector<StateBase>& ustreams)
   {
     stateData = std::make_shared<StateData<T, D>>(store, t, step, initialize_zero_dual, ustreams);
   }

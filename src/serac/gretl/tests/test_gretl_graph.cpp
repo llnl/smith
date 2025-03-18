@@ -66,7 +66,7 @@ TEST(Graph, NonlinearGraphGradients)
 
   dataStore.back_prop();
 
-  for (int i = 0; i < 2; ++i) {
+  for (size_t i = 0; i < 2; ++i) {
     double A = a.get()[i];
     double B = b.get()[i];
     double Z = z.get()[i];
@@ -141,7 +141,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
 
   dataStore.back_prop();
 
-  for (int i = 0; i < 2; ++i) {
+  for (size_t i = 0; i < 2; ++i) {
     double A = a.get()[i];
     double B = b.get()[i];
     double Z = z.get()[i];
