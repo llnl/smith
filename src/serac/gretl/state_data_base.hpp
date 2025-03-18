@@ -97,9 +97,6 @@ struct StateDataBase {
   DataStore& dataStore;
   UpstreamStates upstreams;
 
-  float computeCost;
-  float memorySize;
-
   friend struct DataStore;
 
  protected:

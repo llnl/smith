@@ -39,16 +39,16 @@ struct StateData : public StateDataBase {
     vjp(this->upstreams, DownstreamState(*this));
   }
 
-  State<T,D> clone(const std::vector<StateBase>& upstreams) const
+  State<T, D> clone(const std::vector<StateBase>& upstreams) const
   {
-    return dataStore.create_empty_state<T,D>(initialize_zero_dual, upstreams);
+    return dataStore.create_empty_state<T, D>(initialize_zero_dual, upstreams);
   }
 
-  std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)> eval =
-      [](const UpstreamStates&, DownstreamState&) {};
+  std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)> eval = [](const UpstreamStates&,
+                                                                                              DownstreamState&) {};
 
-  std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)> vjp =
-      [](UpstreamStates&, const DownstreamState&) {};
+  std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)> vjp = [](UpstreamStates&,
+                                                                                             const DownstreamState&) {};
 
   virtual T& get_primal() const
   {
@@ -82,12 +82,13 @@ struct StateData : public StateDataBase {
 
   virtual bool dual_active() const override { return d != nullptr; }
 
-  StateData(DataStore& cpd, size_t step, const InitializeZeroDual<T,D>& zc, const std::vector<StateBase>& ustreams)
+  StateData(DataStore& cpd, size_t step, const InitializeZeroDual<T, D>& zc, const std::vector<StateBase>& ustreams)
       : StateDataBase(cpd, step, ustreams), p(nullptr), d(nullptr), initialize_zero_dual(zc)
   {
   }
 
-  StateData(DataStore& cpd, const T& t, size_t step, const InitializeZeroDual<T,D>& zc, const std::vector<StateBase>& ustreams)
+  StateData(DataStore& cpd, const T& t, size_t step, const InitializeZeroDual<T, D>& zc,
+            const std::vector<StateBase>& ustreams)
       : StateData(cpd, step, zc, ustreams)
   {
     p = std::make_shared<T>(t);
@@ -103,59 +104,59 @@ struct StateData : public StateDataBase {
     assert(lastGhost->stepIndex >= parentGhost->stepIndex);
     assert(step > parentGhost->stepIndex);
     assert(step == lastGhost->stepIndex + 1);
-    auto ghostState = std::make_shared<GhostStateData<T,D>>(dataStore, step, initialize_zero_dual, parentGhost, lastGhost);
+    auto ghostState =
+        std::make_shared<GhostStateData<T, D>>(dataStore, step, initialize_zero_dual, parentGhost, lastGhost);
     return ghostState;
   }
 
  protected:
-  InitializeZeroDual<T,D> initialize_zero_dual;
   mutable std::shared_ptr<T> p;
-
- private:
   mutable std::unique_ptr<D> d;
+  InitializeZeroDual<T, D> initialize_zero_dual;
 };
 
-template <typename T,typename D>
+template <typename T, typename D>
 struct GhostEvalFunctor {
-  void operator()(const UpstreamStates& upstreams, DownstreamState& downstream)
+  void operator()(const UpstreamStates&, DownstreamState&)
   {
     assert(lastGhost->primal_ptr());
     assert(!nextGhost.primal_ptr());
     nextGhost.primal_ptr() = lastGhost->primal_ptr();
   }
 
-  std::shared_ptr<StateData<T,D>> lastGhost;
-  GhostStateData<T,D>& nextGhost;
+  std::shared_ptr<StateData<T, D>> lastGhost;
+  GhostStateData<T, D>& nextGhost;
 };
 
 template <typename T, typename D>
-struct GhostStateData : public StateData<T,D> {
+struct GhostStateData : public StateData<T, D> {
   template <typename InitDualFromValue>
-  GhostStateData(DataStore& store, size_t step, InitDualFromValue initialize_zero_dual, const std::shared_ptr<StateDataBase>& pGhost,
-                 const std::shared_ptr<StateDataBase>& lGhost)
-      : StateData<T,D>(store, step, initialize_zero_dual, {}), parentGhost(std::dynamic_pointer_cast<StateData<T,D>>(pGhost))
+  GhostStateData(DataStore& store, size_t step, InitDualFromValue initialize_zero_dual,
+                 const std::shared_ptr<StateDataBase>& pGhost, const std::shared_ptr<StateDataBase>& lGhost)
+      : StateData<T, D>(store, step, initialize_zero_dual, {}),
+        parentGhost(std::dynamic_pointer_cast<StateData<T, D>>(pGhost))
   {
-    std::shared_ptr<StateData<T,D>> lastGhost = std::dynamic_pointer_cast<StateData<T,D>>(lGhost);
-    GhostEvalFunctor<T,D> ghostEval{.lastGhost = lastGhost, .nextGhost = *this};
+    std::shared_ptr<StateData<T, D>> lastGhost = std::dynamic_pointer_cast<StateData<T, D>>(lGhost);
+    GhostEvalFunctor<T, D> ghostEval{.lastGhost = lastGhost, .nextGhost = *this};
 
     this->eval = ghostEval;
-    this->vjp = [](UpstreamStates& upstreams, const DownstreamState& downstream) {};
+    this->vjp = [](UpstreamStates&, const DownstreamState&) {};
 
     assert(!this->primal_active());
     DownstreamState ds(*this);
     this->eval(this->upstreams, ds);
   }
 
-  T& get_primal() const override { return StateData<T,D>::get_primal(); }
+  T& get_primal() const override { return StateData<T, D>::get_primal(); }
 
   D& get_dual() const override { return parentGhost->get_dual(); }
 
-  void set_primal(const T& t) const override
+  void set_primal(const T&) const override
   {
     assert(false);  // should never be setting upstream primals, ghosts can only ever be upstreams
   }
 
-  void set_primal_move(T&& t) const override
+  void set_primal_move(T&&) const override
   {
     assert(false);  // should never be setting upstream primals, ghosts can only ever be upstreams
   }
@@ -178,7 +179,7 @@ struct GhostStateData : public StateData<T,D> {
   {
     if (debugPrint)
       printf("clearing ghost primal at step = %zu, parent = %zu\n", this->stepIndex, parentGhost->stepIndex);
-    StateData<T,D>::clear_primal();
+    StateData<T, D>::clear_primal();
   }
 
   void clear_dual() override
@@ -189,7 +190,7 @@ struct GhostStateData : public StateData<T,D> {
   size_t parent_step_index() const override { return parentGhost->step_index(); }
 
  protected:
-  std::shared_ptr<StateData<T,D>> parentGhost;
+  std::shared_ptr<StateData<T, D>> parentGhost;
 };
 
 }  // namespace gretl

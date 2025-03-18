@@ -4,7 +4,7 @@
 
 namespace gretl {
 
-DataStore::DataStore(size_t maxStates) : checkpoints{.maxNumStates = maxStates} {}
+DataStore::DataStore(size_t maxStates) : checkpoints{.maxNumStates = maxStates, .cps{}} {}
 
 void DataStore::back_prop()
 {
@@ -210,8 +210,8 @@ void DataStore::fetch_state_data(size_t stepIndex)
     for (auto&& subState : measure.second) {
       subState->evaluate();
     }
-    measure.first.evaluate_and_remove_disposable(
-        1.0);  // this call deletes disposable state, MRT, think about cost factor estimate here?
+    measure.first.evaluate_and_remove_disposable();  // this call deletes disposable state, MRT, think about cost factor
+                                                     // estimate here?
 
     if (savingSecondToLast) {
       check_consistency_except_last(2);
@@ -243,7 +243,7 @@ size_t DataStore::num_dual_states() const
   return numStates;
 }
 
-void DataStore::clear_disposable_state(double costFactor)
+void DataStore::clear_disposable_state()
 {
   if (checkpoints.valid_checkpoint_index(nextStepToClear)) {
     clear_measure(states[nextStepToClear]);

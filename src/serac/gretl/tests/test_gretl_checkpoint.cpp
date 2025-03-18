@@ -42,7 +42,7 @@ TEST_F(CheckpointFixture, Procedural)
   std::vector<double> states = get_full_state_hist(x0);
   std::vector<double> reverseStates(N + 1);
 
-  gretl::CheckpointManager checkpointManager{.cps = {}, .maxNumStates = S};
+  gretl::CheckpointManager checkpointManager{.maxNumStates = S, .cps{}};
   std::map<size_t, double> savedCheckpoints;
 
   savedCheckpoints[0] = x0;

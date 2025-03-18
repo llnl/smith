@@ -8,10 +8,10 @@
 
 namespace gretl {
 
-void StateBase::evaluate_and_remove_disposable(double costFactor)
+void StateBase::evaluate_and_remove_disposable()
 {
   stateData->evaluate();  // eventually could adjust cost factor by timing this?
-  stateData->dataStore.clear_disposable_state(costFactor);
+  stateData->dataStore.clear_disposable_state();
 }
 
 void StateBase::evaluate_vjp() { stateData->evaluate_vjp(); }

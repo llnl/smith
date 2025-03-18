@@ -25,6 +25,8 @@ VectorState copy(const VectorState& a);
 VectorState operator+(const VectorState& a, const VectorState& b);
 VectorState operator*(const VectorState& a, double b);
 VectorState operator*(double b, const VectorState& a);
+VectorState operator*(const VectorState& a, const VectorState& b);
+// VectorState operator/(const VectorState& a, const VectorState& b);
 
 State<double> inner_product(const VectorState& a, const VectorState& b);
 

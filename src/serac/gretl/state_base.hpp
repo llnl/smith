@@ -93,7 +93,7 @@ struct StateBase {
   size_t step_index() const;
   void clear();
 
-  void evaluate_and_remove_disposable(double costFactor);
+  void evaluate_and_remove_disposable();
   void evaluate_vjp();
 
   std::shared_ptr<StateDataBase> stateData;
