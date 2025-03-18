@@ -70,16 +70,16 @@ struct StateBase {
   }
 
   template <typename T, typename D, typename ZeroCopyT>
-  State<T, D> create_state(const std::vector<StateBase>& upstreams, const ZeroCopyT zero_clone)
+  State<T, D> create_state(const std::vector<StateBase>& upstreams, const ZeroCopyT initialize_zero_dual)
   {
-    return stateData->dataStore.create_empty_state<T, D>(zero_clone, upstreams);
+    return stateData->dataStore.create_empty_state<T, D>(initialize_zero_dual, upstreams);
   }
 
   template <typename T, typename D = T>
   State<T, D> create_state(const std::vector<StateBase>& upstreams) const
   {
-    auto zero_clone = [](const T&) -> T { return T(); };
-    return stateData->dataStore.create_empty_state<T, D>(zero_clone, upstreams);
+    auto initialize_zero_dual = [](const T&) -> T { return T(); };
+    return stateData->dataStore.create_empty_state<T, D>(initialize_zero_dual, upstreams);
   }
 
   const StateDataBase* data() const { return stateData.get(); }

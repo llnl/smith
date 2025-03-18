@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "vector_state.hpp"
+#include <iostream>
 
 namespace gretl {
 
@@ -155,32 +156,15 @@ State<double> inner_product(const VectorState& a, const VectorState& b)
     const Vector& B = b_.get<Vector>();
     size_t sz = get_same_size<double>({&A, &B});
 
-    if (a_.dual_valid()) {
-      Vector& Abar = a_.get_dual<Vector>();
-      for (size_t i = 0; i < sz; ++i) {
-        Abar[i] += B[i] * Cbar;
-      }
-    } else {
-      Vector Abar(sz);
-      for (size_t i = 0; i < sz; ++i) {
-        Abar[i] = B[i] * Cbar;
-      }
-      a_.set_dual(std::move(Abar));
-      assert(Abar.empty());
+    Vector& Abar = a_.get_dual<Vector>();
+    std::cout << "sizes = " << Abar.size() << " " << a_.get<Vector>().size() << std::endl;
+    for (size_t i = 0; i < sz; ++i) {
+      Abar[i] += B[i] * Cbar;
     }
 
-    if (b_.dual_valid()) {
-      Vector& Bbar = b_.get_dual<Vector>();
-      for (size_t i = 0; i < sz; ++i) {
-        Bbar[i] += A[i] * Cbar;
-      }
-    } else {
-      Vector Bbar(sz);
-      for (size_t i = 0; i < sz; ++i) {
-        Bbar[i] = A[i] * Cbar;
-      }
-      b_.set_dual(std::move(Bbar));
-      assert(Bbar.empty());
+    Vector& Bbar = b_.get_dual<Vector>();
+    for (size_t i = 0; i < sz; ++i) {
+      Bbar[i] += A[i] * Cbar;
     }
   });
 
@@ -211,7 +195,9 @@ VectorState copy(const VectorState& a)
 }
 
 namespace vec {
-Vector zero_clone::operator()(const Vector& from) { return Vector(from.size(), 0.0); }
+Vector initialize_zero_dual::operator()(const Vector& from) {
+  return Vector(from.size(), 0.0); 
+}
 };  // namespace vec
 
 }  // namespace gretl

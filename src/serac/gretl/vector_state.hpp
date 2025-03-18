@@ -29,7 +29,7 @@ VectorState operator*(double b, const VectorState& a);
 State<double> inner_product(const VectorState& a, const VectorState& b);
 
 namespace vec {
-struct zero_clone {
+struct initialize_zero_dual {
   Vector operator()(const Vector& from);
 };
 }  // namespace vec

@@ -120,9 +120,8 @@ gretl::State<double> advance_solution(const gretl::State<double>& a)
 
   b.set_eval([](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
     const auto& a_ = upstreams[0];
-    auto& b_ = downstream;
     double B = advance_solution(a_.get<double>());
-    b_.set(B);
+    downstream.set(B);
   });
 
   b.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
@@ -151,7 +150,7 @@ TEST_F(CheckpointFixture, Automated)
   std::vector<double> advanceStates(N + 1);
 
   gretl::DataStoreForTesting dataStore(S);
-  gretl::State<double> X = dataStore.create_state(x);
+  gretl::State<double> X = dataStore.create_state(x, gretl::defaultInitializeZeroDual<double>());
 
   advanceStates[0] = X.get();
   for (size_t n = 0; n < N; ++n) {

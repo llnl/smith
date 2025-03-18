@@ -95,8 +95,8 @@ class MeshFixture : public ::testing::Test {
 
 TEST_F(MeshFixture, NonlinearGraphGradients)
 {
-  Param params = dataStore->create_state(params_data);
-  State state0 = dataStore->create_state(state0_data);
+  Param params = dataStore->create_state(params_data, gretl::vec::initialize_zero_dual());
+  State state0 = dataStore->create_state(state0_data, gretl::vec::initialize_zero_dual());
 
   State stateRate = state_rate_equation(state0, params, 0.0);
   gretl::State<double> rateNorm = set_as_objective(gretl::inner_product(stateRate, stateRate));
@@ -110,8 +110,8 @@ TEST_F(MeshFixture, NonlinearGraphGradients)
 
 TEST_F(MeshFixture, Dynamics)
 {
-  Param params = dataStore->create_state(params_data);
-  State state0 = dataStore->create_state(state0_data);
+  Param params = dataStore->create_state(params_data, gretl::vec::initialize_zero_dual());
+  State state0 = dataStore->create_state(state0_data, gretl::vec::initialize_zero_dual());
 
   State state = copy(state0);
   for (size_t i = 0; i < N; ++i) {
