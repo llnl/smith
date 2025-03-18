@@ -5,9 +5,10 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file common.hpp
+ * @file mesh.hpp
  *
- * @brief A file defining some enums and structs that are used by the different physics modules
+ * @brief Serac mesh class which assists in constructing the appropriate parallel mfem meshes 
+ * and registering and accessing Domains for use in serac::Functional operations
  */
 #pragma once
 
