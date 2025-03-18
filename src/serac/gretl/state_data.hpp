@@ -45,10 +45,10 @@ struct StateData : public StateDataBase {
   }
 
   std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)> eval =
-      [](const UpstreamStates& upstreams, DownstreamState& downstream) {};
+      [](const UpstreamStates&, DownstreamState&) {};
 
   std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)> vjp =
-      [](UpstreamStates& upstreams, const DownstreamState& downstream) {};
+      [](UpstreamStates&, const DownstreamState&) {};
 
   virtual T& get_primal() const
   {
