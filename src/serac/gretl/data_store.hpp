@@ -23,16 +23,14 @@ struct DataStore {
 
   // create a new state in the graph, store it, return it
   template <typename T, typename D=T>
-  State<T,D> create_state(const T& t)
+  State<T, D> create_state(const T& t)
   {
     auto zero_clone = [](const T&) -> D { return D(); };
     return create_state<T, D, decltype(zero_clone)>(t, zero_clone);
-    //auto zero_clone = [](const T&) -> T { return T(); };
-    //return create_state(t, zero_clone);
   }
 
   // create a new state in the graph, store it, return it
-  template <typename T, typename D, typename ZeroCloneFromT>
+  template <typename T, typename D=T, typename ZeroCloneFromT>
   State<T, D> create_state(const T& t, ZeroCloneFromT zero_clone)
   {
     State<T, D> newState(*this, t, states.size(), zero_clone, {});
