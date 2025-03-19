@@ -19,7 +19,7 @@
     - module load cmake/3.23.1
     # Workaround for multiple before_scripts - see https://gitlab.com/gitlab-org/gitlab-runner/-/issues/2301
     # See also https://github.com/LLNL/serac/pull/417#discussion_r631194968
-    - if [[ $CUDA_BUILD == "ON" ]]; then module load cuda/11.2.0; fi
+    - if [[ $CUDA_BUILD == "ON" ]]; then module load cuda/11.8.0; fi
 
 ####
 # Load required CUDA module
@@ -40,9 +40,9 @@
 
 ####
 # Build jobs
-blueos-clang_10_0_1-src:
+blueos-clang_14_0_5-src:
   variables:
-    COMPILER: "clang@10.0.1"
+    COMPILER: "clang@14.0.5"
     HOST_CONFIG: "lassen-blueos_3_ppc64le_ib_p9-${COMPILER}_cuda.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF"
     ALLOC_NODES: "1"
@@ -51,18 +51,18 @@ blueos-clang_10_0_1-src:
 
 # Note: to reduce duplication SPEC is not defined here, if we move to more than one
 # spec on blueos add it back like toss4
-blueos-clang_10_0_1-full:
+blueos-clang_14_0_5-full:
   variables:
-    COMPILER: "clang@10.0.1"
+    COMPILER: "clang@14.0.5"
     HOST_CONFIG: "lassen-blueos_3_ppc64le_ib_p9-${COMPILER}_cuda.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF"
     ALLOC_NODES: "1"
     ALLOC_TIME: "65"
   extends: [.full_build_on_blueos, .with_cuda]
 
-blueos-clang_10_0_1-benchmarks:
+blueos-clang_14_0_5-benchmarks:
   variables:
-    COMPILER: "clang@10.0.1"
+    COMPILER: "clang@14.0.5"
     HOST_CONFIG: "lassen-blueos_3_ppc64le_ib_p9-${COMPILER}_cuda.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "120"

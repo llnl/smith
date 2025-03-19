@@ -252,17 +252,6 @@ install cmake, MPICH, openblas, OpenGL, and the various developer tools using th
    $ sudo apt-get install cmake libopenblas-dev libopenblas-base mpich mesa-common-dev libglu1-mesa-dev freeglut3-dev cppcheck doxygen libreadline-dev python3-sphinx python3-pip clang-format-10 m4 elfutils
    $ sudo ln -s /usr/lib/x86_64-linux-gnu/* /usr/lib
 
-**Ubuntu 18.04**
-
-.. code-block:: bash
-
-   $ sudo apt-get update
-   $ sudo apt-get upgrade
-   $ sudo apt-get install g++-8 gcc-8
-   $ sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 --slave /usr/bin/g++ g++ /usr/bin/g++-8
-   $ sudo apt-get install cmake libopenblas-dev libopenblas-base mpich mesa-common-dev libglu1-mesa-dev freeglut3-dev cppcheck doxygen libreadline-dev python3-distutils python3-pip
-   $ sudo ln -s /usr/lib/x86_64-linux-gnu/* /usr/lib
-
 Note that the last line is required since Spack expects the system libraries to exist in a directory
 named ``lib``. During the third party library build phase, the appropriate Spack config directory
 must be specified using either:
@@ -271,13 +260,8 @@ must be specified using either:
 
 ``python3 scripts/uberenv/uberenv.py --spack-env-file=scripts/spack/configs/linux_ubuntu_20/spack.yaml --prefix=../path/to/install``
 
-**Ubuntu 18.04**
-
-``python3 scripts/uberenv/uberenv.py --spack-env-file=scripts/spack/configs/linux_ubuntu_18/spack.yaml --prefix=../path/to/install``
-
 Building Serac Dependencies on MacOS
 ------------------------------------
-
 .. warning::
    These instructions are in development, but have been tested for M2 MacBooks.
 
