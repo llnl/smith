@@ -43,7 +43,7 @@ struct StateDataBase {
     return typedStateData->get_dual();
   }
 
-  template <typename T, typename D>
+  template <typename T, typename D = T>
   void set_primal(const T& t) const
   {
     auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
@@ -51,7 +51,7 @@ struct StateDataBase {
     typedStateData->set_primal(t);
   }
 
-  template <typename T, typename D>
+  template <typename T, typename D = T>
   void move_primal(T&& t) const
   {
     auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
