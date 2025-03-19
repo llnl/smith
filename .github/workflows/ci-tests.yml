@@ -36,23 +36,23 @@ jobs:
       matrix:
         build_type: [ Debug, Release ]
         config:
-        - job_name: clang@14.0.0, shared
+        - job_name: clang@14.0.0, ${{ matrix.build_type }}, shared
           host_config: clang@14.0.0.cmake
           compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
           cmake_opts: "-DBUILD_SHARED_LIBS=ON"
-        - job_name: gcc@12.3.0, shared, cuda, no tests/install/warnings as errors
+        - job_name: gcc@12.3.0, ${{ matrix.build_type }}, shared, cuda, no tests/install/warnings as errors
           host_config: gcc@12.3.0_cuda.cmake
           compiler_image: ${{ needs.set_image_vars.outputs.cuda_docker_image }}
           cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_WARNINGS_AS_ERRORS=OFF"
           build_src_opts: "--skip-install --skip-tests"
-        - job_name: gcc@13.1.0, shared
+        - job_name: gcc@13.1.0, ${{ matrix.build_type }}, shared
           host_config: gcc@13.1.0.cmake
           compiler_image: ${{ needs.set_image_vars.outputs.gcc_docker_image }}
           cmake_opts: "-DBUILD_SHARED_LIBS=ON"
         include:
         - build_type: Debug
           config:
-            job_name: clang@14.0.0, shared, codevelop
+            job_name: clang@14.0.0, ${{ matrix.build_type }}, shared, codevelop
             host_config: clang@14.0.0.cmake
             compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
             cmake_opts: "-DSERAC_ENABLE_CODEVELOP=ON"
