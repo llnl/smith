@@ -39,9 +39,9 @@ struct StateData : public StateDataBase {
     vjp(this->upstreams, DownstreamState(*this));
   }
 
-  State<T, D> clone(const std::vector<StateBase>& upstreams) const
+  State<T, D> clone(const std::vector<StateBase>& upstreams_) const
   {
-    return dataStore.create_empty_state<T, D>(initialize_zero_dual, upstreams);
+    return dataStore.create_empty_state<T, D>(initialize_zero_dual, upstreams_);
   }
 
   std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)> eval = [](const UpstreamStates&,
