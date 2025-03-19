@@ -57,7 +57,7 @@ jobs:
             compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
             cmake_opts: "-DSERAC_ENABLE_CODEVELOP=ON"
             build_src_opts: "--skip-install"
-    name: ${{ job_name }}
+    name: ${{ matrix.config.job_name }}
     container:
       image: ${{ matrix.config.compiler_image }}
       volumes:
