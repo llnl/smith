@@ -42,13 +42,23 @@ set(physics_parallel_test_sources
     thermal_nonlinear_solve.cpp
     thermomech_statics_patch.cpp
     )
-blt_list_append(TO physics_parallel_test_sources 
-                ELEMENTS 
-                    contact_patch.cpp
-                    contact_patch_tied.cpp
-                    contact_beam.cpp
-                IF TRIBOL_FOUND)
+set(physics_parallel_tribol_test_sources
+    contact_patch.cpp
+    contact_patch_tied.cpp
+    contact_beam.cpp
+    )
+blt_list_append(TO       physics_parallel_test_sources
+                ELEMENTS ${physics_parallel_tribol_test_sources}
+                IF       TRIBOL_FOUND)
 
 serac_add_tests(SOURCES       ${physics_parallel_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 2)
+
+if(SERAC_ENABLE_HIP AND TRIBOL_FOUND)
+    foreach(filename ${physics_parallel_tribol_test_sources})
+        get_filename_component(test_name ${filename} NAME_WE)
+        blt_add_target_compile_flags(TO ${test_name} FLAGS "-fgpu-rdc")
+        blt_add_target_link_flags(TO ${test_name} FLAGS "-fgpu-rdc")
+    endforeach()
+endif()

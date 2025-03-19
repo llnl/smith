@@ -3,6 +3,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+from spack.package import *
 from spack.pkg.builtin.cray_mpich import CrayMpich as BuiltinCrayMpich
 
 class CrayMpich(BuiltinCrayMpich):
