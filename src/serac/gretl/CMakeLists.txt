@@ -9,10 +9,13 @@ set(smith_gretl_sources
 set(smith_gretl_headers
       checkpoint.hpp
       data_store.hpp
-      state.hpp
+      data_store_for_testing.hpp
       state_base.hpp
+      state.hpp
       state_data_base.hpp
+      state_data.hpp
       upstream_state.hpp
+      double_state.hpp
       vector_state.hpp
     )
 
