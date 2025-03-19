@@ -63,6 +63,7 @@ vectoradd_float(float* __restrict__ a, const float* __restrict__ b, const float*
       // SERAC EDIT START
       int x = static_cast<int>(hipBlockDim_x * hipBlockIdx_x + hipThreadIdx_x);
       int y = static_cast<int>(hipBlockDim_y * hipBlockIdx_y + hipThreadIdx_y);
+      // SERAC EDIT END
 
       int i = y * width + x;
       if ( i < (width * height)) {
