@@ -131,9 +131,9 @@ struct GhostEvalFunctor {
 template <typename T, typename D>
 struct GhostStateData : public StateData<T, D> {
   template <typename InitDualFromValue>
-  GhostStateData(DataStore& store, size_t step, InitDualFromValue initialize_zero_dual,
+  GhostStateData(DataStore& store, size_t step, InitDualFromValue initialize_zero_dual_,
                  const std::shared_ptr<StateDataBase>& pGhost, const std::shared_ptr<StateDataBase>& lGhost)
-      : StateData<T, D>(store, step, initialize_zero_dual, {}),
+      : StateData<T, D>(store, step, initialize_zero_dual_, {}),
         parentGhost(std::dynamic_pointer_cast<StateData<T, D>>(pGhost))
   {
     std::shared_ptr<StateData<T, D>> lastGhost = std::dynamic_pointer_cast<StateData<T, D>>(lGhost);
