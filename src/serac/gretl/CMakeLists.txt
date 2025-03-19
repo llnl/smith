@@ -14,6 +14,7 @@ set(smith_gretl_headers
       state.hpp
       state_data_base.hpp
       state_data.hpp
+      create_state.hpp
       upstream_state.hpp
       double_state.hpp
       vector_state.hpp
