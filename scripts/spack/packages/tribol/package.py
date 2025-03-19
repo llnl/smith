@@ -97,7 +97,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     with when("+openmp"):
         depends_on("axom+openmp")
-        # Tribol requires RAJA and Umpire for OpenMP support
+        # Tribol requires RAJA and Umpire with OpenMP support
         depends_on("raja+openmp")
         depends_on("umpire+openmp")
 
