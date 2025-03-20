@@ -50,7 +50,7 @@ State state_rate_equation(const State& state, const Param& params, [[maybe_unuse
     sNew[0] = p[0] * (s[1] - s[0]);
     sNew[1] = s[0] * (p[1] - s[2]) - s[1];
     sNew[2] = s[0] * s[1] - p[2] * s[2];
-    output.move(std::move(sNew));
+    output.set(std::move(sNew));
   });
 
   newState.set_vjp([](gretl::UpstreamStates& inputs, const gretl::DownstreamState& output) {
