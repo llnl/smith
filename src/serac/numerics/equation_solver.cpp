@@ -855,7 +855,7 @@ class TrustRegion : public mfem::NewtonSolver {
       mfem::out << "Newton: No convergence!\n";
     }
 
-    if (false && (print_options.summary || print_options.warnings)) {
+    if (true && (print_options.summary || print_options.warnings)) {
       mfem::out << "num hess vecs = " << num_hess_vecs << "\n";
       mfem::out << "num preconds = " << num_preconds << "\n";
       mfem::out << "num residuals = " << num_residuals << "\n";
