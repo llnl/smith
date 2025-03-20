@@ -49,7 +49,7 @@ void ThermomechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
   double alpha = 1.0e-3;
   double theta_ref = 0.0;
   double k = 1.0;
-  GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
+  thermomechanics::GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
 
   Domain domain = EntireDomain(pmesh);
   Domain boundary = EntireBoundary(pmesh);
@@ -409,7 +409,7 @@ std::array<double, 2> SolutionError(
   double c = 1.0;
   double theta_ref = std::get<3>(coef);
   double k = 1.0;
-  GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
+  thermomechanics::GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
   Domain domain = EntireDomain(pmesh);
 
   thermomech_solver.setMaterial(material, domain);

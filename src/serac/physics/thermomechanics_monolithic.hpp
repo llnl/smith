@@ -926,20 +926,6 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     dr2_dparam_mat->MultTranspose(displacement_adjoint_, displacement_sensitivity);
 
     add(temperature_sensitivity, displacement_sensitivity, *parameters_[parameter_field].sensitivity);
-    // // Debug
-    // mfem::ParGridFunction adj_sensitivity(&parameters_[parameter_field].state->space(),
-    //   parameters_[parameter_field].sensitivity.get()); mfem::ParGridFunction
-    // dqoi_dscale_temp(&parameters_[parameter_field].state->space(), &temperature_sensitivity); mfem::ParGridFunction
-    // dqoi_dscale_disp(&parameters_[parameter_field].state->space(), &displacement_sensitivity);
-    // mfem::ParaViewDataCollection paraview_dc("adjoint_debug", &mesh_);
-    // paraview_dc.SetPrefixPath("adjoint_debug");
-    // paraview_dc.SetTime(1.0);
-    // paraview_dc.RegisterField("adj_sensitivity", &adj_sensitivity);
-    // paraview_dc.RegisterField("dqoi_dscale_temp", &dqoi_dscale_temp);
-    // paraview_dc.RegisterField("dqoi_dscale_disp", &dqoi_dscale_disp);
-    // paraview_dc.RegisterField("temperature_adjoint", &temperature_adjoint_.gridFunction());
-    // paraview_dc.RegisterField("displacement_adjoint", &displacement_adjoint_.gridFunction());
-    // paraview_dc.Save();
 
     return *parameters_[parameter_field].sensitivity;
   }
@@ -947,8 +933,6 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   /// @overload
   FiniteElementDual& computeTimestepShapeSensitivity() override
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Do not use. Method not yet tested"));
-
     auto dr1_dshape =
         serac::get<DERIVATIVE>((*residual_T_)(time_end_step_, differentiate_wrt(shape_displacement_), temperature_,
                                               displacement_, *parameters_[parameter_indices].state...));
