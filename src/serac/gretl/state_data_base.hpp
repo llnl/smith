@@ -51,28 +51,12 @@ struct StateDataBase {
     typedStateData->set_primal(t);
   }
 
-  template <typename T, typename D = T>
-  void move_primal(T&& t) const
-  {
-    auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
-    assert(typedStateData);
-    typedStateData->move_primal(std::move(t));
-  }
-
   template <typename T, typename D>
   void set_dual(const D& d) const
   {
     auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
     assert(typedStateData);
     typedStateData->set_dual(d);
-  }
-
-  template <typename T, typename D>
-  void move_dual(D&& d) const
-  {
-    auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
-    assert(typedStateData);
-    typedStateData->move_dual(std::move(d));
   }
 
   virtual void evaluate() = 0;

@@ -19,6 +19,7 @@ struct UpstreamState {
   UpstreamState(const std::shared_ptr<StateDataBase>& s) : state(s) {}
 
   bool valid() const { return state->primal_active(); }
+
   bool dual_valid() const { return state->dual_active(); }
 
   template <typename T, typename D = T>
@@ -26,25 +27,23 @@ struct UpstreamState {
   {
     return state->template get<T, D>();
   }
+
   template <typename D, typename T = D>
   D& get_dual()
   {
     return state->template get_dual<T, D>();
   }
+
   template <typename D, typename T = D>
   const D& get_dual() const
   {
     return state->template get_dual<T, D>();
   }
+
   template <typename D, typename T = D>
   void set_dual(const D& d)
   {
     return state->set_dual<T, D>(d);
-  }
-  template <typename D, typename T = D>
-  void move_dual(D&& d)
-  {
-    return state->move_dual<T, D>(std::move(d));
   }
 
   friend struct DataStore;
@@ -63,11 +62,7 @@ struct DownstreamState {
   {
     return stateDataBase.set_primal<T, D>(t);
   }
-  template <typename T, typename D = T>
-  void move(T&& t)
-  {
-    return stateDataBase.move_primal<T, D>(std::move(t));
-  }
+
   // this call will give incorrect behavior if called on the forward pass.  Consider adding ConstDownStreamState type to
   // allow this on reverse, but not forward
   template <typename T, typename D = T>
