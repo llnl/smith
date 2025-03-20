@@ -20,7 +20,7 @@ namespace serac {
 // Heat driven solid deformation test
 // Fixed bcs for displacement: u(0, y) = 0, u(x, 0) = 0
 template <int p, int dim, typename TempBC, typename FluxBC, typename ThermalSource>
-void ThermoMechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& temp_bc_function,
+void ThermomechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& temp_bc_function,
                             const FluxBC& flux_bc_function, const ThermalSource& source_function)
 {
   MPI_Barrier(MPI_COMM_WORLD);
@@ -29,7 +29,7 @@ void ThermoMechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
   int parallel_refinement = 2;
 
   axom::sidre::DataStore datastore;
-  serac::StateManager::initialize(datastore, "thermoMechHeatedDeform");
+  serac::StateManager::initialize(datastore, "thermomechHeatedDeform");
 
   std::string filename = SERAC_REPO_DIR "/data/meshes/square_attribute.mesh";
 
@@ -38,9 +38,9 @@ void ThermoMechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), meshtag);
 
-  auto linear_opts = thermomech::direct_linear_options;
-  auto nonlinear_opts = thermomech::default_nonlinear_options;
-  ThermoMechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, "thermoMechHeatedDeform", meshtag);
+  auto linear_opts = thermomechanics::direct_linear_options;
+  auto nonlinear_opts = thermomechanics::default_nonlinear_options;
+  ThermomechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, "thermomechHeatedDeform", meshtag);
 
   double rho = 1.0;
   double E = 100.0;
@@ -197,7 +197,7 @@ class ManufacturedSolution {
    * @param disp_ess_bcs Boundary attributes on which essential boundary conditions are desired on displacement field
    */
   template <typename MaterialType, int p>
-  void applyLoads(const MaterialType& material, ThermoMechanicsMonolithic<p, dim>& tm, Domain& temp_ess_bdr,
+  void applyLoads(const MaterialType& material, ThermomechanicsMonolithic<p, dim>& tm, Domain& temp_ess_bdr,
                   Domain& disp_ess_bdr) const
   {
     // essential BCs
@@ -394,14 +394,14 @@ std::array<double, 2> SolutionError(
   const std::string meshtag = "mesh";
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), meshtag);
 
-  auto linear_opts = thermomech::direct_linear_options;
+  auto linear_opts = thermomechanics::direct_linear_options;
   linear_opts.relative_tol = 1e-14;
   linear_opts.absolute_tol = 1e-14;
-  auto nonlinear_opts = thermomech::default_nonlinear_options;
+  auto nonlinear_opts = thermomechanics::default_nonlinear_options;
   nonlinear_opts.relative_tol = 1e-14;
   nonlinear_opts.absolute_tol = 1e-14;
   nonlinear_opts.print_level = 0;
-  ThermoMechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, "thermomech_patch_test", meshtag);
+  ThermomechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, "thermomech_patch_test", meshtag);
 
   double rho = 1.0;
   double E = 100.0;
@@ -432,17 +432,17 @@ std::array<double, 2> SolutionError(
 }
 
 /////////////////////////////////Smoke Tests//////////////////////////////////////////////
-TEST(ThermoMechanics, VolumetricHeating)
+TEST(Thermomechanics, SmokeVolumetricHeating)
 {
-  ThermoMechHeatedDeform<1, 2>(
+  ThermomechHeatedDeform<1, 2>(
       std::set<int>{2, 4}, [](auto /* X */, auto /* time */) -> double { return 0.0; },
       [](auto /* X */, auto /* n */, auto /* time */, auto /* T */) { return 0.0; },
       [](auto /* X */, auto /* time */, auto /* T */, auto /* dT_dx */) { return 1.0; });
 }
 
-TEST(ThermoMechanics, BCFluxHeating)
+TEST(Thermomechanics, SmokeBCFluxHeating)
 {
-  ThermoMechHeatedDeform<1, 2>(
+  ThermomechHeatedDeform<1, 2>(
       std::set<int>{2, 4}, [](auto /* X */, auto /* time */) -> double { return 0.0; },
       [](auto X, auto /* n */, auto /* time */, auto /* T */) {
         auto x = get<0>(X);
@@ -460,7 +460,7 @@ constexpr int LINEAR = 1;
 constexpr int QUADRATIC = 2;
 constexpr int CUBIC = 3;
 
-TEST(ThermoMechanics, Patch2dQ1TempEssentialDispConst)
+TEST(Thermomechanics, Patch2dQ1TempEssentialDispConst)
 {
   tensor<double, 2, 2> A{{{0.0, 0.0}, {0.0, 0.0}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -481,7 +481,7 @@ TEST(ThermoMechanics, Patch2dQ1TempEssentialDispConst)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ1DispEssentialTempConst)
+TEST(Thermomechanics, Patch2dQ1DispEssentialTempConst)
 {
   tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901}, {0.198344644470483, 0.060514559793513}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -502,7 +502,7 @@ TEST(ThermoMechanics, Patch2dQ1DispEssentialTempConst)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ1EssentialDecoupled)
+TEST(Thermomechanics, Patch2dQ1EssentialDecoupled)
 {
   tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901}, {0.198344644470483, 0.060514559793513}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -523,7 +523,7 @@ TEST(ThermoMechanics, Patch2dQ1EssentialDecoupled)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ1EssentialCoupled)
+TEST(Thermomechanics, Patch2dQ1EssentialCoupled)
 {
   tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901}, {0.198344644470483, 0.060514559793513}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -544,7 +544,7 @@ TEST(ThermoMechanics, Patch2dQ1EssentialCoupled)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch3dQ1EssentialCoupled)
+TEST(Thermomechanics, Patch3dQ1EssentialCoupled)
 {
   tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
                           {0.198344644470483, 0.060514559793513, 0.084137393813728},
@@ -567,7 +567,7 @@ TEST(ThermoMechanics, Patch3dQ1EssentialCoupled)
   EXPECT_LT(hex_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ2EssentialCoupled)
+TEST(Thermomechanics, Patch2dQ2EssentialCoupled)
 {
   tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901}, {0.198344644470483, 0.060514559793513}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -588,7 +588,7 @@ TEST(ThermoMechanics, Patch2dQ2EssentialCoupled)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch3dQ2EssentialCoupled)
+TEST(Thermomechanics, Patch3dQ2EssentialCoupled)
 {
   tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
                           {0.198344644470483, 0.060514559793513, 0.084137393813728},
@@ -611,7 +611,7 @@ TEST(ThermoMechanics, Patch3dQ2EssentialCoupled)
   EXPECT_LT(hex_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ3EssentialCoupled)
+TEST(Thermomechanics, Patch2dQ3EssentialCoupled)
 {
   tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901}, {0.198344644470483, 0.060514559793513}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -632,7 +632,7 @@ TEST(ThermoMechanics, Patch2dQ3EssentialCoupled)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch3dQ3EssentialCoupled)
+TEST(Thermomechanics, Patch3dQ3EssentialCoupled)
 {
   tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
                           {0.198344644470483, 0.060514559793513, 0.084137393813728},
@@ -656,7 +656,7 @@ TEST(ThermoMechanics, Patch3dQ3EssentialCoupled)
 }
 
 //////////////////////////Patch Tests (Essential and natural BC)/////////////////////////////
-TEST(ThermoMechanics, Patch2dQ1TempEssentialAndNaturalDispConst)
+TEST(Thermomechanics, Patch2dQ1TempEssentialAndNaturalDispConst)
 {
   tensor<double, 2, 2> A{{{0.0, 0.0}, {0.0, 0.0}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -677,7 +677,7 @@ TEST(ThermoMechanics, Patch2dQ1TempEssentialAndNaturalDispConst)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ1DispEssentialAndNaturalTempConst)
+TEST(Thermomechanics, Patch2dQ1DispEssentialAndNaturalTempConst)
 {
   tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901}, {0.198344644470483, 0.060514559793513}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -698,7 +698,7 @@ TEST(ThermoMechanics, Patch2dQ1DispEssentialAndNaturalTempConst)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ1EssentialAndNaturalDecoupled)
+TEST(Thermomechanics, Patch2dQ1EssentialAndNaturalDecoupled)
 {
   tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901}, {0.198344644470483, 0.060514559793513}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -720,7 +720,7 @@ TEST(ThermoMechanics, Patch2dQ1EssentialAndNaturalDecoupled)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ1EssentialAndNaturalCoupled)
+TEST(Thermomechanics, Patch2dQ1EssentialAndNaturalCoupled)
 {
   tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901}, {0.198344644470483, 0.060514559793513}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -741,7 +741,7 @@ TEST(ThermoMechanics, Patch2dQ1EssentialAndNaturalCoupled)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch3dQ1EssentialAndNaturalCoupled)
+TEST(Thermomechanics, Patch3dQ1EssentialAndNaturalCoupled)
 {
   tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
                           {0.198344644470483, 0.060514559793513, 0.084137393813728},
@@ -764,7 +764,7 @@ TEST(ThermoMechanics, Patch3dQ1EssentialAndNaturalCoupled)
   EXPECT_LT(hex_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ2EssentialAndNaturalCoupled)
+TEST(Thermomechanics, Patch2dQ2EssentialAndNaturalCoupled)
 {
   tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901}, {0.198344644470483, 0.060514559793513}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -785,7 +785,7 @@ TEST(ThermoMechanics, Patch2dQ2EssentialAndNaturalCoupled)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch3dQ2EssentialAndNaturalCoupled)
+TEST(Thermomechanics, Patch3dQ2EssentialAndNaturalCoupled)
 {
   tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
                           {0.198344644470483, 0.060514559793513, 0.084137393813728},
@@ -808,7 +808,7 @@ TEST(ThermoMechanics, Patch3dQ2EssentialAndNaturalCoupled)
   EXPECT_LT(hex_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch2dQ3EssentialAndNaturalCoupled)
+TEST(Thermomechanics, Patch2dQ3EssentialAndNaturalCoupled)
 {
   tensor<double, 2, 2> A{{{0.110791568544027, 0.230421268325901}, {0.198344644470483, 0.060514559793513}}};
   tensor<double, 2> B{{0.226645549201083, 0.39746067373029}};
@@ -829,7 +829,7 @@ TEST(ThermoMechanics, Patch2dQ3EssentialAndNaturalCoupled)
   EXPECT_LT(quad_err_arr[1], tol);
 }
 
-TEST(ThermoMechanics, Patch3dQ3EssentialAndNaturalCoupled)
+TEST(Thermomechanics, Patch3dQ3EssentialAndNaturalCoupled)
 {
   tensor<double, 3, 3> A{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
                           {0.198344644470483, 0.060514559793513, 0.084137393813728},
