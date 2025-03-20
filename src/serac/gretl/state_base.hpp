@@ -25,7 +25,7 @@ struct StateBase {
   const T& get() const
   {
     auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    assert(typedStateData);
+    gretl_assert(typedStateData);
     return typedStateData->get_primal();
   }
 
@@ -33,7 +33,7 @@ struct StateBase {
   const D& get_dual() const
   {
     auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    assert(typedStateData);
+    gretl_assert(typedStateData);
     return typedStateData->get_dual();
   }
 
@@ -41,7 +41,7 @@ struct StateBase {
   void set(const T& t)
   {
     auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    assert(typedStateData);
+    gretl_assert(typedStateData);
     typedStateData->set(t);
   }
 
@@ -49,7 +49,7 @@ struct StateBase {
   void set(T&& t)
   {
     auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    assert(typedStateData);
+    gretl_assert(typedStateData);
     typedStateData->set(std::move(t));
   }
 
@@ -57,7 +57,7 @@ struct StateBase {
   void set_dual(const D& d)
   {
     auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    assert(typedStateData);
+    gretl_assert(typedStateData);
     typedStateData->set_dual(d);
   }
 
@@ -65,7 +65,7 @@ struct StateBase {
   void set_dual(D&& d)
   {
     auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    assert(typedStateData);
+    gretl_assert(typedStateData);
     typedStateData->set_dual(std::move(d));
   }
 

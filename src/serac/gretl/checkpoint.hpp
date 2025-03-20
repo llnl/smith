@@ -7,6 +7,10 @@
 #include <cassert>
 #include <limits>
 
+#define gretl_assert(x) \
+  assert(x);            \
+  if (!(x)) throw std::runtime_error{"Error on line " + std::to_string(__LINE__) + " in file " + std::string(__FILE__)};
+
 namespace gretl {
 
 struct Unit {};
@@ -59,11 +63,7 @@ struct CheckpointManager {
   {
     size_t levelupAmount = 1;  //= relativeCost >= 2.0 ? 3 : 1;
 
-    // printf("levelup = %zu\n", levelupAmount);
-
     Checkpoint nextStep{.level = levelupAmount - 1, .step = step};
-
-    // if (step==0) assert(persistent);
 
     size_t nextEraseStep = invalidCheckpointIndex;
 
@@ -71,7 +71,7 @@ struct CheckpointManager {
     if (persistent) {
       maxNumStates++;
       nextStep.level = Checkpoint::infinity();
-      assert(cps.size() < maxNumStates);
+      gretl_assert(cps.size() < maxNumStates);
     }
 
     if (cps.size() < maxNumStates) {
@@ -137,7 +137,7 @@ struct CheckpointManager {
         return cp;
       }
     }
-    assert(false);
+    gretl_assert(false);
     return *cps.begin();
   }
 

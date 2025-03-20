@@ -104,7 +104,7 @@ void DataStore::add_state(StateBase& newState)
 {
   if (newState.stateData->persistent()) {
     if (!states.empty()) {
-      assert(states.back().first.stateData->persistent());  // persistents must be added first
+      gretl_assert(states.back().first.stateData->persistent());  // persistents must be added first
     }
   }
 
@@ -124,7 +124,7 @@ void DataStore::add_state(StateBase& newState)
     auto& uPtr = ustate.state;
     size_t nextStepIndex = newState.step_index();
     size_t parentStepIndex = uPtr->step_index();
-    assert(nextStepIndex > uPtr->step_index());
+    gretl_assert(nextStepIndex > uPtr->step_index());
 
     if (!uPtr->persistent() && (nextStepIndex != parentStepIndex + 1)) {
       // the upstream is not from the last step (nor persistent)
@@ -136,7 +136,7 @@ void DataStore::add_state(StateBase& newState)
       }
 
       auto nextUpstreamGhost = add_ghost_state(uPtr, uPtr, parentStepIndex + 1);
-      assert(nextUpstreamGhost->primal_active());
+      gretl_assert(nextUpstreamGhost->primal_active());
       if (!upstreamIsCp) {
         uPtr->clear_primal();
       }
@@ -144,12 +144,12 @@ void DataStore::add_state(StateBase& newState)
       for (size_t s = parentStepIndex + 2; s < nextStepIndex; ++s) {
         // create a clone of this ghost state at the next step... up until the just before current step
         // then at the end, set upstream's data to be that ghost
-        assert(nextUpstreamGhost->primal_active());
+        gretl_assert(nextUpstreamGhost->primal_active());
         auto lastUpstreamGhost = nextUpstreamGhost;
         nextUpstreamGhost = add_ghost_state(uPtr, lastUpstreamGhost, s);
-        assert(nextUpstreamGhost->primal_active());
+        gretl_assert(nextUpstreamGhost->primal_active());
 
-        assert(checkpoints.contains_step(s - 1) == measure_primal_active(states[s - 1]));
+        gretl_assert(checkpoints.contains_step(s - 1) == measure_primal_active(states[s - 1]));
         if (!checkpoints.contains_step(s - 1)) {
           lastUpstreamGhost->clear_primal();
         }
@@ -158,7 +158,7 @@ void DataStore::add_state(StateBase& newState)
       ustate.state = nextUpstreamGhost;
     }
 
-    assert(uPtr->persistent() || newState.step_index() == uPtr->step_index() + 1);
+    gretl_assert(uPtr->persistent() || newState.step_index() == uPtr->step_index() + 1);
   }
 
   check_consistency_except_last(1);
@@ -167,7 +167,7 @@ void DataStore::add_state(StateBase& newState)
   bool persistent = upstreams.empty();
   nextStepToClear = checkpoints.add_checkpoint_and_get_index_to_remove(stateStepAdded, persistent);
   if (checkpoints.valid_checkpoint_index(nextStepToClear)) {
-    assert(nextStepToClear < stateStepAdded);  // MRT this should fail with 1 less
+    gretl_assert(nextStepToClear < stateStepAdded);  // MRT this should fail with 1 less
   }
 }
 
@@ -195,15 +195,15 @@ void DataStore::fetch_state_data(size_t stepIndex)
     }
   }
 
-  assert(checkpoints.last_checkpoint_step() <= stepIndex);
-  assert(stepIndex < states.size());
+  gretl_assert(checkpoints.last_checkpoint_step() <= stepIndex);
+  gretl_assert(stepIndex < states.size());
 
   while (checkpoints.last_checkpoint_step() < stepIndex) {
     size_t lastCp = checkpoints.last_checkpoint_step();
 
     nextStepToClear = checkpoints.add_checkpoint_and_get_index_to_remove(lastCp + 1);
     if (checkpoints.valid_checkpoint_index(nextStepToClear)) {
-      assert(nextStepToClear <= lastCp);
+      gretl_assert(nextStepToClear <= lastCp);
     }
 
     auto& measure = states[lastCp + 1];
@@ -272,14 +272,14 @@ void DataStore::check_consistency_except_last(size_t fromBack) const
     bool cpHasState = checkpoints.contains_step(parent.step_index());
     // EXPECT_EQ(cpHasState, parent.stateData->primal_active()) << "parent step = " << parent.step_index() << "\n" <<
     // checkpoints << std::endl;
-    assert(cpHasState == parent.stateData->primal_active());
+    gretl_assert(cpHasState == parent.stateData->primal_active());
     for (auto& ghost : s.second) {
       // EXPECT_EQ(cpHasState, ghost->primal_active()) << "parent step = " << parent.step_index() << ", ghost = " <<
       // ghost->parent_step_index() << "\n" << checkpoints << std::endl;
       if (cpHasState != ghost->primal_active()) {
         print_state_info();
       }
-      assert(cpHasState == ghost->primal_active());
+      gretl_assert(cpHasState == ghost->primal_active());
     }
   }
 }

@@ -70,7 +70,7 @@ struct State : public StateBase {
   inline StateData<T, D>& get_data() const
   {
     auto typedData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    assert(typedData);
+    gretl_assert(typedData);
     return *typedData;
   }
 };

@@ -65,7 +65,7 @@ struct DataStore {
   template <typename T, typename D, typename InitDualFromValue>
   State<T, D> create_empty_state(InitDualFromValue initial_zero_dual, const std::vector<StateBase>& upstreams)
   {
-    assert(!upstreams.empty());
+    gretl_assert(!upstreams.empty());
     State<T, D> newState(*this, states.size(), initial_zero_dual, upstreams);
     add_state(newState);
     return newState;
