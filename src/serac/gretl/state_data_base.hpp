@@ -31,7 +31,7 @@ struct StateDataBase {
   T& get() const
   {
     auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
-    assert(typedStateData);
+    gretl_assert(typedStateData);
     return typedStateData->get_primal();
   }
 
@@ -39,7 +39,7 @@ struct StateDataBase {
   D& get_dual() const
   {
     auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
-    assert(typedStateData);
+    gretl_assert(typedStateData);
     return typedStateData->get_dual();
   }
 
@@ -47,7 +47,7 @@ struct StateDataBase {
   void set_primal(const T& t) const
   {
     auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
-    assert(typedStateData);
+    gretl_assert(typedStateData);
     typedStateData->set_primal(t);
   }
 
@@ -55,7 +55,7 @@ struct StateDataBase {
   void set_dual(const D& d) const
   {
     auto typedStateData = dynamic_cast<const StateData<T, D>*>(this);
-    assert(typedStateData);
+    gretl_assert(typedStateData);
     typedStateData->set_dual(d);
   }
 

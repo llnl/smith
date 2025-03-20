@@ -25,13 +25,13 @@ struct StateData : public StateDataBase {
   void evaluate() override
   {
     DownstreamState ds(*this);
-    assert(!primal_active());
+    gretl_assert(!primal_active());
     eval(this->upstreams, ds);
   }
 
   void evaluate_vjp() override
   {
-    // MRT, why not this? assert(dual_active());
+    // MRT, why not this? gretl_assert(dual_active());
     // the vjp for the downstream may not exist
     // but only when that value is never used
     // perhaps try to identify such cases and
@@ -55,7 +55,7 @@ struct StateData : public StateDataBase {
     if (!p) {
       dataStore.fetch_state_data(stepIndex);
     }
-    assert(p);
+    gretl_assert(p);
     return *p;
   }
 
@@ -66,7 +66,7 @@ struct StateData : public StateDataBase {
     if (!d) {
       d = std::make_unique<D>(initialize_zero_dual(get_primal()));
     }
-    assert(d);
+    gretl_assert(d);
     return *d;
   }
 
@@ -99,11 +99,11 @@ struct StateData : public StateDataBase {
                                               size_t step) const override
   {
     // this is the parent ghost
-    assert(parentGhost);
-    assert(lastGhost);
-    assert(lastGhost->stepIndex >= parentGhost->stepIndex);
-    assert(step > parentGhost->stepIndex);
-    assert(step == lastGhost->stepIndex + 1);
+    gretl_assert(parentGhost);
+    gretl_assert(lastGhost);
+    gretl_assert(lastGhost->stepIndex >= parentGhost->stepIndex);
+    gretl_assert(step > parentGhost->stepIndex);
+    gretl_assert(step == lastGhost->stepIndex + 1);
     auto ghostState =
         std::make_shared<GhostStateData<T, D>>(dataStore, step, initialize_zero_dual, parentGhost, lastGhost);
     return ghostState;
@@ -119,8 +119,8 @@ template <typename T, typename D>
 struct GhostEvalFunctor {
   void operator()(const UpstreamStates&, DownstreamState&)
   {
-    assert(lastGhost->primal_ptr());
-    assert(!nextGhost.primal_ptr());
+    gretl_assert(lastGhost->primal_ptr());
+    gretl_assert(!nextGhost.primal_ptr());
     nextGhost.primal_ptr() = lastGhost->primal_ptr();
   }
 
@@ -142,7 +142,7 @@ struct GhostStateData : public StateData<T, D> {
     this->eval = ghostEval;
     this->vjp = [](UpstreamStates&, const DownstreamState&) {};
 
-    assert(!this->primal_active());
+    gretl_assert(!this->primal_active());
     DownstreamState ds(*this);
     this->eval(this->upstreams, ds);
   }
@@ -153,23 +153,23 @@ struct GhostStateData : public StateData<T, D> {
 
   void set_primal(const T&) const override
   {
-    assert(false);  // should never be setting upstream primals, ghosts can only ever be upstreams
+    gretl_assert(false);  // should never be setting upstream primals, ghosts can only ever be upstreams
   }
 
   void set_primal_move(T&&) const override
   {
-    assert(false);  // should never be setting upstream primals, ghosts can only ever be upstreams
+    gretl_assert(false);  // should never be setting upstream primals, ghosts can only ever be upstreams
   }
 
   void set_dual(const T& t) const override
   {
-    assert(!parentGhost->dual_active());
+    gretl_assert(!parentGhost->dual_active());
     parentGhost->set_dual(t);
   }
 
   void set_dual(T&& t) const override
   {
-    assert(!parentGhost->dual_active());
+    gretl_assert(!parentGhost->dual_active());
     parentGhost->set_dual(std::move(t));
   }
 

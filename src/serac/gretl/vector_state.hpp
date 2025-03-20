@@ -41,7 +41,7 @@ size_t get_same_size(const std::vector<const std::vector<T>*>& vs)
 {
   size_t size = vs[0]->size();
   for (size_t n = 1; n < vs.size(); ++n) {
-    assert(size == vs[n]->size());
+    gretl_assert(size == vs[n]->size());
   }
   return size;
 }
