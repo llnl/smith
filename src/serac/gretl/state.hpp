@@ -21,17 +21,17 @@ struct State : public StateBase {
   using type = T;
   using dual_type = D;
 
-  void set(const T& t) { get_data().set_primal(t); }
+  inline void set(const T& t) { get_data().set_primal(t); }
 
-  void set(T&& t) { get_data().set_primal(std::move(t)); }
+  inline void set(T&& t) { get_data().set_primal(std::move(t)); }
 
-  void set_dual(const D& d) { get_data().set_dual(d); }
+  inline void set_dual(const D& d) { get_data().set_dual(d); }
 
-  void set_dual(D&& d) { get_data().set_dual(std::move(d)); }
+  inline void set_dual(D&& d) { get_data().set_dual(std::move(d)); }
 
-  const T& get() const { return get_data().get_primal(); }
+  inline const T& get() const { return get_data().get_primal(); }
 
-  const D& get_dual() const { return get_data().get_dual(); }
+  inline const D& get_dual() const { return get_data().get_dual(); }
 
   State<T, D> clone(const std::vector<StateBase>& upstreams) const { return get_data().clone(upstreams); }
 
@@ -67,7 +67,7 @@ struct State : public StateBase {
     stateData = std::make_shared<StateData<T, D>>(store, step, initialize_zero_dual, ustreams);
   }
 
-  StateData<T, D>& get_data() const
+  inline StateData<T, D>& get_data() const
   {
     auto typedData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
     assert(typedData);
