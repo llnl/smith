@@ -19,6 +19,8 @@ set(physics_serial_test_sources
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
+    thermomech_finite_diff.cpp
+    thermomech_statics_patch.cpp
     )
 
 serac_add_tests(SOURCES       ${physics_serial_test_sources}
@@ -40,7 +42,6 @@ set(physics_parallel_test_sources
     dynamic_thermal_adjoint.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
-    thermomech_statics_patch.cpp
     )
 set(physics_parallel_tribol_test_sources
     contact_patch.cpp
