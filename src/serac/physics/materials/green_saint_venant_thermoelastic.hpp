@@ -7,7 +7,7 @@
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/tuple.hpp"
 
-namespace serac {
+namespace serac::thermomechanics {
 
 /**
  * @brief Compute Green's strain from the displacement gradient
@@ -26,7 +26,7 @@ struct GreenSaintVenantThermoelasticMaterial {
   double C_v;        ///< volumetric heat capacity
   double alpha;      ///< thermal expansion coefficient
   double theta_ref;  ///< datum temperature for thermal expansion
-  double k;          ///< thermal conductivity
+  double kappa;      ///< thermal conductivity
 
   /// internal variables for the material model
   struct State {
@@ -66,10 +66,10 @@ struct GreenSaintVenantThermoelasticMaterial {
     const auto Piola = dot(F, S);
 
     // internal heat source
-    const auto s0 = -3 * K * alpha * theta * (trEg - state.strain_trace);
+    const auto s0 = -3.0 * K * alpha * theta * (trEg - state.strain_trace);
 
     // heat flux
-    const auto q0 = -k * grad_theta;
+    const auto q0 = -kappa * grad_theta;
 
     state.strain_trace = get_value(trEg);
 
@@ -105,7 +105,7 @@ struct ParameterizedGreenSaintVenantThermoelasticMaterial {
   double C_v;        ///< volumetric heat capacity
   double alpha0;     ///< reference value of thermal expansion coefficient
   double theta_ref;  ///< datum temperature for thermal expansion
-  double k;          ///< thermal conductivity
+  double kappa;      ///< thermal conductivity
 
   /// internal variables for the material model
   struct State {
@@ -127,19 +127,19 @@ struct ParameterizedGreenSaintVenantThermoelasticMaterial {
    * @param[in,out] state State variables for this material
    *
    * @return[out] tuple of constitutive outputs. Contains the
-   * Cauchy stress, the volumetric heat capacity in the reference
+   * First Piola stress, the volumetric heat capacity in the reference
    * configuration, the heat generated per unit volume during the time
    * step (units of energy), and the referential heat flux (units of
    * energy per unit time and per unit area).
    */
-  template <typename T1, typename T2, typename T3, typename T4>
-  auto operator()(State& state, const tensor<T1, 3, 3>& grad_u, T2 theta, const tensor<T3, 3>& grad_theta,
+  template <typename T1, typename T2, typename T3, typename T4, int dim>
+  auto operator()(State& state, const tensor<T1, dim, dim>& grad_u, T2 theta, const tensor<T3, dim>& grad_theta,
                   T4 thermal_expansion_scaling) const
   {
     auto [scale, unused] = thermal_expansion_scaling;
     const double K = E / (3.0 * (1.0 - 2.0 * nu));
     const double G = 0.5 * E / (1.0 + nu);
-    static constexpr auto I = Identity<3>();
+    static constexpr auto I = Identity<dim>();
     auto F = grad_u + I;
     const auto Eg = greenStrain(grad_u);
     const auto trEg = tr(Eg);
@@ -147,18 +147,17 @@ struct ParameterizedGreenSaintVenantThermoelasticMaterial {
 
     // stress
     const auto S = 2.0 * G * dev(Eg) + K * (trEg - 3.0 * alpha * (theta - theta_ref)) * I;
-    const auto P = dot(F, S);
-    const auto sigma = (dot(P, transpose(F))) / det(F);
+    const auto Piola = dot(F, S);
 
     // internal heat source
-    const auto s0 = -3 * K * alpha * theta * (trEg - state.strain_trace);
+    const auto s0 = -3.0 * K * alpha * theta * (trEg - state.strain_trace);
 
     // heat flux
-    const auto q0 = -k * grad_theta;
+    const auto q0 = -kappa * grad_theta;
 
     state.strain_trace = get_value(trEg);
 
-    return serac::tuple{sigma, C_v, s0, q0};
+    return serac::tuple{Piola, C_v, s0, q0};
   }
 
   /**
@@ -167,8 +166,8 @@ struct ParameterizedGreenSaintVenantThermoelasticMaterial {
    * @param[in] theta temperature
    * @param[in] thermal_expansion_scaling a scaling factor to be applied to alpha0
    */
-  template <typename T1, typename T2, typename T3>
-  auto calculateFreeEnergy(const tensor<T1, 3, 3>& grad_u, T2 theta, T3 thermal_expansion_scaling) const
+  template <typename T1, typename T2, typename T3, int dim>
+  auto calculateFreeEnergy(const tensor<T1, dim, dim>& grad_u, T2 theta, T3 thermal_expansion_scaling) const
   {
     auto [scale, unused] = thermal_expansion_scaling;
     const double K = E / (3.0 * (1.0 - 2.0 * nu));
@@ -185,4 +184,4 @@ struct ParameterizedGreenSaintVenantThermoelasticMaterial {
   }
 };
 
-}  // namespace serac
+}  // namespace serac::thermomechanics
