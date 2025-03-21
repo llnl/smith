@@ -1,0 +1,11 @@
+diff --git a/CHANGELOG b/CHANGELOG
+index cc064859e0..5adf5d8639 100644
+--- a/CHANGELOG
++++ b/CHANGELOG
+@@ -1,3 +1,6 @@
++# This dummy patch is to prevent the real patch in MFEM's builtin Spack package from being applied.
++# All changes in mfem-4.7-sundials-7.patch are already in MFEM since 4.7.0.2.
++# Original patch: https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/mfem/mfem-4.7-sundials-7.patch
+                     Finite Element Discretization Library
+                                    __
+                        _ __ ___   / _|  ___  _ __ ___

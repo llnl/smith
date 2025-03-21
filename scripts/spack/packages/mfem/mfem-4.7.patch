@@ -7,6 +7,6 @@ index 00d50283b..c9be1ddd0 100644
 +# All changes in mfem-4.7.patch are already in MFEM since 4.7.0.1.
 +# Original patch: https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/mfem/mfem-4.7.patch
 +
- # Copyright (c) 2010-2024, Lawrence Livermore National Security, LLC. Produced
+ # Copyright (c) 2010-2025, Lawrence Livermore National Security, LLC. Produced
  # at the Lawrence Livermore National Laboratory. All Rights reserved. See files
  # LICENSE and NOTICE for details. LLNL-CODE-806117.
