@@ -39,7 +39,7 @@ const std::string MESHTAG = "mesh";
  * @param load The type of loading to apply to the problem
  * @param sensitivity_parameter_index The index of the chosen parameter to compute sensitivity w.r.t
  */
-void FiniteDifferenceParameter(LoadingType load, int sensitivity_parameter_index = 0)
+void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_index = 0)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
