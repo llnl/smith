@@ -794,7 +794,7 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   /**
    * @brief Set the loads for the adjoint reverse timestep solve
    *
-   * @param adjoint_loads The loads (e.g. right hand sides) for the adjoint problem
+   * @param loads The loads (e.g. right hand sides) for the adjoint problem
    *
    * @pre The adjoint load map is expected to contain an entry named "temperature" and "displacement"
    *
