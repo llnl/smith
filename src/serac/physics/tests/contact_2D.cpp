@@ -22,9 +22,7 @@
 
 namespace serac {
 
-class ContactTest
-    : public testing::Test { 
-};
+class ContactTest : public testing::Test {};
 
 TEST_F(ContactTest, DISABLED_Contact2D)
 {
@@ -39,7 +37,8 @@ TEST_F(ContactTest, DISABLED_Contact2D)
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
-  auto mesh = mesh::refineAndDistribute(mfem::Mesh::MakeCartesian2D(6, 20, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), 0, 0);
+  auto mesh =
+      mesh::refineAndDistribute(mfem::Mesh::MakeCartesian2D(6, 20, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), 0, 0);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "beam_mesh");
 
   LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
@@ -55,7 +54,7 @@ TEST_F(ContactTest, DISABLED_Contact2D)
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
-  //ContactOptions contact_options{.method = ContactMethod::SingleMortar,
+                                 // ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = ContactEnforcement::Penalty,
                                  .jacobian = ContactJacobian::Exact};
 
@@ -97,7 +96,7 @@ TEST_F(ContactTest, DISABLED_Contact2D)
   printf("simulation over\n");
 }
 
-}
+}  // namespace serac
 
 int main(int argc, char* argv[])
 {
@@ -112,13 +111,13 @@ int main(int argc, char* argv[])
   return result;
 }
 
-
 #include "tribol/physics/MortarUtils.hpp"
 
 using Vec2 = mortar_utils::Vec2;
 using Edge = mortar_utils::Edge;
 
-TEST(Evaluate2dIntersections, WhenBIsSmaller) {
+TEST(Evaluate2dIntersections, WhenBIsSmaller)
+{
   double fixed_gap = 0.1;
   Edge edgeA;
   edgeA[0] = Vec2{1.0, 0.0};
@@ -137,7 +136,8 @@ TEST(Evaluate2dIntersections, WhenBIsSmaller) {
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
 
-TEST(Evaluate2dIntersections, WhenAIsSmaller) {
+TEST(Evaluate2dIntersections, WhenAIsSmaller)
+{
   double fixed_gap = 0.2;
   Edge edgeA;
   edgeA[0] = Vec2{0.9, 0.0};
@@ -156,7 +156,8 @@ TEST(Evaluate2dIntersections, WhenAIsSmaller) {
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
 
-TEST(Evaluate2dIntersections, WhenASlidesRightRelativelySlightly) {
+TEST(Evaluate2dIntersections, WhenASlidesRightRelativelySlightly)
+{
   double fixed_gap = 0.2;
   double sliding = 0.9;
   double alpha = 0.3;
@@ -166,8 +167,8 @@ TEST(Evaluate2dIntersections, WhenASlidesRightRelativelySlightly) {
   edgeA[1] = Vec2{0.0 + alpha * sliding, 0.0};
 
   Edge edgeB;
-  edgeB[0] = Vec2{0.0 - (1.0-alpha) * sliding, fixed_gap};
-  edgeB[1] = Vec2{1.0 - (1.0-alpha) * sliding, fixed_gap};
+  edgeB[0] = Vec2{0.0 - (1.0 - alpha) * sliding, fixed_gap};
+  edgeB[1] = Vec2{1.0 - (1.0 - alpha) * sliding, fixed_gap};
 
   auto [xia, g] = mortar_utils::compute_intersection(edgeA, edgeB, -mortar_utils::compute_normal(edgeB));
 
@@ -178,7 +179,8 @@ TEST(Evaluate2dIntersections, WhenASlidesRightRelativelySlightly) {
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
 
-TEST(Evaluate2dIntersections, WhenASlideLeftRelativelySlightly) {
+TEST(Evaluate2dIntersections, WhenASlideLeftRelativelySlightly)
+{
   double fixed_gap = -0.13;
   double sliding = 0.6;
   double alpha = 0.24;
@@ -188,21 +190,22 @@ TEST(Evaluate2dIntersections, WhenASlideLeftRelativelySlightly) {
   edgeA[1] = Vec2{0.0 - alpha * sliding, 0.0};
 
   Edge edgeB;
-  edgeB[0] = Vec2{0.0 + (1.0-alpha) * sliding, fixed_gap};
-  edgeB[1] = Vec2{1.0 + (1.0-alpha) * sliding, fixed_gap};
+  edgeB[0] = Vec2{0.0 + (1.0 - alpha) * sliding, fixed_gap};
+  edgeB[1] = Vec2{1.0 + (1.0 - alpha) * sliding, fixed_gap};
 
   auto [xia, g] = mortar_utils::compute_intersection(edgeA, edgeB, -mortar_utils::compute_normal(edgeB));
 
   constexpr double tol = 1e-13;
   EXPECT_NEAR(xia[0], 0.0, tol);
-  EXPECT_NEAR(xia[1], 1.0-sliding, tol);
+  EXPECT_NEAR(xia[1], 1.0 - sliding, tol);
   EXPECT_NEAR(g[0], fixed_gap, tol);
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
 
-TEST(Evaluate2dIntersections, WhenASlidesRightALot) {
+TEST(Evaluate2dIntersections, WhenASlidesRightALot)
+{
   double fixed_gap = 0.2;
-  double sliding = 1.1; // slides out of contact
+  double sliding = 1.1;  // slides out of contact
 
   Edge edgeA;
   edgeA[0] = Vec2{1.0 + sliding, 0.0};
@@ -221,9 +224,10 @@ TEST(Evaluate2dIntersections, WhenASlidesRightALot) {
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
 
-TEST(Evaluate2dIntersections, WhenASlidesLeftALot) {
+TEST(Evaluate2dIntersections, WhenASlidesLeftALot)
+{
   double fixed_gap = 0.2;
-  double sliding = -1.1; // slides out of contact
+  double sliding = -1.1;  // slides out of contact
 
   Edge edgeA;
   edgeA[0] = Vec2{1.0 + sliding, 0.0};
@@ -242,12 +246,13 @@ TEST(Evaluate2dIntersections, WhenASlidesLeftALot) {
   EXPECT_NEAR(g[1], fixed_gap, tol);
 }
 
-TEST(Evaluate2dContactPotential, CanMatchReferenceSolution) {
+TEST(Evaluate2dContactPotential, CanMatchReferenceSolution)
+{
   double penalty_length = 0.1;
   double edge_smoothing = 0.2;
 
   Edge edgeA;
-  edgeA[0] = Vec2{0.55,  0.05};
+  edgeA[0] = Vec2{0.55, 0.05};
   edgeA[1] = Vec2{0.50, -0.01};
 
   Edge edgeB;
