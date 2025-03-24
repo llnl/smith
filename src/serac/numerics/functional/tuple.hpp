@@ -248,7 +248,7 @@ struct tuple<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> {
   T7 v7;    ///< The eighth member of the tuple
   T8 v8;    ///< The ninth member of the tuple
   T9 v9;    ///< The tenth member of the tuple
-  T10 v10;  ///< The tenth member of the tuple
+  T10 v10;  ///< The eleventh member of the tuple
 };
 
 /**
