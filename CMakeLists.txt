@@ -53,6 +53,11 @@ if(SERAC_ENABLE_CODEVELOP OR (ENABLE_HIP AND STRUMPACK_DIR))
     set(ENABLE_FORTRAN ON CACHE BOOL "")
 endif()
 
+# Prevent deprecated warnings from C++17 in GTest on TOSS4Cray
+if(DEFINED ENV{SYS_TYPE} AND "$ENV{SYS_TYPE}" STREQUAL "toss_4_x86_64_ib_cray")
+    string(APPEND CMAKE_CXX_FLAGS " -Wno-deprecated-declarations")
+endif()
+
 #------------------------------------------------------------------------------
 # Setup BLT
 #------------------------------------------------------------------------------

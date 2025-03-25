@@ -202,6 +202,11 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         serac_assert_find_succeeded(PROJECT_NAME MFEM
                                     TARGET       mfem
                                     DIR_VARIABLE MFEM_DIR)
+
+        if (SERAC_ENABLE_HIP AND STRUMPACK_DIR)
+            string(APPEND MFEM_LIBRARIES " -lrocblas -lrocsolver")
+            target_link_libraries(mfem INTERFACE rocblas rocsolver)
+        endif()
     else()
         message(STATUS "Using MFEM submodule")
 
@@ -321,6 +326,9 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         # https://github.com/LLNL/blt/issues/695
         set(tmp_cmake_runtime_output_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
         unset(CMAKE_RUNTIME_OUTPUT_DIRECTORY CACHE)
+
+        # MFEM sets CMAKE_CXX_STANDARD if it is not CACHE variable
+        set(CMAKE_CXX_STANDARD ${CMAKE_CXX_STANDARD} CACHE STRING "")
 
         if(${PROJECT_NAME} STREQUAL "smith")
             add_subdirectory(${PROJECT_SOURCE_DIR}/serac/mfem  ${CMAKE_BINARY_DIR}/mfem)
