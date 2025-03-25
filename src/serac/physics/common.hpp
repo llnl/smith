@@ -11,8 +11,6 @@
  */
 #pragma once
 
-#include "serac/numerics/odes.hpp"
-
 namespace serac {
 
 /**
