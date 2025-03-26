@@ -130,7 +130,6 @@ stages:
 include:
   - local: .gitlab/build_blueos.yml
   - local: .gitlab/build_toss4.yml
-  # Disabling cray until all developers have access to the tioga machine
-  # - local: .gitlab/build_toss4_cray.yml
+  - local: .gitlab/build_toss4_cray.yml
   - project: 'lc-templates/id_tokens'
     file: 'id_tokens.yml'
