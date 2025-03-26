@@ -465,6 +465,8 @@ std::unique_ptr<mfem::ParMesh> refineAndDistribute(mfem::Mesh&& serial_mesh, con
   parallel_mesh->EnsureNodes();
   parallel_mesh->ExchangeFaceNbrData();
 
+  std::cout << "number of elements = " << parallel_mesh->GetNE() << std::endl;
+
   return parallel_mesh;
 }
 
