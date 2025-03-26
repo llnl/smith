@@ -468,7 +468,9 @@ std::unique_ptr<mfem::ParMesh> refineAndDistribute(mfem::Mesh&& serial_mesh, con
   int num_elems_local = parallel_mesh->GetNE();
   int num_elems_global = parallel_mesh->GetNE();
   MPI_Allreduce(&num_elems_local, &num_elems_global, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  std::cout << "number of elements = " <<  num_elems_global << std::endl;
+  int myid;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+  if (myid==0) std::cout << "number of elements = " <<  num_elems_global << std::endl;
 
   return parallel_mesh;
 }
