@@ -465,7 +465,10 @@ std::unique_ptr<mfem::ParMesh> refineAndDistribute(mfem::Mesh&& serial_mesh, con
   parallel_mesh->EnsureNodes();
   parallel_mesh->ExchangeFaceNbrData();
 
-  std::cout << "number of elements = " << parallel_mesh->GetNE() << std::endl;
+  int num_elems_local = parallel_mesh->GetNE();
+  int num_elems_global = parallel_mesh->GetNE();
+  MPI_Allreduce(&num_elems_local, &num_elems_global, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  std::cout << "number of elements = " <<  num_elems_global << std::endl;
 
   return parallel_mesh;
 }
