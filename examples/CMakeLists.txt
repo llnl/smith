@@ -30,3 +30,5 @@ add_subdirectory(buckling)
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
 
+# Add the digital twins examples
+add_subdirectory(digital-twins-examples)
