@@ -30,24 +30,24 @@
 # Build jobs
 
 # Only run integration tests on one spec
-toss4_cray-rocm_6_2_1-src:
+toss4_cray-rocmcc_6_2_1-src:
  variables:
-   COMPILER: "rocm@6.2.1"
+   COMPILER: "rocmcc@6.2.1"
    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
    ALLOC_NODES: "1"
    ALLOC_TIME: "30"
  extends: .src_build_on_toss4_cray
 
-toss4_cray-rocm_6_2_1-full:
+toss4_cray-rocmcc_6_2_1-full:
   variables:
     ALLOC_NODES: "1"
     ALLOC_TIME: "45"
   extends: .full_build_on_toss4_cray
 
-toss4_cray-rocm_6_2_1-benchmarks:
+toss4_cray-rocmcc_6_2_1-benchmarks:
   variables:
-    COMPILER: "rocm@6.2.1"
+    COMPILER: "rocmcc@6.2.1"
     HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "120"
