@@ -28,13 +28,12 @@ class FunctionalResidual;
  * This uses Functional to compute the solid mechanics residuals and tangent
  * stiffness matrices.
  *
- * @tparam dim The spatial dimension of the mesh
  */
 template <typename ShapeSpace, typename OutputSpace, typename... parameter_space, int... parameter_indices>
-class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>, std::integer_sequence<int, parameter_indices...>>
-    : public Residual {
+class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>,
+                         std::integer_sequence<int, parameter_indices...>> : public Residual {
  public:
-
+  /// @brief extract residual dimension from the output space
   static constexpr int dim = OutputSpace::components;
 
   /**
@@ -66,7 +65,6 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
         &shape_disp_space, &test_space, trial_spaces);
   }
 
-
   /**
    * @brief Add a body integral contribution to the residual
    *
@@ -90,8 +88,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
                        const std::optional<Domain>& optional_domain = std::nullopt)
   {
     Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
-    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<active_parameters...>{},
-                                 body_integral, domain);
+    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<active_parameters...>{}, body_integral, domain);
   }
 
   /// @overload
@@ -124,7 +121,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    */
   template <int... active_parameters, typename NeumannType>
   void addSurfaceIntegral(DependsOn<active_parameters...>, NeumannType surface_function,
-                         const std::optional<Domain>& optional_domain = std::nullopt)
+                          const std::optional<Domain>& optional_domain = std::nullopt)
   {
     Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh_);
 
@@ -148,7 +145,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
   mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
-    //auto ret = (*residual_)(time, *fields[0], *fields[parameter_indices + 1]...);
+    // auto ret = (*residual_)(time, *fields[0], *fields[parameter_indices + 1]...);
     auto ret = (*residual_)(time, *fields[0], *fields[parameter_indices + 1]...);
     return ret;
   }
