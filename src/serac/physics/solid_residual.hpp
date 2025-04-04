@@ -12,9 +12,7 @@
 
 #pragma once
 
-#include "serac/physics/residual.hpp"
 #include "serac/physics/functional_residual.hpp"
-#include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
 namespace serac {
@@ -33,41 +31,36 @@ class SolidResidual;
  */
 template <int order, int dim, typename... parameter_space>
 class SolidResidual<order, dim, Parameters<parameter_space...>>
-    : public FunctionalResidual< H1<order,dim>, H1<order,dim>, Parameters< H1<order,dim>, H1<order,dim>, H1<order,dim>, parameter_space...> > {
+    : public FunctionalResidual<H1<order, dim>, H1<order, dim>,
+                                Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>> {
  public:
-
-  using BaseResidualT = FunctionalResidual< H1<order,dim>, H1<order,dim>, Parameters< H1<order,dim>, H1<order,dim>, H1<order,dim>, parameter_space...> >;
+  /// @brief typedef for underlying functional type with templates
+  using BaseResidualT =
+      FunctionalResidual<H1<order, dim>, H1<order, dim>,
+                         Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
   /// @brief a container holding quadrature point data of the specified type
   /// @tparam T the type of data to store at each quadrature point
   template <typename T>
   using qdata_type = std::shared_ptr<QuadratureData<T>>;
 
+  /// @brief disp, velo, accel
   static constexpr int NUM_STATE_VARS = 3;
-
-  std::vector<const mfem::ParFiniteElementSpace*> constructAllSpaces(const mfem::ParFiniteElementSpace& state_space, 
-                                                                     const std::vector<const mfem::ParFiniteElementSpace*>& spaces)
-  {
-    std::vector<const mfem::ParFiniteElementSpace*> all_spaces{&state_space, &state_space, &state_space};
-    for (auto& s : spaces) {
-      all_spaces.push_back(s);
-    }
-    return all_spaces;
-  }
 
   /**
    * @brief Construct a new SolidResidual object
    *
    * @param physics_name A name for the physics module instance
-   * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param mesh The serac Mesh
    * @param shape_disp_space Shape displacement space
    * @param test_space Test space
    * @param parameter_fe_spaces Vector of parameters spaces
    */
-  SolidResidual(std::string physics_name, std::string mesh_tag, const mfem::ParFiniteElementSpace& shape_disp_space,
-                const mfem::ParFiniteElementSpace& test_space,
+  SolidResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
+                const mfem::ParFiniteElementSpace& shape_disp_space, const mfem::ParFiniteElementSpace& test_space,
                 std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
-      : BaseResidualT(physics_name, mesh_tag, shape_disp_space, test_space, constructAllSpaces(test_space, parameter_fe_spaces))
+      : BaseResidualT(physics_name, mesh, shape_disp_space, test_space,
+                      constructAllSpaces(test_space, parameter_fe_spaces))
   {
   }
 
@@ -102,7 +95,8 @@ class SolidResidual<order, dim, Parameters<parameter_space...>>
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
                   "invalid quadrature data provided in setMaterial()");
     MaterialStressFunctor<MaterialType> material_functor(material);
-    BaseResidualT::residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 2, active_parameters + NUM_STATE_VARS...>{},
+    BaseResidualT::residual_->AddDomainIntegral(Dimension<dim>{},
+                                                DependsOn<0, 2, active_parameters + NUM_STATE_VARS...>{},
                                                 std::move(material_functor), domain, qdata);
   }
 
@@ -144,8 +138,9 @@ class SolidResidual<order, dim, Parameters<parameter_space...>>
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
                   "invalid quadrature data provided in setMaterial()");
     RateMaterialStressFunctor<MaterialType> material_functor(material);
-    BaseResidualT::residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{},
-                                 std::move(material_functor), domain, qdata);
+    BaseResidualT::residual_->AddDomainIntegral(Dimension<dim>{},
+                                                DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{},
+                                                std::move(material_functor), domain, qdata);
   }
 
   /// @overload
@@ -158,7 +153,8 @@ class SolidResidual<order, dim, Parameters<parameter_space...>>
   /**
    * @brief Set the pressure boundary condition
    *
-   * @tparam active_parameters the indices for active non-state params (i.e., indexing starts just after disp, velo, or accel)
+   * @tparam active_parameters the indices for active non-state params (i.e., indexing starts just after disp, velo, or
+   * accel)
    * @tparam PressureType The type of the pressure load
    * @param pressure_function A function describing the pressure applied to a boundary
    * @param optional_domain The domain over which the pressure is applied. If nothing is supplied the entire boundary is
@@ -216,7 +212,21 @@ class SolidResidual<order, dim, Parameters<parameter_space...>>
     addPressure(DependsOn<>{}, pressure_function, optional_domain);
   }
 
- private:
+ protected:
+  /// @brief For use in the constructor, combined the correct number of state spaces (disp,velo,accel) with the vector
+  /// of parameters
+  /// @param state_space H1<order,dim> displacement space
+  /// @param spaces parameter spaces
+  /// @return
+  std::vector<const mfem::ParFiniteElementSpace*> constructAllSpaces(
+      const mfem::ParFiniteElementSpace& state_space, const std::vector<const mfem::ParFiniteElementSpace*>& spaces)
+  {
+    std::vector<const mfem::ParFiniteElementSpace*> all_spaces{&state_space, &state_space, &state_space};
+    for (auto& s : spaces) {
+      all_spaces.push_back(s);
+    }
+    return all_spaces;
+  }
 
   /**
    * @brief Functor representing a material stress.  A functor is used here instead of an
@@ -279,8 +289,10 @@ class SolidResidual<order, dim, Parameters<parameter_space...>>
      * @tparam Velocity velocity
      * @tparam Acceleration acceleration
      * @tparam Params variadic parameters for call
+     * @param[in] dt time step
      * @param[in] state state
      * @param[in] displacement displacement
+     * @param[in] velocity velocity
      * @param[in] acceleration acceleration
      * @param[in] params parameter pack
      * @return The calculated material response (tuple of volumetric heat capacity and thermal flux) for a linear
@@ -300,26 +312,24 @@ class SolidResidual<order, dim, Parameters<parameter_space...>>
       return serac::tuple{material_.density(params...) * d2u_dt2, stress};
     }
   };
-
 };
 
 /**
  * @brief Utility function for creating a shared_ptr<SolidResidual<>>
  */
 template <int order, int dim, typename... parameter_space>
-auto create_solid_residual(const std::string& physics_name, const serac::Mesh& mesh,
+auto create_solid_residual(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
                            const std::vector<serac::FiniteElementState*>& states,
                            const std::vector<serac::FiniteElementState*>& params)
 {
   std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces;
   if constexpr (sizeof...(parameter_space) > 0) {
-    for_constexpr<sizeof...(parameter_space)>([&](auto i) { parameter_fe_spaces.push_back(&params[i+1]->space()); });
+    for_constexpr<sizeof...(parameter_space)>([&](auto i) { parameter_fe_spaces.push_back(&params[i + 1]->space()); });
   }
 
   using ResidualT = SolidResidual<order, dim, Parameters<parameter_space...>>;
 
-  return std::make_shared<ResidualT>(physics_name, mesh.tag(), params[0]->space(), states[0]->space(),
-                                     parameter_fe_spaces);
+  return std::make_shared<ResidualT>(physics_name, mesh, params[0]->space(), states[0]->space(), parameter_fe_spaces);
 }
 
 }  // namespace serac

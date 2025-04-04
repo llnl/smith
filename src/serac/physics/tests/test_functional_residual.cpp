@@ -78,7 +78,7 @@ struct ResidualFixture : public testing::Test {
 
     double length = 0.5;
     double width = 2.0;
-    mesh = std::make_unique<serac::Mesh>(mfem::Mesh::MakeCartesian2D(6, 20, element_shape, true, length, width),
+    mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(6, 20, element_shape, true, length, width),
                                          "this_mesh_name", 0, 0);
 
     serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
@@ -104,10 +104,11 @@ struct ResidualFixture : public testing::Test {
     using ResidualT =
         serac::FunctionalResidual<ShapeSpace, TrialSpace, serac::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
 
-    auto f_residual =
-        std::make_shared<ResidualT>(physics_name, mesh->tag(), params[PAR::SHAPE].space(), states[STATE::DISP].space(),
-                                    std::vector<const mfem::ParFiniteElementSpace*>{
-                                        &states[STATE::DISP].space(), &states[STATE::DISP].space(), &params[PAR::DENSITY].space()});
+    std::vector<const mfem::ParFiniteElementSpace*> inputs{&states[STATE::DISP].space(), &states[STATE::DISP].space(),
+                                                           &params[PAR::DENSITY].space()};
+
+    auto f_residual = std::make_shared<ResidualT>(physics_name, mesh, params[PAR::SHAPE].space(),
+                                                  states[STATE::DISP].space(), inputs);
 
     // apply some traction boundary conditions
 
@@ -157,7 +158,7 @@ struct ResidualFixture : public testing::Test {
   std::string velo_name = "solid_velocity";
 
   axom::sidre::DataStore datastore;
-  std::unique_ptr<serac::Mesh> mesh;
+  std::shared_ptr<serac::Mesh> mesh;
   std::shared_ptr<serac::Residual> residual;
 
   std::vector<serac::FiniteElementState> states;
