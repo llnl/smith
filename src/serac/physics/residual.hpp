@@ -23,7 +23,9 @@ class FiniteElementDual;
 /// @brief Abstract residual class
 class Residual {
  public:
-  /// @brief base constructor takes the name of the physics
+  /** @brief base constructor takes the name of the physics
+   * @param name provide a name corresponding to the physics
+   */
   Residual(std::string name) : name_(name) {}
 
   /// @brief destructor

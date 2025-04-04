@@ -6,35 +6,27 @@
 
 #include <gtest/gtest.h>
 #include "mfem.hpp"
-#include "serac/infrastructure/application_manager.hpp"
+#include "serac/infrastructure/initialize.hpp"
+#include "serac/infrastructure/terminator.hpp"
 #include "serac/mesh/mesh_utils.hpp"
-#include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/common.hpp"
 
-#include "serac/physics/solid_residual.hpp"
+#include "serac/physics/functional_residual.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
 template <typename T>
-auto getPointers(std::vector<T>& values)
-{
-  std::vector<T*> pointers;
-  for (auto& t : values) {
-    pointers.push_back(&t);
-  }
-  return pointers;
-}
-
-template <typename T>
 auto getPointers(std::vector<T>& states, std::vector<T>& params)
 {
-  std::vector<T*> pointers;
+  assert(params.size()>0);
+
+  std::vector<T*> pointers{&params[0]};
   for (auto& t : states) {
     pointers.push_back(&t);
   }
-  for (auto& t : params) {
-    pointers.push_back(&t);
+  for (size_t n=1; n < params.size(); ++n) {
+    pointers.push_back(&params[n]);
   }
   return pointers;
 }
@@ -68,7 +60,15 @@ struct ResidualFixture : public testing::Test {
   using VectorSpace = serac::H1<disp_order, dim>;
   using DensitySpace = serac::L2<disp_order - 1>;
 
-  using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
+  enum STATE {
+    DISP,
+    VELO
+  };
+
+  enum PAR {
+    SHAPE,
+    DENSITY
+  };
 
   void SetUp()
   {
@@ -82,13 +82,12 @@ struct ResidualFixture : public testing::Test {
 
     serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
     serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
-    serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
     serac::FiniteElementState shape_disp =
         serac::StateManager::newState(VectorSpace{}, "shape_displacement", mesh->tag());
     serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-    states = {disp, velo, accel, shape_disp};
-    params = {density};
+    states = {disp, velo};
+    params = {shape_disp, density};
 
     dual_states = states;
     dual_params = params;
@@ -96,26 +95,26 @@ struct ResidualFixture : public testing::Test {
     v_rhs_states = states;
     v_rhs_params = params;
 
-    std::vector<std::string> param_names{"density"};
-    std::string physics_name = "solid";
+    std::string physics_name = "fake_physics";
 
-    auto solid_mechanics_residual = serac::create_solid_residual<disp_order, dim, DensitySpace>(
-        physics_name, *mesh, getPointers(states), getPointers(params), param_names);
+    using TrialSpace = VectorSpace;
+    using ShapeSpace = VectorSpace;
 
-    // setup material model
+    using ResidualT =
+        serac::FunctionalResidual<ShapeSpace, TrialSpace, serac::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
 
-    SolidMaterial mat;
-    mat.K = 1.0;
-    mat.G = 0.5;
-    solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mat, mesh->entireDomain());
+    auto f_residual = std::make_shared<ResidualT>(physics_name, mesh->tag(), params[PAR::SHAPE].space(), states[STATE::DISP].space(),
+                                                  std::vector<const serac::FiniteElementState*>{&states[STATE::DISP], &states[STATE::DISP], &params[PAR::DENSITY]});
 
     // apply some traction boundary conditions
 
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
 
-    solid_mechanics_residual->setTraction([](auto /*x*/, auto n, auto /*t*/) { return -1.0 * n; },
-                                          mesh->domain(surface_name));
+    f_residual->addSurfaceIntegral([](double /*t*/, auto /*x*/, auto n) { return 1.0 * n; }, mesh->domain(surface_name));
+    f_residual->addBodyIntegral(serac::DependsOn<0>{}, [](double /*t*/, auto /*x*/, auto u) {
+      return serac::tuple{serac::get<serac::VALUE>(u), 0.0 * serac::get<serac::DERIVATIVE>(u)};
+    }, mesh->entireDomain());
 
     // initialize fields for testing
 
@@ -126,21 +125,26 @@ struct ResidualFixture : public testing::Test {
       pseudoRand(p);
     }
 
-    dual_states[0] = 1.0;  // used to test that vjp acts via +=
+    dual_states[0] = 1.0;
+    dual_states[1] = 2.0;
+    dual_params[0] = 1.0;
+    dual_params[1] = 2.0;
 
     states[0].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = 0.1 * x;
       return u;
     });
 
-    states[2].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[1].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = -0.01 * x;
       return u;
     });
-    params[0] = 1.2;
+
+    params[0] = 0.0;
+    params[1] = 1.2;
 
     // residual is abstract Residual class to ensure usage only through BasePhysics interface
-    residual = solid_mechanics_residual;
+    residual = f_residual;
   }
 
   std::string velo_name = "solid_velocity";
@@ -166,6 +170,7 @@ TEST_F(ResidualFixture, VjpConsistency)
   auto all_states = getPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[0].space(), "residual");
+
   res_vector = residual->residual(time, all_states);
   ASSERT_NE(0.0, res_vector.Norml2());
 
@@ -180,15 +185,20 @@ TEST_F(ResidualFixture, VjpConsistency)
   pseudoRand(v);
   auto all_jvps = getPointers(dual_states, dual_params);
 
+  std::vector<serac::FiniteElementState> all_Jvps;
+  for (auto& jvp : all_jvps) {
+    all_Jvps.push_back(*jvp);
+  }
+
+  for (size_t i = 0; i < all_states.size(); ++i) {
+    serac::FiniteElementState& vjp = all_Jvps[i];
+    auto J = residual->jacobian(time, all_states, jacobian_weights(i));
+    J->AddMultTranspose(v, vjp);
+  }
   residual->vjp(time, all_states, getPointers(v), all_jvps);
 
   for (size_t i = 0; i < all_states.size(); ++i) {
-    serac::FiniteElementState vjp = *all_states[i];
-    vjp = 0.0;
-    auto J = residual->jacobian(time, all_states, jacobian_weights(i));
-    J->MultTranspose(v, vjp);
-    if (i == 0) vjp += 1.0;  // make sure jvp uses +=
-    EXPECT_NEAR(vjp.Norml2(), all_jvps[i]->Norml2(), 1e-12);
+    EXPECT_NEAR(all_Jvps[i].Norml2(), all_jvps[i]->Norml2(), 1e-12);
   }
 }
 
@@ -254,6 +264,10 @@ TEST_F(ResidualFixture, JvpConsistency)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  serac::ApplicationManager applicationManager(argc, argv);
-  return RUN_ALL_TESTS();
+
+  serac::initialize(argc, argv);
+  int result = RUN_ALL_TESTS();
+  serac::exitGracefully(result);
+
+  return result;
 }

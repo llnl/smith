@@ -200,7 +200,7 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
    * @brief Functor representing a body force integrand.  A functor is necessary instead
    * of an extended, generic lambda for compatibility with NVCC.
    */
-  template <typename BodyForceType>
+  template <typename VolumeIntegralType>
   struct BodyForceIntegrand {
     /// @brief Body force model
     BodyForceType body_force_;
@@ -250,7 +250,7 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
    *
    * @note This method must be called prior to completeSetup()
    */
-  template <int... active_parameters, typename BodyForceType>
+  template <int... active_parameters, typename VolumeIntegralType>
   void addBodyForce(DependsOn<active_parameters...>, BodyForceType body_force,
                     const std::optional<Domain>& optional_domain = std::nullopt)
   {
