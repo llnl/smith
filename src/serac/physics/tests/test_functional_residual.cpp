@@ -19,13 +19,13 @@ auto element_shape = mfem::Element::QUADRILATERAL;
 template <typename T>
 auto getPointers(std::vector<T>& states, std::vector<T>& params)
 {
-  assert(params.size()>0);
+  assert(params.size() > 0);
 
   std::vector<T*> pointers{&params[0]};
   for (auto& t : states) {
     pointers.push_back(&t);
   }
-  for (size_t n=1; n < params.size(); ++n) {
+  for (size_t n = 1; n < params.size(); ++n) {
     pointers.push_back(&params[n]);
   }
   return pointers;
@@ -60,12 +60,14 @@ struct ResidualFixture : public testing::Test {
   using VectorSpace = serac::H1<disp_order, dim>;
   using DensitySpace = serac::L2<disp_order - 1>;
 
-  enum STATE {
+  enum STATE
+  {
     DISP,
     VELO
   };
 
-  enum PAR {
+  enum PAR
+  {
     SHAPE,
     DENSITY
   };
@@ -103,18 +105,24 @@ struct ResidualFixture : public testing::Test {
     using ResidualT =
         serac::FunctionalResidual<ShapeSpace, TrialSpace, serac::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
 
-    auto f_residual = std::make_shared<ResidualT>(physics_name, mesh->tag(), params[PAR::SHAPE].space(), states[STATE::DISP].space(),
-                                                  std::vector<const serac::FiniteElementState*>{&states[STATE::DISP], &states[STATE::DISP], &params[PAR::DENSITY]});
+    auto f_residual =
+        std::make_shared<ResidualT>(physics_name, mesh->tag(), params[PAR::SHAPE].space(), states[STATE::DISP].space(),
+                                    std::vector<const serac::FiniteElementState*>{
+                                        &states[STATE::DISP], &states[STATE::DISP], &params[PAR::DENSITY]});
 
     // apply some traction boundary conditions
 
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
 
-    f_residual->addSurfaceIntegral([](double /*t*/, auto /*x*/, auto n) { return 1.0 * n; }, mesh->domain(surface_name));
-    f_residual->addBodyIntegral(serac::DependsOn<0>{}, [](double /*t*/, auto /*x*/, auto u) {
-      return serac::tuple{serac::get<serac::VALUE>(u), 0.0 * serac::get<serac::DERIVATIVE>(u)};
-    }, mesh->entireDomain());
+    f_residual->addSurfaceIntegral([](double /*t*/, auto /*x*/, auto n) { return 1.0 * n; },
+                                   mesh->domain(surface_name));
+    f_residual->addBodyIntegral(
+        serac::DependsOn<0>{},
+        [](double /*t*/, auto /*x*/, auto u) {
+          return serac::tuple{serac::get<serac::VALUE>(u), 0.0 * serac::get<serac::DERIVATIVE>(u)};
+        },
+        mesh->entireDomain());
 
     // initialize fields for testing
 
