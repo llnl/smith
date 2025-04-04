@@ -20,7 +20,6 @@ template <typename T>
 auto getPointers(std::vector<T>& states, std::vector<T>& params)
 {
   assert(params.size() > 0);
-
   std::vector<T*> pointers{&params[0]};
   for (auto& t : states) {
     pointers.push_back(&t);
@@ -107,8 +106,8 @@ struct ResidualFixture : public testing::Test {
 
     auto f_residual =
         std::make_shared<ResidualT>(physics_name, mesh->tag(), params[PAR::SHAPE].space(), states[STATE::DISP].space(),
-                                    std::vector<const serac::FiniteElementState*>{
-                                        &states[STATE::DISP], &states[STATE::DISP], &params[PAR::DENSITY]});
+                                    std::vector<const mfem::ParFiniteElementSpace*>{
+                                        &states[STATE::DISP].space(), &states[STATE::DISP].space(), &params[PAR::DENSITY].space()});
 
     // apply some traction boundary conditions
 

@@ -42,27 +42,27 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    * @param physics_name A name for the physics module instance
    * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
    * @param shape_disp_space Shape displacement space
-   * @param test_space Test space
-   * @param argument_states Vector of finite element states which are arguments to the residual
+   * @param output_mfem_space Test space
+   * @param input_mfem_spaces Vector of finite element states which are arguments to the residual
    */
   FunctionalResidual(std::string physics_name, std::string mesh_tag,
-                     const mfem::ParFiniteElementSpace& shape_disp_space, const mfem::ParFiniteElementSpace& test_space,
-                     std::vector<const FiniteElementState*> argument_states)
+                     const mfem::ParFiniteElementSpace& shape_disp_space, const mfem::ParFiniteElementSpace& output_mfem_space,
+                     std::vector<const mfem::ParFiniteElementSpace*> input_mfem_spaces)
       : Residual(physics_name), mesh_tag_(mesh_tag), mesh_(StateManager::mesh(mesh_tag_))
   {
     std::array<const mfem::ParFiniteElementSpace*, sizeof...(parameter_space)> trial_spaces;
 
     SLIC_ERROR_ROOT_IF(
-        sizeof...(parameter_space) != argument_states.size(),
+        sizeof...(parameter_space) != input_mfem_spaces.size(),
         axom::fmt::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
-                          sizeof...(parameter_space), argument_states.size()));
+                          sizeof...(parameter_space), input_mfem_spaces.size()));
 
     if constexpr (sizeof...(parameter_space) > 0) {
-      for_constexpr<sizeof...(parameter_space)>([&](auto i) { trial_spaces[i] = &argument_states[i]->space(); });
+      for_constexpr<sizeof...(parameter_space)>([&](auto i) { trial_spaces[i] = input_mfem_spaces[i]; });
     }
 
     residual_ = std::make_unique<ShapeAwareFunctional<ShapeSpace, OutputSpace(parameter_space...)>>(
-        &shape_disp_space, &test_space, trial_spaces);
+        &shape_disp_space, &output_mfem_space, trial_spaces);
   }
 
   /**
@@ -226,7 +226,8 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
     return;
   }
 
- private:
+ protected:
+
   /// @brief Utility to evaluate residual using all fields in vector
   template <int... i>
   auto evaluateResidual(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
