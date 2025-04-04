@@ -199,6 +199,10 @@ void qoi_test(mfem::ParMesh& mesh, H1<p> trial, Dimension<dim>, WhichTest which)
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
 
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
   ::std::unique_ptr<mfem::HypreParVector> tmp(fespace->NewTrueDofVector());
   mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
