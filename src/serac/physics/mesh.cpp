@@ -14,13 +14,13 @@ namespace serac {
 Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int refine_parallel) : mesh_tag(meshtag)
 {
   auto meshtmp = serac::mesh::refineAndDistribute(std::move(mesh), refine_serial, refine_parallel);
-  mfem_mesh = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag);
+  mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag);
   createDomains();
 }
 
 Mesh::Mesh(mfem::ParMesh& mesh, const std::string& meshtag) : mesh_tag(meshtag)
 {
-  mfem_mesh = &mesh;
+  mfem_mesh_ = &mesh;
   createDomains();
 }
 
@@ -28,13 +28,13 @@ Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_s
     : mesh_tag(meshtag)
 {
   auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel);
-  mfem_mesh = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag);
+  mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag);
   createDomains();
 }
 
-MPI_Comm Mesh::getComm() const { return mfem_mesh->GetComm(); }
+MPI_Comm Mesh::getComm() const { return mfem_mesh_->GetComm(); }
 
-void Mesh::createDomains() { domains_.insert({"entire_mesh", serac::EntireDomain(*mfem_mesh)}); }
+void Mesh::createDomains() { domains_.insert({"entire_mesh", serac::EntireDomain(*mfem_mesh_)}); }
 
 serac::Domain& Mesh::entireDomain() const { return domain("entire_mesh"); }
 
@@ -50,7 +50,7 @@ serac::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name,
 {
   SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
                 axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag));
-  domains_.emplace(domain_name, Domain::ofBoundaryElements(*mfem_mesh, func));
+  domains_.emplace(domain_name, Domain::ofBoundaryElements(*mfem_mesh_, func));
   return domain(domain_name);
 }
 
@@ -59,7 +59,7 @@ serac::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name,
 {
   SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
                 axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag));
-  domains_.emplace(domain_name, Domain::ofBoundaryElements(*mfem_mesh, func));
+  domains_.emplace(domain_name, Domain::ofBoundaryElements(*mfem_mesh_, func));
   return domain(domain_name);
 }
 

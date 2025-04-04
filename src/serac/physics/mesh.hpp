@@ -48,7 +48,7 @@ class Mesh {
   const std::string& tag() const { return mesh_tag; }
 
   /// @brief Returns parallel mfem mesh, ignores const for mfem interfaces
-  mfem::ParMesh& mfemParMesh() const { return *mfem_mesh; }
+  mfem::ParMesh& mfemParMesh() const { return *mfem_mesh_; }
 
   /// @brief Returns parallel communicator
   MPI_Comm getComm() const;
@@ -76,13 +76,13 @@ class Mesh {
   /// names/blocks/attributes from the mesh and create default domains
   void createDomains();
 
-  /// @brief
+  /// @brief String identifying mesh in the state manager
   std::string mesh_tag;
 
-  /// @brief
-  mfem::ParMesh* mfem_mesh;
+  /// @brief Parallel mfem mesh
+  mfem::ParMesh* mfem_mesh_;
 
-  /// @brief
+  /// @brief Map from registered domain name to the domain instance
   mutable std::map<std::string, serac::Domain> domains_;
 };
 
