@@ -95,7 +95,9 @@ void L2_qoi_test(std::string meshfile)
   auto fec = mfem::L2_FECollection(p, dim, mfem::BasisType::GaussLobatto);
   mfem::ParFiniteElementSpace fespace(mesh.get(), &fec, dim, serac::ordering);
 
-  mfem::HypreParVector U = *fespace.NewTrueDofVector();
+  ::std::unique_ptr<mfem::HypreParVector> trueDof(fespace.NewTrueDofVector());
+  mfem::HypreParVector U = *trueDof;
+
   int seed = 2;
   U.Randomize(seed);
 
