@@ -78,7 +78,7 @@ struct ResidualFixture : public testing::Test {
 
     double length = 0.5;
     double width = 2.0;
-    mesh = std::make_unique<serac::Mesh>(mfem::Mesh::MakeCartesian2D(6, 20, element_shape, true, length, width),
+    mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(6, 20, element_shape, true, length, width),
                                          "this_mesh_name", 0, 0);
 
     serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
@@ -100,7 +100,7 @@ struct ResidualFixture : public testing::Test {
     std::string physics_name = "solid";
 
     auto solid_mechanics_residual = serac::create_solid_residual<disp_order, dim, DensitySpace>(
-        physics_name, *mesh, getPointers(states), getPointers(params));
+        physics_name, mesh, getPointers(states), getPointers(params));
 
     // setup material model
 
@@ -150,7 +150,7 @@ struct ResidualFixture : public testing::Test {
   std::string velo_name = "solid_velocity";
 
   axom::sidre::DataStore datastore;
-  std::unique_ptr<serac::Mesh> mesh;
+  std::shared_ptr<serac::Mesh> mesh;
   std::shared_ptr<serac::Residual> residual;
 
   std::vector<serac::FiniteElementState> states;
