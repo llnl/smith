@@ -199,7 +199,7 @@ void qoi_test(mfem::ParMesh& mesh, H1<p> trial, Dimension<dim>, WhichTest which)
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
 
-  mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
+  ::std::unique_ptr<mfem::HypreParVector> tmp(fespace->NewTrueDofVector());
   mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
@@ -207,7 +207,7 @@ void qoi_test(mfem::ParMesh& mesh, H1<p> trial, Dimension<dim>, WhichTest which)
   mfem::FunctionCoefficient x_coord([](mfem::Vector x) { return x[0]; });
   V_gf.ProjectCoefficient(x_coord);
 
-  mfem::HypreParVector* tmp2 = fespace->NewTrueDofVector();
+  ::std::unique_ptr<mfem::HypreParVector> tmp2(fespace->NewTrueDofVector());
   mfem::HypreParVector V = *tmp2;
   V_gf.GetTrueDofs(V);
 
@@ -285,8 +285,6 @@ void qoi_test(mfem::ParMesh& mesh, H1<p> trial, Dimension<dim>, WhichTest which)
 
     } break;
   }
-
-  delete tmp;
 }
 
 template <int p1, int p2, int dim>
@@ -359,7 +357,7 @@ TEST(QoI, DependsOnVectorValuedInput)
   });
   U_gf.ProjectCoefficient(x_squared);
 
-  mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
+  ::std::unique_ptr<mfem::HypreParVector> tmp(fespace->NewTrueDofVector());
   mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
@@ -371,8 +369,6 @@ TEST(QoI, DependsOnVectorValuedInput)
   double exact_answer = 141.3333333333333;
   double relative_error = (f(t, U) - exact_answer) / exact_answer;
   EXPECT_NEAR(0.0, relative_error, 1.0e-10);
-
-  delete tmp;
 }
 
 TEST(QoI, AddAreaIntegral)
@@ -390,7 +386,7 @@ TEST(QoI, AddAreaIntegral)
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
 
-  mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
+  ::std::unique_ptr<mfem::HypreParVector> tmp(fespace->NewTrueDofVector());
   mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
@@ -400,8 +396,6 @@ TEST(QoI, AddAreaIntegral)
   measure.AddAreaIntegral(DependsOn<>{}, TrivialIntegrator{}, whole_mesh);
   double relative_error = (measure(t, U) - measure_mfem(mesh)) / measure(t, U);
   EXPECT_NEAR(0.0, relative_error, 1.0e-10);
-
-  delete tmp;
 }
 
 TEST(QoI, AddVolumeIntegral)
@@ -420,7 +414,7 @@ TEST(QoI, AddVolumeIntegral)
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
 
-  mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
+  ::std::unique_ptr<mfem::HypreParVector> tmp(fespace->NewTrueDofVector());
   mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
@@ -430,8 +424,6 @@ TEST(QoI, AddVolumeIntegral)
   measure.AddVolumeIntegral(DependsOn<>{}, TrivialIntegrator{}, whole_mesh);
   double relative_error = (measure(t, U) - measure_mfem(mesh)) / measure(t, U);
   EXPECT_NEAR(0.0, relative_error, 1.0e-10);
-
-  delete tmp;
 }
 
 TEST(QoI, UsingL2)
