@@ -10,7 +10,7 @@
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
-#include "serac/physics/common.hpp"
+#include "serac/physics/state/state_manager.hpp"
 
 #include "serac/physics/solid_residual.hpp"
 
@@ -114,8 +114,8 @@ struct ResidualFixture : public testing::Test {
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
 
-    solid_mechanics_residual->addSurfaceIntegral([](auto /*t*/, auto /*x*/, auto n) { return 1.0 * n; },
-                                                 mesh->domain(surface_name));
+    solid_mechanics_residual->addSurfaceIntegral(mesh->domain(surface_name),
+                                                 [](auto /*t*/, auto /*x*/, auto n) { return 1.0 * n; });
 
     // initialize fields for testing
 

@@ -13,7 +13,6 @@
 #pragma once
 
 #include "serac/physics/functional_residual.hpp"
-#include "serac/physics/state/state_manager.hpp"
 
 namespace serac {
 
