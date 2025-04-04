@@ -14,7 +14,6 @@
 
 #include "serac/physics/residual.hpp"
 #include "serac/physics/mesh.hpp"
-#include "serac/physics/state/state_manager.hpp"
 
 namespace serac {
 
@@ -69,9 +68,10 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
   /**
    * @brief Add a body integral contribution to the residual
    *
-   * @tparam BodyForceType The type of the body force load
+   * @tparam BodyIntegralType The type of the body integral
+   * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
+   * @param domain The domain over which the body force is applied. If nothing is supplied the entire domain is
    * @param body_integral A function describing the body force applied
-   * @param optional_domain The domain over which the body force is applied. If nothing is supplied the entire domain is
    * used.
    * @pre body_integral must be a object that can be called with the following arguments:
    *    1. `double t` the time
@@ -85,26 +85,39 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *
    */
   template <int... active_parameters, typename BodyIntegralType>
-  void addBodyIntegral(DependsOn<active_parameters...>, BodyIntegralType body_integral,
-                       const std::optional<Domain>& optional_domain = std::nullopt)
+  void addBodyIntegral(DependsOn<active_parameters...>, Domain& domain, BodyIntegralType body_integral)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_->mfemParMesh());
     residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<active_parameters...>{}, body_integral, domain);
   }
 
   /// @overload
-  template <typename BodyForceType>
-  void addBodyIntegral(BodyForceType body_integral, const std::optional<Domain>& optional_domain = std::nullopt)
+  template <int... active_parameters, typename BodyIntegralType>
+  void addBodyIntegral(DependsOn<active_parameters...> depends, BodyIntegralType body_integral)
   {
-    addBodyIntegral(DependsOn<>{}, body_integral, optional_domain);
+    addBodyIntegral(depends, mesh_->entireDomain(), body_integral);
+  }
+
+  /// @overload
+  template <typename BodyForceType>
+  void addBodyIntegral(Domain& domain, BodyForceType body_integral)
+  {
+    addBodyIntegral(DependsOn<>{}, domain, body_integral);
+  }
+
+  /// @overload
+  template <typename BodyForceType>
+  void addBodyIntegral(BodyForceType body_integral)
+  {
+    addBodyIntegral(mesh_->entireDomain(), body_integral);
   }
 
   /**
    * @brief Set the Neumann boundary condition
    *
    * @tparam NeumannType The type of the traction load
+   * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
+   * @param domain The domain over which the traction is applied. If nothing is supplied the entire boundary is
    * @param surface_function A function describing the traction applied to a boundary
-   * @param optional_domain The domain over which the traction is applied. If nothing is supplied the entire boundary is
    * used.
    * @pre NeumannType must be a object that can be called with the following arguments:
    *    1. `double t` the time
@@ -118,14 +131,10 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
    * 3>`)
    *
-   * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename NeumannType>
-  void addSurfaceIntegral(DependsOn<active_parameters...>, NeumannType surface_function,
-                          const std::optional<Domain>& optional_domain = std::nullopt)
+  void addSurfaceIntegral(DependsOn<active_parameters...>, Domain& domain, NeumannType surface_function)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh_->mfemParMesh());
-
     residual_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<active_parameters...>{},
         [surface_function](double t, auto X, auto... params) {
@@ -136,17 +145,30 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
   }
 
   /// @overload
-  template <typename NeumannType>
-  void addSurfaceIntegral(NeumannType surface_function, const std::optional<Domain>& optional_domain = std::nullopt)
+  template <int... active_parameters, typename NeumannType>
+  void addSurfaceIntegral(DependsOn<active_parameters...> depends, NeumannType surface_function)
   {
-    addSurfaceIntegral(DependsOn<>{}, surface_function, optional_domain);
+    addSurfaceIntegral(depends, mesh_->entireDomain(), surface_function);
+  }
+
+  /// @overload
+  template <typename NeumannType>
+  void addSurfaceIntegral(Domain& domain, NeumannType surface_function)
+  {
+    addSurfaceIntegral(DependsOn<>{}, domain, surface_function);
+  }
+
+  /// @overload
+  template <typename NeumannType>
+  void addSurfaceIntegral(NeumannType surface_function)
+  {
+    addSurfaceIntegral(DependsOn<>{}, surface_function);
   }
 
   /// @overload
   mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
-    // auto ret = (*residual_)(time, *fields[0], *fields[parameter_indices + 1]...);
     auto ret = (*residual_)(time, *fields[0], *fields[parameter_indices + 1]...);
     return ret;
   }
