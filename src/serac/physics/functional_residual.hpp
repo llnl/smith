@@ -85,30 +85,16 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *
    */
   template <int... active_parameters, typename BodyIntegralType>
-  void addBodyIntegral(DependsOn<active_parameters...>, Domain& domain, BodyIntegralType body_integral)
+  void addBodyIntegral(DependsOn<active_parameters...>, std::string domain_name, BodyIntegralType body_integral)
   {
-    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<active_parameters...>{}, body_integral, domain);
-  }
-
-  /// @overload
-  template <int... active_parameters, typename BodyIntegralType>
-  void addBodyIntegral(DependsOn<active_parameters...> depends, BodyIntegralType body_integral)
-  {
-    addBodyIntegral(depends, mesh_->entireDomain(), body_integral);
+    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<active_parameters...>{}, body_integral, mesh_->domain(domain_name));
   }
 
   /// @overload
   template <typename BodyForceType>
-  void addBodyIntegral(Domain& domain, BodyForceType body_integral)
+  void addBodyIntegral(std::string domain_name, BodyForceType body_integral)
   {
-    addBodyIntegral(DependsOn<>{}, domain, body_integral);
-  }
-
-  /// @overload
-  template <typename BodyForceType>
-  void addBodyIntegral(BodyForceType body_integral)
-  {
-    addBodyIntegral(mesh_->entireDomain(), body_integral);
+    addBodyIntegral(DependsOn<>{}, domain_name, body_integral);
   }
 
   /**
@@ -133,7 +119,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *
    */
   template <int... active_parameters, typename NeumannType>
-  void addSurfaceIntegral(DependsOn<active_parameters...>, Domain& domain, NeumannType surface_function)
+  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string domain_name, NeumannType surface_function)
   {
     residual_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<active_parameters...>{},
@@ -141,28 +127,14 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
           auto n = cross(get<DERIVATIVE>(X));
           return surface_function(t, get<VALUE>(X), normalize(n), params...);
         },
-        domain);
-  }
-
-  /// @overload
-  template <int... active_parameters, typename NeumannType>
-  void addSurfaceIntegral(DependsOn<active_parameters...> depends, NeumannType surface_function)
-  {
-    addSurfaceIntegral(depends, mesh_->entireDomain(), surface_function);
+        mesh_->domain(domain_name));
   }
 
   /// @overload
   template <typename NeumannType>
-  void addSurfaceIntegral(Domain& domain, NeumannType surface_function)
+  void addBoundaryIntegral(std::string domain_name, NeumannType surface_function)
   {
-    addSurfaceIntegral(DependsOn<>{}, domain, surface_function);
-  }
-
-  /// @overload
-  template <typename NeumannType>
-  void addSurfaceIntegral(NeumannType surface_function)
-  {
-    addSurfaceIntegral(DependsOn<>{}, surface_function);
+    addBoundaryIntegral(DependsOn<>{}, domain_name, surface_function);
   }
 
   /// @overload
