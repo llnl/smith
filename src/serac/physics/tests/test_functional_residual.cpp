@@ -115,13 +115,13 @@ struct ResidualFixture : public testing::Test {
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
 
-    f_residual->addSurfaceIntegral(mesh->domain(surface_name),
+    f_residual->addBoundaryIntegral(surface_name,
                                    [](double /*t*/, auto /*x*/, auto n) { return 1.0 * n; });
-    f_residual->addBodyIntegral(serac::DependsOn<0>{}, mesh->entireDomain(), [](double /*t*/, auto /*x*/, auto u) {
+    f_residual->addBodyIntegral(serac::DependsOn<0>{}, mesh->entireDomainName(), [](double /*t*/, auto /*x*/, auto u) {
       return serac::tuple{serac::get<serac::VALUE>(u), 0.0 * serac::get<serac::DERIVATIVE>(u)};
     });
 
-    f_residual->addBodyIntegral([](double /*t*/, auto x) {
+    f_residual->addBodyIntegral(mesh->entireDomainName(), [](double /*t*/, auto x) {
       return serac::tuple{0.5 * serac::get<serac::VALUE>(x), 0.0 * serac::get<serac::DERIVATIVE>(x)};
     });
 
