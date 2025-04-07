@@ -18,12 +18,12 @@ namespace serac {
 TEST(SolidMechanics, CurvedElementOutput)
 {
   constexpr int dim = 2;
-  constexpr int p = 1;
+  constexpr int p = 2;
   
   const std::string mesh_tag = "mesh";
   const std::string physics_prefix = "solid";
   
-  int serial_refinement = 1;
+  int serial_refinement = 0;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -32,8 +32,17 @@ TEST(SolidMechanics, CurvedElementOutput)
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/single_curved_quad.g";
+  auto serial_mesh = buildMeshFromFile(filename);
+  mfem::out << "num serial nodes: " << serial_mesh.GetNodalFESpace()->GetNDofs() << std::endl;
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
+  mfem::out << "refine distribute mesh order: " << mesh->GetNodalFESpace()->GetMaxElementOrder() << std::endl;
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+
+  const mfem::GridFunction* nodes = pmesh.GetNodes();
+  mfem::out << "Number of mesh nodes: " << nodes->FESpace()->GetNDofs() << std::endl;
+  mfem::out << "Mesh position field polynomial order is " << pmesh.GetNodalFESpace()->GetMaxElementOrder() << std::endl;
+  mfem::out << "mesh nodes" << std::endl;
+  nodes->Print();
 
   Domain whole_domain = EntireDomain(pmesh);
   Domain left_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(4));
@@ -46,18 +55,15 @@ TEST(SolidMechanics, CurvedElementOutput)
 
   auto solid = SolidMechanics<p, dim>(nonlinear_opts, linear_opts, time_opts, "curved_element", mesh_tag);
 
-  using Material = solid_mechanics::NeoHookean;
+  using Material = solid_mechanics::LinearIsotropic;
   constexpr double E = 1.0;
   constexpr double nu = 0.0;
-  Material material{.K = E/3.0/(1.0 - 2.0*nu), .G = 0.5*E/(1.0 + nu)};
+  Material material{.density = 1.0, .K = E/3.0/(1.0 - 2.0*nu), .G = 0.5*E/(1.0 + nu)};
   solid.setMaterial(serac::DependsOn<>{}, material, whole_domain);
 
-  solid.setFixedBCs(left_boundary, Component::X);
-  solid.setFixedBCs(bottom_boundary, Component::Y);
-  
-  solid.setTraction([](auto, auto, auto) { return tensor<double, dim>{0.01, 0.0}; }, right_boundary);
-
   solid.completeSetup();
+
+  solid.setDisplacement([](const tensor<double, dim>& x) { return tensor<double, dim>{2*(x[0] + 0.5)*(x[0] + 0.5), 0}; });
 
   solid.outputStateToDisk("curved_element_paraview");
 }
