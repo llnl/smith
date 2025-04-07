@@ -70,7 +70,8 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *
    * @tparam BodyIntegralType The type of the body integral
    * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
-   * @param domain The domain over which the body force is applied. If nothing is supplied the entire domain is
+   * @param domain_name The name of the registered domain over which the body force is applied. If nothing is supplied
+   * the entire domain is
    * @param body_integral A function describing the body force applied
    * used.
    * @pre body_integral must be a object that can be called with the following arguments:
@@ -103,7 +104,8 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *
    * @tparam NeumannType The type of the traction load
    * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
-   * @param domain The domain over which the traction is applied. If nothing is supplied the entire boundary is
+   * @param domain_name The name of the registered domain over which the traction is applied. If nothing is supplied the
+   * entire boundary is
    * @param surface_function A function describing the traction applied to a boundary
    * used.
    * @pre NeumannType must be a object that can be called with the following arguments:
