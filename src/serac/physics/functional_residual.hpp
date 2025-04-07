@@ -87,7 +87,8 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
   template <int... active_parameters, typename BodyIntegralType>
   void addBodyIntegral(DependsOn<active_parameters...>, std::string domain_name, BodyIntegralType body_integral)
   {
-    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<active_parameters...>{}, body_integral, mesh_->domain(domain_name));
+    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<active_parameters...>{}, body_integral,
+                                 mesh_->domain(domain_name));
   }
 
   /// @overload
