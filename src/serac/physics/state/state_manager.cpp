@@ -50,35 +50,10 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
     datacoll.UpdateStateFromDS();
     datacoll.UpdateMeshAndFieldsFromDS();
 
-    // Functional needs the nodal grid function and neighbor data in the mesh
-
-    // Determine if the existing nodal grid function is discontinuous. This
-    // indicates that the mesh is periodic and the new nodal grid function must also
-    // be discontinuous.
-    bool is_discontinuous = false;
-    auto nodes = mesh(name).GetNodes();
-    if (nodes) {
-      is_discontinuous = nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS;
-      SLIC_WARNING_ROOT_IF(
-          is_discontinuous,
-          "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 fields and "
-          "has not been thoroughly tested. Proceed at your own risk.");
-    }
-
-    // This mfem call ensures the mesh contains an H1 grid function describing nodal
-    // cordinates. The parameters do the following:
-    // 1. Sets the order of the mesh to  p = 1
-    // 2. Uses the existing continuity of the mesh finite element space (periodic meshes are discontinuous)
-    // 3. Uses the spatial dimension as the mesh dimension (i.e. it is not a lower dimension manifold)
-    // 4. Uses the ordering set by serac::ordering
-    mesh(name).SetCurvature(1, is_discontinuous, -1, serac::ordering);
+    checkMesh(mesh(name));
 
     // Sidre will destruct the nodal grid function instead of the mesh
     mesh(name).SetNodesOwner(false);
-
-    // Generate the face neighbor information in the mesh. This is needed by the face restriction
-    // operators used by Functional
-    mesh(name).ExchangeFaceNbrData();
 
     // Construct and store the shape displacement fields and sensitivities associated with this mesh
     constructShapeFields(name);
@@ -94,7 +69,7 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
 void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteElementState*> states_to_load)
 {
   SERAC_MARK_FUNCTION;
-  mfem::ParMesh* meshPtr = &(*states_to_load.begin())->mesh();
+  const mfem::ParMesh* meshPtr = &(*states_to_load.begin())->mesh();
   std::string mesh_name = collectionID(meshPtr);
 
   std::string coll_name = mesh_name + "_datacoll";
@@ -227,26 +202,7 @@ void StateManager::save(const double t, const int cycle, const std::string& mesh
 
 mfem::ParMesh& StateManager::setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag)
 {
-  // Determine if the existing nodal grid function is discontinuous. This
-  // indicates that the mesh is periodic and the new nodal grid function must also
-  // be discontinuous.
-  bool is_discontinuous = false;
-  auto nodes = pmesh->GetNodes();
-  if (nodes) {
-    is_discontinuous = nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS;
-    SLIC_WARNING_ROOT_IF(
-        is_discontinuous,
-        "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 fields and "
-        "has not been thoroughly tested. Proceed at your own risk.");
-  }
-
-  // This mfem call ensures the mesh contains an H1 grid function describing nodal
-  // cordinates. The parameters do the following:
-  // 1. Sets the order of the mesh to  p = 1
-  // 2. Uses the existing continuity of the mesh finite element space (periodic meshes are discontinuous)
-  // 3. Uses the spatial dimension as the mesh dimension (i.e. it is not a lower dimension manifold)
-  // 4. Uses the ordering set by serac::ordering
-  pmesh->SetCurvature(1, is_discontinuous, -1, serac::ordering);
+  checkMesh(*pmesh);
 
   // Sidre will destruct the nodal grid function instead of the mesh
   pmesh->SetNodesOwner(false);
@@ -256,15 +212,12 @@ mfem::ParMesh& StateManager::setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const
   datacoll.SetMesh(pmesh.release());
   datacoll.SetOwnData(true);
 
-  // Functional needs the nodal grid function and neighbor data in the mesh
   auto& new_pmesh = mesh(mesh_tag);
-
-  // Generate the face neighbor information in the mesh. This is needed by the face restriction
-  // operators used by Functional
-  new_pmesh.ExchangeFaceNbrData();
 
   // We must construct the shape fields here as the mesh did not exist during the newDataCollection call
   // for the non-restart case
+  // BT: Consider storing shape fields on the mesh class and making them on mesh construction.
+  // The setMesh() call wouldn't mutate the mesh at all, just store it as name implies.
   constructShapeFields(mesh_tag);
 
   return new_pmesh;
@@ -320,6 +273,27 @@ double StateManager::time(std::string mesh_tag)
 {
   SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag \"{}\" not found in the data store", mesh_tag));
   return datacolls_.at(mesh_tag).GetTime();
+}
+
+
+void checkMesh(const mfem::ParMesh& pmesh)
+{
+  SLIC_ERROR_ROOT_IF(!pmesh.OwnsNodes(),
+    "The mesh must have a grid function for the coordinates.");
+
+  SLIC_WARNING_ROOT_IF(pmesh.GetNodalFESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS,
+    "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 "
+    "fields and has not been thoroughly tested. Proceed at your own risk.");
+  
+  SLIC_ERROR_ROOT_IF(pmesh.GetNodalFESpace()->GetOrdering() != serac::ordering,
+    "The dof ordering of the coordinates must be the same as the global setting in serac::ordering. "
+    "Serac mesh building tools should ensure this automatically.");
+
+  // Mesh must have face restriction operators, as they are used by Functional
+  SLIC_ERROR_ROOT_IF(!pmesh.have_face_nbr_data,
+    "The mesh must have face neighbor data defined. Serac mesh building tools should ensure this "
+    "automatically. If you built your mesh with native MFEM tools, make sure to call the "
+    "ExchangeFaceNbrData() before setting it with the state manager.");
 }
 
 }  // namespace serac

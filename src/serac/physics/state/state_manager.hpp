@@ -374,4 +374,6 @@ class StateManager {
   static std::unordered_map<std::string, mfem::ParGridFunction*> named_duals_;
 };
 
+void checkMesh(const mfem::ParMesh& pmesh);
+
 }  // namespace serac
