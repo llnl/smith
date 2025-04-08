@@ -23,6 +23,7 @@
 
 int main(int argc, char* argv[])
 {
+  // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
 
   // NOTE: p must be equal to 1 to work with Tribol's mortar method

@@ -20,6 +20,7 @@
 
 int main(int argc, char* argv[])
 {
+  // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
 
   SLIC_INFO_ROOT(serac::about());

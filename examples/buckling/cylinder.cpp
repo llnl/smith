@@ -87,8 +87,7 @@ int main(int argc, char* argv[])
   bool use_contact = true;
   auto contact_type = serac::ContactEnforcement::Penalty;
 
-  // Initialize Serac and all of the external libraries.
-  // Automatically terminates libraries and finalizes MPI.
+  // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
 
   // Handle command line arguments

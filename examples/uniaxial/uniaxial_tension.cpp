@@ -28,6 +28,7 @@ void output(double u, double f, const Physics& solid, const std::string& paravie
 
 int main(int argc, char* argv[])
 {
+  // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
 
   constexpr int p = 2;
