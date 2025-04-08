@@ -85,6 +85,14 @@ struct tensor<T, m> {
     return data[0];
   }
 
+  SERAC_HOST_DEVICE constexpr tensor& operator=(const T& scalar)
+  {
+    for (int i = 0; i < m; ++i) {
+      data[i] = scalar;
+    }
+    return *this;
+  }
+
   T data[m];
 };
 /// @endcond
@@ -1282,7 +1290,7 @@ SERAC_HOST_DEVICE constexpr auto detApIm1(const tensor<T, 3, 3>& A)
 
   // clang-format off
   // equivalent to tr(A) + I2(A) + det(A)
-  return A(0, 0) + A(1, 1) + A(2, 2) 
+  return A(0, 0) + A(1, 1) + A(2, 2)
        - A(0, 1) * A(1, 0) * (1 + A(2, 2))
        + A(0, 0) * A(1, 1) * (1 + A(2, 2))
        - A(0, 2) * A(2, 0) * (1 + A(1, 1))
@@ -1891,6 +1899,38 @@ SERAC_HOST_DEVICE constexpr int size(const double&) { return 1; }
 SERAC_HOST_DEVICE constexpr int size(zero) { return 0; }
 
 /**
+ * @brief Returns the rank (number of dimensions) of a tensor.
+ *
+ * @tparam T The datatype stored in the tensor.
+ * @tparam n The extents of each dimension.
+ *
+ * @return The number of dimensions (rank) of the tensor.
+ */
+template <typename T, int... n>
+SERAC_HOST_DEVICE int constexpr
+rank(
+  ::serac::tensor<T, n...> const &
+) {
+  return sizeof...(n);
+}
+
+/**
+ * @brief Returns the shape (extents of each dimension) of a tensor.
+ *
+ * @tparam T The datatype stored in the tensor.
+ * @tparam n The extents of each dimension.
+ *
+ * @return A ::std::array of extents representing the tensor shape.
+ */
+template <typename T, int... n>
+SERAC_HOST_DEVICE ::std::array<int, sizeof...(n)> constexpr
+shape(
+  ::serac::tensor<T, n...> const &
+) {
+  return {n...};
+}
+
+/**
  * @brief a function for querying the ith dimension of a tensor
  *
  * @tparam i which dimension to query
@@ -2033,7 +2073,7 @@ inline mat < 2, 2 > look_at(const vec < 2 > & direction) {
 
 inline mat < 3, 3 > R3_basis(const vec3 & n) {
   float sign = (n[2] >= 0.0f) ? 1.0f : -1.0f;
-  float a = -1.0f / (sign + n[2]); 
+  float a = -1.0f / (sign + n[2]);
   float b = n[0] * n[1] * a;
 
   return mat < 3, 3 >{

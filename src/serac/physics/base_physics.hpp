@@ -431,9 +431,50 @@ public:
   /**
    * @brief Get a timestep increment which has been previously checkpointed at the give cycle
    * @param cycle The previous 'timestep' number where the timestep increment is requested
-   * @return The timestep increment
+   * @return The timestep increment.
    */
   virtual double getCheckpointedTimestep(int cycle) const;
+
+  /**
+   * @brief Get the cumulative time up to the given cycle by summing previously checkpointed timestep increments.
+   * @param cycle The previous 'timestep' number where the simulation time is requested
+   * @return The total simulation time at the start of the given cycle.
+   */
+  virtual double getCheckpointedTime(int cycle) const;
+
+  /**
+   * @brief Computes the absolute change (L2 norm of the difference) between two successive states.
+   *
+   * This function compares checkpointed states at cycles `k` and `k-1` for a given field.
+   *
+   * @param cycle      The solution cycle `k` (must be >= 1).
+   * @param state_name The name of the checkpointed state field to compare.
+   *
+   * @return The absolute L2 norm of the difference: || u^k - u^{k-1} ||.
+   */
+  double
+  getAbsoluteChangeState(
+    int const &cycle,
+    std::string const &state_name
+  );
+
+  /**
+   * @brief Computes the relative change in a given state variable between successive cycles.
+   *
+   * This returns the L2 norm of the difference divided by the L2 norm of the current state:
+   *
+   *     || u^k - u^{k-1} || / (|| u^k || + ε)
+   *
+   * @param cycle      The solution cycle `k` (must be >= 1).
+   * @param state_name The name of the checkpointed state field to compare.
+   *
+   * @return The relative L2 change between `state_name` at cycles `k` and `k-1`.
+   */
+  double
+  getRelativeChangeState(
+    int const &cycle,
+    std::string const &state_name
+  );
 
   /**
    * @brief Initializes the Sidre structure for simulation summary data
@@ -494,6 +535,25 @@ protected:
    * @return A map containing the primal field names and their associated FiniteElementStates at the requested cycle
    */
   std::unordered_map<std::string, FiniteElementState> getCheckpointedStates(int cycle);
+
+  /**
+   * @brief Retrieves a set of previous state values for time integration schemes (e.g., BDF, Extrapolation).
+   *
+   * This version pulls data directly from the solver's checkpointing system via `getCheckpointedStates(cycle)`.
+   * The returned states are ordered from newest (`u^k`) to oldest (`u^{k-q+1}`).
+   *
+   * @param cycle                The current timestep index `k+1` when solving for `u^{k+1}`.
+   * @param num_requested_states Number of past states required (e.g., 2 for BDF2, 1 for linear extrapolation).
+   * @param field_name           The key identifying the field in checkpointed states (e.g., "velocity", "pressure").
+   *
+   * @return A vector of previous states, ordered from latest to oldest.
+   */
+  ::std::vector<::serac::FiniteElementState>
+  getPreviousStates(
+    int const &cycle,
+    int const &num_requested_states,
+    std::string const &field_name
+  );
 
   /// @brief Name of the physics module
   std::string name_ = {};

@@ -89,7 +89,9 @@ public:
     norm = initial_norm = evaluateNorm(x, r);
 
     if (print_options.first_and_last && !print_options.iterations) {
-      mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "...\n";
+      mfem::out << "Newton iteration " << std::setw(3) << 0
+        << " : ||r|| = " << std::scientific << std::setw(12)
+        << std::setprecision(6) << norm << "...\n";
     }
 
     norm_goal            = std::max(rel_tol * initial_norm, abs_tol);
@@ -99,9 +101,13 @@ public:
     for (; true; it++) {
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
       if (print_options.iterations) {
-        mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
+        mfem::out << "Newton iteration " << std::setw(3) << it
+          << " : ||r|| = " << std::scientific << std::setw(12)
+          << std::setprecision(6) << norm;
         if (it > 0) {
-          mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
+          mfem::out << ", ||r||/||r_0|| = "
+          << std::scientific << std::setw(12) << std::setprecision(6)
+          << (initial_norm != 0.0 ? norm / initial_norm : norm);
         }
         mfem::out << '\n';
       }
@@ -193,7 +199,9 @@ public:
     final_norm = norm;
 
     if (print_options.summary || (!converged && print_options.warnings) || print_options.first_and_last) {
-      mfem::out << "Newton: Number of iterations: " << final_iter << '\n' << "   ||r|| = " << final_norm << '\n';
+      mfem::out << "Newton: Number of iterations: " << final_iter << '\n'
+        << "   ||r|| = " << std::scientific << std::setw(12)
+        << std::setprecision(6) << final_norm << '\n';
     }
     if (!converged && (print_options.summary || print_options.warnings)) {
       mfem::out << "Newton: No convergence!\n";
@@ -483,7 +491,9 @@ public:
     norm = initial_norm = computeResidual(X, r);
     norm_goal           = std::max(rel_tol * initial_norm, abs_tol);
     if (print_options.first_and_last && !print_options.iterations) {
-      mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "...\n";
+      mfem::out << "Newton iteration " << std::setw(3) << 0
+        << " : ||r|| = " << std::scientific << std::setw(12)
+        << std::setprecision(6) << norm << "...\n";
     }
     prec->iterative_mode      = false;
     tr_precond.iterative_mode = false;
@@ -517,9 +527,13 @@ public:
     for (; true; it++) {
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
       if (print_options.iterations) {
-        mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
+        mfem::out << "Newton iteration " << std::setw(3) << it
+          << " : ||r|| = " << std::scientific << std::setw(12)
+          << std::setprecision(6) << norm;
         if (it > 0) {
-          mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
+          mfem::out << ", ||r||/||r_0|| = " << std::scientific << std::setw(12)
+            << std::setprecision(6)
+            << (initial_norm != 0.0 ? norm / initial_norm : norm);
           mfem::out << ", x_incr = " << std::setw(13) << d.Norml2();
         } else {
           mfem::out << ", norm goal = " << std::setw(13) << norm_goal << "\n";
@@ -676,8 +690,9 @@ public:
     final_norm = norm;
 
     if (print_options.summary || (!converged && print_options.warnings) || print_options.first_and_last) {
-      mfem::out << "Newton: Number of iterations: " << final_iter << '\n' << "   ||r|| = " << final_norm << '\n';
-    }
+      mfem::out << "Newton: Number of iterations: " << final_iter << '\n'
+        << "   ||r|| = " << std::scientific << std::setw(12)
+        << std::setprecision(6) << final_norm << '\n';    }
     if (!converged && (print_options.summary || print_options.warnings)) {
       mfem::out << "Newton: No convergence!\n";
     }

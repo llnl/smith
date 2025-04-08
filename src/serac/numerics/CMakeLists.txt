@@ -12,6 +12,8 @@ set(numerics_headers
     solver_config.hpp
     stdfunction_operator.hpp
     petsc_solvers.hpp
+    extrapolation_operator.hpp
+    fixed_step_bdf_operator.hpp
     )
 
 set(numerics_sources
