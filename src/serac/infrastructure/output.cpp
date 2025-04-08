@@ -8,7 +8,6 @@
 
 #include "serac/infrastructure/about.hpp"
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/application_manager.hpp"
 
 #include "axom/core.hpp"
 #include "axom/sidre.hpp"

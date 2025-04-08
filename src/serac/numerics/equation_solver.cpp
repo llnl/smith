@@ -12,7 +12,6 @@
 #include <iostream>
 
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/numerics/trust_region_solver.hpp"

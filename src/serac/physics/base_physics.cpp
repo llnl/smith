@@ -12,7 +12,6 @@
 
 #include "serac/infrastructure/about.hpp"
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/application_manager.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/state_manager.hpp"
 

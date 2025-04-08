@@ -6,7 +6,6 @@
 
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/about.hpp"
-#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac::logger {
 
