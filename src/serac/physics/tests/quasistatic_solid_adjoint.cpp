@@ -18,7 +18,7 @@
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 struct ParameterizedLinearIsotropicSolid {
   using State = ::serac::Empty;  ///< this material has no internal variables
@@ -248,9 +248,6 @@ TEST(quasistatic, finiteDifference)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  serac::initialize(argc, argv);
-  int result = RUN_ALL_TESTS();
-  serac::exitGracefully(result);
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

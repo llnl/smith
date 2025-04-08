@@ -14,6 +14,7 @@
 #pragma once
 
 #include <string>
+#include "mpi.h"
 
 namespace serac {
 
@@ -55,5 +56,12 @@ std::string version(bool add_SHA = true);
  * @return string value of the the current compiler name and version
  */
 std::string compiler();
+
+/**
+ * @brief Get MPI Info
+ *
+ * @return std::pair<int, int> Pair containing the number of MPI processes and ranks
+ */
+std::pair<int, int> getMPIInfo(MPI_Comm comm = MPI_COMM_WORLD);
 
 }  // namespace serac

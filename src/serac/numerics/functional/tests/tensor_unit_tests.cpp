@@ -9,6 +9,7 @@
 
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/tuple_tensor_dual_functions.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -636,12 +637,6 @@ TEST(Tensor, SqrtDerivative)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

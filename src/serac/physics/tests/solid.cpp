@@ -23,8 +23,7 @@
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -247,10 +246,6 @@ TEST(SolidMechanics, 3DQuadStaticJ2) { functional_solid_test_static_J2(); }
 int main(int argc, char* argv[])
 {
   testing::InitGoogleTest(&argc, argv);
-
-  serac::initialize(argc, argv);
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully(result);
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

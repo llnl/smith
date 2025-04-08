@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "axom/slic/core/SimpleLogger.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
@@ -247,17 +247,7 @@ TEST_F(InputTest, CoefBuildScalarFromVec)
 
 int main(int argc, char* argv[])
 {
-  int result = 0;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

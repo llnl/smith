@@ -1,10 +1,10 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/infrastructure/initialize.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 #ifdef WIN32
 #include <windows.h>
@@ -17,7 +17,7 @@
 #include "serac/infrastructure/accelerator.hpp"
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/profiling.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/serac_config.hpp"
 
 #include "mfem.hpp"
 
@@ -27,38 +27,22 @@
 
 namespace serac {
 
-std::pair<int, int> getMPIInfo(MPI_Comm comm)
+ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : comm_(comm)
 {
-  int num_procs = 0;
-  int rank = 0;
-  if (MPI_Comm_size(comm, &num_procs) != MPI_SUCCESS) {
-    SLIC_ERROR("Failed to determine number of MPI processes");
-  }
-
-  if (MPI_Comm_rank(comm, &rank) != MPI_SUCCESS) {
-    SLIC_ERROR("Failed to determine MPI rank");
-  }
-  return {num_procs, rank};
-}
-
-std::pair<int, int> initialize(int argc, char* argv[], MPI_Comm comm)
-{
-  // Initialize MPI.
+  // Initialize MPI
   if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
     std::cerr << "Failed to initialize MPI" << std::endl;
-    serac::exitGracefully(true);
+    exit(1);
   }
 
-  // Initialize the signal handler
-  terminator::registerSignals();
-
   // Initialize SLIC logger
-  if (!logger::initialize(comm)) {
-    serac::exitGracefully(true);
+  if (!logger::initialize(comm_)) {
+    std::cerr << "Failed to initialize SLIC logger" << std::endl;
+    exit(1);
   }
 
   // Start the profiler (no-op if not enabled)
-  profiling::initialize(comm);
+  profiling::initialize(comm_);
 
   mfem::Hypre::Init();
 
@@ -76,10 +60,35 @@ std::pair<int, int> initialize(int argc, char* argv[], MPI_Comm comm)
 #endif
 
   // Initialize GPU (no-op if not enabled/available)
-  // TODO for some reason this causes errors on Lassen. We need to look into this ASAP.
-  // accelerator::initializeDevice();
+  accelerator::initializeDevice();
+}
 
-  return getMPIInfo(comm);
+ApplicationManager::~ApplicationManager()
+{
+  if (axom::slic::isInitialized()) {
+    serac::logger::flush();
+    serac::logger::finalize();
+  }
+
+#ifdef SERAC_USE_PETSC
+#ifdef SERAC_USE_SLEPC
+  mfem::MFEMFinalizeSlepc();
+#else
+  mfem::MFEMFinalizePetsc();
+#endif
+#endif
+
+  profiling::finalize();
+
+  int mpi_initialized = 0;
+  MPI_Initialized(&mpi_initialized);
+  int mpi_finalized = 0;
+  MPI_Finalized(&mpi_finalized);
+  if (mpi_initialized && !mpi_finalized) {
+    MPI_Finalize();
+  }
+
+  accelerator::terminateDevice();
 }
 
 }  // namespace serac

@@ -16,10 +16,9 @@
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
-
-int num_procs, myid;
 
 constexpr bool verbose = true;
 std::unique_ptr<mfem::ParMesh> mesh2D;
@@ -191,11 +190,7 @@ TEST(L2, 2DMixed)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
+  serac::ApplicationManager applicationManager(argc, argv);
 
   int serial_refinement = 0;
   int parallel_refinement = 0;
@@ -206,9 +201,5 @@ int main(int argc, char* argv[])
   std::string meshfile3D = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
   mesh3D = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), serial_refinement, parallel_refinement);
 
-  int result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  return RUN_ALL_TESTS();
 }

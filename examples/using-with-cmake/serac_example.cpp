@@ -13,15 +13,14 @@
  */
 
 #include "serac/infrastructure/about.hpp"
-#include "serac/infrastructure/initialize.hpp"
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "mfem.hpp"
 #include "axom/core.hpp"
 
 int main(int argc, char* argv[])
 {
-  serac::initialize(argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv);
 
   SLIC_INFO_ROOT(serac::about());
 
@@ -31,5 +30,5 @@ int main(int argc, char* argv[])
 
   SLIC_INFO_ROOT("\nSerac loaded successfully.");
 
-  serac::exitGracefully();
+  return 0;
 }

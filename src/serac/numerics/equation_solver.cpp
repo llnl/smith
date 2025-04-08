@@ -12,7 +12,7 @@
 #include <iostream>
 
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/numerics/trust_region_solver.hpp"
@@ -1111,12 +1111,12 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
     case LinearSolver::PetscCG:
     case LinearSolver::PetscGMRES:
       SLIC_ERROR_ROOT("PETSc linear solver requested for non-PETSc build.");
-      exitGracefully(true);
+      exit(1);
       break;
 #endif
     default:
       SLIC_ERROR_ROOT("Linear solver type not recognized.");
-      exitGracefully(true);
+      exit(1);
   }
 
   iter_lin_solver->SetRelTol(linear_opts.relative_tol);

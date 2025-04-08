@@ -6,12 +6,11 @@
 
 #include <fstream>
 #include <iostream>
-#include "serac/infrastructure/accelerator.hpp"
 #include "mfem.hpp"
 #include <gtest/gtest.h>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/infrastructure/input.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/mesh/mesh_utils_base.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
@@ -117,20 +116,7 @@ TEST(mixed, thermal_tets_and_hexes) { thermal_test<2, 1>("/data/meshes/patch3D_t
 
 int main(int argc, char* argv[])
 {
-  serac::accelerator::initializeDevice();
   ::testing::InitGoogleTest(&argc, argv);
-
-  int num_procs, myid;
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-  serac::accelerator::terminateDevice();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

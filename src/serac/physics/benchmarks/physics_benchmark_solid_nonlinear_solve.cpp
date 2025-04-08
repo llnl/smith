@@ -23,8 +23,7 @@
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/profiling.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -344,7 +343,7 @@ void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, 
 
 int main(int argc, char* argv[])
 {
-  serac::initialize(argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv);
 
   SERAC_MARK_FUNCTION;
 
@@ -369,7 +368,7 @@ int main(int argc, char* argv[])
     if (e.get_name() == "CallForHelp") {
       auto msg = app.help();
       SLIC_INFO_ROOT(msg);
-      serac::exitGracefully();
+      return 0;
     } else {
       auto err_msg = axom::CLI::FailureMessage::simple(&app, e);
       SLIC_ERROR_ROOT(err_msg);
@@ -404,5 +403,5 @@ int main(int argc, char* argv[])
 
   // functional_solid_test_euler();
 
-  serac::exitGracefully(0);
+  return 0;
 }

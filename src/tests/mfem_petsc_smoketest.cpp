@@ -434,6 +434,8 @@ TEST(MfemPetscSmoketest, MfemPetscEx1)
 
 int main(int argc, char* argv[])
 {
+  // NOTE: This test does not use Serac's ApplicationManager, because
+  // it does not use Serac!
   int result = 0;
 
   ::testing::InitGoogleTest(&argc, argv);

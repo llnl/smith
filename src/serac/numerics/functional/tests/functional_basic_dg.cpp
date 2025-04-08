@@ -12,7 +12,7 @@
 #include <gtest/gtest.h>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/infrastructure/input.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/mesh/mesh_utils_base.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
@@ -202,19 +202,7 @@ TEST(basic, L2_mixed_scalar_test_tets_and_hexes_linear)
 
 int main(int argc, char* argv[])
 {
-  int num_procs, myid;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

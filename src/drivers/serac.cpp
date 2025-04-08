@@ -22,11 +22,10 @@
 
 #include "serac/infrastructure/about.hpp"
 #include "serac/infrastructure/cli.hpp"
-#include "serac/infrastructure/initialize.hpp"
 #include "serac/infrastructure/input.hpp"
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/output.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/heat_transfer.hpp"
@@ -172,7 +171,7 @@ int getOrder(std::optional<serac::SolidMechanicsInputOptions> solid_mechanics_op
  */
 int main(int argc, char* argv[])
 {
-  serac::initialize(argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv);
 
   // Handle Command line
   std::unordered_map<std::string, std::string> cli_opts =
@@ -183,7 +182,7 @@ int main(int argc, char* argv[])
   bool print_version = cli_opts.find("version") != cli_opts.end();
   if (print_version) {
     SLIC_INFO(serac::about());
-    serac::exitGracefully();
+    return 0;
   }
 
   // Output helpful run information
@@ -239,7 +238,7 @@ int main(int argc, char* argv[])
   if (create_input_file_docs) {
     std::string input_docs_path = axom::utilities::filesystem::joinPath(output_directory, "serac_input.rst");
     inlet.write(axom::inlet::SphinxWriter(input_docs_path));
-    serac::exitGracefully();
+    return 0;
   }
 
   // Optionally, print unused entries in input file and quit
@@ -253,7 +252,7 @@ int main(int argc, char* argv[])
     } else {
       SLIC_INFO("No unused entries in input file.");
     }
-    serac::exitGracefully();
+    return 0;
   }
 
   // Save input values to file
@@ -344,5 +343,5 @@ int main(int argc, char* argv[])
   // Output summary file (basic run info and curve data)
   serac::output::outputSummary(datastore, output_directory);
 
-  serac::exitGracefully();
+  return 0;
 }
