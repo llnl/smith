@@ -16,7 +16,7 @@ namespace serac {
 
 /**
  * @brief RAII Application Manager class. Initializes MPI and other important libraries as
- * well as automatically terminates them upon going out of scope.
+ * well as automatically finalizes them upon going out of scope.
  */
 class ApplicationManager {
  public:
