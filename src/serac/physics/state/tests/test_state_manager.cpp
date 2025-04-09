@@ -35,14 +35,16 @@ TEST(StateManager, StoresHighOrderMeshes)
   // It looks something like this:
   //
   //     curved edge on top
-  //       __--O--__
-  //    O--         --O
-  //    |             |
-  //    |             |    straight edges on sides and bottom
-  //    O             O
-  //    |             |
-  //    |             |
-  //    O------O------O
+  //            7
+  //        __--O--__
+  //  0  O--         --O 3
+  //     |             |
+  //     |       O     |    straight edges on sides and bottom
+  //  4  O       8     O 6
+  //     |             |
+  //     |             |
+  //  1  O------O------O 2
+  //            5
 
   constexpr int dim = 2;
   axom::sidre::DataStore datastore;
