@@ -115,7 +115,7 @@ void BasePhysics::setShapeDisplacement(const FiniteElementState& shape_displacem
 
 void BasePhysics::CreateParaviewDataCollection() const
 {
-  std::string output_name = name_.empty()? "default" : name_;
+  std::string output_name = name_.empty() ? "default" : name_;
 
   paraview_dc_ = std::make_unique<mfem::ParaViewDataCollection>(output_name, const_cast<mfem::ParMesh*>(&mesh_));
 
