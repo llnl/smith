@@ -144,7 +144,7 @@ void BasePhysics::CreateParaviewDataCollection() const
 
   // Identify maximum polynomial order in output fields in order to set detail level
 
-  int max_order_in_fields = std::max(mesh_.GetNodalFESpace()->GetMaxElementOrder(), max_order_in_fields);
+  int max_order_in_fields = mesh_.GetNodalFESpace()->GetMaxElementOrder();
 
   for (const auto& [_, field] : paraview_dc_->GetFieldMap()) {
     max_order_in_fields = std::max(field->FESpace()->GetMaxElementOrder(), max_order_in_fields);
