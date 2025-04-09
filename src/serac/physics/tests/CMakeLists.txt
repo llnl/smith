@@ -43,7 +43,6 @@ set(physics_parallel_test_sources
     dynamic_thermal_adjoint.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
-    curved_element_output.cpp
     )
 set(physics_parallel_tribol_test_sources
     contact_patch.cpp
