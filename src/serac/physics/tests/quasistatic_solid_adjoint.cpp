@@ -140,10 +140,8 @@ TEST(quasistatic, finiteDifference)
   ::axom::sidre::DataStore datastore;
   ::serac::StateManager::initialize(datastore, "sidreDataStore");
 
-  mfem::Mesh mesh = mfem::Mesh::MakeCartesian3D(1, 1, 1, mfem::Element::HEXAHEDRON);
-  mesh.Print();
-  assert(mesh.SpaceDimension() == DIM);
-  auto pmesh = ::std::make_unique<::mfem::ParMesh>(MPI_COMM_WORLD, mesh);
+  auto pmesh = ::serac::mesh::refineAndDistribute(mfem::Mesh::MakeCartesian3D(1, 1, 1, mfem::Element::HEXAHEDRON), 0, 0, MPI_COMM_WORLD);
+  assert(pmesh->SpaceDimension() == DIM);
   ::mfem::ParMesh* meshPtr = &::serac::StateManager::setMesh(::std::move(pmesh), mesh_tag);
 
   Domain whole_domain = EntireDomain(*meshPtr);
