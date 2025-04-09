@@ -15,9 +15,9 @@
 namespace serac {
 
 /// a single instance of a QuadratureData container of `Nothing`s, since they are all interchangeable
-std::shared_ptr<QuadratureData<Nothing> > NoQData;
+std::shared_ptr<QuadratureData<Nothing>> NoQData = ::std::make_shared<QuadratureData<Nothing>>();
 
 /// a single instance of a QuadratureData container of `Empty`s, since they are all interchangeable
-std::shared_ptr<QuadratureData<Empty> > EmptyQData;
+std::shared_ptr<QuadratureData<Empty>> EmptyQData = ::std::make_shared<QuadratureData<Empty>>();
 
 }  // namespace serac
