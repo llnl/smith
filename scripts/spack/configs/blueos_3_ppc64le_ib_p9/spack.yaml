@@ -243,6 +243,8 @@ spack:
       require: "@0.9.2~shared~test~examples~utilities"
     hdf5:
       variants: ~shared~mpi
+    hypre:
+      require: "@2.26.0"
     mfem:
       require: "@4.7.0.2"
     petsc:

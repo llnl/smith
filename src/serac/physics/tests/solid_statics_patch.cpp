@@ -553,6 +553,8 @@ int main(int argc, char* argv[])
 
   axom::slic::SimpleLogger logger;
 
+  mfem::Hypre::Init();
+
   int result = RUN_ALL_TESTS();
   MPI_Finalize();
 
