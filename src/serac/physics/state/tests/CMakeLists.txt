@@ -7,7 +7,8 @@
 set(state_test_depends serac_mesh serac_state gtest)
 
 set(state_test_sources
-    test_finite_element_state.cpp)
+    test_finite_element_state.cpp
+    test_state_manager.cpp)
 
 serac_add_tests(SOURCES    ${state_test_sources}
                 DEPENDS_ON ${state_test_depends})
