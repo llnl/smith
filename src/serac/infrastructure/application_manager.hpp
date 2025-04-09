@@ -15,6 +15,11 @@
 namespace serac {
 
 /**
+ * @brief Destroy MPI, signal handling, logging, profiling, hypre, sundials, petsc, and slepc.
+ */
+void finalizer();
+
+/**
  * @brief RAII Application Manager class. Initializes MPI and other important libraries as
  * well as automatically finalizes them upon going out of scope.
  */
@@ -30,8 +35,7 @@ class ApplicationManager {
   ApplicationManager(int argc, char* argv[], MPI_Comm comm = MPI_COMM_WORLD);
 
   /**
-   * @brief Destroy MPI, signal handling, logging, profiling, hypre, sundials, petsc, and slepc.
-   *
+   * @brief Calls serac::finalizer
    */
   ~ApplicationManager();
 
