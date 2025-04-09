@@ -278,16 +278,26 @@ double StateManager::time(std::string mesh_tag)
 
 void checkMesh(const mfem::ParMesh& pmesh)
 {
-  SLIC_ERROR_ROOT_IF(!pmesh.OwnsNodes(),
-    "The mesh must have a grid function for the coordinates.");
+  const mfem::GridFunction* nodes = pmesh.GetNodes();
 
-  SLIC_WARNING_ROOT_IF(pmesh.GetNodalFESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS,
+  SLIC_ERROR_ROOT_IF(!nodes,
+    "The mesh must have a grid function for the nodes defined. Call the EnsureNodes() method on "
+    "your mesh before setting it with the state manager.");
+
+  SLIC_ERROR_ROOT_IF(!pmesh.OwnsNodes(),
+    "The mesh must own its node grid function, as ownership will be passed ot the state manager.");
+
+  SLIC_WARNING_ROOT_IF(nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS,
     "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 "
     "fields and has not been thoroughly tested. Proceed at your own risk.");
   
-  SLIC_ERROR_ROOT_IF(pmesh.GetNodalFESpace()->GetOrdering() != serac::ordering,
-    "The dof ordering of the coordinates must be the same as the global setting in serac::ordering. "
-    "Serac mesh building tools should ensure this automatically.");
+  std::string ordering_string{"byVDIM"};
+  if constexpr(serac::ordering == mfem::Ordering::byNODES) {
+    ordering_string = "byNODES";
+  }
+  SLIC_ERROR_ROOT_IF(nodes->FESpace()->GetOrdering() != serac::ordering,
+    "The dof ordering of the mesh coordinates grid function must be the same as the global setting "
+    "in serac::ordering. The serac ordering is currently " + ordering_string);
 
   // Mesh must have face restriction operators, as they are used by Functional
   SLIC_ERROR_ROOT_IF(!pmesh.have_face_nbr_data,
