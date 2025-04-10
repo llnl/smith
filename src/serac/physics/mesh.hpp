@@ -45,7 +45,7 @@ class Mesh {
   Mesh(const std::string& meshfile, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0);
 
   /// @brief Returns string tag for mesh
-  const std::string& tag() const { return mesh_tag; }
+  const std::string& tag() const { return mesh_tag_; }
 
   /// @brief Returns parallel mfem mesh, ignores const for mfem interfaces
   mfem::ParMesh& mfemParMesh() const { return *mfem_mesh_; }
@@ -80,7 +80,7 @@ class Mesh {
   void createDomains();
 
   /// @brief String identifying mesh in the state manager
-  std::string mesh_tag;
+  std::string mesh_tag_;
 
   /// @brief Parallel mfem mesh
   mfem::ParMesh* mfem_mesh_;

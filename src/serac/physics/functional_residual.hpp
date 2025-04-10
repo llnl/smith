@@ -5,9 +5,10 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file solid_residual.hpp
+ * @file functional_residual.hpp
  *
- * @brief Implement the residual interface for solid mechanics physics
+ * @brief Implements the residual interface using serac::ShapeAwareFunctional.
+ * Allows for generic specification of body and boundary integrals
  */
 
 #pragma once
@@ -36,7 +37,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
   static constexpr int dim = OutputSpace::components;
 
   /**
-   * @brief Construct a new SolidResidual object
+   * @brief Construct a new FunctionalResidual object
    *
    * @param physics_name A name for the physics module instance
    * @param mesh The serac mesh
@@ -70,7 +71,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *
    * @tparam BodyIntegralType The type of the body integral
    * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
-   * @param domain_name The name of the registered domain over which the body force is applied. If nothing is supplied
+   * @param body_name The name of the registered domain over which the body force is applied. If nothing is supplied
    * the entire domain is
    * @param body_integral A function describing the body force applied
    * used.
@@ -86,17 +87,17 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *
    */
   template <int... active_parameters, typename BodyIntegralType>
-  void addBodyIntegral(DependsOn<active_parameters...>, std::string domain_name, BodyIntegralType body_integral)
+  void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType body_integral)
   {
     residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<active_parameters...>{}, body_integral,
-                                 mesh_->domain(domain_name));
+                                 mesh_->domain(body_name));
   }
 
   /// @overload
   template <typename BodyForceType>
-  void addBodyIntegral(std::string domain_name, BodyForceType body_integral)
+  void addBodyIntegral(std::string body_name, BodyForceType body_integral)
   {
-    addBodyIntegral(DependsOn<>{}, domain_name, body_integral);
+    addBodyIntegral(DependsOn<>{}, body_name, body_integral);
   }
 
   /**
@@ -104,7 +105,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *
    * @tparam NeumannType The type of the traction load
    * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
-   * @param domain_name The name of the registered domain over which the traction is applied. If nothing is supplied the
+   * @param boundary_name The name of the registered domain over which the traction is applied. If nothing is supplied the
    * entire boundary is
    * @param surface_function A function describing the traction applied to a boundary
    * used.
@@ -122,7 +123,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *
    */
   template <int... active_parameters, typename NeumannType>
-  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string domain_name, NeumannType surface_function)
+  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, NeumannType surface_function)
   {
     residual_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<active_parameters...>{},
@@ -130,14 +131,14 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
           auto n = cross(get<DERIVATIVE>(X));
           return surface_function(t, get<VALUE>(X), normalize(n), params...);
         },
-        mesh_->domain(domain_name));
+        mesh_->domain(boundary_name));
   }
 
   /// @overload
   template <typename NeumannType>
-  void addBoundaryIntegral(std::string domain_name, NeumannType surface_function)
+  void addBoundaryIntegral(std::string boundary_name, NeumannType surface_function)
   {
-    addBoundaryIntegral(DependsOn<>{}, domain_name, surface_function);
+    addBoundaryIntegral(DependsOn<>{}, boundary_name, surface_function);
   }
 
   /// @overload
