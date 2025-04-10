@@ -95,7 +95,6 @@ TEST(StateManager, StoresHighOrderMeshes)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  serac::initialize(argc, argv);
-  int result = RUN_ALL_TESTS();
-  serac::exitGracefully(result);
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }
