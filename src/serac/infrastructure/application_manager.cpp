@@ -28,6 +28,14 @@
 #include "petsc.h"
 #endif
 
+namespace serac {
+/**
+ * @brief Destroy MPI, signal handling, logging, profiling, hypre, sundials, petsc, and slepc. Note this should not be
+ * called by or exposed to users.
+ */
+void finalizer();
+}  // namespace serac
+
 namespace {
 void signalHandler(int signal)
 {
