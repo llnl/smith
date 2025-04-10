@@ -6,9 +6,8 @@
 
 #include "serac/infrastructure/output.hpp"
 
-#include "serac/infrastructure/initialize.hpp"
+#include "serac/infrastructure/about.hpp"
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/terminator.hpp"
 
 #include "axom/core.hpp"
 #include "axom/sidre.hpp"

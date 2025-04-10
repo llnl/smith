@@ -18,6 +18,7 @@
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/serac_config.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -296,12 +297,6 @@ TEST(HeatTransferDynamic, PatchTest3dQ2FluxBcs)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

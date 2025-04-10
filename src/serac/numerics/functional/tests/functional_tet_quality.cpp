@@ -16,7 +16,7 @@
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-#include "serac/infrastructure/profiling.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 #include "serac/numerics/functional/tests/check_gradient.hpp"
 
@@ -24,8 +24,6 @@ using namespace serac;
 using namespace serac::profiling;
 
 double t = 0.0;
-
-int num_procs, myid;
 
 TEST(QoI, TetrahedronQuality)
 {
@@ -101,13 +99,6 @@ TEST(QoI, TetrahedronQuality)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

@@ -11,7 +11,7 @@
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "mfem.hpp"
 
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/materials/solid_material.hpp"
@@ -28,7 +28,8 @@ void output(double u, double f, const Physics& solid, const std::string& paravie
 
 int main(int argc, char* argv[])
 {
-  serac::initialize(argc, argv);
+  // Initialize and automatically finalize MPI and other libraries
+  serac::ApplicationManager applicationManager(argc, argv);
 
   constexpr int p = 2;
   constexpr int dim = 3;
@@ -168,7 +169,6 @@ int main(int argc, char* argv[])
   }
 
   file.close();
-  serac::exitGracefully();
 
   return 0;
 }

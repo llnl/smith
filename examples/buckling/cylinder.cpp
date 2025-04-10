@@ -36,7 +36,7 @@
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/solid_mechanics_contact.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
@@ -87,8 +87,8 @@ int main(int argc, char* argv[])
   bool use_contact = true;
   auto contact_type = serac::ContactEnforcement::Penalty;
 
-  // Initialize Serac and all of the external libraried
-  serac::initialize(argc, argv);
+  // Initialize and automatically finalize MPI and other libraries
+  serac::ApplicationManager applicationManager(argc, argv);
 
   // Handle command line arguments
   axom::CLI::App app{"Hollow cylinder buckling example"};
@@ -228,6 +228,5 @@ int main(int argc, char* argv[])
   }
   SLIC_INFO_ROOT(axom::fmt::format("final time = {}", solid_solver->time()));
 
-  // Exit without error
-  serac::exitGracefully();
+  return 0;
 }

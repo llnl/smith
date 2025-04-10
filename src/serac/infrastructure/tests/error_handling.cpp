@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "serac/infrastructure/cli.hpp"
-#include "serac/infrastructure/initialize.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/boundary_condition.hpp"
 #include "serac/numerics/equation_solver.hpp"
@@ -76,21 +76,10 @@ TEST(ErrorHandling, NonexistentMeshPath)
 
 int main(int argc, char* argv[])
 {
-  int result = 0;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
+  serac::ApplicationManager applicationManager(argc, argv);
   axom::slic::setAbortFunction([]() { throw SlicErrorException{}; });
   axom::slic::setAbortOnError(true);
   axom::slic::setAbortOnWarning(false);
-
-  result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  return RUN_ALL_TESTS();
 }

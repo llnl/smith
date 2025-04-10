@@ -11,8 +11,7 @@
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -261,10 +260,6 @@ TEST(Solid, MultiMaterialWithState)
 int main(int argc, char* argv[])
 {
   testing::InitGoogleTest(&argc, argv);
-
-  serac::initialize(argc, argv);
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully(result);
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

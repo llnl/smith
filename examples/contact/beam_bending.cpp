@@ -12,7 +12,7 @@
 #include "mfem.hpp"
 
 #include "serac/physics/solid_mechanics_contact.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
@@ -20,7 +20,8 @@
 
 int main(int argc, char* argv[])
 {
-  serac::initialize(argc, argv);
+  // Initialize and automatically finalize MPI and other libraries
+  serac::ApplicationManager applicationManager(argc, argv);
 
   // NOTE: p must be equal to 1 to work with Tribol's mortar method
   constexpr int p = 1;
@@ -118,8 +119,6 @@ int main(int argc, char* argv[])
     // Output the sidre-based plot files
     solid_solver.outputStateToDisk(paraview_name);
   }
-
-  serac::exitGracefully();
 
   return 0;
 }
