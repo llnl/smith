@@ -284,7 +284,7 @@ void checkMesh(const mfem::ParMesh& pmesh)
                      "your mesh before setting it with the state manager.");
 
   SLIC_ERROR_ROOT_IF(!pmesh.OwnsNodes(),
-                     "The mesh must own its node grid function, as ownership will be passed ot the state manager.");
+                     "The mesh must own its node grid function, as ownership will be passed to the state manager.");
 
   SLIC_WARNING_ROOT_IF(nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS,
                        "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 "
