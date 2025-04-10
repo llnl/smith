@@ -290,10 +290,7 @@ void checkMesh(const mfem::ParMesh& pmesh)
                        "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 "
                        "fields and has not been thoroughly tested. Proceed at your own risk.");
 
-  std::string ordering_string{"byVDIM"};
-  if constexpr (serac::ordering == mfem::Ordering::byNODES) {
-    ordering_string = "byNODES";
-  }
+  const std::string ordering_string = serac::ordering == mfem::Ordering::byNODES ? "byNODES" : "byVDIM";
   SLIC_ERROR_ROOT_IF(nodes->FESpace()->GetOrdering() != serac::ordering,
                      "The dof ordering of the mesh coordinates grid function must be the same as the global setting "
                      "in serac::ordering. The serac ordering is currently " +
