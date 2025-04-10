@@ -14,8 +14,7 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 
