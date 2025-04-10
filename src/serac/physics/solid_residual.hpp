@@ -17,7 +17,7 @@
 
 namespace serac {
 
-template <int order, int dim, typename parameters = Parameters<>>
+template <int order, int dim, typename InputSpaces = Parameters<>>
 class SolidResidual;
 
 /**
@@ -29,15 +29,15 @@ class SolidResidual;
  * @tparam order The order of the discretization of the displacement and velocity fields
  * @tparam dim The spatial dimension of the mesh
  */
-template <int order, int dim, typename... parameter_space>
-class SolidResidual<order, dim, Parameters<parameter_space...>>
+template <int order, int dim, typename... InputSpaces>
+class SolidResidual<order, dim, Parameters<InputSpaces...>>
     : public FunctionalResidual<H1<order, dim>, H1<order, dim>,
-                                Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>> {
+                                Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>> {
  public:
   /// @brief typedef for underlying functional type with templates
   using BaseResidualT =
       FunctionalResidual<H1<order, dim>, H1<order, dim>,
-                         Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
+                         Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>>;
 
   /// @brief a container holding quadrature point data of the specified type
   /// @tparam T the type of data to store at each quadrature point
@@ -317,17 +317,17 @@ class SolidResidual<order, dim, Parameters<parameter_space...>>
 /**
  * @brief Utility function for creating a shared_ptr<SolidResidual<>>
  */
-template <int order, int dim, typename... parameter_space>
+template <int order, int dim, typename... InputSpaces>
 auto create_solid_residual(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
                            const std::vector<serac::FiniteElementState*>& states,
                            const std::vector<serac::FiniteElementState*>& params)
 {
   std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces;
-  if constexpr (sizeof...(parameter_space) > 0) {
-    for_constexpr<sizeof...(parameter_space)>([&](auto i) { parameter_fe_spaces.push_back(&params[i + 1]->space()); });
+  if constexpr (sizeof...(InputSpaces) > 0) {
+    for_constexpr<sizeof...(InputSpaces)>([&](auto i) { parameter_fe_spaces.push_back(&params[i + 1]->space()); });
   }
 
-  using ResidualT = SolidResidual<order, dim, Parameters<parameter_space...>>;
+  using ResidualT = SolidResidual<order, dim, Parameters<InputSpaces...>>;
 
   return std::make_shared<ResidualT>(physics_name, mesh, params[0]->space(), states[0]->space(), parameter_fe_spaces);
 }

@@ -18,8 +18,8 @@
 
 namespace serac {
 
-template <typename ShapeSpace, typename OutputSpace, typename parameters = Parameters<>,
-          typename parameter_indices = std::make_integer_sequence<int, parameters::n>>
+template <typename ShapeSpace, typename OutputSpace, typename inputs = Parameters<>,
+          typename input_indices = std::make_integer_sequence<int, inputs::n>>
 class FunctionalResidual;
 
 /**
@@ -29,9 +29,9 @@ class FunctionalResidual;
  * stiffness matrices.
  *
  */
-template <typename ShapeSpace, typename OutputSpace, typename... parameter_space, int... parameter_indices>
-class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>,
-                         std::integer_sequence<int, parameter_indices...>> : public Residual {
+template <typename ShapeSpace, typename OutputSpace, typename... InputSpaces, int... input_indices>
+class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
+                         std::integer_sequence<int, input_indices...>> : public Residual {
  public:
   /// @brief extract residual dimension from the output space
   static constexpr int dim = OutputSpace::components;
@@ -51,18 +51,18 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
                      std::vector<const mfem::ParFiniteElementSpace*> input_mfem_spaces)
       : Residual(physics_name), mesh_(mesh)
   {
-    std::array<const mfem::ParFiniteElementSpace*, sizeof...(parameter_space)> trial_spaces;
+    std::array<const mfem::ParFiniteElementSpace*, sizeof...(InputSpaces)> trial_spaces;
 
     SLIC_ERROR_ROOT_IF(
-        sizeof...(parameter_space) != input_mfem_spaces.size(),
+        sizeof...(InputSpaces) != input_mfem_spaces.size(),
         axom::fmt::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
-                          sizeof...(parameter_space), input_mfem_spaces.size()));
+                          sizeof...(InputSpaces), input_mfem_spaces.size()));
 
-    if constexpr (sizeof...(parameter_space) > 0) {
-      for_constexpr<sizeof...(parameter_space)>([&](auto i) { trial_spaces[i] = input_mfem_spaces[i]; });
+    if constexpr (sizeof...(InputSpaces) > 0) {
+      for_constexpr<sizeof...(InputSpaces)>([&](auto i) { trial_spaces[i] = input_mfem_spaces[i]; });
     }
 
-    residual_ = std::make_unique<ShapeAwareFunctional<ShapeSpace, OutputSpace(parameter_space...)>>(
+    residual_ = std::make_unique<ShapeAwareFunctional<ShapeSpace, OutputSpace(InputSpaces...)>>(
         &shape_disp_space, &output_mfem_space, trial_spaces);
   }
 
@@ -142,19 +142,22 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
   }
 
   /// @overload
-  mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row = 0) const override
+  mfem::Vector residual(double time, double dt, const std::vector<FieldPtr>& fields, int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
-    auto ret = (*residual_)(time, *fields[0], *fields[parameter_indices + 1]...);
+    dt_ = dt;
+    auto ret = (*residual_)(time, *fields[0], *fields[input_indices + 1]...);
     return ret;
   }
 
   /// @overload
-  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, const std::vector<FieldPtr>& fields,
+  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<FieldPtr>& fields,
                                                  const std::vector<double>& jacobian_weights,
                                                  int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
+
+    dt_ = dt;
 
     std::unique_ptr<mfem::HypreParMatrix> J;
 
@@ -171,7 +174,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
       }
     };
 
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, fields);
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (jacobian_weights[input_col] != 0.0) {
@@ -184,15 +187,15 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
   }
 
   /// @overload
-  void jvp([[maybe_unused]] double time, [[maybe_unused]] const std::vector<FieldPtr>& fields,
-           [[maybe_unused]] const std::vector<FieldPtr>& vFields,
-           [[maybe_unused]] std::vector<DualFieldPtr>& jvpReactions) const override
+  void jvp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& vFields,
+           std::vector<DualFieldPtr>& jvpReactions) const override
   {
     SLIC_ERROR_IF(vFields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
     SLIC_ERROR_IF(jvpReactions.size() != 1, "Solid mechanics nonlinear system only supports 1 output residual");
 
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);
+    dt_ = dt;
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, fields);
 
     *jvpReactions[0] = 0.0;
 
@@ -206,15 +209,15 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
   }
 
   /// @overload
-  void vjp([[maybe_unused]] double time, [[maybe_unused]] const std::vector<FieldPtr>& fields,
-           [[maybe_unused]] const std::vector<DualFieldPtr>& vReactions,
-           [[maybe_unused]] std::vector<FieldPtr>& vjpFields) const override
+  void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<DualFieldPtr>& vReactions,
+           std::vector<FieldPtr>& vjpFields) const override
   {
     SLIC_ERROR_IF(vjpFields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
     SLIC_ERROR_IF(vReactions.size() != 1, "Solid mechanics nonlinear system only supports 1 output residual");
 
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);
+    dt_ = dt;
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, fields);
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       auto K = serac::get<DERIVATIVE>(jacs[input_col](time, fields));
@@ -244,11 +247,14 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
     }...};
   };
 
+  /// @brief timestep, this needs to be held here and modified for rate dependent applications
+  mutable double dt_ = std::numeric_limits<double>::max();
+
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;
 
   /// @brief functional residual evaluator, shape aware
-  std::unique_ptr<ShapeAwareFunctional<ShapeSpace, OutputSpace(parameter_space...)>> residual_;
+  std::unique_ptr<ShapeAwareFunctional<ShapeSpace, OutputSpace(InputSpaces...)>> residual_;
 };
 
 }  // namespace serac
