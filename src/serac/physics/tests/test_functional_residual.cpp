@@ -154,6 +154,9 @@ struct ResidualFixture : public testing::Test {
     residual = f_residual;
   }
 
+  const double time = 0.0;
+  const double dt = 1.0;
+
   std::string velo_name = "solid_velocity";
 
   axom::sidre::DataStore datastore;
@@ -173,12 +176,11 @@ struct ResidualFixture : public testing::Test {
 TEST_F(ResidualFixture, VjpConsistency)
 {
   // initialize the displacement and acceleration to a non-trivial field
-  double time = 0.0;
   auto all_states = getPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[0].space(), "residual");
 
-  res_vector = residual->residual(time, all_states);
+  res_vector = residual->residual(time, dt, all_states);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {
@@ -199,10 +201,10 @@ TEST_F(ResidualFixture, VjpConsistency)
 
   for (size_t i = 0; i < all_states.size(); ++i) {
     serac::FiniteElementState& vjp = all_Jvps[i];
-    auto J = residual->jacobian(time, all_states, jacobian_weights(i));
+    auto J = residual->jacobian(time, dt, all_states, jacobian_weights(i));
     J->AddMultTranspose(v, vjp);
   }
-  residual->vjp(time, all_states, getPointers(v), all_jvps);
+  residual->vjp(time, dt, all_states, getPointers(v), all_jvps);
 
   for (size_t i = 0; i < all_states.size(); ++i) {
     EXPECT_NEAR(all_Jvps[i].Norml2(), all_jvps[i]->Norml2(), 1e-12);
@@ -212,11 +214,10 @@ TEST_F(ResidualFixture, VjpConsistency)
 TEST_F(ResidualFixture, JvpConsistency)
 {
   // initialize the displacement and acceleration to a non-trivial field
-  double time = 0.0;
   auto all_states = getPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[0].space(), "residual");
-  res_vector = residual->residual(time, all_states);
+  res_vector = residual->residual(time, dt, all_states);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobianWeights = [&](size_t i) {
@@ -243,9 +244,9 @@ TEST_F(ResidualFixture, JvpConsistency)
   auto all_v_rhs_states = getPointers(v_rhs_states, v_rhs_params);
 
   for (size_t i = 0; i < all_states.size(); ++i) {
-    auto J = residual->jacobian(time, all_states, jacobianWeights(i));
+    auto J = residual->jacobian(time, dt, all_states, jacobianWeights(i));
     J->Mult(*all_v_rhs_states[i], jvp_slow);
-    residual->jvp(time, all_states, selectStates(i), jvps);
+    residual->jvp(time, dt, all_states, selectStates(i), jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 
@@ -258,12 +259,12 @@ TEST_F(ResidualFixture, JvpConsistency)
     double acceleration_factor = 0.2;
     std::vector<double> jacobian_weights = {1.0, 0.0, acceleration_factor, 0.0, 0.0};
 
-    auto J = residual->jacobian(time, all_states, jacobian_weights);
+    auto J = residual->jacobian(time, dt, all_states, jacobian_weights);
     J->Mult(*all_v_rhs_states[0], jvp_slow);
 
     *all_v_rhs_states[2] = *all_v_rhs_states[0];
     *all_v_rhs_states[2] *= acceleration_factor;
-    residual->jvp(time, all_states, all_v_rhs_states, jvps);
+    residual->jvp(time, dt, all_states, all_v_rhs_states, jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 }
