@@ -52,7 +52,8 @@ int main(int argc, char *argv[])
   const int serial_refinement = 0;
   const int parallel_refinement = 0;
   //std::string mesh_file = "./mesh-explorer.mesh";
-  std::string mesh_file = "../../twoLayerHemiPunchout.vtu";
+  // std::string mesh_file = "../../twoLayerHemiPunchout.vtu";
+  std::string mesh_file = "/g/g90/barrera/codes/serac-digital-twins/serac/data/meshes/twoLayerHemiPunchout.vtu";
   std::string output_directory = "./";
 
   // CLI IS STRICT ABOUT INPUT FILE EXISTING, WHICH IS COUNTER TO USAGE FOR PRE-PARTITIONED CASE. SINCE I WAS NOT
@@ -214,7 +215,8 @@ int main(int argc, char *argv[])
   //solid_solver.addBodyForce(DependsOn<1>{}, ParameterizedBodyForce{[](const auto& x) { return 0.0 * x; }});
 
   // Set a zero initial guess for the displacement solution
-  FiniteElementState zero_state(pmesh, H1<1>{}, "zero");
+  FiniteElementState zero_state = solid_solver.displacement(); // (pmesh, H1<1>{}, "zero");
+  zero_state = 0.0;
   solid_solver.setDisplacement(zero_state);
 
   // Finalize the data structures
@@ -228,7 +230,8 @@ int main(int argc, char *argv[])
   if (0 == myid) { std::cout << "Solve completed. Saving output...." << std::endl; }
 
   // Save problem state for later visualization
-  solid_solver.outputStateToDisk();
+  std::string outname = "paraview_first_driver";
+  solid_solver.outputStateToDisk(outname);
 
   if (0 == myid) { std::cout << "Complete." << std::endl; }
 
