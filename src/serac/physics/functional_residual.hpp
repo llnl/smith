@@ -105,8 +105,8 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<parameter_space...>
    *
    * @tparam NeumannType The type of the traction load
    * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
-   * @param boundary_name The name of the registered domain over which the traction is applied. If nothing is supplied the
-   * entire boundary is
+   * @param boundary_name The name of the registered domain over which the traction is applied. If nothing is supplied
+   * the entire boundary is
    * @param surface_function A function describing the traction applied to a boundary
    * used.
    * @pre NeumannType must be a object that can be called with the following arguments:
