@@ -484,7 +484,7 @@ struct ConstantTraction {
  * This struct differs in style relative to the older materials as it needs to evaluate both stress
  * and density.  As a result, we want to clearly name these functions.
  * This is likely going to be a new design going forward, at the moment it works with the
- * solid_residual_class.
+ * SolidResidual class.
  *
  */
 struct NeoHookeanWithFieldDensity {

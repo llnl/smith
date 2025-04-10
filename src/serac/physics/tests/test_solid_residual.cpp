@@ -11,7 +11,6 @@
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
-
 #include "serac/physics/solid_residual.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
