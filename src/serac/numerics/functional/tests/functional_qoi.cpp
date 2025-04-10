@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
-#include "serac/infrastructure/accelerator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/mesh/mesh_utils_base.hpp"
 #include "serac/numerics/functional/functional.hpp"
@@ -24,7 +24,6 @@
 using namespace serac;
 using namespace serac::profiling;
 
-int num_procs, myid;
 int nsamples = 1;  // because mfem doesn't take in unsigned int
 
 double t = 0.0;
@@ -712,11 +711,7 @@ TEST(Variadic, 3DQuadratic) { qoi_test(*mesh3D, H1<2>{}, H1<2>{}, Dimension<3>{}
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
+  serac::ApplicationManager applicationManager(argc, argv);
 
   int serial_refinement = 1;
   int parallel_refinement = 0;
@@ -726,8 +721,5 @@ int main(int argc, char* argv[])
 
   std::string meshfile3D = SERAC_REPO_DIR "/data/meshes/patch3D_tets_and_hexes.mesh";
   mesh3D = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), serial_refinement, parallel_refinement);
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-  return result;
+  return RUN_ALL_TESTS();
 }

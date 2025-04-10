@@ -6,8 +6,7 @@
 
 #include <gtest/gtest.h>
 #include "mfem.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "petsc.h"
 
 #ifndef MFEM_USE_SLEPC
@@ -62,10 +61,6 @@ TEST(PETSC_AND_SLEPC, CanComputeSmallestEigenvalueAndEigenvectors)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  serac::initialize(argc, argv);
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully();
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

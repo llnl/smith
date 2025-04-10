@@ -12,7 +12,6 @@
 #include "axom/fmt.hpp"
 
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/terminator.hpp"
 
 namespace serac {
 

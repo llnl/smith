@@ -17,6 +17,7 @@
 
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/physics/materials/material_verification_tools.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -87,10 +88,6 @@ TEST(NeoHookeanSplit, deviatoricPartIsCorrectlySplit)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }
