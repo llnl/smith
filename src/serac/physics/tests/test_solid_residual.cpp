@@ -29,6 +29,9 @@ template <typename T>
 auto getPointers(std::vector<T>& states, std::vector<T>& params)
 {
   assert(params.size() > 0);
+  // At the moment, every FunctionalResidual expects the shape displacement to go first.
+  // so we have to do some slight reordering of the arguments.
+  // Here shape displacement is expected to be the first parameter.
   std::vector<T*> pointers{&params[0]};
   for (auto& t : states) {
     pointers.push_back(&t);

@@ -35,9 +35,8 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
                                 Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>> {
  public:
   /// @brief typedef for underlying functional type with templates
-  using BaseResidualT =
-      FunctionalResidual<H1<order, dim>, H1<order, dim>,
-                         Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>>;
+  using BaseResidualT = FunctionalResidual<H1<order, dim>, H1<order, dim>,
+                                           Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>>;
 
   /// @brief a container holding quadrature point data of the specified type
   /// @tparam T the type of data to store at each quadrature point
