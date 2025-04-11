@@ -42,7 +42,7 @@ class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputS
    * @param mesh The serac mesh
    * @param shape_disp_space Shape displacement space
    * @param output_mfem_space Test space
-   * @param input_mfem_spaces Vector of finite element states which are arguments to the residual
+   * @param input_mfem_spaces Vector of finite element spaces which are arguments to the residual
    */
   FunctionalResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
                      const mfem::ParFiniteElementSpace& shape_disp_space,
