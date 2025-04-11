@@ -68,8 +68,8 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
    *
    * @tparam MaterialType The solid material type
    * @tparam StateType the type that contains the internal variables for MaterialType
+   * @param body_name string name for a registered body Domain on the mesh
    * @param material A material that provides a function to evaluate stress
-   * @param domain Domain for material to be integrated over
    * @pre material must be a object that can be called with the following arguments:
    *    1. `MaterialType::State & state` an mutable reference to the internal variables for this quadrature point
    *    2. `tensor<T,dim,dim> du_dx` the displacement gradient at this quadrature point
@@ -112,8 +112,8 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
    *
    * @tparam MaterialType The solid material type
    * @tparam StateType the type that contains the internal variables for MaterialType
+   * @param body_name string name for a registered domain on the mesh
    * @param material A material that provides a function to evaluate stress
-   * @param domain Domain for material to be integrated over
    * @pre material must be a object that can be called with the following arguments:
    *    1. `MaterialType::State & state` an mutable reference to the internal variables for this quadrature point
    *    2. `tensor<T,dim,dim> du_dx` the displacement gradient at this quadrature point
