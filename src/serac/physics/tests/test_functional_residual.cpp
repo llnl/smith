@@ -100,8 +100,8 @@ struct ResidualFixture : public testing::Test {
     using TrialSpace = VectorSpace;
     using ShapeSpace = VectorSpace;
 
-    using ResidualT =
-        serac::FunctionalResidual<ShapeSpace, TrialSpace, serac::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
+    using ResidualT = serac::FunctionalResidual<dim, ShapeSpace, TrialSpace,
+                                                serac::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
 
     std::vector<const mfem::ParFiniteElementSpace*> inputs{&states[STATE::DISP].space(), &states[STATE::DISP].space(),
                                                            &params[PAR::DENSITY].space()};

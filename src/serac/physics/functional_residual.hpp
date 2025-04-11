@@ -33,7 +33,6 @@ template <int spatial_dim, typename ShapeSpace, typename OutputSpace, typename..
 class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
                          std::integer_sequence<int, input_indices...>> : public Residual {
  public:
-
   using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
 
   /**
@@ -54,7 +53,7 @@ class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputS
 
     SLIC_ERROR_ROOT_IF(
         sizeof...(InputSpaces) != input_mfem_spaces.size(),
-        axom::fmt::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
+        axom::fmt::format("{} parameter spaces given in the template argument but {} input mfem spaces were supplied.",
                           sizeof...(InputSpaces), input_mfem_spaces.size()));
 
     if constexpr (sizeof...(InputSpaces) > 0) {
@@ -252,5 +251,16 @@ class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputS
   /// @brief functional residual evaluator, shape aware
   std::unique_ptr<ShapeAwareFunctional<ShapeSpace, OutputSpace(InputSpaces...)>> residual_;
 };
+
+/// @brief Helper function to construct vector of spaces from an existing vector of FiniteElementState.
+/// @param states vector of FiniteElementState
+inline std::vector<const mfem::ParFiniteElementSpace*> getSpaces(const std::vector<serac::FiniteElementState>& states)
+{
+  std::vector<const mfem::ParFiniteElementSpace*> spaces;
+  for (auto& f : states) {
+    spaces.push_back(&f.space());
+  }
+  return spaces;
+}
 
 }  // namespace serac

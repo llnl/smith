@@ -29,15 +29,12 @@ template <typename T>
 auto getPointers(std::vector<T>& states, std::vector<T>& params)
 {
   assert(params.size() > 0);
-  // At the moment, every FunctionalResidual expects the shape displacement to go first.
-  // so we have to do some slight reordering of the arguments.
-  // Here shape displacement is expected to be the first parameter.
-  std::vector<T*> pointers{&params[0]};
+  std::vector<T*> pointers;
   for (auto& t : states) {
     pointers.push_back(&t);
   }
-  for (size_t n = 1; n < params.size(); ++n) {
-    pointers.push_back(&params[n]);
+  for (auto& t : params) {
+    pointers.push_back(&t);
   }
   return pointers;
 }
@@ -73,6 +70,14 @@ struct ResidualFixture : public testing::Test {
 
   using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 
+  enum StateOrder
+  {
+    SHAPE,
+    DISP,
+    VELO,
+    ACCEL
+  };
+
   void SetUp()
   {
     MPI_Barrier(MPI_COMM_WORLD);
@@ -90,8 +95,8 @@ struct ResidualFixture : public testing::Test {
         serac::StateManager::newState(VectorSpace{}, "shape_displacement", mesh->tag());
     serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-    states = {disp, velo, accel};
-    params = {shape_disp, density};
+    states = {shape_disp, disp, velo, accel};
+    params = {density};
 
     dual_states = states;
     dual_params = params;
@@ -101,11 +106,9 @@ struct ResidualFixture : public testing::Test {
 
     std::string physics_name = "solid";
 
-    auto solid_mechanics_residual = serac::create_solid_residual<disp_order, dim, DensitySpace>(
-        physics_name, mesh, getPointers(states), getPointers(params));
-
-    // setup material model
-
+    using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
+    auto solid_mechanics_residual = std::make_shared<SolidResidualT>(physics_name, mesh, states[SHAPE].space(),
+                                                                     states[DISP].space(), getSpaces(params));
     SolidMaterial mat;
     mat.K = 1.0;
     mat.G = 0.5;
@@ -125,22 +128,22 @@ struct ResidualFixture : public testing::Test {
       pseudoRand(p);
     }
 
-    dual_params[0] = 1.0;  // used to test that vjp acts via +=, add initial value to shape displacement dual
+    dual_states[0] = 1.0;  // used to test that vjp acts via +=, add initial value to shape displacement dual
 
-    states[0].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = 0.1 * x;
       return u;
     });
-    states[1].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[VELO].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = -0.1 * x;
       return u;
     });
-    states[2].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[ACCEL].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = -0.01 * x;
       return u;
     });
-    params[0] = 0.0;
-    params[1] = 1.2;
+    states[SHAPE] = 0.0;
+    params[0] = 1.2;
 
     // residual is abstract Residual class to ensure usage only through BasePhysics interface
     residual = solid_mechanics_residual;
@@ -170,7 +173,7 @@ TEST_F(ResidualFixture, VjpConsistency)
   // initialize the displacement and acceleration to a non-trivial field
   auto all_states = getPointers(states, params);
 
-  serac::FiniteElementDual res_vector(states[0].space(), "residual");
+  serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
   res_vector = residual->residual(time, dt, all_states);
   ASSERT_NE(0.0, res_vector.Norml2());
 
@@ -202,7 +205,7 @@ TEST_F(ResidualFixture, JvpConsistency)
   // initialize the displacement and acceleration to a non-trivial field
   auto all_states = getPointers(states, params);
 
-  serac::FiniteElementDual res_vector(states[0].space(), "residual");
+  serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
   res_vector = residual->residual(time, dt, all_states);
   ASSERT_NE(0.0, res_vector.Norml2());
 
@@ -222,8 +225,8 @@ TEST_F(ResidualFixture, JvpConsistency)
     return pts;
   };
 
-  serac::FiniteElementDual jvp_slow(states[0].space(), "jvp_slow");
-  serac::FiniteElementDual jvp(states[0].space(), "jvp");
+  serac::FiniteElementDual jvp_slow(states[DISP].space(), "jvp_slow");
+  serac::FiniteElementDual jvp(states[DISP].space(), "jvp");
   jvp = 4.0;  // set to some value to test jvp resets these values
   std::vector<serac::FiniteElementDual*> jvps = getPointers(jvp);
 
@@ -238,18 +241,19 @@ TEST_F(ResidualFixture, JvpConsistency)
 
   // test jacobians in weighted combinations
   {
-    all_v_rhs_states[1] = nullptr;
-    all_v_rhs_states[3] = nullptr;
+    all_v_rhs_states[SHAPE] = nullptr;
+    all_v_rhs_states[VELO] = nullptr;
     all_v_rhs_states[4] = nullptr;
 
     double acceleration_factor = 0.2;
-    std::vector<double> jacobian_weights = {1.0, 0.0, acceleration_factor, 0.0, 0.0};
+    std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, acceleration_factor, 0.0};
 
     auto J = residual->jacobian(time, dt, all_states, jacobian_weights);
-    J->Mult(*all_v_rhs_states[0], jvp_slow);
+    J->Mult(*all_v_rhs_states[DISP], jvp_slow);
 
-    *all_v_rhs_states[2] = *all_v_rhs_states[0];
-    *all_v_rhs_states[2] *= acceleration_factor;
+    *all_v_rhs_states[ACCEL] = *all_v_rhs_states[DISP];
+    *all_v_rhs_states[ACCEL] *= acceleration_factor;
+
     residual->jvp(time, dt, all_states, all_v_rhs_states, jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
