@@ -155,8 +155,8 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
    * @tparam active_parameters the indices for active non-state params (i.e., indexing starts just after disp, velo, or
    * accel)
    * @tparam PressureType The type of the pressure load
+   * @param boundary_name string, name of boundary domain
    * @param pressure_function A function describing the pressure applied to a boundary
-   * @param optional_domain The domain over which the pressure is applied. If nothing is supplied the entire boundary is
    * used.
    * @pre PressureType must be a object that can be called with the following arguments:
    *    1. `double t` the time (note: time will be handled differently in the future)

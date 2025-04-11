@@ -34,8 +34,8 @@ Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_s
 
 MPI_Comm Mesh::getComm() const { return mfem_mesh_->GetComm(); }
 
-void Mesh::createDomains() 
-{ 
+void Mesh::createDomains()
+{
   domains_.insert({entireBodyName(), serac::EntireDomain(*mfem_mesh_)});
   domains_.insert({entireBoundaryName(), serac::EntireBoundary(*mfem_mesh_)});
 }

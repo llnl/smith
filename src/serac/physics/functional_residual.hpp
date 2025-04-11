@@ -36,7 +36,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
   /// @brief extract residual dimension from the output space
   static constexpr int dim = OutputSpace::components;
 
-  using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;
+  using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
 
   /**
    * @brief Construct a new FunctionalResidual object
@@ -49,8 +49,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
    */
   FunctionalResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
                      const mfem::ParFiniteElementSpace& shape_disp_space,
-                     const mfem::ParFiniteElementSpace& output_mfem_space,
-                     SpacesT input_mfem_spaces)
+                     const mfem::ParFiniteElementSpace& output_mfem_space, SpacesT input_mfem_spaces)
       : Residual(physics_name), mesh_(mesh)
   {
     std::array<const mfem::ParFiniteElementSpace*, sizeof...(InputSpaces)> trial_spaces;
