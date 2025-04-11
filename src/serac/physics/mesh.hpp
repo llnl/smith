@@ -53,11 +53,17 @@ class Mesh {
   /// @brief Returns parallel communicator
   MPI_Comm getComm() const;
 
-  /// @brief  Returns string, name used to access the entire domain
-  std::string entireDomainName() const { return "entire_mesh"; }
+  /// @brief  Returns string, name used to access the entire domain body
+  static std::string entireBodyName() { return "entire_body"; }
 
   /// @brief Returns domain corresponding to the entire mesh
-  serac::Domain& entireDomain() const;
+  serac::Domain& entireBody() const;
+
+  /// @brief  Returns string, name used to access the entire boundary
+  static std::string entireBoundaryName() { return "entire_boundary"; }
+
+  /// @brief Returns domain boundary corresponding to the entire mesh
+  serac::Domain& entireBoundary() const;
 
   /// @brief Returns registered domain with specified name
   serac::Domain& domain(const std::string& domain_name) const;

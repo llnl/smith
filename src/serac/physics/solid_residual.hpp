@@ -172,11 +172,8 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
    * @note This pressure is applied in the deformed (current) configuration if GeometricNonlinearities are on.
    */
   template <int... active_parameters, typename PressureType>
-  void addPressure(DependsOn<active_parameters...>, PressureType pressure_function,
-                   const std::optional<Domain>& optional_domain = std::nullopt)
+  void addPressure(DependsOn<active_parameters...>, std::string boundary_name, PressureType pressure_function)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(BaseResidualT::mesh_);
-
     BaseResidualT::residual_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<0, active_parameters + NUM_STATE_VARS...>{},
         [pressure_function](double t, auto X, auto displacement, auto... params) {
@@ -201,14 +198,14 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
           // We always query the pressure function in the undeformed configuration
           return pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
         },
-        domain);
+        BaseResidualT::mesh_->domain(boundary_name));
   }
 
   /// @overload
   template <typename PressureType>
-  void addPressure(PressureType pressure_function, const std::optional<Domain>& optional_domain = std::nullopt)
+  void addPressure(std::string boundary_name, PressureType pressure_function)
   {
-    addPressure(DependsOn<>{}, pressure_function, optional_domain);
+    addPressure(DependsOn<>{}, boundary_name, pressure_function);
   }
 
  protected:

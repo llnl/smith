@@ -36,6 +36,8 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
   /// @brief extract residual dimension from the output space
   static constexpr int dim = OutputSpace::components;
 
+  using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;
+
   /**
    * @brief Construct a new FunctionalResidual object
    *
@@ -48,7 +50,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
   FunctionalResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
                      const mfem::ParFiniteElementSpace& shape_disp_space,
                      const mfem::ParFiniteElementSpace& output_mfem_space,
-                     std::vector<const mfem::ParFiniteElementSpace*> input_mfem_spaces)
+                     SpacesT input_mfem_spaces)
       : Residual(physics_name), mesh_(mesh)
   {
     std::array<const mfem::ParFiniteElementSpace*, sizeof...(InputSpaces)> trial_spaces;
@@ -205,7 +207,6 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
         K.AddMult(*vFields[input_col], *jvpReactions[0]);
       }
     }
-    return;
   }
 
   /// @overload
@@ -224,8 +225,6 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
       std::unique_ptr<mfem::HypreParMatrix> J = assemble(K);
       J->AddMultTranspose(*vReactions[0], *vjpFields[input_col]);
     }
-
-    return;
   }
 
  protected:
