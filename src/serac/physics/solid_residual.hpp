@@ -88,22 +88,23 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
    *
    */
   template <int... active_parameters, typename MaterialType, typename StateType = Empty>
-  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material, Domain& domain,
+  void setMaterial(DependsOn<active_parameters...>, std::string body_name, const MaterialType& material,
                    qdata_type<StateType> qdata = EmptyQData)
   {
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
                   "invalid quadrature data provided in setMaterial()");
     MaterialStressFunctor<MaterialType> material_functor(material);
-    BaseResidualT::residual_->AddDomainIntegral(Dimension<dim>{},
-                                                DependsOn<0, 2, active_parameters + NUM_STATE_VARS...>{},
-                                                std::move(material_functor), domain, qdata);
+    BaseResidualT::residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
+        BaseResidualT::mesh_->domain(body_name), qdata);
   }
 
   /// @overload
   template <typename MaterialType, typename StateType = Empty>
-  void setMaterial(const MaterialType& material, std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
+  void setMaterial(std::string body_name, const MaterialType& material,
+                   std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
-    setMaterial(DependsOn<>{}, material, qdata);
+    setMaterial(DependsOn<>{}, body_name, material, qdata);
   }
 
   /**
@@ -131,22 +132,23 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
    *
    */
   template <int... active_parameters, typename MaterialType, typename StateType = Empty>
-  void setRateMaterial(DependsOn<active_parameters...>, const MaterialType& material, Domain& domain,
+  void setRateMaterial(DependsOn<active_parameters...>, std::string body_name, const MaterialType& material,
                        qdata_type<StateType> qdata = EmptyQData)
   {
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
                   "invalid quadrature data provided in setMaterial()");
-    RateMaterialStressFunctor<MaterialType> material_functor(material);
-    BaseResidualT::residual_->AddDomainIntegral(Dimension<dim>{},
-                                                DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{},
-                                                std::move(material_functor), domain, qdata);
+    RateMaterialStressFunctor<MaterialType> material_functor(material, &this->dt_);
+    BaseResidualT::residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
+        BaseResidualT::mesh_->domain(body_name), qdata);
   }
 
   /// @overload
   template <typename MaterialType, typename StateType = Empty>
-  void setRateMaterial(const MaterialType& material, std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
+  void setRateMaterial(std::string body_name, const MaterialType& material,
+                       std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
-    setRateMaterial(DependsOn<>{}, material, qdata);
+    setRateMaterial(DependsOn<>{}, body_name, material, qdata);
   }
 
   /**
@@ -271,10 +273,13 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
   template <typename Material>
   struct RateMaterialStressFunctor {
     /// Constructor for the functor
-    RateMaterialStressFunctor(Material material) : material_(material) {}
+    RateMaterialStressFunctor(Material material, const double* dt) : material_(material), dt_(dt) {}
 
     /// Material model
     Material material_;
+
+    /// Time step
+    const double* dt_;
 
     /**
      * @brief Material stress response call
@@ -285,7 +290,6 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
      * @tparam Velocity velocity
      * @tparam Acceleration acceleration
      * @tparam Params variadic parameters for call
-     * @param[in] dt time step
      * @param[in] state state
      * @param[in] displacement displacement
      * @param[in] velocity velocity
@@ -296,14 +300,14 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
      */
     template <typename X, typename State, typename Displacement, typename Velocity, typename Acceleration,
               typename... Params>
-    auto SERAC_HOST_DEVICE operator()(double dt, X, State& state, Displacement displacement, Velocity velocity,
+    auto SERAC_HOST_DEVICE operator()(double /*t*/, X, State& state, Displacement displacement, Velocity velocity,
                                       Acceleration acceleration, Params... params) const
     {
       auto du_dX = get<DERIVATIVE>(displacement);
       auto dv_dX = get<DERIVATIVE>(velocity);
       auto d2u_dt2 = get<VALUE>(acceleration);
 
-      auto stress = material_.pkStress(dt, state, du_dX, dv_dX, params...);
+      auto stress = material_.pkStress(*dt_, state, du_dX, dv_dX, params...);
 
       return serac::tuple{material_.density(params...) * d2u_dt2, stress};
     }

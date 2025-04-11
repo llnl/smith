@@ -112,7 +112,7 @@ struct ResidualFixture : public testing::Test {
     SolidMaterial mat;
     mat.K = 1.0;
     mat.G = 0.5;
-    solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mat, mesh->entireBody());
+    solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
 
     // apply traction boundary conditions
     std::string surface_name = "side";
@@ -186,17 +186,17 @@ TEST_F(ResidualFixture, VjpConsistency)
   // test vjp
   serac::FiniteElementDual v(res_vector.space(), "v");
   pseudoRand(v);
-  auto all_jvps = getPointers(dual_states, dual_params);
+  auto all_vjps = getPointers(dual_states, dual_params);
 
-  residual->vjp(time, dt, all_states, getPointers(v), all_jvps);
+  residual->vjp(time, dt, all_states, getPointers(v), all_vjps);
 
   for (size_t i = 0; i < all_states.size(); ++i) {
     serac::FiniteElementState vjp = *all_states[i];
     vjp = 0.0;
     auto J = residual->jacobian(time, dt, all_states, jacobian_weights(i));
     J->MultTranspose(v, vjp);
-    if (i == 0) vjp += 1.0;  // make sure jvp uses +=
-    EXPECT_NEAR(vjp.Norml2(), all_jvps[i]->Norml2(), 1e-12);
+    if (i == 0) vjp += 1.0;  // make sure vjp uses +=
+    EXPECT_NEAR(vjp.Norml2(), all_vjps[i]->Norml2(), 1e-12);
   }
 }
 
