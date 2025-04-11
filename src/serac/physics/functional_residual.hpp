@@ -18,23 +18,21 @@
 
 namespace serac {
 
-template <typename ShapeSpace, typename OutputSpace, typename inputs = Parameters<>,
+template <int spatial_dim, typename ShapeSpace, typename OutputSpace, typename inputs = Parameters<>,
           typename input_indices = std::make_integer_sequence<int, inputs::n>>
 class FunctionalResidual;
 
 /**
  * @brief The nonlinear residual class
  *
- * This uses Functional to compute the solid mechanics residuals and tangent
- * stiffness matrices.
+ * This uses Functional to compute fairly arbitrary residuals and tangent
+ * stiffness matrices based on body and boundary integrals.
  *
  */
-template <typename ShapeSpace, typename OutputSpace, typename... InputSpaces, int... input_indices>
-class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
+template <int spatial_dim, typename ShapeSpace, typename OutputSpace, typename... InputSpaces, int... input_indices>
+class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
                          std::integer_sequence<int, input_indices...>> : public Residual {
  public:
-  /// @brief extract residual dimension from the output space
-  static constexpr int dim = OutputSpace::components;
 
   using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
 
@@ -90,7 +88,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BodyIntegralType>
   void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType body_integral)
   {
-    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<active_parameters...>{}, body_integral,
+    residual_->AddDomainIntegral(Dimension<spatial_dim>{}, DependsOn<active_parameters...>{}, body_integral,
                                  mesh_->domain(body_name));
   }
 
@@ -127,7 +125,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
   void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, NeumannType surface_function)
   {
     residual_->AddBoundaryIntegral(
-        Dimension<dim - 1>{}, DependsOn<active_parameters...>{},
+        Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
         [surface_function](double t, auto X, auto... params) {
           auto n = cross(get<DERIVATIVE>(X));
           return surface_function(t, get<VALUE>(X), normalize(n), params...);
@@ -145,7 +143,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
   /// @overload
   mfem::Vector residual(double time, double dt, const std::vector<FieldPtr>& fields, int block_row = 0) const override
   {
-    SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
+    SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
     dt_ = dt;
     auto ret = (*residual_)(time, *fields[0], *fields[input_indices + 1]...);
     return ret;
@@ -156,7 +154,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
                                                  const std::vector<double>& jacobian_weights,
                                                  int block_row = 0) const override
   {
-    SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
+    SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
 
     dt_ = dt;
 
@@ -177,7 +175,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
 
     auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, fields);
 
-    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
+    for (size_t input_col = 0; input_col < jacobian_weights.size(); ++input_col) {
       if (jacobian_weights[input_col] != 0.0) {
         auto K = serac::get<DERIVATIVE>(jacs[input_col](time, fields));
         addToJ(jacobian_weights[input_col], assemble(K));
@@ -193,7 +191,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
   {
     SLIC_ERROR_IF(vFields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(jvpReactions.size() != 1, "Solid mechanics nonlinear system only supports 1 output residual");
+    SLIC_ERROR_IF(jvpReactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
     auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, fields);
@@ -214,7 +212,7 @@ class FunctionalResidual<ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
   {
     SLIC_ERROR_IF(vjpFields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(vReactions.size() != 1, "Solid mechanics nonlinear system only supports 1 output residual");
+    SLIC_ERROR_IF(vReactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
     auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, fields);

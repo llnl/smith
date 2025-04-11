@@ -31,11 +31,11 @@ class SolidResidual;
  */
 template <int order, int dim, typename... InputSpaces>
 class SolidResidual<order, dim, Parameters<InputSpaces...>>
-    : public FunctionalResidual<H1<order, dim>, H1<order, dim>,
+    : public FunctionalResidual<dim, H1<order, dim>, H1<order, dim>,
                                 Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>> {
  public:
   /// @brief typedef for underlying functional type with templates
-  using BaseResidualT = FunctionalResidual<H1<order, dim>, H1<order, dim>,
+  using BaseResidualT = FunctionalResidual<dim, H1<order, dim>, H1<order, dim>,
                                            Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>>;
 
   /// @brief a container holding quadrature point data of the specified type
@@ -309,23 +309,5 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
     }
   };
 };
-
-/**
- * @brief Utility function for creating a shared_ptr<SolidResidual<>>
- */
-template <int order, int dim, typename... InputSpaces>
-auto create_solid_residual(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
-                           const std::vector<serac::FiniteElementState*>& states,
-                           const std::vector<serac::FiniteElementState*>& params)
-{
-  std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces;
-  if constexpr (sizeof...(InputSpaces) > 0) {
-    for_constexpr<sizeof...(InputSpaces)>([&](auto i) { parameter_fe_spaces.push_back(&params[i + 1]->space()); });
-  }
-
-  using ResidualT = SolidResidual<order, dim, Parameters<InputSpaces...>>;
-
-  return std::make_shared<ResidualT>(physics_name, mesh, params[0]->space(), states[0]->space(), parameter_fe_spaces);
-}
 
 }  // namespace serac
