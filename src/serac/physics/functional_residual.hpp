@@ -224,13 +224,6 @@ class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputS
   }
 
  protected:
-  /// @brief Utility to evaluate residual using all fields in vector
-  template <int... i>
-  auto evaluateResidual(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
-  {
-    return (*residual_)(time, *fs[i]...);
-  };
-
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
   template <int... i>
   auto jacobianFunctions(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
