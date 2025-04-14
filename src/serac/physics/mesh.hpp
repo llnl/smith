@@ -45,16 +45,25 @@ class Mesh {
   Mesh(const std::string& meshfile, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0);
 
   /// @brief Returns string tag for mesh
-  const std::string& tag() const { return mesh_tag; }
+  const std::string& tag() const { return mesh_tag_; }
 
   /// @brief Returns parallel mfem mesh, ignores const for mfem interfaces
-  mfem::ParMesh& mfemParMesh() const { return *mfem_mesh; }
+  mfem::ParMesh& mfemParMesh() const { return *mfem_mesh_; }
 
   /// @brief Returns parallel communicator
   MPI_Comm getComm() const;
 
+  /// @brief  Returns string, name used to access the entire domain body
+  static std::string entireBodyName() { return "entire_body"; }
+
   /// @brief Returns domain corresponding to the entire mesh
-  serac::Domain& entireDomain() const;
+  serac::Domain& entireBody() const;
+
+  /// @brief  Returns string, name used to access the entire boundary
+  static std::string entireBoundaryName() { return "entire_boundary"; }
+
+  /// @brief Returns domain boundary corresponding to the entire mesh
+  serac::Domain& entireBoundary() const;
 
   /// @brief Returns registered domain with specified name
   serac::Domain& domain(const std::string& domain_name) const;
@@ -76,13 +85,13 @@ class Mesh {
   /// names/blocks/attributes from the mesh and create default domains
   void createDomains();
 
-  /// @brief
-  std::string mesh_tag;
+  /// @brief String identifying mesh in the state manager
+  std::string mesh_tag_;
 
-  /// @brief
-  mfem::ParMesh* mfem_mesh;
+  /// @brief Parallel mfem mesh
+  mfem::ParMesh* mfem_mesh_;
 
-  /// @brief
+  /// @brief Map from registered domain name to the domain instance
   mutable std::map<std::string, serac::Domain> domains_;
 };
 
