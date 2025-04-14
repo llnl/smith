@@ -65,6 +65,12 @@ class Mesh {
   /// @brief Returns domain boundary corresponding to the entire mesh
   serac::Domain& entireBoundary() const;
 
+  /// @brief  Returns string, name used to access the internal boundary elements
+  static std::string internalBoundaryName() { return "internal_boundary"; }
+
+  /// @brief Returns domain boundary corresponding to the internal boundary elements
+  serac::Domain& internalBoundary() const;
+
   /// @brief Returns registered domain with specified name
   serac::Domain& domain(const std::string& domain_name) const;
 

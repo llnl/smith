@@ -38,11 +38,14 @@ void Mesh::createDomains()
 {
   domains_.insert({entireBodyName(), serac::EntireDomain(*mfem_mesh_)});
   domains_.insert({entireBoundaryName(), serac::EntireBoundary(*mfem_mesh_)});
+  domains_.insert({internalBoundaryName(), serac::InteriorFaces(*mfem_mesh_)});
 }
 
 serac::Domain& Mesh::entireBody() const { return domain(entireBodyName()); }
 
 serac::Domain& Mesh::entireBoundary() const { return domain(entireBoundaryName()); }
+
+serac::Domain& Mesh::internalBoundary() const { return domain(internalBoundaryName()); }
 
 serac::Domain& Mesh::domain(const std::string& domain_name) const
 {

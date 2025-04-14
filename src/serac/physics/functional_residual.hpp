@@ -223,6 +223,8 @@ class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputS
     }
   }
 
+  ShapeAwareFunctional<ShapeSpace, OutputSpace(InputSpaces...)>& getFunctional() { return *residual_; }
+
  protected:
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
   template <int... i>
@@ -252,6 +254,17 @@ inline std::vector<const mfem::ParFiniteElementSpace*> getSpaces(const std::vect
   std::vector<const mfem::ParFiniteElementSpace*> spaces;
   for (auto& f : states) {
     spaces.push_back(&f.space());
+  }
+  return spaces;
+}
+
+/// @brief Helper function to construct vector of spaces from an existing vector of FieldState.
+/// @param states vector of FieldStates
+inline std::vector<const mfem::ParFiniteElementSpace*> getSpaces(const std::vector<serac::FieldState>& states)
+{
+  std::vector<const mfem::ParFiniteElementSpace*> spaces;
+  for (auto& f : states) {
+    spaces.push_back(&f.get()->space());
   }
   return spaces;
 }
