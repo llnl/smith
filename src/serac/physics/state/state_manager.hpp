@@ -484,6 +484,6 @@ class StateManager {
 };
 
 /// @brief Check that a mesh satisfies our required properties
-void checkMesh(const mfem::ParMesh& pmesh);
+void checkMesh(const mfem::ParMesh& pmesh, bool is_restart=false);
 
 }  // namespace serac

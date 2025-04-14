@@ -50,10 +50,12 @@ double StateManager::newDataCollection(const std::string& mesh_tag, const std::o
     datacoll.UpdateStateFromDS();
     datacoll.UpdateMeshAndFieldsFromDS();
 
-    checkMesh(mesh(mesh_tag));
+    // TODO: This should not be necessary, figure out why on restart this information is not being restored
+    // Generate the face neighbor information in the mesh. This is needed by the face restriction
+    // operators used by Functional
+    mesh(mesh_tag).ExchangeFaceNbrData();
 
-    // Sidre will destruct the nodal grid function instead of the mesh
-    mesh(mesh_tag).SetNodesOwner(false);
+    checkMesh(mesh(mesh_tag));
 
     // Construct and store the shape displacement fields and sensitivities associated with this mesh
     constructShapeFields(mesh_tag);
@@ -70,7 +72,7 @@ void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteE
 {
   SERAC_MARK_FUNCTION;
   const mfem::ParMesh* meshPtr = &(*states_to_load.begin())->mesh();
-  std::string mesh_name = collectionID(meshPtr);
+  std::string mesh_tag = collectionID(meshPtr);
 
   std::string coll_name = getCollectionName(mesh_tag);
 
@@ -275,7 +277,7 @@ double StateManager::time(std::string mesh_tag)
   return datacolls_.at(mesh_tag).GetTime();
 }
 
-void checkMesh(const mfem::ParMesh& pmesh)
+void checkMesh(const mfem::ParMesh& pmesh, bool is_restart)
 {
   const mfem::GridFunction* nodes = pmesh.GetNodes();
 
@@ -283,8 +285,10 @@ void checkMesh(const mfem::ParMesh& pmesh)
                      "The mesh must have a grid function for the nodes defined. Call the EnsureNodes() method on "
                      "your mesh before setting it with the state manager.");
 
-  SLIC_ERROR_ROOT_IF(!pmesh.OwnsNodes(),
-                     "The mesh must own its node grid function, as ownership will be passed to the state manager.");
+  if(is_restart) {
+    SLIC_ERROR_ROOT_IF(!pmesh.OwnsNodes(),
+                       "The mesh must own its node grid function, as ownership will be passed to the state manager.");
+  }
 
   SLIC_WARNING_ROOT_IF(nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS,
                        "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 "
