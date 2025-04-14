@@ -200,7 +200,7 @@ spack:
     hypre:
       require: "@2.26.0"
     mfem:
-      require: "@4.8.0.0"
+      require: "@4.8.0.1"
     petsc:
       require: "@3.21.5"
     raja:
