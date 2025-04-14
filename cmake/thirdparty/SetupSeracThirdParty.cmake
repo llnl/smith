@@ -227,6 +227,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         # We don't use MFEM's Conduit/Axom support
         set(MFEM_USE_CONDUIT OFF CACHE BOOL "")
         set(MFEM_USE_CUDA ${SERAC_ENABLE_CUDA} CACHE BOOL "")
+        set(MFEM_USE_HIP ${SERAC_ENABLE_HIP} CACHE BOOL "")
         set(MFEM_USE_LAPACK ON CACHE BOOL "")
         # mfem+mpi requires metis
         set(MFEM_USE_METIS ${SERAC_ENABLE_MPI} CACHE BOOL "")
