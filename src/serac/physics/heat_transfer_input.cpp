@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/physics/heat_transfer_input.hpp"
+#include "serac/numerics/odes.hpp"
 
 namespace serac {
 

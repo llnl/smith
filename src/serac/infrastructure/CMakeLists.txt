@@ -15,31 +15,29 @@ serac_configure_file(
 set(infrastructure_headers
     about.hpp
     accelerator.hpp
+    application_manager.hpp
     cli.hpp
     debug_print.hpp
     ${PROJECT_BINARY_DIR}/include/serac/infrastructure/git_sha.hpp
-    initialize.hpp
     input.hpp
     logger.hpp
     memory.hpp
     mpi_fstream.hpp
     output.hpp
     profiling.hpp
-    terminator.hpp
     variant.hpp
     )
 
 set(infrastructure_sources
     about.cpp
     accelerator.cpp
+    application_manager.cpp
     cli.cpp
-    initialize.cpp
     input.cpp
     logger.cpp
     mpi_fstream.cpp
     output.cpp
     profiling.cpp
-    terminator.cpp
     )
 
 set(infrastructure_depends axom::inlet axom::fmt axom::cli11 camp mfem ${serac_device_depends})

@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "serac/numerics/functional/tuple_tensor_dual_functions.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 class SlicErrorException : public std::exception {};
 
@@ -152,16 +153,10 @@ TEST(ScalarEquationSolver, CanTakeDirectionalDerivative)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
+  serac::ApplicationManager applicationManager(argc, argv);
 
   axom::slic::setAbortFunction([]() { throw SlicErrorException{}; });
   axom::slic::setAbortOnError(true);
   axom::slic::setAbortOnWarning(false);
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  return RUN_ALL_TESTS();
 }

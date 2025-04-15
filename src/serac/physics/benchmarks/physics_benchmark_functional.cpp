@@ -10,7 +10,7 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/profiling.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
@@ -80,14 +80,9 @@ void functional_test(int parallel_refinement)
 
 int main(int argc, char* argv[])
 {
-  MPI_Init(&argc, &argv);
+  serac::ApplicationManager applicationManager(argc, argv);
 
   int parallel_refinement = 3;
-
-  axom::slic::SimpleLogger logger;
-
-  // Initialize profiling
-  serac::profiling::initialize();
 
   // Add metadata
   SERAC_SET_METADATA("test", "functional");
@@ -131,11 +126,6 @@ int main(int argc, char* argv[])
   SERAC_MARK_END("dimension 3, order 2");
 
   SERAC_MARK_END("vector H1");
-
-  // Finalize profiling
-  serac::profiling::finalize();
-
-  MPI_Finalize();
 
   return 0;
 }

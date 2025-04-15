@@ -10,9 +10,8 @@
 
 #include "axom/fmt.hpp"
 
-#include "serac/infrastructure/initialize.hpp"
+#include "serac/infrastructure/about.hpp"
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/terminator.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
@@ -115,38 +114,40 @@ void BasePhysics::setShapeDisplacement(const FiniteElementState& shape_displacem
 
 void BasePhysics::CreateParaviewDataCollection() const
 {
-  std::string output_name = name_;
-  if (output_name == "") {
-    output_name = "default";
-  }
+  std::string output_name = name_.empty() ? "default" : name_;
 
   paraview_dc_ = std::make_unique<mfem::ParaViewDataCollection>(output_name, const_cast<mfem::ParMesh*>(&mesh_));
-  int max_order_in_fields = 0;
 
-  // Find the maximum polynomial order in the physics module's states
+  // Register finite element fields
+
+  paraview_dc_->RegisterField(shape_displacement_.name(), &shape_displacement_.gridFunction());
+
   for (const FiniteElementState* state : states_) {
     paraview_dc_->RegisterField(state->name(), &state->gridFunction());
-    max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
-  }
-
-  for (const FiniteElementDual* dual : duals_) {
-    paraview_dual_grid_functions_[dual->name()] =
-        std::make_unique<mfem::ParGridFunction>(const_cast<mfem::ParFiniteElementSpace*>(&dual->space()));
-    max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
-    paraview_dc_->RegisterField(dual->name(), paraview_dual_grid_functions_[dual->name()].get());
   }
 
   for (auto& parameter : parameters_) {
     paraview_dc_->RegisterField(parameter.state->name(), &parameter.state->gridFunction());
-    max_order_in_fields = std::max(max_order_in_fields, parameter.state->space().GetOrder(0));
   }
 
-  paraview_dc_->RegisterField(shape_displacement_.name(), &shape_displacement_.gridFunction());
-  max_order_in_fields = std::max(max_order_in_fields, shape_displacement_.space().GetOrder(0));
+  // Register dual fields. These don't have gridfunction views already, so create them
 
   shape_sensitivity_grid_function_ = std::make_unique<mfem::ParGridFunction>(&shape_displacement_sensitivity_->space());
-  max_order_in_fields = std::max(max_order_in_fields, shape_displacement_sensitivity_->space().GetOrder(0));
   paraview_dc_->RegisterField(shape_displacement_sensitivity_->name(), shape_sensitivity_grid_function_.get());
+
+  for (const FiniteElementDual* dual : duals_) {
+    paraview_dual_grid_functions_[dual->name()] =
+        std::make_unique<mfem::ParGridFunction>(const_cast<mfem::ParFiniteElementSpace*>(&dual->space()));
+    paraview_dc_->RegisterField(dual->name(), paraview_dual_grid_functions_[dual->name()].get());
+  }
+
+  // Identify maximum polynomial order in output fields in order to set detail level
+
+  int max_order_in_fields = mesh_.GetNodalFESpace()->GetMaxElementOrder();
+
+  for (const auto& [_, field] : paraview_dc_->GetFieldMap()) {
+    max_order_in_fields = std::max(field->FESpace()->GetMaxElementOrder(), max_order_in_fields);
+  }
 
   // Set the options for the paraview output files
   paraview_dc_->SetLevelsOfDetail(max_order_in_fields);

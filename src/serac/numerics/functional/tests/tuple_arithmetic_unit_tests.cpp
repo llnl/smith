@@ -11,6 +11,7 @@
 
 #include "serac/numerics/functional/tuple.hpp"
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -128,5 +129,6 @@ TEST(TupleArithmeticUnitTests, ReadTheDocsExample)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv);
   return RUN_ALL_TESTS();
 }

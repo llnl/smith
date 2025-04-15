@@ -12,7 +12,6 @@
 #include "axom/core.hpp"
 
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/terminator.hpp"
 #include "serac/numerics/solver_config.hpp"
 
 namespace serac::input {

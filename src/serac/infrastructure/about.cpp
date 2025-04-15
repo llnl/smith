@@ -45,7 +45,6 @@
 #endif
 
 #include "serac/infrastructure/git_sha.hpp"
-#include "serac/infrastructure/initialize.hpp"
 #include "serac/infrastructure/logger.hpp"
 
 namespace serac {
@@ -222,5 +221,19 @@ std::string version(bool add_SHA)
 }
 
 std::string compiler() { return axom::fmt::format("{0} version {1}", SERAC_COMPILER_NAME, SERAC_COMPILER_VERSION); }
+
+std::pair<int, int> getMPIInfo(MPI_Comm comm)
+{
+  int num_procs = 0;
+  int rank = 0;
+  if (MPI_Comm_size(comm, &num_procs) != MPI_SUCCESS) {
+    SLIC_ERROR("Failed to determine number of MPI processes");
+  }
+
+  if (MPI_Comm_rank(comm, &rank) != MPI_SUCCESS) {
+    SLIC_ERROR("Failed to determine MPI rank");
+  }
+  return {num_procs, rank};
+}
 
 }  // namespace serac
