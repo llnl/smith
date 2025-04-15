@@ -60,7 +60,17 @@ bool compare_tensors(const tensor<T, M, N>& a, const tensor<T, M, N>& b)
 
 }  // namespace detail
 
-TEST(state_manager, basic)
+TEST(state_manager, QuadratureData_Restart)
+{
+  // This test checks that the state manager can save and load
+  // a quadrature data object. It does this by creating a
+  // quadrature data object, populating it with some data,
+  // saving it to disk, and then loading it back from disk.
+  // It then checks that the loaded data matches the original
+  // data.
+
+  // Initialize MPI
+  MPI_Init(&argc, &argv);
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
