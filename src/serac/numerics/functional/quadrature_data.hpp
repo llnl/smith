@@ -101,7 +101,8 @@ class ArrayView<serac::Empty, 2, MemorySpace::Dynamic> {
 namespace serac {
 namespace detail {
 
-// Note: The indexes between these two arrays must match the type in qdata_geometries to the name in qdata_geometry_names
+// Note: The indexes between these two arrays must match the type in qdata_geometries to the name in
+// qdata_geometry_names
 /// @brief a list of mfem::Geometry types supported by QuadratureData
 constexpr std::array<mfem::Geometry::Type, 5> qdata_geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE,
                                                                   mfem::Geometry::SQUARE, mfem::Geometry::TETRAHEDRON,
