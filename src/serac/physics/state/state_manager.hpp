@@ -112,7 +112,7 @@ class StateManager {
     constexpr const char* qds_group_name = "quadraturedatas";
 
     // Get Sidre location for quadrature data inside data collection
-    auto&               datacoll = datacolls_.at(mesh_tag);
+    auto& datacoll = datacolls_.at(mesh_tag);
     axom::sidre::Group* bp_group = datacoll.GetBPGroup();  // mesh_datacoll
     // For each geometry type, use i to get both type and name from matching arrays
     for (std::size_t i = 0; i < detail::qdata_geometries.size(); ++i) {
@@ -484,6 +484,6 @@ class StateManager {
 };
 
 /// @brief Check that a mesh satisfies our required properties
-void checkMesh(const mfem::ParMesh& pmesh, bool is_restart=false);
+void checkMesh(const mfem::ParMesh& pmesh, bool is_restart = false);
 
 }  // namespace serac

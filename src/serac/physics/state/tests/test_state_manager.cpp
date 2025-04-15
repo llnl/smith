@@ -36,7 +36,7 @@ void apply_function_to_quadrature_data_states(const double starting_value, std::
     // Check if geometry type has any data
     if ((*qdata).data.find(geom_type) != (*qdata).data.end()) {
       // Get axom::Array of states in map
-      auto   states     = (*qdata)[geom_type];
+      auto states = (*qdata)[geom_type];
       double curr_value = starting_value;
       for (auto& state : states) {
         apply_function(curr_value, state);
@@ -65,7 +65,7 @@ TEST(state_manager, basic)
   MPI_Barrier(MPI_COMM_WORLD);
 
   // TODO: are these right?
-  constexpr int dim   = 3;
+  constexpr int dim = 3;
   constexpr int order = 2;
 
   // Info about this test's Quadrature data state
@@ -88,27 +88,27 @@ TEST(state_manager, basic)
 
   // Lamda to fill the state against a starting value which is incremented after each check
   std::function<void(double&, State&)> fill_state = [](double& curr_value, State& state) {
-    state.Fpinv                      = make_tensor<dim, dim>([&](int i, int j) { return i + curr_value * j; });
+    state.Fpinv = make_tensor<dim, dim>([&](int i, int j) { return i + curr_value * j; });
     state.accumulated_plastic_strain = curr_value;
     curr_value++;
   };
   //---------------------------------
 
   // Create DataStore
-  std::string            name = "basic";
+  std::string name = "basic";
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
   // Construct the appropriate dimension mesh and give it to the StateManager
   std::string filename = SERAC_REPO_DIR "/data/meshes/ball.mesh";
   std::string mesh_tag = "ball_mesh";
-  auto        mesh     = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
   StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // Create and store the initial state of the quadrature data in sidre
   SLIC_INFO("Creating Quadrature Data with initial state");
-  Domain                                 domain = EntireDomain(StateManager::mesh(mesh_tag));
-  State                                  initial_state{};
+  Domain domain = EntireDomain(StateManager::mesh(mesh_tag));
+  State initial_state{};
   std::shared_ptr<QuadratureData<State>> qdata =
       StateManager::newQuadratureDataBuffer(mesh_tag, domain, order, dim, initial_state);
 
@@ -120,7 +120,7 @@ TEST(state_manager, basic)
   detail::apply_function_to_quadrature_data_states(good_starting_value, qdata, check_state);
 
   // Save to disk and simulate a restart
-  const int    cycle      = 1;
+  const int cycle = 1;
   const double time_saved = 1.5;
   SLIC_INFO(axom::fmt::format("Saving mesh restart '{0}' at cycle '{1}'", mesh_tag, cycle));
   StateManager::save(time_saved, cycle, mesh_tag);
@@ -134,7 +134,7 @@ TEST(state_manager, basic)
 
   // Load data from disk
   SLIC_INFO("Loading previously saved Quadrature Data");
-  Domain                                 new_domain = EntireDomain(StateManager::mesh(mesh_tag));
+  Domain new_domain = EntireDomain(StateManager::mesh(mesh_tag));
   std::shared_ptr<QuadratureData<State>> new_qdata =
       StateManager::newQuadratureDataBuffer(mesh_tag, new_domain, order, dim, initial_state);
 

@@ -100,11 +100,11 @@ class ArrayView<serac::Empty, 2, MemorySpace::Dynamic> {
 
 namespace serac {
 namespace detail {
-constexpr std::array<mfem::Geometry::Type, 5> qdata_geometries     = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE,
-                                                                      mfem::Geometry::SQUARE, mfem::Geometry::TETRAHEDRON,
-                                                                      mfem::Geometry::CUBE};
-constexpr std::array<std::string_view, 5>     qdata_geometry_names = {"Segment", "Triangle", "Square", "Tetrahedron",
-                                                                      "Cube"};
+constexpr std::array<mfem::Geometry::Type, 5> qdata_geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE,
+                                                                  mfem::Geometry::SQUARE, mfem::Geometry::TETRAHEDRON,
+                                                                  mfem::Geometry::CUBE};
+constexpr std::array<std::string_view, 5> qdata_geometry_names = {"Segment", "Triangle", "Square", "Tetrahedron",
+                                                                  "Cube"};
 }  // namespace detail
 
 /**
@@ -173,6 +173,6 @@ struct QuadratureData<Empty> {
 
 /// these values exist to serve as default arguments for materials without material state
 extern std::shared_ptr<QuadratureData<Nothing>> NoQData;
-extern std::shared_ptr<QuadratureData<Empty>>   EmptyQData;
+extern std::shared_ptr<QuadratureData<Empty>> EmptyQData;
 
 }  // namespace serac
