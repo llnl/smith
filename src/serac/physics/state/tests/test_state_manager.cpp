@@ -78,7 +78,7 @@ TEST(state_manager, QuadratureData_Restart)
   constexpr int dim = 3;
   constexpr int order = 2;
 
-  // Info about this test's Quadrature data state
+  // Info about this test's QuadratureData State
   /*
     struct State {
         tensor<double, dim, dim> Fpinv = DenseIdentity<3>();  ///< inverse of plastic distortion tensor
@@ -115,7 +115,7 @@ TEST(state_manager, QuadratureData_Restart)
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
   StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  // Create and store the initial state of the quadrature data in sidre
+  // Create and store the initial state of the QuadratureData in Sidre
   SLIC_INFO("Creating Quadrature Data with initial state");
   Domain domain = EntireDomain(StateManager::mesh(mesh_tag));
   State initial_state{};
@@ -123,7 +123,7 @@ TEST(state_manager, QuadratureData_Restart)
       StateManager::newQuadratureDataBuffer(mesh_tag, domain, order, dim, initial_state);
 
   // Change data
-  SLIC_INFO("Populating Quadrature Data");
+  SLIC_INFO("Populating QuadratureData");
   constexpr double good_starting_value = 1.0;
   detail::apply_function_to_quadrature_data_states(good_starting_value, qdata, fill_state);
   SLIC_INFO("Verifying populated Quadrature Data");
