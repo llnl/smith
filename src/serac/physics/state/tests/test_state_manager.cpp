@@ -69,12 +69,8 @@ TEST(state_manager, QuadratureData_Restart)
   // It then checks that the loaded data matches the original
   // data.
 
-  // Initialize MPI
-  MPI_Init(&argc, &argv);
-{
   MPI_Barrier(MPI_COMM_WORLD);
 
-  // TODO: are these right?
   constexpr int dim = 3;
   constexpr int order = 2;
 
