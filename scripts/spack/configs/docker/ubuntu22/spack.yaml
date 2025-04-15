@@ -208,6 +208,6 @@ spack:
     sundials:
       require: "@6.7.0"
     tribol:
-      require: "@0.1.0.17~examples~tests"
+      require: "@0.1.0.18~examples~tests"
     umpire:
       require: "@2024.07.0~examples~werror"
