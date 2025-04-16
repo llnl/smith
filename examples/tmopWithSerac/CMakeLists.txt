@@ -22,6 +22,12 @@ blt_add_executable( NAME        tmop_with_serac_3D
                     DEPENDS_ON  serac_physics serac_mesh serac_functional
                     )
 
+blt_add_executable( NAME        tmopWithSerac2D_ADWithMfem
+                    SOURCES     tmopWithSerac2D_ADWithMfem.cpp
+                    OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                    DEPENDS_ON  serac_physics serac_mesh serac_functional
+                    )
+
 if(SERAC_ENABLE_TESTS)
     blt_add_test(NAME          tmop_with_serac_initial_testing
                 COMMAND        tmop_with_serac_initial_testing

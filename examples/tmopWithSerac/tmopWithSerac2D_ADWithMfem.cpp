@@ -84,8 +84,75 @@ private:
     T1 centerX;    // X-coordinate of the center
     T1 centerY;    // Y-coordinate of the center
 };
-//////////////////////////////////////////////
-//////////////////////////////////////////////
+//////////////////////////////////////////////////
+//////////////////////////////////////////////////
+/// MFEM native AD-type for first derivatives
+typedef ::mfem::internal::dual<::mfem::real_t, ::mfem::real_t> ADFType;
+/// MFEM native AD-type for second derivatives
+typedef ::mfem::internal::dual<ADFType, ADFType> ADSType;
+
+::mfem::real_t ADVal_func( const ::mfem::Vector &p, std::function<ADFType(const std::vector<ADFType>&)> func)
+{
+  int numParams = p.Size();
+  // int matsize = numParams;
+   std::vector<ADFType> adinp(numParams);
+   for (int i=0; i<numParams; i++) { adinp[i] = ADFType{p[i], 0.0}; }
+ 
+   return func(adinp).value;
+}
+
+void ADGrad_func(const ::mfem::Vector &p, std::function<ADFType(const std::vector<ADFType>&)> func, ::mfem::Vector &grad)
+{  
+   int numParams = p.Size();
+   std::vector<ADFType> adinp(numParams);
+   for (int i=0; i<numParams; i++) { adinp[i] = ADFType{p[i], 0.0}; }
+   for (int i=0; i<numParams; i++)
+   {
+      adinp[i] = ADFType{p[i], 1.0};
+      ADFType rez = func(adinp);
+      grad[i] = rez.gradient;
+      adinp[i] = ADFType{p[i], 0.0};
+   }
+}
+
+void ADHessian_func(const ::mfem::Vector &p, std::function<ADSType(const std::vector<ADSType>&)> func, ::mfem::DenseMatrix &H)
+{
+   int numParams = p.Size();
+
+   //use forward-forward mode
+   std::vector<ADSType> aduu(numParams);
+   for (int ii = 0; ii < numParams; ii++)
+   {
+      aduu[ii].value = ADFType{p[ii], 0.0};
+      aduu[ii].gradient = ADFType{0.0, 0.0};
+   }
+
+   for (int ii = 0; ii < numParams; ii++)
+   {
+      aduu[ii].value = ADFType{p[ii], 1.0};
+      for (int jj = 0; jj < (ii + 1); jj++)
+      {
+         aduu[jj].gradient = ADFType{1.0, 0.0};
+         ADSType rez = func(aduu);
+         H(ii,jj) = rez.gradient.gradient;
+         H(jj,ii) = rez.gradient.gradient;
+         aduu[jj].gradient = ADFType{0.0, 0.0};
+      }
+      aduu[ii].value = ADFType{p[ii], 0.0};
+   }
+   return;
+}
+
+//example functions
+template <typename type>
+auto func_example(const std::vector<type>& x ) -> type {
+    double x0=0.0;
+    double y0=0.0;
+    double exponent=2.0;
+    return pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent) - x[2];
+};
+//////////////////////////////////////////////////
+//////////////////////////////////////////////////
 
 // _main_init_start
 int main(int argc, char* argv[])
@@ -168,8 +235,6 @@ int main(int argc, char* argv[])
   // Circle/cylinder geometry
   auto omega = 1.0e1;
   auto radius = 0.75;
-  auto x0 = 0.0;
-  auto y0 = 0.0;
 
   serac::Domain radial_boundary = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<DIM>(1));
   residual.AddBoundaryIntegral(
@@ -178,14 +243,38 @@ int main(int argc, char* argv[])
       auto [X, dXdxi] = position;
       auto u = serac::get<0>(nodeDisp);
       auto x = X + u;
-      auto phi_value = CuboidLSF2D{x0, y0, 1.0*radius, 2};
-      auto phiVal = phi_value.SDF(x);
-      auto dphi = phi_value.GRAD(x);
-// std::cout<<" ....... omega = "<< omega <<std::endl;
-// std::cout<<" ....... phiVal = "<< phiVal <<std::endl;
-// std::cout<<" ....... dphi = "<< dphi <<std::endl;
-// std::cout<<" ....... boundary int = "<<2.0 * omega * phiVal * dphi<<std::endl<<std::endl;
-      return 2.0 * omega * phiVal * dphi;
+      
+      ::mfem::Vector p(DIM+1);     // inputs
+      ::mfem::Vector grad(DIM+1); 
+      p = radius;
+
+      // Overwrite first 2/3 parameters with coordinates to get shape derivatives
+      for (int i = 0; i < DIM; i++) {
+        if constexpr (serac::is_tensor_of_dual_number<decltype(x)>::value) {
+          p[i]=x[i].value;
+        } else {
+          p[i]=x[i];
+        }
+      }
+      auto phiVal = ADVal_func(p, func_example<ADFType>);
+      ADGrad_func(p, func_example<ADFType>, grad); // grad = dphi/dp = [dphi/dx, dphi/dr]
+      // Check if the dimensions match
+      serac::tensor<double, DIM> dphi;
+      // Populate the serac::tensor from the mfem::Vector
+      for (int i = 0; i < DIM; i++) {
+        dphi[i] = grad[i];
+      }
+
+      if constexpr (serac::is_tensor_of_dual_number<decltype(u)>::value) 
+      {
+        auto dual_dphi = serac::make_dual(dphi); // Ensure dphi is compatible
+        return dual_dphi;
+        // return 2.0 * omega * phiVal * dphi;
+      }
+      else
+      {
+        return 2.0 * omega * phiVal * dphi;
+      }
     },
     radial_boundary // whole_boundary
   );
@@ -249,8 +338,8 @@ int main(int argc, char* argv[])
   mfem::ParGridFunction nodeSolGF(shape_fes.get());
   nodeSolGF.SetFromTrueDofs(node_disp_computed);
 
-  auto pd = mfem::ParaViewDataCollection("sol_mesh_morphing_serac_2D", &pmesh);
-  pd.RegisterField("solution", &nodeSolGF);
+  auto pd = mfem::ParaViewDataCollection("sol_mesh_morphing_serac_2D_ad_mfem", &pmesh);
+  pd.RegisterField("solution_ad_mfem", &nodeSolGF);
   pd.SetCycle(1);
   pd.SetTime(1);
   pd.Save();
