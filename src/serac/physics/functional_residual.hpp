@@ -223,6 +223,8 @@ class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputS
     }
   }
 
+  /// @brief Accessor to get a reference to the underlying ShapeAwareFunctional in case more direct access is needed.
+  /// @return Reference to ShapeAwareFunctional instance.
   ShapeAwareFunctional<ShapeSpace, OutputSpace(InputSpaces...)>& getFunctional() { return *residual_; }
 
  protected:
