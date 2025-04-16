@@ -86,6 +86,18 @@ class Mesh {
   serac::Domain& addDomainOfBoundaryElements(const std::string& domain_name,
                                              std::function<bool(std::vector<vec2>, int)> func);
 
+  /// @brief create domain of 3D elements with specified name
+  /// The second argument is a function taking a std::vector<vec3> corresponding
+  /// to the nodal coordinates of the element as well as an integer corresponding to the attribute id
+  serac::Domain& addDomainOfBodyElements(const std::string& domain_name,
+                                         std::function<bool(std::vector<vec3>, int)> func);
+
+  /// @brief create domain of 2D boundary elements with specified name
+  /// The second argument is a function taking a std::vector<vec2> corresponding
+  /// to the nodal coordinates of the element as well as an integer corresponding to the attribute id
+  serac::Domain& addDomainOfBodyElements(const std::string& domain_name,
+                                         std::function<bool(std::vector<vec2>, int)> func);
+
  private:
   /// @brief Sets up some initial domains, for now just the 'entire_domain', but eventually we can read of
   /// names/blocks/attributes from the mesh and create default domains
