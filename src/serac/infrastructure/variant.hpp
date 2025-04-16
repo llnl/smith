@@ -37,8 +37,8 @@ struct variant_storage {
    */
   int index_ = 0;
   union {
-    T0 t0_;
-    T1 t1_;
+    T0 t0_;  ///< first type
+    T1 t1_;  ///< second type
   };
 
   /**
