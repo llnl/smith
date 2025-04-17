@@ -32,6 +32,7 @@ set(physics_headers
     thermomechanics_input.hpp
     thermomechanics_monolithic.hpp
     residual.hpp
+    functional_residual.hpp
     solid_residual.hpp
     )
 

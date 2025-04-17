@@ -35,6 +35,8 @@ TEST(LiquidCrystalElastomer, Brighenti)
   mfem::Mesh cuboid =
       mfem::Mesh(mfem::Mesh::MakeCartesian3D(nElem, 2 * nElem, 2 * nElem, mfem::Element::HEXAHEDRON, lx, ly, lz));
   auto mesh = std::make_unique<mfem::ParMesh>(MPI_COMM_WORLD, cuboid);
+  mesh->EnsureNodes();
+  mesh->ExchangeFaceNbrData();
 
   std::string mesh_tag{"mesh"};
 
