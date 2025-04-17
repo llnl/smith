@@ -407,8 +407,7 @@ int ex1_main(int argc, char *argv[])
 TEST(MfemPetscSmoketest, MfemPetscEx1)
 {
   ::testing::internal::CaptureStdout();
-  // Disable device testing due to the following error:
-  // cuBLAS error 15 (CUBLAS_STATUS_NOT_SUPPORTED)
+  // https://github.com/LLNL/serac/issues/1361
   // #ifdef SERAC_USE_CUDA
   //   const char* fake_argv[] = {"ex1",
   //                              "-m",

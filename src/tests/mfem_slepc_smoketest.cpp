@@ -462,8 +462,7 @@ int ex11_main(int argc, char *argv[])
 TEST(MfemSlepcSmoketest, MfemPetscEx11)
 {
   ::testing::internal::CaptureStdout();
-  // Disable device testing due to the following error:
-  // cuBLAS error 15 (CUBLAS_STATUS_NOT_SUPPORTED)
+  // https://github.com/LLNL/serac/issues/1361
   // #ifdef SERAC_USE_CUDA
   //   const char* fake_argv[] = {"ex11",       "-m",          SERAC_REPO_DIR "/mfem/data/star.mesh",
   //                              "--useslepc", "--slepcopts", SERAC_REPO_DIR "/src/tests/rc_mfem_slepc_smoketest_gpu",
