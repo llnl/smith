@@ -55,7 +55,7 @@ double StateManager::newDataCollection(const std::string& mesh_tag, const std::o
     // operators used by Functional
     mesh(mesh_tag).ExchangeFaceNbrData();
 
-    checkMesh(mesh(mesh_tag));
+    checkMesh(mesh(mesh_tag), is_restart_);
 
     // Construct and store the shape displacement fields and sensitivities associated with this mesh
     constructShapeFields(mesh_tag);
@@ -285,7 +285,7 @@ void checkMesh(const mfem::ParMesh& pmesh, bool is_restart)
                      "The mesh must have a grid function for the nodes defined. Call the EnsureNodes() method on "
                      "your mesh before setting it with the state manager.");
 
-  if (is_restart) {
+  if (!is_restart) {
     SLIC_ERROR_ROOT_IF(!pmesh.OwnsNodes(),
                        "The mesh must own its node grid function, as ownership will be passed to the state manager.");
   }
