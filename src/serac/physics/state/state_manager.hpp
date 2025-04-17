@@ -181,15 +181,20 @@ class StateManager {
                              "Loaded Quadrature Data geometry Sidre view did not have 'states'");
           axom::sidre::View* states_view = geom_group->getView("states");
           states_view->setExternalDataPtr(states.data());
+
+          // TODO: swap this code for the one below after updating Axom
+          // Load this set of quadrature data only
+          // std::string group_name_to_load = axom::fmt::format("{0}/{1}", qds_group_name, geom_name);
+          // datacoll.LoadExternalData("", group_name_to_load);
         }
       }
     }
-
     if (is_restart_) {
       // NOTE: This call will reload all external buffers from file stored in the DataStore
       // TODO: This should be changed to load only the current material quadrature data after
-      // MFEMSidreDatacollection::LoadExternalData and SPIO is enhanced to allow loading the
-      // external data piecemeal
+      // MFEMSidreDatacollection::LoadExternalData is enhanced to allow loading the
+      // external data piecemeal. After Axom PR#1555 goes in, uncomment the loadExternalData call
+      // above and remove this if block.
       datacoll.LoadExternalData();
     }
   }
