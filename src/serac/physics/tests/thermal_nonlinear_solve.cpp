@@ -44,7 +44,6 @@ void functional_thermal_test_nonlinear()
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  // _solver_params_start
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
                                                   .relative_tol = 1.0e-12,
                                                   .absolute_tol = 1.0e-12,
@@ -53,7 +52,6 @@ void functional_thermal_test_nonlinear()
 
   HeatTransfer<p, dim> thermal_solver(nonlinear_options, heat_transfer::default_linear_options,
                                       heat_transfer::default_static_options, "heat_transfer", mesh_tag);
-  // _solver_params_end
 
   heat_transfer::LinearIsotropicConductor mat{
       1.0,  // mass density
