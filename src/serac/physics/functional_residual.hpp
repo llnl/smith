@@ -260,15 +260,4 @@ inline std::vector<const mfem::ParFiniteElementSpace*> getSpaces(const std::vect
   return spaces;
 }
 
-/// @brief Helper function to construct vector of spaces from an existing vector of FieldState.
-/// @param states vector of FieldStates
-inline std::vector<const mfem::ParFiniteElementSpace*> getSpaces(const std::vector<serac::FieldState>& states)
-{
-  std::vector<const mfem::ParFiniteElementSpace*> spaces;
-  for (auto& f : states) {
-    spaces.push_back(&f.get()->space());
-  }
-  return spaces;
-}
-
 }  // namespace serac
