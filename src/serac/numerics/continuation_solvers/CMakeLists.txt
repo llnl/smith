@@ -56,3 +56,7 @@ install(TARGETS     serac_continuation_solvers
         EXPORT      serac-targets
         DESTINATION lib
         )
+
+if(SERAC_ENABLE_TESTS)
+   add_subdirectory(tests)
+endif()
