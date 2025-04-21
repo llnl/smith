@@ -7,7 +7,7 @@
 /**
  * @file functional_objective.hpp
  *
- * @brief Implements the objective interface for some average motion constraints
+ * @brief Implements the scalar objective interface using shape aware functional's scalar output capability
  */
 
 #pragma once
@@ -21,7 +21,7 @@
 namespace mfem {
 class Vector;
 class HypreParMatrix;
-}  // namespace mfem
+}
 
 namespace serac {
 
