@@ -16,6 +16,26 @@
 #include "serac/infrastructure/memory.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"
 
+namespace serac {
+
+/**
+ * @brief get a readable sting_view of the underlying templated type
+ * @tparam T the type to get a string name for
+ * @param t An instance of the variable to get the type of
+ */
+template <class T>
+constexpr std::string_view type_name(const T& /*t*/)
+{
+  using namespace std;
+#ifdef __clang__
+  string_view p = __PRETTY_FUNCTION__;
+  return string_view(p.data() + 34, p.size() - 34 - 1);
+#elif defined(__GNUC__)
+  string_view p = __PRETTY_FUNCTION__;
+  return string_view(p.data() + 49, p.find(';', 49) - 49);
+#endif
+}
+
 /**
  * @brief write an array of values out to file, in a space-separated format
  * @tparam T the type of each value in the array
@@ -140,4 +160,7 @@ void printCUDAMemUsage()
   std::cout << " Free Memory (MB): " << (freeBytes / 1024.0 / 1024.0) << std::endl;
   std::cout << " Used Memory (MB): " << (usedBytes / 1024.0 / 1024.0) << std::endl;
 }
+
 #endif
+
+}  // namespace serac
