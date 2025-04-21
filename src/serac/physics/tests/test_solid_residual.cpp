@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <gtest/gtest.h>
-<<<<<<< HEAD
 #include "mfem.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
@@ -62,20 +61,6 @@ void pseudoRand(serac::FiniteElementDual& dual)
   }
 }
 
-=======
-#include "serac/physics/solid_residual.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
-#include "serac/mesh/mesh_utils.hpp"
-#include "serac/physics/materials/solid_material.hpp"
-#include "serac/physics/mesh.hpp"
-#include "serac/physics/common.hpp"
-#include "mfem.hpp"
-#include "serac/physics/tests/physics_test_utils.hpp"
-
-auto element_shape = mfem::Element::QUADRILATERAL;
-
->>>>>>> ba610bffc (Formulate a residual with a small number of constraints.)
 struct ResidualFixture : public testing::Test {
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
@@ -164,14 +149,11 @@ struct ResidualFixture : public testing::Test {
     residual = solid_mechanics_residual;
   }
 
-<<<<<<< HEAD
   const double time = 0.0;
   const double dt = 1.0;
 
   std::string velo_name = "solid_velocity";
 
-=======
->>>>>>> ba610bffc (Formulate a residual with a small number of constraints.)
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;
   std::shared_ptr<serac::Residual> residual;
