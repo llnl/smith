@@ -118,7 +118,6 @@ void ADGrad_func(const ::mfem::Vector &p, std::function<ADFType(const std::vecto
 void ADHessian_func(const ::mfem::Vector &p, std::function<ADSType(const std::vector<ADSType>&)> func, ::mfem::DenseMatrix &H)
 {
    int numParams = p.Size();
-
    //use forward-forward mode
    std::vector<ADSType> aduu(numParams);
    for (int ii = 0; ii < numParams; ii++)
@@ -132,11 +131,12 @@ void ADHessian_func(const ::mfem::Vector &p, std::function<ADSType(const std::ve
       aduu[ii].value = ADFType{p[ii], 1.0};
       for (int jj = 0; jj < (ii + 1); jj++)
       {
-         aduu[jj].gradient = ADFType{1.0, 0.0};
-         ADSType rez = func(aduu);
-         H(ii,jj) = rez.gradient.gradient;
-         H(jj,ii) = rez.gradient.gradient;
-         aduu[jj].gradient = ADFType{0.0, 0.0};
+
+        aduu[jj].gradient = ADFType{1.0, 0.0};
+        ADSType rez = func(aduu);
+        H(ii,jj) = rez.gradient.gradient;
+        H(jj,ii) = rez.gradient.gradient;
+        aduu[jj].gradient = ADFType{0.0, 0.0};
       }
       aduu[ii].value = ADFType{p[ii], 0.0};
    }
@@ -267,8 +267,32 @@ int main(int argc, char* argv[])
 
       if constexpr (serac::is_tensor_of_dual_number<decltype(u)>::value) 
       {
-        auto dual_dphi = serac::make_dual(dphi); // Ensure dphi is compatible
-        return dual_dphi;
+          // Get d2phidXdp
+          ::mfem::Vector d2phidpdXVal(DIM);
+          ::mfem::DenseMatrix H;
+          H.SetSize(DIM+1, DIM+1);
+          ADHessian_func(p, func_example<ADSType>, H);
+
+          // Extract components
+          serac::tensor<double, DIM, DIM> d2phidx2;
+          // d2phidx2.SetSize(DIM, DIM);
+      
+          for (int i = 0; i < DIM; i++){
+              for (int j = 0; j < DIM; j++) { d2phidx2(i, j) = H(i, j); }
+          }
+          auto gradForDual = 2.0 * omega * ( serac::outer(dphi, dphi) + phiVal * d2phidx2 );
+
+          // std::cout << "Type of phiVal: " << typeid(phiVal).name() << std::endl;
+          // std::cout << "Type of dphi: " << typeid(dphi).name() << std::endl;
+          // auto dual_dphi = serac::make_dual(dphi);
+          // std::cout << "Type of dual_dphi: " << typeid(dual_dphi).name() << std::endl;
+          // std::cout << "Type of gradForDual: " << typeid(gradForDual).name() << std::endl;
+          // exit(0);
+
+          return gradForDual;
+          
+        // auto dual_dphi = serac::make_dual(dphi); // Ensure dphi is compatible
+        // return dual_dphi;
         // return 2.0 * omega * phiVal * dphi;
       }
       else
