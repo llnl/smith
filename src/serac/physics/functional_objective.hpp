@@ -12,11 +12,11 @@
 
 #pragma once
 
-#include "serac/physics/objective.hpp"
+#include "serac/physics/scalar_objective.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/common.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
 
 namespace mfem {
 class Vector;
@@ -25,44 +25,42 @@ class HypreParMatrix;
 
 namespace serac {
 
-template <int order, int dim, typename parameters = Parameters<>,
+template <int spatial_dim, typename ShapeDispSpace, typename parameters = Parameters<>,
           typename parameter_indices = std::make_integer_sequence<int, parameters::n>>
 class FunctionalObjective;
 
 /**
- * @brief Center of mass constraint
+ * @brief Construct a new FunctionalObjective object
  *
- * @tparam order The order of the discretization of the displacement and velocity fields
- * @tparam dim The spatial dimension of the mesh
+ * @param physics_name A name for the physics module instance
+ * @param mesh The serac mesh
+ * @param shape_disp_space Shape displacement space
+ * @param input_mfem_spaces Vector of finite element spaces which are arguments to the residual
  */
-template <int order, int dim, typename... parameter_space, int... parameter_indices>
-class FunctionalObjective<order, dim, Parameters<parameter_space...>, std::integer_sequence<int, parameter_indices...>>
-    : public Objective {
+template <int spatial_dim, typename ShapeDispSpace, typename... InputSpaces, int... parameter_indices>
+class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...>,
+                          std::integer_sequence<int, parameter_indices...>> : public ScalarObjective {
  public:
-  static constexpr auto NUM_STATE_VARS = 0;  ///< _
-  static constexpr auto NUM_PRE_PARAMS = 1;  ///< shape_displacement
-  static constexpr auto NUM_FIELD_OFFSET =
-      NUM_STATE_VARS + NUM_PRE_PARAMS;  ///< sum of num states and num preset params
+  using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
 
   /// @brief construct a center of mass objective
-  FunctionalObjective(const mfem::ParFiniteElementSpace& mfem_shape_disp_space,
-                      std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {},
-                      std::vector<std::string> parameter_names = {})
+  FunctionalObjective(const std::string& physics_name, std::shared_ptr<Mesh> mesh,
+                      const mfem::ParFiniteElementSpace& shape_disp_space, const SpacesT& input_mfem_spaces)
+      : ScalarObjective(physics_name), mesh_(mesh)
   {
-    std::array<const mfem::ParFiniteElementSpace*, NUM_STATE_VARS + sizeof...(parameter_space)> mfem_spaces;
+    std::array<const mfem::ParFiniteElementSpace*, sizeof...(InputSpaces)> mfem_spaces;
 
     SLIC_ERROR_ROOT_IF(
-        sizeof...(parameter_space) != parameter_names.size(),
+        sizeof...(InputSpaces) != input_mfem_spaces.size(),
         axom::fmt::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
-                          sizeof...(parameter_space), parameter_names.size()));
+                          sizeof...(InputSpaces), input_mfem_spaces.size()));
 
-    if constexpr (sizeof...(parameter_space) > 0) {
-      for_constexpr<sizeof...(parameter_space)>(
-          [&](auto i) { mfem_spaces[i + NUM_STATE_VARS] = parameter_fe_spaces[i]; });
+    if constexpr (sizeof...(InputSpaces) > 0) {
+      for_constexpr<sizeof...(InputSpaces)>([&](auto i) { mfem_spaces[i] = input_mfem_spaces[i]; });
     }
 
-    objective_ = std::make_unique<ShapeAwareFunctional<shape_space, double(parameter_space...)>>(&mfem_shape_disp_space,
-                                                                                                 mfem_spaces);
+    objective_ =
+        std::make_unique<ShapeAwareFunctional<ShapeDispSpace, double(InputSpaces...)>>(&shape_disp_space, mfem_spaces);
   }
 
   /// @brief using
@@ -76,24 +74,25 @@ class FunctionalObjective<order, dim, Parameters<parameter_space...>, std::integ
    * @param qfunction a callable that returns a tuple of body-force and stress
    */
   template <int... active_parameters, typename FuncOfTimeSpaceAndParams>
-  void addDomainIntegral(DependsOn<active_parameters...>, serac::Domain& domain,
-                         const FuncOfTimeSpaceAndParams& qfunction)
+  void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name,
+                       const FuncOfTimeSpaceAndParams& qfunction)
   {
-    objective_->AddDomainIntegral(serac::Dimension<dim>{}, serac::DependsOn<active_parameters...>{}, qfunction, domain);
+    objective_->AddDomainIntegral(serac::Dimension<spatial_dim>{}, serac::DependsOn<active_parameters...>{}, qfunction,
+                                  mesh_->domain(body_name));
   }
 
   /// @overload
-  virtual double evaluate(double time, const std::vector<FieldPtr>& fields) const
+  virtual double evaluate(double time, double dt, const std::vector<FieldPtr>& fields) const
   {
-    return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{}, time,
-                             fields);
+    dt_ = dt;
+    return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);
   }
 
   /// @overload
-  virtual mfem::Vector gradient(double time, const std::vector<FieldPtr>& fields, int direction) const
+  virtual mfem::Vector gradient(double time, double dt, const std::vector<FieldPtr>& fields, int direction) const
   {
-    auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{},
-                                    time, fields);
+    dt_ = dt;
+    auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);
     auto g = serac::get<DERIVATIVE>(grads[static_cast<size_t>(direction)](time, fields));
     return *assemble(g);
   }
@@ -117,9 +116,14 @@ class FunctionalObjective<order, dim, Parameters<parameter_space...>, std::integ
     }...};
   };
 
-  using shape_space = H1<order, dim>;
+  /// @brief timestep, this needs to be held here and modified for rate dependent applications
+  mutable double dt_ = std::numeric_limits<double>::max();
 
-  std::unique_ptr<ShapeAwareFunctional<shape_space, double(parameter_space...)>> objective_;
+  /// @brief primary mesh
+  std::shared_ptr<Mesh> mesh_;
+
+  /// @brief scalar output shape aware functional
+  std::unique_ptr<ShapeAwareFunctional<ShapeDispSpace, double(InputSpaces...)>> objective_;
 };
 
 }  // namespace serac

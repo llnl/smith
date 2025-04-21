@@ -15,10 +15,13 @@
 
 #include "serac/physics/residual.hpp"
 #include "serac/physics/mesh.hpp"
+#include "serac/numerics/functional/shape_aware_functional.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
 
 namespace serac {
 
-template <int spatial_dim, typename ShapeSpace, typename OutputSpace, typename inputs = Parameters<>,
+template <int spatial_dim, typename ShapeDispSpace, typename OutputSpace, typename inputs = Parameters<>,
           typename input_indices = std::make_integer_sequence<int, inputs::n>>
 class FunctionalResidual;
 
@@ -29,8 +32,8 @@ class FunctionalResidual;
  * stiffness matrices based on body and boundary integrals.
  *
  */
-template <int spatial_dim, typename ShapeSpace, typename OutputSpace, typename... InputSpaces, int... input_indices>
-class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputSpaces...>,
+template <int spatial_dim, typename ShapeDispSpace, typename OutputSpace, typename... InputSpaces, int... input_indices>
+class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<InputSpaces...>,
                          std::integer_sequence<int, input_indices...>> : public Residual {
  public:
   using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
@@ -46,7 +49,7 @@ class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputS
    */
   FunctionalResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
                      const mfem::ParFiniteElementSpace& shape_disp_space,
-                     const mfem::ParFiniteElementSpace& output_mfem_space, SpacesT input_mfem_spaces)
+                     const mfem::ParFiniteElementSpace& output_mfem_space, const SpacesT& input_mfem_spaces)
       : Residual(physics_name), mesh_(mesh)
   {
     std::array<const mfem::ParFiniteElementSpace*, sizeof...(InputSpaces)> trial_spaces;
@@ -60,7 +63,7 @@ class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputS
       for_constexpr<sizeof...(InputSpaces)>([&](auto i) { trial_spaces[i] = input_mfem_spaces[i]; });
     }
 
-    residual_ = std::make_unique<ShapeAwareFunctional<ShapeSpace, OutputSpace(InputSpaces...)>>(
+    residual_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>>(
         &shape_disp_space, &output_mfem_space, trial_spaces);
   }
 
@@ -246,7 +249,7 @@ class FunctionalResidual<spatial_dim, ShapeSpace, OutputSpace, Parameters<InputS
   std::shared_ptr<Mesh> mesh_;
 
   /// @brief functional residual evaluator, shape aware
-  std::unique_ptr<ShapeAwareFunctional<ShapeSpace, OutputSpace(InputSpaces...)>> residual_;
+  std::unique_ptr<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>> residual_;
 };
 
 /// @brief Helper function to construct vector of spaces from an existing vector of FiniteElementState.

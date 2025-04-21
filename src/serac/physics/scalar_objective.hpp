@@ -25,13 +25,13 @@ namespace serac {
 class FiniteElementState;
 
 /// @brief Abstract residual class
-class Objective {
+class ScalarObjective {
  public:
   /// @brief base constructor takes the name of the physics
-  Objective() {}
+  ScalarObjective(const std::string& name) : name_(name) {}
 
   /// @brief destructor
-  virtual ~Objective() {}
+  virtual ~ScalarObjective() {}
 
   /// @brief using
   using FieldPtr = FiniteElementState*;
@@ -42,7 +42,7 @@ class Objective {
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
    * @return double
    */
-  virtual double evaluate(double time, const std::vector<FieldPtr>& fields) const = 0;
+  virtual double evaluate(double time, double dt, const std::vector<FieldPtr>& fields) const = 0;
 
   /** @brief Virtual interface for computing objective gradient from a vector of serac::FiniteElementState*
    *
@@ -51,7 +51,14 @@ class Objective {
    * @param direction index for which field to take the gradient with respect to
    * @return mfem::Vector
    */
-  virtual mfem::Vector gradient(double time, const std::vector<FieldPtr>& fields, int direction) const = 0;
+  virtual mfem::Vector gradient(double time, double dt, const std::vector<FieldPtr>& fields, int direction) const = 0;
+
+  /// @brief name
+  std::string name() const { return name_; }
+
+ private:
+  /// @brief name provided to objective
+  std::string name_;
 };
 
 }  // namespace serac

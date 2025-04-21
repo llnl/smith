@@ -34,7 +34,7 @@ set(physics_headers
     residual.hpp
     functional_residual.hpp
     solid_residual.hpp
-    objective.hpp
+    scalar_objective.hpp
     functional_objective.hpp
     )
 
