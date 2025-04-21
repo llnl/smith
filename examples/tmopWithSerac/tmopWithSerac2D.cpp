@@ -185,6 +185,7 @@ int main(int argc, char* argv[])
 // std::cout<<" ....... phiVal = "<< phiVal <<std::endl;
 // std::cout<<" ....... dphi = "<< dphi <<std::endl;
 // std::cout<<" ....... boundary int = "<<2.0 * omega * phiVal * dphi<<std::endl<<std::endl;
+std::cout<<typeid(2.0 * omega * phiVal * dphi).name()<<std::endl;
       return 2.0 * omega * phiVal * dphi;
     },
     radial_boundary // whole_boundary

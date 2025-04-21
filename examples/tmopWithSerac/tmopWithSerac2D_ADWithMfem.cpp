@@ -288,9 +288,17 @@ int main(int argc, char* argv[])
           // std::cout << "Type of dual_dphi: " << typeid(dual_dphi).name() << std::endl;
           // std::cout << "Type of gradForDual: " << typeid(gradForDual).name() << std::endl;
           // exit(0);
+serac::tensor<serac::dual<serac::tensor<double, DIM>>, DIM> grad_for_dual;
+// serac::tensor<serac::tuple<serac::tensor<double, DIM>, serac::tensor<double, DIM>>, DIM> grad_for_dual;
+// serac::get<0>(grad_for_dual[0]) = 2.0 * omega * phiVal * dphi;
+// serac::get<0>(grad_for_dual[1]) = 2.0 * omega * phiVal * dphi;
+// serac::get<1>(grad_for_dual[0]) = gradForDual[0];
+// serac::get<1>(grad_for_dual[1]) = gradForDual[1];
+// serac::tuple<serac::tensor<double, DIM>, serac::tensor<double, DIM, DIM>> finalDualReturn{2.0 * omega * phiVal * dphi, gradForDual};
+//           return serac::make_dual(finalDualReturn);
+          // return gradForDual;
+          return grad_for_dual;
 
-          return gradForDual;
-          
         // auto dual_dphi = serac::make_dual(dphi); // Ensure dphi is compatible
         // return dual_dphi;
         // return 2.0 * omega * phiVal * dphi;
