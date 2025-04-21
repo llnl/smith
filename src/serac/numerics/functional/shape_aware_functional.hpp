@@ -464,6 +464,61 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
    * lambda for compatibility with NVCC.
    */
   template <typename Integrand, int dim, int... args>
+  struct ShapeAwareInteriorBoundaryIntegrandWrapper {
+    /// @brief Constructor for functor
+    ShapeAwareInteriorBoundaryIntegrandWrapper(Integrand integrand) : integrand_(integrand) {}
+    /// @brief integrand
+    Integrand integrand_;
+    /**
+     * @brief integrand call
+     *
+     * @tparam PositionType position type
+     * @tparam ShapeValueType shape value type
+     * @tparam QFuncArgs type of variadic pack to forward to qfunc
+     * @param[in] time time
+     * @param[in] x position
+     * @param[in] shape_val shape
+     * @param[in] qfunc_args qfunc parameter pack
+     * @return qf function corrected for boundary area
+     */
+    template <typename PositionType, typename ShapeValueType, typename... QFuncArgs>
+    SERAC_HOST_DEVICE auto operator()(double time, PositionType x, ShapeValueType shape_val,
+                                      QFuncArgs... qfunc_args) const
+    {
+      auto unmodified_qf_returns = integrand_(time, x + shape_val, qfunc_args...);
+      auto correction = detail::compute_boundary_area_correction(x, shape_val);
+      return serac::tuple{correction * serac::get<0>(unmodified_qf_returns),
+                          correction * serac::get<1>(unmodified_qf_returns)};
+    }
+  };
+
+  /**
+   * @brief Adds an interior face integral term to the weak formulation of the PDE
+   *
+   * @tparam dim The dimension of the element (2 for quad, 3 for hex, etc)
+   * @tparam args The type of the trial function input arguments
+   * @tparam lambda The type of the integrand functor: must implement operator() with an appropriate function signature
+   * @tparam domain_type The type of the integration domain (either serac::Domain or mfem::Mesh)
+   *
+   * @param[in] integrand The user-provided quadrature function, see @p Integral
+   * @param[in] domain The domain on which to evaluate the integral
+   *
+   * @note The @p Dimension parameters are used to assist in the deduction of the @a geometry_dim
+   * and @a spatial_dim template parameter
+   */
+  template <int dim, int... args, typename lambda>
+  void AddInteriorFaceIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, Domain& domain)
+  {
+    functional_->AddInteriorFaceIntegral(Dimension<dim>{}, DependsOn<0, (args + 1)...>{},
+                                         ShapeAwareInteriorBoundaryIntegrandWrapper<lambda, dim, args...>(integrand),
+                                         domain);
+  }
+
+  /**
+   * @brief Functor representing a shape-aware integrand.  Used instead of an extended generic
+   * lambda for compatibility with NVCC.
+   */
+  template <typename Integrand, int dim, int... args>
   struct ShapeAwareBoundaryIntegrandWrapper {
     /// @brief Constructor for functor
     ShapeAwareBoundaryIntegrandWrapper(Integrand integrand) : integrand_(integrand) {}
