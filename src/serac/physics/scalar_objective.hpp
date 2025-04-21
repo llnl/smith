@@ -17,7 +17,6 @@
 
 namespace mfem {
 class Vector;
-class HypreParMatrix;
 }  // namespace mfem
 
 namespace serac {

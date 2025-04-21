@@ -18,11 +18,6 @@
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
 
-namespace mfem {
-class Vector;
-class HypreParMatrix;
-}
-
 namespace serac {
 
 template <int spatial_dim, typename ShapeDispSpace, typename parameters = Parameters<>,
