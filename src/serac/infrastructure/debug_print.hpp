@@ -19,7 +19,7 @@
 namespace serac {
 
 /**
- * @brief get a readable sting_view of the underlying templated type
+ * @brief get a readable string_view of the underlying templated type
  * @tparam T the type to get a string name for
  */
 template <class T>
