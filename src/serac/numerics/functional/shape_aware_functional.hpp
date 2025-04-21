@@ -493,7 +493,7 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
   };
 
   /**
-   * @brief Adds an interior face integral term to the weak formulationx of the PDE
+   * @brief Adds an interior face integral term to the weak formulation of the PDE
    *
    * @tparam dim The dimension of the element (2 for quad, 3 for hex, etc)
    * @tparam args The type of the trial function input arguments
