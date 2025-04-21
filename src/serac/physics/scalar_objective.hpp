@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file objective.hpp
+ * @file scalar_objective.hpp
  *
  * @brief Specifies interface for evaluating scalar objective from fields and their field gradients
  */
@@ -39,6 +39,7 @@ class ScalarObjective {
   /** @brief Virtual interface for computing objective gradient from a vector of serac::FiniteElementState*
    *
    * @param time time
+   * @param dt  time step
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
    * @return double
    */
@@ -47,6 +48,7 @@ class ScalarObjective {
   /** @brief Virtual interface for computing objective gradient from a vector of serac::FiniteElementState*
    *
    * @param time time
+   * @param dt time step
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
    * @param direction index for which field to take the gradient with respect to
    * @return mfem::Vector

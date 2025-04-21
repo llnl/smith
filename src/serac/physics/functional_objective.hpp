@@ -70,7 +70,7 @@ class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...
    * @brief register a custom domain integral calculation as part of the residual
    *
    * @tparam active_parameters a list of indices, describing which parameters to pass to the q-function
-   * @param domain which elements should evaluate the provided qfunction
+   * @param body_name string specifing the domain to integrate over
    * @param qfunction a callable that returns a tuple of body-force and stress
    */
   template <int... active_parameters, typename FuncOfTimeSpaceAndParams>
