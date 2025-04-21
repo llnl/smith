@@ -281,27 +281,16 @@ int main(int argc, char* argv[])
               for (int j = 0; j < DIM; j++) { d2phidx2(i, j) = H(i, j); }
           }
           auto gradForDual = 2.0 * omega * ( serac::outer(dphi, dphi) + phiVal * d2phidx2 );
+          auto flux = 2.0 * omega * phiVal * dphi;
+ 
+          decltype(x) grad_for_dual;
+          grad_for_dual[0].value = flux[0];
+          grad_for_dual[1].value = flux[1];
+ 
+          serac::get<0>(grad_for_dual[0].gradient) = gradForDual[0];
+          serac::get<0>(grad_for_dual[1].gradient) = gradForDual[1];
 
-          // std::cout << "Type of phiVal: " << typeid(phiVal).name() << std::endl;
-          // std::cout << "Type of dphi: " << typeid(dphi).name() << std::endl;
-          // auto dual_dphi = serac::make_dual(dphi);
-          // std::cout << "Type of dual_dphi: " << typeid(dual_dphi).name() << std::endl;
-          // std::cout << "Type of gradForDual: " << typeid(gradForDual).name() << std::endl;
-          // exit(0);
-serac::tensor<serac::dual<serac::tensor<double, DIM>>, DIM> grad_for_dual;
-// serac::tensor<serac::tuple<serac::tensor<double, DIM>, serac::tensor<double, DIM>>, DIM> grad_for_dual;
-// serac::get<0>(grad_for_dual[0]) = 2.0 * omega * phiVal * dphi;
-// serac::get<0>(grad_for_dual[1]) = 2.0 * omega * phiVal * dphi;
-// serac::get<1>(grad_for_dual[0]) = gradForDual[0];
-// serac::get<1>(grad_for_dual[1]) = gradForDual[1];
-// serac::tuple<serac::tensor<double, DIM>, serac::tensor<double, DIM, DIM>> finalDualReturn{2.0 * omega * phiVal * dphi, gradForDual};
-//           return serac::make_dual(finalDualReturn);
-          // return gradForDual;
           return grad_for_dual;
-
-        // auto dual_dphi = serac::make_dual(dphi); // Ensure dphi is compatible
-        // return dual_dphi;
-        // return 2.0 * omega * phiVal * dphi;
       }
       else
       {

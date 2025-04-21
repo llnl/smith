@@ -181,11 +181,7 @@ int main(int argc, char* argv[])
       auto phi_value = CuboidLSF2D{x0, y0, 1.0*radius, 2};
       auto phiVal = phi_value.SDF(x);
       auto dphi = phi_value.GRAD(x);
-// std::cout<<" ....... omega = "<< omega <<std::endl;
-// std::cout<<" ....... phiVal = "<< phiVal <<std::endl;
-// std::cout<<" ....... dphi = "<< dphi <<std::endl;
-// std::cout<<" ....... boundary int = "<<2.0 * omega * phiVal * dphi<<std::endl<<std::endl;
-std::cout<<typeid(2.0 * omega * phiVal * dphi).name()<<std::endl;
+      
       return 2.0 * omega * phiVal * dphi;
     },
     radial_boundary // whole_boundary
