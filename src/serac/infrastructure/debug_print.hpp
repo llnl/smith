@@ -21,7 +21,6 @@ namespace serac {
 /**
  * @brief get a readable sting_view of the underlying templated type
  * @tparam T the type to get a string name for
- * @param t An instance of the variable to get the type of
  */
 template <class T>
 constexpr std::string_view type_name(const T& /*t*/)
@@ -78,6 +77,9 @@ void write_to_file(mfem::SparseMatrix A, std::string filename)
   outfile.close();
 }
 
+/**
+ * @brief stream output for DoF
+ */
 std::ostream& operator<<(std::ostream& out, DoF dof)
 {
   out << "{" << dof.index() << ", " << dof.sign() << ", " << dof.orientation() << "}";
@@ -87,7 +89,7 @@ std::ostream& operator<<(std::ostream& out, DoF dof)
 /**
  * @brief write a 2D array of values out to file, in a space-separated format
  * @tparam T the type of each value in the array
- * @param v the values to write to file
+ * @param arr the array to write to file
  * @param filename the name of the output file
  */
 template <typename T>
@@ -110,7 +112,7 @@ void write_to_file(axom::Array<T, 2, serac::detail::host_memory_space> arr, std:
 /**
  * @brief write a 3D array of values out to file, in a mathematica-compatible format
  * @tparam T the type of each value in the array
- * @param v the values to write to file
+ * @param arr the array to write to file
  * @param filename the name of the output file
  */
 template <typename T>
