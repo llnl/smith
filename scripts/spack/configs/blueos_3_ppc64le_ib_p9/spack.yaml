@@ -246,7 +246,7 @@ spack:
     hypre:
       require: "@2.26.0"
     mfem:
-      require: "@4.7.0.2"
+      require: "@4.8.0.1"
     petsc:
       require: "@3.21.5"
     raja:
@@ -254,6 +254,6 @@ spack:
     sundials:
       require: "@6.7.0"
     tribol:
-      require: "@0.1.0.17~examples~tests"
+      require: "@0.1.0.18~examples~tests"
     umpire:
       require: "@2024.07.0~shared~examples~werror"
