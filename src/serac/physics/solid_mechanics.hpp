@@ -419,7 +419,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   qdata_type<T> createQuadratureDataBuffer(T initial_state, const std::optional<Domain>& optional_domain = std::nullopt)
   {
     Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
-    return StateManager::newQuadratureDataBuffer(domain, order, dim, initial_state);
+    return StateManager::newQuadratureDataBuffer(mesh_tag_, domain, order, dim, initial_state);
   }
 
   /**
