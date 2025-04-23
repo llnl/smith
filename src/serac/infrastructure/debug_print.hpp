@@ -19,19 +19,26 @@
 namespace serac {
 
 /**
- * @brief get a readable string_view of the underlying templated type
+ * @brief Return string of given parameter's type
  * @tparam T the type to get a string name for
+ * @return string representation of the type
  */
-template <class T>
-constexpr std::string_view type_name(const T& /*t*/)
-{
-  using namespace std;
-#ifdef __clang__
-  string_view p = __PRETTY_FUNCTION__;
-  return string_view(p.data() + 34, p.size() - 34 - 1);
-#elif defined(__GNUC__)
-  string_view p = __PRETTY_FUNCTION__;
-  return string_view(p.data() + 49, p.find(';', 49) - 49);
+template <typename T>
+std::string type_to_string(T& var) {
+    // Remove reference, but keep the const/volatile qualifiers.
+    const char* name = typeid(var).name();
+#ifdef __GNUG__
+    int status = -4; // Arbitrary value to eliminate the compiler warning
+    char* demangled = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+    std::string result((status == 0) ? demangled : name);
+    std::free(demangled);
+    if constexpr (std::is_const_v<T>) {
+      result = "const " + result;
+    }
+    return result;
+#else
+    // Return name if compiler doesn't support GNU's extensions (most do)
+    return name;
 #endif
 }
 
@@ -166,3 +173,4 @@ void printCUDAMemUsage()
 #endif
 
 }  // namespace serac
+
