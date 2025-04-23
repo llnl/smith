@@ -35,7 +35,7 @@ class ScalarObjective {
   /// @brief using
   using FieldPtr = FiniteElementState*;
 
-  /** @brief Virtual interface for computing the scale vaue for the objective/constrant, given a vector of
+  /** @brief Virtual interface for computing the scale value for the objective/constrant, given a vector of
    * serac::FiniteElementState*
    *
    * @param time time
