@@ -24,7 +24,7 @@ namespace serac {
  * @return string representation of the type
  */
 template <typename T>
-std::string type_to_string(T& var)
+std::string typeToString(T& var)
 {
   // Remove reference, but keep the const/volatile qualifiers.
   const char* name = typeid(var).name();
@@ -50,7 +50,7 @@ std::string type_to_string(T& var)
  * @param filename the name of the output file
  */
 template <typename T>
-void write_to_file(std::vector<T> v, std::string filename)
+void writeToFile(std::vector<T> v, std::string filename)
 {
   std::ofstream outfile(filename);
   for (int i = 0; i < v.size(); i++) {
@@ -64,7 +64,7 @@ void write_to_file(std::vector<T> v, std::string filename)
  * @param v the values to write to file
  * @param filename the name of the output file
  */
-void write_to_file(mfem::Vector v, std::string filename)
+void writeToFile(mfem::Vector v, std::string filename)
 {
   std::ofstream outfile(filename);
   for (int i = 0; i < v.Size(); i++) {
@@ -78,7 +78,7 @@ void write_to_file(mfem::Vector v, std::string filename)
  * @param A the matrix to write to file
  * @param filename the name of the output file
  */
-void write_to_file(mfem::SparseMatrix A, std::string filename)
+void writeToFile(mfem::SparseMatrix A, std::string filename)
 {
   std::ofstream outfile(filename);
   A.PrintMM(outfile);
@@ -101,7 +101,7 @@ std::ostream& operator<<(std::ostream& out, DoF dof)
  * @param filename the name of the output file
  */
 template <typename T>
-void write_to_file(axom::Array<T, 2, serac::detail::host_memory_space> arr, std::string filename)
+void writeToFile(axom::Array<T, 2, serac::detail::host_memory_space> arr, std::string filename)
 {
   std::ofstream outfile(filename);
 
@@ -124,7 +124,7 @@ void write_to_file(axom::Array<T, 2, serac::detail::host_memory_space> arr, std:
  * @param filename the name of the output file
  */
 template <typename T>
-void write_to_file(axom::Array<T, 3, serac::detail::host_memory_space> arr, std::string filename)
+void writeToFile(axom::Array<T, 3, serac::detail::host_memory_space> arr, std::string filename)
 {
   std::ofstream outfile(filename);
 
