@@ -78,7 +78,7 @@ class Residual {
    * nullptr fieldsV are assumed to be all zero to avoid extra calculations
    */
   virtual void jvp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& vFields,
-                   std::vector<DualFieldPtr>& jvpReactions) const = 0;
+                   const std::vector<DualFieldPtr>& jvpReactions) const = 0;
 
   /**
    * @brief Vector-Jacobian product, will += into existing values in vjpFields
@@ -89,7 +89,7 @@ class Residual {
    * @param vjpFields output jvps, 1 per input field: vResiduals[i] * d{r}_i / d{fields}_j
    */
   virtual void vjp(double time, double dt, const std::vector<FieldPtr>& fields,
-                   const std::vector<DualFieldPtr>& vReactions, std::vector<FieldPtr>& vjpFields) const = 0;
+                   const std::vector<DualFieldPtr>& vReactions, const std::vector<FieldPtr>& vjpFields) const = 0;
 
   /// @brief name
   std::string name() const { return name_; }

@@ -189,7 +189,7 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
 
   /// @overload
   void jvp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& vFields,
-           std::vector<DualFieldPtr>& jvpReactions) const override
+           const std::vector<DualFieldPtr>& jvpReactions) const override
   {
     SLIC_ERROR_IF(vFields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
@@ -210,7 +210,7 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
 
   /// @overload
   void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<DualFieldPtr>& vReactions,
-           std::vector<FieldPtr>& vjpFields) const override
+           const std::vector<FieldPtr>& vjpFields) const override
   {
     SLIC_ERROR_IF(vjpFields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
