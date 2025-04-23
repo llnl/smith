@@ -11,6 +11,10 @@ if(TRIBOL_FOUND AND PETSC_FOUND)
                         DEPENDS_ON  serac_physics serac_mesh
                         )
 
+    blt_add_test(NAME            buckling_cylinder
+                 COMMAND         buckling_cylinder
+                 NUM_MPI_TASKS   1)
+
     install(
         FILES
             cylinder.cpp

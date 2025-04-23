@@ -19,6 +19,10 @@ if(TRIBOL_FOUND)
                            SOURCES     ${filename}
                            OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
                            DEPENDS_ON  serac_physics serac_mesh)
+
+        blt_add_test(NAME            contact_${example_name}
+                     COMMAND         contact_${example_name}
+                     NUM_MPI_TASKS   4)
     endforeach()
 
     install(

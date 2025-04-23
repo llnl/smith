@@ -10,6 +10,9 @@ blt_add_executable( NAME        uniaxial_tension
                     DEPENDS_ON  serac_physics serac_mesh
                     )
 
+blt_add_test(NAME            uniaxial_tension
+             COMMAND         uniaxial_tension
+             NUM_MPI_TASKS   4)
 
 install(
     FILES
