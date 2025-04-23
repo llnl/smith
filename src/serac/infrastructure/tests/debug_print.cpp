@@ -8,9 +8,8 @@
 #include <gtest/gtest.h>
 
 #include "serac/infrastructure/debug_print.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-
-class SlicErrorException : public std::exception {};
 
 namespace serac {
 
@@ -18,10 +17,11 @@ TEST(DebugPrint, typeToString)
 {
   int i = 0;
   std::string str = "test";
+  std::string str_type = "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >";
   double d = 3.14;
 
   EXPECT_EQ(typeToString(i), "int");
-  EXPECT_EQ(typeToString(str), "std::string");
+  EXPECT_EQ(typeToString(str), str_type);
   EXPECT_EQ(typeToString(d), "double");
 
   const int ci = 0;
@@ -29,7 +29,7 @@ TEST(DebugPrint, typeToString)
   const double cd = 3.14;
 
   EXPECT_EQ(typeToString(ci), "const int");
-  EXPECT_EQ(typeToString(cstr), "const std::string");
+  EXPECT_EQ(typeToString(cstr), "const " + str_type);
   EXPECT_EQ(typeToString(cd), "const double");
 }
 
