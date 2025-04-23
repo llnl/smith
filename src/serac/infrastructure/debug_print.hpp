@@ -24,21 +24,22 @@ namespace serac {
  * @return string representation of the type
  */
 template <typename T>
-std::string type_to_string(T& var) {
-    // Remove reference, but keep the const/volatile qualifiers.
-    const char* name = typeid(var).name();
+std::string type_to_string(T& var)
+{
+  // Remove reference, but keep the const/volatile qualifiers.
+  const char* name = typeid(var).name();
 #ifdef __GNUG__
-    int status = -4; // Arbitrary value to eliminate the compiler warning
-    char* demangled = abi::__cxa_demangle(name, nullptr, nullptr, &status);
-    std::string result((status == 0) ? demangled : name);
-    std::free(demangled);
-    if constexpr (std::is_const_v<T>) {
-      result = "const " + result;
-    }
-    return result;
+  int status = -4;  // Arbitrary value to eliminate the compiler warning
+  char* demangled = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+  std::string result((status == 0) ? demangled : name);
+  std::free(demangled);
+  if constexpr (std::is_const_v<T>) {
+    result = "const " + result;
+  }
+  return result;
 #else
-    // Return name if compiler doesn't support GNU's extensions (most do)
-    return name;
+  // Return name if compiler doesn't support GNU's extensions (most do)
+  return name;
 #endif
 }
 
@@ -173,4 +174,3 @@ void printCUDAMemUsage()
 #endif
 
 }  // namespace serac
-
