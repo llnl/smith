@@ -35,12 +35,13 @@ class ScalarObjective {
   /// @brief using
   using FieldPtr = FiniteElementState*;
 
-  /** @brief Virtual interface for computing objective gradient from a vector of serac::FiniteElementState*
+  /** @brief Virtual interface for computing the scale vaue for the objective/constrant, given a vector of
+   * serac::FiniteElementState*
    *
    * @param time time
    * @param dt  time step
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
-   * @return double
+   * @return double which is the scalar objective value
    */
   virtual double evaluate(double time, double dt, const std::vector<FieldPtr>& fields) const = 0;
 

@@ -50,7 +50,7 @@ class Mesh {
   /// @brief Returns const parallel mfem mesh
   const mfem::ParMesh& mfemParMesh() const { return *mfem_mesh_; }
 
-    /// @brief Returns parallel mfem mesh
+  /// @brief Returns parallel mfem mesh
   mfem::ParMesh& mfemParMesh() { return *mfem_mesh_; }
 
   /// @brief Returns parallel communicator

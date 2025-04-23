@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file utils_physics_tests.hpp
+ * @file physics_test_utils.hpp
  *
  * @brief Common functions used in multiple physics unit tests
  */

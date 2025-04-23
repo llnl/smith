@@ -25,12 +25,7 @@ template <int spatial_dim, typename ShapeDispSpace, typename parameters = Parame
 class FunctionalObjective;
 
 /**
- * @brief Construct a new FunctionalObjective object
- *
- * @param physics_name A name for the physics module instance
- * @param mesh The serac mesh
- * @param shape_disp_space Shape displacement space
- * @param input_mfem_spaces Vector of finite element spaces which are arguments to the residual
+ * @brief FunctionalObjective object, implements to the ScalarFunctional interface using serac::ShapeAwareFunctional
  */
 template <int spatial_dim, typename ShapeDispSpace, typename... InputSpaces, int... parameter_indices>
 class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...>,
@@ -38,7 +33,12 @@ class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...
  public:
   using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
 
-  /// @brief construct a center of mass objective
+  /** @brief construct a FunctionalObjective
+   * @param physics_name name for the physics module instance
+   * @param mesh serac mesh
+   * @param shape_disp_space shape displacement space
+   * @param input_mfem_spaces vector of finite element spaces which are arguments to the residual
+   */
   FunctionalObjective(const std::string& physics_name, std::shared_ptr<Mesh> mesh,
                       const mfem::ParFiniteElementSpace& shape_disp_space, const SpacesT& input_mfem_spaces)
       : ScalarObjective(physics_name), mesh_(mesh)
@@ -65,7 +65,7 @@ class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...
    * @brief register a custom domain integral calculation as part of the residual
    *
    * @tparam active_parameters a list of indices, describing which parameters to pass to the q-function
-   * @param body_name string specifing the domain to integrate over
+   * @param body_name string specifying the domain to integrate over
    * @param qfunction a callable that returns a tuple of body-force and stress
    */
   template <int... active_parameters, typename FuncOfTimeSpaceAndParams>

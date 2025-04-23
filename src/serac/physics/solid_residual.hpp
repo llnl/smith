@@ -314,17 +314,17 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
   };
 };
 
-
 /**
  * @brief Utility function for creating a shared_ptr<SolidResidual<>>
  */
 template <int order, int dim, typename EnergySpace, typename... ParameterSpaces>
 auto create_solid_residual(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
-                           const std::vector<serac::FiniteElementState*>& states, // shape, u, v, a, e
+                           const std::vector<serac::FiniteElementState*>& states,  // shape, u, v, a, e
                            const std::vector<serac::FiniteElementState*>& params)
 {
   /// Local enum to better document the expected indexing order to states
-  enum FieldNumbering {
+  enum FieldNumbering
+  {
     SHAPE,
     DISP,
     VELO,
@@ -340,7 +340,8 @@ auto create_solid_residual(const std::string& physics_name, std::shared_ptr<sera
 
   using ResidualT = SolidResidual<order, dim, Parameters<EnergySpace, ParameterSpaces...>>;
 
-  return std::make_shared<ResidualT>(physics_name, mesh, states[SHAPE]->space(), states[DISP]->space(), parameter_fe_spaces);
+  return std::make_shared<ResidualT>(physics_name, mesh, states[SHAPE]->space(), states[DISP]->space(),
+                                     parameter_fe_spaces);
 }
 
 }  // namespace serac
