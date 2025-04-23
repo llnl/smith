@@ -17,11 +17,12 @@ TEST(DebugPrint, typeString)
 {
   int i = 0;
   std::string str = "test";
-  std::string str_type = "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >";
+  std::string longStrType = "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >";
   double d = 3.14;
 
   EXPECT_EQ(typeString(i), "int");
-  EXPECT_EQ(typeString(str), str_type);
+  std::string testStr = typeString(str);
+  EXPECT_TRUE(testStr == "std::string" || testStr == longStrType) << "Expected type string to be either 'std::string' or '" << longStrType << "', but got: " << testStr;
   EXPECT_EQ(typeString(d), "double");
 
   const int ci = 0;
@@ -29,7 +30,8 @@ TEST(DebugPrint, typeString)
   const double cd = 3.14;
 
   EXPECT_EQ(typeString(ci), "const int");
-  EXPECT_EQ(typeString(cstr), "const " + str_type);
+  testStr = typeString(cstr);
+  EXPECT_TRUE(testStr == "const std::string" || testStr == "const " + longStrType) << "Expected type string to be either 'const std::string' or 'const " << longStrType << "', but got: " << testStr;
   EXPECT_EQ(typeString(cd), "const double");
 }
 
