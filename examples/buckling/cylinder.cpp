@@ -16,7 +16,7 @@
  * @endcode
  * @note Run with penalty contact and HYPRE BoomerAMG preconditioner
  * @code{.sh}
- * ./build/examples/buckling_cylinder --penalty 1e3
+ * ./build/examples/buckling_cylinder
  * @endcode
  * @note Run without contact:
  * @code{.sh}
@@ -113,11 +113,6 @@ int main(int argc, char* argv[])
       ->expected(0, 7);
   app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
                  "Petsc preconditioner (Index of enum serac::PetscPCType)")
-      ->transform(
-          [](const std::string& in) -> std::string {
-            return std::to_string(static_cast<int>(mfem_ext::stringToPetscPCType(in)));
-          },
-          "Convert string to PetscPCType", "PetscPCTypeTransform")
       ->default_val("0")  // Matches index of value set by class
       ->expected(0, 14);
   app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")
