@@ -13,24 +13,24 @@
 
 namespace serac {
 
-TEST(DebugPrint, typeToString)
+TEST(DebugPrint, typeString)
 {
   int i = 0;
   std::string str = "test";
   std::string str_type = "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >";
   double d = 3.14;
 
-  EXPECT_EQ(typeToString(i), "int");
-  EXPECT_EQ(typeToString(str), str_type);
-  EXPECT_EQ(typeToString(d), "double");
+  EXPECT_EQ(typeString(i), "int");
+  EXPECT_EQ(typeString(str), str_type);
+  EXPECT_EQ(typeString(d), "double");
 
   const int ci = 0;
   const std::string cstr = "test";
   const double cd = 3.14;
 
-  EXPECT_EQ(typeToString(ci), "const int");
-  EXPECT_EQ(typeToString(cstr), "const " + str_type);
-  EXPECT_EQ(typeToString(cd), "const double");
+  EXPECT_EQ(typeString(ci), "const int");
+  EXPECT_EQ(typeString(cstr), "const " + str_type);
+  EXPECT_EQ(typeString(cd), "const double");
 }
 
 }  // namespace serac

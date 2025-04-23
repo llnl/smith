@@ -24,7 +24,7 @@ namespace serac {
  * @return string representation of the type
  */
 template <typename T>
-std::string typeToString(T& var)
+std::string typeString(T& var)
 {
   // Remove reference, but keep the const/volatile qualifiers.
   const char* name = typeid(var).name();
