@@ -7,19 +7,19 @@
 #include <fstream>
 #include <iostream>
 
-#include "axom/slic/core/SimpleLogger.hpp"
+//#include "axom/slic/core/SimpleLogger.hpp"
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils_base.hpp"
-#include "serac/numerics/functional/functional.hpp"
-#include "serac/numerics/functional/shape_aware_functional.hpp"
-#include "serac/numerics/functional/tensor.hpp"
+//#include "serac/mesh/mesh_utils_base.hpp"
+//#include "serac/numerics/functional/functional.hpp"
+//#include "serac/numerics/functional/shape_aware_functional.hpp"
+//#include "serac/numerics/functional/tensor.hpp"
 #include "serac/infrastructure/profiling.hpp"
-
-#include "serac/numerics/functional/tests/check_gradient.hpp"
+//
+//#include "serac/numerics/functional/tests/check_gradient.hpp"
 
 #include "serac/numerics/continuation_solvers/problems/Problems.hpp"
 #include "serac/numerics/continuation_solvers/solvers/IPSolver.hpp"
@@ -56,7 +56,6 @@ public:
    void g(const Vector & u, Vector & gu, int & eval_err);
 
    HypreParMatrix * Ddg(const Vector &);
-   void Displayul(int myid);
 
    virtual ~QPTestProblem();
 };
@@ -65,11 +64,24 @@ public:
 
 TEST(InteriorPointMethod, QuadraticProgramming)
 {
-   //int n = 10;
-   //double optTol = 1.e-8;
-   //int maxiter = 40;
-   //QPTestProblem(n);
-   EXPECT_LT(0., 1.0e-3); 
+   int n = 30;
+   double optTol = 1.e-8;
+   int maxiter = 40;
+   
+   QPTestProblem problem(n);
+
+   ParInteriorPointSolver solver(&problem);
+
+   int dimx = problem.GetDimU();
+   Vector x0(dimx); x0 = 0.0;
+   Vector xf(dimx); xf = 0.0; 
+   
+   solver.SetTol(optTol);
+   solver.SetMaxIter(maxiter);
+   
+   solver.Mult(x0, xf);
+   
+   EXPECT_TRUE(solver.GetConverged()); 
 }
 
 
@@ -115,17 +127,16 @@ QPTestProblem::QPTestProblem(int n) : ParOptProblem(),
      }
   }
   constraintOffsets[0] = dofOffsets[0];
-  constraintOffsets[1] = constraintOffsets[0];
+  constraintOffsets[1] = dofOffsets[1];
   Init(dofOffsets, constraintOffsets);
   delete[] dofOffsets;
   delete[] constraintOffsets;
 
-  {
-     Vector temp(dimU); temp = 1.0;
-     d2Edu2 = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
-     // deep copy?
-     dgdu = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
-  }
+  Vector temp(dimU); temp = 1.0;
+  d2Edu2 = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
+  // deep copy?
+  dgdu = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
+  
   
   // random entries in [-1, 1]
   ul.SetSize(dimM);
@@ -165,17 +176,10 @@ HypreParMatrix * QPTestProblem::Ddg(const Vector & u)
 }
 
 
-void QPTestProblem::Displayul(int myid)
-{
-   //for (int i = 0; i < dimU; i++)
-   //{
-   //   cout << "ul(" << i << ") = " << ul(i) << ", (rank = " << myid << ")\n";
-   //}
-}
-
 QPTestProblem::~QPTestProblem()
 {
    delete d2Edu2;
+   delete dgdu;
 }
 
 
