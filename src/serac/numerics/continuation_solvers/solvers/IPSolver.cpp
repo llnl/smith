@@ -510,21 +510,31 @@ void ParInteriorPointSolver::IPNewtonSolve(BlockVector &x, Vector &l, Vector &zl
 
 
       /* direct solve of the 3x3 IP-Newton linear system */
-      #ifdef MFEM_USE_MUMPS
+#ifdef MFEM_USE_MUMPS
         MUMPSSolver ASolver;
         ASolver.SetPrintLevel(0);
         ASolver.SetMatrixSymType(MUMPSSolver::MatType::SYMMETRIC_INDEFINITE);
         ASolver.SetOperator(*Ah);
         ASolver.Mult(b, Xhat);
-      #else 
-        #ifdef MFEM_USE_MKL_CPARDISO
-          CPardisoSolver ASolver(MPI_COMM_WORLD);
-          ASolver.SetOperator(*Ah);
-          ASolver.Mult(b, Xhat);
-	#else
+#else 
+#ifdef MFEM_USE_MKL_CPARDISO
+         CPardisoSolver ASolver(MPI_COMM_WORLD);
+         ASolver.SetOperator(*Ah);
+         ASolver.Mult(b, Xhat);
+#else
+#ifdef MFEM_USE_STRUMPACK
+         STRUMPACKSolver ASolver(MPI_COMM_WORLD);
+	 ASolver.SetKrylovSolver(strumpack::KrylovSolver::DIRECT);
+	 ASolver.SetReorderingStrategy(strumpack::ReorderingStrategy::METIS);
+	 STRUMPACKRowLocMatrix * Ahstrum = new STRUMPACKRowLocMatrix(*Ah);
+	 ASolver.SetOperator(*Ahstrum);
+	 ASolver.Mult(b, Xhat);
+	 delete Ahstrum;
+#else
 	  MFEM_VERIFY(false, "linSolver 0 will not work unless compiled with MUMPS or MKL");
-        #endif
-      #endif
+#endif
+#endif
+#endif
 
       delete Ah;
    }
