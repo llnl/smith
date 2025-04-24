@@ -8,14 +8,21 @@
 #include "mfem.hpp"
 #include "axom/core.hpp"
 
-#include <string>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
+#include <string>
+#include <typeinfo>
 #include <vector>
+
+#ifdef __GNUG__
+#include <cxxabi.h>
+#include <cstdlib>
+#endif
 
 #include "serac/infrastructure/memory.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"
-#include <cxxabi.h>
+
 namespace serac {
 
 /**
