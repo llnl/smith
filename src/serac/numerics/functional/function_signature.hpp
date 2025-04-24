@@ -1,3 +1,9 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #pragma once
 #include <camp/camp.hpp>
 #include "serac/numerics/functional/finite_element.hpp"
