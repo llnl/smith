@@ -317,7 +317,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
 /**
  * @brief Utility function for creating a shared_ptr<SolidResidual<>>
  */
-template <int order, int dim, typename EnergySpace, typename... ParameterSpaces>
+template <int order, int dim, typename... ParameterSpaces>
 auto create_solid_residual(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
                            const std::vector<serac::FiniteElementState*>& states,  // shape, u, v, a, e
                            const std::vector<serac::FiniteElementState*>& params)
@@ -329,16 +329,15 @@ auto create_solid_residual(const std::string& physics_name, std::shared_ptr<sera
     DISP,
     VELO,
     ACCEL,
-    ENERGY
   };
 
-  std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces{&(states[ENERGY]->space())};
+  std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces;
 
   if constexpr (sizeof...(ParameterSpaces) > 0) {
     for_constexpr<sizeof...(ParameterSpaces)>([&](auto i) { parameter_fe_spaces.push_back(&params[i]->space()); });
   }
 
-  using ResidualT = SolidResidual<order, dim, Parameters<EnergySpace, ParameterSpaces...>>;
+  using ResidualT = SolidResidual<order, dim, Parameters<ParameterSpaces...>>;
 
   return std::make_shared<ResidualT>(physics_name, mesh, states[SHAPE]->space(), states[DISP]->space(),
                                      parameter_fe_spaces);
