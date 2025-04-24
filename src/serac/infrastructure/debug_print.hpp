@@ -15,7 +15,7 @@
 
 #include "serac/infrastructure/memory.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"
-
+#include <cxxabi.h>
 namespace serac {
 
 /**
