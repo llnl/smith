@@ -8,13 +8,48 @@
 #include "mfem.hpp"
 #include "axom/core.hpp"
 
-#include <string>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
+#include <string>
+#include <typeinfo>
 #include <vector>
+
+#ifdef __GNUG__
+#include <cxxabi.h>
+#include <cstdlib>
+#endif
 
 #include "serac/infrastructure/memory.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"
+
+namespace serac {
+
+/**
+ * @brief Return string of given parameter's type
+ * @tparam T the type to get a string name for
+ * @param[in] var the variable to get the type of
+ * @return string representation of the type
+ */
+template <typename T>
+std::string typeString(T& var)
+{
+  // Remove reference, but keep the const/volatile qualifiers.
+  const char* name = typeid(var).name();
+#ifdef __GNUG__
+  int status = -4;  // Arbitrary value to eliminate the compiler warning
+  char* demangled = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+  std::string result((status == 0) ? demangled : name);
+  std::free(demangled);
+  if constexpr (std::is_const_v<T>) {
+    result = "const " + result;
+  }
+  return result;
+#else
+  // Return name if compiler doesn't support GNU's extensions (most do)
+  return name;
+#endif
+}
 
 /**
  * @brief write an array of values out to file, in a space-separated format
@@ -23,7 +58,7 @@
  * @param filename the name of the output file
  */
 template <typename T>
-void write_to_file(std::vector<T> v, std::string filename)
+void writeToFile(std::vector<T> v, std::string filename)
 {
   std::ofstream outfile(filename);
   for (int i = 0; i < v.size(); i++) {
@@ -37,7 +72,7 @@ void write_to_file(std::vector<T> v, std::string filename)
  * @param v the values to write to file
  * @param filename the name of the output file
  */
-void write_to_file(mfem::Vector v, std::string filename)
+void writeToFile(mfem::Vector v, std::string filename)
 {
   std::ofstream outfile(filename);
   for (int i = 0; i < v.Size(); i++) {
@@ -51,13 +86,16 @@ void write_to_file(mfem::Vector v, std::string filename)
  * @param A the matrix to write to file
  * @param filename the name of the output file
  */
-void write_to_file(mfem::SparseMatrix A, std::string filename)
+void writeToFile(mfem::SparseMatrix A, std::string filename)
 {
   std::ofstream outfile(filename);
   A.PrintMM(outfile);
   outfile.close();
 }
 
+/**
+ * @brief stream output for DoF
+ */
 std::ostream& operator<<(std::ostream& out, DoF dof)
 {
   out << "{" << dof.index() << ", " << dof.sign() << ", " << dof.orientation() << "}";
@@ -67,11 +105,11 @@ std::ostream& operator<<(std::ostream& out, DoF dof)
 /**
  * @brief write a 2D array of values out to file, in a space-separated format
  * @tparam T the type of each value in the array
- * @param v the values to write to file
+ * @param arr the array to write to file
  * @param filename the name of the output file
  */
 template <typename T>
-void write_to_file(axom::Array<T, 2, serac::detail::host_memory_space> arr, std::string filename)
+void writeToFile(axom::Array<T, 2, serac::detail::host_memory_space> arr, std::string filename)
 {
   std::ofstream outfile(filename);
 
@@ -90,11 +128,11 @@ void write_to_file(axom::Array<T, 2, serac::detail::host_memory_space> arr, std:
 /**
  * @brief write a 3D array of values out to file, in a mathematica-compatible format
  * @tparam T the type of each value in the array
- * @param v the values to write to file
+ * @param arr the array to write to file
  * @param filename the name of the output file
  */
 template <typename T>
-void write_to_file(axom::Array<T, 3, serac::detail::host_memory_space> arr, std::string filename)
+void writeToFile(axom::Array<T, 3, serac::detail::host_memory_space> arr, std::string filename)
 {
   std::ofstream outfile(filename);
 
@@ -140,4 +178,7 @@ void printCUDAMemUsage()
   std::cout << " Free Memory (MB): " << (freeBytes / 1024.0 / 1024.0) << std::endl;
   std::cout << " Used Memory (MB): " << (usedBytes / 1024.0 / 1024.0) << std::endl;
 }
+
 #endif
+
+}  // namespace serac
