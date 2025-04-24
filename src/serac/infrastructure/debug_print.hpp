@@ -21,6 +21,7 @@ namespace serac {
 /**
  * @brief Return string of given parameter's type
  * @tparam T the type to get a string name for
+ * @param[in] var the variable to get the type of
  * @return string representation of the type
  */
 template <typename T>
