@@ -22,7 +22,8 @@ TEST(DebugPrint, typeString)
 
   EXPECT_EQ(typeString(i), "int");
   std::string testStr = typeString(str);
-  EXPECT_TRUE(testStr == "std::string" || testStr == longStrType) << "Expected type string to be either 'std::string' or '" << longStrType << "', but got: " << testStr;
+  EXPECT_TRUE(testStr == "std::string" || testStr == longStrType)
+      << "Expected type string to be either 'std::string' or '" << longStrType << "', but got: " << testStr;
   EXPECT_EQ(typeString(d), "double");
 
   const int ci = 0;
@@ -31,7 +32,8 @@ TEST(DebugPrint, typeString)
 
   EXPECT_EQ(typeString(ci), "const int");
   testStr = typeString(cstr);
-  EXPECT_TRUE(testStr == "const std::string" || testStr == "const " + longStrType) << "Expected type string to be either 'const std::string' or 'const " << longStrType << "', but got: " << testStr;
+  EXPECT_TRUE(testStr == "const std::string" || testStr == "const " + longStrType)
+      << "Expected type string to be either 'const std::string' or 'const " << longStrType << "', but got: " << testStr;
   EXPECT_EQ(typeString(cd), "const double");
 }
 
