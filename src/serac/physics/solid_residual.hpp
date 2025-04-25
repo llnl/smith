@@ -97,6 +97,14 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
     BaseResidualT::residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
         BaseResidualT::mesh_->domain(body_name), qdata);
+
+    BaseResidualT::v_residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 1, 3, active_parameters + 1 + NUM_STATE_VARS...>{}, 
+        [material_functor](double t, auto X, auto state, auto V, auto... params) {
+          auto flux = material_functor(t, X, state, params...);
+          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) + serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
+        },
+        BaseResidualT::mesh_->domain(body_name), qdata);
   }
 
   /// @overload
@@ -140,6 +148,14 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
     RateMaterialStressFunctor<MaterialType> material_functor(material, &this->dt_);
     BaseResidualT::residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
+        BaseResidualT::mesh_->domain(body_name), qdata);
+
+    BaseResidualT::v_residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 1, 2, 3, active_parameters + 1 + NUM_STATE_VARS...>{}, 
+        [material_functor, qdata](double t, auto X, auto state, auto V, auto... params) {
+          auto flux = material_functor(t, X, state, params...);
+          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) + serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
+        },
         BaseResidualT::mesh_->domain(body_name), qdata);
   }
 
