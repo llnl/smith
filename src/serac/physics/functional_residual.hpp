@@ -263,8 +263,10 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   /// @brief Accessor to get a reference to the underlying ShapeAwareFunctional vector-residual in case more direct
   /// access is needed.
   /// @return Reference to ShapeAwareFunctional instance.
-  // ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>& getShapeAwareVectorTimesResidual() {
-  // return *v_residual_; }
+  ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>& getShapeAwareVectorTimesResidual()
+  {
+    return *v_residual_;
+  }
 
  protected:
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
