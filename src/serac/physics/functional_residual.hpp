@@ -99,7 +99,6 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   {
     residual_->AddDomainIntegral(Dimension<spatial_dim>{}, DependsOn<active_parameters...>{}, body_integral,
                                  mesh_->domain(body_name));
-    // VectorResidualFunctor<BodyIntegralType> v_body_integral(body_integral);
     v_residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
         [body_integral](double t, auto X, auto V, auto... inputs) {
@@ -249,10 +248,6 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
       auto jacVec = serac::get<DERIVATIVE>(jacVecs[input_col](time, vReactions[0], fields));
       auto jacVecVector = assemble(jacVec);
       *vjpFields[input_col] += *jacVecVector;
-      // vjpFields
-      // auto K = serac::get<DERIVATIVE>(jacs[input_col](time, fields));
-      // std::unique_ptr<mfem::HypreParMatrix> J = assemble(K);
-      // J->AddMultTranspose(*vReactions[0], *vjpFields[input_col]);
     }
   }
 
