@@ -702,7 +702,6 @@ SERAC_HOST_DEVICE constexpr auto inner(double A, double B) { return A * B; }
  * @tparam m the number of rows
  * @tparam n the number of columns
  * @param[in] A The lefthand tensor
- * @param[in] B The righthand zero
  */
 template <typename S, int m, int n>
 SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m, n>& A, zero)
@@ -736,13 +735,11 @@ SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m>& A, zero)
  */
 SERAC_HOST_DEVICE constexpr auto inner(double A, zero) { return A * 0.0; }
 
-
 /**
  * @brief this function contracts over all indices of the two tensor arguments
  * @tparam T the underlying type of the tensor (righthand) argument
  * @tparam m the number of rows
  * @tparam n the number of columns
- * @param[in] A The lefthand zero tensor
  * @param[in] B The righthand tensor
  */
 template <typename T, int m, int n>
