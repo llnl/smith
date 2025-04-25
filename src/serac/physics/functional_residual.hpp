@@ -53,6 +53,7 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
       : Residual(physics_name), mesh_(mesh)
   {
     std::array<const mfem::ParFiniteElementSpace*, sizeof...(InputSpaces)> trial_spaces;
+    std::array<const mfem::ParFiniteElementSpace*, sizeof...(InputSpaces) + 1> vector_residual_trial_spaces{&output_mfem_space};
 
     SLIC_ERROR_ROOT_IF(
         sizeof...(InputSpaces) != input_mfem_spaces.size(),
@@ -61,11 +62,35 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
 
     if constexpr (sizeof...(InputSpaces) > 0) {
       for_constexpr<sizeof...(InputSpaces)>([&](auto i) { trial_spaces[i] = input_mfem_spaces[i]; });
+      for_constexpr<sizeof...(InputSpaces)>([&](auto i) { vector_residual_trial_spaces[i+1] = input_mfem_spaces[i]; });
     }
 
     residual_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>>(
         &shape_disp_space, &output_mfem_space, trial_spaces);
+
+    v_residual_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>>(
+        &shape_disp_space, vector_residual_trial_spaces);
   }
+
+  /**
+   * @brief Functor representing a material stress.  A functor is used here instead of an
+   * extended, generic lambda for compatibility with NVCC.
+   */
+  template <typename OrigFunctor>
+  struct VectorResidualFunctor {
+    /// Constructor for the functor
+    VectorResidualFunctor(OrigFunctor func) : func_(func) {}
+
+    /// Base functor
+    OrigFunctor func_;
+
+    template <typename X, typename OutputT, typename... Params>
+    auto SERAC_HOST_DEVICE operator()(double t, const X& x, const OutputT& v, Params... params) const
+    {
+      auto orig_tuple = func_(t, x, params...);
+      return serac::inner(get<VALUE>(v), get<VALUE>(orig_tuple)) + serac::inner(get<DERIVATIVE>(v), get<DERIVATIVE>(orig_tuple));
+    }
+  };
 
   /**
    * @brief Add a body integral contribution to the residual
@@ -92,6 +117,9 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   {
     residual_->AddDomainIntegral(Dimension<spatial_dim>{}, DependsOn<active_parameters...>{}, body_integral,
                                  mesh_->domain(body_name));
+    VectorResidualFunctor<BodyIntegralType> v_body_integral(body_integral);
+    v_residual_->AddDomainIntegral(Dimension<spatial_dim>{}, DependsOn<0, 1+active_parameters...>{}, std::move(v_body_integral),
+                                   mesh_->domain(body_name));
   }
 
   /// @overload
@@ -131,6 +159,14 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
         [surface_function](double t, auto X, auto... params) {
           auto n = cross(get<DERIVATIVE>(X));
           return surface_function(t, get<VALUE>(X), normalize(n), params...);
+        },
+        mesh_->domain(boundary_name));
+
+    v_residual_->AddBoundaryIntegral(Dimension<spatial_dim - 1>{}, DependsOn<0, 1+active_parameters...>{},
+        [surface_function](double t, auto X, auto V, auto... params) {
+          auto n = cross(get<DERIVATIVE>(X));
+          auto orig_surface_flux = surface_function(t, get<VALUE>(X), normalize(n), params...);
+          return serac::inner(get<VALUE>(V), orig_surface_flux);
         },
         mesh_->domain(boundary_name));
   }
@@ -217,18 +253,26 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
     SLIC_ERROR_IF(vReactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, fields);
+    auto jacVecs = jacobianVectorFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, vReactions[0], fields);
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      auto K = serac::get<DERIVATIVE>(jacs[input_col](time, fields));
-      std::unique_ptr<mfem::HypreParMatrix> J = assemble(K);
-      J->AddMultTranspose(*vReactions[0], *vjpFields[input_col]);
+      auto jacVec = serac::get<DERIVATIVE>(jacVecs[input_col](time, vReactions[0], fields));
+      auto jacVecVector = assemble(jacVec);
+      *vjpFields[input_col] += *jacVecVector;
+      //vjpFields
+      //auto K = serac::get<DERIVATIVE>(jacs[input_col](time, fields));
+      //std::unique_ptr<mfem::HypreParMatrix> J = assemble(K);
+      //J->AddMultTranspose(*vReactions[0], *vjpFields[input_col]);
     }
   }
 
   /// @brief Accessor to get a reference to the underlying ShapeAwareFunctional in case more direct access is needed.
   /// @return Reference to ShapeAwareFunctional instance.
-  ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>& getFunctional() { return *residual_; }
+  ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>& getShapeAwareResidual() { return *residual_; }
+
+  /// @brief Accessor to get a reference to the underlying ShapeAwareFunctional vector-residual in case more direct access is needed.
+  /// @return Reference to ShapeAwareFunctional instance.
+  //ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>& getShapeAwareVectorTimesResidual() { return *v_residual_; }
 
  protected:
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
@@ -242,6 +286,19 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
     }...};
   };
 
+  /// @brief Utility to get array of jvp functions, one for each input field in fs
+  template <int... i>
+  auto jacobianVectorFunctions(std::integer_sequence<int, i...>, double time, DualFieldPtr v, const std::vector<FieldPtr>& fs) const
+  {
+    using GradFuncType = std::function<decltype((*v_residual_)(DifferentiateWRT<1>{}, time, *v, *fs[i]...))(
+        double, DualFieldPtr, const std::vector<FieldPtr>&)>;
+    return std::array<GradFuncType, sizeof...(i)>{[=](double _time, DualFieldPtr _v, const std::vector<FieldPtr>& _fs) {
+      std::vector<mfem::Vector*> _vfs{_v};
+      _vfs.insert(_vfs.end(), _fs.begin()+1, _fs.end());
+      return (*v_residual_)(DifferentiateWRT<i==0 ? 0 : i+1>{}, _time, *_fs[0], *_vfs[i]...);
+    }...};
+  };
+
   /// @brief timestep, this needs to be held here and modified for rate dependent applications
   mutable double dt_ = std::numeric_limits<double>::max();
 
@@ -250,6 +307,9 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
 
   /// @brief functional residual evaluator, shape aware
   std::unique_ptr<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>> residual_;
+
+  /// @brief functional residual times and arbitrary vector v (same space as residual) evaluator, shape aware
+  std::unique_ptr<ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>> v_residual_;
 };
 
 /// @brief Helper function to construct vector of spaces from an existing vector of FiniteElementState.
