@@ -697,86 +697,16 @@ SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m>& A, const tensor<T, m>
 SERAC_HOST_DEVICE constexpr auto inner(double A, double B) { return A * B; }
 
 /**
- * @brief this function contracts over all indices of the two tensor arguments
- * @tparam S the underlying type of the tensor (lefthand) argument
- * @tparam m the number of rows
- * @tparam n the number of columns
- * @param[in] A The lefthand tensor
- * @param[in] B The righthand zero
- */
-template <typename S, int m, int n>
-SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m, n>& A, zero)
-{
-  decltype(S{}) sum{};
-  for (int i = 0; i < m; i++) {
-    for (int j = 0; j < n; j++) {
-      sum += A[i][j] * 0.0;
-    }
-  }
-  return sum;
-}
-
-/**
- * @overload
- * @note for first order tensors (vectors)
- */
-template <typename S, int m>
-SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m>& A, zero)
-{
-  decltype(S{}) sum{};
-  for (int i = 0; i < m; i++) {
-    sum += A[i] * 0.0;
-  }
-  return sum;
-}
-
-/**
  * @overload
  * @note for zeroth-order tensors (scalars)
  */
 SERAC_HOST_DEVICE constexpr auto inner(double A, zero) { return A * 0.0; }
-
-
-/**
- * @brief this function contracts over all indices of the two tensor arguments
- * @tparam T the underlying type of the tensor (righthand) argument
- * @tparam m the number of rows
- * @tparam n the number of columns
- * @param[in] A The lefthand zero tensor
- * @param[in] B The righthand tensor
- */
-template <typename T, int m, int n>
-SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m, n>& B)
-{
-  decltype(T{}) sum{};
-  for (int i = 0; i < m; i++) {
-    for (int j = 0; j < n; j++) {
-      sum += 0.0 * B[i][j];
-    }
-  }
-  return sum;
-}
-
-/**
- * @overload
- * @note for first order tensors (vectors)
- */
-template <typename T, int m>
-SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m>& B)
-{
-  decltype(T{}) sum{};
-  for (int i = 0; i < m; i++) {
-    sum += 0.0 * B[i];
-  }
-  return sum;
-}
 
 /**
  * @overload
  * @note for zeroth-order tensors (scalars)
  */
 SERAC_HOST_DEVICE constexpr auto inner(zero, double B) { return 0.0 * B; }
-
 
 /**
  * @brief this function contracts over the "middle" index of the two tensor arguments
