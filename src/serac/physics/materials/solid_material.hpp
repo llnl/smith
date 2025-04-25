@@ -527,5 +527,4 @@ struct NeoHookeanWithFieldDensity {
   double G;  ///< shear modulus
 };
 
-
 }  // namespace serac::solid_mechanics

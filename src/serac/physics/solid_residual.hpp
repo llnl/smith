@@ -99,10 +99,11 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
         BaseResidualT::mesh_->domain(body_name), qdata);
 
     BaseResidualT::v_residual_->AddDomainIntegral(
-        Dimension<dim>{}, DependsOn<0, 1, 3, active_parameters + 1 + NUM_STATE_VARS...>{}, 
+        Dimension<dim>{}, DependsOn<0, 1, 3, active_parameters + 1 + NUM_STATE_VARS...>{},
         [material_functor](double t, auto X, auto state, auto V, auto... params) {
           auto flux = material_functor(t, X, state, params...);
-          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) + serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
+          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
+                 serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
         },
         BaseResidualT::mesh_->domain(body_name), qdata);
   }
@@ -151,10 +152,11 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
         BaseResidualT::mesh_->domain(body_name), qdata);
 
     BaseResidualT::v_residual_->AddDomainIntegral(
-        Dimension<dim>{}, DependsOn<0, 1, 2, 3, active_parameters + 1 + NUM_STATE_VARS...>{}, 
+        Dimension<dim>{}, DependsOn<0, 1, 2, 3, active_parameters + 1 + NUM_STATE_VARS...>{},
         [material_functor, qdata](double t, auto X, auto state, auto V, auto... params) {
           auto flux = material_functor(t, X, state, params...);
-          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) + serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
+          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
+                 serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
         },
         BaseResidualT::mesh_->domain(body_name), qdata);
   }
@@ -215,7 +217,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
         },
         BaseResidualT::mesh_->domain(boundary_name));
 
-      BaseResidualT::v_residual_->AddBoundaryIntegral(
+    BaseResidualT::v_residual_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + 1 + NUM_STATE_VARS...>{},
         [pressure_function](double t, auto X, auto V, auto displacement, auto... params) {
           auto x = X + 0.0 * displacement;
