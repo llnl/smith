@@ -159,11 +159,9 @@ struct ResidualFixture : public testing::Test {
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
     solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*t*/, auto /*x*/, auto n) { return 1.0 * n; });
-
-    // solid_mechanics_residual->addPressure(surface_name, [](auto /*t*/, auto /*x*/, auto n) { return 1.0 * n; });
+    solid_mechanics_residual->addPressure(surface_name, [](auto /*t*/, auto /*x*/) { return 0.6; });
 
     // initialize fields for testing
-
     for (auto& s : v_rhs_states) {
       pseudoRand(s);
     }
