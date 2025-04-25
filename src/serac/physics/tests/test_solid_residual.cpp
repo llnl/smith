@@ -67,7 +67,8 @@ struct NeoHookeanWithFieldWithRateForTesting {
   using State = Empty;  ///< this material has no internal variables
 
   template <typename T1, typename T2, int dim>
-  SERAC_HOST_DEVICE auto pkStress(double /*dt*/, State& /* state */, const tensor<T1, dim, dim>& du_dX, const tensor<T2, dim, dim>& /*dv_dX*/) const
+  SERAC_HOST_DEVICE auto pkStress(double /*dt*/, State& /* state */, const tensor<T1, dim, dim>& du_dX,
+                                  const tensor<T2, dim, dim>& /*dv_dX*/) const
   {
     using std::log1p;
     constexpr auto I = Identity<dim>();
@@ -83,17 +84,14 @@ struct NeoHookeanWithFieldWithRateForTesting {
     return dot(TK, inv(transpose(F)));
   }
 
-  SERAC_HOST_DEVICE auto density() const
-  {
-    return Rho;
-  }
+  SERAC_HOST_DEVICE auto density() const { return Rho; }
 
-  double K;  ///< bulk modulus
-  double G;  ///< shear modulus
-  double Rho; ///< density
+  double K;    ///< bulk modulus
+  double G;    ///< shear modulus
+  double Rho;  ///< density
 };
 
-}
+}  // namespace serac
 
 struct ResidualFixture : public testing::Test {
   static constexpr int dim = 2;
