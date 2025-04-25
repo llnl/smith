@@ -25,6 +25,7 @@ stages:
   - comparison
 
 # Run src build each push
+# NOTE: When you add a new workflow, remember to add it to this `if` statement!
 .src_workflow:
   stage: src
   rules:
