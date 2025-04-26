@@ -541,9 +541,9 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
   template <int dim, int... args, typename lambda>
   void AddInteriorFaceIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, Domain& domain)
   {
-    functional_->AddInteriorFaceIntegral(Dimension<dim>{}, DependsOn<0, (args + 1)...>{},
-                                         ShapeAwareInteriorBoundaryIntegrandWrapper<test, lambda, dim, args...>(integrand),
-                                         domain);
+    functional_->AddInteriorFaceIntegral(
+        Dimension<dim>{}, DependsOn<0, (args + 1)...>{},
+        ShapeAwareInteriorBoundaryIntegrandWrapper<test, lambda, dim, args...>(integrand), domain);
   }
 
   /**
