@@ -241,7 +241,7 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
     SLIC_ERROR_IF(vReactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
-    auto jacVecs = jacobianVectorFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time,
+    auto jacVecs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time,
                                            vReactions[0], fields);
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
@@ -277,7 +277,7 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
 
   /// @brief Utility to get array of jvp functions, one for each input field in fs
   template <int... i>
-  auto jacobianVectorFunctions(std::integer_sequence<int, i...>, double time, DualFieldPtr v,
+  auto vectorJacobianFunctions(std::integer_sequence<int, i...>, double time, DualFieldPtr v,
                                const std::vector<FieldPtr>& fs) const
   {
     using GradFuncType = std::function<decltype((*v_residual_)(DifferentiateWRT<1>{}, time, *v, *fs[i]...))(
