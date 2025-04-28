@@ -462,12 +462,11 @@ int ex11_main(int argc, char *argv[])
 TEST(MfemSlepcSmoketest, MfemPetscEx11)
 {
   ::testing::internal::CaptureStdout();
-  // https://github.com/LLNL/serac/issues/1361
-  // #ifdef SERAC_USE_CUDA
-  //   const char* fake_argv[] = {"ex11",       "-m",          SERAC_REPO_DIR "/mfem/data/star.mesh",
-  //                              "--useslepc", "--slepcopts", SERAC_REPO_DIR "/src/tests/rc_mfem_slepc_smoketest_gpu",
-  //                              "--device",   "cuda",        "--no-visualization"};
-  // #else
+#ifdef SERAC_USE_CUDA
+  const char* fake_argv[] = {"ex11",       "-m",          SERAC_REPO_DIR "/mfem/data/star.mesh",
+                             "--useslepc", "--slepcopts", SERAC_REPO_DIR "/src/tests/rc_mfem_slepc_smoketest_gpu",
+                             "--device",   "cuda",        "--no-visualization"};
+#else
   const char* fake_argv[] = {"ex11",
                              "-m",
                              SERAC_REPO_DIR "/mfem/data/star.mesh",
@@ -475,7 +474,7 @@ TEST(MfemSlepcSmoketest, MfemPetscEx11)
                              "--slepcopts",
                              SERAC_REPO_DIR "/src/tests/rc_mfem_slepc_smoketest",
                              "--no-visualization"};
-  // #endif
+#endif
   int fake_argc = sizeof(fake_argv) / sizeof(fake_argv[0]);
   ex11_main(fake_argc, const_cast<char**>(fake_argv));
   std::string output = ::testing::internal::GetCapturedStdout();

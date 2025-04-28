@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -41,7 +41,10 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     # Create global variable to toggle between GPU targets
     #------------------------------------------------------------------------------
     if(SERAC_ENABLE_CUDA)
-        set(serac_device_depends blt::cuda CACHE STRING "" FORCE)
+        # CUDAToolkit required to find cublasLt library
+        # Can be removed once this BLT PR is merged https://github.com/LLNL/blt/pull/585 (?)
+        find_package(CUDAToolkit REQUIRED)
+        set(serac_device_depends blt::cuda CUDA::cublasLt CACHE STRING "" FORCE)
     elseif(SERAC_ENABLE_HIP)
         set(serac_device_depends blt::hip CACHE STRING "" FORCE)
     else()

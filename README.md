@@ -29,7 +29,7 @@ For more information, see the [contributing guide](./CONTRIBUTING.md).
 License
 -------
 
-Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC. 
+Copyright (c) Lawrence Livermore National Security, LLC. 
 Produced at the Lawrence Livermore National Laboratory.
 
 Copyrights and patents in the Serac project are retained by contributors.
@@ -76,6 +76,10 @@ PackageLicenseDeclared: BSD-3-Clause
 
 PackageName: radiuss-spack-configs  
 PackageHomePage: https://github.com/LLNL/radiuss-spack-configs  
+PackageLicenseDeclared: MIT License
+
+PackageName: Tribol  
+PackageHomePage: https://github.com/LLNL/tribol  
 PackageLicenseDeclared: MIT License
 
 PackageName: uberenv  
