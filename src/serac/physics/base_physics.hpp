@@ -432,7 +432,7 @@ class BasePhysics {
    * @param cycle The cycle to retrieve state from
    * @return The named primal Finite Element State
    */
-  FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle);
+  virtual FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle);
 
   /**
    * @brief Accessor for getting a single named finite element dual solution from the physics modules at a given
