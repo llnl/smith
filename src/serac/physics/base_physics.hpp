@@ -297,7 +297,7 @@ class BasePhysics {
    * The physics module constructs its own parameter FiniteElementState in the physics module constructor. This
    * call sets the internally-owned parameter object by value (i.e. deep copies) from the given argument.
    */
-  void setParameter(const size_t parameter_index, const FiniteElementState& parameter_state);
+  virtual void setParameter(const size_t parameter_index, const FiniteElementState& parameter_state);
 
   /**
    * @brief Set the current shape displacement for the underlying mesh
