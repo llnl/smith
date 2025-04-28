@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -19,6 +19,7 @@
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/serac_config.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -43,7 +44,6 @@ void functional_thermal_test_nonlinear()
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  // _solver_params_start
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
                                                   .relative_tol = 1.0e-12,
                                                   .absolute_tol = 1.0e-12,
@@ -52,7 +52,6 @@ void functional_thermal_test_nonlinear()
 
   HeatTransfer<p, dim> thermal_solver(nonlinear_options, heat_transfer::default_linear_options,
                                       heat_transfer::default_static_options, "heat_transfer", mesh_tag);
-  // _solver_params_end
 
   heat_transfer::LinearIsotropicConductor mat{
       1.0,  // mass density
@@ -103,12 +102,6 @@ TEST(HeatTransfer, robin_condition) { functional_thermal_test_nonlinear(); }
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

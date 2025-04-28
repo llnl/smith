@@ -1,7 +1,7 @@
-# Copyright 2013-2024 Lawrence Livermore National Security, LLC and other
-# Spack Project Developers. See the top-level LICENSE file for details.
+# Copyright (c) Lawrence Livermore National Security, LLC and
+# other Tribol Project Developers. See the top-level COPYRIGHT file for details.
 #
-# SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# SPDX-License-Identifier: (MIT)
 
 import os
 import socket
@@ -44,7 +44,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     # SERAC EDIT START
     # Note: We add a number to the end of the real version number to indicate that we have
     #  moved forward past the release. Increment the last number when updating the commit sha.
-    version("0.1.0.16", commit="99068de157aa836e75c063080e011c4b1ed22200", submodules=True, preferred=True)
+    version("0.1.0.18", commit="8351aa4e104fce00ee25c760a5c3f3c882557d50", submodules=True, preferred=True)
     # SERAC EDIT END
 
     # -----------------------------------------------------------------------
@@ -60,10 +60,16 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
             description="Build examples")
     variant("devtools", default=False, 
             description="Build development tools (Sphinx, Doxygen, Shroud, clang-format)")
+    # SERAC EDIT START
+    variant("asan", default=False,
+            description="Build with address sanitizer flags")
+    # SERAC EDIT END
     variant("umpire",   default=False,
             description="Build with portable memory access support")
     variant("raja",     default=False,
             description="Build with portable kernel execution support")
+    variant("openmp",   default=False,
+            description="Build with OpenMP support")
 
     # -----------------------------------------------------------------------
     # Dependencies
@@ -82,26 +88,37 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("raja@2024.02.0:", when="+raja")
     depends_on("umpire@2024.02.0:", when="+umpire")
 
-    with when("+redecomp"):
-        depends_on("mfem+metis+mpi")
-        depends_on("mfem+raja", when="+raja")
-        depends_on("mfem+umpire", when="+umpire")
-        depends_on("axom+raja", when="+raja")
-        depends_on("axom+umpire", when="+umpire")
+    depends_on("axom+raja", when="+raja")
+    depends_on("axom~raja", when="~raja")
+    depends_on("axom+umpire", when="+umpire")
+    depends_on("axom~umpire", when="~umpire")
+
+    depends_on("mfem+metis+mpi", when="+redecomp")
+
+    with when("+openmp"):
+        depends_on("axom+openmp")
+        # Tribol requires RAJA and Umpire with OpenMP support
+        depends_on("raja+openmp")
+        depends_on("umpire+openmp")
+
+    with when("~openmp"):
+        depends_on("axom~openmp")
 
     for val in CudaPackage.cuda_arch_values:
         ext_cuda_dep = f"+cuda cuda_arch={val}"
         depends_on(f"mfem{ext_cuda_dep}", when=f"{ext_cuda_dep}")
         depends_on(f"axom{ext_cuda_dep}", when=f"{ext_cuda_dep}")
-        depends_on(f"raja{ext_cuda_dep}", when=f"+raja{ext_cuda_dep}")
-        depends_on(f"umpire{ext_cuda_dep}", when=f"+umpire{ext_cuda_dep}")
+        # NOTE: Tribol requires RAJA and Umpire for CUDA support
+        depends_on(f"raja{ext_cuda_dep}", when=f"{ext_cuda_dep}")
+        depends_on(f"umpire{ext_cuda_dep}", when=f"{ext_cuda_dep}")
 
     for val in ROCmPackage.amdgpu_targets:
         ext_rocm_dep = f"+rocm amdgpu_target={val}"
         depends_on(f"mfem{ext_rocm_dep}", when=f"{ext_rocm_dep}")
         depends_on(f"axom{ext_rocm_dep}", when=f"{ext_rocm_dep}")
-        depends_on(f"raja{ext_rocm_dep}", when=f"+raja{ext_rocm_dep}")
-        depends_on(f"umpire{ext_rocm_dep}", when=f"+umpire{ext_rocm_dep}")
+        # NOTE: Tribol requires RAJA and Umpire for HIP support
+        depends_on(f"raja{ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"umpire{ext_rocm_dep}", when=f"{ext_rocm_dep}")
 
     depends_on("rocprim", when="+rocm")
     
@@ -117,14 +134,33 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     for dep in ["hypre", "mfem"]:
         depends_on("{0}+debug".format(dep), when="build_type=Debug")
 
+    # SERAC EDIT START
+    # ASan is only supported by GCC and (some) LLVM-derived
+    # compilers.
+    asan_compiler_denylist = {"aocc", "arm", "cce", "fj", "intel", "nag",
+                              "nvhpc", "oneapi", "pgi", "xl", "xl_r"}
+    asan_compiler_allowlist = {"gcc", "clang", "apple-clang"}
+
+    # ASan compiler denylist and allowlist should be disjoint.
+    assert len(asan_compiler_denylist & asan_compiler_allowlist) == 0
+
+    for compiler_ in asan_compiler_denylist:
+        conflicts(
+            "%{0}".format(compiler_),
+            when="+asan",
+            msg="{0} compilers do not support Address Sanitizer".format(compiler_)
+        )
+    # SERAC EDIT END
+
     # Devtool dependencies these need to match tribol_devtools/package.py
     depends_on("doxygen", when="+devtools")
     depends_on("python", when="+devtools")
     depends_on("py-shroud", when="+devtools+fortran")
     depends_on("py-sphinx", when="+devtools")
-    depends_on("llvm+clang@10.0.0", when="+devtools", type="build")
+    depends_on("llvm@14+clang+python", when="+devtools")
 
     conflicts("+cuda", when="+rocm")
+    conflicts("+openmp", when="+rocm")
 
     def _get_sys_type(self, spec):
         sys_type = spec.architecture
@@ -188,6 +224,9 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
         spec = self.spec
         entries = super(Tribol, self).initconfig_hardware_entries()
 
+        entries.append(cmake_cache_option("ENABLE_OPENMP",
+                                          spec.satisfies("+openmp")))
+
         if "+cuda" in spec:
             entries.append(cmake_cache_option("ENABLE_CUDA", True))
             entries.append(cmake_cache_option("CMAKE_CUDA_SEPARABLE_COMPILATION", True))
@@ -210,37 +249,42 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
 
             entries.append(cmake_cache_option("ENABLE_HIP", True))
 
-            hip_root = spec["hip"].prefix
-            rocm_root = hip_root + "/.."
+            rocm_root = spec["hip"].prefix
+            if not spec.satisfies("^hip@6.0.0:"):
+                rocm_root = "{0}/..".format(rocm_root)
+            entries.append(cmake_cache_path("ROCM_PATH", rocm_root))
 
-            # Fix blt_hip getting HIP_CLANG_INCLUDE_PATH-NOTFOUND bad include directory
-            if (self.spec.satisfies('%cce') or self.spec.satisfies('%clang')) and 'toss_4' in self._get_sys_type(spec):
-                # Set the patch version to 0 if not already
-                clang_version= str(self.compiler.version)[:-1] + "0"
-                hip_clang_include_path = rocm_root + "/llvm/lib/clang/" + clang_version + "/include"
-                if os.path.isdir(hip_clang_include_path):
-                    entries.append(cmake_cache_path("HIP_CLANG_INCLUDE_PATH", hip_clang_include_path))
+            hip_link_flags = "-L{0}/lib -Wl,-rpath,{0}/lib ".format(rocm_root)
 
+            # Recommended MPI flags
+            hip_link_flags += "-lxpmem "
+            hip_link_flags += "-L/opt/cray/pe/mpich/{0}/gtl/lib ".format(spec["mpi"].version)
+            hip_link_flags += "-Wl,-rpath,/opt/cray/pe/mpich/{0}/gtl/lib ".format(spec["mpi"].version)
+            hip_link_flags += "-lmpi_gtl_hsa "
+
+            # needed for lapack support in mfem
+            if spec.satisfies("^hip@6.0.0:"):
+                hip_link_flags += "-L{0}/lib/llvm/lib -Wl,-rpath,{0}/lib/llvm/lib ".format(rocm_root)
+            else:
+                hip_link_flags += "-L{0}/llvm/lib -Wl,-rpath,{0}/llvm/lib ".format(rocm_root)
+            hip_link_flags += "-lpgmath "
             # Fixes for mpi for rocm until wrapper paths are fixed
             # These flags are already part of the wrapped compilers on TOSS4 systems
-            hip_link_flags = ""
-            if self.spec.satisfies('%clang'):
-                # only with fortran for axom, but seems to always be needed for tribol
-                hip_link_flags += "-Wl,--disable-new-dtags "
             if "+fortran" in spec and self.is_fortran_compiler("amdflang"):
-                hip_link_flags += "-L{0}/../llvm/lib -L{0}/lib ".format(hip_root)
-                hip_link_flags += "-Wl,-rpath,{0}/../llvm/lib:{0}/lib ".format(hip_root)
-                hip_link_flags += "-lpgmath -lflang -lflangrti -lompstub -lamdhip64 "
+                hip_link_flags += "-Wl,--disable-new-dtags "
+                hip_link_flags += "-lflang -lflangrti -lompstub "
 
             # Remove extra link library for crayftn
             if "+fortran" in spec and self.is_fortran_compiler("crayftn"):
-                entries.append(cmake_cache_string("BLT_CMAKE_IMPLICIT_LINK_LIBRARIES_EXCLUDE",
-                                                  "unwind"))
+                entries.append(
+                    cmake_cache_string("BLT_CMAKE_IMPLICIT_LINK_LIBRARIES_EXCLUDE", "unwind")
+                )
 
             # Additional libraries for TOSS4
-            hip_link_flags += " -L{0}/../lib64 -Wl,-rpath,{0}/../lib64 ".format(hip_root)
-            hip_link_flags += " -L{0}/../lib -Wl,-rpath,{0}/../lib ".format(hip_root)
-            hip_link_flags += "-lamd_comgr -lhsa-runtime64 "
+            hip_link_flags += "-L{0}/lib -Wl,-rpath,{0}/lib ".format(rocm_root)
+            if not spec.satisfies("^hip@6.0.0:"):
+                hip_link_flags += "-L{0}/hip/lib -Wl,-rpath,{0}/hip/lib ".format(rocm_root)
+            hip_link_flags += "-lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr "
 
             entries.append(cmake_cache_string("CMAKE_EXE_LINKER_FLAGS", hip_link_flags))
 
@@ -299,16 +343,20 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
         entries = super(Tribol, self).initconfig_mpi_entries()
 
         entries.append(cmake_cache_option("ENABLE_MPI", True))
-        if spec['mpi'].name == 'spectrum-mpi':
-            entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
-                                              "mpibind"))
+        if spec["mpi"].name == "spectrum-mpi":
+            entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND", "mpibind"))
 
         # Replace /usr/bin/srun path with srun flux wrapper path on TOSS 4
-        if 'toss_4' in self._get_sys_type(spec):
+        # TODO: Remove this logic by adding `using_flux` case in
+        #  spack/lib/spack/spack/build_systems/cached_cmake.py:196 and remove hard-coded
+        #  path to srun in same file.
+        if "toss_4" in self._get_sys_type(spec):
             srun_wrapper = which_string("srun")
-            mpi_exec_index = [index for index,entry in enumerate(entries)
-                                                  if "MPIEXEC_EXECUTABLE" in entry]
-            del entries[mpi_exec_index[0]]
+            mpi_exec_index = [
+                index for index, entry in enumerate(entries) if "MPIEXEC_EXECUTABLE" in entry
+            ]
+            if mpi_exec_index:
+                del entries[mpi_exec_index[0]]
             entries.append(cmake_cache_path("MPIEXEC_EXECUTABLE", srun_wrapper))
 
         return entries
@@ -351,7 +399,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
 
         # optional tpls
         for dep in ('raja', 'umpire'):
-            if spec.satisfies('^{0}'.format(dep)):
+            if spec.satisfies('+{0}'.format(dep)):
                 dep_dir = get_spec_path(spec, dep, path_replacements)
                 entries.append(cmake_cache_path('%s_DIR' % dep.upper(),
                                                 dep_dir))
@@ -390,13 +438,27 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
 
 
     def cmake_args(self):
+        # SERAC EDIT START
+        is_asan_compiler = self.compiler.name in self.asan_compiler_allowlist
+        if self.spec.satisfies("+asan") and not is_asan_compiler:
+            raise UnsupportedCompilerError(
+                "Tribol cannot be built with Address Sanitizer flags "
+                "using {0} compilers".format(self.compiler.name)
+            )
+        # SERAC EDIT END
+
         options = []
 
         options.append("-DBLT_SOURCE_DIR:PATH={0}".format(self.spec["blt"].prefix))
 
         options.append(self.define_from_variant(
-            'TRIBOL_ENABLE_EXAMPLES', 'examples'))
+            "TRIBOL_ENABLE_EXAMPLES", "examples"))
         options.append(self.define_from_variant(
-            'TRIBOL_ENABLE_TESTS', 'tests'))
+            "TRIBOL_ENABLE_TESTS", "tests"))
+        # SERAC EDIT START
+        options.append(self.define_from_variant(
+            "TRIBOL_ENABLE_ASAN", "asan"))
+        # SERAC EDIT END
+
 
         return options

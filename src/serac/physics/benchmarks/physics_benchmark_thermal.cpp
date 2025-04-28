@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -10,7 +10,7 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/profiling.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
@@ -162,12 +162,7 @@ void functional_test_dynamic()
 
 int main(int argc, char* argv[])
 {
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  // Initialize profiling
-  serac::profiling::initialize();
+  serac::ApplicationManager applicationManager(argc, argv);
 
   // Add metadata
   SERAC_SET_METADATA("test", "thermal_functional");
@@ -203,11 +198,6 @@ int main(int argc, char* argv[])
   SERAC_MARK_BEGIN("3D Quadratic Dynamic");
   functional_test_dynamic<2, 3>();
   SERAC_MARK_END("3D Quadratic Dynamic");
-
-  // Finalize profiling
-  serac::profiling::finalize();
-
-  MPI_Finalize();
 
   return 0;
 }

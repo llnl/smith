@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -29,13 +29,14 @@
 
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "axom/inlet.hpp"
+#include "axom/CLI11.hpp"
 
 #include "mfem.hpp"
 
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/solid_mechanics_contact.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
@@ -86,31 +87,54 @@ int main(int argc, char* argv[])
   bool use_contact = true;
   auto contact_type = serac::ContactEnforcement::Penalty;
 
-  // Initialize Serac and all of the external libraried
-  serac::initialize(argc, argv);
+  // Initialize and automatically finalize MPI and other libraries
+  serac::ApplicationManager applicationManager(argc, argv);
 
   // Handle command line arguments
   axom::CLI::App app{"Hollow cylinder buckling example"};
   // Mesh options
-  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps", true);
-  app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps", true);
+  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")
+      ->default_val("0")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps")
+      ->default_val("0")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
   // Solver options
-  app.add_option("--nonlinear-solver", nonlinear_options.nonlin_solver, "Nonlinear solver", true);
-  app.add_option("--linear-solver", linear_options.linear_solver, "Linear solver", true);
-  app.add_option("--preconditioner", linear_options.preconditioner, "Preconditioner", true);
-  app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner, "Petsc preconditioner", true)
+  app.add_option("--nonlinear-solver", nonlinear_options.nonlin_solver,
+                 "Nonlinear solver (Index of enum serac::NonlinearSolver)")
+      ->default_val("3")  // Matches index of value set above
+      ->expected(0, 10);
+  app.add_option("--linear-solver", linear_options.linear_solver, "Linear solver (Index of enum serac::LinearSolver)")
+      ->default_val("1")  // Matches index of value set above
+      ->expected(0, 5);
+  app.add_option("--preconditioner", linear_options.preconditioner,
+                 "Preconditioner (Index of enum serac::NonlinearSolver)")
+      ->default_val("3")  // Matches index of value set above
+      ->expected(0, 7);
+  app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
+                 "Petsc preconditioner (Index of enum serac::PetscPCType)")
       ->transform(
           [](const std::string& in) -> std::string {
             return std::to_string(static_cast<int>(mfem_ext::stringToPetscPCType(in)));
           },
-          "Convert string to PetscPCType", "PetscPCTypeTransform");
-  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact", true);
+          "Convert string to PetscPCType", "PetscPCTypeTransform")
+      ->default_val("0")  // Matches index of value set by class
+      ->expected(0, 14);
+  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")
+      ->default_val("0.1")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
   // Contact options
   app.add_flag("--contact,!--no-contact", use_contact, "Use contact for the inner faces of the cylinder");
   app.add_option("--contact-type", contact_type,
-                 "Type of contact enforcement, 0 for penalty or 1 for Lagrange multipliers", true)
-      ->needs("--contact");
-  app.add_option("--penalty", penalty, "Penalty for contact", true)->needs("--contact");
+                 "Type of contact enforcement, 0 for penalty or 1 for Lagrange multipliers (Index of enum "
+                 "serac::ContactEnforcement)")
+      ->needs("--contact")
+      ->default_val("0")  // Matches index of value set above
+      ->expected(0, 1);
+  app.add_option("--penalty", penalty, "Penalty for contact")
+      ->needs("--contact")
+      ->default_val("1e3")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
 
   // Need to allow extra arguments for PETSc support
   app.set_help_flag("--help");
@@ -204,6 +228,5 @@ int main(int argc, char* argv[])
   }
   SLIC_INFO_ROOT(axom::fmt::format("final time = {}", solid_solver->time()));
 
-  // Exit without error
-  serac::exitGracefully();
+  return 0;
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -12,7 +12,7 @@
 #include <gtest/gtest.h>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/infrastructure/input.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/mesh/mesh_utils_base.hpp"
 #include "serac/numerics/expr_template_ops.hpp"
@@ -112,19 +112,7 @@ TEST(basic, hcurl_test_3D_linear) { hcurl_test_3D<1>(); }
 
 int main(int argc, char* argv[])
 {
-  int num_procs, myid;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

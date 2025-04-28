@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -20,12 +20,13 @@ import platform
 import shutil
 import socket
 
-_host_configs_map = {"rzgenie"   : "rzgenie-toss_3_x86_64_ib-clang@10.0.0.cmake",
-                     "rzalastor" : "rzgenie-toss_3_x86_64_ib-clang@10.0.0.cmake",
-                     "rztopaz"   : "rzgenie-toss_3_x86_64_ib-clang@10.0.0.cmake",
-                     "rzansel"   : "rzansel-blueos_3_ppc64le_ib_p9-clang@10.0.1.cmake",
-                     "ruby"      : "ruby_toss_3_x86_64_ib-clang@10.0.0.cmake",
-                     "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@10.0.1.cmake"}
+_host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmake",
+                     "rzwhippet" : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmake",
+                     "rzvernal"  : "rzvernal-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
+                     "rzansel"   : "rzansel-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake",
+                     "ruby"      : "ruby-toss_4_x86_64_ib-clang@14.0.6.cmake",
+                     "tioga"     : "tioga-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
+                     "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake"}
 
 def get_machine_name():
     return socket.gethostname().rstrip('1234567890')

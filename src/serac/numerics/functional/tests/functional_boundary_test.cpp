@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -20,10 +20,10 @@
 #include "serac/numerics/functional/tests/check_gradient.hpp"
 
 #include "serac/infrastructure/mpi_fstream.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
-int num_procs, myid;
 int refinements = 0;
 constexpr bool verbose = true;
 
@@ -230,11 +230,7 @@ TEST(boundaryL2, 3DCubic) { boundary_test(*mesh3D, L2<3>{}, L2<3>{}, Dimension<3
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
+  serac::ApplicationManager applicationManager(argc, argv);
 
   int serial_refinement = 1;
   int parallel_refinement = 0;
@@ -249,9 +245,5 @@ int main(int argc, char* argv[])
   mesh2D->EnsureNodes();
   mesh3D->EnsureNodes();
 
-  int result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  return RUN_ALL_TESTS();
 }

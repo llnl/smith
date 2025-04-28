@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -14,7 +14,6 @@
 
 #include "mfem.hpp"
 
-#include "serac/infrastructure/initialize.hpp"
 #include "serac/physics/common.hpp"
 #include "serac/physics/heat_transfer_input.hpp"
 #include "serac/physics/base_physics.hpp"
@@ -693,9 +692,6 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    */
   void completeSetup() override
   {
-    // Build the dof array lookup tables
-    temperature_.space().BuildDofToArrays();
-
     if (is_quasistatic_) {
       residual_with_bcs_ = mfem_ext::StdFunctionOperator(
           temperature_.space().TrueVSize(),

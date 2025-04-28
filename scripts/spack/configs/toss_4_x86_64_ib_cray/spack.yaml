@@ -20,15 +20,17 @@ spack:
       modules: []
       operating_system: rhel8
       paths:
-        cc: /opt/rocm-5.7.1/llvm/bin/amdclang
-        cxx: /opt/rocm-5.7.1/llvm/bin/amdclang++
-        f77: /opt/rocm-5.7.1/llvm/bin/amdflang
-        fc: /opt/rocm-5.7.1/llvm/bin/amdflang
-      spec: clang@17.0.0
+        cc: /opt/rocm-6.2.1/llvm/bin/amdclang
+        cxx: /opt/rocm-6.2.1/llvm/bin/amdclang++
+        f77: /opt/rocm-6.2.1/llvm/bin/amdflang
+        fc: /opt/rocm-6.2.1/llvm/bin/amdflang
+      spec: rocmcc@=6.2.1
       target: x86_64
 
   packages:
     all:
+      target: [x86_64_v3]
+      #target: [zen2]
       providers:
         blas: [netlib-lapack]
         lapack: [netlib-lapack]
@@ -38,8 +40,11 @@ spack:
         mpi: [cray-mpich]
 
     # Providers
-    # NOTE: Avoid external blas or lapack providers. Compiler was treating shared object path as cpp file in MFEM, which
-    # resulted in "expected unqualified-id" errors.
+    netlib-lapack:
+      buildable: false
+      externals:
+      - spec: netlib-lapack@3.6.1
+        prefix: /usr
     opengl:
       buildable: false
       externals:
@@ -62,80 +67,80 @@ spack:
     cray-mpich:
       buildable: false
       externals:
-      - spec: cray-mpich@8.1.27+slurm
-        prefix: /usr/tce/packages/cray-mpich-tce/cray-mpich-8.1.27-rocmcc-5.7.1/
+      - spec: cray-mpich@8.1.29%rocmcc@6.2.1+slurm
+        prefix: /usr/tce/packages/cray-mpich-tce/cray-mpich-8.1.29-rocmcc-6.2.1/
 
     # ROCm
     hip:
       buildable: false
       externals:
-      - spec: hip@5.7.1
-        prefix: /opt/rocm-5.7.1/hip
+      - spec: hip@6.2.1
+        prefix: /opt/rocm-6.2.1
     hipblas:
       buildable: false
       externals:
-      - spec: hipblas@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: hipblas@6.2.1
+        prefix: /opt/rocm-6.2.1/
     hipsparse:
       buildable: false
       externals:
-      - spec: hipsparse@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: hipsparse@6.2.1
+        prefix: /opt/rocm-6.2.1/
     llvm-amdgpu:
       buildable: false
       externals:
-      - spec: llvm-amdgpu@5.7.1
-        prefix: /opt/rocm-5.7.1/llvm
+      - spec: llvm-amdgpu@6.2.1
+        prefix: /opt/rocm-6.2.1/llvm
     hsa-rocr-dev:
       buildable: false
       externals:
-      - spec: hsa-rocr-dev@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: hsa-rocr-dev@6.2.1
+        prefix: /opt/rocm-6.2.1/
     rocblas:
       buildable: false
       externals:
-      - spec: rocblas@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: rocblas@6.2.1
+        prefix: /opt/rocm-6.2.1/
     rocm-core:
       buildable: false
       externals:
-      - spec: rocm-core@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: rocm-core@6.2.1
+        prefix: /opt/rocm-6.2.1/
     rocrand:
       buildable: false
       externals:
-      - spec: rocrand@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: rocrand@6.2.1
+        prefix: /opt/rocm-6.2.1/
     rocminfo:
       buildable: false
       externals:
-      - spec: rocminfo@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: rocminfo@6.2.1
+        prefix: /opt/rocm-6.2.1/
     rocsolver:
       buildable: false
       externals:
-      - spec: rocsolver@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: rocsolver@6.2.1
+        prefix: /opt/rocm-6.2.1/
     rocsparse:
       buildable: false
       externals:
-      - spec: rocsparse@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: rocsparse@6.2.1
+        prefix: /opt/rocm-6.2.1/
     rocthrust:
       buildable: false
       externals:
-      - spec: rocthrust@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: rocthrust@6.2.1
+        prefix: /opt/rocm-6.2.1/
     rocprim:
       buildable: false
       externals:
-      - spec: rocprim@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: rocprim@6.2.1
+        prefix: /opt/rocm-6.2.1/
     rocm-device-libs:
       buildable: false
       externals:
-      - spec: rocm-device-libs@5.7.1
-        prefix: /opt/rocm-5.7.1/
+      - spec: rocm-device-libs@6.2.1
+        prefix: /opt/rocm-6.2.1/
 
     # System level packages to not build
     autoconf:
@@ -146,7 +151,7 @@ spack:
     automake:
       buildable: false
       externals:
-      - spec: automake@1.61.1
+      - spec: automake@1.16.1
         prefix: /usr
     binutils:
       buildable: false
@@ -309,9 +314,8 @@ spack:
     cmake:
       buildable: false
       externals:
-      - spec: cmake@3.23.1
-        modules:
-        - cmake/3.23.1
+      - spec: cmake@3.24.2
+        prefix: /usr/tce
     python:
       buildable: false
       externals:
@@ -320,22 +324,26 @@ spack:
 
     # Globally lock version of third party libraries
     axom:
-      require: "@0.9.0.1"
+      require: "@0.10.1.1"
     adiak:
-      require: "@0.4.0"
+      require: "@0.4.1"
     caliper:
-      require: "@2.10.0~kokkos+shared"
+      require: "@2.12.1~kokkos+shared"
     camp:
-      require: "@2024.02.0"
+      require: "@2024.07.0"
     conduit:
-      require: "@0.9.1~shared~test~examples~utilities"
+      require: "@0.9.2~shared~test~examples~utilities"
     hdf5:
       variants: ~shared~mpi
+    hypre:
+      require: "@2.26.0"
     mfem:
-      require: "@4.7.0.1"
+      require: "@4.8.0.1"
     raja:
-      require: "@2024.02.0~shared~examples~exercises"
+      require: "@2024.07.0~shared~examples~exercises"
+    sundials:
+      require: "@6.7.0"
     tribol:
-      require: "@0.1.0.16~examples~tests"
+      require: "@0.1.0.18~examples~tests"
     umpire:
-      require: "@2024.02.0~shared~examples~werror"
+      require: "@2024.07.0~shared~examples~werror"

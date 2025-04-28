@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -22,6 +22,7 @@
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/serac_config.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -46,7 +47,6 @@ void functional_solid_test_robin_condition()
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  // _solver_params_start
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-12,
                                                   .absolute_tol = 1.0e-12,
@@ -55,7 +55,6 @@ void functional_solid_test_robin_condition()
 
   SolidMechanics<p, dim> solid_solver(nonlinear_options, solid_mechanics::default_linear_options,
                                       solid_mechanics::default_quasistatic_options, "solid_mechanics", mesh_tag);
-  // _solver_params_end
 
   solid_mechanics::LinearIsotropic mat{
       1.0,  // mass density
@@ -109,12 +108,6 @@ TEST(SolidMechanics, robin_condition) { functional_solid_test_robin_condition();
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

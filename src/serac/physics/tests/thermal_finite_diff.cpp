@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -16,6 +16,7 @@
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/materials/parameterized_thermal_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -285,12 +286,6 @@ TEST(HeatTransfer, FiniteDifferenceShape)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -23,8 +23,7 @@
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/profiling.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -230,7 +229,7 @@ void functional_solid_test_euler(NonlinSolve nonlinSolve, Prec prec)
 
   std::string meshTag = "mesh";
   mfem::Mesh mesh = mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz);
-  auto pmesh = std::make_unique<mfem::ParMesh>(MPI_COMM_WORLD, mesh);
+  auto pmesh = mesh::refineAndDistribute(std::move(mesh), 0, 0, MPI_COMM_WORLD);
   mfem::ParMesh* meshPtr = &serac::StateManager::setMesh(std::move(pmesh), meshTag);
 
   // solid mechanics
@@ -311,7 +310,7 @@ void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, 
 
   std::string meshTag = "mesh";
   mfem::Mesh mesh = mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz);
-  auto pmesh = std::make_unique<mfem::ParMesh>(MPI_COMM_WORLD, mesh);
+  auto pmesh = mesh::refineAndDistribute(std::move(mesh), 0, 0, MPI_COMM_WORLD);
   mfem::ParMesh* meshPtr = &serac::StateManager::setMesh(std::move(pmesh), meshTag);
 
   // solid mechanics
@@ -344,7 +343,7 @@ void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, 
 
 int main(int argc, char* argv[])
 {
-  serac::initialize(argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv);
 
   SERAC_MARK_FUNCTION;
 
@@ -369,7 +368,7 @@ int main(int argc, char* argv[])
     if (e.get_name() == "CallForHelp") {
       auto msg = app.help();
       SLIC_INFO_ROOT(msg);
-      serac::exitGracefully();
+      return 0;
     } else {
       auto err_msg = axom::CLI::FailureMessage::simple(&app, e);
       SLIC_ERROR_ROOT(err_msg);
@@ -404,5 +403,5 @@ int main(int argc, char* argv[])
 
   // functional_solid_test_euler();
 
-  serac::exitGracefully(0);
+  return 0;
 }

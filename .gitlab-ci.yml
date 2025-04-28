@@ -1,5 +1,5 @@
 ##############################################################################
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and Serac
+# Copyright (c) Lawrence Livermore National Security, LLC and Serac
 # project contributors. See the LICENSE file for details.
 ##############################################################################
 
@@ -25,6 +25,7 @@ stages:
   - comparison
 
 # Run src build each push
+# NOTE: When you add a new workflow, remember to add it to this `if` statement!
 .src_workflow:
   stage: src
   rules:
@@ -55,7 +56,7 @@ stages:
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
   dependencies:
-    - blueos-clang_10_0_1-benchmarks
+    - blueos-clang_14_0_5-benchmarks
     - toss4-gcc_10_3_1-benchmarks
     - toss4-clang_14_0_6-benchmarks
 
@@ -130,7 +131,6 @@ stages:
 include:
   - local: .gitlab/build_blueos.yml
   - local: .gitlab/build_toss4.yml
-  # Disabling cray until all developers have access to the tioga machine
-  # - local: .gitlab/build_toss4_cray.yml
+  - local: .gitlab/build_toss4_cray.yml
   - project: 'lc-templates/id_tokens'
     file: 'id_tokens.yml'

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -15,9 +15,9 @@
 namespace serac {
 
 /// a single instance of a QuadratureData container of `Nothing`s, since they are all interchangeable
-std::shared_ptr<QuadratureData<Nothing> > NoQData;
+std::shared_ptr<QuadratureData<Nothing>> NoQData = ::std::make_shared<QuadratureData<Nothing>>();
 
 /// a single instance of a QuadratureData container of `Empty`s, since they are all interchangeable
-std::shared_ptr<QuadratureData<Empty> > EmptyQData;
+std::shared_ptr<QuadratureData<Empty>> EmptyQData = ::std::make_shared<QuadratureData<Empty>>();
 
 }  // namespace serac

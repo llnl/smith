@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -19,6 +19,10 @@ set(physics_serial_test_sources
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
+    test_solid_residual.cpp
+    test_functional_residual.cpp
+    thermomech_finite_diff.cpp
+    thermomech_statics_patch.cpp
     )
 blt_list_append(TO physics_serial_test_sources 
                 ELEMENTS 
@@ -46,13 +50,23 @@ set(physics_parallel_test_sources
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
     )
-blt_list_append(TO physics_parallel_test_sources 
-                ELEMENTS 
-                    contact_patch.cpp
-                    contact_patch_tied.cpp
-                    contact_beam.cpp
-                IF TRIBOL_FOUND)
+set(physics_parallel_tribol_test_sources
+    contact_patch.cpp
+    contact_patch_tied.cpp
+    contact_beam.cpp
+    )
+blt_list_append(TO       physics_parallel_test_sources
+                ELEMENTS ${physics_parallel_tribol_test_sources}
+                IF       TRIBOL_FOUND)
 
 serac_add_tests(SOURCES       ${physics_parallel_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 2)
+
+if(SERAC_ENABLE_HIP AND TRIBOL_FOUND)
+    foreach(filename ${physics_parallel_tribol_test_sources})
+        get_filename_component(test_name ${filename} NAME_WE)
+        blt_add_target_compile_flags(TO ${test_name} FLAGS "-fgpu-rdc")
+        blt_add_target_link_flags(TO ${test_name} FLAGS "-fgpu-rdc")
+    endforeach()
+endif()

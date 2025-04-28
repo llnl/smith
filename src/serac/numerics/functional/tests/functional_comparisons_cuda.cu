@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -17,9 +17,7 @@
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-#include "serac/infrastructure/profiling.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils_base.hpp"
 
 using namespace serac;
@@ -27,7 +25,6 @@ using namespace serac::profiling;
 int serial_refinement = 1;
 int parallel_refinement = 0;
 
-int num_procs, myid;
 int nsamples = 1;  // because mfem doesn't take in unsigned int
 
 constexpr bool verbose = true;
@@ -426,9 +423,7 @@ int main(int argc, char* argv[])
   cudaDeviceSynchronize();
   std::cout << "Initial:" << serac::accelerator::getCUDAMemInfoString() << std::endl;
 
-  auto [num_procs, myid] = serac::initialize(argc, argv);
-
-  serac::accelerator::initializeDevice();
+  serac::ApplicationManager applicationManager(argc, argv);
 
   mfem::OptionsParser args(argc, argv);
   args.AddOption(&serial_refinement, "-r", "--ref", "");
@@ -440,13 +435,10 @@ int main(int argc, char* argv[])
     if (myid == 0) {
       args.PrintUsage(std::cout);
     }
-    serac::exitGracefully(true);
+    return 1;
   }
   if (myid == 0) {
     args.PrintOptions(std::cout);
   }
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully(result);
+  return RUN_ALL_TESTS();
 }

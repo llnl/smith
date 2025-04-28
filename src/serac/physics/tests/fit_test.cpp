@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -10,13 +10,13 @@
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/materials/solid_material.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 #include <gtest/gtest.h>
 
 using namespace serac;
 using namespace serac::profiling;
 
-int num_procs, myid;
 int nsamples = 1;  // because mfem doesn't take in unsigned int
 
 int n = 0;  // index of tests used to send the output to different locations
@@ -115,13 +115,6 @@ TEST(StressExtrapolation, PiecewiseLinear2D) { stress_extrapolation_test<H1<1> >
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }
