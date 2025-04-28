@@ -245,7 +245,7 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
                                            vReactions[0], fields);
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      if (vjpFields[input_col]!=nullptr) {
+      if (vjpFields[input_col] != nullptr) {
         auto jacVec = serac::get<DERIVATIVE>(jacVecs[input_col](time, vReactions[0], fields));
         auto jacVecVector = assemble(jacVec);
         *vjpFields[input_col] += *jacVecVector;
