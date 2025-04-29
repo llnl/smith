@@ -77,14 +77,14 @@ class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...
   }
 
   /// @overload
-  virtual double evaluate(double time, double dt, const std::vector<FieldPtr>& fields) const
+  virtual double evaluate(double time, double dt, const std::vector<FieldPtr>& fields) const override
   {
     dt_ = dt;
     return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);
   }
 
   /// @overload
-  virtual mfem::Vector gradient(double time, double dt, const std::vector<FieldPtr>& fields, int direction) const
+  virtual mfem::Vector gradient(double time, double dt, const std::vector<FieldPtr>& fields, int direction) const override
   {
     dt_ = dt;
     auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);

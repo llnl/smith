@@ -69,7 +69,7 @@ struct ConstrainedResidualFixture : public testing::Test {
 
     ObjectiveT::SpacesT param_space_ptrs{&all_states[DISP]->space(), &all_states[DENSITY]->space()};
 
-    ObjectiveT mass_objective("mass constraing", mesh, all_states[SHAPE_DISP]->space(), param_space_ptrs);
+    ObjectiveT mass_objective("mass constraining", mesh, all_states[SHAPE_DISP]->space(), param_space_ptrs);
     mass_objective.addBodyIntegral(serac::DependsOn<1>{}, mesh->entireBodyName(),
                                    [](double /*time*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
 
@@ -124,7 +124,7 @@ struct ConstrainedResidualFixture : public testing::Test {
     serac::FiniteElementState shape_disp = serac::StateManager::newState(VectorSpace{}, "shape_disp", mesh->tag());
     serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-    states = {disp, velo, accel, shape_disp};
+    states = {shape_disp, disp, velo, accel};
     params = {density};
 
     std::string physics_name = "solid";
@@ -155,7 +155,7 @@ TEST_F(ConstrainedResidualFixture, CanComputeResidualObjectivesAndTheirGradients
   double dt = 1.0;
   auto all_states = getPointers(states, params);
 
-  serac::FiniteElementDual res_vector(states[0].space(), "residual");
+  serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
   res_vector = residual->residual(time, dt, all_states);
   ASSERT_NE(0.0, res_vector.Norml2());
 
