@@ -84,7 +84,8 @@ class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...
   }
 
   /// @overload
-  virtual mfem::Vector gradient(double time, double dt, const std::vector<FieldPtr>& fields, int direction) const override
+  virtual mfem::Vector gradient(double time, double dt, const std::vector<FieldPtr>& fields,
+                                int direction) const override
   {
     dt_ = dt;
     auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);
