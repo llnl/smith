@@ -14,6 +14,7 @@
 
 #include "mfem.hpp"
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/domain.hpp"
 
 namespace serac {
 

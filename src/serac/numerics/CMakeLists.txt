@@ -23,7 +23,7 @@ set(numerics_sources
     petsc_solvers.cpp
     )
 
-set(numerics_depends serac_infrastructure serac_functional)
+set(numerics_depends serac_physics)
 
 blt_add_library(
     NAME        serac_numerics
