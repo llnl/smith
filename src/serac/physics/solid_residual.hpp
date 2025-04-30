@@ -198,8 +198,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
         Dimension<dim - 1>{}, DependsOn<0, active_parameters + NUM_STATE_VARS...>{},
         [pressure_function](double t, auto X, auto displacement, auto... params) {
           // Calculate the position and normal in the shape perturbed deformed configuration
-          auto x = X + 0.0 * displacement;
-          x = x + displacement;
+          auto x = X + displacement;
           auto n = cross(get<DERIVATIVE>(x));
           // serac::Functional's boundary integrals multiply the q-function output by
           // norm(cross(dX_dxi)) at that quadrature point, but if we impose a shape displacement
@@ -220,11 +219,10 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
     BaseResidualT::v_residual_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + 1 + NUM_STATE_VARS...>{},
         [pressure_function](double t, auto X, auto V, auto displacement, auto... params) {
-          auto x = X + 0.0 * displacement;
-          x = x + displacement;
+          auto x = X + displacement;
           auto n = cross(get<DERIVATIVE>(x));
           auto pressure = pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
-          return inner(pressure, get<VALUE>(V));
+          return inner(get<VALUE>(V), pressure);
         },
         BaseResidualT::mesh_->domain(boundary_name));
   }
