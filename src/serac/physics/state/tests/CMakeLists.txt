@@ -7,6 +7,7 @@
 set(state_test_depends serac_state serac_physics_materials serac_functional serac_mesh gtest)
 
 set(state_test_sources
+    test_finite_element_dual.cpp
     test_finite_element_state.cpp
     test_state_manager.cpp)
 
