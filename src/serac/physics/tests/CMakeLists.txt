@@ -32,6 +32,7 @@ serac_add_tests(SOURCES       ${physics_serial_test_sources}
 set(physics_parallel_test_sources
     lce_Brighenti_tensile.cpp
     lce_Bertoldi_lattice.cpp
+    LCE_simple_test.cpp
     parameterized_thermomechanics_example.cpp
     parameterized_thermal.cpp
     solid.cpp

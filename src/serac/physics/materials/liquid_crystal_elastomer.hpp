@@ -350,4 +350,181 @@ struct LiquidCrystalElastomerBertoldi {
   double beta_parameter_;           ///< Degree of coupling between elastic and nematic energies
 };
 
+/**
+ * @brief Zhang's liquid crystal elastomer model
+ * Paper: Li, W., & Zhang, X. S. (2023). Arbitrary curvature programming of thermo-active liquid 
+ * crystal elastomer via topology optimization. Computer Methods in Applied Mechanics and 
+ * Engineering, 417, 116393..
+ */
+struct LiquidCrystalElastomerZhang {
+  using State = Empty;  ///< this material has no internal variables
+
+  /// this model is only intended to be used in 3D
+  static constexpr int dim = 3;
+
+  /**
+   * @brief Constructor
+   *
+   * @param rho mass density of the material (in reference configuration)
+   * @param shear_mod Shear modulus of the material
+   * @param initial_order_param Parameter for degree of coupling between elastic and nematic energies
+   * @param omega_param Parameter for degree of swelling
+   * @param bulk_mod Bulk modulus of the material
+   */
+  LiquidCrystalElastomerZhang(double rho, double shear_mod, double initial_order_param, 
+                              double omega_param, double bulk_mod)
+      : density(rho),
+        shear_mod_(shear_mod),
+        initial_order_param_(initial_order_param),
+        omega_param_(omega_param),
+        bulk_mod_(bulk_mod)
+  {
+    SLIC_ERROR_ROOT_IF(density <= 0.0, "Density must be positive in the LCE material model.");
+    SLIC_ERROR_ROOT_IF(shear_mod_ <= 0.0, "Shear modulus must be positive in the LCE material model.");
+    SLIC_ERROR_ROOT_IF(initial_order_param_ <= 0.0, "Initial order parameter must be positive in the LCE material model.");
+    SLIC_ERROR_ROOT_IF(omega_param_ <= 0.0, "Omega parameter must be positive in the LCE material model.");
+    SLIC_ERROR_ROOT_IF(bulk_mod_ <= 0.0, "Bulk modulus must be positive in the LCE material model.");
+  }
+
+  /// -------------------------------------------------------
+
+  /**
+   * @brief Material response
+   *
+   * @tparam DispGradType number-like type for the displacement gradient tensor
+   * @tparam OrderParamType number-like type for the order parameter
+   * @tparam GammaAngleType number-like type for the orientation angle gamma
+   * @tparam EtaAngleType number-like type for the orientation angle eta
+   *
+   * @param[in] displacement_grad displacement gradient with respect to the reference configuration
+   * @param[in] inst_order_param_tuple the current order parameter
+   * @param[in] gamma_tuple the first polar angle used to define the liquid crystal orientation vector
+   * @param[in] eta_tuple the second polar angle used to define the liquid crystal orientation vector
+   * @return The calculated material response (Cauchy stress) for the material
+   */
+  template <typename DispGradType, typename OrderParamType, typename GammaAngleType, typename EtaAngleType>
+  SERAC_HOST_DEVICE auto operator()(State& /*state*/, const tensor<DispGradType, dim, dim>& displacement_grad,
+                                    OrderParamType inst_order_param_tuple, GammaAngleType gamma_tuple,
+                                    EtaAngleType eta_tuple) const
+  {
+    using std::cos, std::sin, std::pow, std::log;
+
+    // Compute the normal
+    auto   gamma = get<0>(gamma_tuple);
+    auto   eta   = get<0>(eta_tuple);
+    tensor normal{{cos(gamma) * cos(eta), sin(gamma) * cos(eta), 0.0 * gamma + sin(eta)}};
+
+    // Get order parameters
+    auto   St = get<0>(inst_order_param_tuple);
+    const double S0 = initial_order_param_;
+    const double mu   = shear_mod_;
+    const double bulk = bulk_mod_;
+    const double omega = omega_param_;
+
+    // Kinematics
+    auto I    = Identity<dim>();
+    auto F    = displacement_grad + I;
+    auto Finv = inv(F);
+    auto J    = det(F);
+    auto Fbar = pow(J, -1.0/3.0) * F;
+    auto FbarInv = inv(Fbar);
+    auto Cbar = dot(transpose(Fbar), Fbar);
+
+  // Compute partial derivatives of strain energy wrt Cbar
+    auto dWLCEdCbar_1 = mu/2.0*(1.0-S0)/(1.0-St) * I;
+    auto dWLCEdCbar_2 = mu/2.0*((3.0*S0)/(1.0+2.0*St) - omega) * outer(normal, normal);
+    auto dWLCEdCbar_3 = -mu/2.0*((3.0*St)*(1.0-S0)/(1.0-St)/(1.0+2.0*St) - omega) / dot(normal, dot(Cbar,normal)) * 
+                    ( outer(normal, dot(Cbar,normal)) + 
+                      outer(dot(transpose(Cbar),normal), normal) - 
+                      inner(normal, dot(dot(Cbar,Cbar), normal)) * outer(normal, normal)/dot(normal, dot(Cbar,normal)) 
+                    );
+
+    auto dWLCEdCbar = dWLCEdCbar_1 + dWLCEdCbar_2 + dWLCEdCbar_3;
+
+    // Compute partial derivative os Cbar wrt strain
+    auto dCbardF = make_tensor<3, 3, 3, 3>([&](auto i, auto j, auto m, auto n) {
+        return pow(J, -1.0/3.0) * ( Fbar(m,j)*I(i,n) + Fbar(m,i)*I(j,n) - 2.0/3.0*Cbar(i,j)*FbarInv(n,m));
+      });
+
+    // Compute strain energy derivatives wrt strain (PK stress)
+    auto dWLCEdF = make_tensor<3, 3>([&](auto m, auto n) {
+        auto temp = 0.0 * dWLCEdCbar(0,0) * dCbardF(0,0,0,0);
+        for ( int i=0; i<3; i++)
+          for ( int j=0; j<3; j++) {
+            temp = temp + dWLCEdCbar(i,j) * dCbardF(i,j,m,n); 
+          }
+        return temp;
+      });
+
+    // Compute incompressibility component
+    auto dWIncdF = bulk*log(J)*transpose(Finv) + 0.0*dWLCEdF ;
+
+    // Compute total dW/dF
+    auto dWdF  = dWLCEdF + dWIncdF;
+
+    // Transform from first Piola-Kirchhoff (dWdF) to Cauchy stress
+    return 1.0 / J * dWdF* transpose(F);
+  }
+
+  /// -------------------------------------------------------
+
+  /**
+   * @brief Compute the strain energy
+   *
+   * @tparam DispGradType Type of the displacement gradient
+   * @tparam orderParamType Type of order parameter (level of alignment)
+   * @tparam GammaAngleType Type of the in-plane angle
+   * @tparam EtaAngleType Type of the out-of-plane angle
+   *
+   * @param[in] displacement_grad Displacement gradient
+   * @param[in] inst_order_param_tuple Instantaneous order parameter
+   * @param[in] gamma_tuple In-plane angle of alignment of liquid crystal in elastomer matrix
+   * @param[in] eta_tuple Out-of-plane angle of alignment of liquid crystal in elastomer matrix
+   *
+   * @return strain energy
+   */
+  template <typename DispGradType, typename orderParamType, typename GammaAngleType, typename EtaAngleType>
+  auto calculateStrainEnergy(const State& /*state*/, const tensor<DispGradType, dim, dim>& displacement_grad,
+                             orderParamType inst_order_param_tuple, GammaAngleType gamma_tuple,
+                             EtaAngleType eta_tuple) const
+  {
+    using std::cos, std::sin, std::pow, std::log;
+
+    // Compute the normal
+    auto   gamma = get<0>(gamma_tuple);
+    auto   eta   = get<0>(eta_tuple);
+    tensor normal{{cos(gamma) * cos(eta), sin(gamma) * cos(eta), 0.0 * gamma + sin(eta)}};
+
+    // Get order parameters
+    auto   St = get<0>(inst_order_param_tuple);
+    const double S0 = initial_order_param_;
+    const double mu   = shear_mod_;
+    const double bulk = bulk_mod_;
+    const double omega = omega_param_;
+
+    // kinematics
+    auto I    = Identity<dim>();
+    auto F    = displacement_grad + I;
+    auto J    = det(F);
+    auto Fbar = pow(J, -1.0/3.0) * F;
+    auto Cbar = dot(transpose(Fbar), Fbar);
+
+    // Compute the strain_energy
+    auto W_1 = mu/2.0 * ( (1.0-S0)/(1.0-St) * tr(Cbar) + 0.0*inner(normal, dot(Cbar,normal)) );
+    auto W_2 = mu/2.0 * ( (3.0*S0)/(1.0+2.0*St) - omega ) * inner(normal, dot(Cbar,normal));
+    auto W_3 = -mu/2.0 * ((3.0*St)*(1.0-S0)/(1.0-St)/(1.0+2.0*St) - omega) * 
+                    ( inner(normal, dot(dot(Cbar,Cbar), normal)) / inner(normal, dot(Cbar,normal)) );
+    auto W_Inc = bulk/2.0*log(J)*log(J) + 0.0*W_2 ;
+
+    auto W = W_1 + W_2 + W_3 + W_Inc;
+
+    return W;
+  }
+
+  double density;               ///<  mass density
+  double shear_mod_;            ///< Shear modulus in stress-free configuration
+  double initial_order_param_;  ///< initial value of order parameter
+  double omega_param_;          ///< Degree of coupling between elastic and nematic energies
+  double bulk_mod_;             ///< Bulk modulus in stress-free configuration
+};
 }  // namespace serac
