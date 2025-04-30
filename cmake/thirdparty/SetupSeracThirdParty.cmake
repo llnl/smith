@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -41,7 +41,10 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     # Create global variable to toggle between GPU targets
     #------------------------------------------------------------------------------
     if(SERAC_ENABLE_CUDA)
-        set(serac_device_depends blt::cuda CACHE STRING "" FORCE)
+        # CUDAToolkit required to find cublasLt library
+        # Can be removed once this BLT PR is merged https://github.com/LLNL/blt/pull/585 (?)
+        find_package(CUDAToolkit REQUIRED)
+        set(serac_device_depends blt::cuda CUDA::cublasLt CACHE STRING "" FORCE)
     elseif(SERAC_ENABLE_HIP)
         set(serac_device_depends blt::hip CACHE STRING "" FORCE)
     else()
@@ -227,6 +230,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         # We don't use MFEM's Conduit/Axom support
         set(MFEM_USE_CONDUIT OFF CACHE BOOL "")
         set(MFEM_USE_CUDA ${SERAC_ENABLE_CUDA} CACHE BOOL "")
+        set(MFEM_USE_HIP ${SERAC_ENABLE_HIP} CACHE BOOL "")
         set(MFEM_USE_LAPACK ON CACHE BOOL "")
         # mfem+mpi requires metis
         set(MFEM_USE_METIS ${SERAC_ENABLE_MPI} CACHE BOOL "")
@@ -269,6 +273,14 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         if(STRUMPACK_DIR)
             serac_assert_is_directory(DIR_VARIABLE STRUMPACK_DIR)
             set(MFEM_USE_STRUMPACK ON CACHE BOOL "")
+            # Since we manually find strumpack before MFEM, we must manually find hip-related packages
+            if (SERAC_ENABLE_HIP)
+                find_package(hipblas REQUIRED)
+                find_package(rocblas REQUIRED)
+                find_package(rocsolver REQUIRED)
+                find_package(hipsparse REQUIRED)
+                find_package(rocthrust REQUIRED)
+            endif()
             find_dependency(strumpack CONFIG
                             PATHS "${STRUMPACK_DIR}"
                                   "${STRUMPACK_DIR}/lib/cmake/STRUMPACK"
