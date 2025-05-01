@@ -36,8 +36,10 @@ TEST(FiniteELementDual, MoveAssignment)
 
     FiniteElementDual dual1(*mesh, H1<1>{}, "dual1");
     dual1 = std::move(dual0);
-    EXPECT_EQ(dual1(0), 1.0);
-    dual1.Print();
+    for (const mfem::real_t* d = dual1.begin(); d != dual1.end(); ++d)
+    {
+      EXPECT_EQ(*d, 1.0);
+    }
 }
 
  } // namespace serac
