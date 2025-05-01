@@ -8,43 +8,44 @@
  * @file test_finite_element_staet.cpp
  */
 
- #include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
 
- #include "axom/slic/core/SimpleLogger.hpp"
- #include <gtest/gtest.h>
- #include "mfem.hpp"
- 
- #include "serac/mesh/mesh_utils.hpp"
- #include "serac/numerics/functional/tensor.hpp"
- #include "serac/infrastructure/application_manager.hpp"
- 
- namespace serac {
+#include "axom/slic/core/SimpleLogger.hpp"
+#include <gtest/gtest.h>
+#include "mfem.hpp"
+
+#include "serac/mesh/mesh_utils.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/infrastructure/application_manager.hpp"
+
+namespace serac {
 
 TEST(FiniteELementDual, MoveAssignment)
 {
-    int serial_refinement = 0;
-    int parallel_refinement = 0;
-    constexpr int spatial_dim{3};
+  /* Check that move assignment operator does deep copy of values */
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
+  constexpr int spatial_dim{3};
 
-    std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
-    std::unique_ptr<mfem::ParMesh> mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-    ASSERT_EQ(spatial_dim, mesh->SpaceDimension())
-        << "Test configured incorrectly. The variable spatial_dim must match the spatial dimension of the mesh.";
+  std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
+  std::unique_ptr<mfem::ParMesh> mesh =
+      mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
+  ASSERT_EQ(spatial_dim, mesh->SpaceDimension())
+      << "Test configured incorrectly. The variable spatial_dim must match the spatial dimension of the mesh.";
 
-    FiniteElementDual dual0(*mesh, H1<1>{}, "dual0");
-    dual0 = 1.0;
+  FiniteElementDual dual0(*mesh, H1<1>{}, "dual0");
+  dual0 = 1.0;
 
-    FiniteElementDual dual1(*mesh, H1<1>{}, "dual1");
-    dual1 = std::move(dual0);
-    for (const mfem::real_t* d = dual1.begin(); d != dual1.end(); ++d)
-    {
-      EXPECT_EQ(*d, 1.0);
-    }
+  FiniteElementDual dual1(*mesh, H1<1>{}, "dual1");
+  dual1 = std::move(dual0);
+  for (const mfem::real_t* d = dual1.begin(); d != dual1.end(); ++d) {
+    EXPECT_EQ(*d, 1.0);
+  }
 }
 
- } // namespace serac
+}  // namespace serac
 
- int main(int argc, char* argv[])
+int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   serac::ApplicationManager applicationManager(argc, argv);
