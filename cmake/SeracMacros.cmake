@@ -218,3 +218,92 @@ macro(serac_configure_file _source _target)
     execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_tmp_target} ${_target})
     execute_process(COMMAND ${CMAKE_COMMAND} -E remove ${_tmp_target})
 endmacro(serac_configure_file)
+
+##------------------------------------------------------------------------------
+## serac_remove_string_prefix
+##
+## This function removes a string prefix from a given string.
+##
+## PREFIX - String prefix to be removed
+## INPUT - The name of the unified header.
+## OUTPUT_VAR - Headers to be included in the header.
+##
+##------------------------------------------------------------------------------
+function(serac_remove_string_prefix PREFIX INPUT OUTPUT_VAR)
+    string(LENGTH "${PREFIX}" PREFIX_LEN)
+    string(SUBSTRING "${INPUT}" 0 ${PREFIX_LEN} _actual_prefix)
+
+    if(_actual_prefix STREQUAL "${PREFIX}")
+        string(REPLACE "${PREFIX}" "" STRIPPED_PATH "${INPUT}")
+        set(${OUTPUT_VAR} "${STRIPPED_PATH}" PARENT_SCOPE)
+    else()
+        set(${OUTPUT_VAR} "${INPUT}" PARENT_SCOPE)
+    endif()
+endfunction()
+
+
+##------------------------------------------------------------------------------
+## serac_write_unified_header
+##
+## This macro writes the unified header (<lowered PROJECT_NAME/<lowered NAME>.hpp)
+## to the build directory for the given NAME with the given HEADERS included
+## inside of it.
+##
+## NAME - The name of the unified header.
+## HEADERS - Headers to be included in the header.
+##
+##------------------------------------------------------------------------------
+# List to hold all unified headers to be later used to create a master unified header
+set(_serac_unified_headers)
+macro(serac_write_unified_header)
+
+    set(options )
+    set(singleValueArgs NAME)
+    set(multiValueArgs HEADERS EXCLUDE)
+
+    # Parse the arguments to the macro
+    cmake_parse_arguments(arg
+         "${options}" "${singleValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    string(TOUPPER ${arg_NAME} _ucname)
+    string(TOLOWER ${arg_NAME} _lcname)
+    string(TOLOWER ${PROJECT_NAME} _project_name)
+    set(_header ${PROJECT_BINARY_DIR}/include/${_project_name}/${_lcname}.hpp)
+    set(_tmp_header ${_header}.tmp)
+
+    file(WRITE ${_tmp_header} "\/\/ Copyright Lawrence Livermore National Security, LLC and
+\/\/ other Serac Project Developers. See the top-level LICENSE file for details.
+\/\/
+\/\/ SPDX-License-Identifier: (BSD-3-Clause)
+\n
+")
+
+    file(APPEND ${_tmp_header} "#pragma once\n\n")
+
+    file(APPEND ${_tmp_header} "#include \"${_project_name}\/${_project_name}_config.hpp\"\n\n")
+
+    foreach(_file ${arg_HEADERS})
+        if(${_file} IN_LIST arg_EXCLUDE)
+            continue()
+        elseif(${_headerPath} MATCHES "(\/detail\/)|(\/internal\/)")
+            continue()
+        else()
+            set(_headerPath)
+            serac_remove_string_prefix("${PROJECT_BINARY_DIR}\/" "${_file}" _headerPath)
+            serac_remove_string_prefix("include\/${_project_name}\/${arg_NAME}\/" "${_headerPath}" _headerPath)
+            set(_headerPath "${_project_name}\/${_lcname}\/${_headerPath}")
+            file(APPEND ${_tmp_header} "#include \"${_headerPath}\"\n")
+        endif()
+    endforeach()
+
+    file(APPEND ${_tmp_header} "\n")
+
+    execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_tmp_header} ${_header})
+    execute_process(COMMAND ${CMAKE_COMMAND} -E remove ${_tmp_header})
+
+    install(FILES       ${_header}
+            DESTINATION include/${_project_name})
+
+    list(APPEND _serac_unified_headers "include\/${_project_name}\/${_header}")
+
+endmacro(serac_write_unified_header)

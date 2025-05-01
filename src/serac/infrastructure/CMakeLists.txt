@@ -58,6 +58,10 @@ blt_add_library(
 # Set file back to C++ due to nvcc compiler error
 set_source_files_properties(input.cpp PROPERTIES LANGUAGE CXX)
 
+serac_write_unified_header(
+    NAME infrastructure
+    HEADERS ${infrastructure_headers}
+    )
 target_include_directories(serac_infrastructure PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
     $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
