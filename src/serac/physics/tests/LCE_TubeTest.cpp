@@ -32,63 +32,62 @@ int main(int argc, char* argv[])
 
   // Create DataStore
   axom::sidre::DataStore datastore;
-  serac::StateManager::initialize(datastore, "LCE_free_swelling_zhang");
+  serac::StateManager::initialize(datastore, "LCE_ActiveInactiveTest2");
 
   // Construct the appropriate dimension mesh and give it to the data store
-  int nElem = 5;
-  double lx = (15.8356e-3)/2, lz = (3.25e-3)/2, ly = (0.34e-3);
-  ::mfem::Mesh cuboid =
-      // mfem::Mesh(mfem::Mesh::MakeCartesian3D(20 * nElem, 10 * nElem, nElem, mfem::Element::HEXAHEDRON, lx, ly, lz));
-      mfem::Mesh(mfem::Mesh::MakeCartesian3D(50 * nElem, 1 * nElem, 10 *nElem, mfem::Element::HEXAHEDRON, lx, ly, lz));
-  auto mesh = mesh::refineAndDistribute(std::move(cuboid), serial_refinement, parallel_refinement);
+  auto inputFileName = "../../tests/TubeLCE_NoSplit.g"; 
+  auto meshInput = serac::buildMeshFromFile(inputFileName);
   std::string mesh_tag{"mesh"}; 
+  auto mesh = mesh::refineAndDistribute(std::move(meshInput), serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // Side set ordering for MFEM Cartesian mesh:
-  // SS-2: XY bottom plane
-  // SS-5: XZ left plane
-  // SS-6: YZ front plane
-  // SS-3: XZ right plane
-  // SS-1: YZ back plane
-  // SS-4: XY top plane
+  // SS-1: one end of the cylinder
+  // SS-2: other end of the cylinder
+  // SS-3: curved length of the cylinder
 
   // orient fibers in the beam like below:
   //
-  // y
+  // x
   //
   // ^                                             8
   // |                                             |
   // ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓-- 1
   // ┃ - - - - - - - - - - - - - - - - - - - - - - ┃
   // ┃ - - - - - - - - - - - - - - - - - - - - - - ┃
-  // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛--> x
+  // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛--> z
 
   // LinearSolverOptions linear_options = {.linear_solver = LinearSolver::SuperLU};
-  const LinearSolverOptions linear_options = {.linear_solver = LinearSolver::Strumpack, .print_level = 0};
+  const LinearSolverOptions linear_options = {.linear_solver = LinearSolver::CG,.preconditioner = Preconditioner::HypreAMG,.absolute_tol   = 1.0e-7,.max_iterations=1000, .print_level = 0};
 
-  NonlinearSolverOptions nonlinear_options = {.nonlin_solver  = serac::NonlinearSolver::Newton,
-                                              .relative_tol   = 1.0e-8,
-                                              .absolute_tol   = 1.0e-14,
-                                              .max_iterations = 1000, // changed this from 1
+  NonlinearSolverOptions nonlinear_options = {.nonlin_solver  = serac::NonlinearSolver::TrustRegion,
+                                              .relative_tol   = 1.0e-6,
+                                              .absolute_tol   = 1.0e-11,
+                                              .max_iterations = 500, // changed this from 1
                                               .print_level    = 1};
+  bool use_warm_start = false;
   SolidMechanics<p, dim, Parameters<L2<0>, L2<0>, L2<0> > > solid_solver(
       nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options, 
-      "lce_zhang_free_swelling", mesh_tag, {"orderParam", "gammaParam", "etaParam"});
+      "ActiveInactiveTest2", mesh_tag, {"orderParam", "gammaParam", "etaParam"}, 0, 0.0, false, use_warm_start);
 
   // -------------------
   // Material properties
   // -------------------
 
   double density         = 1.0;
-  double shear_mod       = 4.4762e5; // 4476171.852e-6; // 3.113e4; //  young_modulus_ / 2.0 / (1.0 + poisson_ratio_);
+  double shear_mod       = 0.1*9.9564e6;//4.4762e5; // 4476171.852e-6; // 3.113e4; //  young_modulus_ / 2.0*(1.0 + poisson_ratio_);
   double ini_order_param = 0.535; // 0.28544; //   0.40;
   double min_order_param = 0.00001; // ini_order_param; //
   double omega_param     = 0.12531; // 0.1151; // 1.0e2;
-  double bulk_mod        = 1.0e1*shear_mod; 
+  double bulk_mod        = 4.945e8;//1.0e1*shear_mod; // K = (E/3*(1-2v)), E = 29.67 MPa, v = 0.49 
   // -------------------
 
   // Set material
   LiquidCrystalElastomerZhang lceMat(density, shear_mod, ini_order_param, omega_param, bulk_mod);
+  serac::solid_mechanics::NeoHookean regularMat;
+  regularMat.density = 1; // update
+  regularMat.K = 9.5e6; // E = 0.57 MPa
+  regularMat.G = 0.1*1.9128e5; //
 
   // Parameter 1
   FiniteElementState orderParam(pmesh, L2<0>{}, "orderParam");
@@ -106,7 +105,7 @@ int main(int argc, char* argv[])
 
   // Paremetr 3
   FiniteElementState etaParam(pmesh, L2<0>{}, "etaParam");
-  auto                      etaFunc = [](const mfem::Vector& /*x*/, double) -> double { return 0.0; };
+  auto                      etaFunc = [](const mfem::Vector& /*x*/, double) -> double { return 1.5708; };
   mfem::FunctionCoefficient etaCoef(etaFunc);
   etaParam.project(etaCoef);
 
@@ -119,54 +118,61 @@ int main(int argc, char* argv[])
   solid_solver.setParameter(GAMMA_INDEX, gammaParam);
   solid_solver.setParameter(ETA_INDEX, etaParam);
 
-  // this was adjusted to include the domain as an input
+  // Material domains and material setting
   serac::Domain whole_domain = serac::EntireDomain(pmesh);
-  solid_solver.setMaterial(DependsOn<ORDER_INDEX, GAMMA_INDEX, ETA_INDEX>{}, lceMat, whole_domain);
 
-  // Boundary conditions domains, I added this to comply with new setDisplacementBC format
-  auto BCBotDomain = ::serac::Domain::ofBoundaryElements(pmesh, ::serac::by_attr<dim>(2)); 
-  auto BCLeftDomain = ::serac::Domain::ofBoundaryElements(pmesh, ::serac::by_attr<dim>(5)); 
-  auto BCBackDomain = ::serac::Domain::ofBoundaryElements(pmesh, ::serac::by_attr<dim>(1)); 
-  auto BCRightDomain = ::serac::Domain::ofBoundaryElements(pmesh, ::serac::by_attr<dim>(3)); 
+  auto ActiveMat = serac::Domain::ofElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    return average(vertices)[1] > 0.0;  
+  }));
+  auto NonActiveMat = serac::Domain::ofElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    return average(vertices)[1] < 0.0;  
+  }));
+  //auto SmallEndRegion = serac::Domain::ofElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+  //  return average(vertices)[2] < -24.99;  
+  //}));
 
-  // Prescribe zero displacement at the supported end of the beam - updated this syntax
-  solid_solver.setDisplacementBCs([=](auto, auto) { 
-    tensor<double, dim> u{};
-    u[1] = 0; 
-    return u; }, BCBotDomain, serac::Component::Y);  // bottom face y-dir disp = 0
+  solid_solver.setMaterial(DependsOn<ORDER_INDEX, GAMMA_INDEX, ETA_INDEX>{}, lceMat, ActiveMat);
+  solid_solver.setMaterial(DependsOn<>{}, regularMat, NonActiveMat);
+
+  // Boundary conditions domains
+  auto BCOneEndDomain = ::serac::Domain::ofBoundaryElements(pmesh, ::serac::by_attr<dim>(1)); 
+  auto BCOtherEndDomain = ::serac::Domain::ofBoundaryElements(pmesh, ::serac::by_attr<dim>(2)); 
+
+  // Prescribe zero displacement at the supported end of the beam
   solid_solver.setDisplacementBCs([=](auto, auto) { 
     tensor<double, dim> u{}; 
-    u[0] = 0; 
-    return u; }, BCLeftDomain, serac::Component::X);  // left face x-dir disp = 0
+    u[0] = 0;
+    u[1] = 0;
+    u[2] = 0; 
+    return u; }, BCOneEndDomain);  // serac::Component::
   solid_solver.setDisplacementBCs([=](auto, auto) { 
-    tensor<double, dim> u{};
-    u[2] = 0;  
-    return u; }, BCBackDomain, serac::Component::Z);  // back face z-dir disp = 0
+    tensor<double, dim> u{}; 
+    u[1] = 0.00001;
+    return u; }, BCOtherEndDomain, serac::Component::Y); 
 
-  // set global initial displacement as a field function - updated this syntax
+
+  // set global initial displacement as a field function - not currently using this, but leaving it as an option
+  /*
   auto applied_displacement = [](tensor<double, dim> x, double) {
     tensor<double, dim> u{};
-    u[0] = 0.0001 * x[0];
-    u[1] = 0.0001 * x[1];
-    u[2] = 0.0001 * x[2];
+    u[0] = 0.00001 * x[0];
+    u[1] = 0.00001 * x[1];
+    u[2] = 0.00001 * x[2];
     return u;
   };
-
   solid_solver.setDisplacement(
-    [applied_displacement](tensor<double, dim> X) { return applied_displacement(X, 0.0); });
+    [applied_displacement](tensor<double, dim> X) { return applied_displacement(X, 0.0); });*/
 
-  // set traction, updated this syntax - removing this does not fix the solver problem
+  // set traction - not currently using this, but leaving it as an option
   double loadVal = 0.0e5;
+  /*
   solid_solver.setTraction(
-    [&loadVal, &lx](auto x, auto, auto) {
+    [&loadVal](auto x, auto, auto) {
       auto t = 0.0 * x;
-      t[0] += loadVal * (x[0] > 0.975 * lx);
+      t[0] += loadVal;
       return t;
     },
-    BCRightDomain); 
- // solid_solver.setTraction([&loadVal, lx](auto x, auto /*n*/, auto /*t*/) {
- //   return tensor<double, 3>{loadVal * (x[0] > 0.975 * lx), 0.0, 0.0};
- // });
+    BCRightDomain); */
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -234,19 +240,17 @@ int main(int argc, char* argv[])
     MPI_Allreduce(&lclDispZmin, &gblDispZmin, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
     MPI_Allreduce(&lclDispZmax, &gblDispZmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 
-
+/*
     std::cout << "\n... Entering time step: " << i + 1 << "\n... At time: " << t
               << "\n... Min X displacement: " << gblDispXmin
               << "\n... Max X displacement: " << gblDispXmax
               << "\n... Min Y displacement: " << gblDispYmin
               << "\n... Max Y displacement: " << gblDispYmax
               << "\n... Min Z displacement: " << gblDispZmin
-              << "\n... Max Z displacement: " << gblDispZmax << std::endl;
+              << "\n... Max Z displacement: " << gblDispZmax << std::endl;*/
 
     if (std::isnan(dispVecX.Max()) || std::isnan(-1 * dispVecX.Max())) {
-      //if (rank == 0) {
         std::cout << "... Solution blew up... Check boundary and initial conditions." << std::endl;
-     // }
       exit(1);
     }
   }
