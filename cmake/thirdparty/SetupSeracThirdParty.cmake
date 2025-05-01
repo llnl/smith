@@ -58,9 +58,10 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
       message(STATUS "Setting up external Enzyme TPL...")
     
       set(Enzyme_DIR ${ENZYME_DIR})
+      set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
       find_dependency(Enzyme REQUIRED PATHS "${ENZYME_DIR}")
     
-      set(TRIBOL_USE_ENZYME TRUE)
+      set(SERAC_USE_ENZYME TRUE)
     else()
       message(STATUS "Enzyme support is OFF")
     endif()
