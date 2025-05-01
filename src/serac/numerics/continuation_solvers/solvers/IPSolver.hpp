@@ -30,16 +30,17 @@ protected:
     double thx0, thxtrial;
     double phx0, phxtrial;
     bool descentDirection, switchCondition, sufficientDecrease, lineSearchSuccess, inFilterRegion;
-    double Dxphi0_xhat;
 
     int dimU, dimM, dimC;
     int dimUGlb, dimMGlb, dimCGlb;
     Array<int> block_offsetsumlz, block_offsetsuml, block_offsetsx;
     Vector ml;
 
-    Vector ckSoc;
     HypreParMatrix * Huu, * Hum, * Hmu, * Hmm, * Wmm, *D, * Ju, * Jm, * JuT, * JmT;
     
+
+    Solver * linSolver;
+
     int jOpt;
     bool converged;
     
@@ -55,12 +56,6 @@ protected:
     bool initializedl;
     bool initializedzl;
     Vector minit, linit, zlinit;
-    int linSolver;
-    double linSolveTol;
-    std::ofstream IPNewtonKrylovIters;
-    std::ofstream muStream;
-    std::ofstream optHistory_mu;
-    std::ofstream optHistory_0;
 public:
     ParInteriorPointSolver(ParGeneralOptProblem*);
     double MaxStepSize(Vector& , Vector& , Vector& , double);
@@ -69,14 +64,13 @@ public:
     void Mult(const Vector&, Vector &); 
     void GetLagrangeMultiplier(Vector &);
     void FormIPNewtonMat(BlockVector& , Vector& , Vector& , BlockOperator &);
-    void IPNewtonSolve(BlockVector& , Vector& , Vector& , Vector&, BlockVector& , double, bool);
+    void IPNewtonSolve(BlockVector& , Vector& , Vector& , Vector&, BlockVector& , double);
     void lineSearch(BlockVector& , BlockVector& , double);
     void projectZ(const Vector & , Vector &, double);
     void filterCheck(double, double);
     double E(const BlockVector &, const Vector &, const Vector &, double, bool);
     double E(const BlockVector &, const Vector &, const Vector &, bool);
     bool GetConverged() const;
-    // TO DO: include Hessian of Lagrangian
     double theta(const BlockVector &, int &);
     double phi(const BlockVector &, double, int &);
     double theta(const BlockVector &);
@@ -88,9 +82,6 @@ public:
     void SetMaxIter(int);
     void SetBarrierParameter(double);
     void GetNumIterations(int &);    
-    void SaveLogBarrierHessianIterates(bool);
-    void SetLinearSolver(int);
-    void SetLinearSolveTol(double);
     void InitializeM(Vector &);
     void InitializeL(Vector &);
     void InitializeZl(Vector &);
@@ -99,7 +90,8 @@ public:
     void GetLogBarrierL(Vector &);
     void GetLogBarrierZl(Vector &);
     void GetLogBarrierMu(double &);
-    void SetLogBarrierMu(double);
+    void SetLogBarrierMu(double &);
+    void SetLinearSolver(Solver &);
     virtual ~ParInteriorPointSolver();
 };
 

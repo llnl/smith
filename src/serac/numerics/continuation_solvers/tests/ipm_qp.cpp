@@ -13,13 +13,7 @@
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-//#include "serac/mesh/mesh_utils_base.hpp"
-//#include "serac/numerics/functional/functional.hpp"
-//#include "serac/numerics/functional/shape_aware_functional.hpp"
-//#include "serac/numerics/functional/tensor.hpp"
 #include "serac/infrastructure/profiling.hpp"
-//
-//#include "serac/numerics/functional/tests/check_gradient.hpp"
 
 #include "serac/numerics/continuation_solvers/problems/Problems.hpp"
 #include "serac/numerics/continuation_solvers/solvers/IPSolver.hpp"
@@ -71,6 +65,14 @@ TEST(InteriorPointMethod, QuadraticProgramming)
    QPTestProblem problem(n);
 
    ParInteriorPointSolver solver(&problem);
+   GMRESSolver linSolver(MPI_COMM_WORLD);
+   linSolver.SetRelTol(1.e-10);
+   linSolver.SetMaxIter(1000);
+   linSolver.SetPrintLevel(2);
+   solver.SetLinearSolver(linSolver);
+
+
+
 
    int dimx = problem.GetDimU();
    Vector x0(dimx); x0 = 0.0;
@@ -134,7 +136,6 @@ QPTestProblem::QPTestProblem(int n) : ParOptProblem(),
 
   Vector temp(dimU); temp = 1.0;
   d2Edu2 = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
-  // deep copy?
   dgdu = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
   
   
