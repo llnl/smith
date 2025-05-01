@@ -422,6 +422,7 @@ void ParInteriorPointSolver::IPNewtonSolve(BlockVector &x, Vector &l, Vector &zl
    b *= -1.0; 
    Xhat = 0.0;
 
+   MFEM_VERIFY(linSolver, "linear solver has not been set");
    linSolver->SetOperator(A);
    linSolver->Mult(b, Xhat);
    
