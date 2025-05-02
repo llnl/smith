@@ -36,8 +36,8 @@ TEST(FiniteELementDual, MoveAssignment)
   FiniteElementDual dual0(*mesh, H1<1>{}, "dual0");
   dual0 = 1.0;
 
-  FiniteElementDual dual1(*mesh, H1<1>{}, "dual1");
-  dual1 = std::move(dual0);
+  FiniteElementDual dual1 = std::move(dual0);
+
   for (const mfem::real_t* d = dual1.begin(); d != dual1.end(); ++d) {
     EXPECT_EQ(*d, 1.0);
   }
