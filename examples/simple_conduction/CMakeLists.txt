@@ -7,7 +7,7 @@
 blt_add_executable( NAME        simple_conduction_without_input_file
                     SOURCES     without_input_file.cpp
                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                    DEPENDS_ON  serac_physics serac_mesh serac_functional
+                    DEPENDS_ON  serac_physics
                     )
 
 install(

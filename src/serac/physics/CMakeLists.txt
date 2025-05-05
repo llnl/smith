@@ -8,10 +8,10 @@ add_subdirectory(materials)
 add_subdirectory(state)
 add_subdirectory(boundary_conditions)
 add_subdirectory(contact)
+add_subdirectory(mesh)
 
 set(physics_sources
     base_physics.cpp
-    mesh.cpp
     solid_mechanics.cpp
     heat_transfer_input.cpp
     solid_mechanics_input.cpp
@@ -21,7 +21,6 @@ set(physics_sources
 set(physics_headers
     base_physics.hpp
     common.hpp
-    mesh.hpp
     fit.hpp
     heat_transfer.hpp
     heat_transfer_input.hpp
@@ -44,6 +43,7 @@ set(physics_depends
     serac_contact
     serac_numerics
     serac_physics_materials
+    serac_mesh
     )
 
 blt_add_library(

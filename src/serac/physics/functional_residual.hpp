@@ -14,7 +14,7 @@
 #pragma once
 
 #include "serac/physics/residual.hpp"
-#include "serac/physics/mesh.hpp"
+#include "serac/physics/mesh/mesh.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"

@@ -4,8 +4,8 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/mesh.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/physics/mesh/mesh.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/numerics/functional/domain.hpp"
 

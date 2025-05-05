@@ -4,16 +4,17 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+# Serac MFEM Mesh Wrapper
+
 set(mesh_headers
-    mesh_utils.hpp
-    mesh_utils_base.hpp
+    mesh.hpp
     )
 
 set(mesh_sources
-    mesh_utils.cpp
+    mesh.cpp
     )
 
-set(mesh_depends serac_infrastructure)
+set(mesh_depends serac_functional serac_state serac_mesh_utils)
 
 blt_add_library(
     NAME        serac_mesh
@@ -22,13 +23,9 @@ blt_add_library(
     DEPENDS_ON  ${mesh_depends}
     )
 
-install(FILES ${mesh_headers} DESTINATION include/serac/mesh )
+install(FILES ${mesh_headers} DESTINATION include/serac/physics/mesh)
 
 install(TARGETS              serac_mesh
         EXPORT               serac-targets
         DESTINATION          lib
         )
-
-if(SERAC_ENABLE_TESTS)
-    add_subdirectory(tests)
-endif()

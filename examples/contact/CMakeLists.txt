@@ -18,7 +18,7 @@ if(TRIBOL_FOUND)
         blt_add_executable(NAME        contact_${example_name}
                            SOURCES     ${filename}
                            OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
-                           DEPENDS_ON  serac_physics serac_mesh)
+                           DEPENDS_ON  serac_physics)
 
         blt_add_test(NAME            contact_${example_name}
                      COMMAND         contact_${example_name}

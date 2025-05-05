@@ -10,9 +10,9 @@
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/materials/solid_material.hpp"
-#include "serac/physics/mesh.hpp"
+#include "serac/physics/mesh/mesh.hpp"
 #include "serac/physics/common.hpp"
 #include "mfem.hpp"
 #include "serac/physics/tests/physics_test_utils.hpp"
