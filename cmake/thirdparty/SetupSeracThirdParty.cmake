@@ -52,20 +52,6 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
     #------------------------------------------------------------------------------
-    # Enzyme
-    #------------------------------------------------------------------------------
-    if (ENZYME_DIR)
-      message(STATUS "Setting up external Enzyme TPL...")
-    
-      set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
-      find_dependency(Enzyme REQUIRED)
-    
-      set(SERAC_USE_ENZYME TRUE)
-    else()
-      message(STATUS "Enzyme support is OFF")
-    endif()
-
-    #------------------------------------------------------------------------------
     # Camp
     #------------------------------------------------------------------------------
     if (NOT CAMP_DIR)
@@ -481,6 +467,25 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         blt_convert_to_system_includes(TARGET core)
 
         set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
+    endif()
+
+    #------------------------------------------------------------------------------
+    # Enzyme (used by Tribol)
+    #------------------------------------------------------------------------------
+    if (ENZYME_DIR)
+        serac_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
+        set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
+        find_dependency(Enzyme REQUIRED)
+
+        serac_assert_find_succeeded(PROJECT_NAME Enzyme
+                                    TARGET       LLDEnzymeFlags
+                                    DIR_VARIABLE ENZYME_DIR)
+
+        message(STATUS "Enzyme support is ON")
+        set(ENZYME_FOUND TRUE)
+    else()
+        message(STATUS "Enzyme support is OFF")
+        set(ENZYME_FOUND FALSE)
     endif()
 
     #------------------------------------------------------------------------------

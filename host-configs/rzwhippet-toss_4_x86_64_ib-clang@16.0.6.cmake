@@ -115,6 +115,8 @@ set(UMPIRE_DIR "${TPL_ROOT}/umpire-2024.07.0-fx6257o7ldlbhpyukdppjxxy6kuyicxo" C
 
 set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.18-6st2422xix7ursdm56p4r23tx3kiv7ka" CACHE PATH "")
 
+set(ENZYME_DIR "/usr/WS2/smithdev/toss_4_x86_64_ib/enzyme/2025-01-30" CACHE PATH "")
+
 #------------------------------------------------------------------------------
 # Devtools
 #------------------------------------------------------------------------------
@@ -134,5 +136,7 @@ set(SPHINX_EXECUTABLE "${DEVTOOLS_ROOT}/python-3.11.7/bin/sphinx-build" CACHE PA
 set(CPPCHECK_EXECUTABLE "${DEVTOOLS_ROOT}/cppcheck-2.9/bin/cppcheck" CACHE PATH "")
 
 set(DOXYGEN_EXECUTABLE "${DEVTOOLS_ROOT}/doxygen-1.9.8/bin/doxygen" CACHE PATH "")
+
+set(SERAC_ENABLE_CODEVELOP ON CACHE BOOL "")
 
 
