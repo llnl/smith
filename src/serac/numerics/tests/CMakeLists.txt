@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-set(numerics_test_dependencies serac_numerics serac_boundary_conditions serac_mesh gtest)
+set(numerics_test_dependencies serac_physics gtest)
 
 set(numerics_serial_test_sources
     equationsolver.cpp

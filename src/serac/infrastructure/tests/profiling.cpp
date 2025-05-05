@@ -15,7 +15,7 @@
 #include "serac/infrastructure/cli.hpp"
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/physics/mesh/mesh.hpp"
+#include "serac/physics/mesh.hpp"
 
 namespace serac {
 
