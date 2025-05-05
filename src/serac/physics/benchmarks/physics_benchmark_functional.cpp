@@ -12,6 +12,7 @@
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/heat_transfer.hpp"
@@ -29,14 +30,11 @@ void functional_test(int parallel_refinement)
   std::string filename =
       (dim == 2) ? SERAC_REPO_DIR "/data/meshes/star.mesh" : SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
-  auto mesh =
-      serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), serial_refinement, parallel_refinement);
+  auto mesh = std::make_shared<serac::Mesh>(filename, "mesh_tag", serial_refinement, parallel_refinement);
 
   // Create standard MFEM bilinear and linear forms on H1
   using space = serac::H1<p, components>;
-  auto [fespace, fec] = serac::generateParFiniteElementSpace<space>(mesh.get());
-
-  serac::Domain whole_domain = serac::EntireDomain(*mesh);
+  auto [fespace, fec] = serac::generateParFiniteElementSpace<space>(&mesh->mfemParMesh());
 
   serac::Functional<space(space)> residual(fespace.get(), {fespace.get()});
 
@@ -48,7 +46,7 @@ void functional_test(int parallel_refinement)
         auto [u, du_dx] = phi;
         return serac::tuple{u, du_dx};
       },
-      whole_domain);
+      mesh->entireBody());
 
   // Set a random state to evaluate the residual
   mfem::ParGridFunction u_global(fespace.get());
