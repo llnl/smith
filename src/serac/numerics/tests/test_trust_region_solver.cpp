@@ -39,9 +39,7 @@ struct MeshFixture : public testing::Test {
     double length = 0.5;
     double width = 2.0;
 
-    mesh = std::make_shared<serac::Mesh>(
-      mfem::Mesh::MakeCartesian2D(2, 1, mfem_shape, true, length, width),
-      MESHTAG);
+    mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(2, 1, mfem_shape, true, length, width), MESHTAG);
   }
 
   axom::sidre::DataStore datastore;

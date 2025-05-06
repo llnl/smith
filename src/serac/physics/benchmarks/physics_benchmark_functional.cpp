@@ -30,11 +30,14 @@ void functional_test(int parallel_refinement)
   std::string filename =
       (dim == 2) ? SERAC_REPO_DIR "/data/meshes/star.mesh" : SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
-  auto mesh = std::make_shared<serac::Mesh>(filename, "mesh_tag", serial_refinement, parallel_refinement);
+  ::axom::sidre::DataStore datastore;
+  ::serac::StateManager::initialize(datastore, "sidreDataStore");
+
+  auto pmesh = std::make_shared<serac::Mesh>(filename, "mesh_tag", serial_refinement, parallel_refinement);
 
   // Create standard MFEM bilinear and linear forms on H1
   using space = serac::H1<p, components>;
-  auto [fespace, fec] = serac::generateParFiniteElementSpace<space>(&mesh->mfemParMesh());
+  auto [fespace, fec] = serac::generateParFiniteElementSpace<space>(&pmesh->mfemParMesh());
 
   serac::Functional<space(space)> residual(fespace.get(), {fespace.get()});
 
@@ -46,7 +49,7 @@ void functional_test(int parallel_refinement)
         auto [u, du_dx] = phi;
         return serac::tuple{u, du_dx};
       },
-      mesh->entireBody());
+      pmesh->entireBody());
 
   // Set a random state to evaluate the residual
   mfem::ParGridFunction u_global(fespace.get());

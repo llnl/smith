@@ -229,7 +229,8 @@ void functional_solid_test_euler(NonlinSolve nonlinSolve, Prec prec)
   double load = 0.002;  // 0.004
 
   std::string meshTag = "mesh";
-  auto pmesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz), meshTag, 0, 0);
+  auto pmesh = std::make_shared<serac::Mesh>(
+      mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz), meshTag, 0, 0);
 
   // solid mechanics
   using seracSolidType = serac::SolidMechanics<ORDER, DIM, serac::Parameters<>>;
@@ -245,7 +246,7 @@ void functional_solid_test_euler(NonlinSolve nonlinSolve, Prec prec)
 
   std::string backSurfaceName = "back_surface";
   std::string topSurfaceName = "top_surface";
-  pmesh->addDomainOfBoundaryElements(backSurfaceName, serac::by_attr<DIM>(3)); // 4,5 with traction makes a twist
+  pmesh->addDomainOfBoundaryElements(backSurfaceName, serac::by_attr<DIM>(3));  // 4,5 with traction makes a twist
   pmesh->addDomainOfBoundaryElements(topSurfaceName, serac::by_attr<DIM>(6));
 
   int num_time_steps = 2;
@@ -308,7 +309,8 @@ void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, 
   SERAC_MARK_FUNCTION;
 
   std::string meshTag = "mesh";
-  auto pmesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz), meshTag, 0, 0);
+  auto pmesh = std::make_shared<serac::Mesh>(
+      mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz), meshTag, 0, 0);
 
   // solid mechanics
   using seracSolidType = serac::SolidMechanics<ORDER, DIM, serac::Parameters<>>;
