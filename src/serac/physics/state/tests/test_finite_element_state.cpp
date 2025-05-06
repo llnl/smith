@@ -28,20 +28,20 @@ class TestFiniteElementState : public testing::Test {
     int parallel_refinement = 0;
 
     std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
-    mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-    ASSERT_EQ(spatial_dim, mesh->SpaceDimension())
+    mesh = std::make_shared(filename, "mesh_tag", serial_refinement, parallel_refinement);
+    ASSERT_EQ(spatial_dim, mesh->mfemParMesh().SpaceDimension())
         << "Test configured incorrectly. The variable spatial_dim must match the spatial dimension of the mesh.";
   }
 
   static constexpr int spatial_dim{3};
-  std::unique_ptr<mfem::ParMesh> mesh;
+  std::shared_ptr<serac::Mesh> mesh;
 };
 
 TEST_F(TestFiniteElementState, SetScalarStateFromFieldFunction)
 {
   // make a scalar-valued state
   constexpr int p = 1;
-  FiniteElementState scalar_state(*mesh, H1<p>{}, "scalar_field");
+  FiniteElementState scalar_state(mesh->mfemParMesh(), H1<p>{}, "scalar_field");
 
   // Set state with field function.
   // Check that lambda captures work with this.
@@ -50,7 +50,7 @@ TEST_F(TestFiniteElementState, SetScalarStateFromFieldFunction)
   scalar_state.setFromFieldFunction(scalar_field);
 
   // Get the nodal positions corresponding to state dofs in a grid function
-  auto [coords_fe_space, coords_fe_coll] = serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(mesh.get());
+  auto [coords_fe_space, coords_fe_coll] = serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(&mesh->mfemParMesh());
   mfem::ParGridFunction nodal_coords_gf(coords_fe_space.get());
   mesh->GetNodes(nodal_coords_gf);
 
@@ -74,7 +74,7 @@ TEST_F(TestFiniteElementState, SetVectorStateFromFieldFunction)
   // Choose vector dimension for state field that is different from spatial dimension
   // to test the field indexing more thoroughly.
   constexpr int vdim = 2;
-  FiniteElementState state(*mesh, H1<p, vdim>{}, "vector_field");
+  FiniteElementState state(mesh->mfemParMesh(), H1<p, vdim>{}, "vector_field");
 
   // set the field with an arbitrarily chosen field function
   auto vector_field = [](tensor<double, spatial_dim> X) {
@@ -83,7 +83,7 @@ TEST_F(TestFiniteElementState, SetVectorStateFromFieldFunction)
   state.setFromFieldFunction(vector_field);
 
   // Get the nodal positions for the state in a grid function
-  auto [coords_fe_space, coords_fe_coll] = serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(mesh.get());
+  auto [coords_fe_space, coords_fe_coll] = serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(&mesh->mfemParMesh());
   mfem::ParGridFunction nodal_coords_gf(coords_fe_space.get());
   mesh->GetNodes(nodal_coords_gf);
 
@@ -116,7 +116,7 @@ TEST_F(TestFiniteElementState, DISABLED_ErrorsIfFieldFunctionDimensionMismatched
 
   // Choose vector dimension for state field that is different from spatial dimension
   constexpr int vdim = 2;
-  FiniteElementState state(*mesh, H1<p, vdim>{}, "vector_field");
+  FiniteElementState state(mesh->mfemParMesh(), H1<p, vdim>{}, "vector_field");
 
   // Set the field with a field function with the wrong vector dimension.
   // Should return tensor of size vdim!
