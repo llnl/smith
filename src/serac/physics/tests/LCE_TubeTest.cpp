@@ -32,10 +32,10 @@ int main(int argc, char* argv[])
 
   // Create DataStore
   axom::sidre::DataStore datastore;
-  serac::StateManager::initialize(datastore, "LCE_ActiveInactiveTest2");
+  serac::StateManager::initialize(datastore, "LCE_ActiveInactiveTest");
 
   // Construct the appropriate dimension mesh and give it to the data store
-  auto inputFileName = "../../tests/TubeLCE_NoSplit.g"; 
+  auto inputFileName = "../../tests/TubeLCE_Split1.g"; 
   auto meshInput = serac::buildMeshFromFile(inputFileName);
   std::string mesh_tag{"mesh"}; 
   auto mesh = mesh::refineAndDistribute(std::move(meshInput), serial_refinement, parallel_refinement);
@@ -58,25 +58,27 @@ int main(int argc, char* argv[])
   // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛--> z
 
   // LinearSolverOptions linear_options = {.linear_solver = LinearSolver::SuperLU};
-  const LinearSolverOptions linear_options = {.linear_solver = LinearSolver::CG,.preconditioner = Preconditioner::HypreAMG,.absolute_tol   = 1.0e-7,.max_iterations=1000, .print_level = 0};
+  const LinearSolverOptions linear_options = {.linear_solver = LinearSolver::CG,.preconditioner = Preconditioner::HypreAMG,.absolute_tol   = 1.0e-8,.max_iterations=1000, .print_level = 0};
 
   NonlinearSolverOptions nonlinear_options = {.nonlin_solver  = serac::NonlinearSolver::TrustRegion,
                                               .relative_tol   = 1.0e-6,
-                                              .absolute_tol   = 1.0e-11,
+                                              .absolute_tol   = 1.0e-10,
                                               .max_iterations = 500, // changed this from 1
-                                              .print_level    = 1};
+                                              .print_level    = 1,
+                                              .trust_region_scaling = 0.1};
   bool use_warm_start = false;
   SolidMechanics<p, dim, Parameters<L2<0>, L2<0>, L2<0> > > solid_solver(
       nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options, 
-      "ActiveInactiveTest2", mesh_tag, {"orderParam", "gammaParam", "etaParam"}, 0, 0.0, false, use_warm_start);
+      "ActiveInactiveTest", mesh_tag, {"orderParam", "gammaParam", "etaParam"}, 0, 0.0, false, use_warm_start);
 
   // -------------------
   // Material properties
   // -------------------
 
+  // Active material properties - from Harvard
   double density         = 1.0;
-  double shear_mod       = 0.1*9.9564e6;//4.4762e5; // 4476171.852e-6; // 3.113e4; //  young_modulus_ / 2.0*(1.0 + poisson_ratio_);
-  double ini_order_param = 0.535; // 0.28544; //   0.40;
+  double shear_mod       = 9.9564e6;//4.4762e5; // 4476171.852e-6; // 3.113e4; //  young_modulus_ / 2.0*(1.0 + poisson_ratio_);
+  double ini_order_param = 0.535; //0.535; // 0.28544; //   0.40;
   double min_order_param = 0.00001; // ini_order_param; //
   double omega_param     = 0.12531; // 0.1151; // 1.0e2;
   double bulk_mod        = 4.945e8;//1.0e1*shear_mod; // K = (E/3*(1-2v)), E = 29.67 MPa, v = 0.49 
@@ -85,9 +87,11 @@ int main(int argc, char* argv[])
   // Set material
   LiquidCrystalElastomerZhang lceMat(density, shear_mod, ini_order_param, omega_param, bulk_mod);
   serac::solid_mechanics::NeoHookean regularMat;
+
+  // inactive material properties - from Harvard
   regularMat.density = 1; // update
   regularMat.K = 9.5e6; // E = 0.57 MPa
-  regularMat.G = 0.1*1.9128e5; //
+  regularMat.G = 1.9128e5; //
 
   // Parameter 1
   FiniteElementState orderParam(pmesh, L2<0>{}, "orderParam");
@@ -121,15 +125,31 @@ int main(int argc, char* argv[])
   // Material domains and material setting
   serac::Domain whole_domain = serac::EntireDomain(pmesh);
 
+  // Domains for the active and inactive material domains, noting that the current mesh has a slice at y = 0 that should make these a roughly even split
   auto ActiveMat = serac::Domain::ofElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
     return average(vertices)[1] > 0.0;  
   }));
   auto NonActiveMat = serac::Domain::ofElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
     return average(vertices)[1] < 0.0;  
   }));
-  //auto SmallEndRegion = serac::Domain::ofElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
-  //  return average(vertices)[2] < -24.99;  
-  //}));
+
+  // Small areas on the end of the domain to fix in x and y, so that we constrain rigid modes while also allowing swelling on most of the end face
+  auto FixedAreaY = serac::Domain::ofBoundaryElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    bool Outputs{};
+    Outputs = false;
+    if(average(vertices)[1] < -0.0004 && average(vertices)[2] < 0.0001){
+      Outputs = true;
+    };
+    return Outputs;  
+  }));
+  auto FixedAreaX = serac::Domain::ofBoundaryElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    bool Outputs{};
+    Outputs = false;
+    if(average(vertices)[0] < -0.0004 && average(vertices)[2] < 0.0001){
+      Outputs = true;
+    };
+    return Outputs;  
+  }));
 
   solid_solver.setMaterial(DependsOn<ORDER_INDEX, GAMMA_INDEX, ETA_INDEX>{}, lceMat, ActiveMat);
   solid_solver.setMaterial(DependsOn<>{}, regularMat, NonActiveMat);
@@ -141,23 +161,31 @@ int main(int argc, char* argv[])
   // Prescribe zero displacement at the supported end of the beam
   solid_solver.setDisplacementBCs([=](auto, auto) { 
     tensor<double, dim> u{}; 
-    u[0] = 0;
     u[1] = 0;
-    u[2] = 0; 
-    return u; }, BCOneEndDomain);  // serac::Component::
+    return u; }, FixedAreaY,serac::Component::Y);
   solid_solver.setDisplacementBCs([=](auto, auto) { 
     tensor<double, dim> u{}; 
-    u[1] = 0.00001;
-    return u; }, BCOtherEndDomain, serac::Component::Y); 
+    u[0] = 0;
+    return u; }, FixedAreaX,serac::Component::X);
+  solid_solver.setDisplacementBCs([=](auto, auto) { 
+    tensor<double, dim> u{}; 
+    u[2] = 0;
+    return u; }, BCOneEndDomain, serac::Component::Z);
+
+    // Option to set a small end displacement, this did not fix the solver issues
+  //solid_solver.setDisplacementBCs([=](auto, auto) { 
+  //  tensor<double, dim> u{}; 
+  //  u[1] = 0.00000001;
+  //  return u; }, BCOtherEndDomain, serac::Component::Y); 
 
 
-  // set global initial displacement as a field function - not currently using this, but leaving it as an option
+  // set global initial displacement as a field function - not currently using this, but leaving it as an option - note this doesn't fix the solver issues I am having
   /*
   auto applied_displacement = [](tensor<double, dim> x, double) {
     tensor<double, dim> u{};
-    u[0] = 0.00001 * x[0];
-    u[1] = 0.00001 * x[1];
-    u[2] = 0.00001 * x[2];
+    u[0] = 0.00000001 * x[0];
+    u[1] = 0.00000001 * x[1];
+    u[2] = 0.00000001 * x[2];
     return u;
   };
   solid_solver.setDisplacement(
@@ -165,6 +193,7 @@ int main(int argc, char* argv[])
 
   // set traction - not currently using this, but leaving it as an option
   double loadVal = 0.0e5;
+  
   /*
   solid_solver.setTraction(
     [&loadVal](auto x, auto, auto) {
@@ -172,7 +201,7 @@ int main(int argc, char* argv[])
       t[0] += loadVal;
       return t;
     },
-    BCRightDomain); */
+    BCOtherEndDomain); */
 
   // Finalize the data structures
   solid_solver.completeSetup();
