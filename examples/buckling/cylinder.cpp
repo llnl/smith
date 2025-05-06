@@ -93,8 +93,7 @@ int main(int argc, char* argv[])
   // Handle command line arguments
   axom::CLI::App app{"Hollow cylinder buckling example"};
   // Mesh options
-  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")
-      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")->check(axom::CLI::PositiveNumber);
   app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps")
       ->check(axom::CLI::PositiveNumber);
   // Solver options
@@ -109,18 +108,16 @@ int main(int argc, char* argv[])
   app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
                  "Petsc preconditioner (Index of enum serac::PetscPCType)")
       ->expected(0, 14);
-  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")
-      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")->check(axom::CLI::PositiveNumber);
   // Contact options
-  auto opt_contact = app.add_flag("--contact,!--no-contact", use_contact, "Use contact for the inner faces of the cylinder");
+  auto opt_contact =
+      app.add_flag("--contact,!--no-contact", use_contact, "Use contact for the inner faces of the cylinder");
   app.add_option("--contact-type", contact_type,
                  "Type of contact enforcement, 0 for penalty or 1 for Lagrange multipliers (Index of enum "
                  "serac::ContactEnforcement)")
       ->needs(opt_contact)
       ->expected(0, 1);
-  app.add_option("--penalty", penalty, "Penalty for contact")
-      ->needs(opt_contact)
-      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--penalty", penalty, "Penalty for contact")->needs(opt_contact)->check(axom::CLI::PositiveNumber);
   // Misc options
   app.add_flag("--fast", use_fast_options, "Reduce max iterations and delta-time for testing purposes.");
 
