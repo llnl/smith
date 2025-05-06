@@ -67,8 +67,7 @@ TEST_P(TribolFiniteDiff, patch)
   constexpr int interaction_id = 0;
   contact_data.addContactInteraction(interaction_id, {6}, {7}, contact_options);
 
-  auto pressure_space = contact_data.getContactInteractions()[0].pressureSpace();
-  mfem::Vector u(pmesh.GetNodes()->Size() + pressure_space.GetVSize());
+  mfem::Vector u(pmesh.GetNodes()->Size() + contact_data.getContactInteractions()[0].numPressureDofs());
   u = 0.0;
   mfem::Vector f(u.Size());
   f = 0.0;
