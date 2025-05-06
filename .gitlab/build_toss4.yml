@@ -62,6 +62,7 @@ toss4-clang_16_0_6-src:
     COMPILER: "clang@16.0.6"
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
+    EXTRA_BUILD_OPTIONS: "--skip-install"
     #DO_INTEGRATION_TESTS: "yes"
     ALLOC_NODES: "2"
     ALLOC_TIME: "30"
