@@ -19,6 +19,12 @@ if(TRIBOL_FOUND)
                            SOURCES     ${filename}
                            OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
                            DEPENDS_ON  serac_physics serac_mesh)
+
+        if(SERAC_ENABLE_HIP)
+            blt_add_target_compile_flags(TO contact_${example_name} FLAGS "-fgpu-rdc")
+            blt_add_target_link_flags(TO contact_${example_name} FLAGS "-fgpu-rdc")
+        endif()
+        
     endforeach()
 
     install(
