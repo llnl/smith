@@ -15,7 +15,7 @@ set(contact_sources
     contact_interaction.cpp
     )
 
-set(contact_depends serac_infrastructure)
+set(contact_depends serac_infrastructure serac_state)
 blt_list_append(TO contact_depends ELEMENTS tribol IF TRIBOL_FOUND)
 blt_list_append(TO contact_depends ELEMENTS redecomp IF TRIBOL_FOUND AND SERAC_ENABLE_MPI)
 
