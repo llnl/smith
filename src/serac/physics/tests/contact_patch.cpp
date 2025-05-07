@@ -49,6 +49,7 @@ TEST_P(ContactTest, patch)
   Domain z0_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
   Domain zmax_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
 
+  // TODO: investigate performance with Petsc
   // #ifdef SERAC_USE_PETSC
   //   LinearSolverOptions linear_options{
   //       .linear_solver = LinearSolver::PetscGMRES,

@@ -56,12 +56,6 @@ TEST_P(ContactTest, beam)
                                            .absolute_tol = 1.0e-13,
                                            .max_iterations = 20,
                                            .print_level = 1};
-  // #ifdef SERAC_USE_SUNDIALS
-  //   // KINFullStep is preferred, but has issues when active set is enabled
-  //   if (std::get<1>(GetParam()) == ContactType::TiedNormal) {
-  //     nonlinear_options.nonlin_solver = NonlinearSolver::KINFullStep;
-  //   }
-  // #endif
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = std::get<0>(GetParam()),
