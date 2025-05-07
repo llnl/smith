@@ -66,7 +66,7 @@ struct ResidualFixture : public testing::Test {
   static constexpr int order = 1;
 
   using VectorSpace = serac::H1<order, dim>;
-  using ScalarSpace = serac::H1<order>
+  using ScalarSpace = serac::H1<order>;
   using ParamSpace = serac::L2<order - 1>;
 
   using ThermalMaterial = serac::heat_transfer::ParameterizedLinearIsotropicConductor;
@@ -181,6 +181,46 @@ TEST_F(ResidualFixture, VjpConsistency)
     if (i == 0) vjp += 1.0;  // make sure vjp uses +=
     EXPECT_NEAR(vjp.Norml2(), all_vjps[i]->Norml2(), 1e-12);
   }
+}
+
+TEST_F(ResidualFixture, JvpConsistency)
+{
+  auto all_states = getPointers(states, params);
+
+  serac::FiniteElementDual res_vector(states[TEMP].space(), "residual");
+  res_vector = residual->residual(time, dt, all_states);
+  ASSERT_NE(0.0, res_vector.Norml2());
+
+  auto jacobianWeights = [&](size_t i) {
+    std::vector<double> tangents(all_states.size());
+    tangents[i] = 1.0;
+    return tangents;
+  };
+
+  auto selectStates = [&](size_t i) {
+    auto pts = getPointers(v_rhs_states, v_rhs_params);
+    for (size_t j = 0; j < pts.size(); ++j) {
+      if (i != j) {
+        pts[j] = nullptr;
+      }
+    }
+    return pts;
+  };
+
+  serac::FiniteElementDual jvp_slow(states[TEMP].space(), "jvp_slow");
+  serac::FiniteElementDual jvp(states[TEMP].space(), "jvp");
+  jvp = 4.0;
+  std::vector<serac::FiniteElementDual*> jvps = getPointers(jvp);
+
+  auto all_v_rhs_states = getPointers(v_rhs_states, v_rhs_params);
+
+  for (size_t i = 0; i < all_states.size(); ++i) {
+    auto J = residual->jacobian(time, dt, all_states, jacobianWeights(i));
+    J->Mult(*all_v_rhs_states[i], jvp_slow);
+    residual->jvp(time, dt, all_states, selectStates(i), jvps);
+    EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
+  }
+
 }
 
 int main(int argc, char* argv[])

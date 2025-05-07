@@ -57,9 +57,9 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
    */
   HeatTransferResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
                        const mfem::ParFiniteElementSpace& shape_disp_space, const mfem::ParFiniteElementSpace& test_space,
-                       std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces{})
-      : BaseResidualT(physics_name, mesh, shape_disp_space, test_space,
-                      constructAllSpaces(test_space, parameter_fe_spaces))
+                       std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
+       : BaseResidualT(physics_name, mesh, shape_disp_space, test_space,
+                       constructAllSpaces(test_space, parameter_fe_spaces))
   {
   }
 
@@ -90,7 +90,7 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
   {
     ThermalMaterialFunctor<MaterialType> material_functor(material);
     BaseResidualT::residual_->AddDomainIntegral(
-        Dimension<dim>, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
+        Dimension<dim>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
         BaseResidualT::mesh_->domain(body_name));
   }
 
@@ -117,7 +117,7 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
     return all_spaces;
   }
 
-  template <typename Material>
+  template <typename MaterialType>
   struct ThermalMaterialFunctor {
     /**
      * @brief Construct a ThermalMaterialIntegrand functor with material model of type `MaterialType`.
@@ -126,6 +126,7 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
      */
     ThermalMaterialFunctor(MaterialType material) : material_(material) {}
 
+    /// Material model
     MaterialType material_;
 
     /**
@@ -152,7 +153,7 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
 
       return serac::tuple{heat_capacity * du_dt, -1.0 * heat_flux};
     }
-  }
+  };
 };
 
 } // namespace serac
