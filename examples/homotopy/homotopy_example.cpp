@@ -104,16 +104,15 @@ protected:
    std::vector<std::shared_ptr<serac::ScalarObjective>> constraints;
    double time = 0.0;
    double dt = 0.0;
-   //std::vector<double> jacobian_weights {0.0, 1.0, 0.0};
-   //std::vector<double> jacobian_weights {1.0, 0.0, 0.0, 0.0, 0.0}; 
+   std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, 0.0, 0.0}; 
 public:
    // pass opt_state pointer
    // lambdas that take in opt_state
-   InertialReliefProblem(std::vector<serac::FiniteElementState *> & obj_states_, 
-		   std::vector<serac::FiniteElementState *> & all_states_,
+   InertialReliefProblem(std::vector<serac::FiniteElementState *> obj_states_, 
+		   std::vector<serac::FiniteElementState *> all_states_,
 		   std::shared_ptr<serac::Residual> residual_, 
-                   std::vector<std::shared_ptr<serac::ScalarObjective>> &constraints_);
-#if 0
+                   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_);
+#if 1
    void F(const mfem::Vector &x, const mfem::Vector &y, mfem::Vector &feval, int &Feval_err) const;
    void Q(const mfem::Vector &x, const mfem::Vector &y, mfem::Vector &qeval, int &Qeval_err) const;
    mfem::HypreParMatrix * DxF(const mfem::Vector &x, const mfem::Vector &y);
@@ -179,13 +178,14 @@ int main(int argc, char* argv[])
   // apply some traction boundary conditions
   std::string surface_name = "side";
   mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
-  solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
+  solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return -1.0 * n; });
 
   residual = solid_mechanics_residual;
   
   
   // construct constraints
-  params[0] = 1.2;
+  params[0] = 1.0;
+
 
   using ObjectiveT = serac::FunctionalObjective<dim, VectorSpace, serac::Parameters<VectorSpace, DensitySpace>>; // functional objective on displacement/density
 
@@ -230,6 +230,23 @@ int main(int argc, char* argv[])
     constraints.push_back(center_rotation_objective);
   }
 
+  
+  serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
+  res_vector = residual->residual(time, dt, all_states);
+  
+  std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, 0.0, 0.0};
+  ////std::vector<serac::FiniteElementState *> r_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[VELO], all_states[ACCEL]};
+  auto drdu_unique = residual->jacobian(time, dt, all_states, jacobian_weights);
+  //drdu_unique->Print("drdu");
+  
+  //for (const auto & c : constraints) 
+  //{
+  //   std::cout << "c_i" << c->evaluate(time, dt, objective_states) << std::endl;
+  //   std::cout << "dim(grad_u c_i) = " << c->gradient(time, dt, objective_states, DISP).Size() << std::endl;
+  //
+  //}
+
+
   // initialize displacement
   states[FIELD::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
     auto u = 0.1 * x;
@@ -239,26 +256,31 @@ int main(int argc, char* argv[])
 
   //serac::FiniteElementDual res_vector(all_states[DISP]->space(), "residual");
   //res_vector = solid_mechanics_residual->residual(time, all_states);
+  
+
+  InertialReliefProblem problem(objective_states, all_states, solid_mechanics_residual, constraints);
+  int dimx = problem.GetDimx();
+  int dimy = problem.GetDimy();
+
+  mfem::Vector x0(dimx); x0 = 0.0;
+  mfem::Vector y0(dimy); y0 = 0.0;
+  mfem::Vector xf(dimx); xf = 0.0;
+  mfem::Vector yf(dimy); yf = 0.0;
+  
+  HypreParMatrix * dxF = problem.DxF(x0, y0);
+  HypreParMatrix * dyF = problem.DyF(x0, y0);
+  HypreParMatrix * dxQ = problem.DxQ(x0, y0);
+  HypreParMatrix * dyQ = problem.DyQ(x0, y0);
+  
+  
+  HomotopySolver solver(&problem);
+  double tol = 1.e-6;
+  int maxIter = 30;
+  solver.SetTol(tol);
+  solver.SetMaxIter(maxIter);
 
 
-  //InertialReliefProblem problem(all_states[DISP], objective_states, all_states, solid_mechanics_residual, constraint_evaluators);
-  //int dimx = problem.GetDimx();
-  //int dimy = problem.GetDimy();
-
-  //mfem::Vector x0(dimx); x0 = 0.0;
-  //mfem::Vector y0(dimy); y0 = 0.0;
-  //mfem::Vector xf(dimx); xf = 0.0;
-  //mfem::Vector yf(dimy); yf = 0.0;
-  //
-  //
-  //HomotopySolver solver(&problem);
-  //double tol = 1.e-6;
-  //int maxIter = 30;
-  //solver.SetTol(tol);
-  //solver.SetMaxIter(maxIter);
-
-
-  //solver.Mult(x0, y0, xf, yf);
+  solver.Mult(x0, y0, xf, yf);
   //bool converged = solver.GetConverged();
   //if (myid == 0)
   //{
@@ -274,10 +296,10 @@ int main(int argc, char* argv[])
 }
 
 #if 1
-InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementState *> & obj_states_, 
-		std::vector<serac::FiniteElementState *> & all_states_,
+InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementState *> obj_states_, 
+		std::vector<serac::FiniteElementState *> all_states_,
 		std::shared_ptr<serac::Residual> residual_, 
-                            std::vector<std::shared_ptr<serac::ScalarObjective>> &constraints_) : GeneralNLMCProblem(), 
+                            std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_) : GeneralNLMCProblem(), 
 	dFdx(nullptr), dFdy(nullptr), dQdx(nullptr), dQdy(nullptr), uOffsets(nullptr), cOffsets(nullptr)
 {
   residual = residual_;
@@ -296,7 +318,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   cOffsets = new HYPRE_BigInt[2];
   for (int i = 0; i < 2; i++)
   {
-     uOffsets[i] = all_states[1]->space().GetTrueDofOffsets()[i];
+     uOffsets[i] = all_states[FIELD::DISP]->space().GetTrueDofOffsets()[i];
   }
   
   int myid = mfem::Mpi::WorldRank();
@@ -358,7 +380,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
 
 }
 
-#if 0
+#if 1
 void InertialReliefProblem::F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int &Feval_err) const
 {
   MFEM_VERIFY(x.Size() == dimx && y.Size() == dimy && feval.Size() == dimx, "InertialReliefProblem::F -- Inconsistent dimensions");
@@ -393,12 +415,12 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
      SLIC_ERROR_ROOT_IF(i2 != i,
                        axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
      gradc = 0.0;
-     gradc.Set(1.0, constraints[i]->gradient(time, dt, obj_states, i));
+     gradc.Set(1.0, constraints[i]->gradient(time, dt, obj_states, DISP));
      std::cout << "|| grad(c_i) || = " << gradc.Norml2() << std::endl;
-     std::cout << "dim(grad(c_i)) = " << constraints[i]->gradient(time, obj_states, DISP).Size() << std::endl;
+     std::cout << "dim(grad(c_i)) = " << constraints[i]->gradient(time, dt, obj_states, DISP).Size() << std::endl;
+     std::cout << "dimU = " << dimu << std::endl;
      qblock.GetBlock(0).Add(yblock.GetBlock(1)(idx), gradc);
-     qblock.GetBlock(1)(idx) = constraints[i]->evaluate(time, obj_states);
-     //std::cout << "c_i = " << qblock.GetBlock(1)(i) << std::endl;
+     qblock.GetBlock(1)(idx) = constraints[i]->evaluate(time, dt, obj_states);
   }
   qeval.Set(1.0, qblock);
   Qeval_err = 0;
@@ -431,7 +453,7 @@ mfem::HypreParMatrix * InertialReliefProblem::DyQ([[maybe_unused]]const mfem::Ve
    // note we are neglecting Hessian constraint terms
    mfem::BlockVector yblock(y_partition); yblock.Set(1.0, y);
    mfem::BlockVector qblock(y_partition); qblock = 0.0;
-   opt_state->Set(1.0, yblock.GetBlock(0));
+   obj_states[DISP]->Set(1.0, yblock.GetBlock(0));
    
 	
    if (dQdy)
@@ -440,7 +462,8 @@ mfem::HypreParMatrix * InertialReliefProblem::DyQ([[maybe_unused]]const mfem::Ve
    }	   
    {
       mfem::HypreParMatrix * drdu = nullptr;
-      auto drdu_unique = residual->jacobian(time, all_states, jacobian_weights);
+      auto drdu_unique = residual->jacobian(time, dt, all_states, jacobian_weights);
+
       drdu = drdu_unique.release();
 
       mfem::HypreParMatrix * dcdu = nullptr;
@@ -460,10 +483,7 @@ mfem::HypreParMatrix * InertialReliefProblem::DyQ([[maybe_unused]]const mfem::Ve
 	 for (int i = 0; i < dimc; i++)
 	 {
 	    entries = 0.;
-	    //for (int j = 0; j < dim-1; j++)
-	    //{
-	    entries.Add(1.0, constraints[i]->gradient(time, obj_states, DISP)); // j = 0 shape displacement, u displacemtn j =1
-	    //}
+	    entries.Add(1.0, constraints[i]->gradient(time, dt, obj_states, DISP)); // j = 0 shape displacement, u displacemtn j =1
 	    dcdumat->SetRow(i, cols, entries);
 	 }
       }
@@ -486,7 +506,6 @@ mfem::HypreParMatrix * InertialReliefProblem::DyQ([[maybe_unused]]const mfem::Ve
       delete dcduT;
       delete dcdu;
    }
-
    return dQdy; 
 }
 #endif

@@ -14,7 +14,8 @@
 
 #include <vector>
 #include "serac/physics/common.hpp"
-
+#include <memory>
+#include <string>
 namespace mfem {
 class Vector;
 class HypreParMatrix;
