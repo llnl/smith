@@ -211,3 +211,8 @@ spack:
       externals:
       - spec: py-ats@7.0.105
         prefix: /Users/chapman39/dev/serac/venv
+
+    # Globally lock version of third party libraries
+    arpack-ng:
+      # 3.9.1 has this error: undefined reference to `pdsaupd_'
+      require: "@3.9.0"
