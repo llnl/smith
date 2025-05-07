@@ -15,7 +15,7 @@
 
 #include "serac/physics/functional_residual.hpp"
 
-namespace serac{
+namespace serac {
 
 template <int order, int dim, typename InputSpaces = Parameters<>>
 class HeatTransferResidual;
@@ -31,12 +31,11 @@ class HeatTransferResidual;
  */
 template <int order, int dim, typename... InputSpaces>
 class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
-    : public FunctionalResidual<dim, H1<order, dim>, H1<order>,
-                                Parameters<H1<order>, H1<order>, InputSpaces...>> {
+    : public FunctionalResidual<dim, H1<order, dim>, H1<order>, Parameters<H1<order>, H1<order>, InputSpaces...>> {
  public:
   /// @brief typedef for underlying functional type with templates
-  using BaseResidualT = FunctionalResidual<dim, H1<order, dim>, H1<order>,
-                                           Parameters<H1<order>, H1<order>, InputSpaces...>>;
+  using BaseResidualT =
+      FunctionalResidual<dim, H1<order, dim>, H1<order>, Parameters<H1<order>, H1<order>, InputSpaces...>>;
 
   // /// @brief a container holding quadrature point data of the specified type
   // /// @tparam T the type of data to store at each quadrature point
@@ -56,10 +55,11 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
    * @param parameter_fe_spaces Vector of parameters spaces
    */
   HeatTransferResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
-                       const mfem::ParFiniteElementSpace& shape_disp_space, const mfem::ParFiniteElementSpace& test_space,
+                       const mfem::ParFiniteElementSpace& shape_disp_space,
+                       const mfem::ParFiniteElementSpace& test_space,
                        std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
-       : BaseResidualT(physics_name, mesh, shape_disp_space, test_space,
-                       constructAllSpaces(test_space, parameter_fe_spaces))
+      : BaseResidualT(physics_name, mesh, shape_disp_space, test_space,
+                      constructAllSpaces(test_space, parameter_fe_spaces))
   {
   }
 
@@ -89,13 +89,13 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
   void setMaterial(DependsOn<active_parameters...>, std::string body_name, const MaterialType& material)
   {
     ThermalMaterialFunctor<MaterialType> material_functor(material);
-    BaseResidualT::residual_->AddDomainIntegral(
-        Dimension<dim>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
-        BaseResidualT::mesh_->domain(body_name));
+    BaseResidualT::residual_->AddDomainIntegral(Dimension<dim>{},
+                                                DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
+                                                std::move(material_functor), BaseResidualT::mesh_->domain(body_name));
   }
 
   /// @overload
-  template<typename MaterialType>
+  template <typename MaterialType>
   void setMaterial(std::string body_name, const MaterialType& material)
   {
     setMaterial(DependsOn<>{}, body_name, material);
@@ -156,4 +156,4 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
   };
 };
 
-} // namespace serac
+}  // namespace serac

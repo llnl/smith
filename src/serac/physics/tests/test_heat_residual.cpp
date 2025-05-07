@@ -88,8 +88,10 @@ struct ResidualFixture : public testing::Test {
 
     serac::FiniteElementState temperature = serac::StateManager::newState(ScalarSpace{}, "temperature", mesh->tag());
     serac::FiniteElementState temp_rate = serac::StateManager::newState(ScalarSpace{}, "temperature_rate", mesh->tag());
-    serac::FiniteElementState shape_disp = serac::StateManager::newState(VectorSpace{}, "shape_displacement", mesh->tag());
-    serac::FiniteElementState conductivity_offset = serac::StateManager::newState(ParamSpace{}, "conductivity_offset", mesh->tag());
+    serac::FiniteElementState shape_disp =
+        serac::StateManager::newState(VectorSpace{}, "shape_displacement", mesh->tag());
+    serac::FiniteElementState conductivity_offset =
+        serac::StateManager::newState(ParamSpace{}, "conductivity_offset", mesh->tag());
 
     states = {shape_disp, temperature, temp_rate};
     params = {conductivity_offset};
@@ -112,7 +114,8 @@ struct ResidualFixture : public testing::Test {
     std::string source_name = "souce";
     mesh->addDomainOfBoundaryElements(source_name, serac::by_attr<dim>({1, 2}));
 
-    heat_transfer_residual->addBoundaryIntegral(source_name, [](auto /* t */, auto /* x */, auto /* n */) {return -1.0;});
+    heat_transfer_residual->addBoundaryIntegral(source_name,
+                                                [](auto /* t */, auto /* x */, auto /* n */) { return -1.0; });
 
     for (auto& s : v_rhs_states) {
       pseudoRand(s);
@@ -123,12 +126,10 @@ struct ResidualFixture : public testing::Test {
 
     dual_states[0] = 1.0;  // used to test that vjp acts via +=, add initial value to shape displacement dual
 
-    states[TEMP].setFromFieldFunction([](serac::tensor<double, dim> x) {
-      return 0.1 * std::pow(std::pow(x[0], 2.0) + std::pow(x[1], 2.0), 0.5);
-    });
-    states[TRATE].setFromFieldFunction([](serac::tensor<double, dim> x) {
-      return 0.01 * std::pow(std::pow(x[0], 2.0) + std::pow(x[1], 2.0), 0.5);
-    });
+    states[TEMP].setFromFieldFunction(
+        [](serac::tensor<double, dim> x) { return 0.1 * std::pow(std::pow(x[0], 2.0) + std::pow(x[1], 2.0), 0.5); });
+    states[TRATE].setFromFieldFunction(
+        [](serac::tensor<double, dim> x) { return 0.01 * std::pow(std::pow(x[0], 2.0) + std::pow(x[1], 2.0), 0.5); });
     states[SHAPE] = 0.0;
     params[0] = 0.5;
 
@@ -220,7 +221,6 @@ TEST_F(ResidualFixture, JvpConsistency)
     residual->jvp(time, dt, all_states, selectStates(i), jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
-
 }
 
 int main(int argc, char* argv[])
