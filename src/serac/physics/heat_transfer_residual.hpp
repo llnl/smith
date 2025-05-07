@@ -117,6 +117,9 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
     return all_spaces;
   }
 
+  /**
+   * @brief Functor representing a thermal material's heat capacity and flux.
+   */
   template <typename MaterialType>
   struct ThermalMaterialFunctor {
     /**
@@ -136,6 +139,7 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
      * @tparam Temperature temperature
      * @tparam dT_dt temperature rate
      * @tparam Params variadic parameters for call
+     * @param[in] x spatial position
      * @param[in] temperature temperature
      * @param[in] dtemp_dt temperature rate
      * @param[in] params parameter pack
