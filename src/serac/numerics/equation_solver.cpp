@@ -628,7 +628,7 @@ class TrustRegion : public mfem::NewtonSolver {
     num_subspace_solves = 0;
     num_jacobian_assembles = 0;
 
-    real_t norm, norm_goal;
+    real_t norm, norm_goal, prev_norm;
     norm = initial_norm = computeResidual(X, r);
     norm_goal = std::max(rel_tol * initial_norm, abs_tol);
     if (print_options.first_and_last && !print_options.iterations) {
@@ -665,6 +665,7 @@ class TrustRegion : public mfem::NewtonSolver {
         mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
         if (it > 0) {
           mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
+          mfem::out << ", Rate = " << std::setw(10) << std::log10(prev_norm / norm);
           mfem::out << ", x_incr = " << std::setw(13) << trResults.d.Norml2();
         } else {
           mfem::out << ", norm goal = " << std::setw(13) << norm_goal << "\n";
@@ -687,6 +688,8 @@ class TrustRegion : public mfem::NewtonSolver {
       }
 
       assembleJacobian(X);
+
+      prev_norm = norm;
 
       if (it == 0 || (trResults.cg_iterations_count >= settings.max_cg_iterations ||
                       cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {
