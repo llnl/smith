@@ -30,3 +30,5 @@ add_subdirectory(buckling)
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
 
+# Add the homotopy example
+add_subdirectory(homotopy)
