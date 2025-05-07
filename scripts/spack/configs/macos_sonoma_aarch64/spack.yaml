@@ -89,11 +89,6 @@ spack:
       externals:
       - spec: expat@2.7.1
         prefix: /opt/homebrew
-    fmt:
-      buildable: false
-      externals:
-      - spec: fmt@11.1.4
-        prefix: /opt/homebrew
     gettext:
       buildable: false
       externals:

@@ -23,6 +23,7 @@ function send_email() {
 # Send email before exiting from an error
 trap "send_email; exit 1" ERR
 
+# Print command and its output into a log file
 print_run_log(){
     echo "####################" >> "$OUTPUT_LOG"
     echo "# $@" >> "$OUTPUT_LOG"

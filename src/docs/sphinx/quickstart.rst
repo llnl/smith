@@ -265,6 +265,9 @@ Building Serac Dependencies on MacOS
 .. warning::
    These instructions are in development, but have been tested for M2 MacBooks.
 
+.. note::
+   View an example host-config for MacOS in ``host-configs/other``.
+
 Installing base dependencies using Homebrew
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
