@@ -1,4 +1,14 @@
 spack:
+  config:
+    install_tree:
+      root: $spack/..
+      projections:
+        all: '{compiler.name}-{compiler.version}/{name}-{version}-{hash}'
+    misc_cache: $spack/../misc_cache
+    test_stage: $spack/../test_stage
+    build_stage::
+    - $spack/../build_stage
+
   view: false
 
   compilers::
@@ -61,13 +71,14 @@ spack:
       externals:
       - spec: bzip2@1.0.8
         prefix: /opt/homebrew/opt/bzip2
-    # NOTE: CMake version 4.0 and above seems to cause metis and other package to fail
+    # NOTE: CMake v4.0 causes metis and other package to fail. Brew doesn't allow older versions
+    # of CMake to be installed, so I installed CMake manually https://cmake.org/files/v3.23/
     cmake:
       version: [3.23.5]
-      # buildable: false
-      # externals:
-      # - spec: cmake@4.0.1
-      #   prefix: /opt/homebrew
+      buildable: false
+      externals:
+      - spec: cmake@3.23.5
+        prefix: /Applications/CMake.app/Contents
     diffutils:
       buildable: false
       externals:
