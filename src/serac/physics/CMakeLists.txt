@@ -35,6 +35,8 @@ set(physics_headers
     functional_residual.hpp
     solid_residual.hpp
     heat_transfer_residual.hpp
+    scalar_objective.hpp
+    functional_objective.hpp
     )
 
 set(physics_depends

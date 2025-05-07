@@ -226,7 +226,7 @@ class BasePhysics {
    *
    * @return The shape displacement finite element state
    */
-  const FiniteElementState& shapeDisplacement() const { return shape_displacement_; }
+  virtual const FiniteElementState& shapeDisplacement() const { return shape_displacement_; }
 
   /**
    * @brief Accessor for getting named finite element state parameter fields from the physics modules

@@ -4,7 +4,16 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause) 
 
-set(physics_test_depends serac_physics serac_mesh gtest)
+set(physics_test_headers
+    physics_test_utils.hpp
+    )
+    
+blt_add_library(
+    NAME        serac_physics_test_utils
+    HEADERS     ${physics_test_headers}
+    )
+      
+set(physics_test_depends serac_physics serac_mesh serac_physics_test_utils gtest)
 
 set(physics_serial_test_sources
     beam_bending.cpp
@@ -24,6 +33,7 @@ set(physics_serial_test_sources
     test_functional_residual.cpp
     thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
+    test_kinematic_objective.cpp
     )
 
 serac_add_tests(SOURCES       ${physics_serial_test_sources}
