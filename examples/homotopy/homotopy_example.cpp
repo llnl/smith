@@ -237,7 +237,6 @@ int main(int argc, char* argv[])
   std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, 0.0, 0.0};
   ////std::vector<serac::FiniteElementState *> r_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[VELO], all_states[ACCEL]};
   auto drdu_unique = residual->jacobian(time, dt, all_states, jacobian_weights);
-  //drdu_unique->Print("drdu");
   
   //for (const auto & c : constraints) 
   //{
@@ -405,6 +404,13 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   
   serac::FiniteElementDual res_vector(all_states[DISP]->space(), "tempresidual");
   res_vector = residual->residual(time, dt, all_states);
+  for (int i = 0; i < res_vector.Size(); i++)
+  {
+     if (std::isnan(res_vector(i)))
+     {
+        cout << "nan entry in residual\n";
+     }
+  }
   qblock.GetBlock(0).Set(1.0, res_vector);
 
   Vector gradc(dimu); gradc = 0.0;
@@ -424,6 +430,14 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   }
   qeval.Set(1.0, qblock);
   Qeval_err = 0;
+  for (int i = 0; i < qeval.Size(); i++)
+  {
+     if (std::isnan(qeval(i)))
+     {
+        cout << "nan entry\n";
+        Qeval_err = 1;
+     }
+  }
 }
 
 
@@ -463,6 +477,7 @@ mfem::HypreParMatrix * InertialReliefProblem::DyQ([[maybe_unused]]const mfem::Ve
    {
       mfem::HypreParMatrix * drdu = nullptr;
       auto drdu_unique = residual->jacobian(time, dt, all_states, jacobian_weights);
+      MFEM_VERIFY(drdu_unique->Height() == dimu, "size error");
 
       drdu = drdu_unique.release();
 
@@ -471,12 +486,12 @@ mfem::HypreParMatrix * InertialReliefProblem::DyQ([[maybe_unused]]const mfem::Ve
       // TODO: the following won't work with more than 1 MPI process
       if (dimc > 0)
       {
-         dcdumat = new mfem::SparseMatrix(dimc, drdu->GetGlobalNumCols(), dimy);
+         dcdumat = new mfem::SparseMatrix(dimc, drdu->GetGlobalNumCols(), dimu);
 
 	 mfem::Array<int>  cols;
-	 cols.SetSize(dimy);
-	 mfem::Vector entries(dimy); entries = 0.;
-	 for (int i = 0; i < dimy; i++)
+	 cols.SetSize(dimu);
+	 mfem::Vector entries(dimu); entries = 0.;
+	 for (int i = 0; i < dimu; i++)
 	 {
 	    cols[i] = i;
 	 }
@@ -489,10 +504,10 @@ mfem::HypreParMatrix * InertialReliefProblem::DyQ([[maybe_unused]]const mfem::Ve
       }
       else
       {
-         dcdumat = new mfem::SparseMatrix(dimc, drdu->GetGlobalNumCols(), dimy);
+         dcdumat = new mfem::SparseMatrix(dimc, drdu->GetGlobalNumCols(), dimu);
       }
-      dcdumat->Finalize();
       dcdumat->Threshold(1.e-20);
+      dcdumat->Finalize();
       dcdu = GenerateHypreParMatrixFromSparseMatrix(uOffsets, cOffsets , dcdumat); // utility function call
       mfem::HypreParMatrix * dcduT = dcdu->Transpose();
       mfem::Array2D<const mfem::HypreParMatrix *> BlockMat(2, 2);
