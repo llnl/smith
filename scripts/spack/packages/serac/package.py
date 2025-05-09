@@ -454,7 +454,8 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
             srun_wrapper = which_string("srun")
             mpi_exec_index = [index for index,entry in enumerate(entries)
                                                   if "MPIEXEC_EXECUTABLE" in entry]
-            del entries[mpi_exec_index[0]]
+            if len(mpi_exec_index) != 0:
+                del entries[mpi_exec_index[0]]
             entries.append(cmake_cache_path("MPIEXEC_EXECUTABLE", srun_wrapper))
 
         return entries
