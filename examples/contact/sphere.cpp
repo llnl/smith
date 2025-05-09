@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -59,22 +59,23 @@ int main(int argc, char* argv[])
   auto fixed_boundary = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
   auto driven_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(12));
 
-  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
+  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
   return 1;
 #endif
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
-                                                  .relative_tol = 1.0e-8,
-                                                  .absolute_tol = 1.0e-5,
+                                                  .relative_tol = 1.0e-13,
+                                                  .absolute_tol = 1.0e-13,
                                                   .max_iterations = 200,
                                                   .print_level = 1};
 
   serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                         .enforcement = serac::ContactEnforcement::Penalty,
                                         .type = serac::ContactType::Frictionless,
-                                        .penalty = 1.0e4};
+                                        .penalty = 1.0e4,
+                                        .jacobian = serac::ContactJacobian::Exact};
 
   serac::SolidMechanicsContact<p, dim> solid_solver(
       nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "sphere_mesh");

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -12,13 +12,19 @@ if(TRIBOL_FOUND)
         twist.cpp
     )
 
-    foreach(filename ${arg_CONTACT_EXAMPLES_SOURCES})
+    foreach(filename ${CONTACT_EXAMPLES_SOURCES})
         get_filename_component(example_name ${filename} NAME_WE)
 
         blt_add_executable(NAME        contact_${example_name}
                            SOURCES     ${filename}
                            OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
                            DEPENDS_ON  serac_physics serac_mesh)
+
+        if(SERAC_ENABLE_HIP)
+            blt_add_target_compile_flags(TO contact_${example_name} FLAGS "-fgpu-rdc")
+            blt_add_target_link_flags(TO contact_${example_name} FLAGS "-fgpu-rdc")
+        endif()
+        
     endforeach()
 
     install(

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -47,8 +47,11 @@ class Mesh {
   /// @brief Returns string tag for mesh
   const std::string& tag() const { return mesh_tag_; }
 
-  /// @brief Returns parallel mfem mesh, ignores const for mfem interfaces
-  mfem::ParMesh& mfemParMesh() const { return *mfem_mesh_; }
+  /// @brief Returns const parallel mfem mesh
+  const mfem::ParMesh& mfemParMesh() const { return *mfem_mesh_; }
+
+  /// @brief Returns parallel mfem mesh
+  mfem::ParMesh& mfemParMesh() { return *mfem_mesh_; }
 
   /// @brief Returns parallel communicator
   MPI_Comm getComm() const;

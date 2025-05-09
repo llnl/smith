@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -179,6 +179,15 @@ class ContactData {
     return false;
 #endif
   }
+
+#ifdef SERAC_USE_TRIBOL
+  /**
+   * @brief Get the contact interactions
+   *
+   * @return Vector of contact interactions
+   */
+  const std::vector<ContactInteraction>& getContactInteractions() const { return interactions_; }
+#endif
 
   /**
    * @brief Are any contact interactions enforced using Lagrange multipliers?

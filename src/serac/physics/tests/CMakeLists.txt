@@ -1,10 +1,19 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause) 
 
-set(physics_test_depends serac_physics serac_mesh gtest)
+set(physics_test_headers
+    physics_test_utils.hpp
+    )
+    
+blt_add_library(
+    NAME        serac_physics_test_utils
+    HEADERS     ${physics_test_headers}
+    )
+      
+set(physics_test_depends serac_physics serac_mesh serac_physics_test_utils gtest)
 
 set(physics_serial_test_sources
     beam_bending.cpp
@@ -23,7 +32,13 @@ set(physics_serial_test_sources
     test_functional_residual.cpp
     thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
+    test_kinematic_objective.cpp
     )
+if (TRIBOL_FOUND AND ENZYME_FOUND)
+    list(APPEND physics_serial_test_sources 
+                contact_finite_diff.cpp
+                tribol_finite_diff.cpp)
+endif()
 
 serac_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}

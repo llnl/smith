@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -62,6 +62,7 @@ class FiniteElementDual : public FiniteElementVector {
    */
   FiniteElementDual& operator=(FiniteElementDual&& rhs)
   {
+    FiniteElementVector::operator=(rhs);
     this->linear_form_ = std::move(rhs.linear_form_);
     return *this;
   }

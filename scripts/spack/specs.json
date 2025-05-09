@@ -1,6 +1,6 @@
 {
     "__comment__":"##############################################################################",
-    "__comment__":"# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and      ",
+    "__comment__":"# Copyright (c) Lawrence Livermore National Security, LLC and      ",
     "__comment__":"# other Serac Project Developers. See the top-level COPYRIGHT file for details.",
     "__comment__":"#                                                                             ",
     "__comment__":"# SPDX-License-Identifier: (BSD-3-Clause)                                     ",
@@ -15,7 +15,8 @@
 
     "toss_4_x86_64_ib":
     [ "gcc@10.3.1+devtools+profiling",
-      "clang@14.0.6+devtools+profiling" ],
+      "clang@14.0.6+devtools+profiling",
+      "clang@16.0.6+devtools+profiling~openmp" ],
 
     "toss_4_x86_64_ib_cray":
     [ "rocmcc@6.2.1~openmp+profiling+rocm+raja+umpire+strumpack~petsc amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion"],
