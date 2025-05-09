@@ -4,13 +4,13 @@
 # CMake executable path: /Applications/CMake.app/Contents/bin/cmake
 #------------------------------------------------------------------------------
 
-set(CMAKE_PREFIX_PATH "/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/caliper-2.12.1-7jgcw4avlugvmgjprkb2l4dxz7st4wnm;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/tribol-0.1.0.18-kbxwfnobrpyhma6qn66v2fm75p3l6qx5;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/adiak-0.4.1-3ckr3xlctw4n2vxgyvwwedz565pnk7ew;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/axom-0.10.1.1-eki6z6de3acyjwjrcpbprlpzfhg6jwn5;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/conduit-0.9.2-u47jzvf5dvxsohzqinocnioiiclop2sf;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/mfem-4.8.0.1-eocrayyf5n37lzvw3r5wgz2evuc2wuqt;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/raja-2024.07.0-gknfkv4gybxnqx2i3nil5g3qjyok3sts;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/umpire-2024.07.0-ojfmlfuryuihurl7icn3s2xsb6ps63ih;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/netcdf-c-4.7.4-jedoysgapy62edrl3g2iup5e32txllc3;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/slepc-3.22.2-glqr3ei66zbym2agfhwnuvdluglymerk;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/sundials-6.7.0-kz556nsodfzycginqegqvmnsarupoknh;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/hdf5-1.8.23-bgdxb3ycqwijcx6l4fxjvxsgbqpyqkh6;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/arpack-ng-3.9.0-oitp62cmbqzjmdtddtoh4bzoyzfhqfo5;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/petsc-3.22.3-5576rgkg27aa42hnfs37rfs5zzswycfl;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/hypre-2.32.0-3a2s24qtkbmistrphdr3qvycdp5naovi;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/strumpack-8.0.0-z2mwrm5bnxzd4el27kjoaaltbvga7erc;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/superlu-dist-8.1.2-loru4twlvr4bzt43nz3x4xytycqeaxb3;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/netlib-scalapack-2.2.2-3c6fcy7eejjmgc6c2y6dzsln7jr3ku6x;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/parmetis-4.0.3-uuvvpz25j4rxiqdjrt6yk4c62zoho665;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/camp-2024.07.0-weivskea4ygfy3lout6mbx4mt3glbru3;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/metis-5.1.0-n6nb3njjkh7ogs5mysui3kckushhn6ui;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/fmt-11.0.2-wmjdxvdbsy33as7ifrvcjzm76o2zbd67;/Users/chapman39/dev/serac/venv;/Users/chapman39/dev/serac/venv;/Applications/CMake.app/Contents;/opt/homebrew;/opt/homebrew;/opt/homebrew/opt/llvm@14;/opt/homebrew;/opt/homebrew;/opt/homebrew;/opt/homebrew" CACHE STRING "")
+set(CMAKE_PREFIX_PATH "/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/caliper-2.12.1-7jgcw4avlugvmgjprkb2l4dxz7st4wnm;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/tribol-0.1.0.18-bsli3bttyfydtoocmahqe4qqjdg7nmh4;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/adiak-0.4.1-3ckr3xlctw4n2vxgyvwwedz565pnk7ew;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/axom-0.10.1.1-76tu5rbb7voci7ligokn3ugvpje7rsqp;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/conduit-0.9.2-6qpw5tn3zazjeanphdgszsnoiovs3kkm;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/mfem-4.8.0.1-eocrayyf5n37lzvw3r5wgz2evuc2wuqt;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/raja-2024.07.0-gknfkv4gybxnqx2i3nil5g3qjyok3sts;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/umpire-2024.07.0-ojfmlfuryuihurl7icn3s2xsb6ps63ih;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/netcdf-c-4.7.4-jedoysgapy62edrl3g2iup5e32txllc3;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/slepc-3.22.2-glqr3ei66zbym2agfhwnuvdluglymerk;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/sundials-6.7.0-kz556nsodfzycginqegqvmnsarupoknh;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/hdf5-1.8.23-bgdxb3ycqwijcx6l4fxjvxsgbqpyqkh6;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/arpack-ng-3.9.0-oitp62cmbqzjmdtddtoh4bzoyzfhqfo5;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/petsc-3.22.3-5576rgkg27aa42hnfs37rfs5zzswycfl;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/hypre-2.32.0-3a2s24qtkbmistrphdr3qvycdp5naovi;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/strumpack-8.0.0-z2mwrm5bnxzd4el27kjoaaltbvga7erc;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/superlu-dist-8.1.2-loru4twlvr4bzt43nz3x4xytycqeaxb3;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/netlib-scalapack-2.2.2-3c6fcy7eejjmgc6c2y6dzsln7jr3ku6x;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/parmetis-4.0.3-uuvvpz25j4rxiqdjrt6yk4c62zoho665;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/camp-2024.07.0-weivskea4ygfy3lout6mbx4mt3glbru3;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/metis-5.1.0-n6nb3njjkh7ogs5mysui3kckushhn6ui;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/fmt-11.0.2-wmjdxvdbsy33as7ifrvcjzm76o2zbd67;/Users/chapman39/dev/serac/venv;/Users/chapman39/dev/serac/venv;/Applications/CMake.app/Contents;/opt/homebrew;/opt/homebrew;/opt/homebrew/opt/llvm@14;/opt/homebrew;/opt/homebrew;/opt/homebrew;/opt/homebrew" CACHE STRING "")
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH "ON" CACHE STRING "")
 
-set(CMAKE_BUILD_RPATH "/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/serac-develop-jtolh7o7fxcdesiyq2cgu7qmybuo77gd/lib;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/serac-develop-jtolh7o7fxcdesiyq2cgu7qmybuo77gd/lib64;/opt/homebrew/lib/gcc/14;" CACHE STRING "")
+set(CMAKE_BUILD_RPATH "/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/serac-develop-dg5e6dsb32yaogkk65ssiniinhfjgcvo/lib;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/serac-develop-dg5e6dsb32yaogkk65ssiniinhfjgcvo/lib64;/opt/homebrew/lib/gcc/14;" CACHE STRING "")
 
-set(CMAKE_INSTALL_RPATH "/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/serac-develop-jtolh7o7fxcdesiyq2cgu7qmybuo77gd/lib;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/serac-develop-jtolh7o7fxcdesiyq2cgu7qmybuo77gd/lib64;/opt/homebrew/lib/gcc/14;" CACHE STRING "")
+set(CMAKE_INSTALL_RPATH "/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/serac-develop-dg5e6dsb32yaogkk65ssiniinhfjgcvo/lib;/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6/serac-develop-dg5e6dsb32yaogkk65ssiniinhfjgcvo/lib64;/opt/homebrew/lib/gcc/14;" CACHE STRING "")
 
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 
@@ -65,11 +65,11 @@ set(ENABLE_OPENMP ON CACHE BOOL "")
 
 set(TPL_ROOT "/Users/chapman39/dev/serac/serac_tpls/clang-14.0.6" CACHE PATH "")
 
-set(AXOM_DIR "${TPL_ROOT}/axom-0.10.1.1-eki6z6de3acyjwjrcpbprlpzfhg6jwn5" CACHE PATH "")
+set(AXOM_DIR "${TPL_ROOT}/axom-0.10.1.1-76tu5rbb7voci7ligokn3ugvpje7rsqp" CACHE PATH "")
 
 set(CAMP_DIR "${TPL_ROOT}/camp-2024.07.0-weivskea4ygfy3lout6mbx4mt3glbru3" CACHE PATH "")
 
-set(CONDUIT_DIR "${TPL_ROOT}/conduit-0.9.2-u47jzvf5dvxsohzqinocnioiiclop2sf" CACHE PATH "")
+set(CONDUIT_DIR "${TPL_ROOT}/conduit-0.9.2-6qpw5tn3zazjeanphdgszsnoiovs3kkm" CACHE PATH "")
 
 set(LUA_DIR "/opt/homebrew" CACHE PATH "")
 
@@ -107,7 +107,7 @@ set(SUNDIALS_DIR "${TPL_ROOT}/sundials-6.7.0-kz556nsodfzycginqegqvmnsarupoknh" C
 
 set(UMPIRE_DIR "${TPL_ROOT}/umpire-2024.07.0-ojfmlfuryuihurl7icn3s2xsb6ps63ih" CACHE PATH "")
 
-set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.18-kbxwfnobrpyhma6qn66v2fm75p3l6qx5" CACHE PATH "")
+set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.18-bsli3bttyfydtoocmahqe4qqjdg7nmh4" CACHE PATH "")
 
 #------------------------------------------------------------------------------
 # Devtools
