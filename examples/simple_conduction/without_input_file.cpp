@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -19,8 +19,7 @@
 #include "serac/physics/state/state_manager.hpp"
 // _incl_state_manager_end
 // _incl_infra_start
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 // _incl_infra_end
 // _incl_mesh_start
 #include "serac/mesh/mesh_utils.hpp"
@@ -29,7 +28,8 @@
 // _main_init_start
 int main(int argc, char* argv[])
 {
-  /*auto [num_procs, rank] = */ serac::initialize(argc, argv);
+  // Initialize and automatically finalize MPI and other libraries
+  serac::ApplicationManager applicationManager(argc, argv);
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "without_input_file_example");
   // _main_init_end
@@ -80,6 +80,6 @@ int main(int argc, char* argv[])
   // _run_sim_end
 
   // _exit_start
-  serac::exitGracefully();
+  return 0;
 }
 // _exit_end

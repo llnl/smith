@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -12,7 +12,6 @@
 #include <iostream>
 
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/terminator.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/numerics/trust_region_solver.hpp"
@@ -629,7 +628,7 @@ class TrustRegion : public mfem::NewtonSolver {
     num_subspace_solves = 0;
     num_jacobian_assembles = 0;
 
-    real_t norm, norm_goal;
+    real_t norm, norm_goal, prev_norm;
     norm = initial_norm = computeResidual(X, r);
     norm_goal = std::max(rel_tol * initial_norm, abs_tol);
     if (print_options.first_and_last && !print_options.iterations) {
@@ -666,6 +665,7 @@ class TrustRegion : public mfem::NewtonSolver {
         mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
         if (it > 0) {
           mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
+          mfem::out << ", Rate = " << std::setw(10) << std::log10(prev_norm / norm);
           mfem::out << ", x_incr = " << std::setw(13) << trResults.d.Norml2();
         } else {
           mfem::out << ", norm goal = " << std::setw(13) << norm_goal << "\n";
@@ -688,6 +688,8 @@ class TrustRegion : public mfem::NewtonSolver {
       }
 
       assembleJacobian(X);
+
+      prev_norm = norm;
 
       if (it == 0 || (trResults.cg_iterations_count >= settings.max_cg_iterations ||
                       cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {
@@ -1114,12 +1116,12 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
     case LinearSolver::PetscCG:
     case LinearSolver::PetscGMRES:
       SLIC_ERROR_ROOT("PETSc linear solver requested for non-PETSc build.");
-      exitGracefully(true);
+      exit(1);
       break;
 #endif
     default:
       SLIC_ERROR_ROOT("Linear solver type not recognized.");
-      exitGracefully(true);
+      exit(1);
   }
 
   iter_lin_solver->SetRelTol(linear_opts.relative_tol);

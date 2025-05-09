@@ -1,17 +1,17 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level COPYRIGHT file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+from spack.package import *
 from spack.pkg.builtin.mfem import Mfem as BuiltinMfem
-
 
 class Mfem(BuiltinMfem):
 
     # Note: Make sure this sha coincides with the git submodule
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
-    version("4.7.0.1", commit="057a5a43b067bf1507c0cb6d8165fdd153702b96")
+    version("4.8.0.1", commit="d9c1c34fdfaf3f7a9f56dfc82f7c083082a36fca")
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 

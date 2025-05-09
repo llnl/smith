@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -11,7 +11,7 @@
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "mfem.hpp"
 
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/materials/solid_material.hpp"
@@ -28,7 +28,8 @@ void output(double u, double f, const Physics& solid, const std::string& paravie
 
 int main(int argc, char* argv[])
 {
-  serac::initialize(argc, argv);
+  // Initialize and automatically finalize MPI and other libraries
+  serac::ApplicationManager applicationManager(argc, argv);
 
   constexpr int p = 2;
   constexpr int dim = 3;
@@ -39,8 +40,8 @@ int main(int argc, char* argv[])
   constexpr int elements_in_y = 1;
   constexpr int elements_in_z = 1;
 
-  int serial_refinements = 0;
-  int parallel_refinements = 0;
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
   int time_steps = 100;
   double strain_rate = 1e-3;
 
@@ -59,11 +60,20 @@ int main(int argc, char* argv[])
   // Handle command line arguments
   axom::CLI::App app{"Plane strain uniaxial extension of a bar."};
   // Mesh options
-  app.add_option("--serial-refinements", serial_refinements, "Serial refinement steps", true);
-  app.add_option("--parallel-refinements", parallel_refinements, "Parallel refinement steps", true);
-  app.add_option("--time-steps", time_steps, "Number of time steps to divide simulation", true);
-  app.add_option("--strain-rate", strain_rate, "Nominal strain rate", true);
-  app.add_option("--output-file", output_filename, "Name for force-displacement output file", true);
+  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")
+      ->default_val("0")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps")
+      ->default_val("0")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--time-steps", time_steps, "Number of time steps to divide simulation")
+      ->default_val("100")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--strain-rate", strain_rate, "Nominal strain rate")
+      ->default_val("1e-3")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--output-file", output_filename, "Name for force-displacement output file")
+      ->default_val(output_filename);
   app.set_help_flag("--help");
 
   CLI11_PARSE(app, argc, argv);
@@ -81,7 +91,7 @@ int main(int argc, char* argv[])
 
   auto mesh = serac::mesh::refineAndDistribute(
       serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length),
-      serial_refinements, parallel_refinements);
+      serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // create boundary domains for boundary conditions
@@ -159,7 +169,6 @@ int main(int argc, char* argv[])
   }
 
   file.close();
-  serac::exitGracefully();
 
   return 0;
 }

@@ -60,9 +60,9 @@ toss4-gcc_10_3_1-src:
 toss4-clang_16_0_6-src:
   variables:
     COMPILER: "clang@16.0.6"
-    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
+    HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
-    #DO_INTEGRATION_TESTS: "yes"
+    EXTRA_BUILD_OPTIONS: "--skip-install"
     ALLOC_NODES: "2"
     ALLOC_TIME: "30"
     ALLOC_DEADLINE: "60"

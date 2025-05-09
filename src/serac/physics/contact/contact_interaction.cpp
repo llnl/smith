@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -63,16 +63,10 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
     mfem::FiniteElementSpace::MarkerToList(tdof_markers, inactive_tdofs_);
   }
 
-  // make sure we can compute exact Jacobian if requested
+  // set up Tribol to compute exact Jacobian if requested
   if (getContactOptions().jacobian == ContactJacobian::Exact) {
-#ifdef TRIBOL_USE_ENZYME
     tribol::enableEnzyme(interaction_id, true);
     tribol::registerMfemReferenceCoords(interaction_id, static_cast<const mfem::ParGridFunction&>(*mesh.GetNodes()));
-#else
-    SLIC_INFO_ROOT(
-        "Exact contact Jacobian contributions require Enzyme support in Tribol. Using approximate Jacobian.");
-    contact_opts_.jacobian = ContactJacobian::Approximate;
-#endif
   }
 }
 

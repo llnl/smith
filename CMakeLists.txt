@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -51,6 +51,11 @@ message(STATUS "Serac Source Dir: ${SERAC_SOURCE_DIR}")
 # undefined symbol: mpi_abort_
 if(SERAC_ENABLE_CODEVELOP OR (ENABLE_HIP AND STRUMPACK_DIR))
     set(ENABLE_FORTRAN ON CACHE BOOL "")
+endif()
+
+# Prevent deprecated warnings from C++17 in GTest on TOSS4Cray
+if(DEFINED ENV{SYS_TYPE} AND "$ENV{SYS_TYPE}" STREQUAL "toss_4_x86_64_ib_cray")
+    string(APPEND CMAKE_CXX_FLAGS " -Wno-deprecated-declarations")
 endif()
 
 #------------------------------------------------------------------------------

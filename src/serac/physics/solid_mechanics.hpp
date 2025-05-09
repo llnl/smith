@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -15,7 +15,6 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/initialize.hpp"
 #include "serac/physics/common.hpp"
 #include "serac/physics/solid_mechanics_input.hpp"
 #include "serac/physics/base_physics.hpp"
@@ -420,7 +419,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   qdata_type<T> createQuadratureDataBuffer(T initial_state, const std::optional<Domain>& optional_domain = std::nullopt)
   {
     Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
-    return StateManager::newQuadratureDataBuffer(domain, order, dim, initial_state);
+    return StateManager::newQuadratureDataBuffer(mesh_tag_, domain, order, dim, initial_state);
   }
 
   /**
@@ -1158,9 +1157,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// @overload
   void completeSetup() override
   {
-    // Build the dof array lookup tables
-    displacement_.space().BuildDofToArrays();
-
     if (is_quasistatic_) {
       residual_with_bcs_ = buildQuasistaticOperator();
     } else {

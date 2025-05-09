@@ -21,8 +21,7 @@
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -68,8 +67,7 @@ TEST_P(TribolFiniteDiff, patch)
   constexpr int interaction_id = 0;
   contact_data.addContactInteraction(interaction_id, {6}, {7}, contact_options);
 
-  auto pressure_space = contact_data.getContactInteractions()[0].pressureSpace();
-  mfem::Vector u(pmesh.GetNodes()->Size() + pressure_space.GetVSize());
+  mfem::Vector u(pmesh.GetNodes()->Size() + contact_data.getContactInteractions()[0].numPressureDofs());
   u = 0.0;
   mfem::Vector u_shape = u;
   mfem::Vector f(u.Size());
@@ -122,10 +120,6 @@ INSTANTIATE_TEST_SUITE_P(tribol, TribolFiniteDiff,
 int main(int argc, char* argv[])
 {
   testing::InitGoogleTest(&argc, argv);
-
-  serac::initialize(argc, argv);
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully(result);
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

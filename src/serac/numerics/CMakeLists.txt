@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -23,7 +23,7 @@ set(numerics_sources
     petsc_solvers.cpp
     )
 
-set(numerics_depends serac_infrastructure serac_functional)
+set(numerics_depends serac_infrastructure serac_functional serac_boundary_conditions)
 
 blt_add_library(
     NAME        serac_numerics

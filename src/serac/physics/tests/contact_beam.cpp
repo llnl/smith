@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -19,6 +19,7 @@
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -55,12 +56,6 @@ TEST_P(ContactTest, beam)
                                            .absolute_tol = 1.0e-13,
                                            .max_iterations = 20,
                                            .print_level = 1};
-  // #ifdef SERAC_USE_SUNDIALS
-  //   // KINFullStep is preferred, but has issues when active set is enabled
-  //   if (std::get<1>(GetParam()) == ContactType::TiedNormal) {
-  //     nonlinear_options.nonlin_solver = NonlinearSolver::KINFullStep;
-  //   }
-  // #endif
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = std::get<0>(GetParam()),
@@ -138,12 +133,6 @@ INSTANTIATE_TEST_SUITE_P(
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

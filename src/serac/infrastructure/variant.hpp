@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -37,8 +37,8 @@ struct variant_storage {
    */
   int index_ = 0;
   union {
-    T0 t0_;
-    T1 t1_;
+    T0 t0_;  ///< type 0
+    T1 t1_;  ///< type 1
   };
 
   /**

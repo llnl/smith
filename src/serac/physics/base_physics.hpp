@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -226,7 +226,7 @@ class BasePhysics {
    *
    * @return The shape displacement finite element state
    */
-  const FiniteElementState& shapeDisplacement() const { return shape_displacement_; }
+  virtual const FiniteElementState& shapeDisplacement() const { return shape_displacement_; }
 
   /**
    * @brief Accessor for getting named finite element state parameter fields from the physics modules

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -19,7 +19,7 @@ namespace serac {
 
 ContactData::ContactData(const mfem::ParMesh& mesh)
     : mesh_{mesh},
-      reference_nodes_{dynamic_cast<const mfem::ParGridFunction*>(mesh.GetNodes())},
+      reference_nodes_{static_cast<const mfem::ParGridFunction*>(mesh.GetNodes())},
       current_coords_{*reference_nodes_},
       have_lagrange_multipliers_{false},
       num_pressure_dofs_{0},

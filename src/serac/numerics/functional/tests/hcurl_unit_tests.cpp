@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -10,6 +10,7 @@
 #include "serac/numerics/functional/detail/metaprogramming.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/finite_element.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -125,8 +126,6 @@ TEST(VerifyCurl, HexahedronCubic) { verify_curl_calculation<finite_element<::mfe
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-
-  axom::slic::SimpleLogger logger;
-
+  serac::ApplicationManager applicationManager(argc, argv);
   return RUN_ALL_TESTS();
 }

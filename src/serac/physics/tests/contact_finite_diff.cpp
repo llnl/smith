@@ -21,8 +21,7 @@
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -99,8 +98,6 @@ TEST_P(ContactFiniteDiff, patch)
   Domain material_block = EntireDomain(pmesh);
   solid_solver.setMaterial(mat, material_block);
 
-  // NOTE: Tribol will miss this contact if warm start doesn't account for contact
-  // constexpr double max_disp = 0.2;
   auto nonzero_disp_bc = [](vec3, double) { return vec3{{0.0, 0.0, 0.0}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
@@ -217,10 +214,6 @@ INSTANTIATE_TEST_SUITE_P(tribol, ContactFiniteDiff,
 int main(int argc, char* argv[])
 {
   testing::InitGoogleTest(&argc, argv);
-
-  serac::initialize(argc, argv);
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully(result);
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -15,9 +15,11 @@ set(contact_sources
     contact_interaction.cpp
     )
 
-set(contact_depends serac_infrastructure)
+set(contact_depends serac_infrastructure serac_state)
 blt_list_append(TO contact_depends ELEMENTS tribol IF TRIBOL_FOUND)
-blt_list_append(TO contact_depends ELEMENTS redecomp IF TRIBOL_FOUND AND SERAC_ENABLE_MPI)
+if (TRIBOL_FOUND AND SERAC_ENABLE_MPI)
+    list(APPEND contact_depends redecomp)
+endif()
 
 blt_add_library(
     NAME        serac_contact
