@@ -123,7 +123,9 @@ struct LiquidCrystElastomerBrighenti {
     state.temperature = get_value(temperature);
     state.distribution_tensor = get_value(mu);
 
-    return stress;
+    // transform the Cauchy stress to the First Piola-Kirchhoff stress
+    auto Finv = inv(F);
+    return J * stress * transpose(Finv);
   }
 
   /// -------------------------------------------------------
@@ -284,21 +286,10 @@ struct LiquidCrystalElastomerBertoldi {
     auto S_stress_1 = lambda * tr(E) * I;
     auto S_stress_2 = 2 * mu * E;
     auto S_stress_3 = -0.5 * beta_parameter_ * (St - S0) * (3 * outer(normal, normal) - I);
-// std::cout<< ".... young_modulus_ = "<< young_modulus_ << std::endl;
-// std::cout<< ".... poisson_ratio_ = "<< poisson_ratio_ << std::endl;
-// std::cout<< ".... beta_parameter_ = "<< beta_parameter_ << std::endl;
-// std::cout<< ".... normal = "<< normal[0] << std::endl;
-// std::cout<< ".... St = "<< St << " .... S0 = "<< S0 << std::endl;
-// std::cout<< ".... S_stress_1 = " << std::endl;
-// std::cout<<S_stress_1;
-// std::cout<< ".... S_stress_2 = " << std::endl;
-// std::cout<<S_stress_2;
-// std::cout<< ".... S_stress_3 = " << std::endl;
-// std::cout<<S_stress_3;
-// std::cout<< std::endl;
-// exit(0);
+
     // transform from second Piola-Lichhoff to Cauchy stress
-    auto stress = 1.0 / J * F * (S_stress_1 + S_stress_2 + S_stress_3) * transpose(F);
+    // auto stress = 1.0 / J * F * (S_stress_1 + S_stress_2 + S_stress_3) * transpose(F);
+    auto stress = F * (S_stress_1 + S_stress_2 + S_stress_3);
 
     return stress;
   }
@@ -478,8 +469,8 @@ struct LiquidCrystalElastomerZhang {
     // Compute total dW/dF
     auto dWdF  = dWLCEdF + dWIncdF;
 
-    // Transform from first Piola-Kirchhoff (dWdF) to Cauchy stress
-    return 1.0 / J * dWdF* transpose(F);
+    // Return first Piola-Kirchhoff stress (dWdF) 
+    return dWdF;
   }
 
   /// -------------------------------------------------------
