@@ -216,3 +216,7 @@ spack:
     arpack-ng:
       # 3.9.1 has this error: undefined reference to `pdsaupd_'
       require: "@3.9.0"
+    sundials:
+      # 7+ has MPI calls after MPI_finalize, since MFEM's Sundials instance
+      # is static
+      require: "@6.7.0"
