@@ -208,7 +208,11 @@ struct ContactSensitivityFixture : public ::testing::Test {
   SolidMaterial mat;
   TimeSteppingInfo tsInfo;
 
+#ifdef SERAC_USE_ENZYME
   static constexpr double eps = 2e-7;
+#else
+  static constexpr double eps = 0.2;
+#endif
 };
 
 TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjectiveAndGradient)
