@@ -36,7 +36,8 @@ TEST(DebugPrint, typeString)
   EXPECT_EQ(typeString(i), "int");
   std::string testStr = typeString(str);
   EXPECT_TRUE(testStr == "std::string" || testStr == gnuStdStr || testStr == llvmStdStr)
-      << "Expected type string to be either 'std::string' or '" << gnuStdStr << "' or '" << llvmStdStr << "', but got: " << testStr;
+      << "Expected type string to be either 'std::string' or '" << gnuStdStr << "' or '" << llvmStdStr
+      << "', but got: " << testStr;
   EXPECT_EQ(typeString(d), "double");
   EXPECT_EQ(typeString(m), "serac::detail::Material");
   EXPECT_EQ(typeString(ms), "serac::detail::Material::State");
@@ -50,7 +51,8 @@ TEST(DebugPrint, typeString)
   EXPECT_EQ(typeString(ci), "const int");
   testStr = typeString(cstr);
   EXPECT_TRUE(testStr == "const std::string" || testStr == "const " + gnuStdStr || testStr == "const " + llvmStdStr)
-      << "Expected type string to be either 'const std::string' or 'const " << gnuStdStr << "', or 'const " << llvmStdStr << "', but got: " << testStr;
+      << "Expected type string to be either 'const std::string' or 'const " << gnuStdStr << "', or 'const "
+      << llvmStdStr << "', but got: " << testStr;
   EXPECT_EQ(typeString(cd), "const double");
   EXPECT_EQ(typeString(cm), "const serac::detail::Material");
   EXPECT_EQ(typeString(cms), "const serac::detail::Material::State");
