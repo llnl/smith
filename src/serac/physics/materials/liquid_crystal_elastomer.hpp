@@ -462,8 +462,8 @@ struct LiquidCrystalElastomerZhang {
     // Compute total dW/dF
     auto dWdF  = dWLCEdF + dWIncdF;
 
-    // Transform from first Piola-Kirchhoff (dWdF) to Cauchy stress
-    return 1.0 / J * dWdF* transpose(F);
+    // return first Piola-Kirchhoff stress
+    return dWdF;
   }
 
   /// -------------------------------------------------------

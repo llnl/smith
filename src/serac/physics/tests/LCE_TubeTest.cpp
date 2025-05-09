@@ -41,10 +41,6 @@ int main(int argc, char* argv[])
   auto mesh = mesh::refineAndDistribute(std::move(meshInput), serial_refinement, parallel_refinement);
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  // Side set ordering for MFEM Cartesian mesh:
-  // SS-1: one end of the cylinder
-  // SS-2: other end of the cylinder
-  // SS-3: curved length of the cylinder
 
   // orient fibers in the beam like below:
   //
@@ -58,18 +54,18 @@ int main(int argc, char* argv[])
   // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛--> z
 
   // LinearSolverOptions linear_options = {.linear_solver = LinearSolver::SuperLU};
-  const LinearSolverOptions linear_options = {.linear_solver = LinearSolver::CG,.preconditioner = Preconditioner::HypreAMG,.absolute_tol   = 1.0e-8,.max_iterations=1000, .print_level = 0};
+  const LinearSolverOptions linear_options = {.linear_solver = LinearSolver::CG,.preconditioner = Preconditioner::HypreAMG,.absolute_tol   = 1.0e-11,.max_iterations=1000, .print_level = 0};
 
   NonlinearSolverOptions nonlinear_options = {.nonlin_solver  = serac::NonlinearSolver::TrustRegion,
-                                              .relative_tol   = 1.0e-6,
-                                              .absolute_tol   = 1.0e-10,
-                                              .max_iterations = 500, // changed this from 1
+                                              .relative_tol   = 1.0e-8,
+                                              .absolute_tol   = 1.0e-14,
+                                              .max_iterations = 1000, // changed this from 1
                                               .print_level    = 1,
                                               .trust_region_scaling = 0.1};
   bool use_warm_start = false;
-  SolidMechanics<p, dim, Parameters<L2<0>, L2<0>, L2<0> > > solid_solver(
+  SolidMechanics<p, dim, Parameters<L2<0>, L2<0>, L2<0>, L2<0>, L2<0>, L2<0> > > solid_solver(
       nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options, 
-      "ActiveInactiveTest", mesh_tag, {"orderParam", "gammaParam", "etaParam"}, 0, 0.0, false, use_warm_start);
+      "ActiveInactiveTest", mesh_tag, {"orderParam", "gammaParam", "etaParam","orderParam2","gammaParam2","etaParam2"}, 0, 0.0, false, use_warm_start);
 
   // -------------------
   // Material properties
@@ -86,41 +82,56 @@ int main(int argc, char* argv[])
 
   // Set material
   LiquidCrystalElastomerZhang lceMat(density, shear_mod, ini_order_param, omega_param, bulk_mod);
+  LiquidCrystalElastomerZhang regularMat(density, 1.9128e5, 0.0001, omega_param, 9.5e6);
+  /*
   serac::solid_mechanics::NeoHookean regularMat;
-
   // inactive material properties - from Harvard
   regularMat.density = 1; // update
   regularMat.K = 9.5e6; // E = 0.57 MPa
-  regularMat.G = 1.9128e5; //
+  regularMat.G = 1.9128e5; //*/
 
   // Parameter 1
   FiniteElementState orderParam(pmesh, L2<0>{}, "orderParam");
   orderParam = ini_order_param;
+  FiniteElementState orderParam2(pmesh, L2<0>{}, "orderParam2");
+  orderParam2 = 0.0001;
 
   // Parameter 2
   FiniteElementState gammaParam(pmesh, L2<0>{}, "gammaParam");
+  FiniteElementState gammaParam2(pmesh, L2<0>{}, "gammaParam2");
 
-  auto gammaFunc         = [](const mfem::Vector&, double) -> double {
+  auto gammaFunc         = [](const mfem::Vector& /*this is location*/, double) -> double {
     return 0.0 * M_PI_2; // 0.0;  // 
   };
 
   mfem::FunctionCoefficient gammaCoef(gammaFunc);
   gammaParam.project(gammaCoef);
+  gammaParam2.project(gammaCoef);
 
   // Paremetr 3
   FiniteElementState etaParam(pmesh, L2<0>{}, "etaParam");
-  auto                      etaFunc = [](const mfem::Vector& /*x*/, double) -> double { return 1.5708; };
+  auto                      etaFunc = [](const mfem::Vector& /*x*/, double) -> double { return 1.5708; }; //1.5708
   mfem::FunctionCoefficient etaCoef(etaFunc);
+  FiniteElementState etaParam2(pmesh, L2<0>{}, "etaParam2");
+  auto                      etaFunc2 = [](const mfem::Vector& /*x*/, double) -> double { return 0.0; }; //1.5708
+  mfem::FunctionCoefficient etaCoef2(etaFunc2);
   etaParam.project(etaCoef);
+  etaParam2.project(etaCoef2);
 
   // Set parameters
   constexpr int ORDER_INDEX = 0;
   constexpr int GAMMA_INDEX = 1;
   constexpr int ETA_INDEX   = 2;
+  constexpr int ORDER_INDEX2 = 3;
+  constexpr int GAMMA_INDEX2 = 4;
+  constexpr int ETA_INDEX2 = 5;
 
   solid_solver.setParameter(ORDER_INDEX, orderParam);
+  solid_solver.setParameter(ORDER_INDEX2, orderParam2);
   solid_solver.setParameter(GAMMA_INDEX, gammaParam);
   solid_solver.setParameter(ETA_INDEX, etaParam);
+  solid_solver.setParameter(GAMMA_INDEX2, gammaParam2);
+  solid_solver.setParameter(ETA_INDEX2, etaParam2);
 
   // Material domains and material setting
   serac::Domain whole_domain = serac::EntireDomain(pmesh);
@@ -134,25 +145,19 @@ int main(int argc, char* argv[])
   }));
 
   // Small areas on the end of the domain to fix in x and y, so that we constrain rigid modes while also allowing swelling on most of the end face
-  auto FixedAreaY = serac::Domain::ofBoundaryElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+  auto FixedArea = serac::Domain::ofBoundaryElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
     bool Outputs{};
     Outputs = false;
-    if(average(vertices)[1] < -0.0004 && average(vertices)[2] < 0.0001){
-      Outputs = true;
-    };
-    return Outputs;  
-  }));
-  auto FixedAreaX = serac::Domain::ofBoundaryElements(pmesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
-    bool Outputs{};
-    Outputs = false;
-    if(average(vertices)[0] < -0.0004 && average(vertices)[2] < 0.0001){
+    if(average(vertices)[1] < -0.00045 && average(vertices)[2] < 0.0001){
       Outputs = true;
     };
     return Outputs;  
   }));
 
+
   solid_solver.setMaterial(DependsOn<ORDER_INDEX, GAMMA_INDEX, ETA_INDEX>{}, lceMat, ActiveMat);
-  solid_solver.setMaterial(DependsOn<>{}, regularMat, NonActiveMat);
+  //solid_solver.setMaterial(DependsOn<>{}, regularMat, NonActiveMat);
+  solid_solver.setMaterial(DependsOn<ORDER_INDEX2, GAMMA_INDEX2, ETA_INDEX2>{}, regularMat, NonActiveMat); 
 
   // Boundary conditions domains
   auto BCOneEndDomain = ::serac::Domain::ofBoundaryElements(pmesh, ::serac::by_attr<dim>(1)); 
@@ -160,49 +165,18 @@ int main(int argc, char* argv[])
 
   // Prescribe zero displacement at the supported end of the beam
   solid_solver.setDisplacementBCs([=](auto, auto) { 
-    tensor<double, dim> u{}; 
+    tensor<double, dim> u{};
+    u[0] = 0; 
     u[1] = 0;
-    return u; }, FixedAreaY,serac::Component::Y);
-  solid_solver.setDisplacementBCs([=](auto, auto) { 
-    tensor<double, dim> u{}; 
-    u[0] = 0;
-    return u; }, FixedAreaX,serac::Component::X);
+    return u; }, FixedArea,serac::Component::X + serac::Component::Y);
   solid_solver.setDisplacementBCs([=](auto, auto) { 
     tensor<double, dim> u{}; 
     u[2] = 0;
     return u; }, BCOneEndDomain, serac::Component::Z);
 
-    // Option to set a small end displacement, this did not fix the solver issues
-  //solid_solver.setDisplacementBCs([=](auto, auto) { 
-  //  tensor<double, dim> u{}; 
-  //  u[1] = 0.00000001;
-  //  return u; }, BCOtherEndDomain, serac::Component::Y); 
-
-
-  // set global initial displacement as a field function - not currently using this, but leaving it as an option - note this doesn't fix the solver issues I am having
-  /*
-  auto applied_displacement = [](tensor<double, dim> x, double) {
-    tensor<double, dim> u{};
-    u[0] = 0.00000001 * x[0];
-    u[1] = 0.00000001 * x[1];
-    u[2] = 0.00000001 * x[2];
-    return u;
-  };
-  solid_solver.setDisplacement(
-    [applied_displacement](tensor<double, dim> X) { return applied_displacement(X, 0.0); });*/
-
   // set traction - not currently using this, but leaving it as an option
   double loadVal = 0.0e5;
   
-  /*
-  solid_solver.setTraction(
-    [&loadVal](auto x, auto, auto) {
-      auto t = 0.0 * x;
-      t[0] += loadVal;
-      return t;
-    },
-    BCOtherEndDomain); */
-
   // Finalize the data structures
   solid_solver.completeSetup();
 
@@ -220,7 +194,7 @@ int main(int argc, char* argv[])
             << "\n... Using two gamma angles" << std::endl;
 
   solid_solver.advanceTimestep(dt);
-  std::string outputFilename = "sol_tension_zhang_Dans_test_00_degrees_no_swelling_only_compresion";
+  std::string outputFilename = "ActiveInactiveFilamentTest";
   solid_solver.outputStateToDisk(outputFilename);
 
   for (int i = 0; i < num_steps; i++) {    
