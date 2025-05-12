@@ -57,6 +57,74 @@ using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
 
 
+class ParaviewWriter {
+public:
+  using StateVecs = std::vector<std::shared_ptr<serac::FiniteElementState> >;
+  using DualVecs = std::vector<std::shared_ptr<serac::FiniteElementDual> >;
+ 
+  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_)
+      : pv(std::move(pv_)), states(states_)
+  {
+  }
+ 
+  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
+      : pv(std::move(pv_)), states(states_), dual_states(duals_)
+  {
+  }
+ 
+  void write(int step, double time, const std::vector<serac::FiniteElementState*>& current_states)
+  {
+    SERAC_MARK_FUNCTION;
+    SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
+ 
+    for (size_t n = 0; n < states.size(); ++n) {
+      auto& state = states[n];
+      *state = *current_states[n];
+      state->gridFunction();
+    }
+ 
+    pv->SetCycle(step);
+    pv->SetTime(time);
+    pv->Save();
+  }
+private:
+  std::unique_ptr<mfem::ParaViewDataCollection> pv;
+  StateVecs states;
+  StateVecs dual_states;
+};
+
+
+
+ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<serac::FiniteElementState*>& states,
+                          std::string output_name)
+{
+  if (output_name == "") {
+    output_name = "default";
+  }
+ 
+  ParaviewWriter::StateVecs output_states;
+  for (const auto& s : states) {
+    output_states.push_back(std::make_shared<serac::FiniteElementState>(s->space(), s->name()));
+  }
+ 
+  auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
+  auto paraview_dc = std::make_unique<mfem::ParaViewDataCollection>(output_name, non_const_mesh);
+  int max_order_in_fields = 0;
+ 
+  // Find the maximum polynomial order in the physics module's states
+  for (const auto& state : output_states) {
+    paraview_dc->RegisterField(state->name(), &state->gridFunction());
+    max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
+  }
+ 
+  // Set the options for the paraview output files
+  paraview_dc->SetLevelsOfDetail(max_order_in_fields);
+  paraview_dc->SetHighOrderOutput(true);
+  paraview_dc->SetDataFormat(mfem::VTKFormat::BINARY);
+  paraview_dc->SetCompression(true);
+ 
+  return ParaviewWriter(std::move(paraview_dc), output_states, {});
+}
 
 
 // Q = [r + J^T l] = 0
@@ -146,9 +214,9 @@ int main(int argc, char* argv[])
   std::shared_ptr<serac::Residual> residual;
   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints;
   
-  int nx = 3; // 6
-  int ny = 2; // 4
-  int nz = 2; // 4
+  int nx = 6;
+  int ny = 4;
+  int nz = 4;
   mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian3D(nx, ny, nz, element_shape, xlength, ylength, zlength),
         	  "this_mesh_name", 0, 0);
 
@@ -190,7 +258,7 @@ int main(int argc, char* argv[])
   using ObjectiveT = serac::FunctionalObjective<dim, VectorSpace, serac::Parameters<VectorSpace, DensitySpace>>; // functional objective on displacement/density
 
   double time = 0.0;
-  double dt = 0.0;
+  double dt = 1.0;
   auto all_states = getPointers(states, params);
   auto objective_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[DENSITY]};
     
@@ -256,7 +324,8 @@ int main(int argc, char* argv[])
   //serac::FiniteElementDual res_vector(all_states[DISP]->space(), "residual");
   //res_vector = solid_mechanics_residual->residual(time, all_states);
   
-
+  auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "");
+  writer.write(0, 0.0, objective_states);
   InertialReliefProblem problem(objective_states, all_states, solid_mechanics_residual, constraints);
   int dimx = problem.GetDimx();
   int dimy = problem.GetDimy();
@@ -266,20 +335,50 @@ int main(int argc, char* argv[])
   mfem::Vector xf(dimx); xf = 0.0;
   mfem::Vector yf(dimy); yf = 0.0;
   
-  HypreParMatrix * dxF = problem.DxF(x0, y0);
-  HypreParMatrix * dyF = problem.DyF(x0, y0);
-  HypreParMatrix * dxQ = problem.DxQ(x0, y0);
-  HypreParMatrix * dyQ = problem.DyQ(x0, y0);
-  
+  // finite difference check
+  //{
+  //   y0 = 3.0;
+  //   mfem::Vector ydir(dimy); ydir.Randomize();
+  //   mfem::Vector y1(dimy); y1 = 0.0;
+  //   mfem::Vector q0(dimy); q0 = 0.0;
+  //   mfem::Vector q1(dimy); q1 = 0.0;
+  //   mfem::Vector err(dimy); err = 0.0;
+  //   int qeval_err;
+  //   problem.Q(x0, y0, q0, qeval_err);
+  //   HypreParMatrix * dyQ = problem.DyQ(x0, y0);
+  //   double eps = 1.0;
+  //   for (int j = 0; j < 30; j++)
+  //   {
+  //      y1.Set(1.0, y0);
+  //      y1.Add(eps, ydir);
+  //      problem.Q(x0, y1, q1, qeval_err);
+  //      if (qeval_err)
+  //      {
+  //         eps /= 2.0;
+  //         continue;
+  //      }
+  //      dyQ->Mult(ydir, err);
+  //      err.Add(-1. / eps, q1);
+  //      err.Add(1./ eps, q0);
+  //      std::cout << "||dQdy * yhat - (q(y0 + eps * yhat) - q(y0))/ eps||_2 = " << err.Norml2() << std::endl;
+  //      std::cout << "eps = " << eps << std::endl;
+
+  //      eps /= 2.0;
+  //   }
+
+  //}
+
   
   HomotopySolver solver(&problem);
   double tol = 1.e-6;
-  int maxIter = 30;
+  int maxIter = 100;
   solver.SetTol(tol);
   solver.SetMaxIter(maxIter);
 
 
   solver.Mult(x0, y0, xf, yf);
+  //objective_states[DISP]->Set(1.0, yf);
+  writer.write(1, 1.0, objective_states);
   //bool converged = solver.GetConverged();
   //if (myid == 0)
   //{
@@ -404,13 +503,6 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   
   serac::FiniteElementDual res_vector(all_states[DISP]->space(), "tempresidual");
   res_vector = residual->residual(time, dt, all_states);
-  for (int i = 0; i < res_vector.Size(); i++)
-  {
-     if (std::isnan(res_vector(i)))
-     {
-        cout << "nan entry in residual\n";
-     }
-  }
   qblock.GetBlock(0).Set(1.0, res_vector);
 
   Vector gradc(dimu); gradc = 0.0;
@@ -422,11 +514,8 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
                        axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
      gradc = 0.0;
      gradc.Set(1.0, constraints[i]->gradient(time, dt, obj_states, DISP));
-     std::cout << "|| grad(c_i) || = " << gradc.Norml2() << std::endl;
-     std::cout << "dim(grad(c_i)) = " << constraints[i]->gradient(time, dt, obj_states, DISP).Size() << std::endl;
-     std::cout << "dimU = " << dimu << std::endl;
      qblock.GetBlock(0).Add(yblock.GetBlock(1)(idx), gradc);
-     qblock.GetBlock(1)(idx) = constraints[i]->evaluate(time, dt, obj_states);
+     qblock.GetBlock(1)(idx) = -1.0 * constraints[i]->evaluate(time, dt, obj_states);
   }
   qeval.Set(1.0, qblock);
   Qeval_err = 0;
@@ -434,9 +523,12 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   {
      if (std::isnan(qeval(i)))
      {
-        cout << "nan entry\n";
         Qeval_err = 1;
      }
+  }
+  if (Qeval_err > 0 && mfem::Mpi::WorldRank() == 0)
+  {
+     cout << "at least one nan entry\n";
   }
 }
 
@@ -510,6 +602,10 @@ mfem::HypreParMatrix * InertialReliefProblem::DyQ([[maybe_unused]]const mfem::Ve
       dcdumat->Finalize();
       dcdu = GenerateHypreParMatrixFromSparseMatrix(uOffsets, cOffsets , dcdumat); // utility function call
       mfem::HypreParMatrix * dcduT = dcdu->Transpose();
+      mfem::Vector scale(dcdu->Height());
+      scale = -1.0;
+      dcdu->ScaleRows(scale);
+      
       mfem::Array2D<const mfem::HypreParMatrix *> BlockMat(2, 2);
       BlockMat(0, 0) = drdu;
       BlockMat(0, 1) = dcduT;

@@ -132,6 +132,7 @@ void HomotopySolver::Mult(const Vector & x0, const Vector & y0, Vector & xf, Vec
       Xtrial.Add(1.0, dXtrk);
 
 
+      // TODO: what if the residual evaluation is bad
       Residual(Xtrial, theta, rktrial, reval_err);
       Vector rktrial_comp_norm(3); rktrial_comp_norm = 0.0;
       for (int i = 0; i < 3; i++)
@@ -156,7 +157,7 @@ void HomotopySolver::Mult(const Vector & x0, const Vector & y0, Vector & xf, Vec
 	 }
       }
       
-      if (!inFilterRegion && inNeighborhood)
+      if (!inFilterRegion && inNeighborhood && reval_err == 0)
       {
 	 UpdateFilter(rktrial_comp_norm);
 	 tr_centering = false;
@@ -226,7 +227,7 @@ void HomotopySolver::Mult(const Vector & x0, const Vector & y0, Vector & xf, Vec
 	    {
 	       cout << "TRcen -- not in beta1 neighborhood\n";
 	    }
-	    if (!inFilterRegion && inNeighborhood)
+	    if (!inFilterRegion && inNeighborhood && reval_err == 0)
 	    {
 	       UpdateFilter(rktrial_comp_norm);
 	       delta *= 0.5;
@@ -317,7 +318,10 @@ void HomotopySolver::Mult(const Vector & x0, const Vector & y0, Vector & xf, Vec
 	       if (iAmRoot)
 	       {
 	           cout << "CenManagement -- bad evaluation of residual\n";
+		   cout << "i_linesearch - " << i_linesearch << endl;
 	       }   
+	       t = 0.995 * pow(t, 3.0);
+	       i_linesearch += 1;
 	       continue;
 	    }
 	    inNeighborhood = NeighborhoodCheck(Xtrialp, rktrial, theta_t, beta1, betabar);
@@ -558,7 +562,6 @@ void HomotopySolver::JacG(const BlockVector &X, const double theta, BlockOperato
       delete JGxx; JGxx = nullptr;
    }
    JGxx = GenerateHypreParMatrixFromDiagonal(dofOffsetsx, diagJacGxx);
-
    // I + diag( (x - s) / sqrt( (x - s)^2 + 4 (\theta a)^q)
    // = 2 I - [I - diag( (x - s) / sqrt( (x - s)^2 + 4 * (\theta a)^q)]
    Vector diagJacGxs(dimx);
@@ -569,7 +572,6 @@ void HomotopySolver::JacG(const BlockVector &X, const double theta, BlockOperato
       delete JGxs; JGxs = nullptr;
    }
    JGxs = GenerateHypreParMatrixFromDiagonal(dofOffsetsx, diagJacGxs);
-   
    // d / dx (G_t)_2 = -dF/dx - (t \gamma_x)^p
    if (JGsx)
    {
@@ -609,7 +611,6 @@ void HomotopySolver::JacG(const BlockVector &X, const double theta, BlockOperato
       delete JGyx;
    }
    JGyx = new HypreParMatrix(*(problem->DxQ(X.GetBlock(0), X.GetBlock(2))));
-
 
    // d / dy (G_t)_3 = dQ / dy + (t * \gamma_y)^p
    if (JGyy)
