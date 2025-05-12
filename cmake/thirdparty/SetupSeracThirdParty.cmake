@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -41,7 +41,10 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     # Create global variable to toggle between GPU targets
     #------------------------------------------------------------------------------
     if(SERAC_ENABLE_CUDA)
-        set(serac_device_depends blt::cuda CACHE STRING "" FORCE)
+        # CUDAToolkit required to find cublasLt library
+        # Can be removed once this BLT PR is merged https://github.com/LLNL/blt/pull/585 (?)
+        find_package(CUDAToolkit REQUIRED)
+        set(serac_device_depends blt::cuda CUDA::cublasLt CACHE STRING "" FORCE)
     elseif(SERAC_ENABLE_HIP)
         set(serac_device_depends blt::hip CACHE STRING "" FORCE)
     else()
@@ -467,6 +470,25 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
     #------------------------------------------------------------------------------
+    # Enzyme (used by Tribol)
+    #------------------------------------------------------------------------------
+    if (ENZYME_DIR)
+        serac_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
+        set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
+        find_dependency(Enzyme REQUIRED)
+
+        serac_assert_find_succeeded(PROJECT_NAME Enzyme
+                                    TARGET       LLDEnzymeFlags
+                                    DIR_VARIABLE ENZYME_DIR)
+
+        message(STATUS "Enzyme support is ON")
+        set(ENZYME_FOUND TRUE)
+    else()
+        message(STATUS "Enzyme support is OFF")
+        set(ENZYME_FOUND FALSE)
+    endif()
+
+    #------------------------------------------------------------------------------
     # Tribol
     #------------------------------------------------------------------------------
     if (NOT SERAC_ENABLE_CODEVELOP)
@@ -507,6 +529,11 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
             $<BUILD_INTERFACE:${tribol_repo_dir}/src>
         )
         target_include_directories(tribol PUBLIC
+            $<BUILD_INTERFACE:${tribol_repo_dir}/src>
+            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
+            $<INSTALL_INTERFACE:include>
+        )
+        target_include_directories(tribol_shared PUBLIC
             $<BUILD_INTERFACE:${tribol_repo_dir}/src>
             $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
             $<INSTALL_INTERFACE:include>

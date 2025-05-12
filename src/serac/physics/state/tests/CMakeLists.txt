@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -7,6 +7,7 @@
 set(state_test_depends serac_state serac_physics_materials serac_functional serac_mesh gtest)
 
 set(state_test_sources
+    test_finite_element_dual.cpp
     test_finite_element_state.cpp
     test_state_manager.cpp)
 

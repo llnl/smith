@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -60,7 +60,7 @@ TEST_P(ContactPatchTied, patch)
 //   };
 // #elif defined(MFEM_USE_STRUMPACK)
 #ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 1};
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #else
   LinearSolverOptions linear_options{};
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -68,15 +68,16 @@ TEST_P(ContactPatchTied, patch)
 #endif
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
-                                           .relative_tol = 1.0e-10,
-                                           .absolute_tol = 1.0e-10,
+                                           .relative_tol = 1.0e-13,
+                                           .absolute_tol = 1.0e-13,
                                            .max_iterations = 20,
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = GetParam().first,
                                  .type = ContactType::TiedNormal,
-                                 .penalty = 1.0e4};
+                                 .penalty = 8.0e2,
+                                 .jacobian = ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, "patch_mesh");
