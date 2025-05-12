@@ -449,15 +449,6 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
             entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
                                               "mpibind"))
 
-        # Replace /usr/bin/srun path with srun flux wrapper path on TOSS 4
-        if 'toss_4' in self._get_sys_type(spec):
-            srun_wrapper = which_string("srun")
-            mpi_exec_index = [index for index,entry in enumerate(entries)
-                                                  if "MPIEXEC_EXECUTABLE" in entry]
-            if len(mpi_exec_index) != 0:
-                del entries[mpi_exec_index[0]]
-            entries.append(cmake_cache_path("MPIEXEC_EXECUTABLE", srun_wrapper))
-
         return entries
 
     def find_path_replacement(self, path1, path2, path_replacements, name, entries):
