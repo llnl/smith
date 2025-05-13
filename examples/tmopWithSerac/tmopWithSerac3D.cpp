@@ -28,6 +28,9 @@
 #include <functional>
 #include <mfem/linalg/tensor.hpp>
 
+#define SPHERICAL_DOMAIN
+// #undef SPHERICAL_DOMAIN
+
 //////////////////////////////////////////////
 //////////////////////////////////////////////
 
@@ -56,8 +59,10 @@ inline double skewMatrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 //////////////////////////////////////////////
 struct CuboidLSF3D { 
   double x0;
-  double y0; 
-  // double z0; 
+  double y0;
+#ifdef SPHERICAL_DOMAIN
+  double z0; 
+#endif
   double radius; 
   double exponent; 
 
@@ -65,7 +70,11 @@ struct CuboidLSF3D {
   T SDF(const serac::tensor<T, 3> & x) const {
     using std::pow;
     // return pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent) + pow(x[2]-z0, exponent), 1.0/exponent) - radius;
+#ifdef SPHERICAL_DOMAIN
+    return pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent) + pow(x[2]-z0, exponent), 1.0/exponent) - radius;
+#else
     return pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent) - radius;
+#endif
   }
 
   template < typename T >
@@ -79,7 +88,9 @@ struct CuboidLSF3D {
 
     dphi[0] = pow(x[0] - x0, exponent-1) * pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
     dphi[1] = pow(x[1] - y0, exponent-1) * pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
-    // dphi[2] = (x[2] - z0)* pow( pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
+#ifdef SPHERICAL_DOMAIN
+    dphi[2] = pow(x[2] - z0, exponent-1) * pow(pow(x[0]-x0, exponent) + pow(x[1]-y0, exponent), 1.0/exponent-1);
+#endif
     return dphi;
   }
 };
@@ -130,7 +141,11 @@ int main(int argc, char* argv[])
   // Define the spatial dimension of the problem and the type of finite elements used.
   static constexpr int ORDER {1};
   static constexpr int DIM {3};
+#ifdef SPHERICAL_DOMAIN
+  auto inputFilename = "../../data/meshes/sphereTets.g";
+#else
   auto inputFilename = "../../data/meshes/cylOneElemThicknessTets.g";
+#endif
   int numElements = 2485;
 
   auto mesh = serac::buildMeshFromFile(inputFilename);
@@ -217,7 +232,12 @@ int main(int argc, char* argv[])
       auto [u, dudX] = nodeDisp;
       auto x = X + u;
       // auto z0 = 0.0;
+#ifdef SPHERICAL_DOMAIN   
+      auto z0 = 0.0;   
+      auto phi_value = CuboidLSF3D{x0, y0, z0, radius, exponent};
+#else
       auto phi_value = CuboidLSF3D{x0, y0, radius, exponent};
+#endif
       auto phiVal = phi_value.SDF(x);
       auto dphi = phi_value.GRAD(x);
 
@@ -228,6 +248,9 @@ int main(int argc, char* argv[])
 
   int totNumDofs = shape_fes->TrueVSize();
 
+#ifdef SPHERICAL_DOMAIN
+  mfem::Array<int> constrainedDofs(0);
+#else
   // Get dofs in z direction for all elements (pseudo 2D problem)
   mfem::Array<int> ess_tdof_list, ess_bdr(mesh.bdr_attributes.Max());
   ess_bdr = 0;
@@ -242,6 +265,7 @@ int main(int argc, char* argv[])
     counter++;
   }
   constrainedDofs.SetSize(counter);
+#endif
 
   // wrap residual and provide Jacobian
   serac::mfem_ext::StdFunctionOperator residual_opr(
@@ -273,7 +297,7 @@ int main(int argc, char* argv[])
                                         .preconditioner = ::serac::Preconditioner::HypreJacobi,
                                         .relative_tol   = 1.0e-10,
                                         .absolute_tol   = 1.0e-12,
-                                        .max_iterations = DIM * numElements,
+                                        .max_iterations = 5000 +  0 * DIM * numElements,
                                         .print_level    = 0};
 
   const serac::NonlinearSolverOptions nonlin_opts = {
@@ -293,8 +317,11 @@ int main(int argc, char* argv[])
 
   mfem::ParGridFunction nodeSolGF(shape_fes.get());
   nodeSolGF.SetFromTrueDofs(node_disp_computed);
-
+#ifdef SPHERICAL_DOMAIN
+  auto pd = mfem::ParaViewDataCollection("sol_mesh_morphing_serac_3D_sphere", &pmesh);
+#else
   auto pd = mfem::ParaViewDataCollection("sol_mesh_morphing_serac_3D", &pmesh);
+#endif
   pd.RegisterField("solution", &nodeSolGF);
   pd.SetCycle(1);
   pd.SetTime(1);
