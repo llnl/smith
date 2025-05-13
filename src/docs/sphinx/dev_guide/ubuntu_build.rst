@@ -42,10 +42,10 @@ Install required build packages to minimize what Spack will build:
     && sudo sed -i "s/ -fallow-argument-mismatch//g" /usr/bin/mpifort.mpich
 
 .. note::
-    If you are using the clang compiler, the above removing of flags is essential because
+    If you are using the ``clang`` compiler, the above removing of flags is essential because
     they are gcc specific.
 
-Optionally install packages to generate documenation:
+Optionally you can install packages to generate documenation:
 
 .. code-block:: bash
 
@@ -68,9 +68,9 @@ Spack builds.
 
     scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --setup-and-env-only
 
-This command will create a Spack environment file, `spack.yaml`, where you ran the above command.
+This command will create a Spack environment file, ``spack.yaml``, where you ran the above command.
 If you want to use Clang as your compiler. Alter the following section in that file, by changing
-`null` in the `f77` and `fc` lines to `/usr/bin/gfortran`.
+``null`` in the ``f77`` and ``fc`` lines to ``/usr/bin/gfortran``.
 
 .. code-block: yaml
 
@@ -91,7 +91,7 @@ If you want to use Clang as your compiler. Alter the following section in that f
 If you are using the GNU compiler, you can ignore the above step.
 
 To speed up the build, you can add packages that exist on your system to the same Spack environment file. For example,
-we installed lua in the above `apt-get` commands. To do so, add the following lines under the `packages:` section of the yaml:
+we installed lua in the above ``apt-get`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
 
 .. code-block: yaml
 
@@ -144,9 +144,9 @@ The above spack command will output a concretization that looks like the followi
     -   mqmexdv      ^umpire@2024.07.0%gcc@13.3.0~asan~backtrace+c~cuda~dev_benchmarks~device_alloc~deviceconst~examples+fmt_header_only~fortran~ipc_shmem~ipo~mpi~numa~omptarget+openmp~rocm~sanitizer_tests~shared~sqlite_experimental~tools+werror build_system=cmake build_type=Release generator=make tests=none arch=linux-ubuntu24.04-skylake
     -   vjmiu7m          ^fmt@11.0.2%gcc@13.3.0~ipo+pic~shared build_system=cmake build_type=Release cxxstd=11 generator=make arch=linux-ubuntu24.04-skylake
 
-Lines starting with `[e]` are external packages that Spack recognizes are on the system and will not rebuild them.
+Lines starting with ``[e]`` are external packages that Spack recognizes are on the system and will not rebuild them.
 By adding Lua to the Spack environment file, Spack will no longer build Lua and any of its dependencies that are
-needed by anything else. In this case, `lua`, `readline`, and `unzip` will not be built. `unzip` may be needed
+needed by anything else. In this case, ``lua``, ``readline``, and ``unzip`` will not be built. ``unzip`` may be needed
 by another package, so you can also add it with this yaml section:
 
 .. code-block: yaml
@@ -159,9 +159,9 @@ by another package, so you can also add it with this yaml section:
 
 .. important::
 
-    Uberenv will override existing `spack.yaml` files. Now that we have made modifications, you should rename
+    Uberenv will override existing ``spack.yaml`` files. Now that we have made modifications, you should rename
     or move the file so they are not lost. For the rest of instruction, we will assume you renamed the file to
-    `ubuntu24.yaml`.
+    ``ubuntu24.yaml``.
 
 -----------------------------------
 Build Serac's Third-party Libraries
@@ -176,4 +176,33 @@ that you want to develop with:
     scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=ubuntu24.yaml --spec="%clang@=14.0.6"
     # gcc
     scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=ubuntu24.yaml --spec="%gcc@=13.3.0"
+
+If successful, you will see two things. The first is what we call a host-config. It is all the CMake
+inputs you need to build Serac. This file will be a new CMake file in the current directory with your machine
+name, system type, and compiler, for example ``mycomputerlinux-ubuntu24.04-skylake-clang@14.0.6.cmake``.
+The second will be output from Spack that ends in this:
+
+.. code-block:: bash
+
+    ==> serac: Executing phase: 'initconfig'
+    ==> Updating view at /my/prefix/spack_env/.spack-env/view
+
+--------------
+Building Serac
+--------------
+
+Finally, with the TPL's built and the host-config file, you can build Serac with the following
+command:
+
+.. code-block:: bash
+
+    ./config-build.py -hc <host-config file>
+    cd <created build directory>
+    make -j
+    make -j8 test
+
+
+For more detail instructions on how to build Serac, see :ref:`quickstart guide <build-label>`.
+
+
 
