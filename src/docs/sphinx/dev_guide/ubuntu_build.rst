@@ -30,7 +30,7 @@ Install required build packages to minimize what Spack will build:
 
 .. code-block:: bash
 
-    sudo apt-get -qq install -y --no-install-recommends build-essential bzip2 cmake libopenblas-dev lua5.2 lua5.2-dev mpich unzip
+    sudo apt-get -qq install -y --no-install-recommends build-essential bzip2 cmake libopenblas-dev lua5.2 lua5.2-dev mpich libmpich-dev unzip
     # Remove problematic flags from mpich
     sudo sed -i "s/ -flto=auto//g" /usr/bin/mpicxx.mpich \
     && sudo sed -i "s/ -flto=auto//g" /usr/bin/mpicc.mpich \
@@ -40,6 +40,10 @@ Install required build packages to minimize what Spack will build:
     && sudo sed -i "s/ -ffat-lto-objects//g" /usr/bin/mpifort.mpich \
     && sudo sed -i "s/ -fallow-invalid-boz//g" /usr/bin/mpifort.mpich \
     && sudo sed -i "s/ -fallow-argument-mismatch//g" /usr/bin/mpifort.mpich
+
+.. note::
+    If you are using the clang compiler, the above removing of flags is essential because
+    they are gcc specific.
 
 Optionally install packages to generate documenation:
 
@@ -156,7 +160,8 @@ by another package, so you can also add it with this yaml section:
 .. important::
 
     Uberenv will override existing `spack.yaml` files. Now that we have made modifications, you should rename
-    or move the file so they are not lost.
+    or move the file so they are not lost. For the rest of instruction, we will assume you renamed the file to
+    `ubuntu24.yaml`.
 
 -----------------------------------
 Build Serac's Third-party Libraries
@@ -168,7 +173,7 @@ that you want to develop with:
 .. code-block:: bash
 
     # clang
-    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spec="%clang@=14.0.6"
+    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=ubuntu24.yaml --spec="%clang@=14.0.6"
     # gcc
-    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spec="%gcc@=13.3.0"
+    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=ubuntu24.yaml --spec="%gcc@=13.3.0"
 
