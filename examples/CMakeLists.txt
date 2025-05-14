@@ -30,5 +30,5 @@ add_subdirectory(buckling)
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
 
-# Add the homotopy example
-add_subdirectory(homotopy)
+# Add the inertia relief example
+add_subdirectory(inertia_relief)
