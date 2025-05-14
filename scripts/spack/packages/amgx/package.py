@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 from spack.package import *
-from spack_repo.builtin.packages.amgx.package import Amgx as BuiltinAmgx
+from spack.pkg.builtin.amgx import Amgx as BuiltinAmgx
 
 class Amgx(BuiltinAmgx):
     """AmgX provides a simple path to accelerated core solver technology on

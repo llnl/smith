@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 from spack.package import *
-from spack_repo.builtin.packages.sundials.package import Sundials as BuiltinSundials
+from spack.pkg.builtin.sundials import Sundials as BuiltinSundials
 
 class Sundials(BuiltinSundials):
 

@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 from spack.package import *
-from spack_repo.builtin.packages.cray_mpich.package import CrayMpich as BuiltinCrayMpich
+from spack.pkg.builtin.cray_mpich import CrayMpich as BuiltinCrayMpich
 
 class CrayMpich(BuiltinCrayMpich):
     # Adds newer version
