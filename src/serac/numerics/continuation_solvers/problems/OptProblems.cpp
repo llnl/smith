@@ -168,17 +168,8 @@ ReducedProblem::ReducedProblem(ParOptProblem * problem_, HYPRE_Int * constraintM
   constraintOffsets_reduced = offsetsFromLocalSizes(nLocConstraints);
 
 
-  for (int i = 0; i < 2; i++)
-  {
-    cout << "constraintOffsetsReduced_" << i << " = " << constraintOffsets_reduced[i] << ", (rank = " << myrank << ")\n";
-  }
-
   HYPRE_BigInt * constraintOffsets;
   constraintOffsets = offsetsFromLocalSizes(nProblemConstraints);
-  for (int i = 0; i < 2; i++)
-  {
-    cout << "constraintOffsets_" << i << " = " << constraintOffsets[i] << ", (rank = " << myrank << ")\n";
-  }
   
   
   P = GenerateProjector(constraintOffsets, constraintOffsets_reduced, constraintMask);
@@ -215,18 +206,9 @@ ReducedProblem::ReducedProblem(ParOptProblem * problem_, HypreParVector & constr
   constraintOffsets_reduced = offsetsFromLocalSizes(nLocConstraints);
 
 
-  for (int i = 0; i < 2; i++)
-  {
-    cout << "constraintOffsetsReduced_" << i << " = " << constraintOffsets_reduced[i] << ", (rank = " << myrank << ")\n";
-  }
 
   HYPRE_BigInt * constraintOffsets;
   constraintOffsets = offsetsFromLocalSizes(nProblemConstraints);
-  for (int i = 0; i < 2; i++)
-  {
-    cout << "constraintOffsets_" << i << " = " << constraintOffsets[i] << ", (rank = " << myrank << ")\n";
-  }
-  
   
   P = GenerateProjector(constraintOffsets, constraintOffsets_reduced, constraintMask);
 
