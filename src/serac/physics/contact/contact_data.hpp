@@ -180,6 +180,15 @@ class ContactData {
 #endif
   }
 
+#ifdef SERAC_USE_TRIBOL
+  /**
+   * @brief Get the contact interactions
+   *
+   * @return Vector of contact interactions
+   */
+  const std::vector<ContactInteraction>& getContactInteractions() const { return interactions_; }
+#endif
+
   /**
    * @brief Are any contact interactions enforced using Lagrange multipliers?
    *

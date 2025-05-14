@@ -25,7 +25,7 @@ set(numerics_sources
     petsc_solvers.cpp
     )
 
-set(numerics_depends serac_infrastructure serac_functional serac_continuation_solvers)
+set(numerics_depends serac_infrastructure serac_functional serac_boundary_conditions serac_continuation_solvers)
 
 blt_add_library(
     NAME        serac_numerics
