@@ -450,6 +450,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
                                               "mpibind"))
 
         # Replace /usr/bin/srun path with srun flux wrapper path on TOSS 4
+        # TODO Remove this once we move past https://github.com/spack/spack/pull/49033
         if 'toss_4' in self._get_sys_type(spec):
             srun_wrapper = which_string("srun")
             mpi_exec_index = [index for index,entry in enumerate(entries)
