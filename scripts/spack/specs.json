@@ -14,13 +14,13 @@
     "__comment__":"##############################################################################",
 
     "toss_4_x86_64_ib":
-    [ "+devtools+profiling %gcc@10.3.1",
-      "+devtools+profiling %clang@14.0.6",
-      "+devtools+profiling~openmp %clang@16.0.6" ],
+    [ "gcc@10.3.1+devtools+profiling",
+      "clang@14.0.6+devtools+profiling",
+      "clang@16.0.6+devtools+profiling~openmp" ],
 
     "toss_4_x86_64_ib_cray":
-    [ "~openmp+profiling+rocm+raja+umpire+strumpack~petsc amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion %rocmcc@6.2.1"],
+    [ "rocmcc@6.2.1~openmp+profiling+rocm+raja+umpire+strumpack~petsc amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion"],
 
     "blueos_3_ppc64le_ib_p9":
-    [ "+devtools+cuda+raja+umpire+profiling~strumpack cuda_arch=70 %clang@14.0.5" ]
+    [ "clang@14.0.5+devtools+cuda+raja+umpire+profiling~strumpack cuda_arch=70" ]
 }

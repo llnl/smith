@@ -4,7 +4,7 @@
 "package_final_phase" : "initconfig",
 "package_source_dir" : "../..",
 "spack_url": "https://github.com/spack/spack.git",
-"spack_commit": "5a8a7b83f689e62f48a6050f671f9c619bdb4849",
+"spack_commit": "ca977ea9e1afc9742e311b60f9b089f6345ceed8",
 "spack_configs_path": "scripts/spack/configs",
 "spack_packages_path": ["scripts/spack/radiuss-spack-configs/packages", "scripts/spack/packages"]
 }
