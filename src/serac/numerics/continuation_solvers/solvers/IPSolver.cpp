@@ -13,7 +13,7 @@ ParInteriorPointSolver::ParInteriorPointSolver(ParGeneralOptProblem * problem_)
                        block_offsetsumlz(5), block_offsetsuml(4), block_offsetsx(3),
                        Huu(nullptr), Hum(nullptr), Hmu(nullptr), 
                        Hmm(nullptr), Wmm(nullptr), D(nullptr), 
-                       Ju(nullptr), Jm(nullptr), JuT(nullptr), JmT(nullptr) 
+                       Ju(nullptr), Jm(nullptr), JuT(nullptr), JmT(nullptr), linSolver(nullptr) 
 {
    OptTol  = 1.e-2;
    max_iter = 20;
@@ -422,14 +422,69 @@ void ParInteriorPointSolver::IPNewtonSolve(BlockVector &x, Vector &l, Vector &zl
    b *= -1.0; 
    Xhat = 0.0;
 
-   MFEM_VERIFY(linSolver, "linear solver has not been set");
-   linSolver->SetOperator(A);
-   linSolver->Mult(b, Xhat);
+   if (linSolver)
+   {
+      MFEM_VERIFY(false, "attempting solve without having set");
+      linSolver->SetOperator(A);
+      linSolver->Mult(b, Xhat);
+   }
+   else // attempt a direct solve
+   {
+      int nRowBlocks = A.NumRowBlocks();
+      int nColBlocks = A.NumColBlocks();
+      Array2D<const HypreParMatrix *> ABlockMat(nRowBlocks, nColBlocks);
+      for (int i = 0; i < nRowBlocks; i++)
+      {
+         for (int j = 0; j < nColBlocks; j++)
+	 {
+	    if (!A.IsZeroBlock(i, j))
+	    {
+	        ABlockMat(i, j) = dynamic_cast<HypreParMatrix *>(&(A.GetBlock(i, j)));
+		MFEM_VERIFY(ABlockMat(i, j), "cast failure");
+	    }
+	    else
+	    {
+	        ABlockMat(i, j) = nullptr;
+	    }
+	 }
+      }
+      HypreParMatrix * Ak = HypreParMatrixFromBlocks(ABlockMat);
+      Solver * AkSolver = nullptr;
+#ifdef MFEM_USE_STRUMPACK
+      AkSolver = new STRUMPACKSolver(MPI_COMM_WORLD);
+      auto Aksolver = dynamic_cast<STRUMPACKSolver*>(AkSolver);
+      Aksolver->SetKrylovSolver(strumpack::KrylovSolver::DIRECT);
+      Aksolver->SetReorderingStrategy(strumpack::ReorderingStrategy::METIS);
+      STRUMPACKRowLocMatrix *Akstrumpack = new STRUMPACKRowLocMatrix(*Ak);
+      Aksolver->SetOperator(*Akstrumpack);
+#else
+#ifdef MFEM_USE_MKL_CPARDISO
+      AkSolver = new CPardisoSolver(MPI_COMM_WORLD);
+      AkSolver->SetOperator(*Ak);
+#else
+#ifdef MFEM_USE_MUMPS
+      AkSolver = new MUMPSSolver(MPI_COMM_WORLD);
+      auto Aksolver = dynamic_cast<MUMPSSolver *>(AkSolver);
+      Aksolver->SetPrintLevel(0);
+      Aksolver->SetMatrixSymType(MUMPSSolver::MatType::UNSYMMETRIC);
+      Aksolver->SetOperator(*Ak);
+#else 
+      MFEM_ERROR("IP-Newton linear solve failure due to not having compiled with STRUMPACK, MUMPS or MKL_CPARDISO or having set the linear solver of the IP solver via the");
+#endif
+#endif
+#endif
+      AkSolver->Mult(b, Xhat);
+      delete AkSolver;
+      delete Ak; 
+#ifdef MFEM_USE_STRUMPACK
+      delete Akstrumpack;
+#endif 
+   } 
    
    /* backsolve to determine zlhat */
-   for(int ii = 0; ii < dimM; ii++)
+   for(int i = 0; i < dimM; i++)
    {
-      zlhat(ii) = -1.*(zl(ii) + (zl(ii) * Xhat(ii + dimU) - mu) / (x(ii + dimU) - ml(ii)) );
+      zlhat(i) = -1.*(zl(i) + (zl(i) * Xhat(i + dimU) - mu) / (x(i + dimU) - ml(i)) );
    }
    
 

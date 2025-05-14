@@ -13,7 +13,7 @@ using namespace mfem;
 
 HomotopySolver::HomotopySolver(GeneralNLMCProblem * problem_) : problem(problem_), block_offsets_xsy(4),
 	dFdx(nullptr), dFdy(nullptr), dQdx(nullptr), dQdy(nullptr), JGxx(nullptr), JGxs(nullptr), JGsx(nullptr),
-   JGss(nullptr), JGsy(nullptr), JGyx(nullptr), JGyy(nullptr), filter(0)
+   JGss(nullptr), JGsy(nullptr), JGyx(nullptr), JGyy(nullptr), linSolver(nullptr), filter(0)
 {
    dimx = problem->GetDimx();
    dimy = problem->GetDimy();
@@ -638,18 +638,20 @@ void HomotopySolver::JacG(const BlockVector &X, const double theta, BlockOperato
 // solve J dX_N = - rk
 void HomotopySolver::NewtonSolve(BlockOperator & JkOp, [[maybe_unused]] const BlockVector & rk, BlockVector & dXN)
 {
-   int num_row_blocks = JkOp.NumRowBlocks();
-   int num_col_blocks = JkOp.NumColBlocks();
-   
-   
-   // Direct solver (default)
-   MFEM_VERIFY(linSolveOption == 0, "NewtonSolve only supports a direct solver (linSolveOption == 0)");
-   if(linSolveOption == 0)
+
+   if (linSolver)
    {
-      Array2D<const HypreParMatrix *> JkBlockMat(num_row_blocks, num_col_blocks);
-      for(int i = 0; i < num_row_blocks; i++)
+      linSolver->SetOperator(JkOp);
+      linSolver->Mult(rk, dXN); 
+   }
+   else
+   {
+      int nRowBlocks = JkOp.NumRowBlocks();
+      int nColBlocks = JkOp.NumColBlocks();
+      Array2D<const HypreParMatrix *> JkBlockMat(nRowBlocks, nColBlocks);
+      for(int i = 0; i < nRowBlocks; i++)
       {
-         for(int j = 0; j < num_col_blocks; j++)
+         for(int j = 0; j < nColBlocks; j++)
          {
             if(!JkOp.IsZeroBlock(i, j))
             {
@@ -690,13 +692,14 @@ void HomotopySolver::NewtonSolve(BlockOperator & JkOp, [[maybe_unused]] const Bl
 #endif
 #endif
       JkSolver->Mult(rk, dXN);
-      dXN *= -1.0;
       delete Jk;
       delete JkSolver;
 #ifdef MFEM_USE_STRUMPACK
       delete Jkstrumpack;
 #endif
+   
    }
+   dXN *= -1.0;
 }
 
 void HomotopySolver::DogLeg(const BlockOperator & JkOp, const BlockVector & gk, const double delta, const BlockVector & dXN, BlockVector & dXtr)
@@ -861,6 +864,10 @@ bool HomotopySolver::NeighborhoodCheck_2(const BlockVector & X, const BlockVecto
    return inNeighborhood;
 }
 
+void HomotopySolver::SetLinearSolver(Solver & solver_)
+{
+   linSolver = &(solver_);
+}
 
 
 

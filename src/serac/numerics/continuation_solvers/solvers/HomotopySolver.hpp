@@ -71,9 +71,7 @@ protected:
    int jOpt;
 
    // linear algebra
-   // flag which controls which linear solver is used
-   // to solve the unsymmetric Newton system
-   int linSolveOption = 0;
+   Solver * linSolver;
 
    int MyRank;
    bool iAmRoot;
@@ -97,6 +95,7 @@ public:
    bool NeighborhoodCheck_2(const BlockVector & X, const BlockVector & r, const double theta, const double beta, double & betabar_);
    void SetTol(double tol_) { tol = tol_; };
    void SetMaxIter(int max_outer_iter_) { max_outer_iter = max_outer_iter_; };
+   void SetLinearSolver(Solver &);
    virtual ~HomotopySolver();
 };
 
