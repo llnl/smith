@@ -266,7 +266,7 @@ Building Serac Dependencies on MacOS
    These instructions are in development, but have been tested for M2 MacBooks.
 
 .. note::
-   View an example host-config for MacOS in ``host-configs/other``.
+   View an example host-config for MacOS in ``host-configs/other/firion-darwin-sequoia-m2-clang@14.0.6.cmake``.
 
 Installing base dependencies using Homebrew
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
