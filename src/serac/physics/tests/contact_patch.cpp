@@ -17,6 +17,7 @@
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
@@ -41,13 +42,12 @@ TEST_P(ContactTest, patch)
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 2, 0);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "patch_mesh");
+  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), "patch_mesh", 2, 0);
 
-  Domain x0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  Domain y0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
-  Domain z0_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
-  Domain zmax_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
+  pmesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(2));
+  pmesh->addDomainOfBoundaryElements("z0_face", serac::by_attr<dim>(3));
+  pmesh->addDomainOfBoundaryElements("zmax_face", serac::by_attr<dim>(6));
 
   // TODO: investigate performance with Petsc
   // #ifdef SERAC_USE_PETSC
@@ -85,17 +85,16 @@ TEST_P(ContactTest, patch)
   double K = 10.0;
   double G = 0.25;
   solid_mechanics::NeoHookean mat{1.0, K, G};
-  Domain material_block = EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, material_block);
+  solid_solver.setMaterial(mat, pmesh->entireBody());
 
   // Define the function for the initial displacement and boundary condition
   auto applied_disp_function = [](tensor<double, dim>, auto) { return tensor<double, dim>{{0, 0, -0.01}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  solid_solver.setFixedBCs(x0_faces, Component::X);
-  solid_solver.setFixedBCs(y0_faces, Component::Y);
-  solid_solver.setFixedBCs(z0_face, Component::Z);
-  solid_solver.setDisplacementBCs(applied_disp_function, zmax_face, Component::Z);
+  solid_solver.setFixedBCs(pmesh->domain("x0_faces"), Component::X);
+  solid_solver.setFixedBCs(pmesh->domain("y0_faces"), Component::Y);
+  solid_solver.setFixedBCs(pmesh->domain("z0_face"), Component::Z);
+  solid_solver.setDisplacementBCs(applied_disp_function, pmesh->domain("zmax_face"), Component::Z);
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {4}, {5}, contact_options);

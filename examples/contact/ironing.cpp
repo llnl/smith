@@ -85,12 +85,10 @@ int main(int argc, char* argv[])
   solid_solver.setMaterial(serac::DependsOn<0, 1>{}, mat, mesh->entireBody());
 
   // Pass the BC information to the solver object
-  std::string surface_name = "bottom_of_subtrate";
-  mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(5));
-  solid_solver.setFixedBCs(mesh->domain(surface_name));
+  mesh->addDomainOfBoundaryElements("bottom_of_subtrate", serac::by_attr<dim>(5));
+  solid_solver.setFixedBCs(mesh->domain("bottom_of_subtrate"));
 
-  surface_name = "top_of_indenter";
-  mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(12));
+  mesh->addDomainOfBoundaryElements("top_of_indenter", serac::by_attr<dim>(12));
   auto applied_displacement = [](serac::tensor<double, dim>, double t) {
     constexpr double init_steps = 2.0;
     serac::tensor<double, dim> u{};
@@ -102,7 +100,7 @@ int main(int argc, char* argv[])
     }
     return u;
   };
-  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain(surface_name));
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("top_of_indenter"));
 
   // Add the contact interaction
   auto contact_interaction_id = 0;

@@ -15,6 +15,7 @@
 
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/materials/parameterized_thermal_material.hpp"
 #include "serac/serac_config.hpp"
@@ -53,14 +54,15 @@ static int iter = 0;
 std::unique_ptr<HeatTransfer<p, dim>> createNonlinearHeatTransfer(
     axom::sidre::DataStore& /*data_store*/, const NonlinearSolverOptions& nonlinear_opts,
     const TimesteppingOptions& dyn_opts,
-    const heat_transfer::IsotropicConductorWithLinearConductivityVsTemperature& mat, Domain& whole_domain)
+    const heat_transfer::IsotropicConductorWithLinearConductivityVsTemperature& mat, std::shared_ptr<serac::Mesh>& mesh)
 {
   // Note that we are testing the non-default checkpoint to disk capability here
   auto thermal = std::make_unique<HeatTransfer<p, dim>>(nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts,
                                                         thermal_prefix + std::to_string(iter++), mesh_tag,
                                                         std::vector<std::string>{}, 0, 0.0);
-  thermal->setMaterial(mat, whole_domain);
-  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; }, whole_domain);
+  thermal->setMaterial(mat, mesh->entireBody());
+  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; },
+                     mesh->entireBody());
 
   thermal->setTemperature([](const mfem::Vector&, double) { return 0.0; });
   thermal->setTemperatureBCs({1}, [](const mfem::Vector&, double) { return 0.0; });
@@ -73,7 +75,7 @@ using ParametrizedHeatTransferT = HeatTransfer<p, dim, Parameters<H1<p>>, std::i
 std::unique_ptr<ParametrizedHeatTransferT> createParameterizedHeatTransfer(
     axom::sidre::DataStore& /*data_store*/, const NonlinearSolverOptions& nonlinear_opts,
     const TimesteppingOptions& dyn_opts, const heat_transfer::ParameterizedLinearIsotropicConductor& mat,
-    Domain& whole_domain)
+    std::shared_ptr<serac::Mesh>& mesh)
 {
   std::vector<std::string> names{"conductivity"};
 
@@ -81,11 +83,12 @@ std::unique_ptr<ParametrizedHeatTransferT> createParameterizedHeatTransfer(
       nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts,
       parametrized_thermal_prefix + std::to_string(iter++), mesh_tag, names);
 
-  FiniteElementState user_defined_conductivity(StateManager::mesh(mesh_tag), H1<p>{}, "user_defined_conductivity");
+  FiniteElementState user_defined_conductivity(mesh->mfemParMesh(), H1<p>{}, "user_defined_conductivity");
   user_defined_conductivity = 1.1;
   thermal->setParameter(0, user_defined_conductivity);
-  thermal->setMaterial(DependsOn<0>{}, mat, whole_domain);
-  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; }, whole_domain);
+  thermal->setMaterial(DependsOn<0>{}, mat, mesh->entireBody());
+  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; },
+                     mesh->entireBody());
   thermal->setTemperature([](const mfem::Vector&, double) { return 0.0; });
   thermal->setTemperatureBCs({1}, [](const mfem::Vector&, double) { return 0.0; });
   thermal->completeSetup();
@@ -95,7 +98,8 @@ std::unique_ptr<ParametrizedHeatTransferT> createParameterizedHeatTransfer(
 std::unique_ptr<ParametrizedHeatTransferT> createParameterizedNonlinearHeatTransfer(
     axom::sidre::DataStore& /*data_store*/, const NonlinearSolverOptions& nonlinear_opts,
     const TimesteppingOptions& dyn_opts,
-    const heat_transfer::ParameterizedIsotropicConductorWithLinearConductivityVsTemperature& mat, Domain& whole_domain)
+    const heat_transfer::ParameterizedIsotropicConductorWithLinearConductivityVsTemperature& mat,
+    std::shared_ptr<serac::Mesh>& mesh)
 {
   std::vector<std::string> names{"conductivity"};
 
@@ -103,12 +107,13 @@ std::unique_ptr<ParametrizedHeatTransferT> createParameterizedNonlinearHeatTrans
       nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts,
       parametrized_thermal_prefix + std::to_string(iter++), mesh_tag, names);
 
-  FiniteElementState user_defined_conductivity(StateManager::mesh(mesh_tag), H1<p>{}, "user_defined_conductivity");
+  FiniteElementState user_defined_conductivity(mesh->mfemParMesh(), H1<p>{}, "user_defined_conductivity");
   user_defined_conductivity = 1.1;
   thermal->setParameter(0, user_defined_conductivity);
 
-  thermal->setMaterial(DependsOn<0>{}, mat, whole_domain);
-  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; }, whole_domain);
+  thermal->setMaterial(DependsOn<0>{}, mat, mesh->entireBody());
+  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; },
+                     mesh->entireBody());
 
   thermal->setTemperature([](const mfem::Vector&, double) { return 0.0; });
   thermal->setTemperatureBCs({1}, [](const mfem::Vector&, double) { return 0.0; });
@@ -142,9 +147,10 @@ double computeThermalQoiAdjustingInitalTemperature(BasePhysics& solver, const Ti
 }
 
 double computeThermalQoiAdjustingShape(BasePhysics& solver, const TimeSteppingInfo& ts_info,
-                                       const FiniteElementState& shape_derivative_direction, double pertubation)
+                                       const FiniteElementState& shape_derivative_direction, double pertubation,
+                                       std::shared_ptr<serac::Mesh>& mesh)
 {
-  FiniteElementState shape_disp(StateManager::mesh(mesh_tag), H1<SHAPE_ORDER, dim>{}, "input_shape_displacement");
+  FiniteElementState shape_disp(mesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{}, "input_shape_displacement");
 
   SLIC_ASSERT_MSG(shape_disp.Size() == shape_derivative_direction.Size(),
                   "Shape displacement and intended derivative direction FiniteElementState sizes do not agree.");
@@ -157,9 +163,9 @@ double computeThermalQoiAdjustingShape(BasePhysics& solver, const TimeSteppingIn
 
 double computeThermalQoiAdjustingConductivity(BasePhysics& solver, const TimeSteppingInfo& ts_info,
                                               const FiniteElementState& conductivity_derivative_direction,
-                                              double pertubation)
+                                              double pertubation, std::shared_ptr<serac::Mesh>& mesh)
 {
-  FiniteElementState cond(StateManager::mesh(mesh_tag), H1<p>{}, "input_conductivity");
+  FiniteElementState cond(mesh->mfemParMesh(), H1<p>{}, "input_conductivity");
   cond = 1.1;
 
   SLIC_ASSERT_MSG(cond.Size() == conductivity_derivative_direction.Size(),
@@ -172,13 +178,13 @@ double computeThermalQoiAdjustingConductivity(BasePhysics& solver, const TimeSte
 }
 
 std::tuple<double, FiniteElementDual, FiniteElementDual> computeThermalQoiAndInitialTemperatureAndShapeSensitivity(
-    BasePhysics& solver, const TimeSteppingInfo& ts_info)
+    BasePhysics& solver, const TimeSteppingInfo& ts_info, std::shared_ptr<serac::Mesh>& mesh)
 {
   double qoi = computeThermalQoi(solver, ts_info);
 
   FiniteElementDual initial_temperature_sensitivity(solver.state("temperature").space(), "init_temp_sensitivity");
   initial_temperature_sensitivity = 0.0;
-  FiniteElementDual shape_sensitivity(StateManager::mesh(mesh_tag), H1<SHAPE_ORDER, dim>{}, "shape_sensitivity");
+  FiniteElementDual shape_sensitivity(mesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{}, "shape_sensitivity");
   shape_sensitivity = 0.0;
 
   FiniteElementDual adjoint_load(solver.state("temperature").space(), "adjoint_load");
@@ -203,11 +209,12 @@ std::tuple<double, FiniteElementDual, FiniteElementDual> computeThermalQoiAndIni
 }
 
 std::tuple<double, FiniteElementDual> computeThermalConductivitySensitivity(BasePhysics& solver,
-                                                                            const TimeSteppingInfo& ts_info)
+                                                                            const TimeSteppingInfo& ts_info,
+                                                                            std::shared_ptr<serac::Mesh>& mesh)
 {
   double qoi = computeThermalQoi(solver, ts_info);
 
-  FiniteElementDual conductivity_sensitivity(StateManager::mesh(mesh_tag), H1<p>{}, "conductivity_sensitivity");
+  FiniteElementDual conductivity_sensitivity(mesh->mfemParMesh(), H1<p>{}, "conductivity_sensitivity");
   conductivity_sensitivity = 0.0;
 
   FiniteElementDual adjoint_load(solver.state("temperature").space(), "adjoint_load");
@@ -232,7 +239,7 @@ struct HeatTransferSensitivityFixture : public ::testing::Test {
     MPI_Barrier(MPI_COMM_WORLD);
     StateManager::initialize(data_store, "thermal_dynamic_solve");
     std::string filename = std::string(SERAC_REPO_DIR) + "/data/meshes/star.mesh";
-    mesh = &StateManager::setMesh(mesh::refineAndDistribute(buildMeshFromFile(filename), 0), mesh_tag);
+    mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
   }
 
   void fillDirection(FiniteElementState& direction) const
@@ -245,7 +252,7 @@ struct HeatTransferSensitivityFixture : public ::testing::Test {
 
   // Create DataStore
   axom::sidre::DataStore data_store;
-  mfem::ParMesh* mesh;
+  std::shared_ptr<serac::Mesh> mesh;
 
   // Solver options
   NonlinearSolverOptions nonlinear_opts{.relative_tol = 5.0e-13, .absolute_tol = 5.0e-13};
@@ -265,11 +272,10 @@ struct HeatTransferSensitivityFixture : public ::testing::Test {
 
 TEST_F(HeatTransferSensitivityFixture, InitialTemperatureSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
-  auto thermal_solver = createNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, nonlinearMat, whole_domain);
+  auto thermal_solver = createNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, nonlinearMat, mesh);
 
   auto [qoi_base, temperature_sensitivity, _] =
-      computeThermalQoiAndInitialTemperatureAndShapeSensitivity(*thermal_solver, tsInfo);
+      computeThermalQoiAndInitialTemperatureAndShapeSensitivity(*thermal_solver, tsInfo, mesh);
 
   thermal_solver->resetStates();
   FiniteElementState derivative_direction(temperature_sensitivity.space(), "derivative_direction");
@@ -284,17 +290,16 @@ TEST_F(HeatTransferSensitivityFixture, InitialTemperatureSensitivities)
 
 TEST_F(HeatTransferSensitivityFixture, ShapeSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
-  auto thermal_solver = createNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, nonlinearMat, whole_domain);
+  auto thermal_solver = createNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, nonlinearMat, mesh);
 
   auto [qoi_base, _, shape_sensitivity] =
-      computeThermalQoiAndInitialTemperatureAndShapeSensitivity(*thermal_solver, tsInfo);
+      computeThermalQoiAndInitialTemperatureAndShapeSensitivity(*thermal_solver, tsInfo, mesh);
 
   thermal_solver->resetStates();
   FiniteElementState derivative_direction(shape_sensitivity.space(), "derivative_direction");
   fillDirection(derivative_direction);
 
-  double qoi_plus = computeThermalQoiAdjustingShape(*thermal_solver, tsInfo, derivative_direction, eps);
+  double qoi_plus = computeThermalQoiAdjustingShape(*thermal_solver, tsInfo, derivative_direction, eps, mesh);
   double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
   ASSERT_TRUE(std::abs(directional_deriv) > 1e-13);
   EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, eps);
@@ -302,16 +307,14 @@ TEST_F(HeatTransferSensitivityFixture, ShapeSensitivities)
 
 TEST_F(HeatTransferSensitivityFixture, ConductivityParameterSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
-  auto thermal_solver =
-      createParameterizedHeatTransfer(data_store, nonlinear_opts, dyn_opts, parameterizedMat, whole_domain);
-  auto [qoi_base, conductivity_sensitivity] = computeThermalConductivitySensitivity(*thermal_solver, tsInfo);
+  auto thermal_solver = createParameterizedHeatTransfer(data_store, nonlinear_opts, dyn_opts, parameterizedMat, mesh);
+  auto [qoi_base, conductivity_sensitivity] = computeThermalConductivitySensitivity(*thermal_solver, tsInfo, mesh);
 
   thermal_solver->resetStates();
   FiniteElementState derivative_direction(conductivity_sensitivity.space(), "derivative_direction");
   fillDirection(derivative_direction);
 
-  double qoi_plus = computeThermalQoiAdjustingConductivity(*thermal_solver, tsInfo, derivative_direction, eps);
+  double qoi_plus = computeThermalQoiAdjustingConductivity(*thermal_solver, tsInfo, derivative_direction, eps, mesh);
   double directional_deriv = innerProduct(derivative_direction, conductivity_sensitivity);
   ASSERT_TRUE(std::abs(directional_deriv) > 1e-13);
   EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, eps);
@@ -319,16 +322,15 @@ TEST_F(HeatTransferSensitivityFixture, ConductivityParameterSensitivities)
 
 TEST_F(HeatTransferSensitivityFixture, NonlinearConductivityParameterSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
-  auto thermal_solver = createParameterizedNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts,
-                                                                 parameterizedNonlinearMat, whole_domain);
-  auto [qoi_base, conductivity_sensitivity] = computeThermalConductivitySensitivity(*thermal_solver, tsInfo);
+  auto thermal_solver =
+      createParameterizedNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, parameterizedNonlinearMat, mesh);
+  auto [qoi_base, conductivity_sensitivity] = computeThermalConductivitySensitivity(*thermal_solver, tsInfo, mesh);
 
   thermal_solver->resetStates();
   FiniteElementState derivative_direction(conductivity_sensitivity.space(), "derivative_direction");
   fillDirection(derivative_direction);
 
-  double qoi_plus = computeThermalQoiAdjustingConductivity(*thermal_solver, tsInfo, derivative_direction, eps);
+  double qoi_plus = computeThermalQoiAdjustingConductivity(*thermal_solver, tsInfo, derivative_direction, eps, mesh);
   double directional_deriv = innerProduct(derivative_direction, conductivity_sensitivity);
   ASSERT_TRUE(std::abs(directional_deriv) > 1e-13);
   EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, eps);
