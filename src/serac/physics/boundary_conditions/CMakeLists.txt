@@ -17,7 +17,7 @@ set(boundary_conditions_sources
     boundary_condition_manager.cpp
     )
 
-set(boundary_conditions_depends serac_state)
+set(boundary_conditions_depends serac_infrastructure serac_state)
 
 blt_add_library(
     NAME        serac_boundary_conditions

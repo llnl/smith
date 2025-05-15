@@ -17,6 +17,7 @@
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/physics/mesh.hpp"
 
 namespace serac {
 
@@ -28,7 +29,7 @@ class TestFiniteElementState : public testing::Test {
     int parallel_refinement = 0;
 
     std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
-    mesh = std::make_shared(filename, "mesh_tag", serial_refinement, parallel_refinement);
+    mesh = std::make_shared<serac::Mesh>(filename, "mesh_tag", serial_refinement, parallel_refinement);
     ASSERT_EQ(spatial_dim, mesh->mfemParMesh().SpaceDimension())
         << "Test configured incorrectly. The variable spatial_dim must match the spatial dimension of the mesh.";
   }
@@ -50,9 +51,10 @@ TEST_F(TestFiniteElementState, SetScalarStateFromFieldFunction)
   scalar_state.setFromFieldFunction(scalar_field);
 
   // Get the nodal positions corresponding to state dofs in a grid function
-  auto [coords_fe_space, coords_fe_coll] = serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(&mesh->mfemParMesh());
+  auto [coords_fe_space, coords_fe_coll] =
+      serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(&mesh->mfemParMesh());
   mfem::ParGridFunction nodal_coords_gf(coords_fe_space.get());
-  mesh->GetNodes(nodal_coords_gf);
+  mesh->mfemParMesh().GetNodes(nodal_coords_gf);
 
   for (int node = 0; node < scalar_state.space().GetNDofs(); node++) {
     // Fill a tensor with the coordinates of the node
@@ -83,9 +85,10 @@ TEST_F(TestFiniteElementState, SetVectorStateFromFieldFunction)
   state.setFromFieldFunction(vector_field);
 
   // Get the nodal positions for the state in a grid function
-  auto [coords_fe_space, coords_fe_coll] = serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(&mesh->mfemParMesh());
+  auto [coords_fe_space, coords_fe_coll] =
+      serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(&mesh->mfemParMesh());
   mfem::ParGridFunction nodal_coords_gf(coords_fe_space.get());
-  mesh->GetNodes(nodal_coords_gf);
+  mesh->mfemParMesh().GetNodes(nodal_coords_gf);
 
   // we need the state values and the nodal coordinates in the same kind of container,
   // so we will get the grid function view of the state
