@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
 
   std::shared_ptr<serac::Mesh> mesh = std::make_shared<serac::Mesh>(filename, "ironing_mesh", 2, 0);
 
-  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
+  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -47,15 +47,16 @@ int main(int argc, char* argv[])
 #endif
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
-                                                  .relative_tol = 1.0e-7,
-                                                  .absolute_tol = 1.0e-7,
+                                                  .relative_tol = 1.0e-13,
+                                                  .absolute_tol = 1.0e-13,
                                                   .max_iterations = 200,
                                                   .print_level = 1};
 
   serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                         .enforcement = serac::ContactEnforcement::Penalty,
                                         .type = serac::ContactType::TiedNormal,
-                                        .penalty = 1.0e3};
+                                        .penalty = 5.0e2,
+                                        .jacobian = serac::ContactJacobian::Exact};
 
   serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
       nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh->tag(),

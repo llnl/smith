@@ -135,6 +135,21 @@ class ContactInteraction {
    */
   const mfem::Array<int>& inactiveDofs() const;
 
+  /**
+   * @brief List of pressure/gap DOFs that are not active
+   *
+   * @param pressure A custom pressure field
+   * @return Array of inactive DOFs
+   */
+  const mfem::Array<int>& inactiveDofs(const FiniteElementState& pressure) const;
+
+  /**
+   * @brief Turn on/off Jacobian evaluation
+   *
+   * @param eval True if Jacobian should be evaluated, false otherwise
+   */
+  void evalJacobian(bool eval) const;
+
  private:
   /**
    * @brief Get the Tribol enforcement method given a serac enforcement method

@@ -34,6 +34,11 @@ set(physics_serial_test_sources
     thermomech_statics_patch.cpp
     test_kinematic_objective.cpp
     )
+if (TRIBOL_FOUND AND ENZYME_FOUND)
+    list(APPEND physics_serial_test_sources 
+                contact_finite_diff.cpp
+                tribol_finite_diff.cpp)
+endif()
 
 serac_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
