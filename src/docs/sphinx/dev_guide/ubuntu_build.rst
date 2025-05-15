@@ -30,16 +30,14 @@ Install required build packages to minimize what Spack will build:
 
 .. code-block:: bash
 
-    sudo apt-get -qq install -y --no-install-recommends build-essential bzip2 cmake libopenblas-dev lua5.2 lua5.2-dev openmpi-bin libopenmpi-dev unzip
+    sudo apt-get -qq install -y --no-install-recommends build-essential bzip2 cmake libopenblas-dev \
+    lua5.2 lua5.2-dev openmpi-bin libopenmpi-dev unzip
 
-Optionally you can install packages to generate documenation:
+Optionally you can install packages to generate documentation:
 
 .. code-block:: bash
 
-    sudo apt-get -qq install -y --no-install-recommends graphviz python3-sphinx texlive-full
-    sudo wget https://github.com/doxygen/doxygen/releases/download/Release_1_9_8/doxygen-1.9.8.linux.bin.tar.gz
-    sudo tar -xf doxygen-1.9.8.linux.bin.tar.gz
-    cd doxygen-1.9.8 && sudo make && sudo make install && doxygen --version
+    sudo apt-get -qq install -y --no-install-recommends graphviz python3-sphinx texlive-full doxygen
 
 
 -------------------------------
@@ -59,28 +57,29 @@ This command will create a Spack environment file, ``spack.yaml``, where you ran
 If you want to use Clang as your compiler. Alter the following section in that file, by changing
 ``null`` in the ``f77`` and ``fc`` lines to ``/usr/bin/gfortran``.
 
-.. code-block: yaml
+.. code-block:: yaml
 
-  - compiler:
-      spec: clang@=14.0.6
-      paths:
-        cc: /usr/bin/clang
-        cxx: /usr/bin/clang++
-        f77: null # Change null to /usr/bin/gfortran
-        fc: null # and this one too
-      flags: {}
-      operating_system: ubuntu24.04
-      target: x86_64
-      modules: []
-      environment: {}
-      extra_rpaths: []
+    - compiler:
+        spec: clang@=14.0.6
+        paths:
+            cc: /usr/bin/clang
+            cxx: /usr/bin/clang++
+            f77: null # Change null to /usr/bin/gfortran
+            fc: null # and this one too
+        flags: {}
+        operating_system: ubuntu24.04
+        target: x86_64
+        modules: []
+        environment: {}
+        extra_rpaths: []
+
 
 If you are using the GNU compiler, you can ignore the above step.
 
 To speed up the build, you can add packages that exist on your system to the same Spack environment file. For example,
 we installed lua in the above ``apt-get`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
 
-.. code-block: yaml
+.. code-block:: yaml
 
     lua:
       externals:
@@ -90,7 +89,7 @@ we installed lua in the above ``apt-get`` commands. To do so, add the following 
 
 The above spack command will output a concretization that looks like the following:
 
-.. code-block: shell
+.. code-block:: shell
 
     ==> Concretized 1 spec:
     -   56woyw5  serac@develop%gcc@13.3.0~asan~cuda~devtools~ipo+openmp+petsc~profiling+raja~rocm~shared+slepc+strumpack+sundials+tribol+umpire build_system=cmake build_type=Release dev_path=/home/white238/projects/serac/repo generator=make arch=linux-ubuntu24.04-skylake
@@ -135,7 +134,7 @@ By adding Lua to the Spack environment file, Spack will no longer build Lua and 
 needed by anything else. In this case, ``lua``, ``readline``, and ``unzip`` will not be built. ``unzip`` may be needed
 by another package, so you can also add it with this yaml section:
 
-.. code-block: yaml
+.. code-block:: yaml
 
     unzip:
       externals:
@@ -186,7 +185,6 @@ command:
     cd <created build directory>
     make -j
     make -j8 test
-
 
 For more detail instructions on how to build Serac, see :ref:`quickstart guide <build-label>`.
 
