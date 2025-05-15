@@ -55,7 +55,7 @@ Spack builds.
 
 This command will create a Spack environment file, ``spack.yaml``, where you ran the above command.
 If you want to use Clang as your compiler. Alter the following section in that file, by changing
-``null`` in the ``f77`` and ``fc`` lines to ``/usr/bin/gfortran``.
+``null`` in the ``f77`` and ``fc`` lines to ``/usr/bin/gfortran``:
 
 .. code-block:: yaml
 
