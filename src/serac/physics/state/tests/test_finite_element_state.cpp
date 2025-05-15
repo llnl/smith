@@ -50,7 +50,8 @@ TEST_F(TestFiniteElementState, SetScalarStateFromFieldFunction)
   scalar_state.setFromFieldFunction(scalar_field);
 
   // Get the nodal positions corresponding to state dofs in a grid function
-  auto [coords_fe_space, coords_fe_coll] = serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(&mesh->mfemParMesh());
+  auto [coords_fe_space, coords_fe_coll] =
+      serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(&mesh->mfemParMesh());
   mfem::ParGridFunction nodal_coords_gf(coords_fe_space.get());
   mesh->GetNodes(nodal_coords_gf);
 
@@ -83,7 +84,8 @@ TEST_F(TestFiniteElementState, SetVectorStateFromFieldFunction)
   state.setFromFieldFunction(vector_field);
 
   // Get the nodal positions for the state in a grid function
-  auto [coords_fe_space, coords_fe_coll] = serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(&mesh->mfemParMesh());
+  auto [coords_fe_space, coords_fe_coll] =
+      serac::generateParFiniteElementSpace<H1<p, spatial_dim>>(&mesh->mfemParMesh());
   mfem::ParGridFunction nodal_coords_gf(coords_fe_space.get());
   mesh->GetNodes(nodal_coords_gf);
 
