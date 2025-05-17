@@ -701,18 +701,11 @@ SERAC_HOST_DEVICE constexpr auto inner(double A, double B) { return A * B; }
  * @tparam S the underlying type of the tensor (lefthand) argument
  * @tparam m the number of rows
  * @tparam n the number of columns
- * @param[in] A The lefthand tensor
  */
 template <typename S, int m, int n>
-SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m, n>& A, zero)
+SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m, n>&, zero)
 {
-  decltype(S{}) sum{};
-  for (int i = 0; i < m; i++) {
-    for (int j = 0; j < n; j++) {
-      sum += A[i][j] * 0.0;
-    }
-  }
-  return sum;
+  return zero{};
 }
 
 /**
@@ -720,38 +713,27 @@ SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m, n>& A, zero)
  * @note for first order tensors (vectors)
  */
 template <typename S, int m>
-SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m>& A, zero)
+SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m>&, zero)
 {
-  decltype(S{}) sum{};
-  for (int i = 0; i < m; i++) {
-    sum += A[i] * 0.0;
-  }
-  return sum;
+  return zero{};
 }
 
 /**
  * @overload
  * @note for zeroth-order tensors (scalars)
  */
-SERAC_HOST_DEVICE constexpr auto inner(double A, zero) { return A * 0.0; }
+SERAC_HOST_DEVICE constexpr auto inner(double, zero) { return zero{}; }
 
 /**
  * @brief this function contracts over all indices of the two tensor arguments
  * @tparam T the underlying type of the tensor (righthand) argument
  * @tparam m the number of rows
  * @tparam n the number of columns
- * @param[in] B The righthand tensor
  */
 template <typename T, int m, int n>
-SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m, n>& B)
+SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m, n>&)
 {
-  decltype(T{}) sum{};
-  for (int i = 0; i < m; i++) {
-    for (int j = 0; j < n; j++) {
-      sum += 0.0 * B[i][j];
-    }
-  }
-  return sum;
+  return zero{};
 }
 
 /**
@@ -759,20 +741,16 @@ SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m, n>& B)
  * @note for first order tensors (vectors)
  */
 template <typename T, int m>
-SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m>& B)
+SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m>&)
 {
-  decltype(T{}) sum{};
-  for (int i = 0; i < m; i++) {
-    sum += 0.0 * B[i];
-  }
-  return sum;
+  return zero{};
 }
 
 /**
  * @overload
  * @note for zeroth-order tensors (scalars)
  */
-SERAC_HOST_DEVICE constexpr auto inner(zero, double B) { return 0.0 * B; }
+SERAC_HOST_DEVICE constexpr auto inner(zero, double) { return zero{}; }
 
 /**
  * @brief this function contracts over the "middle" index of the two tensor arguments

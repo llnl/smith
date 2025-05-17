@@ -212,43 +212,43 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   }
 
   /// @overload
-  void jvp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& vFields,
-           const std::vector<DualFieldPtr>& jvpReactions) const override
+  void jvp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
+           const std::vector<DualFieldPtr>& jvp_reactions) const override
   {
-    SLIC_ERROR_IF(vFields.size() != fields.size(),
+    SLIC_ERROR_IF(v_fields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(jvpReactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
+    SLIC_ERROR_IF(jvp_reactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
     auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, fields);
 
-    *jvpReactions[0] = 0.0;
+    *jvp_reactions[0] = 0.0;
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      if (vFields[input_col] != nullptr) {
+      if (v_fields[input_col] != nullptr) {
         auto K = serac::get<DERIVATIVE>(jacs[input_col](time, fields));
-        K.AddMult(*vFields[input_col], *jvpReactions[0]);
+        K.AddMult(*v_fields[input_col], *jvp_reactions[0]);
       }
     }
   }
 
   /// @overload
-  void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<DualFieldPtr>& vReactions,
-           const std::vector<FieldPtr>& vjpFields) const override
+  void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<DualFieldPtr>& v_reactions,
+           const std::vector<FieldPtr>& vjp_fields) const override
   {
-    SLIC_ERROR_IF(vjpFields.size() != fields.size(),
+    SLIC_ERROR_IF(vjp_fields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(vReactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
+    SLIC_ERROR_IF(v_reactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
-    auto jacVecs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time,
-                                           vReactions[0], fields);
+    auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time,
+                                           v_reactions[0], fields);
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      if (vjpFields[input_col] != nullptr) {
-        auto jacVec = serac::get<DERIVATIVE>(jacVecs[input_col](time, vReactions[0], fields));
-        auto jacVecVector = assemble(jacVec);
-        *vjpFields[input_col] += *jacVecVector;
+      if (vjp_fields[input_col] != nullptr) {
+        auto vecJac = serac::get<DERIVATIVE>(vecJacs[input_col](time, v_reactions[0], fields));
+        auto vecJacMfemVector = assemble(vecJac);
+        *vjp_fields[input_col] += *vecJacMfemVector;
       }
     }
   }
@@ -287,7 +287,9 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
     return std::array<GradFuncType, sizeof...(i)>{[=](double _time, DualFieldPtr _v, const std::vector<FieldPtr>& _fs) {
       std::vector<mfem::Vector*> _vfs{_v};
       _vfs.insert(_vfs.end(), _fs.begin() + 1, _fs.end());
-      return (*v_residual_)(DifferentiateWRT < i == 0 ? 0 : i + 1 > {}, _time, *_fs[0], *_vfs[i]...);
+      constexpr bool is_shape_disp = i == 0;
+      constexpr int diff_index = is_shape_disp ? 0 : i + 1;
+      return (*v_residual_)(DifferentiateWRT<diff_index>{}, _time, *_fs[0], *_vfs[i]...);
     }...};
   };
 
