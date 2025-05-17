@@ -13,7 +13,6 @@
 #pragma once
 
 #include <vector>
-#include <memory>
 #include <string>
 #include "serac/physics/common.hpp"
 
