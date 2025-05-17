@@ -307,7 +307,7 @@ class BasePhysics {
    * This updates the shape displacement field associated with the underlying mesh. Note that the input
    * FiniteElementState is deep copied into the shape displacement object owned by the StateManager.
    */
-  void setShapeDisplacement(const FiniteElementState& shape_displacement);
+  virtual void setShapeDisplacement(const FiniteElementState& shape_displacement);
 
   /**
    * @brief Compute the implicit sensitivity of the quantity of interest used in defining the adjoint load with respect
