@@ -85,7 +85,7 @@ class NewtonSolver : public mfem::NewtonSolver {
 
     using real_t = mfem::real_t;
 
-    real_t norm, norm_goal, prev_norm;
+    real_t norm, norm_goal, prev_norm = 0;
     norm = initial_norm = evaluateNorm(x, r);
 
     if (print_options.first_and_last && !print_options.iterations) {
