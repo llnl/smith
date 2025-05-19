@@ -17,6 +17,7 @@
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
@@ -285,11 +286,9 @@ double solution_error(solution_type exact_solution, PatchBoundaryCondition bc)
       SLIC_ERROR_ROOT("unsupported element type for patch test");
       break;
   }
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename));
 
   std::string mesh_tag{"mesh"};
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
 
   // Construct a functional-based solid mechanics solver
   serac::NonlinearSolverOptions nonlin_opts{.relative_tol = 1.0e-13, .absolute_tol = 1.0e-13};
@@ -299,16 +298,15 @@ double solution_error(solution_type exact_solution, PatchBoundaryCondition bc)
                                "solid_dynamics", mesh_tag);
 
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = 1.0, .G = 1.0};
-  Domain whole_domain = EntireDomain(pmesh);
-  solid.setMaterial(mat, whole_domain);
+  solid.setMaterial(mat, pmesh->entireBody());
 
   // initial conditions
   solid.setVelocity([&exact_solution](tensor<double, dim> X) { return exact_solution.velocity(X, 0.0); });
   solid.setDisplacement([&exact_solution](tensor<double, dim> X) { return exact_solution.displacement(X, 0.0); });
 
   // forcing terms
-  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
-  exact_solution.applyLoads(mat, solid, essential_boundary, whole_domain);
+  pmesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
+  exact_solution.applyLoads(mat, solid, pmesh->domain("essential_boundary"), pmesh->entireBody());
 
   // Finalize the data structures
   solid.completeSetup();
