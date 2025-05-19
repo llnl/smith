@@ -27,15 +27,17 @@ TEST(DebugPrint, typeString)
 {
   int i = 0;
   std::string str = "test";
-  std::string longStrType = "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >";
+  std::string gnuStdStr = "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >";
+  std::string llvmStdStr = "std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>";
   double d = 3.14;
   detail::Material m;
   detail::Material::State ms;
 
   EXPECT_EQ(typeString(i), "int");
   std::string testStr = typeString(str);
-  EXPECT_TRUE(testStr == "std::string" || testStr == longStrType)
-      << "Expected type string to be either 'std::string' or '" << longStrType << "', but got: " << testStr;
+  EXPECT_TRUE(testStr == "std::string" || testStr == gnuStdStr || testStr == llvmStdStr)
+      << "Expected type string to be either 'std::string' or '" << gnuStdStr << "' or '" << llvmStdStr
+      << "', but got: " << testStr;
   EXPECT_EQ(typeString(d), "double");
   EXPECT_EQ(typeString(m), "serac::detail::Material");
   EXPECT_EQ(typeString(ms), "serac::detail::Material::State");
@@ -48,8 +50,9 @@ TEST(DebugPrint, typeString)
 
   EXPECT_EQ(typeString(ci), "const int");
   testStr = typeString(cstr);
-  EXPECT_TRUE(testStr == "const std::string" || testStr == "const " + longStrType)
-      << "Expected type string to be either 'const std::string' or 'const " << longStrType << "', but got: " << testStr;
+  EXPECT_TRUE(testStr == "const std::string" || testStr == "const " + gnuStdStr || testStr == "const " + llvmStdStr)
+      << "Expected type string to be either 'const std::string' or 'const " << gnuStdStr << "', or 'const "
+      << llvmStdStr << "', but got: " << testStr;
   EXPECT_EQ(typeString(cd), "const double");
   EXPECT_EQ(typeString(cm), "const serac::detail::Material");
   EXPECT_EQ(typeString(cms), "const serac::detail::Material::State");

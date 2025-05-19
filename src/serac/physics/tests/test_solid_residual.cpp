@@ -61,6 +61,38 @@ void pseudoRand(serac::FiniteElementDual& dual)
   }
 }
 
+namespace serac {
+
+struct NeoHookeanWithFieldWithRateForTesting {
+  using State = Empty;  ///< this material has no internal variables
+
+  template <typename T1, typename T2, int dim>
+  SERAC_HOST_DEVICE auto pkStress(double /*dt*/, State& /* state */, const tensor<T1, dim, dim>& du_dX,
+                                  const tensor<T2, dim, dim>& /*dv_dX*/) const
+  {
+    using std::log1p;
+    constexpr auto I = Identity<dim>();
+    auto lambda = K - (2.0 / 3.0) * G;
+    auto B_minus_I = dot(du_dX, transpose(du_dX)) + transpose(du_dX) + du_dX;
+
+    auto logJ = log1p(detApIm1(du_dX));
+    // Kirchoff stress, in form that avoids cancellation error when F is near I
+    auto TK = lambda * logJ * I + G * B_minus_I;
+
+    // Pull back to Piola
+    auto F = du_dX + I;
+    return dot(TK, inv(transpose(F)));
+  }
+
+  SERAC_HOST_DEVICE auto density() const { return Rho; }
+
+  double K;    ///< bulk modulus
+  double G;    ///< shear modulus
+  double Rho;  ///< density
+};
+
+}  // namespace serac
+
 struct ResidualFixture : public testing::Test {
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
@@ -69,6 +101,7 @@ struct ResidualFixture : public testing::Test {
   using DensitySpace = serac::L2<disp_order - 1>;
 
   using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
+  using SolidRateMaterial = serac::NeoHookeanWithFieldWithRateForTesting;
 
   enum StateOrder
   {
@@ -112,15 +145,21 @@ struct ResidualFixture : public testing::Test {
     SolidMaterial mat;
     mat.K = 1.0;
     mat.G = 0.5;
+    SolidRateMaterial rate_mat;
+    rate_mat.K = 1.0;
+    rate_mat.G = 0.5;
+    rate_mat.Rho = 1.5;
+
     solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
+    solid_mechanics_residual->setRateMaterial(serac::DependsOn<>{}, mesh->entireBodyName(), rate_mat);
 
     // apply traction boundary conditions
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
     solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*t*/, auto /*x*/, auto n) { return 1.0 * n; });
+    solid_mechanics_residual->addPressure(surface_name, [](auto /*t*/, auto /*x*/) { return 0.6; });
 
     // initialize fields for testing
-
     for (auto& s : v_rhs_states) {
       pseudoRand(s);
     }
