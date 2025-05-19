@@ -274,6 +274,36 @@ SERAC_HOST_DEVICE auto min(dual<gradient_type> a, dual<gradient_type> b)
   return (a < b) ? a : b;
 }
 
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+template <typename S, typename T>
+SERAC_HOST_DEVICE constexpr auto inner(const dual<S>& A, const dual<T>& B)
+{
+  return A * B;
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+template <typename T>
+SERAC_HOST_DEVICE constexpr auto inner(double A, const dual<T>& B)
+{
+  return A * B;
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+template <typename S>
+SERAC_HOST_DEVICE constexpr auto inner(const dual<S>& A, double B)
+{
+  return A * B;
+}
+
 /** @brief implementation of square root for dual numbers */
 template <typename gradient_type>
 SERAC_HOST_DEVICE auto sqrt(dual<gradient_type> x)
