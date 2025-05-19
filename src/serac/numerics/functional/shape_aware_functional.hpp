@@ -463,7 +463,7 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
    * @brief Functor representing a shape-aware integrand.  Used instead of an extended generic
    * lambda for compatibility with NVCC.
    */
-  template <typename Integrand, int dim, int... args>
+  template <typename test_type, typename Integrand, int dim, int... args>
   struct ShapeAwareInteriorBoundaryIntegrandWrapper {
     /// @brief Constructor for functor
     ShapeAwareInteriorBoundaryIntegrandWrapper(Integrand integrand) : integrand_(integrand) {}
@@ -493,6 +493,38 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
   };
 
   /**
+   * @brief Functor representing a shape-aware integrand.  Used instead of an extended generic
+   * lambda for compatibility with NVCC.
+   */
+  template <typename Integrand, int dim, int... args>
+  struct ShapeAwareInteriorBoundaryIntegrandWrapper<double, Integrand, dim, args...> {
+    /// @brief Constructor for functor
+    ShapeAwareInteriorBoundaryIntegrandWrapper(Integrand integrand) : integrand_(integrand) {}
+    /// @brief integrand
+    Integrand integrand_;
+    /**
+     * @brief integrand call
+     *
+     * @tparam PositionType position type
+     * @tparam ShapeValueType shape value type
+     * @tparam QFuncArgs type of variadic pack to forward to qfunc
+     * @param[in] time time
+     * @param[in] x position
+     * @param[in] shape_val shape
+     * @param[in] qfunc_args qfunc parameter pack
+     * @return qf function corrected for boundary area
+     */
+    template <typename PositionType, typename ShapeValueType, typename... QFuncArgs>
+    SERAC_HOST_DEVICE auto operator()(double time, PositionType x, ShapeValueType shape_val,
+                                      QFuncArgs... qfunc_args) const
+    {
+      auto unmodified_qf_returns = integrand_(time, x + shape_val, qfunc_args...);
+      auto correction = detail::compute_boundary_area_correction(x, shape_val);
+      return correction * unmodified_qf_returns;
+    }
+  };
+
+  /**
    * @brief Adds an interior face integral term to the weak formulation of the PDE
    *
    * @tparam dim The dimension of the element (2 for quad, 3 for hex, etc)
@@ -509,9 +541,9 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
   template <int dim, int... args, typename lambda>
   void AddInteriorFaceIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, Domain& domain)
   {
-    functional_->AddInteriorFaceIntegral(Dimension<dim>{}, DependsOn<0, (args + 1)...>{},
-                                         ShapeAwareInteriorBoundaryIntegrandWrapper<lambda, dim, args...>(integrand),
-                                         domain);
+    functional_->AddInteriorFaceIntegral(
+        Dimension<dim>{}, DependsOn<0, (args + 1)...>{},
+        ShapeAwareInteriorBoundaryIntegrandWrapper<test, lambda, dim, args...>(integrand), domain);
   }
 
   /**
