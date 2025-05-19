@@ -13,6 +13,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 #include "serac/physics/common.hpp"
 
 namespace mfem {

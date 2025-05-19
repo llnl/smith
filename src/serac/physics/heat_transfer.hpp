@@ -551,23 +551,6 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
   }
 
   /**
-   * @brief Set the underlying finite element state to a prescribed shape displacement
-   *
-   * This field will perturb the mesh nodes as required by shape optimization workflows.
-   *
-   * @param shape_disp The function describing the shape displacement field
-   */
-  void setShapeDisplacement(std::function<void(const mfem::Vector& x, mfem::Vector& shape_disp)> shape_disp)
-  {
-    // Project the coefficient onto the grid function
-    mfem::VectorFunctionCoefficient shape_disp_coef(dim, shape_disp);
-    shape_displacement_.project(shape_disp_coef);
-  }
-
-  /// @overload
-  void setShapeDisplacement(FiniteElementState& shape_disp) { shape_displacement_ = shape_disp; }
-
-  /**
    * @brief Get the temperature state
    *
    * @return A reference to the current temperature finite element state

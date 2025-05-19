@@ -297,7 +297,7 @@ class BasePhysics {
    * The physics module constructs its own parameter FiniteElementState in the physics module constructor. This
    * call sets the internally-owned parameter object by value (i.e. deep copies) from the given argument.
    */
-  void setParameter(const size_t parameter_index, const FiniteElementState& parameter_state);
+  virtual void setParameter(const size_t parameter_index, const FiniteElementState& parameter_state);
 
   /**
    * @brief Set the current shape displacement for the underlying mesh
@@ -307,7 +307,7 @@ class BasePhysics {
    * This updates the shape displacement field associated with the underlying mesh. Note that the input
    * FiniteElementState is deep copied into the shape displacement object owned by the StateManager.
    */
-  void setShapeDisplacement(const FiniteElementState& shape_displacement);
+  virtual void setShapeDisplacement(const FiniteElementState& shape_displacement);
 
   /**
    * @brief Compute the implicit sensitivity of the quantity of interest used in defining the adjoint load with respect
@@ -400,6 +400,16 @@ class BasePhysics {
   }
 
   /**
+   * @brief Initialize any fields nessary for before the first step of the time integration
+   */
+  virtual void initializationStep() {}
+
+  /**
+   * @brief Compute adjoint sensitivities back through initializationStep
+   */
+  virtual void reverseAdjointInitializationStep() {}
+
+  /**
    * @brief Output the current state of the PDE fields in Sidre format and optionally in Paraview format
    *  if \p paraview_output_dir is given.
    *
@@ -422,7 +432,7 @@ class BasePhysics {
    * @param cycle The cycle to retrieve state from
    * @return The named primal Finite Element State
    */
-  FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle);
+  virtual FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle);
 
   /**
    * @brief Accessor for getting a single named finite element dual solution from the physics modules at a given

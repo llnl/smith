@@ -697,6 +697,62 @@ SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m>& A, const tensor<T, m>
 SERAC_HOST_DEVICE constexpr auto inner(double A, double B) { return A * B; }
 
 /**
+ * @brief this function contracts over all indices of the two tensor arguments
+ * @tparam S the underlying type of the tensor (lefthand) argument
+ * @tparam m the number of rows
+ * @tparam n the number of columns
+ */
+template <typename S, int m, int n>
+SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m, n>&, zero)
+{
+  return zero{};
+}
+
+/**
+ * @overload
+ * @note for first order tensors (vectors)
+ */
+template <typename S, int m>
+SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m>&, zero)
+{
+  return zero{};
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+SERAC_HOST_DEVICE constexpr auto inner(double, zero) { return zero{}; }
+
+/**
+ * @brief this function contracts over all indices of the two tensor arguments
+ * @tparam T the underlying type of the tensor (righthand) argument
+ * @tparam m the number of rows
+ * @tparam n the number of columns
+ */
+template <typename T, int m, int n>
+SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m, n>&)
+{
+  return zero{};
+}
+
+/**
+ * @overload
+ * @note for first order tensors (vectors)
+ */
+template <typename T, int m>
+SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m>&)
+{
+  return zero{};
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+SERAC_HOST_DEVICE constexpr auto inner(zero, double) { return zero{}; }
+
+/**
  * @brief this function contracts over the "middle" index of the two tensor arguments
  * @tparam S the underlying type of the tensor (lefthand) argument
  * @tparam T the underlying type of the tensor (righthand) argument
