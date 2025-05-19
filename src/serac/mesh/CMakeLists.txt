@@ -22,6 +22,11 @@ blt_add_library(
     DEPENDS_ON  ${mesh_depends}
     )
 
+serac_write_unified_header(
+    NAME mesh
+    HEADERS ${mesh_headers}
+    )
+
 install(FILES ${mesh_headers} DESTINATION include/serac/mesh )
 
 install(TARGETS              serac_mesh
