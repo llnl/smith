@@ -225,8 +225,8 @@ endmacro(serac_configure_file)
 ## This function removes a string prefix from a given string.
 ##
 ## PREFIX - String prefix to be removed
-## INPUT - The name of the unified header.
-## OUTPUT_VAR - Headers to be included in the header.
+## INPUT - String with possible prefix to be removed
+## OUTPUT_VAR - Possibly altered output string
 ##
 ##------------------------------------------------------------------------------
 function(serac_remove_string_prefix PREFIX INPUT OUTPUT_VAR)
