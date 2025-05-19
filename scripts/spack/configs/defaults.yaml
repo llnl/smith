@@ -1,0 +1,19 @@
+# Globally lock variants of third party libraries
+packages:
+  caliper:
+    require:
+    - spec: "~kokkos+shared"
+  conduit:
+    require:
+    - spec: "~shared~test~examples~utilities"
+  hdf5:
+    variants: ~shared~mpi
+  raja:
+    require:
+    - spec: "~shared~examples~exercises"
+  tribol:
+    require:
+    - spec: "~examples~tests"
+  umpire:
+    require:
+    - spec: "~shared~examples~werror"
