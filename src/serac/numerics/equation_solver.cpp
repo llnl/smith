@@ -628,7 +628,7 @@ class TrustRegion : public mfem::NewtonSolver {
     num_subspace_solves = 0;
     num_jacobian_assembles = 0;
 
-    real_t norm, norm_goal, prev_norm;
+    real_t norm, norm_goal, prev_norm = 0.0;
     norm = initial_norm = computeResidual(X, r);
     norm_goal = std::max(rel_tol * initial_norm, abs_tol);
     if (print_options.first_and_last && !print_options.iterations) {
