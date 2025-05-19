@@ -325,3 +325,8 @@ spack:
       externals:
       - spec: python@3.9.12
         prefix: /usr/tce/packages/python/python-3.9.12
+
+    # Platform-specific defaults and versions
+    caliper:
+      require: 
+      - spec: "+shared"

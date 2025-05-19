@@ -270,31 +270,28 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     conflicts("cuda_arch=none", when="+cuda",
               msg="CUDA architecture is required")
     depends_on("amgx", when="+cuda")
-    # Always add these variants if +cuda
-    cuda_deps = ["axom", "mfem"]
-    for dep in cuda_deps:
-        depends_on("{0}+cuda".format(dep), when="+cuda")
-        for sm_ in CudaPackage.cuda_arch_values:
-            depends_on("{0} cuda_arch={1}".format(dep, sm_),
-                    when="cuda_arch={0}".format(sm_))
-    
-    # Check if these variants are true and +cuda before adding
-    cuda_deps_with_variants = ["raja", "sundials", "tribol", "umpire", "petsc", "slepc"]
-    for dep in cuda_deps_with_variants:
-        depends_on("{0}+cuda".format(dep), when="+{0}+cuda".format(dep))
-        for sm_ in CudaPackage.cuda_arch_values:
-            depends_on("{0} cuda_arch={1}".format(dep, sm_),
-                    when="+{0}+cuda cuda_arch={1}".format(dep, sm_))
 
-    depends_on("caliper+cuda", when="+profiling+cuda")
-    for sm_ in CudaPackage.cuda_arch_values:
-        depends_on("caliper cuda_arch={0}".format(sm_),
-                when="+profiling cuda_arch={0}".format(sm_))
+    for val in CudaPackage.cuda_arch_values:
+        ext_rocm_dep = f"+cuda cuda_arch={val}"
 
+        # required
+        depends_on(f"axom {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"mfem {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+
+        # optional
+        depends_on(f"caliper {ext_rocm_dep}", when=f"+profiling {ext_rocm_dep}")
+        depends_on(f"petsc {ext_rocm_dep}", when=f"+petsc {ext_rocm_dep}")
+        depends_on(f"raja {ext_rocm_dep}", when=f"+raja {ext_rocm_dep}")
+        depends_on(f"slepc {ext_rocm_dep}", when=f"+slepc {ext_rocm_dep}")
+        depends_on(f"sundials {ext_rocm_dep}", when=f"+sundials {ext_rocm_dep}")
+        depends_on(f"tribol {ext_rocm_dep}", when=f"+tribol {ext_rocm_dep}")
+        depends_on(f"umpire {ext_rocm_dep}", when=f"+umpire {ext_rocm_dep}")
 
     #
     # ROCm
     #
+    conflicts("amdgpu_target=none", when="+rocm",
+              msg="AMD GPU target is required when building with ROCm")
 
     with when("+profiling"):
         depends_on("caliper+rocm", when="+rocm")

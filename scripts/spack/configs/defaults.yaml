@@ -2,7 +2,7 @@
 packages:
   caliper:
     require:
-    - spec: "~kokkos+shared"
+    - spec: "~kokkos"
   conduit:
     require:
     - spec: "~shared~test~examples~utilities"
