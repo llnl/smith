@@ -7,7 +7,8 @@ packages:
     require:
     - spec: "~shared~test~examples~utilities"
   hdf5:
-    variants: ~shared~mpi
+    require:
+    - spec: ~shared~mpi
   raja:
     require:
     - spec: "~shared~examples~exercises"
