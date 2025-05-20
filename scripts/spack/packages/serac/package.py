@@ -238,6 +238,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     conflicts("+openmp", when="+rocm")
     conflicts("+cuda", when="+rocm")
+    conflicts("~umpire", when="+raja", msg="Axom requires both raja and umpire in order to properly set CAMP_DIR.")
 
     conflicts("%intel", msg="Intel has a bug with C++17 support as of May 2020")
 
