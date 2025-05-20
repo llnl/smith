@@ -5,9 +5,9 @@
 
 .. _ubuntu_build-label:
 
-==================
-Serac Ubuntu Build
-==================
+=====================
+Serac Ubuntu 24 Build
+=====================
 
 ------------------
 Basic System Setup
@@ -30,15 +30,18 @@ Install required build packages to minimize what Spack will build:
 
 .. code-block:: bash
 
-    sudo apt-get -qq install -y --no-install-recommends build-essential bzip2 cmake libopenblas-dev \
-    lua5.2 lua5.2-dev openmpi-bin libopenmpi-dev unzip
+    sudo apt install -y --no-install-recommends build-essential bzip2 cmake libopenblas-dev \
+    lua5.2 liblua5.2-dev openmpi-bin libopenmpi-dev unzip
 
 Optionally you can install packages to generate documentation:
 
 .. code-block:: bash
 
-    sudo apt-get -qq install -y --no-install-recommends graphviz python3-sphinx texlive-full doxygen
+    sudo apt install -y --no-install-recommends graphviz python3-sphinx texlive-full doxygen
 
+.. note::
+
+    The documentation packages require a lot of disk space.
 
 -------------------------------
 Generate Spack Environment File
@@ -48,6 +51,12 @@ Spack uses an environment file to describe where system level packages are to mi
 The following command will download the specific Spack version we use and run a minimal set of commands to
 generate an environment file for you. This should be a good starting point and should be used in following
 Spack builds.
+
+.. note::
+
+    We provide a basic Ubuntu 24 Spack environment file in ``scripts/spack/configs/linux_ubuntu_24`` that
+    may work for most people. If you want to try using that, skip to :ref:`Build Serac's Third-party Libraries <ubuntu_tpl_build-label>`
+    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/linux_ubuntu_24/ubuntu24.yaml``
 
 .. code-block:: bash
 
@@ -77,7 +86,7 @@ If you want to use Clang as your compiler. Alter the following section in that f
 If you are using the GNU compiler, you can ignore the above step.
 
 To speed up the build, you can add packages that exist on your system to the same Spack environment file. For example,
-we installed lua in the above ``apt-get`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
+we installed lua in the above ``apt`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
 
 .. code-block:: yaml
 
@@ -144,9 +153,11 @@ by another package, so you can also add it with this yaml section:
 
 .. important::
 
-    Uberenv will override existing ``spack.yaml`` files. Now that we have made modifications, you should rename
-    or move the file so they are not lost. For the rest of instruction, we will assume you renamed the file to
+    Uberenv will override existing ``spack.yaml`` files in the current working directory. Now that we have made modifications,
+    you should rename or move the file so they are not lost. For the rest of instruction, we will assume you renamed the file to
     ``ubuntu24.yaml``.
+
+.. _ubuntu_tpl_build-label:
 
 -----------------------------------
 Build Serac's Third-party Libraries
