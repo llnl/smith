@@ -59,7 +59,7 @@ blt_add_library(
 set_source_files_properties(input.cpp PROPERTIES LANGUAGE CXX)
 
 serac_write_unified_header(
-    NAME infrastructure
+    NAME    infrastructure
     HEADERS ${infrastructure_headers}
     )
 

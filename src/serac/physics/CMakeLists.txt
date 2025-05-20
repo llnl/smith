@@ -53,6 +53,11 @@ blt_add_library(
     DEPENDS_ON  ${physics_depends}
     )
 
+serac_write_unified_header(
+    NAME    physics
+    HEADERS ${physics_headers}
+    )
+
 install(FILES ${physics_headers} DESTINATION include/serac/physics )
 
 install(TARGETS              serac_physics

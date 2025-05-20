@@ -23,7 +23,7 @@ blt_add_library(
     )
 
 serac_write_unified_header(
-    NAME mesh
+    NAME    mesh
     HEADERS ${mesh_headers}
     )
 

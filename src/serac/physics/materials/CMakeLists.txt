@@ -35,6 +35,11 @@ blt_add_library(
    DEPENDS_ON  ${materials_depends}
    )
 
+serac_write_unified_header(
+    NAME    materials
+    HEADERS ${materials_headers}
+    )
+
 install(FILES ${materials_headers} DESTINATION include/serac/physics/materials )
 
 install(TARGETS              serac_physics_materials

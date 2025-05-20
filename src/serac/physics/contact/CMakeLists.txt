@@ -28,6 +28,11 @@ blt_add_library(
     DEPENDS_ON  ${contact_depends}
     )
 
+serac_write_unified_header(
+    NAME    contact
+    HEADERS ${contact_headers}
+    )
+
 install(FILES ${contact_headers} DESTINATION include/serac/physics/contact )
 
 install(TARGETS              serac_contact
