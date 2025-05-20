@@ -25,6 +25,7 @@ Developer Guide
    state_manager
    equation_solver
    macmini
+   ubuntu_build
 
 Developing a New Physics Module
 -------------------------------
