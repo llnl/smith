@@ -251,21 +251,26 @@ endfunction()
 ##
 ## NAME - The name of the unified header.
 ## HEADERS - Headers to be included in the header.
+## NO_PATH_MODIFICATION - ON/OFF(default) Stops include path modification if on,
+##    used for the project-level unified header
 ##
 ##------------------------------------------------------------------------------
 # List to hold all unified headers to be later used to create a master unified header
-set(_serac_unified_headers)
+set(_serac_unified_headers "" CACHE STRING "")
 macro(serac_write_unified_header)
 
-    set(options )
-    set(singleValueArgs NAME)
+    set(options)
+    set(singleValueArgs NAME NO_PATH_MODIFICATION)
     set(multiValueArgs HEADERS EXCLUDE)
 
     # Parse the arguments to the macro
     cmake_parse_arguments(arg
          "${options}" "${singleValueArgs}" "${multiValueArgs}" ${ARGN})
 
-    string(TOUPPER ${arg_NAME} _ucname)
+    if(NOT DEFINED arg_NO_PATH_MODIFICATION)
+        set(arg_NO_PATH_MODIFICATION OFF)
+    endif()
+
     string(TOLOWER ${arg_NAME} _lcname)
     string(TOLOWER ${PROJECT_NAME} _project_name)
     set(_header ${PROJECT_BINARY_DIR}/include/${_project_name}/${_lcname}.hpp)
@@ -285,8 +290,10 @@ macro(serac_write_unified_header)
     foreach(_file ${arg_HEADERS})
         if(${_file} IN_LIST arg_EXCLUDE)
             continue()
-        elseif(${_headerPath} MATCHES "(\/detail\/)|(\/internal\/)")
+        elseif(${_file} MATCHES "(\/detail\/)|(\/internal\/)")
             continue()
+        elseif(arg_NO_PATH_MODIFICATION)
+            file(APPEND ${_tmp_header} "#include \"${_file}\"\n")
         else()
             set(_headerPath)
             serac_remove_string_prefix("${PROJECT_BINARY_DIR}\/" "${_file}" _headerPath)
@@ -304,6 +311,11 @@ macro(serac_write_unified_header)
     install(FILES       ${_header}
             DESTINATION include/${_project_name})
 
-    list(APPEND _serac_unified_headers "include\/${_project_name}\/${_header}")
-
+    # Add this component's unified header to the list to be added to the project specific unified header
+    set(_component_header "${_project_name}/${_lcname}.hpp")
+    if("${_serac_unified_headers}" STREQUAL "")
+        set(_serac_unified_headers "${_component_header}" CACHE STRING "" FORCE)
+    else()
+        set(_serac_unified_headers "${_serac_unified_headers};${_component_header}" CACHE STRING "" FORCE)
+    endif()
 endmacro(serac_write_unified_header)
