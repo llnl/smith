@@ -73,7 +73,7 @@ blt_add_library(
 
 serac_write_unified_header(
     NAME    functional
-    HEADERS ${functional_headers}
+    HEADERS functional.hpp
     )
 
 install(FILES ${functional_headers} DESTINATION include/serac/numerics/functional )
