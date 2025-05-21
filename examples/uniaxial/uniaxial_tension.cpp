@@ -11,7 +11,7 @@
 #include "axom/slic.hpp"
 #include "mfem.hpp"
 
-#include "serac/serac_config.hpp"
+#include "serac/serac.hpp"
 
 template <class Physics>
 void output(double u, double f, const Physics& solid, const std::string& paraview_tag, std::ofstream& file)
