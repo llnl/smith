@@ -8,15 +8,9 @@
 #include <fstream>
 
 #include "axom/inlet.hpp"
-#include "axom/slic/core/SimpleLogger.hpp"
+#include "axom/slic.hpp"
 #include "mfem.hpp"
 
-#include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh/mesh_utils.hpp"
-#include "serac/physics/boundary_conditions/components.hpp"
-#include "serac/physics/materials/solid_material.hpp"
-#include "serac/physics/solid_mechanics.hpp"
-#include "serac/physics/state/state_manager.hpp"
 #include "serac/serac_config.hpp"
 
 template <class Physics>
