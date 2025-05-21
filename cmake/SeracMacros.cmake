@@ -222,24 +222,86 @@ endmacro(serac_configure_file)
 ##------------------------------------------------------------------------------
 ## serac_remove_string_prefix
 ##
-## This function removes a string prefix from a given string.
+## This macro removes a string prefix from a given string.
 ##
 ## PREFIX - String prefix to be removed
 ## INPUT - String with possible prefix to be removed
 ## OUTPUT_VAR - Possibly altered output string
 ##
 ##------------------------------------------------------------------------------
-function(serac_remove_string_prefix PREFIX INPUT OUTPUT_VAR)
-    string(LENGTH "${PREFIX}" PREFIX_LEN)
-    string(SUBSTRING "${INPUT}" 0 ${PREFIX_LEN} _actual_prefix)
+macro(serac_remove_string_prefix)
+    set(options)
+    set(singleValueArgs PREFIX INPUT OUTPUT_VAR)
+    set(multiValueArgs)
 
-    if(_actual_prefix STREQUAL "${PREFIX}")
-        string(REPLACE "${PREFIX}" "" STRIPPED_PATH "${INPUT}")
-        set(${OUTPUT_VAR} "${STRIPPED_PATH}" PARENT_SCOPE)
-    else()
-        set(${OUTPUT_VAR} "${INPUT}" PARENT_SCOPE)
+    # Parse the arguments to the macro
+    cmake_parse_arguments(arg
+         "${options}" "${singleValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if(NOT DEFINED arg_PREFIX)
+         message(FATAL_ERROR "PREFIX is required")
     endif()
-endfunction()
+
+    if(NOT DEFINED arg_INPUT)
+         message(FATAL_ERROR "INPUT is required")
+    endif()
+
+    if(NOT DEFINED arg_OUTPUT_VAR)
+         message(FATAL_ERROR "OUTPUT_VAR is required")
+    endif()
+
+    string(LENGTH "${arg_PREFIX}" _prefix_len)
+    string(SUBSTRING "${arg_INPUT}" 0 ${_prefix_len} _actual_prefix)
+
+    if(_actual_prefix STREQUAL "${arg_PREFIX}")
+        string(REPLACE "${arg_PREFIX}" "" _stripped_path "${arg_INPUT}")
+        set(${arg_OUTPUT_VAR} "${_stripped_path}")
+    else()
+        set(${arg_OUTPUT_VAR} "${arg_INPUT}")
+    endif()
+endmacro()
+
+##------------------------------------------------------------------------------
+## serac_remove_string_prefix
+##
+## This macro fills OUTPUT_VAR with the subdirectory relative to 
+## "<lower case project name>/src"
+##
+## OUTPUT_VAR - Possibly altered output string
+##
+##------------------------------------------------------------------------------
+macro(serac_get_src_subdirectory)
+
+    set(options)
+    set(singleValueArgs OUTPUT_VAR)
+    set(multiValueArgs)
+
+    # Parse the arguments to the macro
+    cmake_parse_arguments(arg
+         "${options}" "${singleValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if(NOT DEFINED arg_OUTPUT_VAR)
+         message(FATAL_ERROR "OUTPUT_VAR is required")
+    endif()
+
+    string(TOLOWER ${PROJECT_NAME} _project_name)
+
+    # Convert both paths to absolute
+    file(REAL_PATH "${PROJECT_SOURCE_DIR}/src/${_project_name}" abs_base_dir)
+    file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}" abs_full_path)
+
+    # Check if full path starts with the base directory
+    string(FIND "${abs_full_path}" "${abs_base_dir}" found_pos)
+
+    if(NOT found_pos EQUAL 0)
+        message(FATAL_ERROR "The full path '${abs_full_path}' does not start with the base directory '${abs_base_dir}'")
+    endif()
+
+    # Strip base directory from full path
+    serac_remove_string_prefix(PREFIX "${abs_base_dir}/"
+                               INPUT "${abs_full_path}"
+                               OUTPUT_VAR ${arg_OUTPUT_VAR})
+endmacro(serac_get_src_subdirectory)
 
 
 ##------------------------------------------------------------------------------
@@ -275,6 +337,10 @@ macro(serac_write_unified_header)
     string(TOLOWER ${PROJECT_NAME} _project_name)
     set(_header ${PROJECT_BINARY_DIR}/include/${_project_name}/${_lcname}.hpp)
     set(_tmp_header ${_header}.tmp)
+    set(_src_subdir)
+    if(NOT arg_NO_PATH_MODIFICATION)
+        serac_get_src_subdirectory(OUTPUT_VAR _src_subdir)
+    endif()
 
     file(WRITE ${_tmp_header} "\/\/ Copyright Lawrence Livermore National Security, LLC and
 \/\/ other Serac Project Developers. See the top-level LICENSE file for details.
@@ -288,17 +354,23 @@ macro(serac_write_unified_header)
     file(APPEND ${_tmp_header} "#include \"${_project_name}\/${_project_name}_config.hpp\"\n\n")
 
     foreach(_file ${arg_HEADERS})
-        if(${_file} IN_LIST arg_EXCLUDE)
+        if("${_file}" IN_LIST arg_EXCLUDE)
             continue()
-        elseif(${_file} MATCHES "(\/detail\/)|(\/internal\/)")
+        elseif("${_file}" MATCHES "\\.inl$")
+            continue()
+        elseif("${_file}" MATCHES "(\/detail\/)|(\/internal\/)")
             continue()
         elseif(arg_NO_PATH_MODIFICATION)
             file(APPEND ${_tmp_header} "#include \"${_file}\"\n")
         else()
             set(_headerPath)
-            serac_remove_string_prefix("${PROJECT_BINARY_DIR}\/" "${_file}" _headerPath)
-            serac_remove_string_prefix("include\/${_project_name}\/${arg_NAME}\/" "${_headerPath}" _headerPath)
-            set(_headerPath "${_project_name}\/${_lcname}\/${_headerPath}")
+            serac_remove_string_prefix(PREFIX "${PROJECT_BINARY_DIR}\/"
+                                       INPUT "${_file}"
+                                       OUTPUT_VAR _headerPath)
+            serac_remove_string_prefix(PREFIX "include\/${_project_name}\/${arg_NAME}\/"
+                                       INPUT "${_headerPath}"
+                                       OUTPUT_VAR _headerPath)
+            set(_headerPath "${_project_name}\/${_src_subdir}\/${_headerPath}")
             file(APPEND ${_tmp_header} "#include \"${_headerPath}\"\n")
         endif()
     endforeach()
