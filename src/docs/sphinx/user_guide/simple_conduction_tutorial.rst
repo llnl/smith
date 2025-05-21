@@ -10,7 +10,7 @@ Simple Heat Transfer Tutorial
 This tutorial provides an introduction to running simulations with Serac and demonstrates
 the setup of a simple steady-state heat transfer problem.
 
-The full source code for this tutorial is available in ``examples/simple_conduction/simple_conduction.cpp``, =
+The full source code for this tutorial is available in ``examples/conduction/simple_conduction.cpp``, =
 which demonstrates C++ configuration of a heat transfer physics module.
 
 The heat transfer modeled in this section is based on the formulation discussed in :ref:`conduction-theory-label`.
@@ -20,7 +20,7 @@ Setting Up Includes and Initializing
 
 Serac provides a single unified header for all classes and functions needed by users. Shown here:
 
-.. literalinclude:: ../../../../examples/simple_conduction/simple_conduction.cpp
+.. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _serac_include_header_start
    :end-before: _serac_include_header_end
    :language: C++
@@ -35,7 +35,7 @@ We're now ready to start our ``main()`` function. Serac's ``ApplicationManager``
 through RAII, initializes and finalizes much of the boilerplate setup required for each simulation,
 e.g., MPI, logging. All you need to do is instantiate the class before other Serac functionality:
 
-.. literalinclude:: ../../../../examples/simple_conduction/simple_conduction.cpp
+.. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _main_init_start
    :end-before: _main_init_end
    :language: C++
@@ -46,7 +46,7 @@ e.g., MPI, logging. All you need to do is instantiate the class before other Ser
 To simplify saving to an output file and restarting a simulation, Serac stores critical state information, like
 the mesh, fields, and individual finite element states, in a single ``StateManager`` object. 
 
-.. literalinclude:: ../../../../examples/simple_conduction/simple_conduction.cpp
+.. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _statemanager_start
    :end-before: _statemanager_end
    :language: C++
@@ -60,7 +60,7 @@ like cuboids, rectangles, disks, and cylinders. In this introductory example, we
 mesh with 10 quadrilateral elements in each space dimension for 100 elements total.  Once created, the primary
 mesh must always be registered with the ``StateManager``: 
 
-.. literalinclude:: ../../../../examples/simple_conduction/simple_conduction.cpp
+.. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _create_mesh_start
    :end-before: _create_mesh_end
    :language: C++
@@ -75,7 +75,7 @@ of a partial differential equation (e.g., continuous Galerkin finite element met
 In this example, we are building a heat transfer simulation, so we include Serac's ``HeatTransfer`` module and
 thermal material models:
 
-.. literalinclude:: ../../../../examples/simple_conduction/simple_conduction.cpp
+.. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _create_module_start
    :end-before: _create_module_end
    :language: C++
@@ -92,7 +92,7 @@ We define a material model that includes information needed for the constitutive
 In this example, we define a linear isotropic conductor with uniform density, heat capacity, and conductivity (kappa).
 That material model is then passed to the ``HeatTransfer`` object. Note that this material model could be user-defined.
 
-.. literalinclude:: ../../../../examples/simple_conduction/simple_conduction.cpp
+.. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _conductivity_start
    :end-before: _conductivity_end
    :language: C++
@@ -107,7 +107,7 @@ The following snippets add two Dirichlet boundary conditions:
 - One that constrains the temperature to :math:`x^2 + y - 1` at boundary attributes 2 and 3, which for
   this mesh correspond to the right side and top of the mesh, respectively.
 
-.. literalinclude:: ../../../../examples/simple_conduction/simple_conduction.cpp
+.. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _bc_start
    :end-before: _bc_end
    :language: C++
@@ -123,7 +123,7 @@ all of the internal finite element data structures.
 
 We can then perform the steady-state solve and save the end result:
 
-.. literalinclude:: ../../../../examples/simple_conduction/simple_conduction.cpp
+.. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _run_sim_start
    :end-before: _run_sim_end
    :language: C++
@@ -150,7 +150,7 @@ Serac's ``ApplicationManager`` class will automatically finalize it's previously
 through RAII when it falls out of scope. To end your simulation simply ``return`` from the ``main`` like any
 other C++ program:
 
-.. literalinclude:: ../../../../examples/simple_conduction/simple_conduction.cpp
+.. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _exit_start
    :end-before: _exit_end
    :language: C++

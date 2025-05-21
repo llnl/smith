@@ -22,7 +22,7 @@ int main(int argc, char* argv[])
   serac::ApplicationManager applicationManager(argc, argv);
 // _main_init_end
 
-  // _statemanager_end
+  // _statemanager_start
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "without_input_file_example");
   // _statemanager_end
