@@ -23,7 +23,7 @@
 
 namespace serac {
 
-class ContactTest : public testing::TestWithParam<std::pair<ContactEnforcement, std::string>> {};
+class ContactTest : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactJacobian, std::string>> {};
 
 TEST_P(ContactTest, patch)
 {
@@ -34,7 +34,7 @@ TEST_P(ContactTest, patch)
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
-  std::string name = "contact_patch_" + GetParam().second;
+  std::string name = "contact_patch_" + std::get<2>(GetParam());
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
@@ -49,17 +49,18 @@ TEST_P(ContactTest, patch)
   Domain z0_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
   Domain zmax_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
 
-#ifdef SERAC_USE_PETSC
-  LinearSolverOptions linear_options{
-      .linear_solver = LinearSolver::PetscGMRES,
-      .preconditioner = Preconditioner::Petsc,
-      .petsc_preconditioner = PetscPCType::HMG,
-      .absolute_tol = 1e-16,
-      .print_level = 1,
-  };
-#elif defined(MFEM_USE_STRUMPACK)
-  // #ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 1};
+  // TODO: investigate performance with Petsc
+  // #ifdef SERAC_USE_PETSC
+  //   LinearSolverOptions linear_options{
+  //       .linear_solver = LinearSolver::PetscGMRES,
+  //       .preconditioner = Preconditioner::Petsc,
+  //       .petsc_preconditioner = PetscPCType::HMG,
+  //       .absolute_tol = 1e-16,
+  //       .print_level = 1,
+  //   };
+  // #elif defined(MFEM_USE_STRUMPACK)
+#ifdef MFEM_USE_STRUMPACK
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #else
   LinearSolverOptions linear_options{};
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -67,15 +68,16 @@ TEST_P(ContactTest, patch)
 #endif
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
-                                           .relative_tol = 1.0e-12,
-                                           .absolute_tol = 1.0e-12,
+                                           .relative_tol = 1.0e-13,
+                                           .absolute_tol = 1.0e-13,
                                            .max_iterations = 20,
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
-                                 .enforcement = GetParam().first,
+                                 .enforcement = std::get<0>(GetParam()),
                                  .type = ContactType::Frictionless,
-                                 .penalty = 1.0e4};
+                                 .penalty = 8.0e2,
+                                 .jacobian = std::get<1>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, "patch_mesh");
@@ -127,10 +129,14 @@ TEST_P(ContactTest, patch)
   EXPECT_NEAR(0.0, approx_error_l2, 1.0e-3);
 }
 
-INSTANTIATE_TEST_SUITE_P(tribol, ContactTest,
-                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty"),
-                                         std::make_pair(ContactEnforcement::LagrangeMultiplier,
-                                                        "lagrange_multiplier")));
+INSTANTIATE_TEST_SUITE_P(
+    tribol, ContactTest,
+    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ"),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Approximate,
+                                    "lagrange_multiplier_approxJ"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ"),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Exact,
+                                    "lagrange_multiplier_exactJ")));
 
 }  // namespace serac
 

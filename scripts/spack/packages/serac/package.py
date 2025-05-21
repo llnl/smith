@@ -92,13 +92,15 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("py-sphinx", when="+devtools")
     depends_on("py-ats", when="+devtools")
 
-    # MFEM is deprecating the monitoring support with sundials v6.0 and later
-    # NOTE: Sundials must be built static to prevent the following runtime error:
-    # "error while loading shared libraries: libsundials_nvecserial.so.6:
-    # cannot open shared object file: No such file or directory"
-    depends_on("sundials+hypre~monitoring~examples~examples-install+static~shared",
-               when="+sundials")
-    depends_on("sundials+asan", when="+sundials+asan")
+    with when("+sundials"):
+        # Going to sundials@7: causes 80%+ test failures
+        depends_on("sundials@:6.999", when="+sundials")
+        # MFEM is deprecating the monitoring support with sundials v6.0 and later
+        # NOTE: Sundials must be built static to prevent the following runtime error:
+        # "error while loading shared libraries: libsundials_nvecserial.so.6:
+        # cannot open shared object file: No such file or directory"
+        depends_on("sundials+hypre~monitoring~examples~examples-install+static~shared")
+        depends_on("sundials+asan", when="+asan")
 
     depends_on("mfem+netcdf+metis+superlu-dist+lapack+mpi")
     depends_on("mfem+sundials", when="+sundials")
@@ -236,6 +238,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     conflicts("+openmp", when="+rocm")
     conflicts("+cuda", when="+rocm")
+    conflicts("~umpire", when="+raja", msg="Axom requires both raja and umpire in order to properly set CAMP_DIR.")
 
     conflicts("%intel", msg="Intel has a bug with C++17 support as of May 2020")
 
@@ -450,11 +453,13 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
                                               "mpibind"))
 
         # Replace /usr/bin/srun path with srun flux wrapper path on TOSS 4
+        # TODO Remove this once we move past https://github.com/spack/spack/pull/49033
         if 'toss_4' in self._get_sys_type(spec):
             srun_wrapper = which_string("srun")
             mpi_exec_index = [index for index,entry in enumerate(entries)
                                                   if "MPIEXEC_EXECUTABLE" in entry]
-            del entries[mpi_exec_index[0]]
+            if len(mpi_exec_index) != 0:
+                del entries[mpi_exec_index[0]]
             entries.append(cmake_cache_path("MPIEXEC_EXECUTABLE", srun_wrapper))
 
         return entries
