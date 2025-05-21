@@ -77,12 +77,15 @@ TEST(Solid, MultiMaterial)
   constexpr double nu_right = 2 * nu_left;
   Material mat_right{.density = 1.0, .K = E_right / 3.0 / (1 - 2 * nu_right), .G = 0.5 * E_right / (1 + nu_right)};
 
-  pmesh->addDomainOfBoundaryElements("left", [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
+  auto is_in_left = [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
     return average(coords)[0] < 0.5 * L;
-  });
-  pmesh->addDomainOfBoundaryElements("right", [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
+  };
+  auto is_in_right = [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
     return average(coords)[0] >= 0.5 * L;
-  });
+  };
+
+  pmesh->addDomainOfBodyElements("left", is_in_left);
+  pmesh->addDomainOfBodyElements("right", is_in_right);
 
   solid.setMaterial(mat_left, pmesh->domain("left"));
   solid.setMaterial(mat_right, pmesh->domain("right"));
@@ -183,12 +186,15 @@ TEST(Solid, MultiMaterialWithState)
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                "solid_mechanics", mesh_tag);
 
-  pmesh->addDomainOfBoundaryElements("left", [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
+  auto is_in_left = [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
     return average(coords)[0] < 0.5 * L;
-  });
-  pmesh->addDomainOfBoundaryElements("right", [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
+  };
+  auto is_in_right = [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
     return average(coords)[0] >= 0.5 * L;
-  });
+  };
+
+  pmesh->addDomainOfBodyElements("left", is_in_left);
+  pmesh->addDomainOfBodyElements("right", is_in_right);
 
   using Hardening = solid_mechanics::LinearHardening;
   using MaterialRight = solid_mechanics::J2SmallStrain<Hardening>;

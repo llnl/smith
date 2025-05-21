@@ -17,6 +17,7 @@
 
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 
@@ -37,7 +38,7 @@ constexpr double boundary_disp = 0.013;
 constexpr double shear_modulus_value = 1.0;
 constexpr double bulk_modulus_value = 1.0;
 
-std::unique_ptr<SolidMechanicsType> createNonlinearSolidMechanicsSolver(mfem::ParMesh& pmesh,
+std::unique_ptr<SolidMechanicsType> createNonlinearSolidMechanicsSolver(std::shared_ptr<serac::Mesh> pmesh,
                                                                         const NonlinearSolverOptions& nonlinear_opts,
                                                                         const SolidMaterial& mat)
 {
@@ -48,18 +49,16 @@ std::unique_ptr<SolidMechanicsType> createNonlinearSolidMechanicsSolver(mfem::Pa
 
   // Construct and initialized the user-defined moduli to be used as a differentiable parameter in
   // the solid physics module.
-  FiniteElementState user_defined_shear_modulus(StateManager::mesh(mesh_tag), H1<p>{}, "parameterized_shear");
+  FiniteElementState user_defined_shear_modulus(pmesh->mfemParMesh(), H1<p>{}, "parameterized_shear");
   user_defined_shear_modulus = shear_modulus_value;
 
-  FiniteElementState user_defined_bulk_modulus(StateManager::mesh(mesh_tag), H1<p>{}, "parameterized_bulk");
+  FiniteElementState user_defined_bulk_modulus(pmesh->mfemParMesh(), H1<p>{}, "parameterized_bulk");
   user_defined_bulk_modulus = bulk_modulus_value;
 
   solid->setParameter(0, user_defined_bulk_modulus);
   solid->setParameter(1, user_defined_shear_modulus);
 
-  Domain whole_mesh = EntireDomain(pmesh);
-
-  solid->setMaterial(DependsOn<0, 1>{}, mat, whole_mesh);
+  solid->setMaterial(DependsOn<0, 1>{}, mat, pmesh->entireBody());
 
   solid->addBodyForce(
       [](auto X, auto /* t */) {
@@ -68,61 +67,60 @@ std::unique_ptr<SolidMechanicsType> createNonlinearSolidMechanicsSolver(mfem::Pa
         Y[1] = -0.05 - 0.2 * X[0] + 0.15 * X[1];
         return 0.1 * X + Y;
       },
-      whole_mesh);
+      pmesh->entireBody());
 
-  Domain essential_bdr = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("essential_bdr", by_attr<dim>(1));
   auto applied_displacement = [](vec2, double) { return boundary_disp * vec2{{1.0, 1.0}}; };
 
-  solid->setDisplacementBCs(applied_displacement, essential_bdr);
+  solid->setDisplacementBCs(applied_displacement, pmesh->domain("essential_bdr"));
 
   solid->completeSetup();
 
   return solid;
 }
 
-FiniteElementState createReactionDirection(const BasePhysics& solid_solver, int direction)
+FiniteElementState createReactionDirection(const BasePhysics& solid_solver, int direction,
+                                           std::shared_ptr<serac::Mesh> pmesh)
 {
   const FiniteElementDual& reactions = solid_solver.dual("reactions");
 
   FiniteElementState reactionDirections(reactions.space(), "reaction_directions");
   reactionDirections = 0.0;
 
-  Domain essential_boundary = Domain::ofBoundaryElements(StateManager::mesh(mesh_tag), by_attr<dim>(1));
-
   mfem::VectorFunctionCoefficient func(dim, [direction](const mfem::Vector& /*x*/, mfem::Vector& u) {
     u = 0.0;
     u[direction] = 1.0;
   });
 
-  reactionDirections.project(func, essential_boundary);
+  reactionDirections.project(func, pmesh->domain("essential_bdr"));
 
   return reactionDirections;
 }
 
-double computeSolidMechanicsQoi(BasePhysics& solid_solver)
+double computeSolidMechanicsQoi(BasePhysics& solid_solver, std::shared_ptr<serac::Mesh> pmesh)
 {
   solid_solver.resetStates();
   solid_solver.advanceTimestep(0.1);
 
   const FiniteElementDual& reactions = solid_solver.dual("reactions");
-  auto reactionDirections = createReactionDirection(solid_solver, 0);
+  auto reactionDirections = createReactionDirection(solid_solver, 0, pmesh);
   // reactionDirections = solid_solver.dual("reactions");
 
   const FiniteElementState& displacements = solid_solver.state("displacement");
   return innerProduct(reactions, reactionDirections) + 0.05 * innerProduct(displacements, displacements);
 }
 
-auto computeSolidMechanicsQoiSensitivities(BasePhysics& solid_solver)
+auto computeSolidMechanicsQoiSensitivities(BasePhysics& solid_solver, std::shared_ptr<serac::Mesh> pmesh)
 {
-  double qoi = computeSolidMechanicsQoi(solid_solver);
+  double qoi = computeSolidMechanicsQoi(solid_solver, pmesh);
 
   FiniteElementDual shape_sensitivity(solid_solver.shapeDisplacement().space(), "shape sensitivity");
   shape_sensitivity = 0.0;
 
-  FiniteElementDual shear_modulus_sensitivity(StateManager::mesh(mesh_tag), H1<p>{}, "shear modulus sensitivity");
+  FiniteElementDual shear_modulus_sensitivity(pmesh->mfemParMesh(), H1<p>{}, "shear modulus sensitivity");
   shear_modulus_sensitivity = 0.0;
 
-  auto reaction_adjoint_load = createReactionDirection(solid_solver, 0);
+  auto reaction_adjoint_load = createReactionDirection(solid_solver, 0, pmesh);
 
   FiniteElementDual displacement_adjoint_load(solid_solver.state("displacement").space(), "displacement_adjoint_load");
   displacement_adjoint_load = solid_solver.state("displacement");
@@ -139,23 +137,24 @@ auto computeSolidMechanicsQoiSensitivities(BasePhysics& solid_solver)
 }
 
 double computeSolidMechanicsQoiAdjustingShape(BasePhysics& solid_solver,
-                                              const FiniteElementState& shape_derivative_direction, double pertubation)
+                                              const FiniteElementState& shape_derivative_direction, double pertubation,
+                                              std::shared_ptr<serac::Mesh> pmesh)
 {
-  FiniteElementState shape_disp(StateManager::mesh(mesh_tag), H1<SHAPE_ORDER, dim>{}, "input_shape_displacement");
+  FiniteElementState shape_disp(pmesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{}, "input_shape_displacement");
   SLIC_ASSERT_MSG(shape_disp.Size() == shape_derivative_direction.Size(),
                   "Shape displacement and intended derivative direction FiniteElementState sizes do not agree.");
 
   shape_disp.Add(pertubation, shape_derivative_direction);
   solid_solver.setShapeDisplacement(shape_disp);
 
-  return computeSolidMechanicsQoi(solid_solver);
+  return computeSolidMechanicsQoi(solid_solver, pmesh);
 }
 
 double computeSolidMechanicsQoiAdjustingShearModulus(BasePhysics& solid_solver,
                                                      const FiniteElementState& shear_modulus_derivative_direction,
-                                                     double pertubation)
+                                                     double pertubation, std::shared_ptr<serac::Mesh> pmesh)
 {
-  FiniteElementState user_defined_shear_modulus(StateManager::mesh(mesh_tag), H1<p>{}, "parameterized_shear");
+  FiniteElementState user_defined_shear_modulus(pmesh->mfemParMesh(), H1<p>{}, "parameterized_shear");
   user_defined_shear_modulus = shear_modulus_value;
 
   SLIC_ASSERT_MSG(user_defined_shear_modulus.Size() == shear_modulus_derivative_direction.Size(),
@@ -164,7 +163,7 @@ double computeSolidMechanicsQoiAdjustingShearModulus(BasePhysics& solid_solver,
   user_defined_shear_modulus.Add(pertubation, shear_modulus_derivative_direction);
   solid_solver.setParameter(0, user_defined_shear_modulus);
 
-  return computeSolidMechanicsQoi(solid_solver);
+  return computeSolidMechanicsQoi(solid_solver, pmesh);
 }
 
 struct SolidMechanicsSensitivityFixture : public ::testing::Test {
@@ -173,7 +172,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
     MPI_Barrier(MPI_COMM_WORLD);
     StateManager::initialize(dataStore, "solid_mechanics_solve");
     std::string filename = std::string(SERAC_REPO_DIR) + "/data/meshes/patch2D_quads.mesh";
-    mesh = &StateManager::setMesh(mesh::refineAndDistribute(buildMeshFromFile(filename), 2, 1), mesh_tag);
+    pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, 2, 1);
     mat.density = 1.0;
     mat.K0 = 1.0;
     mat.G0 = 0.1;
@@ -188,7 +187,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
   }
 
   axom::sidre::DataStore dataStore;
-  mfem::ParMesh* mesh;
+  std::shared_ptr<serac::Mesh> pmesh;
 
   NonlinearSolverOptions nonlinear_opts{.relative_tol = 1.0e-15, .absolute_tol = 1.0e-15};
 
@@ -201,14 +200,14 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
 
 TEST_F(SolidMechanicsSensitivityFixture, ReactionShapeSensitivities)
 {
-  auto solid_solver = createNonlinearSolidMechanicsSolver(*mesh, nonlinear_opts, mat);
-  auto [qoi_base, _, shape_sensitivity] = computeSolidMechanicsQoiSensitivities(*solid_solver);
+  auto solid_solver = createNonlinearSolidMechanicsSolver(pmesh, nonlinear_opts, mat);
+  auto [qoi_base, _, shape_sensitivity] = computeSolidMechanicsQoiSensitivities(*solid_solver, pmesh);
 
   solid_solver->resetStates();
   FiniteElementState derivative_direction(shape_sensitivity.space(), "derivative_direction");
   fillDirection(derivative_direction);
 
-  double qoi_plus = computeSolidMechanicsQoiAdjustingShape(*solid_solver, derivative_direction, eps);
+  double qoi_plus = computeSolidMechanicsQoiAdjustingShape(*solid_solver, derivative_direction, eps, pmesh);
   double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
 
   EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, eps);
@@ -216,14 +215,14 @@ TEST_F(SolidMechanicsSensitivityFixture, ReactionShapeSensitivities)
 
 TEST_F(SolidMechanicsSensitivityFixture, ReactionParameterSensitivities)
 {
-  auto solid_solver = createNonlinearSolidMechanicsSolver(*mesh, nonlinear_opts, mat);
-  auto [qoi_base, shear_modulus_sensitivity, _] = computeSolidMechanicsQoiSensitivities(*solid_solver);
+  auto solid_solver = createNonlinearSolidMechanicsSolver(pmesh, nonlinear_opts, mat);
+  auto [qoi_base, shear_modulus_sensitivity, _] = computeSolidMechanicsQoiSensitivities(*solid_solver, pmesh);
 
   solid_solver->resetStates();
   FiniteElementState derivative_direction(shear_modulus_sensitivity.space(), "derivative_direction");
   fillDirection(derivative_direction);
 
-  double qoi_plus = computeSolidMechanicsQoiAdjustingShearModulus(*solid_solver, derivative_direction, eps);
+  double qoi_plus = computeSolidMechanicsQoiAdjustingShearModulus(*solid_solver, derivative_direction, eps, pmesh);
   double directional_deriv = innerProduct(derivative_direction, shear_modulus_sensitivity);
 
   EXPECT_NEAR(directional_deriv, (qoi_plus - qoi_base) / eps, eps);
