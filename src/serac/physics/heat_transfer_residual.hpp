@@ -92,6 +92,14 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
     BaseResidualT::residual_->AddDomainIntegral(Dimension<dim>{},
                                                 DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
                                                 std::move(material_functor), BaseResidualT::mesh_->domain(body_name));
+    BaseResidualT::v_residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + 1 + NUM_STATE_VARS...>{},
+        [material_functor](double t, auto X, auto V, auto... params) {
+          auto flux = material_functor(t, X, params...);
+          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
+                 serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
+        },
+        BaseResidualT::mesh_->domain(body_name));
   }
 
   /// @overload
