@@ -10,7 +10,7 @@ source ~/.bash_profile
 CI_ROOT_DIR="/Users/chapman39/dev/serac/.ci"
 PROJECT_DIR="$CI_ROOT_DIR/repo"
 OUTPUT_LOG="$CI_ROOT_DIR/logs/macmini-build-and-test-$(date +"%Y_%m_%d_%H_%M_%S").log"
-HOST_CONFIG="$PROJECT_DIR/host-configs/other/firion-darwin-sonoma-aarch64-clang@14.0.6.cmake"
+HOST_CONFIG="$PROJECT_DIR/host-configs/other/firion-darwin-sequoia-m2-clang@14.0.6.cmake"
 RECIPIENTS="chapman39@llnl.gov,white238@llnl.gov,talamini1@llnl.gov"
 EMAIL_SUBJECT="Serac Failed! MacMini build and test report $(date)"
 EMAIL_BODY="This is automatic weekly report of Serac's MacMini build. See attached for log."
