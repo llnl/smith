@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
 {
   // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
-// _main_init_end
+  // _main_init_end
 
   // _statemanager_start
   axom::sidre::DataStore datastore;
