@@ -10,8 +10,8 @@
 
 #
 # usage:
-# python3 ./config-build.py -hc ./host-configs/rzgenie-toss_3_x86_64_ib-gcc@8.3.1.cmake --graphviz=graphviz/graph.dot
-# ./generate_images.py --graphviz=./build-rzgenie-toss_3_x86_64_ib-gcc@8.3.1-debug/graphviz
+# python3 ./config-build.py --graphviz=graphviz/graph.dot
+# python3 ./scripts/graphviz/generate_images.py --graphviz=/path/to/build/graphviz
 #
 
 import os
