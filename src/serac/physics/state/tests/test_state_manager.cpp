@@ -20,7 +20,6 @@
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/numerics/functional/quadrature_data.hpp"
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 
 namespace serac {
@@ -109,13 +108,15 @@ TEST(state_manager, QuadratureData_Restart)
   // Construct the appropriate dimension mesh and give it to the StateManager
   std::string filename = SERAC_REPO_DIR "/data/meshes/ball.mesh";
   std::string mesh_tag = "ball_mesh";
-  auto mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, 1, 0);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
+  StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // Create and store the initial state of the QuadratureData in Sidre
   SLIC_INFO("Creating Quadrature Data with initial state");
+  Domain domain = EntireDomain(StateManager::mesh(mesh_tag));
   State initial_state{};
   std::shared_ptr<QuadratureData<State>> qdata =
-      StateManager::newQuadratureDataBuffer(mesh_tag, mesh->entireBody(), order, dim, initial_state);
+      StateManager::newQuadratureDataBuffer(mesh_tag, domain, order, dim, initial_state);
 
   // Change data
   SLIC_INFO("Populating QuadratureData");
@@ -139,8 +140,9 @@ TEST(state_manager, QuadratureData_Restart)
 
   // Load data from disk
   SLIC_INFO("Loading previously saved Quadrature Data");
+  Domain new_domain = EntireDomain(StateManager::mesh(mesh_tag));
   std::shared_ptr<QuadratureData<State>> new_qdata =
-      StateManager::newQuadratureDataBuffer(mesh_tag, mesh->entireBody(), order, dim, initial_state);
+      StateManager::newQuadratureDataBuffer(mesh_tag, new_domain, order, dim, initial_state);
 
   // Verify data has reloaded to restart data
   SLIC_INFO("Verifying loaded Quadrature Data");
@@ -179,25 +181,24 @@ TEST(StateManager, StoresHighOrderMeshes)
   const std::string filename = SERAC_REPO_DIR "/data/meshes/single_curved_quad.g";
   int serial_refinement = 0;
   int parallel_refinement = 0;
-  const std::string mesh_tag = "mesh";
-  auto mesh =
-      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "mesh");
 
-  ASSERT_EQ(dim, mesh->mfemParMesh().SpaceDimension());
+  ASSERT_EQ(dim, pmesh.SpaceDimension());
 
   // Make sure that the stored mesh maintained second order character
-  EXPECT_EQ(mesh->mfemParMesh().GetNodalFESpace()->GetMaxElementOrder(), 2);
-  EXPECT_EQ(mesh->mfemParMesh().GetNodalFESpace()->GetNDofs(), 9);
+  EXPECT_EQ(pmesh.GetNodalFESpace()->GetMaxElementOrder(), 2);
+  EXPECT_EQ(pmesh.GetNodalFESpace()->GetNDofs(), 9);
 
   // make sure that the curved boundary hasn't been replaced
   // with a straight edge
 
-  const mfem::GridFunction* nodes = mesh->mfemParMesh().GetNodes();
+  const mfem::GridFunction* nodes = pmesh.GetNodes();
 
   // Get dofs on curved edge
   const int curved_boundary_element = 2;  // edge elem id of the curved edge
   mfem::Array<int> dofs;
-  mesh->mfemParMesh().GetNodalFESpace()->GetBdrElementDofs(curved_boundary_element, dofs);
+  pmesh.GetNodalFESpace()->GetBdrElementDofs(curved_boundary_element, dofs);
   constexpr int num_nodes_on_edge = dim + 1;
   ASSERT_EQ(dofs.Size(), num_nodes_on_edge);
 
@@ -206,7 +207,7 @@ TEST(StateManager, StoresHighOrderMeshes)
   for (int k = 0; k < dofs.Size(); k++) {
     int d = dofs[k];
     for (int i = 0; i < dim; i++) {
-      edge_coords[k][i] = (*nodes)(mesh->mfemParMesh().GetNodalFESpace()->DofToVDof(d, i));
+      edge_coords[k][i] = (*nodes)(pmesh.GetNodalFESpace()->DofToVDof(d, i));
     }
   }
 

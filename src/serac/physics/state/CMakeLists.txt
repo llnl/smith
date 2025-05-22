@@ -17,7 +17,7 @@ set(state_sources
     state_manager.cpp
     )
 
-set(state_depends serac_physics ${serac_device_depends})
+set(state_depends serac_infrastructure serac_functional ${serac_device_depends})
 
 blt_add_library(
     NAME        serac_state

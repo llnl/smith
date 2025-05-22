@@ -15,7 +15,6 @@
 #include "mfem.hpp"
 
 #include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/physics/mesh.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 
@@ -29,11 +28,12 @@ TEST(FiniteELementDual, MoveAssignment)
   constexpr int spatial_dim{3};
 
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
-  auto pmesh = std::make_shared<serac::Mesh>(filename, "mesh_tag", serial_refinement, parallel_refinement);
-  ASSERT_EQ(spatial_dim, pmesh->mfemParMesh().SpaceDimension())
+  std::unique_ptr<mfem::ParMesh> mesh =
+      mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
+  ASSERT_EQ(spatial_dim, mesh->SpaceDimension())
       << "Test configured incorrectly. The variable spatial_dim must match the spatial dimension of the mesh.";
 
-  FiniteElementDual dual0(pmesh->mfemParMesh(), H1<1>{}, "dual0");
+  FiniteElementDual dual0(*mesh, H1<1>{}, "dual0");
   dual0 = 1.0;
 
   FiniteElementDual dual1 = std::move(dual0);
