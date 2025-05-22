@@ -61,6 +61,10 @@ set_source_files_properties(input.cpp PROPERTIES LANGUAGE CXX)
 serac_write_unified_header(
     NAME    infrastructure
     HEADERS ${infrastructure_headers}
+    EXCLUDE accelerator.hpp
+            debug_print.hpp
+            mpi_fstream.hpp
+            variant.hpp
     )
 
 target_include_directories(serac_infrastructure PUBLIC

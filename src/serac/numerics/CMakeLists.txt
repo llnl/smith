@@ -34,10 +34,7 @@ blt_add_library(
 
 serac_write_unified_header(
     NAME    numerics
-    HEADERS ${numerics_headers}
-    EXCLUDE dense_petsc.hpp
-            trust_region_solver.hpp
-            odes.hpp
+    HEADERS solver_config.hpp
     )
 
 install(FILES ${numerics_headers} DESTINATION include/serac/numerics )

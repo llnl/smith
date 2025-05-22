@@ -129,7 +129,7 @@ We can then perform the steady-state solve and save the end result:
    :language: C++
 
 .. note::
-  The ``dt`` variable does not actually get used in a quasistatic simulation.
+  The ``dt`` variable does not actually get used in this quasistatic simulation.
 
 This should produce the following initial state:
 
