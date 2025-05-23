@@ -18,8 +18,8 @@ install(
         examples/serac/using-with-cmake
 )
 
-# Add the simple conduction examples
-add_subdirectory(simple_conduction)
+# Add the conduction examples
+add_subdirectory(conduction)
 
 # Add the contact examples
 add_subdirectory(contact)

@@ -26,6 +26,8 @@ blt_add_library(
     DEPENDS_ON  ${boundary_conditions_depends}
     )
 
+# Unified header is not needed in this component
+
 install(FILES ${boundary_conditions_headers} DESTINATION include/serac/physics/boundary_conditions )
 
 install(TARGETS              serac_boundary_conditions

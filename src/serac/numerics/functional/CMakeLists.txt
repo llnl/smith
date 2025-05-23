@@ -71,6 +71,12 @@ blt_add_library(
       DEPENDS_ON  ${functional_depends}
       )
 
+serac_write_unified_header(
+    NAME    functional
+    HEADERS domain.hpp
+            functional.hpp
+            shape_aware_functional.hpp
+    )
 
 install(FILES ${functional_headers} DESTINATION include/serac/numerics/functional )
 install(FILES ${functional_detail_headers} DESTINATION include/serac/numerics/functional/detail )
