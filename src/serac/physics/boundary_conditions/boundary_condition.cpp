@@ -99,7 +99,7 @@ void BoundaryCondition::setDofs(mfem::Vector& vector, const double time) const
     // a single component of a vector-valued function
     auto scalar_coef = get<std::shared_ptr<mfem::Coefficient>>(coef_);
     scalar_coef->SetTime(time);
-    if (component_) {
+    if (component_ || attr_markers_.Size() == 0) { // TODO: If attribute markers is empty, that means this is applied to the entire domain (component could be zero).
       state.project(*scalar_coef, dof_list, *component_);
 
     } else {
