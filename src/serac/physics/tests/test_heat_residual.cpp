@@ -111,7 +111,7 @@ struct ResidualFixture : public testing::Test {
     ThermalMaterial mat(1.0, 1.0, 1.0);
     heat_transfer_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
 
-    std::string source_name = "souce";
+    std::string source_name = "source";
     mesh->addDomainOfBoundaryElements(source_name, serac::by_attr<dim>({1, 2}));
 
     heat_transfer_residual->addBoundaryIntegral(source_name,
