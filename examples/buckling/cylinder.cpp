@@ -12,7 +12,7 @@
  * @note Run with mortar contact and PETSc preconditioners:
  * @code{.sh}
  * ./build/examples/buckling_cylinder --contact --contact-type 1 --preconditioner 6 \
- *    -options_file examples/buckling/cylinder_petsc_options.yml
+ *    -options_file examples/cylinder_petsc_options.yml
  * @endcode
  * @note Run with penalty contact and HYPRE BoomerAMG preconditioner
  * @code{.sh}
@@ -76,7 +76,7 @@ int main(int argc, char* argv[])
   bool use_contact = true;
   auto contact_type = serac::ContactEnforcement::Penalty;
 
-  // Misc options
+  // Option for testing purposes only, to reduce runtime
   bool use_fast_options = false;
 
   // Initialize and automatically finalize MPI and other libraries
