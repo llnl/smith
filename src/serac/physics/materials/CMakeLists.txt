@@ -38,7 +38,6 @@ blt_add_library(
 serac_write_unified_header(
     NAME    materials
     HEADERS ${materials_headers}
-    EXCLUDE material_verification_tools.hpp
     )
 
 install(FILES ${materials_headers} DESTINATION include/serac/physics/materials )
