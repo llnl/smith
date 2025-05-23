@@ -15,3 +15,10 @@ endif()
 if(SERAC_ENABLE_TESTS)
     add_subdirectory(tests)
 endif()
+
+# Create single unified header of component-level unified headers
+serac_write_unified_header(
+    NAME    serac
+    HEADERS ${_serac_unified_headers}
+    NO_PATH_MODIFICATION ON
+    )
