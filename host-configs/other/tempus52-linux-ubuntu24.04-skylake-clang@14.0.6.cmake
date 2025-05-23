@@ -117,7 +117,7 @@ set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.18-esklvghh2zzjyjpluycfrxbyc5cfn47q" CA
 
 set(SERAC_ENABLE_CODE_CHECKS OFF CACHE BOOL "")
 
-set(ENABLE_CLANGFORMAT OFF CACHE BOOL "")
+set(CLANGFORMAT_EXECUTABLE "/usr/bin/clang-format" CACHE PATH "")
 
 set(ENABLE_CLANGTIDY OFF CACHE BOOL "")
 

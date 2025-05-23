@@ -26,6 +26,11 @@ blt_add_library(
     DEPENDS_ON  ${state_depends}
     )
 
+serac_write_unified_header(
+    NAME    state
+    HEADERS ${state_headers}
+    )
+
 install(FILES ${state_headers} DESTINATION include/serac/physics/state )
 
 install(TARGETS              serac_state
