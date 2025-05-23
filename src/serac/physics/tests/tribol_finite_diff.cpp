@@ -42,7 +42,7 @@ TEST_P(TribolFiniteDiff, patch)
 
   double shift = eps * 10;
   // clang-format off
-  auto mesh = mesh::refineAndDistribute(shared::MeshBuilder::Unify({
+  auto pmesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
     shared::MeshBuilder::CubeMesh(1, 1, 1),
     shared::MeshBuilder::CubeMesh(1, 1, 1)
       // shift up 99.9% height of element
@@ -53,21 +53,19 @@ TEST_P(TribolFiniteDiff, patch)
       .updateBdrAttrib(1, 7)
       // change the mesh1 boundary attribute from 6 to 8
       .updateBdrAttrib(6, 8)
-  }), 0, 0);
+  }), "patch_mesh", 0, 0);
   // clang-format on
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "patch_mesh");
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = GetParam().first,
                                  .type = ContactType::TiedNormal,
                                  .penalty = 1.0,
                                  .jacobian = ContactJacobian::Exact};
-  ContactData contact_data(pmesh);
+  ContactData contact_data(pmesh->mfemParMesh());
   constexpr int interaction_id = 0;
   contact_data.addContactInteraction(interaction_id, {6}, {7}, contact_options);
 
-  mfem::Vector u(pmesh.GetNodes()->Size() + contact_data.getContactInteractions()[0].numPressureDofs());
+  mfem::Vector u(pmesh->mfemParMesh().GetNodes()->Size() + contact_data.getContactInteractions()[0].numPressureDofs());
   u = 0.0;
   mfem::Vector f(u.Size());
   f = 0.0;

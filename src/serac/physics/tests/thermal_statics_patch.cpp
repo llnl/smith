@@ -16,6 +16,7 @@
 
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
@@ -164,11 +165,10 @@ double solution_error(const ExactSolution& exact_temperature, PatchBoundaryCondi
   static_assert(dim == 2 || dim == 3, "Dimension must be 2 or 3 for heat transfer test");
 
   std::string filename = std::string(SERAC_REPO_DIR) +  "/data/meshes/patch" + std::to_string(dim) + "D.mesh";
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename));
 
   std::string mesh_tag{"mesh"};
 
-  auto & pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
 
   // Construct a heat transfer mechanics solver
   auto nonlinear_opts = heat_transfer::default_nonlinear_options;
@@ -177,11 +177,9 @@ double solution_error(const ExactSolution& exact_temperature, PatchBoundaryCondi
   HeatTransfer<p, dim> thermal(nonlinear_opts, heat_transfer::direct_linear_options, heat_transfer::default_static_options, "thermal", mesh_tag);
 
   heat_transfer::LinearIsotropicConductor mat(1.0,1.0,1.0);
-  Domain whole_domain = EntireDomain(pmesh);
-  Domain whole_boundary = EntireBoundary(pmesh);
-  thermal.setMaterial(mat, whole_domain);
+  thermal.setMaterial(mat, pmesh->entireBody());
 
-  exact_temperature.applyLoads(mat, thermal, essentialBoundaryAttributes<dim>(bc), whole_boundary);
+  exact_temperature.applyLoads(mat, thermal, essentialBoundaryAttributes<dim>(bc), pmesh->entireBoundary());
 
   // Finalize the data structures
   thermal.completeSetup();
