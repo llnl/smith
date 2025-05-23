@@ -10,7 +10,6 @@
 
 #include "mfem.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
 #include "serac/numerics/functional/functional.hpp"
@@ -38,12 +37,13 @@ struct MeshFixture : public testing::Test {
 
     double length = 0.5;
     double width = 2.0;
-
-    mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(2, 1, mfem_shape, true, length, width), MESHTAG);
+    auto meshtmp =
+        serac::mesh::refineAndDistribute(mfem::Mesh::MakeCartesian2D(2, 1, mfem_shape, true, length, width), 0, 0);
+    mesh = &serac::StateManager::setMesh(std::move(meshtmp), MESHTAG);
   }
 
   axom::sidre::DataStore datastore;
-  std::shared_ptr<serac::Mesh> mesh;
+  mfem::ParMesh* mesh;
 };
 
 std::vector<mfem::Vector> applyLinearOperator(const Mat& A, const std::vector<const mfem::Vector*>& states)

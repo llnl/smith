@@ -84,8 +84,8 @@ int main(int argc, char* argv[])
   serac::StateManager::initialize(datastore, simulation_tag + "_data");
 
   auto pmesh = std::make_shared<serac::Mesh>(
-      serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length),
-      mesh_tag, serial_refinement, parallel_refinement);
+      serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length), mesh_tag,
+      serial_refinement, parallel_refinement);
 
   // create boundary domains for boundary conditions
   pmesh->addDomainOfBoundaryElements("fix_x", serac::by_attr<dim>(5));
