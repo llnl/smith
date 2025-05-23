@@ -143,7 +143,8 @@ TEST(quasistatic, finiteDifference)
 
   auto pmesh =
       std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian3D(1, 1, 1, mfem::Element::HEXAHEDRON), mesh_tag, 0, 0);
-  assert(pmesh->mfemParMesh().SpaceDimension() == DIM);
+  auto meshPtr = &pmesh->mfemParMesh();
+  assert(meshPtr->SpaceDimension() == DIM);
 
   std::string xmax_face_domain_name = "xmax_face";
   std::string ymax_face_domain_name = "ymax_face";
@@ -192,7 +193,7 @@ TEST(quasistatic, finiteDifference)
   seracSolid->completeSetup();
 
   // set up QoI
-  auto [param_space, _] = ::serac::generateParFiniteElementSpace<paramFES>(&pmesh->mfemParMesh());
+  auto [param_space, _] = ::serac::generateParFiniteElementSpace<paramFES>(meshPtr);
   const ::mfem::ParFiniteElementSpace* u_space = &seracSolid->state("displacement").space();
 
   std::array<const ::mfem::ParFiniteElementSpace*, 3> qoiFES = {param_space.get(), param_space.get(), u_space};
@@ -209,7 +210,7 @@ TEST(quasistatic, finiteDifference)
 
   int nTimeSteps = 3;
   double timeStep = 0.8;
-  forwardPass(seracSolid.get(), qoi.get(), &pmesh->mfemParMesh(), nTimeSteps, timeStep, "f0");
+  forwardPass(seracSolid.get(), qoi.get(), meshPtr, nTimeSteps, timeStep, "f0");
 
   // ADJOINT GRADIENT
   double Ederiv, vderiv;
@@ -227,22 +228,22 @@ TEST(quasistatic, finiteDifference)
 
   Estate = E0 + h;
   seracSolid->setParameter(0, Estate);
-  double fpE = forwardPass(seracSolid.get(), qoi.get(), &pmesh->mfemParMesh(), nTimeSteps, timeStep, "fpE");
+  double fpE = forwardPass(seracSolid.get(), qoi.get(), meshPtr, nTimeSteps, timeStep, "fpE");
 
   Estate = E0 - h;
   seracSolid->setParameter(0, Estate);
-  double fmE = forwardPass(seracSolid.get(), qoi.get(), &pmesh->mfemParMesh(), nTimeSteps, timeStep, "fmE");
+  double fmE = forwardPass(seracSolid.get(), qoi.get(), meshPtr, nTimeSteps, timeStep, "fmE");
 
   Estate = E0;
   seracSolid->setParameter(0, Estate);
 
   vstate = v0 + h;
   seracSolid->setParameter(1, vstate);
-  double fpv = forwardPass(seracSolid.get(), qoi.get(), &pmesh->mfemParMesh(), nTimeSteps, timeStep, "fpv");
+  double fpv = forwardPass(seracSolid.get(), qoi.get(), meshPtr, nTimeSteps, timeStep, "fpv");
 
   vstate = v0 - h;
   seracSolid->setParameter(1, vstate);
-  double fmv = forwardPass(seracSolid.get(), qoi.get(), &pmesh->mfemParMesh(), nTimeSteps, timeStep, "fmv");
+  double fmv = forwardPass(seracSolid.get(), qoi.get(), meshPtr, nTimeSteps, timeStep, "fmv");
 
   ASSERT_NEAR(Ederiv, (fpE - fmE) / (2. * h), 1e-7);
   ASSERT_NEAR(vderiv, (fpv - fmv) / (2. * h), 1e-7);
