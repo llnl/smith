@@ -27,20 +27,13 @@
 #include <set>
 #include <string>
 
-#include "axom/slic/core/SimpleLogger.hpp"
+#include "axom/slic.hpp"
 #include "axom/inlet.hpp"
 #include "axom/CLI11.hpp"
 
 #include "mfem.hpp"
 
-#include "serac/numerics/functional/domain.hpp"
-#include "serac/physics/boundary_conditions/components.hpp"
-#include "serac/physics/solid_mechanics_contact.hpp"
-#include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh/mesh_utils.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/materials/parameterized_solid_material.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac.hpp"
 
 using namespace serac;
 
