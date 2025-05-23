@@ -84,7 +84,7 @@ toss4-gcc_10_3_1-src-no-optional-solvers:
     HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -USUNDIALS_DIR -UPETSC_DIR"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "20"
+    ALLOC_TIME: "30"
     ALLOC_DEADLINE: "60"
   extends: .src_build_on_toss4
 
