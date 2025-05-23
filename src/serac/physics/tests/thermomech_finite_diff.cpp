@@ -56,7 +56,8 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
   std::string filename = SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";
   std::string mesh_tag("mesh");
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   constexpr int p = 1;
   constexpr int dim = 2;
@@ -64,8 +65,10 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
   // Construct and initialized the user-defined Young's modulus, thermal conductivity
   // to be used as a differentiable parameter in the thermomechanics physics module.
   FiniteElementState user_defined_youngs_modulus(pmesh->mfemParMesh(), H1<p>{}, "parameterized_youngs_modulus");
-  FiniteElementState user_defined_thermal_conductivity(pmesh->mfemParMesh(), H1<p>{}, "parameterized_thermal_conductivity");
-  FiniteElementState user_defined_coupling_coefficient(pmesh->mfemParMesh(), H1<p>{}, "parameterized_coupling_coefficient");
+  FiniteElementState user_defined_thermal_conductivity(pmesh->mfemParMesh(), H1<p>{},
+                                                       "parameterized_thermal_conductivity");
+  FiniteElementState user_defined_coupling_coefficient(pmesh->mfemParMesh(), H1<p>{},
+                                                       "parameterized_coupling_coefficient");
 
   std::array<double, 3> parameter_values = {0.5, 0.5, 1.0};
   std::array<FiniteElementState*, 3> parameter_ptrs = {&user_defined_youngs_modulus, &user_defined_thermal_conductivity,
@@ -266,7 +269,8 @@ void FiniteDifferenceShapeTest(LoadingType load)
   std::string filename = SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";
   std::string mesh_tag("mesh");
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   constexpr int p = 1;
   constexpr int dim = 2;

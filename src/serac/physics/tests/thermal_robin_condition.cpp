@@ -42,7 +42,8 @@ void functional_thermal_test_robin_condition()
 
   std::string mesh_tag{"mesh"};
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-12,

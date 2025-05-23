@@ -12,7 +12,6 @@
 #include "serac/infrastructure/cli.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/physics/mesh.hpp"
 #include "serac/physics/boundary_conditions/boundary_condition.hpp"
 #include "serac/numerics/equation_solver.hpp"
 #include "serac/serac_config.hpp"
@@ -37,9 +36,9 @@ TEST(ErrorHandling, BcOneComponentVectorCoef)
   mfem::Vector vec;
   auto coef = std::make_shared<mfem::VectorConstantCoefficient>(vec);
 
-  std::shared_ptr<serac::Mesh> mesh = std::make_shared<serac::Mesh>(buildDiskMesh(10), "mesh");
+  auto mesh = mesh::refineAndDistribute(buildDiskMesh(10), 0, 0);
 
-  auto [space, coll] = serac::generateParFiniteElementSpace<H1<1>>(&mesh->mfemParMesh());
+  auto [space, coll] = serac::generateParFiniteElementSpace<H1<1>>(mesh.get());
 
   EXPECT_THROW(BoundaryCondition(coef, 0, *space, std::set<int>{1}), SlicErrorException);
 }
@@ -51,9 +50,9 @@ TEST(ErrorHandling, BcOneComponentVectorCoefDofs)
   mfem::Array<int> dofs(1);
   dofs[0] = 1;
 
-  std::shared_ptr<serac::Mesh> mesh = std::make_shared<serac::Mesh>(buildDiskMesh(10), "mesh");
+  auto mesh = mesh::refineAndDistribute(buildDiskMesh(10), 0, 0);
 
-  auto [space, coll] = serac::generateParFiniteElementSpace<H1<1>>(&mesh->mfemParMesh());
+  auto [space, coll] = serac::generateParFiniteElementSpace<H1<1>>(mesh.get());
 
   EXPECT_THROW(BoundaryCondition(coef, 0, *space, dofs), SlicErrorException);
 }

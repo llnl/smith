@@ -40,7 +40,8 @@ void functional_test_static_3D(double expected_norm)
 
   std::string mesh_tag{"mesh"};
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // Define the boundary subset where essential boundary conditions will be prescribed
   // For simplicity, we apply essential boundary condtions in both the thermal and mechanics
@@ -120,7 +121,8 @@ void functional_test_shrinking_3D(double expected_norm)
 
   std::string mesh_tag{"mesh"};
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // Define a boundary partitions where essential boundary conditions will be prescribed
   pmesh->addDomainOfBoundaryElements("constraint_bdr", by_attr<dim>(1));
@@ -221,7 +223,8 @@ void parameterized()
   // The test should be made stronger by having non-constant
   // Jacobians. For a problem with tractions, the surface
   // facets should be non-affine as well.
-  auto pmesh = std::make_shared<serac::Mesh>(buildCuboidMesh(4, 4, 4, 0.25, 0.25, 0.25), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh = std::make_shared<serac::Mesh>(buildCuboidMesh(4, 4, 4, 0.25, 0.25, 0.25), mesh_tag, serial_refinement,
+                                             parallel_refinement);
 
   // Construct the thermomechanics solver module using the default equation solver parameters for both the heat transfer
   // and solid mechanics solves.

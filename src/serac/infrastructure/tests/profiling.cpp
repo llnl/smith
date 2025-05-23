@@ -15,7 +15,6 @@
 #include "serac/infrastructure/cli.hpp"
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/physics/mesh.hpp"
 
 namespace serac {
 
@@ -32,26 +31,26 @@ TEST(Profiling, MeshRefinement)
   std::string test_name = "_profiling";
 
   SERAC_MARK_BEGIN(profiling::concat("RefineAndLoadMesh", test_name).c_str());
-  std::shared_ptr<serac::Mesh> mesh = std::make_shared<serac::Mesh>(mesh_file, "mesh_tag");
+  auto pmesh = mesh::refineAndDistribute(buildMeshFromFile(mesh_file));
   SERAC_MARK_END(profiling::concat("RefineAndLoadMesh", test_name).c_str());
 
   SERAC_MARK_LOOP_BEGIN(refinement_loop, "refinement_loop");
   for (int i = 0; i < 2; i++) {
     SERAC_MARK_LOOP_ITERATION(refinement_loop, i);
-    mesh->mfemParMesh().UniformRefinement();
+    pmesh->UniformRefinement();
   }
   SERAC_MARK_LOOP_END(refinement_loop);
 
   // Refine once more and utilize SERAC_MARK_SCOPE
   {
     SERAC_MARK_SCOPE("RefineOnceMore");
-    mesh->mfemParMesh().UniformRefinement();
+    pmesh->UniformRefinement();
   }
 
   // Add metadata
   SERAC_SET_METADATA("test", "profiling");
   SERAC_SET_METADATA("mesh_file", mesh_file.c_str());
-  SERAC_SET_METADATA("number_mesh_elements", mesh->mfemParMesh().GetNE());
+  SERAC_SET_METADATA("number_mesh_elements", pmesh->GetNE());
 
   // this number represents "llnl" as an unsigned integer
   unsigned int magic_uint = 1819176044;

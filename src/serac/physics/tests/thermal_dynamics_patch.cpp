@@ -120,7 +120,8 @@ double dynamic_solution_error(const ExactSolution& exact_solution, PatchBoundary
   thermal.setTemperature([exact_solution](const mfem::Vector& x, double) { return exact_solution(x, 0.0); });
 
   // forcing terms
-  exact_solution.applyLoads(mat, thermal, pmesh->entireBody(), pmesh->entireBoundary(), essentialBoundaryAttributes<dim>(bc));
+  exact_solution.applyLoads(mat, thermal, pmesh->entireBody(), pmesh->entireBoundary(),
+                            essentialBoundaryAttributes<dim>(bc));
 
   // Finalize the data structures
   thermal.completeSetup();

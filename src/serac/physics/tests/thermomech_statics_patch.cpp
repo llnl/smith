@@ -37,7 +37,8 @@ void ThermomechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
 
   const std::string mesh_tag = "mesh";
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   auto linear_opts = thermomechanics::direct_linear_options;
   auto nonlinear_opts = thermomechanics::default_nonlinear_options;

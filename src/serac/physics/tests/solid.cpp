@@ -46,7 +46,8 @@ void functional_solid_test_static_J2()
 
   std::string mesh_tag{"mesh"};
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // _solver_params_start
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
@@ -143,7 +144,8 @@ void functional_parameterized_solid_test(double expected_disp_norm)
 
   std::string mesh_tag{"mesh"};
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // Construct and initialized the user-defined moduli to be used as a differentiable parameter in
   // the solid mechanics physics module.

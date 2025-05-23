@@ -42,7 +42,8 @@ void functional_thermal_test_nonlinear()
 
   std::string mesh_tag{"mesh"};
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
                                                   .relative_tol = 1.0e-12,

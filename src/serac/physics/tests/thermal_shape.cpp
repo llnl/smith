@@ -40,7 +40,8 @@ TEST(HeatTransfer, MoveShape)
 
   std::string mesh_tag{"mesh"};
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   mfem::Vector shape_temperature;
   mfem::Vector pure_temperature;
@@ -114,7 +115,8 @@ TEST(HeatTransfer, MoveShape)
 
   std::string pure_mesh_tag{"pure_mesh"};
 
-  auto new_pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto new_pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), pure_mesh_tag, serial_refinement, parallel_refinement);
 
   {
     // Construct and initialized the user-defined shape displacement to offset the computational mesh
