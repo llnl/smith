@@ -137,8 +137,8 @@ TEST(HeatTransfer, MoveShape)
     thermal_solver_no_shape.setTemperatureBCs(ess_bdr, zero);
     thermal_solver_no_shape.setTemperature(zero);
 
-    thermal_solver_no_shape.setMaterial(mat, pmesh->entireBody());
-    thermal_solver_no_shape.setSource(source, pmesh->entireBody());
+    thermal_solver_no_shape.setMaterial(mat, new_pmesh->entireBody());
+    thermal_solver_no_shape.setSource(source, new_pmesh->entireBody());
 
     // Finalize the data structures
     thermal_solver_no_shape.completeSetup();
