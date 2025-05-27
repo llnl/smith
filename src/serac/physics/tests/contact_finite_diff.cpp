@@ -19,6 +19,7 @@
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
@@ -93,8 +94,7 @@ TEST_P(ContactFiniteDiff, patch)
   double K = 10.0;
   double G = 0.25;
   solid_mechanics::NeoHookean mat{1.0, K, G};
-  Domain material_block = EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, material_block);
+  solid_solver.setMaterial(mat, pmesh->entireBody());
 
   auto nonzero_disp_bc = [](vec3, double) { return vec3{{0.0, 0.0, 0.0}}; };
 
