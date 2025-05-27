@@ -29,6 +29,7 @@ set(physics_serial_test_sources
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
     test_solid_residual.cpp
+    test_heat_residual.cpp
     test_functional_residual.cpp
     thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
