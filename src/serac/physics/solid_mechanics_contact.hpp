@@ -326,7 +326,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       mfem::Vector r_blk(augmented_residual, 0, displacement_.space().TrueVSize());
       r_blk = res;
 
-      contact_.residualFunction(shape_displacement_, displacement_, augmented_residual);
+      mfem::Vector augmented_solution(displacement_.space().TrueVSize() + contact_.numPressureDofs());
+      augmented_solution = 0.0;
+      mfem::Vector du(augmented_solution, 0, displacement_.space().TrueVSize());
+      du = displacement_;
+
+      contact_.residualFunction(shape_displacement_, augmented_solution, augmented_residual);
       r_blk.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
 
       // use the most recently evaluated Jacobian
@@ -369,9 +374,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
       augmented_residual *= -1.0;
 
-      mfem::Vector augmented_solution(displacement_.space().TrueVSize() + contact_.numPressureDofs());
-      augmented_solution = 0.0;
-      mfem::Vector du(augmented_solution, 0, displacement_.space().TrueVSize());
       du = du_;
       mfem::EliminateBC(*J_, *J_e_, constrained_dofs, du, r_blk);
       for (int i = 0; i < constrained_dofs.Size(); i++) {
