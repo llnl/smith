@@ -69,7 +69,8 @@ TEST_P(TribolFiniteDiff, patch)
 
   mfem::Vector u(pmesh.GetNodes()->Size() + contact_data.getContactInteractions()[0].numPressureDofs());
   u = 0.0;
-  mfem::Vector u_shape = u;
+  mfem::Vector u_shape(pmesh.GetNodes()->Size());
+  u_shape = 0.0;
   mfem::Vector f(u.Size());
   f = 0.0;
   contact_data.residualFunction(u_shape, u, f);
