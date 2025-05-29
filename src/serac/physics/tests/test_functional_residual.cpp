@@ -66,7 +66,7 @@ struct ResidualFixture : public testing::Test {
 
   enum PAR
   {
-    SHAPE,
+    SHAPE_DISP,
     DENSITY
   };
 
@@ -106,7 +106,7 @@ struct ResidualFixture : public testing::Test {
     std::vector<const mfem::ParFiniteElementSpace*> inputs{&states[STATE::DISP].space(), &states[STATE::DISP].space(),
                                                            &params[PAR::DENSITY].space()};
 
-    auto f_residual = std::make_shared<ResidualT>(physics_name, mesh, params[PAR::SHAPE].space(),
+    auto f_residual = std::make_shared<ResidualT>(physics_name, mesh, params[PAR::SHAPE_DISP].space(),
                                                   states[STATE::DISP].space(), inputs);
 
     // apply some traction boundary conditions
@@ -207,7 +207,7 @@ TEST_F(ResidualFixture, VjpConsistency)
   residual->vjp(time, dt, all_states, getPointers(v), all_jvps);
 
   for (size_t i = 0; i < all_states.size(); ++i) {
-    EXPECT_NEAR(all_Jvps[i].Norml2(), all_jvps[i]->Norml2(), 1e-12);
+    EXPECT_NEAR(all_Jvps[i].Norml2(), all_jvps[i]->Norml2(), 1e-12) << " " << all_Jvps[i].name() << std::endl;
   }
 }
 

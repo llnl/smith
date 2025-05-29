@@ -34,6 +34,7 @@ set(physics_headers
     residual.hpp
     functional_residual.hpp
     solid_residual.hpp
+    heat_transfer_residual.hpp
     scalar_objective.hpp
     functional_objective.hpp
     )
@@ -51,6 +52,11 @@ blt_add_library(
     SOURCES     ${physics_sources}
     HEADERS     ${physics_headers}
     DEPENDS_ON  ${physics_depends}
+    )
+
+serac_write_unified_header(
+    NAME    physics
+    HEADERS ${physics_headers}
     )
 
 install(FILES ${physics_headers} DESTINATION include/serac/physics )

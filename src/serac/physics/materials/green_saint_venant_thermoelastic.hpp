@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#pragma once
+
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/tuple.hpp"
 
