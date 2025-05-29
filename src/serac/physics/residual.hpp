@@ -89,8 +89,8 @@ class Residual {
    * @param vReactions left hand side 'v' fields
    * @param vjpFields output jvps, 1 per input field: vResiduals[i] * d{r}_i / d{fields}_j
    */
-  virtual void vjp(double time, double dt, const std::vector<FieldPtr>& fields,
-                   const std::vector<FieldPtr>& vReactions, const std::vector<DualFieldPtr>& vjpFields) const = 0;
+  virtual void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& vReactions,
+                   const std::vector<DualFieldPtr>& vjpFields) const = 0;
 
   /// @brief name
   std::string name() const { return name_; }

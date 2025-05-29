@@ -241,8 +241,8 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
     SLIC_ERROR_IF(vs.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
-    auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time,
-                                           vs[0], fields);
+    auto vecJacs =
+        vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, vs[0], fields);
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
