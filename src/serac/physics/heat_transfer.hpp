@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -14,7 +14,6 @@
 
 #include "mfem.hpp"
 
-#include "serac/infrastructure/initialize.hpp"
 #include "serac/physics/common.hpp"
 #include "serac/physics/heat_transfer_input.hpp"
 #include "serac/physics/base_physics.hpp"
@@ -31,10 +30,10 @@ namespace heat_transfer {
 /**
  * @brief Reasonable defaults for most thermal linear solver options
  */
-const LinearSolverOptions default_linear_options = {.linear_solver  = LinearSolver::GMRES,
+const LinearSolverOptions default_linear_options = {.linear_solver = LinearSolver::GMRES,
                                                     .preconditioner = Preconditioner::HypreL1Jacobi,
-                                                    .relative_tol   = 1.0e-6,
-                                                    .absolute_tol   = 1.0e-12,
+                                                    .relative_tol = 1.0e-6,
+                                                    .absolute_tol = 1.0e-12,
                                                     .max_iterations = 200};
 
 /// the default direct solver option for solving the linear stiffness equations
@@ -47,11 +46,11 @@ const LinearSolverOptions direct_linear_options = {.linear_solver = LinearSolver
 /**
  * @brief Reasonable defaults for most thermal nonlinear solver options
  */
-const NonlinearSolverOptions default_nonlinear_options = {.nonlin_solver  = NonlinearSolver::Newton,
-                                                          .relative_tol   = 1.0e-4,
-                                                          .absolute_tol   = 1.0e-8,
+const NonlinearSolverOptions default_nonlinear_options = {.nonlin_solver = NonlinearSolver::Newton,
+                                                          .relative_tol = 1.0e-4,
+                                                          .absolute_tol = 1.0e-8,
                                                           .max_iterations = 500,
-                                                          .print_level    = 1};
+                                                          .print_level = 1};
 
 /**
  * @brief Reasonable defaults for dynamic heat transfer simulations
@@ -86,11 +85,11 @@ class HeatTransfer;
 template <int order, int dim, typename... parameter_space, int... parameter_indices>
 class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequence<int, parameter_indices...>>
     : public BasePhysics {
-public:
+ public:
   //! @cond Doxygen_Suppress
-  static constexpr int  VALUE = 0, DERIVATIVE = 1;
-  static constexpr int  SHAPE = 0;
-  static constexpr auto I     = Identity<dim>();
+  static constexpr int VALUE = 0, DERIVATIVE = 1;
+  static constexpr int SHAPE = 0;
+  static constexpr auto I = Identity<dim>();
   //! @endcond
 
   /// @brief The total number of non-parameter state variables (temperature, dtemp_dt) passed to the FEM
@@ -184,7 +183,7 @@ public:
     adjoints_.push_back(&adjoint_temperature_);
 
     // Create a pack of the primal field and parameter finite element spaces
-    mfem::ParFiniteElementSpace* test_space  = &temperature_.space();
+    mfem::ParFiniteElementSpace* test_space = &temperature_.space();
     mfem::ParFiniteElementSpace* shape_space = &shape_displacement_.space();
 
     std::array<const mfem::ParFiniteElementSpace*, sizeof...(parameter_space) + NUM_STATE_VARS> trial_spaces;
@@ -275,17 +274,17 @@ public:
    */
   void initializeThermalStates()
   {
-    dt_            = 0.0;
-    previous_dt_   = -1.0;
+    dt_ = 0.0;
+    previous_dt_ = -1.0;
     time_end_step_ = 0.0;
 
-    u_                                              = 0.0;
-    temperature_                                    = 0.0;
-    temperature_rate_                               = 0.0;
-    adjoint_temperature_                            = 0.0;
+    u_ = 0.0;
+    temperature_ = 0.0;
+    temperature_rate_ = 0.0;
+    adjoint_temperature_ = 0.0;
     implicit_sensitivity_temperature_start_of_step_ = 0.0;
-    temperature_adjoint_load_                       = 0.0;
-    temperature_rate_adjoint_load_                  = 0.0;
+    temperature_adjoint_load_ = 0.0;
+    temperature_rate_adjoint_load_ = 0.0;
 
     if (!checkpoint_to_disk_) {
       checkpoint_states_.clear();
@@ -369,7 +368,7 @@ public:
     if (cycle_ > max_cycle_) {
       timesteps_.push_back(dt);
       max_cycle_ = cycle_;
-      max_time_  = time_;
+      max_time_ = time_;
     }
   }
 
@@ -394,14 +393,14 @@ public:
     {
       // Get the value and the gradient from the input tuple
       auto [u, du_dX] = temperature;
-      auto du_dt      = get<VALUE>(dtemp_dt);
+      auto du_dt = get<VALUE>(dtemp_dt);
 
       auto [heat_capacity, heat_flux] = material_(x, u, du_dX, params...);
 
       return serac::tuple{heat_capacity * du_dt, -1.0 * heat_flux};
     }
 
-  private:
+   private:
     MaterialType material_;
   };
 
@@ -410,6 +409,7 @@ public:
    *
    * @tparam MaterialType The thermal material type
    * @param material A material containing heat capacity and thermal flux evaluation information
+   * @param domain which elements in the mesh are described by the specified material
    *
    * @pre material must be a object that can be called with the following arguments:
    *    1. `tensor<T,dim> x` the spatial position of the material evaluation call
@@ -429,17 +429,17 @@ public:
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename MaterialType>
-  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material)
+  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material, Domain& domain)
   {
     residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 1, NUM_STATE_VARS + active_parameters...>{},
-                                 ThermalMaterialIntegrand<MaterialType>(material), mesh_);
+                                 ThermalMaterialIntegrand<MaterialType>(material), domain);
   }
 
   /// @overload
   template <typename MaterialType>
-  void setMaterial(const MaterialType& material)
+  void setMaterial(const MaterialType& material, Domain& domain)
   {
-    setMaterial(DependsOn<>{}, material);
+    setMaterial(DependsOn<>{}, material, domain);
   }
 
   /**
@@ -466,8 +466,7 @@ public:
    *
    * @tparam SourceType The type of the source function
    * @param source_function A source function for a prescribed thermal load
-   * @param optional_domain The domain over which the source is applied. If nothing is supplied the entire domain is
-   * used.
+   * @param domain The domain over which the source is applied.
    *
    * @pre source_function must be a object that can be called with the following arguments:
    *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
@@ -485,11 +484,8 @@ public:
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename SourceType>
-  void setSource(DependsOn<active_parameters...>, SourceType source_function,
-                 const std::optional<Domain>& optional_domain = std::nullopt)
+  void setSource(DependsOn<active_parameters...>, SourceType source_function, Domain& domain)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
-
     residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
         [source_function](double t, auto x, auto temperature, auto /* dtemp_dt */, auto... params) {
@@ -506,9 +502,9 @@ public:
 
   /// @overload
   template <typename SourceType>
-  void setSource(SourceType source_function, const std::optional<Domain>& optional_domain = std::nullopt)
+  void setSource(SourceType source_function, Domain& domain)
   {
-    setSource(DependsOn<>{}, source_function, optional_domain);
+    setSource(DependsOn<>{}, source_function, domain);
   }
 
   /**
@@ -516,8 +512,7 @@ public:
    *
    * @tparam FluxType The type of the thermal flux object
    * @param flux_function A function describing the flux applied to a boundary
-   * @param optional_domain The domain over which the flux is applied. If nothing is supplied the entire boundary is
-   * used.
+   * @param domain The domain over which the flux is applied
    *
    * @pre FluxType must be a object that can be called with the following arguments:
    *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
@@ -535,16 +530,13 @@ public:
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename FluxType>
-  void setFluxBCs(DependsOn<active_parameters...>, FluxType flux_function,
-                  const std::optional<Domain>& optional_domain = std::nullopt)
+  void setFluxBCs(DependsOn<active_parameters...>, FluxType flux_function, Domain& domain)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh_);
-
     residual_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
         [flux_function](double t, auto X, auto u, auto /* dtemp_dt */, auto... params) {
           auto temp = get<VALUE>(u);
-          auto n    = cross(get<DERIVATIVE>(X));
+          auto n = cross(get<DERIVATIVE>(X));
 
           return flux_function(X, normalize(n), t, temp, params...);
         },
@@ -553,27 +545,10 @@ public:
 
   /// @overload
   template <typename FluxType>
-  void setFluxBCs(FluxType flux_function, const std::optional<Domain>& optional_domain = std::nullopt)
+  void setFluxBCs(FluxType flux_function, Domain& domain)
   {
-    setFluxBCs(DependsOn<>{}, flux_function, optional_domain);
+    setFluxBCs(DependsOn<>{}, flux_function, domain);
   }
-
-  /**
-   * @brief Set the underlying finite element state to a prescribed shape displacement
-   *
-   * This field will perturb the mesh nodes as required by shape optimization workflows.
-   *
-   * @param shape_disp The function describing the shape displacement field
-   */
-  void setShapeDisplacement(std::function<void(const mfem::Vector& x, mfem::Vector& shape_disp)> shape_disp)
-  {
-    // Project the coefficient onto the grid function
-    mfem::VectorFunctionCoefficient shape_disp_coef(dim, shape_disp);
-    shape_displacement_.project(shape_disp_coef);
-  }
-
-  /// @overload
-  void setShapeDisplacement(FiniteElementState& shape_disp) { shape_displacement_ = shape_disp; }
 
   /**
    * @brief Get the temperature state
@@ -651,28 +626,27 @@ public:
    *
    * @tparam active_parameters a list of indices, describing which parameters to pass to the q-function
    * @param qfunction a callable that returns the normal heat flux on a boundary surface
-   * @param optional_domain The domain over which the integral is computed
+   * @param domain The domain over which the integral is computed
    *
    * ~~~ {.cpp}
    *
    *  heat_transfer.addCustomBoundaryIntegral(
-   *     DependsOn<>{},
-   *     [](double t, auto position, auto temperature, auto temperature_rate) {
-   *         auto [T, dT_dxi] = temperature;
-   *         auto q           = 5.0*(T-25.0);
-   *         return q;  // define a temperature-proportional heat-flux
-   *  });
+   *    DependsOn<>{},
+   *    [](double t, auto position, auto temperature, auto temperature_rate) {
+   *      auto [T, dT_dxi] = temperature;
+   *      auto q           = 5.0*(T-25.0);
+   *      return q;  // define a temperature-proportional heat-flux
+   *    },
+   *    domain
+   *  );
    *
    * ~~~
    *
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename callable>
-  void addCustomBoundaryIntegral(DependsOn<active_parameters...>, callable qfunction,
-                                 const std::optional<Domain>& optional_domain = std::nullopt)
+  void addCustomBoundaryIntegral(DependsOn<active_parameters...>, callable qfunction, Domain& domain)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh_);
-
     residual_->AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
                                    qfunction, domain);
   }
@@ -701,9 +675,6 @@ public:
    */
   void completeSetup() override
   {
-    // Build the dof array lookup tables
-    temperature_.space().BuildDofToArrays();
-
     if (is_quasistatic_) {
       residual_with_bcs_ = mfem_ext::StdFunctionOperator(
           temperature_.space().TrueVSize(),
@@ -722,8 +693,8 @@ public:
           [this](const mfem::Vector& u) -> mfem::Operator& {
             auto [r, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(u), temperature_rate_,
                                           *parameters_[parameter_indices].state...);
-            J_             = assemble(drdu);
-            J_e_           = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
+            J_ = assemble(drdu);
+            J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
             return *J_;
           });
     } else {
@@ -794,7 +765,7 @@ public:
     SLIC_ERROR_ROOT_IF(loads.size() == 0,
                        "Adjoint load container size must be greater than 0 in the heat transfer module.");
 
-    auto temp_adjoint_load      = loads.find("temperature");
+    auto temp_adjoint_load = loads.find("temperature");
     auto temp_rate_adjoint_load = loads.find("temperature_rate");  // does not need to be specified
 
     SLIC_ERROR_ROOT_IF(temp_adjoint_load == loads.end(), "Adjoint load for \"temperature\" not found.");
@@ -852,8 +823,8 @@ public:
 
     cycle_--;  // cycle is now at n \in [0,N-1]
 
-    double dt                = getCheckpointedTimestep(cycle_);
-    auto   end_step_solution = getCheckpointedStates(cycle_ + 1);
+    double dt = getCheckpointedTimestep(cycle_);
+    auto end_step_solution = getCheckpointedStates(cycle_ + 1);
 
     temperature_ = end_step_solution.at("temperature");
 
@@ -863,8 +834,8 @@ public:
 
       auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(temperature_), temperature_rate_,
                                     *parameters_[parameter_indices].state...);
-      auto jacobian  = assemble(drdu);
-      auto J_T       = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
+      auto jacobian = assemble(drdu);
+      auto J_T = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
 
       for (const auto& bc : bcs_.essentials()) {
         bc.apply(*J_T, temperature_adjoint_load_, adjoint_essential);
@@ -933,7 +904,7 @@ public:
   {
     // TODO: the time is likely not being handled correctly on the reverse pass, but we don't
     //       have tests to confirm.
-    auto drdparam     = serac::get<DERIVATIVE>(d_residual_d_[parameter_field](time_end_step_));
+    auto drdparam = serac::get<DERIVATIVE>(d_residual_d_[parameter_field](time_end_step_));
     auto drdparam_mat = assemble(drdparam);
 
     drdparam_mat->MultTranspose(adjoint_temperature_, *parameters_[parameter_field].sensitivity);
@@ -969,7 +940,8 @@ public:
    *
    * @pre `reverseAdjointTimestep` must be called as many times as the forward solver was advanced before this is called
    */
-  const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity() override
+  const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity()
+      const override
   {
     return {{"temperature", implicit_sensitivity_temperature_start_of_step_}};
   }
@@ -977,7 +949,7 @@ public:
   /// Destroy the Thermal Solver object
   virtual ~HeatTransfer() = default;
 
-protected:
+ protected:
   /// The compile-time finite element trial space for heat transfer (H1 of order p)
   using scalar_trial = H1<order>;
 

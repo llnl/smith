@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -27,7 +27,7 @@ namespace serac {
  */
 template <typename gradient_type>
 struct dual {
-  double        value;     ///< the actual numerical value
+  double value;            ///< the actual numerical value
   gradient_type gradient;  ///< the partial derivatives of value w.r.t. some other quantity
 
   /**
@@ -38,7 +38,7 @@ struct dual {
    */
   SERAC_HOST_DEVICE constexpr auto& operator=(double b)
   {
-    value    = b;
+    value = b;
     gradient = {};
     return *this;
   }
@@ -274,6 +274,36 @@ SERAC_HOST_DEVICE auto min(dual<gradient_type> a, dual<gradient_type> b)
   return (a < b) ? a : b;
 }
 
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+template <typename S, typename T>
+SERAC_HOST_DEVICE constexpr auto inner(const dual<S>& A, const dual<T>& B)
+{
+  return A * B;
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+template <typename T>
+SERAC_HOST_DEVICE constexpr auto inner(double A, const dual<T>& B)
+{
+  return A * B;
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+template <typename S>
+SERAC_HOST_DEVICE constexpr auto inner(const dual<S>& A, double B)
+{
+  return A * B;
+}
+
 /** @brief implementation of square root for dual numbers */
 template <typename gradient_type>
 SERAC_HOST_DEVICE auto sqrt(dual<gradient_type> x)
@@ -376,8 +406,8 @@ template <typename gradient_type>
 SERAC_HOST_DEVICE auto pow(dual<gradient_type> a, dual<gradient_type> b)
 {
   using std::pow, std::log;
-  double        value = pow(a.value, b.value);
-  gradient_type grad  = pow(a.value, b.value - 1) * (a.gradient * b.value + b.gradient * a.value * log(a.value));
+  double value = pow(a.value, b.value);
+  gradient_type grad = pow(a.value, b.value - 1) * (a.gradient * b.value + b.gradient * a.value * log(a.value));
   return dual<gradient_type>{value, grad};
 }
 
@@ -395,8 +425,8 @@ template <typename gradient_type>
 SERAC_HOST_DEVICE auto pow(dual<gradient_type> a, double b)
 {
   using std::pow;
-  double        value = pow(a.value, b);
-  gradient_type grad  = b * pow(a.value, b - 1) * a.gradient;
+  double value = pow(a.value, b);
+  gradient_type grad = b * pow(a.value, b - 1) * a.gradient;
   return dual<gradient_type>{value, grad};
 }
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -26,9 +26,18 @@ blt_add_library(
     DEPENDS_ON  ${state_depends}
     )
 
+serac_write_unified_header(
+    NAME    state
+    HEADERS ${state_headers}
+    )
+
 install(FILES ${state_headers} DESTINATION include/serac/physics/state )
 
 install(TARGETS              serac_state
         EXPORT               serac-targets
         DESTINATION          lib
         )
+
+if(SERAC_ENABLE_TESTS)
+    add_subdirectory(tests)
+endif()

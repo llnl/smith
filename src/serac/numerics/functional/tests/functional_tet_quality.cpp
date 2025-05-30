@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2023, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -16,7 +16,7 @@
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-#include "serac/infrastructure/profiling.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 #include "serac/numerics/functional/tests/check_gradient.hpp"
 
@@ -24,8 +24,6 @@ using namespace serac;
 using namespace serac::profiling;
 
 double t = 0.0;
-
-int num_procs, myid;
 
 TEST(QoI, TetrahedronQuality)
 {
@@ -45,9 +43,11 @@ TEST(QoI, TetrahedronQuality)
   using shape_space = H1<1, dim>;
 
   std::string meshfile3D = SERAC_REPO_DIR "/data/meshes/onetet.mesh";
-  auto        mesh       = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), 0, 0);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), 0, 0);
 
   auto [fes, fec] = generateParFiniteElementSpace<shape_space>(mesh.get());
+
+  Domain whole_domain = EntireDomain(*mesh);
 
   // Define the shape-aware QOI objects
   serac::ShapeAwareFunctional<shape_space, double()> saf_qoi(fes.get(), {});
@@ -60,7 +60,7 @@ TEST(QoI, TetrahedronQuality)
         auto [x, dx_dxi] = position;
         return mu(dot(regular_tet_correction, dx_dxi));
       },
-      *mesh);
+      whole_domain);
 
   serac::Functional<double(shape_space)> qoi({fes.get()});
 
@@ -68,7 +68,7 @@ TEST(QoI, TetrahedronQuality)
       serac::Dimension<3>{}, serac::DependsOn<0>{},
       [=](double /*t*/, auto position, auto displacement) {
         auto [X, dX_dxi] = position;  // <--- the position derivative term is w.r.t. xi, not X!
-        auto [u, du_dX]  = displacement;
+        auto [u, du_dX] = displacement;
 
         // x := X + u,
         // so, dx/dxi = dX/dxi + du/dxi
@@ -78,7 +78,7 @@ TEST(QoI, TetrahedronQuality)
         auto dx_dxi = dX_dxi + dot(du_dX, dX_dxi);
         return mu(dot(regular_tet_correction, dx_dxi));
       },
-      *mesh);
+      whole_domain);
 
   std::unique_ptr<mfem::HypreParVector> u(fes->NewTrueDofVector());
   *u = 0.0;
@@ -99,13 +99,6 @@ TEST(QoI, TetrahedronQuality)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

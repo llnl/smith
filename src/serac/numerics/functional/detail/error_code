@@ -1,0 +1,175 @@
+==558614==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6190000437d0 at pc 0x5cf949c2911f bp 0x7ffcb5ae08f0 sp 0x7ffcb5ae08e8
+READ of size 8 at 0x6190000437d0 thread T0
+=================================================================
+==558615==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6190000437d0 at pc 0x64f5687e111f bp 0x7ffc48d1be30 sp 0x7ffc48d1be28
+READ of size 8 at 0x6190000437d0 thread T0
+    #0 0x5cf949c2911e in auto serac::dot<double, double, 2, 2>(serac::tensor<double, 2> const&, serac::tensor<double, 2, 2> const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/tensor.hpp:765:23
+    #1 0x5cf949c27cf4 in auto serac::finite_element<(mfem::Geometry::Type)1, serac::L2<1, 2> >::interpolate<2>(serac::tensor<double, 2, 2, 2> const&, serac::TensorProductQuadratureRule<2> const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/detail/segment_L2.inl:174:16
+    #2 0x5cf949c276ca in void serac::interior_face_integral::evaluation_kernel_impl<2147483648u, 2, (mfem::Geometry::Type)1, serac::finite_element<(mfem::Geometry::Type)1, serac::L2<1, 2> >, serac::tuple<serac::finite_element<(mfem::Geometry::Type)1, serac::L2<1, 2> > >, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero, 0>(serac::tuple<serac::finite_element<(mfem::Geometry::Type)1, serac::L2<1, 2> > >, serac::finite_element<(mfem::Geometry::Type)1, serac::L2<1, 2> >, double, std::vector<double const*, std::allocator<double const*> > const&, double*, double const*, double const*, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero*, unsigned int, camp::int_seq<int, 0>) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/interior_face_integral_kernels.hpp:175:9
+    #3 0x5cf949c271fa in auto serac::interior_face_integral::evaluation_kernel<2147483648u, 2, (mfem::Geometry::Type)1, FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero>(FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), double const*, double const*, std::shared_ptr<serac::zero>, unsigned int)::'lambda'(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool)::operator()(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool) const /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/interior_face_integral_kernels.hpp:347:5
+    #4 0x5cf949c26f5a in auto std::__invoke_impl<void, auto serac::interior_face_integral::evaluation_kernel<2147483648u, 2, (mfem::Geometry::Type)1, FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero>(FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), double const*, double const*, std::shared_ptr<serac::zero>, unsigned int)::'lambda'(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool)&, double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool>(std::__invoke_other, auto&&, double&&, std::vector<double const*, std::allocator<double const*> > const&, double*&&, bool&&) /usr/bin/../lib/gcc/x86_64-linux-gnu/12/../../../../include/c++/12/bits/invoke.h:61:14
+    #5 0x5cf949c26de0 in std::enable_if<is_invocable_r_v<auto, auto, double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool>, auto>::type std::__invoke_r<void, auto serac::interior_face_integral::evaluation_kernel<2147483648u, 2, (mfem::Geometry::Type)1, FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero>(FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), double const*, double const*, std::shared_ptr<serac::zero>, unsigned int)::'lambda'(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool)&, double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool>(auto&&, double&&, std::vector<double const*, std::allocator<double const*> > const&, double*&&, bool&&) /usr/bin/../lib/gcc/x86_64-linux-gnu/12/../../../../include/c++/12/bits/invoke.h:111:2
+    #6 0x5cf949c269a0 in std::_Function_handler<void (double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool), auto serac::interior_face_integral::evaluation_kernel<2147483648u, 2, (mfem::Geometry::Type)1, FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero>(FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), double const*, double const*, std::shared_ptr<serac::zero>, unsigned int)::'lambda'(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool)>::_M_invoke(std::_Any_data const&, double&&, std::vector<double const*, std::allocator<double const*> > const&, double*&&, bool&&) /usr/bin/../lib/gcc/x86_64-linux-gnu/12/../../../../include/c++/12/bits/std_function.h:290:9
+    #7 0x5cf949c475d8 in std::function<void (double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool)>::operator()(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool) const /usr/bin/../lib/gcc/x86_64-linux-gnu/12/../../../../include/c++/12/bits/std_function.h:591:9
+    #8 0x5cf949c46bee in serac::Integral::Mult(double, std::vector<mfem::BlockVector, std::allocator<mfem::BlockVector> > const&, mfem::BlockVector&, unsigned int, bool) const /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/integral.hpp:80:7
+    #9 0x5cf949c4613c in serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator_paren_return<2147483648u>::type serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator()<2147483648u, mfem::Vector>(serac::DifferentiateWRT<2147483648u>, double, mfem::Vector const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/functional.hpp:466:16
+    #10 0x5cf949bf3c73 in auto serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator()<mfem::Vector>(double, mfem::Vector const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/functional.hpp:507:12
+    #11 0x5cf949bf0ac2 in void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:72:16
+    #12 0x5cf949b980b6 in basic_L2_test_tris_and_quads_linear_Test::TestBody() /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:77:46
+    #13 0x5cf949d1fb9a in void testing::internal::HandleSehExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2621:10
+    #14 0x5cf949d03689 in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2657:14
+    #15 0x5cf949ce27a2 in testing::Test::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2696:5
+    #16 0x5cf949ce339f in testing::TestInfo::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2845:11
+    #17 0x5cf949ce3c1e in testing::TestSuite::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:3023:30
+    #18 0x5cf949cf4960 in testing::internal::UnitTestImpl::RunAllTests() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:5926:44
+    #19 0x5cf949d2401a in bool testing::internal::HandleSehExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2621:10
+    #20 0x5cf949d05b59 in bool testing::internal::HandleExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2657:14
+    #21 0x5cf949cf44ba in testing::UnitTest::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:5492:10
+    #22 0x5cf949ca8490 in RUN_ALL_TESTS() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/include/gtest/gtest.h:2314:73
+    #23 0x5cf949b98f48 in main /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:209:16
+    #24 0x70f059a29d8f in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #25 0x70f059a29e3f in __libc_start_main csu/../csu/libc-start.c:392:3
+    #26 0x5cf949ad7da4 in _start (/home/sam/code/serac/build-Debug/tests/functional_basic_dg+0x980da4) (BuildId: 24bdc502972e3564795b90b83e63bc92533fcdae)
+
+0x6190000437d0 is located 0 bytes to the right of 1104-byte region [0x619000043380,0x6190000437d0)
+allocated by thread T0 here:
+    #0 0x5cf949b95acd in operator new[](unsigned long) (/home/sam/code/serac/build-Debug/tests/functional_basic_dg+0xa3eacd) (BuildId: 24bdc502972e3564795b90b83e63bc92533fcdae)
+    #1 0x5cf949bf7b1d in mfem::Memory<double>::Alloc<16ul, true>::New(unsigned long) /home/sam/code/serac/mfem/linalg/../general/mem_manager.hpp:582:55
+    #2 0x5cf949bf7ae4 in mfem::Memory<double>::NewHOST(unsigned long) /home/sam/code/serac/mfem/linalg/../general/mem_manager.hpp:596:14
+    #3 0x5cf949bf8f47 in mfem::Memory<double>::New(int, mfem::MemoryType) /home/sam/code/serac/mfem/linalg/../general/mem_manager.hpp:955:44
+    #4 0x5cf949c00064 in mfem::Vector::SetSize(int) /home/sam/code/serac/mfem/mesh/../linalg/vector.hpp:554:9
+    #5 0x5cf949c45ece in serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator_paren_return<2147483648u>::type serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator()<2147483648u, mfem::Vector>(serac::DifferentiateWRT<2147483648u>, double, mfem::Vector const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/functional.hpp:459:28
+    #6 0x5cf949bf3c73 in auto serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator()<mfem::Vector>(double, mfem::Vector const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/functional.hpp:507:12
+    #7 0x5cf949bf0ac2 in void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:72:16
+    #8 0x5cf949b980b6 in basic_L2_test_tris_and_quads_linear_Test::TestBody() /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:77:46
+    #9 0x5cf949d1fb9a in void testing::internal::HandleSehExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2621:10
+    #10 0x5cf949d03689 in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2657:14
+    #11 0x5cf949ce27a2 in testing::Test::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2696:5
+    #12 0x5cf949ce339f in testing::TestInfo::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2845:11
+    #13 0x5cf949ce3c1e in testing::TestSuite::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:3023:30
+    #14 0x5cf949cf4960 in testing::internal::UnitTestImpl::RunAllTests() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:5926:44
+    #15 0x5cf949d2401a in bool testing::internal::HandleSehExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2621:10
+    #16 0x5cf949d05b59 in bool testing::internal::HandleExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2657:14
+    #17 0x5cf949cf44ba in testing::UnitTest::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:5492:10
+    #18 0x5cf949ca8490 in RUN_ALL_TESTS() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/include/gtest/gtest.h:2314:73
+    #19 0x5cf949b98f48 in main /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:209:16
+    #20 0x70f059a29d8f in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/tensor.hpp:765:23 in auto serac::dot<double, double, 2, 2>(serac::tensor<double, 2> const&, serac::tensor<double, 2, 2> const&)
+Shadow bytes around the buggy address:
+  0x0c32800006a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c32800006b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c32800006c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c32800006d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c32800006e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c32800006f0: 00 00 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa
+  0x0c3280000700: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3280000710: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3280000720: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3280000730: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3280000740: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==558614==ABORTING
+    #0 0x64f5687e111e in auto serac::dot<double, double, 2, 2>(serac::tensor<double, 2> const&, serac::tensor<double, 2, 2> const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/tensor.hpp:765:23
+    #1 0x64f5687dfcf4 in auto serac::finite_element<(mfem::Geometry::Type)1, serac::L2<1, 2> >::interpolate<2>(serac::tensor<double, 2, 2, 2> const&, serac::TensorProductQuadratureRule<2> const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/detail/segment_L2.inl:174:16
+    #2 0x64f5687df6ca in void serac::interior_face_integral::evaluation_kernel_impl<2147483648u, 2, (mfem::Geometry::Type)1, serac::finite_element<(mfem::Geometry::Type)1, serac::L2<1, 2> >, serac::tuple<serac::finite_element<(mfem::Geometry::Type)1, serac::L2<1, 2> > >, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero, 0>(serac::tuple<serac::finite_element<(mfem::Geometry::Type)1, serac::L2<1, 2> > >, serac::finite_element<(mfem::Geometry::Type)1, serac::L2<1, 2> >, double, std::vector<double const*, std::allocator<double const*> > const&, double*, double const*, double const*, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero*, unsigned int, camp::int_seq<int, 0>) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/interior_face_integral_kernels.hpp:175:9
+    #3 0x64f5687df1fa in auto serac::interior_face_integral::evaluation_kernel<2147483648u, 2, (mfem::Geometry::Type)1, FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero>(FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), double const*, double const*, std::shared_ptr<serac::zero>, unsigned int)::'lambda'(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool)::operator()(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool) const /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/interior_face_integral_kernels.hpp:347:5
+    #4 0x64f5687def5a in auto std::__invoke_impl<void, auto serac::interior_face_integral::evaluation_kernel<2147483648u, 2, (mfem::Geometry::Type)1, FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero>(FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), double const*, double const*, std::shared_ptr<serac::zero>, unsigned int)::'lambda'(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool)&, double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool>(std::__invoke_other, auto&&, double&&, std::vector<double const*, std::allocator<double const*> > const&, double*&&, bool&&) /usr/bin/../lib/gcc/x86_64-linux-gnu/12/../../../../include/c++/12/bits/invoke.h:61:14
+    #5 0x64f5687dede0 in std::enable_if<is_invocable_r_v<auto, auto, double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool>, auto>::type std::__invoke_r<void, auto serac::interior_face_integral::evaluation_kernel<2147483648u, 2, (mfem::Geometry::Type)1, FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero>(FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), double const*, double const*, std::shared_ptr<serac::zero>, unsigned int)::'lambda'(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool)&, double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool>(auto&&, double&&, std::vector<double const*, std::allocator<double const*> > const&, double*&&, bool&&) /usr/bin/../lib/gcc/x86_64-linux-gnu/12/../../../../include/c++/12/bits/invoke.h:111:2
+    #6 0x64f5687de9a0 in std::_Function_handler<void (double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool), auto serac::interior_face_integral::evaluation_kernel<2147483648u, 2, (mfem::Geometry::Type)1, FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), serac::zero>(FunctionSignature<serac::L2<1, 2> (serac::L2<1, 2>)>, void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::'lambda'(double, auto, auto), double const*, double const*, std::shared_ptr<serac::zero>, unsigned int)::'lambda'(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool)>::_M_invoke(std::_Any_data const&, double&&, std::vector<double const*, std::allocator<double const*> > const&, double*&&, bool&&) /usr/bin/../lib/gcc/x86_64-linux-gnu/12/../../../../include/c++/12/bits/std_function.h:290:9
+    #7 0x64f5687ff5d8 in std::function<void (double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool)>::operator()(double, std::vector<double const*, std::allocator<double const*> > const&, double*, bool) const /usr/bin/../lib/gcc/x86_64-linux-gnu/12/../../../../include/c++/12/bits/std_function.h:591:9
+    #8 0x64f5687febee in serac::Integral::Mult(double, std::vector<mfem::BlockVector, std::allocator<mfem::BlockVector> > const&, mfem::BlockVector&, unsigned int, bool) const /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/integral.hpp:80:7
+    #9 0x64f5687fe13c in serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator_paren_return<2147483648u>::type serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator()<2147483648u, mfem::Vector>(serac::DifferentiateWRT<2147483648u>, double, mfem::Vector const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/functional.hpp:466:16
+    #10 0x64f5687abc73 in auto serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator()<mfem::Vector>(double, mfem::Vector const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/functional.hpp:507:12
+    #11 0x64f5687a8ac2 in void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:72:16
+    #12 0x64f5687500b6 in basic_L2_test_tris_and_quads_linear_Test::TestBody() /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:77:46
+    #13 0x64f5688d7b9a in void testing::internal::HandleSehExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2621:10
+    #14 0x64f5688bb689 in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2657:14
+    #15 0x64f56889a7a2 in testing::Test::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2696:5
+    #16 0x64f56889b39f in testing::TestInfo::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2845:11
+    #17 0x64f56889bc1e in testing::TestSuite::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:3023:30
+    #18 0x64f5688ac960 in testing::internal::UnitTestImpl::RunAllTests() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:5926:44
+    #19 0x64f5688dc01a in bool testing::internal::HandleSehExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2621:10
+    #20 0x64f5688bdb59 in bool testing::internal::HandleExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2657:14
+    #21 0x64f5688ac4ba in testing::UnitTest::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:5492:10
+    #22 0x64f568860490 in RUN_ALL_TESTS() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/include/gtest/gtest.h:2314:73
+    #23 0x64f568750f48 in main /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:209:16
+    #24 0x721e2c829d8f in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #25 0x721e2c829e3f in __libc_start_main csu/../csu/libc-start.c:392:3
+    #26 0x64f56868fda4 in _start (/home/sam/code/serac/build-Debug/tests/functional_basic_dg+0x980da4) (BuildId: 24bdc502972e3564795b90b83e63bc92533fcdae)
+
+0x6190000437d0 is located 0 bytes to the right of 1104-byte region [0x619000043380,0x6190000437d0)
+allocated by thread T0 here:
+    #0 0x64f56874dacd in operator new[](unsigned long) (/home/sam/code/serac/build-Debug/tests/functional_basic_dg+0xa3eacd) (BuildId: 24bdc502972e3564795b90b83e63bc92533fcdae)
+    #1 0x64f5687afb1d in mfem::Memory<double>::Alloc<16ul, true>::New(unsigned long) /home/sam/code/serac/mfem/linalg/../general/mem_manager.hpp:582:55
+    #2 0x64f5687afae4 in mfem::Memory<double>::NewHOST(unsigned long) /home/sam/code/serac/mfem/linalg/../general/mem_manager.hpp:596:14
+    #3 0x64f5687b0f47 in mfem::Memory<double>::New(int, mfem::MemoryType) /home/sam/code/serac/mfem/linalg/../general/mem_manager.hpp:955:44
+    #4 0x64f5687b8064 in mfem::Vector::SetSize(int) /home/sam/code/serac/mfem/mesh/../linalg/vector.hpp:554:9
+    #5 0x64f5687fdece in serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator_paren_return<2147483648u>::type serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator()<2147483648u, mfem::Vector>(serac::DifferentiateWRT<2147483648u>, double, mfem::Vector const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/functional.hpp:459:28
+    #6 0x64f5687abc73 in auto serac::Functional<serac::L2<1, 2> (serac::L2<1, 2>), (serac::ExecutionSpace)0>::operator()<mfem::Vector>(double, mfem::Vector const&) /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/functional.hpp:507:12
+    #7 0x64f5687a8ac2 in void L2_test<2, 1>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:72:16
+    #8 0x64f5687500b6 in basic_L2_test_tris_and_quads_linear_Test::TestBody() /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:77:46
+    #9 0x64f5688d7b9a in void testing::internal::HandleSehExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2621:10
+    #10 0x64f5688bb689 in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2657:14
+    #11 0x64f56889a7a2 in testing::Test::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2696:5
+    #12 0x64f56889b39f in testing::TestInfo::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2845:11
+    #13 0x64f56889bc1e in testing::TestSuite::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:3023:30
+    #14 0x64f5688ac960 in testing::internal::UnitTestImpl::RunAllTests() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:5926:44
+    #15 0x64f5688dc01a in bool testing::internal::HandleSehExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2621:10
+    #16 0x64f5688bdb59 in bool testing::internal::HandleExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:2657:14
+    #17 0x64f5688ac4ba in testing::UnitTest::Run() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/src/gtest.cc:5492:10
+    #18 0x64f568860490 in RUN_ALL_TESTS() /home/sam/code/serac/cmake/blt/thirdparty_builtin/googletest/googletest/include/gtest/gtest.h:2314:73
+    #19 0x64f568750f48 in main /home/sam/code/serac/src/serac/numerics/functional/tests/functional_basic_dg.cpp:209:16
+    #20 0x721e2c829d8f in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /home/sam/code/serac/src/serac/infrastructure/../../serac/numerics/functional/tensor.hpp:765:23 in auto serac::dot<double, double, 2, 2>(serac::tensor<double, 2> const&, serac::tensor<double, 2, 2> const&)
+Shadow bytes around the buggy address:
+  0x0c32800006a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c32800006b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c32800006c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c32800006d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c32800006e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c32800006f0: 00 00 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa
+  0x0c3280000700: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3280000710: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3280000720: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3280000730: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3280000740: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==558615==ABORTING

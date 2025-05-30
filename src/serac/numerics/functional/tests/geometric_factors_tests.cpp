@@ -1,6 +1,13 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #include <gtest/gtest.h>
 
 #include "serac/numerics/functional/geometric_factors.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -21,16 +28,6 @@ mfem::Mesh import_mesh(std::string meshfile)
   return mesh;
 }
 
-template <int dim>
-tensor<double, dim> average(std::vector<tensor<double, dim> >& positions)
-{
-  tensor<double, dim> total{};
-  for (auto x : positions) {
-    total += x;
-  }
-  return total / double(positions.size());
-}
-
 TEST(geometric_factors, with_2D_domains)
 {
   auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
@@ -43,9 +40,9 @@ TEST(geometric_factors, with_2D_domains)
 
   {
     GeometricFactors gf(d, q, mfem::Geometry::TRIANGLE);
-    int              components_per_J = 4;
-    int              qpts_per_elem    = (q * (q + 1)) / 2;
-    int              num_elems        = 1;
+    int components_per_J = 4;
+    int qpts_per_elem = (q * (q + 1)) / 2;
+    int num_elems = 1;
     EXPECT_EQ(gf.J.Size(), components_per_J * qpts_per_elem * num_elems);
   }
 
@@ -53,9 +50,9 @@ TEST(geometric_factors, with_2D_domains)
 
   {
     GeometricFactors gf(d, q, mfem::Geometry::SQUARE);
-    int              components_per_J = 4;
-    int              qpts_per_elem    = q * q;
-    int              num_elems        = 1;
+    int components_per_J = 4;
+    int qpts_per_elem = q * q;
+    int num_elems = 1;
     EXPECT_EQ(gf.J.Size(), components_per_J * qpts_per_elem * num_elems);
   }
 }
@@ -73,36 +70,24 @@ TEST(geometric_factors, with_3D_domains)
 
   {
     GeometricFactors gf(d, q, mfem::Geometry::TETRAHEDRON);
-    int              components_per_J = 9;
-    int              qpts_per_elem    = (q * (q + 1) * (q + 2)) / 6;
-    int              num_elems        = 6;
+    int components_per_J = 9;
+    int qpts_per_elem = (q * (q + 1) * (q + 2)) / 6;
+    int num_elems = 6;
     EXPECT_EQ(gf.J.Size(), components_per_J * qpts_per_elem * num_elems);
   }
 
   {
     GeometricFactors gf(d, q, mfem::Geometry::CUBE);
-    int              components_per_J = 9;
-    int              qpts_per_elem    = q * q * q;
-    int              num_elems        = 1;
+    int components_per_J = 9;
+    int qpts_per_elem = q * q * q;
+    int num_elems = 1;
     EXPECT_EQ(gf.J.Size(), components_per_J * qpts_per_elem * num_elems);
   }
 }
 
 int main(int argc, char* argv[])
 {
-  int num_procs, myid;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

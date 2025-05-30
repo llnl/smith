@@ -1,8 +1,9 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level COPYRIGHT file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+from spack.package import *
 from spack.pkg.builtin.cray_mpich import CrayMpich as BuiltinCrayMpich
 
 class CrayMpich(BuiltinCrayMpich):

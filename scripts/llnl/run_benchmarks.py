@@ -1,7 +1,7 @@
 #!/bin/sh
 "exec" "python3" "-u" "-B" "$0" "$@"
 
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -18,7 +18,9 @@ from common_build_functions import *
 
 from argparse import ArgumentParser
 
+import grp
 import os
+import stat
 
 
 def parse_args():
@@ -59,7 +61,7 @@ def main():
     args = parse_args()
     cmake_options = args["extra_cmake_options"] + " -DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Release"
     host_config = args["host_config"]
-    spot_dir = args["spot_dir"]
+    spot_dir = os.path.abspath(args["spot_dir"])
     timestamp = args["timestamp"]
 
     # Vars
@@ -89,6 +91,12 @@ def main():
     for cali_file in cali_files:
         if os.path.exists(cali_file):
             shutil.copy2(cali_file, spot_dir)
+            # Update group and permissions of new caliper file
+            cali_file = os.path.join(spot_dir, os.path.basename(cali_file))
+            group_info = grp.getgrnam("smithdev")
+            os.chown(cali_file, -1, group_info.gr_gid)
+            os.chmod(cali_file,
+                     stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
 
     # Print SPOT url
     if on_rz():

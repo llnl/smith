@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -45,7 +45,6 @@
 #endif
 
 #include "serac/infrastructure/git_sha.hpp"
-#include "serac/infrastructure/initialize.hpp"
 #include "serac/infrastructure/logger.hpp"
 
 namespace serac {
@@ -53,7 +52,7 @@ namespace serac {
 std::string about()
 {
   using namespace axom::fmt;
-  [[maybe_unused]] constexpr std::string_view on  = "ON";
+  [[maybe_unused]] constexpr std::string_view on = "ON";
   [[maybe_unused]] constexpr std::string_view off = "OFF";
 
   std::string about = "\n";
@@ -111,7 +110,7 @@ std::string about()
   // HDF5
 #ifdef SERAC_USE_HDF5
   unsigned int h5_maj, h5_min, h5_rel;
-  std::string  h5_version;
+  std::string h5_version;
   if (H5get_libversion(&h5_maj, &h5_min, &h5_rel) < 0) {
     SLIC_ERROR("Failed to retrieve HDF5 version.");
   } else {
@@ -222,5 +221,19 @@ std::string version(bool add_SHA)
 }
 
 std::string compiler() { return axom::fmt::format("{0} version {1}", SERAC_COMPILER_NAME, SERAC_COMPILER_VERSION); }
+
+std::pair<int, int> getMPIInfo(MPI_Comm comm)
+{
+  int num_procs = 0;
+  int rank = 0;
+  if (MPI_Comm_size(comm, &num_procs) != MPI_SUCCESS) {
+    SLIC_ERROR("Failed to determine number of MPI processes");
+  }
+
+  if (MPI_Comm_rank(comm, &rank) != MPI_SUCCESS) {
+    SLIC_ERROR("Failed to determine MPI rank");
+  }
+  return {num_procs, rank};
+}
 
 }  // namespace serac

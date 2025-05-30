@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -16,6 +16,7 @@
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/materials/parameterized_thermal_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -23,7 +24,7 @@ TEST(Thermal, FiniteDifference)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -39,7 +40,7 @@ TEST(Thermal, FiniteDifference)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Define a boundary attribute set
@@ -65,9 +66,20 @@ TEST(Thermal, FiniteDifference)
 
   thermal_solver.setParameter(0, user_defined_conductivity);
 
+  Domain whole_domain = EntireDomain(pmesh);
+  Domain whole_boundary = EntireBoundary(pmesh);
+
   // Construct a potentially user-defined parameterized material and send it to the thermal module
   heat_transfer::ParameterizedLinearIsotropicConductor mat;
-  thermal_solver.setMaterial(DependsOn<0>{}, mat);
+  thermal_solver.setMaterial(DependsOn<0>{}, mat, whole_domain);
+
+  // Define a constant source term
+  heat_transfer::ConstantSource source{1.0};
+  thermal_solver.setSource(source, whole_domain);
+
+  // Set the flux term to zero for testing code paths
+  heat_transfer::ConstantFlux flux_bc{0.0};
+  thermal_solver.setFluxBCs(flux_bc, whole_boundary);
 
   // Define the function for the initial temperature and boundary condition
   auto bdr_temp = [](const mfem::Vector& x, double) -> double { return (x[0] < 0.5 || x[1] < 0.5) ? 1.0 : 0.0; };
@@ -75,14 +87,6 @@ TEST(Thermal, FiniteDifference)
   // Set the initial temperature and boundary condition
   thermal_solver.setTemperatureBCs(ess_bdr, bdr_temp);
   thermal_solver.setTemperature(bdr_temp);
-
-  // Define a constant source term
-  heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source, EntireDomain(pmesh));
-
-  // Set the flux term to zero for testing code paths
-  heat_transfer::ConstantFlux flux_bc{0.0};
-  thermal_solver.setFluxBCs(flux_bc, EntireBoundary(pmesh));
 
   // Finalize the data structures
   thermal_solver.completeSetup();
@@ -101,7 +105,7 @@ TEST(Thermal, FiniteDifference)
 
   // Construct a dummy adjoint load (this would come from a QOI downstream).
   // This adjoint load is equivalent to a discrete L1 norm on the temperature.
-  serac::FiniteElementDual              adjoint_load(thermal_solver.temperature().space(), "adjoint_load");
+  serac::FiniteElementDual adjoint_load(thermal_solver.temperature().space(), "adjoint_load");
   std::unique_ptr<mfem::HypreParVector> assembled_vector(adjoint_load_form.ParallelAssemble());
   adjoint_load = *assembled_vector;
 
@@ -156,7 +160,7 @@ TEST(HeatTransfer, FiniteDifferenceShape)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 0;
+  int serial_refinement = 0;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -172,7 +176,7 @@ TEST(HeatTransfer, FiniteDifferenceShape)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Define a boundary attribute set
@@ -190,7 +194,12 @@ TEST(HeatTransfer, FiniteDifferenceShape)
 
   heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, 1.0);
 
-  thermal_solver.setMaterial(mat);
+  Domain whole_domain = EntireDomain(pmesh);
+
+  thermal_solver.setMaterial(mat, whole_domain);
+
+  heat_transfer::ConstantSource source{1.0};
+  thermal_solver.setSource(source, whole_domain);
 
   FiniteElementState shape_displacement(pmesh, H1<SHAPE_ORDER, dim>{});
 
@@ -203,9 +212,6 @@ TEST(HeatTransfer, FiniteDifferenceShape)
   // Set the initial displacement and boundary condition
   thermal_solver.setTemperatureBCs(ess_bdr, one);
   thermal_solver.setTemperature(one);
-
-  heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source, EntireDomain(pmesh));
 
   // Finalize the data structures
   thermal_solver.completeSetup();
@@ -224,7 +230,7 @@ TEST(HeatTransfer, FiniteDifferenceShape)
 
   // Construct a dummy adjoint load (this would come from a QOI downstream).
   // This adjoint load is equivalent to a discrete L1 norm on the temperature.
-  serac::FiniteElementDual              adjoint_load(thermal_solver.temperature().space(), "adjoint_load");
+  serac::FiniteElementDual adjoint_load(thermal_solver.temperature().space(), "adjoint_load");
   std::unique_ptr<mfem::HypreParVector> assembled_vector(adjoint_load_form.ParallelAssemble());
   adjoint_load = *assembled_vector;
 
@@ -280,12 +286,6 @@ TEST(HeatTransfer, FiniteDifferenceShape)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

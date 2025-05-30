@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -16,12 +16,13 @@
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/input.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 class SlicErrorException : public std::exception {};
 
 // Copied from src/serac/infrastructure/tests/serac_input.cpp
 class MeshTest : public ::testing::Test {
-protected:
+ protected:
   static void SetUpTestSuite()
   {
     axom::slic::setAbortFunction([]() { throw SlicErrorException{}; });
@@ -38,13 +39,13 @@ protected:
   }
 
   // Initialization cannot occur during construction, has to be initialized later
-  axom::inlet::Reader*              reader_ = nullptr;
+  axom::inlet::Reader* reader_ = nullptr;
   std::optional<axom::inlet::Inlet> inlet_;
 
   // Where all of the .mesh files are located
   std::string base_mesh_dir_ = std::string(SERAC_REPO_DIR) + "/data/meshes/";
 
-private:
+ private:
   axom::sidre::DataStore datastore_;
 };
 
@@ -60,7 +61,7 @@ TEST_F(MeshTest, LuaInputMainMeshFromFile)
   mesh::InputOptions::defineInputFileSchema(mesh_table);
 
   // Build and test mesh
-  auto       mesh_options = mesh_table.get<mesh::InputOptions>();
+  auto mesh_options = mesh_table.get<mesh::InputOptions>();
   const auto file_options = std::get_if<mesh::FileInputOptions>(&mesh_options.extra_options);
   ASSERT_NE(file_options, nullptr);
 
@@ -84,7 +85,7 @@ TEST_F(MeshTest, LuaInputMainMeshCuboid)
   mesh::InputOptions::defineInputFileSchema(mesh_table);
 
   // Build and test mesh
-  auto       mesh_options   = mesh_table.get<serac::mesh::InputOptions>();
+  auto mesh_options = mesh_table.get<serac::mesh::InputOptions>();
   const auto cuboid_options = std::get_if<serac::mesh::BoxInputOptions>(&mesh_options.extra_options);
   ASSERT_NE(cuboid_options, nullptr);
   EXPECT_EQ(cuboid_options->elements.size(), 3);
@@ -103,7 +104,7 @@ TEST_F(MeshTest, LuaInputMainMeshRect)
   mesh::InputOptions::defineInputFileSchema(mesh_table);
 
   // Build and test mesh
-  auto       mesh_options = mesh_table.get<serac::mesh::InputOptions>();
+  auto mesh_options = mesh_table.get<serac::mesh::InputOptions>();
   const auto rect_options = std::get_if<serac::mesh::BoxInputOptions>(&mesh_options.extra_options);
   ASSERT_NE(rect_options, nullptr);
   EXPECT_EQ(rect_options->elements.size(), 2);
@@ -146,21 +147,10 @@ TEST(MeshGen, SuccessfulCreation)
 
 int main(int argc, char* argv[])
 {
-  int result = 0;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
+  serac::ApplicationManager applicationManager(argc, argv);
   axom::slic::setAbortFunction([]() { throw SlicErrorException{}; });
   axom::slic::setAbortOnError(true);
   axom::slic::setAbortOnWarning(false);
-
-  result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  return RUN_ALL_TESTS();
 }

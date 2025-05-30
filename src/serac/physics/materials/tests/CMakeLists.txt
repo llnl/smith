@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -7,9 +7,10 @@
 set(material_test_depends serac_physics_materials gtest)
 
 set(material_test_sources
-    thermomechanical_material.cpp
     J2_material.cpp
+    neohookean_additive_split.cpp
     parameterized_nonlinear_J2_material.cpp
+    thermomechanical_material.cpp
 )
 
 serac_add_tests( SOURCES    ${material_test_sources}

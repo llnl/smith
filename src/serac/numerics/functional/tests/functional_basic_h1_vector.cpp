@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -11,8 +11,7 @@
 
 #include <gtest/gtest.h>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/infrastructure/input.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/mesh/mesh_utils_base.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
@@ -38,8 +37,8 @@ struct MixedModelOne {
     constexpr static auto d11 =
         1.0 * make_tensor<dim + 1, dim, dim + 2, dim>([](int i, int j, int k, int l) { return i - j + 2 * k - 3 * l; });
     auto [u, du_dx] = displacement;
-    auto source     = zero{};
-    auto flux       = double_dot(d11, du_dx);
+    auto source = zero{};
+    auto flux = double_dot(d11, du_dx);
     return serac::tuple{source, flux};
   }
 };
@@ -50,8 +49,8 @@ struct MixedModelTwo {
   SERAC_HOST_DEVICE auto operator()(double, position_type position, displacement_type displacement) const
   {
     constexpr static auto s11 = 1.0 * make_tensor<dim + 1, dim + 2>([](int i, int j) { return i * i - j; });
-    auto [X, dX_dxi]          = position;
-    auto [u, du_dxi]          = displacement;
+    auto [X, dX_dxi] = position;
+    auto [u, du_dxi] = displacement;
     return dot(s11, u) * X[0];
   }
 };
@@ -67,8 +66,8 @@ struct ElasticityTestModelOne {
     constexpr static auto d11 =
         make_tensor<dim, dim, dim, dim>([](int i, int j, int k, int l) { return i - j + 2 * k - 3 * l + 1; });
     auto [u, du_dx] = displacement;
-    auto source     = dot(d00, u) + double_dot(d01, du_dx);
-    auto flux       = dot(d10, u) + double_dot(d11, du_dx);
+    auto source = dot(d00, u) + double_dot(d01, du_dx);
+    auto flux = dot(d10, u) + double_dot(d11, du_dx);
     return serac::tuple{source, flux};
   }
 };
@@ -88,23 +87,25 @@ template <int p, int dim>
 void weird_mixed_test(std::unique_ptr<mfem::ParMesh>& mesh)
 {
   // Define vector-valued test and trial spaces of different sizes
-  using test_space  = H1<p, dim + 1>;
+  using test_space = H1<p, dim + 1>;
   using trial_space = H1<p, dim + 2>;
 
   auto [trial_fes, trial_col] = generateParFiniteElementSpace<trial_space>(mesh.get());
-  auto [test_fes, test_col]   = generateParFiniteElementSpace<test_space>(mesh.get());
+  auto [test_fes, test_col] = generateParFiniteElementSpace<test_space>(mesh.get());
 
   mfem::Vector U(trial_fes->TrueVSize());
 
   Functional<test_space(trial_space), exec_space> residual(test_fes.get(), {trial_fes.get()});
-  U.Randomize();
+  int seed = 5;
+  U.Randomize(seed);
 
   // note: this is not really an elasticity problem, it's testing source and flux
   // terms that have the appropriate shapes to ensure that all the differentiation
   // code works as intended
-  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, MixedModelOne<dim>{}, *mesh);
-
-  residual.AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<0>{}, MixedModelTwo<dim>{}, *mesh);
+  Domain dom = EntireDomain(*mesh);
+  Domain bdr = EntireBoundary(*mesh);
+  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, MixedModelOne<dim>{}, dom);
+  residual.AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<0>{}, MixedModelTwo<dim>{}, bdr);
 
   double t = 0.0;
   check_gradient(residual, t, U);
@@ -114,22 +115,26 @@ template <int p, int dim>
 void elasticity_test(std::unique_ptr<mfem::ParMesh>& mesh)
 {
   // Define the test and trial spaces for an elasticity-like problem
-  using test_space  = H1<p, dim>;
+  using test_space = H1<p, dim>;
   using trial_space = H1<p, dim>;
 
   auto [trial_fes, trial_col] = generateParFiniteElementSpace<trial_space>(mesh.get());
-  auto [test_fes, test_col]   = generateParFiniteElementSpace<test_space>(mesh.get());
+  auto [test_fes, test_col] = generateParFiniteElementSpace<test_space>(mesh.get());
 
   mfem::Vector U(trial_fes->TrueVSize());
-  U.Randomize();
+  int seed = 6;
+  U.Randomize(seed);
 
   Functional<test_space(trial_space), exec_space> residual(test_fes.get(), {trial_fes.get()});
 
   // note: this is not really an elasticity problem, it's testing source and flux
   // terms that have the appropriate shapes to ensure that all the differentiation
   // code works as intended
-  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, ElasticityTestModelOne<dim>{}, *mesh);
-  residual.AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<0>{}, ElasticityTestModelTwo<dim>{}, *mesh);
+  Domain dom = EntireDomain(*mesh);
+  Domain bdr = EntireBoundary(*mesh);
+
+  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, ElasticityTestModelOne<dim>{}, dom);
+  residual.AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<0>{}, ElasticityTestModelTwo<dim>{}, bdr);
 
   double t = 0.0;
   check_gradient(residual, t, U);
@@ -168,20 +173,7 @@ TEST(VectorValuedH1, test_suite_tets_and_hexes) { test_suite("/data/meshes/patch
 
 int main(int argc, char* argv[])
 {
-  int num_procs, myid;
-
   ::testing::InitGoogleTest(&argc, argv);
-  serac::accelerator::initializeDevice();
-
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-  serac::accelerator::terminateDevice();
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

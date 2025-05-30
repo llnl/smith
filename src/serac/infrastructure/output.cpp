@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -6,9 +6,8 @@
 
 #include "serac/infrastructure/output.hpp"
 
-#include "serac/infrastructure/initialize.hpp"
+#include "serac/infrastructure/about.hpp"
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/terminator.hpp"
 
 #include "axom/core.hpp"
 #include "axom/sidre.hpp"
@@ -41,7 +40,7 @@ void outputSummary(const axom::sidre::DataStore& datastore, const std::string& o
   std::string file_format_string = detail::file_format_string(file_format);
 
   const std::string file_name = axom::fmt::format("summary.{0}", file_format_string);
-  const std::string path      = axom::utilities::filesystem::joinPath(output_directory, file_name);
+  const std::string path = axom::utilities::filesystem::joinPath(output_directory, file_name);
   datastore.getRoot()->getGroup("serac_summary")->save(path, file_format_string);
 }
 

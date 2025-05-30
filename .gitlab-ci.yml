@@ -1,5 +1,5 @@
 ##############################################################################
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and Serac
+# Copyright (c) Lawrence Livermore National Security, LLC and Serac
 # project contributors. See the LICENSE file for details.
 ##############################################################################
 
@@ -12,25 +12,53 @@ variables:
   BUILD_ROOT: ${CI_PROJECT_DIR}
   FULL_BUILD_ROOT: ${CI_BUILDS_DIR}/serac/${CI_JOB_NAME}
   ALLOC_BANK: eng
+  SPOT_DIR: ${BUILD_ROOT}/califiles
 
 # Whether and how to update uberenv
 .run_update_uberenv: &run_update_uberenv |
   [[ -n "${UPDATE_UBERENV}" ]] && ./scripts/gitlab/update-uberenv.sh "${UPDATE_UBERENV}"
 
+stages:
+  - src
+  - full
+  - benchmarks
+  - comparison
+
 # Run src build each push
+# NOTE: When you add a new workflow, remember to add it to this `if` statement!
 .src_workflow:
+  stage: src
   rules:
-    - if: $SERAC_CI_WORKFLOW_TYPE != "full" && $SERAC_CI_WORKFLOW_TYPE != "benchmarks"
+    - if: $SERAC_CI_WORKFLOW_TYPE != "full" &&
+          $SERAC_CI_WORKFLOW_TYPE != "benchmarks" &&
+          $SERAC_CI_WORKFLOW_TYPE != "comparison"
 
 # Run full build as a nightly scheduled pipeline
 .full_workflow:
+  stage: full
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "full"
 
 # Run benchmarks build as a weekly scheduled pipeline
+# or, run benchmarks and save them in tmp location for comparison
 .benchmarks_workflow:
+  stage: benchmarks
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "benchmarks"
+      variables:
+        # Note: make sure this matches what's in common_build_functions.py!
+        SPOT_DIR: /usr/workspace/smithdev/califiles/serac
+    - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
+
+# Compare caliper files (generated from .benchmarks_workflow) against develop
+.comparison_workflow:
+  stage: comparison
+  rules:
+    - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
+  dependencies:
+    - blueos-clang_14_0_5-benchmarks
+    - toss4-gcc_10_3_1-benchmarks
+    - toss4-clang_14_0_6-benchmarks
 
 ####
 # Templates
@@ -73,13 +101,13 @@ variables:
     reports:
       junit: ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_serac_build_and_test_*/build-*/junit.xml
 
-
 .benchmarks_build_script:
   script:
     # Builds src, runs benchmarks, and stores Caliper files in shared location
     - echo -e "section_start:$(date +%s):benchmarks_build\r\e[0K
       Benchmarks Build ${CI_PROJECT_NAME}"
-    - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py
+    - mkdir -p ${SPOT_DIR}
+    - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py --spot-dir ${SPOT_DIR}
     - echo -e "section_end:$(date +%s):benchmarks_build\r\e[0K"
   artifacts:
     expire_in: 2 weeks
@@ -87,13 +115,22 @@ variables:
     paths:
       - _serac_build_and_test_*/output.log*.txt
       - _serac_build_and_test_*/build-*/output.log*.txt
-      - _serac_build_and_test_*/build-*/*.cali
+      - ${SPOT_DIR}/*.cali
+
+.comparison_build_script:
+  script:
+    # Takes Caliper files from previous jobs and performs benchmark analysis
+    - echo -e "section_start:$(date +%s):comparison\r\e[0K
+      Comparison Build ${CI_PROJECT_NAME}"
+    - ls ${SPOT_DIR}
+    - ls ${SPOT_DIR} | wc -l
+    - ${ALLOC_COMMAND} python3 scripts/llnl/compare_benchmarks.py --current-cali-dir ${SPOT_DIR} --verbose
+    - echo -e "section_end:$(date +%s):comparison\r\e[0K"
 
 # This is where jobs are included for each system
 include:
   - local: .gitlab/build_blueos.yml
   - local: .gitlab/build_toss4.yml
-  # Disabling cray until all developers have access to the tioga machine
-  # - local: .gitlab/build_toss4_cray.yml
+  - local: .gitlab/build_toss4_cray.yml
   - project: 'lc-templates/id_tokens'
     file: 'id_tokens.yml'

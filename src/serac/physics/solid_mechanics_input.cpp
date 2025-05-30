@@ -1,10 +1,11 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/physics/solid_mechanics_input.hpp"
+#include "serac/numerics/odes.hpp"
 
 namespace serac {
 
@@ -43,13 +44,13 @@ serac::SolidMechanicsInputOptions FromInlet<serac::SolidMechanicsInputOptions>::
   result.order = base["order"];
 
   // Solver parameters
-  auto equation_solver         = base["equation_solver"];
-  result.lin_solver_options    = equation_solver["linear"].get<serac::LinearSolverOptions>();
+  auto equation_solver = base["equation_solver"];
+  result.lin_solver_options = equation_solver["linear"].get<serac::LinearSolverOptions>();
   result.nonlin_solver_options = equation_solver["nonlinear"].get<serac::NonlinearSolverOptions>();
 
   if (base.contains("dynamics")) {
     serac::TimesteppingOptions timestepping_options;
-    auto                       dynamics = base["dynamics"];
+    auto dynamics = base["dynamics"];
 
     // FIXME: Implement all supported methods as part of an ODE schema
     const static std::map<std::string, serac::TimestepMethod> timestep_methods = {

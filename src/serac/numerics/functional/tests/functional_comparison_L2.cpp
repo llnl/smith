@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -16,12 +16,11 @@
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
-int num_procs, myid;
-
-constexpr bool                 verbose = true;
+constexpr bool verbose = true;
 std::unique_ptr<mfem::ParMesh> mesh2D;
 std::unique_ptr<mfem::ParMesh> mesh3D;
 
@@ -37,7 +36,7 @@ struct hcurl_qfunction {
   SERAC_HOST_DEVICE auto operator()(UnusedType1, UnusedType2, Position X) const
   {
     auto dp_dX = serac::get<1>(X);
-    auto I     = serac::Identity<dim>();
+    auto I = serac::Identity<dim>();
     return serac::tuple{serac::det(dp_dX + I), serac::zero{}};
   }
 };
@@ -50,9 +49,9 @@ struct test_qfunction {
     static constexpr double b = 0.0;
     // get the value and the gradient from the input tuple
     auto [X, dX_dxi] = position;
-    auto [u, du_dx]  = temperature;
-    auto source      = a * u - (100 * X[0] * X[1]);
-    auto flux        = b * du_dx;
+    auto [u, du_dx] = temperature;
+    auto source = a * u - (100 * X[0] * X[1]);
+    auto flux = b * du_dx;
     return serac::tuple{source, flux};
   }
 };
@@ -69,7 +68,7 @@ void functional_test(mfem::ParMesh& mesh, L2<p> test, L2<p> trial, Dimension<dim
   [[maybe_unused]] static constexpr double b = 0.0;
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = decltype(test);
+  using test_space = decltype(test);
   using trial_space = decltype(trial);
 
   // Create standard MFEM bilinear and linear forms on H1
@@ -87,7 +86,7 @@ void functional_test(mfem::ParMesh& mesh, L2<p> test, L2<p> trial, Dimension<dim
   std::unique_ptr<mfem::HypreParMatrix> J(A.ParallelAssemble());
 
   // Create a linear form for the load term using the standard MFEM method
-  mfem::ParLinearForm       f(fespace.get());
+  mfem::ParLinearForm f(fespace.get());
   mfem::FunctionCoefficient load_func([&](const mfem::Vector& coords) { return 100 * coords(0) * coords(1); });
   // FunctionCoefficient load_func([&]([[maybe_unused]] const Vector& coords) { return 1.0; });
 
@@ -98,7 +97,8 @@ void functional_test(mfem::ParMesh& mesh, L2<p> test, L2<p> trial, Dimension<dim
 
   // Set a random state to evaluate the residual
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 2;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   u_global.GetTrueDofs(U);
@@ -109,7 +109,8 @@ void functional_test(mfem::ParMesh& mesh, L2<p> test, L2<p> trial, Dimension<dim
   Functional<test_space(trial_space), exec_space> residual(fespace.get(), {fespace.get()});
 
   // Add the total domain residual term to the weak form
-  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, test_qfunction{}, mesh);
+  Domain dom = EntireDomain(mesh);
+  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, test_qfunction{}, dom);
 
   // uncomment lines below to verify that compile-time error messages
   // explain L2 spaces are not currently supported in boundary integrals.
@@ -127,7 +128,7 @@ void functional_test(mfem::ParMesh& mesh, L2<p> test, L2<p> trial, Dimension<dim
   r1 -= (*F);
 
   // Compute the residual using weak form
-  double t        = 0.0;
+  double t = 0.0;
   auto [r2, drdU] = residual(t, differentiate_wrt(U));
 
   mfem::Vector diff(r1.Size());
@@ -173,27 +174,25 @@ TEST(L2, 3DCubic) { functional_test(*mesh3D, L2<3>{}, L2<3>{}, Dimension<3>{}); 
 TEST(L2, 2DMixed)
 {
   constexpr int dim = 2;
-  using test_space  = L2<0>;
+  using test_space = L2<0>;
   using trial_space = H1<1, dim>;
 
   auto [L2fespace, L2fec] = serac::generateParFiniteElementSpace<test_space>(mesh2D.get());
 
   auto [H1fespace, H1fec] = serac::generateParFiniteElementSpace<trial_space>(mesh2D.get());
 
+  Domain dom = EntireDomain(*mesh2D);
+
   serac::Functional<test_space(trial_space)> f(L2fespace.get(), {H1fespace.get()});
-  f.AddDomainIntegral(serac::Dimension<dim>{}, serac::DependsOn<0>{}, hcurl_qfunction<dim>{}, *mesh2D);
+  f.AddDomainIntegral(serac::Dimension<dim>{}, serac::DependsOn<0>{}, hcurl_qfunction<dim>{}, dom);
 }
 
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+  serac::ApplicationManager applicationManager(argc, argv);
 
-  axom::slic::SimpleLogger logger;
-
-  int serial_refinement   = 0;
+  int serial_refinement = 0;
   int parallel_refinement = 0;
 
   std::string meshfile2D = SERAC_REPO_DIR "/data/meshes/star.mesh";
@@ -202,9 +201,5 @@ int main(int argc, char* argv[])
   std::string meshfile3D = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
   mesh3D = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), serial_refinement, parallel_refinement);
 
-  int result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  return RUN_ALL_TESTS();
 }

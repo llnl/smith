@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -35,7 +35,7 @@ namespace serac {
  * for the container holding all contact interactions and for Tribol API calls acting on all contact interactions.
  **/
 class ContactInteraction {
-public:
+ public:
   /**
    * @brief The constructor
    *
@@ -135,7 +135,22 @@ public:
    */
   const mfem::Array<int>& inactiveDofs() const;
 
-private:
+  /**
+   * @brief List of pressure/gap DOFs that are not active
+   *
+   * @param pressure A custom pressure field
+   * @return Array of inactive DOFs
+   */
+  const mfem::Array<int>& inactiveDofs(const FiniteElementState& pressure) const;
+
+  /**
+   * @brief Turn on/off Jacobian evaluation
+   *
+   * @param eval True if Jacobian should be evaluated, false otherwise
+   */
+  void evalJacobian(bool eval) const;
+
+ private:
   /**
    * @brief Get the Tribol enforcement method given a serac enforcement method
    *

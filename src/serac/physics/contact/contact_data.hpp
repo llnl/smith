@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -29,10 +29,10 @@ namespace contact {
  * @brief Default contact options: frictionless mortar with penalty = 1000
  * enforcement
  */
-const ContactOptions default_contact_options = {.method      = ContactMethod::SingleMortar,
+const ContactOptions default_contact_options = {.method = ContactMethod::SingleMortar,
                                                 .enforcement = ContactEnforcement::Penalty,
-                                                .type        = ContactType::Frictionless,
-                                                .penalty     = 1.0e3};
+                                                .type = ContactType::Frictionless,
+                                                .penalty = 1.0e3};
 
 }  // namespace contact
 
@@ -41,7 +41,7 @@ const ContactOptions default_contact_options = {.method      = ContactMethod::Si
  * interactions, and agglomerates fields that exist over different ContactInteractions.
  */
 class ContactData {
-public:
+ public:
   /**
    * @brief The constructor
    *
@@ -180,6 +180,15 @@ public:
 #endif
   }
 
+#ifdef SERAC_USE_TRIBOL
+  /**
+   * @brief Get the contact interactions
+   *
+   * @return Vector of contact interactions
+   */
+  const std::vector<ContactInteraction>& getContactInteractions() const { return interactions_; }
+#endif
+
   /**
    * @brief Are any contact interactions enforced using Lagrange multipliers?
    *
@@ -195,7 +204,7 @@ public:
    */
   int numPressureDofs() const { return num_pressure_dofs_; };
 
-private:
+ private:
 #ifdef SERAC_USE_TRIBOL
   /**
    * @brief Computes interaction pressure T-dof offsets and global pressure T-dof offsets
@@ -275,7 +284,7 @@ private:
    */
   mutable mfem::Array<HYPRE_BigInt> global_pressure_dof_offsets_;
 
-  int    cycle_{0};
+  int cycle_{0};
   double time_{0.0};
   double dt_{1.0};
 };

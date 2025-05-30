@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -11,11 +11,13 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -23,7 +25,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -39,7 +41,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Construct and initialized the user-defined moduli to be used as a differentiable parameter in
@@ -58,7 +60,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
   // Construct a functional-based solid solver
 
-  auto lin_options          = solid_mechanics::default_linear_options;
+  auto lin_options = solid_mechanics::default_linear_options;
   lin_options.linear_solver = LinearSolver::SuperLU;
 
   SolidMechanics<p, dim, Parameters<H1<1>, H1<1>>> solid_solver(
@@ -73,15 +75,12 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   constexpr int bulk_parameter_index = 0;
 
   solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  solid_solver.setMaterial(DependsOn<0, 1>{}, mat);
-
-  // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
+  Domain whole_mesh = EntireDomain(pmesh);
+  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, whole_mesh);
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  std::set<int> ess_bdr = {1};
-  solid_solver.setDisplacementBCs(ess_bdr, bc);
-  solid_solver.setDisplacement(bc);
+  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  solid_solver.setFixedBCs(essential_boundary);
 
   tensor<double, dim> constant_force;
 
@@ -93,7 +92,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   }
 
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-  solid_solver.addBodyForce(force, EntireDomain(pmesh));
+  solid_solver.addBodyForce(force, whole_mesh);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -111,7 +110,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
   // Construct a dummy adjoint load (this would come from a QOI downstream).
   // This adjoint load is equivalent to a discrete L1 norm on the displacement.
-  serac::FiniteElementDual              adjoint_load(solid_solver.displacement().space(), "adjoint_load");
+  serac::FiniteElementDual adjoint_load(solid_solver.displacement().space(), "adjoint_load");
   std::unique_ptr<mfem::HypreParVector> assembled_vector(adjoint_load_form.ParallelAssemble());
   adjoint_load = *assembled_vector;
 
@@ -127,10 +126,11 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   // to check if computed qoi sensitivity is consistent
   // with finite difference on the displacement
   double eps = 1.0e-5;
+  FiniteElementState zero_state(pmesh, H1<p, dim>{}, "zero");
   for (int i = 0; i < user_defined_bulk_modulus.gridFunction().Size(); ++i) {
     // Perturb the bulk modulus
     user_defined_bulk_modulus(i) = bulk_modulus_value + eps;
-    solid_solver.setDisplacement(bc);
+    solid_solver.setDisplacement(zero_state);
 
     solid_solver.setParameter(0, user_defined_bulk_modulus);
 
@@ -139,7 +139,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
 
     user_defined_bulk_modulus(i) = bulk_modulus_value - eps;
 
-    solid_solver.setDisplacement(bc);
+    solid_solver.setDisplacement(zero_state);
 
     solid_solver.setParameter(0, user_defined_bulk_modulus);
     solid_solver.advanceTimestep(1.0);
@@ -188,7 +188,7 @@ void finite_difference_shape_test(LoadingType load)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 1;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -204,11 +204,11 @@ void finite_difference_shape_test(LoadingType load)
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
-  // Define a boundary attribute set
-  std::set<int> ess_bdr = {1};
+  // Define the boundary for essential bcs
+  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
 
   double shape_displacement_value = 1.0;
 
@@ -221,52 +221,31 @@ void finite_difference_shape_test(LoadingType load)
                                       solid_mechanics::default_quasistatic_options, "solid_functional", mesh_tag);
 
   solid_mechanics::NeoHookean mat{1.0, 1.0, 1.0};
-  solid_solver.setMaterial(mat);
+  Domain whole_mesh = EntireDomain(pmesh);
+  solid_solver.setMaterial(mat, whole_mesh);
 
   FiniteElementState shape_displacement(pmesh, H1<SHAPE_ORDER, dim>{});
 
   shape_displacement = shape_displacement_value;
   solid_solver.setShapeDisplacement(shape_displacement);
 
-  // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector&, mfem::Vector& bc_vec) -> void { bc_vec = 0.0; };
-
   // Set the initial displacement and boundary condition
-  solid_solver.setDisplacementBCs(ess_bdr, bc);
-  solid_solver.setDisplacement(bc);
+  solid_solver.setFixedBCs(essential_boundary);
+
+  Domain top_face = Domain::ofBoundaryElements(pmesh, [](std::vector<vec2> vertices, int /*attr*/) {
+    return average(vertices)[1] > 0.99;  // select faces by y-coordinate
+  });
 
   if (load == LoadingType::BodyForce) {
-    tensor<double, dim> constant_force;
-
-    constant_force[0] = 0.0;
+    tensor<double, dim> constant_force{};
     constant_force[1] = 1.0e-1;
 
-    if (dim == 3) {
-      constant_force[2] = 0.0;
-    }
-
     solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-    solid_solver.addBodyForce(force, EntireDomain(pmesh));
+    solid_solver.addBodyForce(force, whole_mesh);
   } else if (load == LoadingType::Pressure) {
-    solid_solver.setPressure(
-        [](auto& X, double) {
-          if (X[1] > 0.99) {
-            return 0.1;
-          }
-          return 0.0;
-        },
-        EntireBoundary(pmesh));
+    solid_solver.setPressure([](auto /*X*/, double /*t*/) { return 0.1; }, top_face);
   } else if (load == LoadingType::Traction) {
-    solid_solver.setTraction(
-        [](auto& X, auto, double) {
-          auto traction = 0.0 * X;
-          if (X[1] > 0.99) {
-            traction[0] = 1.0e-2;
-            traction[1] = 1.0e-2;
-          }
-          return traction;
-        },
-        EntireBoundary(pmesh));
+    solid_solver.setTraction([](auto /*X*/, auto /*n*/, double /*t*/) { return vec2{0.01, 0.01}; }, top_face);
   }
 
   // Finalize the data structures
@@ -285,7 +264,7 @@ void finite_difference_shape_test(LoadingType load)
 
   // Construct a dummy adjoint load (this would come from a QOI downstream).
   // This adjoint load is equivalent to a discrete L1 norm on the displacement.
-  serac::FiniteElementDual              adjoint_load(solid_solver.displacement().space(), "adjoint_load");
+  serac::FiniteElementDual adjoint_load(solid_solver.displacement().space(), "adjoint_load");
   std::unique_ptr<mfem::HypreParVector> assembled_vector(adjoint_load_form.ParallelAssemble());
   adjoint_load = *assembled_vector;
 
@@ -344,12 +323,6 @@ TEST(SolidMechanicsShape, Traction) { finite_difference_shape_test(LoadingType::
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -44,7 +44,7 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
   if (getContactOptions().type == ContactType::TiedNormal) {
     // this block essentially returns the complement of GetEssentialTrueDofsFromElementAttribute(surface 2) (def'd in
     // boundary_condition_helper)
-    auto&            pressure_space = *tribol::getMfemPressure(interaction_id).ParFESpace();
+    auto& pressure_space = *tribol::getMfemPressure(interaction_id).ParFESpace();
     mfem::Array<int> dof_markers(pressure_space.GetVSize());
     dof_markers = -1;
     mfem::Array<int> surf2_markers(pressure_space.GetMesh()->attributes.Max());
@@ -62,12 +62,18 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
     pressure_space.GetRestrictionMatrix()->BooleanMult(dof_markers, tdof_markers);
     mfem::FiniteElementSpace::MarkerToList(tdof_markers, inactive_tdofs_);
   }
+
+  // set up Tribol to compute exact Jacobian if requested
+  if (getContactOptions().jacobian == ContactJacobian::Exact) {
+    tribol::enableEnzyme(interaction_id, true);
+    tribol::registerMfemReferenceCoords(interaction_id, static_cast<const mfem::ParGridFunction&>(*mesh.GetNodes()));
+  }
 }
 
 FiniteElementDual ContactInteraction::forces() const
 {
   FiniteElementDual f(*current_coords_.ParFESpace());
-  auto&             f_loc = f.linearForm();
+  auto& f_loc = f.linearForm();
   tribol::getMfemResponse(getInteractionId(), f_loc);
   f.setFromLinearForm(f_loc);
   return f;
@@ -75,7 +81,7 @@ FiniteElementDual ContactInteraction::forces() const
 
 FiniteElementState ContactInteraction::pressure() const
 {
-  auto&              p_tribol = tribol::getMfemPressure(getInteractionId());
+  auto& p_tribol = tribol::getMfemPressure(getInteractionId());
   FiniteElementState p(*p_tribol.ParFESpace());
   p.setFromGridFunction(p_tribol);
   return p;
@@ -84,7 +90,7 @@ FiniteElementState ContactInteraction::pressure() const
 FiniteElementDual ContactInteraction::gaps() const
 {
   FiniteElementDual g(pressureSpace());
-  auto&             g_loc = g.linearForm();
+  auto& g_loc = g.linearForm();
   tribol::getMfemGap(getInteractionId(), g_loc);
   g.setFromLinearForm(g_loc);
   return g;
@@ -112,15 +118,20 @@ void ContactInteraction::setPressure(const FiniteElementState& pressure) const
   tribol::getMfemPressure(getInteractionId()) = pressure.gridFunction();
 }
 
-const mfem::Array<int>& ContactInteraction::inactiveDofs() const
+const mfem::Array<int>& ContactInteraction::inactiveDofs() const { return inactiveDofs(pressure()); }
+
+const mfem::Array<int>& ContactInteraction::inactiveDofs(const FiniteElementState& pressure) const
 {
   if (getContactOptions().type == ContactType::Frictionless) {
-    auto             p = pressure();
-    auto             g = gaps();
+    auto g = gaps();
     std::vector<int> inactive_tdofs_vector;
-    inactive_tdofs_vector.reserve(static_cast<size_t>(p.Size()));
-    for (int d{0}; d < p.Size(); ++d) {
-      if (p[d] >= 0.0 && g[d] >= -1.0e-14) {
+    inactive_tdofs_vector.reserve(static_cast<size_t>(pressure.Size()));
+    for (int d{0}; d < pressure.Size(); ++d) {
+      // don't check pressure for penalty; it's just the gap * a constant
+      if (getContactOptions().enforcement == ContactEnforcement::Penalty && g[d] >= -1.0e-14) {
+        inactive_tdofs_vector.push_back(d);
+      } else if (getContactOptions().enforcement == ContactEnforcement::LagrangeMultiplier && pressure[d] >= 0.0 &&
+                 g[d] >= -1.0e-14) {
         inactive_tdofs_vector.push_back(d);
       }
     }
@@ -128,6 +139,15 @@ const mfem::Array<int>& ContactInteraction::inactiveDofs() const
     std::copy(inactive_tdofs_vector.begin(), inactive_tdofs_vector.end(), inactive_tdofs_.begin());
   }
   return inactive_tdofs_;
+}
+
+void ContactInteraction::evalJacobian(bool eval) const
+{
+  if (eval) {
+    tribol::setLagrangeMultiplierOptions(getInteractionId(), tribol::ImplicitEvalMode::MORTAR_RESIDUAL_JACOBIAN);
+  } else {
+    tribol::setLagrangeMultiplierOptions(getInteractionId(), tribol::ImplicitEvalMode::MORTAR_GAP);
+  }
 }
 
 tribol::ContactMethod ContactInteraction::getMethod() const

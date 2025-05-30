@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -18,6 +18,9 @@ blt_add_executable(NAME        tensor_unit_tests
 set(functional_serial_test_sources
     functional_shape_derivatives.cpp
     simplex_basis_function_unit_tests.cpp
+    element_restriction_tests.cpp
+    dg_restriction_operators.cpp
+    functional_basic_dg.cpp
     bug_boundary_qoi.cpp
     domain_tests.cpp
     geometric_factors_tests.cpp

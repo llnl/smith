@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -13,16 +13,17 @@
 
 #include "serac/numerics/odes.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 using namespace serac::mfem_ext;
 
-const LinearSolverOptions linear_options{.linear_solver  = LinearSolver::CG,
+const LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
                                          .preconditioner = Preconditioner::None,
-                                         .relative_tol   = 1.0e-12,
-                                         .absolute_tol   = 1.0e-12,
+                                         .relative_tol = 1.0e-12,
+                                         .absolute_tol = 1.0e-12,
                                          .max_iterations = 10,
-                                         .print_level    = 0};
+                                         .print_level = 0};
 
 const NonlinearSolverOptions nonlinear_options{
     .relative_tol = 1.0e-12, .absolute_tol = 1.0e-12, .max_iterations = 10, .print_level = -1};
@@ -239,10 +240,10 @@ int which_kind_of_ode(serac::TimestepMethod m)
 double first_order_ode_test(int nsteps, ode_type type, constraint_type constraint, TimestepMethod timestepper,
                             DirichletEnforcementMethod enforcement)
 {
-  double t                      = 0.0;
+  double t = 0.0;
   double ode_residual_eval_time = 0.0;
-  double dt                     = 1.0 / nsteps;
-  double previous_dt            = -1.0;
+  double dt = 1.0 / nsteps;
+  double previous_dt = -1.0;
   double c0;
 
   mfem::Vector x(3);
@@ -251,8 +252,8 @@ double first_order_ode_test(int nsteps, ode_type type, constraint_type constrain
 
   mfem::DenseMatrix J(3, 3);
 
-  auto                     mesh1D = mfem::Mesh::MakeCartesian1D(2);
-  mfem::ParMesh            mesh(MPI_COMM_WORLD, mesh1D);
+  auto mesh1D = mfem::Mesh::MakeCartesian1D(2);
+  mfem::ParMesh mesh(MPI_COMM_WORLD, mesh1D);
   BoundaryConditionManager bcs(mesh);
 
   // although these test problems don't really apply to a finite element mesh,
@@ -261,23 +262,23 @@ double first_order_ode_test(int nsteps, ode_type type, constraint_type constrain
 
   if (constraint == SINE_WAVE) {
     auto coef = std::make_shared<mfem::FunctionCoefficient>(sine_wave);
-    bcs.addEssential({1}, coef, dummy.space());
+    bcs.addEssential(std::set<int>{1}, coef, dummy.space());
   }
 
   if (constraint == TRIANGLE_WAVE) {
     auto coef = std::make_shared<mfem::FunctionCoefficient>(triangle_wave);
-    bcs.addEssential({1}, coef, dummy.space());
+    bcs.addEssential(std::set<int>{1}, coef, dummy.space());
   }
 
-  std::function<mfem::Vector(const mfem::Vector&)>      f_int;
+  std::function<mfem::Vector(const mfem::Vector&)> f_int;
   std::function<mfem::DenseMatrix(const mfem::Vector&)> K;
 
   if (type == LINEAR) {
     f_int = internal_force_linear;
-    K     = stiffness_linear;
+    K = stiffness_linear;
   } else {
     f_int = internal_force_nonlinear;
-    K     = stiffness_nonlinear;
+    K = stiffness_nonlinear;
   }
 
   StdFunctionOperator residual(
@@ -360,9 +361,9 @@ double first_order_ode_test(int nsteps, ode_type type, constraint_type constrain
 double second_order_ode_test(int nsteps, ode_type type, constraint_type constraint, TimestepMethod timestepper,
                              DirichletEnforcementMethod enforcement)
 {
-  double t                      = 0.0;
+  double t = 0.0;
   double ode_residual_eval_time = 0.0;
-  double dt                     = 1.0 / nsteps;
+  double dt = 1.0 / nsteps;
   double c0, c1;
 
   mfem::Vector x(3);
@@ -372,8 +373,8 @@ double second_order_ode_test(int nsteps, ode_type type, constraint_type constrai
 
   mfem::DenseMatrix J(3, 3);
 
-  auto                     mesh1D = mfem::Mesh::MakeCartesian1D(2);
-  mfem::ParMesh            mesh(MPI_COMM_WORLD, mesh1D);
+  auto mesh1D = mfem::Mesh::MakeCartesian1D(2);
+  mfem::ParMesh mesh(MPI_COMM_WORLD, mesh1D);
   BoundaryConditionManager bcs(mesh);
 
   // although these test problems don't really apply to a finite element mesh,
@@ -382,23 +383,23 @@ double second_order_ode_test(int nsteps, ode_type type, constraint_type constrai
 
   if (constraint == SINE_WAVE) {
     auto coef = std::make_shared<mfem::FunctionCoefficient>(sine_wave);
-    bcs.addEssential({1}, coef, dummy.space());
+    bcs.addEssential(std::set<int>{1}, coef, dummy.space());
   }
 
   if (constraint == TRIANGLE_WAVE) {
     auto coef = std::make_shared<mfem::FunctionCoefficient>(triangle_wave);
-    bcs.addEssential({1}, coef, dummy.space());
+    bcs.addEssential(std::set<int>{1}, coef, dummy.space());
   }
 
-  std::function<mfem::Vector(const mfem::Vector&)>      f_int;
+  std::function<mfem::Vector(const mfem::Vector&)> f_int;
   std::function<mfem::DenseMatrix(const mfem::Vector&)> K;
 
   if (type == LINEAR) {
     f_int = internal_force_linear;
-    K     = stiffness_linear;
+    K = stiffness_linear;
   } else {
     f_int = internal_force_nonlinear;
-    K     = stiffness_nonlinear;
+    K = stiffness_nonlinear;
   }
 
   StdFunctionOperator residual(
@@ -517,11 +518,11 @@ double second_order_ode_test(int nsteps, ode_type type, constraint_type constrai
 using param_t = std::tuple<ode_type, constraint_type, TimestepMethod, DirichletEnforcementMethod>;
 
 class FirstOrderODESuite : public testing::TestWithParam<param_t> {
-protected:
-  void                       SetUp() override { std::tie(type, constraint, timestepper, enforcement) = GetParam(); }
-  ode_type                   type;
-  constraint_type            constraint;
-  TimestepMethod             timestepper;
+ protected:
+  void SetUp() override { std::tie(type, constraint, timestepper, enforcement) = GetParam(); }
+  ode_type type;
+  constraint_type constraint;
+  TimestepMethod timestepper;
   DirichletEnforcementMethod enforcement;
 };
 
@@ -585,11 +586,11 @@ INSTANTIATE_TEST_SUITE_P(AllFirstOrderTests, FirstOrderODESuite,
 // clang-format on
 
 class SecondOrderODESuite : public testing::TestWithParam<param_t> {
-protected:
-  void                       SetUp() override { std::tie(type, constraint, timestepper, enforcement) = GetParam(); }
-  ode_type                   type;
-  constraint_type            constraint;
-  TimestepMethod             timestepper;
+ protected:
+  void SetUp() override { std::tie(type, constraint, timestepper, enforcement) = GetParam(); }
+  ode_type type;
+  constraint_type constraint;
+  TimestepMethod timestepper;
   DirichletEnforcementMethod enforcement;
 };
 
@@ -652,17 +653,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 int main(int argc, char* argv[])
 {
-  int result = 0;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

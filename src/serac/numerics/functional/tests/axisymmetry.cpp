@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2023, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -11,12 +11,12 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/mesh/mesh_utils_base.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-#include "serac/infrastructure/profiling.hpp"
 
 #include "serac/numerics/functional/tests/check_gradient.hpp"
 
@@ -24,8 +24,6 @@ using namespace serac;
 using namespace serac::profiling;
 
 double t = 0.0;
-
-int num_procs, myid;
 
 template <typename T, int m, int n>
 struct mat {
@@ -45,7 +43,7 @@ template <typename T1, typename T2>
 auto axiSymmetricDisplacementGradient(const T1& r, const T2& displacement)
 {
   auto [u, du_dx] = displacement;
-  using scalar_t  = decltype(u[0] / r + du_dx[0][0]);
+  using scalar_t = decltype(u[0] / r + du_dx[0][0]);
   scalar_t z{};
   return serac::tensor<scalar_t, 3, 3>{
       {{du_dx[0][0], du_dx[0][1], z}, {du_dx[1][0], du_dx[1][1], z}, {z, z, u[0] / r}}};
@@ -70,13 +68,13 @@ TEST(QoI, BoundaryIntegralWithTangentialShapeDisplacements)
   residual.AddDomainIntegral(
       serac::Dimension<2>{}, serac::DependsOn<0>{},
       [&](auto /*t*/, auto position, auto displacement) {
-        auto r           = serac::get<0>(position)[0];
+        auto r = serac::get<0>(position)[0];
         auto du_dx_prime = axiSymmetricDisplacementGradient(r, displacement);
-        auto stress      = du_dx_prime * 3;
+        auto stress = du_dx_prime * 3;
 
-        using source_type                       = decltype(stress[2][2] * r);
-        serac::tensor<source_type, 2>    source = {stress[2][2] * 6.28, 0.0};
-        serac::tensor<source_type, 2, 2> flux   = {{{stress[0][0], stress[0][1]}, {stress[1][0], stress[1][1]}}};
+        using source_type = decltype(stress[2][2] * r);
+        serac::tensor<source_type, 2> source = {stress[2][2] * 6.28, 0.0};
+        serac::tensor<source_type, 2, 2> flux = {{{stress[0][0], stress[0][1]}, {stress[1][0], stress[1][1]}}};
 
         return serac::tuple{source, flux * 6.28 * r};
       },
@@ -86,13 +84,6 @@ TEST(QoI, BoundaryIntegralWithTangentialShapeDisplacements)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

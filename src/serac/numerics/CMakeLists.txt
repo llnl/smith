@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -14,21 +14,29 @@ set(numerics_headers
     petsc_solvers.hpp
     extrapolation_operator.hpp
     fixed_step_bdf_operator.hpp
+    trust_region_solver.hpp
+    dense_petsc.hpp
     )
 
 set(numerics_sources
     equation_solver.cpp
+    trust_region_solver.cpp
     odes.cpp
     petsc_solvers.cpp
     )
 
-set(numerics_depends serac_infrastructure serac_functional)
+set(numerics_depends serac_infrastructure serac_functional serac_boundary_conditions)
 
 blt_add_library(
     NAME        serac_numerics
     HEADERS     ${numerics_headers}
     SOURCES     ${numerics_sources}
     DEPENDS_ON  ${numerics_depends}
+    )
+
+serac_write_unified_header(
+    NAME    numerics
+    HEADERS solver_config.hpp
     )
 
 install(FILES ${numerics_headers} DESTINATION include/serac/numerics )

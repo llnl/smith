@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -327,10 +327,6 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
             print("[ERROR: Tests for host-config: %s failed]\n" % host_config)
             return res
     else:
-        # Copy dummy .xml file to avoid Azure CI warning when not running tests
-        dummy_ctest_src = pjoin(get_repo_dir(), "scripts/azure-pipelines/DummyTest.xml")
-        dummy_ctest_dst = pjoin(build_dir, "Test.xml")
-        shutil.copy(dummy_ctest_src, dummy_ctest_dst)
         print("[skipping unit tests]")
 
     # build the docs
@@ -637,26 +633,8 @@ def get_build_dir(prefix, host_config):
     return pjoin(prefix, "build-" + host_config_root)
 
 
-_repo_dir = ""
 def get_repo_dir():
-    """ Return absolute path to Smith or Serac repo """
-    # Only set var once
-    global _repo_dir
-    if not _repo_dir:
-        # Set repo dir to be relative to this script
-        _repo_dir = os.path.abspath(pjoin(get_script_dir(), "../.."))
-
-        # Check the parent dir for an uberenv config with a package_name "smith".
-        # This means Serac is a submodule. Change the repo dir to be parent dir (i.e.
-        # Smith repo dir)
-        smith_uberenv_config_path = pjoin(_repo_dir, "../.uberenv_config.json")
-        if os.path.exists(smith_uberenv_config_path):
-            with open(smith_uberenv_config_path) as json_file:
-                data = json.load(json_file)
-                if "package_name" in data:
-                    if data["package_name"] == "smith":
-                        _repo_dir = pjoin(_repo_dir, "../")
-    return _repo_dir
+    return os.path.abspath(pjoin(get_script_dir(), "../.."))
 
 
 def get_build_and_test_root(prefix, timestamp):
@@ -698,7 +676,7 @@ def get_shared_libs_dir():
 
 
 def get_shared_spot_dir():
-    return pjoin(get_shared_base_dir(), "califiles")
+    return pjoin(get_shared_base_dir(), "califiles", get_project_name())
 
 
 def get_uberenv_path():
@@ -713,7 +691,9 @@ def on_rz():
 
 
 def get_script_dir():
-    return os.path.dirname(os.path.abspath(__file__))
+    # NOTE: sys.argv[0] is based-on the script that is calling get_script_dir (e.g. build_tpls.py). This is to properly
+    # handle the case where this `scripts/llnl` directory is being symlinked by Smith. 
+    return os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
 _project_name = ""

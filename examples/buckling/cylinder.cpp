@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -27,17 +27,13 @@
 #include <set>
 #include <string>
 
-#include "axom/slic/core/SimpleLogger.hpp"
+#include "axom/slic.hpp"
 #include "axom/inlet.hpp"
+#include "axom/CLI11.hpp"
 
 #include "mfem.hpp"
 
-#include "serac/physics/solid_mechanics_contact.hpp"
-#include "serac/infrastructure/terminator.hpp"
-#include "serac/mesh/mesh_utils.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/materials/parameterized_solid_material.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac.hpp"
 
 using namespace serac;
 
@@ -53,62 +49,85 @@ std::function<std::string(const std::string&)> petscPCTypeValidator = [](const s
 int main(int argc, char* argv[])
 {
   constexpr int dim = 3;
-  constexpr int p   = 1;
+  constexpr int p = 1;
 
   // Command line arguments
   // Mesh options
-  int    serial_refinement   = 0;
-  int    parallel_refinement = 0;
-  double dt                  = 0.1;
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
+  double dt = 0.1;
 
   // Solver options
-  NonlinearSolverOptions nonlinear_options     = solid_mechanics::default_nonlinear_options;
-  LinearSolverOptions    linear_options        = solid_mechanics::default_linear_options;
-  nonlinear_options.nonlin_solver              = serac::NonlinearSolver::TrustRegion;
-  nonlinear_options.relative_tol               = 1e-6;
-  nonlinear_options.absolute_tol               = 1e-10;
-  nonlinear_options.min_iterations             = 1;
-  nonlinear_options.max_iterations             = 500;
+  NonlinearSolverOptions nonlinear_options = solid_mechanics::default_nonlinear_options;
+  LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
+  nonlinear_options.nonlin_solver = serac::NonlinearSolver::TrustRegion;
+  nonlinear_options.relative_tol = 1e-6;
+  nonlinear_options.absolute_tol = 1e-10;
+  nonlinear_options.min_iterations = 1;
+  nonlinear_options.max_iterations = 500;
   nonlinear_options.max_line_search_iterations = 20;
-  nonlinear_options.print_level                = 1;
+  nonlinear_options.print_level = 1;
 #ifdef SERAC_USE_PETSC
-  linear_options.linear_solver  = serac::LinearSolver::GMRES;
+  linear_options.linear_solver = serac::LinearSolver::GMRES;
   linear_options.preconditioner = serac::Preconditioner::HypreAMG;
-  linear_options.relative_tol   = 1e-8;
-  linear_options.absolute_tol   = 1e-16;
+  linear_options.relative_tol = 1e-8;
+  linear_options.absolute_tol = 1e-16;
   linear_options.max_iterations = 2000;
 #endif
 
   // Contact specific options
-  double penalty      = 1e3;
-  bool   use_contact  = true;
-  auto   contact_type = serac::ContactEnforcement::Penalty;
+  double penalty = 1e3;
+  bool use_contact = true;
+  auto contact_type = serac::ContactEnforcement::Penalty;
 
-  // Initialize Serac and all of the external libraried
-  serac::initialize(argc, argv);
+  // Initialize and automatically finalize MPI and other libraries
+  serac::ApplicationManager applicationManager(argc, argv);
 
   // Handle command line arguments
   axom::CLI::App app{"Hollow cylinder buckling example"};
   // Mesh options
-  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps", true);
-  app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps", true);
+  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")
+      ->default_val("0")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps")
+      ->default_val("0")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
   // Solver options
-  app.add_option("--nonlinear-solver", nonlinear_options.nonlin_solver, "Nonlinear solver", true);
-  app.add_option("--linear-solver", linear_options.linear_solver, "Linear solver", true);
-  app.add_option("--preconditioner", linear_options.preconditioner, "Preconditioner", true);
-  app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner, "Petsc preconditioner", true)
+  app.add_option("--nonlinear-solver", nonlinear_options.nonlin_solver,
+                 "Nonlinear solver (Index of enum serac::NonlinearSolver)")
+      ->default_val("3")  // Matches index of value set above
+      ->expected(0, 10);
+  app.add_option("--linear-solver", linear_options.linear_solver, "Linear solver (Index of enum serac::LinearSolver)")
+      ->default_val("1")  // Matches index of value set above
+      ->expected(0, 5);
+  app.add_option("--preconditioner", linear_options.preconditioner,
+                 "Preconditioner (Index of enum serac::NonlinearSolver)")
+      ->default_val("3")  // Matches index of value set above
+      ->expected(0, 7);
+  app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
+                 "Petsc preconditioner (Index of enum serac::PetscPCType)")
       ->transform(
           [](const std::string& in) -> std::string {
             return std::to_string(static_cast<int>(mfem_ext::stringToPetscPCType(in)));
           },
-          "Convert string to PetscPCType", "PetscPCTypeTransform");
-  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact", true);
+          "Convert string to PetscPCType", "PetscPCTypeTransform")
+      ->default_val("0")  // Matches index of value set by class
+      ->expected(0, 14);
+  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")
+      ->default_val("0.1")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
   // Contact options
   app.add_flag("--contact,!--no-contact", use_contact, "Use contact for the inner faces of the cylinder");
   app.add_option("--contact-type", contact_type,
-                 "Type of contact enforcement, 0 for penalty or 1 for Lagrange multipliers", true)
-      ->needs("--contact");
-  app.add_option("--penalty", penalty, "Penalty for contact", true)->needs("--contact");
+                 "Type of contact enforcement, 0 for penalty or 1 for Lagrange multipliers (Index of enum "
+                 "serac::ContactEnforcement)")
+      ->needs("--contact")
+      ->default_val("0")  // Matches index of value set above
+      ->expected(0, 1);
+  app.add_option("--penalty", penalty, "Penalty for contact")
+      ->needs("--contact")
+      ->default_val("1e3")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
 
   // Need to allow extra arguments for PETSc support
   app.set_help_flag("--help");
@@ -117,22 +136,24 @@ int main(int argc, char* argv[])
   nonlinear_options.force_monolithic = linear_options.preconditioner != Preconditioner::Petsc;
 
   // Create DataStore
-  std::string            name     = use_contact ? "buckling_cylinder_contact" : "buckling_cylinder";
-  std::string            mesh_tag = "mesh";
+  std::string name = use_contact ? "buckling_cylinder_contact" : "buckling_cylinder";
+  std::string mesh_tag = "mesh";
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, name + "_data");
 
   // Create and refine mesh
   std::string filename = SERAC_REPO_DIR "/data/meshes/hollow-cylinder.mesh";
-  auto        mesh     = serac::buildMeshFromFile(filename);
-  auto        pmesh    = mesh::refineAndDistribute(std::move(mesh), serial_refinement, parallel_refinement);
-  serac::StateManager::setMesh(std::move(pmesh), mesh_tag);
+  auto mesh = serac::buildMeshFromFile(filename);
+  auto refined_mesh = mesh::refineAndDistribute(std::move(mesh), serial_refinement, parallel_refinement);
+  auto& pmesh = serac::StateManager::setMesh(std::move(refined_mesh), mesh_tag);
 
-  // Surface attributes for boundary conditions
-  std::set<int> xneg{2};
-  std::set<int> xpos{3};
-  std::set<int> bottom{1};
-  std::set<int> top{4};
+  // Surfaces for boundary conditions
+  constexpr int xneg_attr{2};
+  constexpr int xpos_attr{3};
+  auto xneg = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(xneg_attr));
+  auto xpos = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(xpos_attr));
+  auto bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  auto top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(4));
 
   // Create solver, either with or without contact
   std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
@@ -141,43 +162,39 @@ int main(int argc, char* argv[])
         nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag);
 
     // Add the contact interaction
-    serac::ContactOptions contact_options{.method      = serac::ContactMethod::SingleMortar,
+    serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                           .enforcement = contact_type,
-                                          .type        = serac::ContactType::Frictionless,
-                                          .penalty     = penalty};
-    auto                  contact_interaction_id = 0;
-    solid_contact_solver->addContactInteraction(contact_interaction_id, xpos, xneg, contact_options);
+                                          .type = serac::ContactType::Frictionless,
+                                          .penalty = penalty};
+    auto contact_interaction_id = 0;
+    solid_contact_solver->addContactInteraction(contact_interaction_id, {xpos_attr}, {xneg_attr}, contact_options);
     solid_solver = std::move(solid_contact_solver);
   } else {
     solid_solver = std::make_unique<serac::SolidMechanics<p, dim>>(
         nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag);
-    auto domain = serac::Domain::ofBoundaryElements(
-        StateManager::mesh(mesh_tag), [&](std::vector<vec3>, int attr) { return xpos.find(attr) != xpos.end(); });
-    solid_solver->setPressure([&](auto&, double t) { return 0.01 * t; }, domain);
+    solid_solver->setPressure([&](auto&, double t) { return 0.01 * t; }, xpos);
   }
 
   // Define a Neo-Hookean material
-  auto                        lambda = 1.0;
-  auto                        G      = 0.1;
+  auto lambda = 1.0;
+  auto G = 0.1;
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
-
-  solid_solver->setMaterial(mat);
+  Domain whole_mesh = EntireDomain(pmesh);
+  solid_solver->setMaterial(mat, whole_mesh);
 
   // Set up essential boundary conditions
   // Bottom of cylinder is fixed
-  auto clamp = [](const mfem::Vector&, mfem::Vector& u) {
-    u.SetSize(dim);
-    u = 0.0;
-  };
-  solid_solver->setDisplacementBCs(bottom, clamp);
+  solid_solver->setFixedBCs(bottom);
 
   // Top of cylinder has prescribed displacement of magnitude in x-z direction
-  auto compress = [&](const mfem::Vector&, double t, mfem::Vector& u) {
-    u.SetSize(dim);
-    u    = 0.0;
-    u(0) = u(2) = -1.5 / std::sqrt(2.0) * t;
+  auto compress = [&](const serac::tensor<double, dim>, double t) {
+    serac::tensor<double, dim> u{};
+    u[0] = u[2] = -1.5 / std::sqrt(2.0) * t;
+    return u;
   };
-  solid_solver->setDisplacementBCs(top, compress);
+  solid_solver->setDisplacementBCs(compress, top, Component::X + Component::Z);
+  solid_solver->setDisplacementBCs(compress, top,
+                                   Component::Y);  // BT: Would it be better to leave this component free?
 
   // Finalize the data structures
   solid_solver->completeSetup();
@@ -204,6 +221,5 @@ int main(int argc, char* argv[])
   }
   SLIC_INFO_ROOT(axom::fmt::format("final time = {}", solid_solver->time()));
 
-  // Exit without error
-  serac::exitGracefully();
+  return 0;
 }

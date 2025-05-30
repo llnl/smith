@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -24,7 +24,7 @@ namespace serac {
  * @brief A container for the boundary condition information relating to a specific physics module
  */
 class BoundaryConditionManager {
-public:
+ public:
   /**
    * @brief Construct a new Boundary Condition Manager object
    *
@@ -44,18 +44,15 @@ public:
                     mfem::ParFiniteElementSpace& space, const std::optional<int> component = {});
 
   /**
-   * @brief Set a list of true degrees of freedom from a vector coefficient
+   * @brief Set a list of local degrees of freedom from a scalar coefficient
    *
-   * @param[in] true_dofs The true degrees of freedom to set with a Dirichlet condition
-   * @param[in] ess_bdr_coef The vector coefficient that evaluates to the Dirichlet condition
+   * @param[in] local_dofs Indices of ldofs to set with a Dirichlet condition
+   * @param[in] ess_bdr_coef The scalar coefficient that evaluates to the Dirichlet condition
    * @param[in] space The finite element space to which the BC should be applied
-   *
-   * @note The coefficient is required to be vector-valued. However, only the dofs specified in the @a true_dofs
-   * array will be set. This means that if the @a true_dofs array only contains dofs for a specific vector component in
-   * a vector-valued finite element space, only that component will be set.
+   * @param[in] component The component to set (null implies all components are set)
    */
-  void addEssential(const mfem::Array<int>& true_dofs, std::shared_ptr<mfem::VectorCoefficient> ess_bdr_coef,
-                    mfem::ParFiniteElementSpace& space);
+  void addEssential(const mfem::Array<int>& local_dofs, std::shared_ptr<mfem::Coefficient> ess_bdr_coef,
+                    mfem::ParFiniteElementSpace& space, std::optional<int> component = {});
 
   /**
    * @brief Returns all the true degrees of freedom associated with all the essential BCs
@@ -103,7 +100,7 @@ public:
    */
   const std::vector<BoundaryCondition>& essentials() const { return ess_bdr_; }
 
-private:
+ private:
   /**
    * @brief Updates the "cached" list of all DOF indices
    */

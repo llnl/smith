@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -27,6 +27,7 @@ if(PETSC_FOUND)
     if(SLEPC_FOUND)
         set(slepc_solver_tests
             eigensolver.cpp
+            test_trust_region_solver.cpp
             )
         serac_add_tests(SOURCES       ${slepc_solver_tests}
                         DEPENDS_ON    ${numerics_test_dependencies}

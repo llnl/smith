@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -10,7 +10,6 @@
 
 #include "serac/infrastructure/input.hpp"
 #include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/terminator.hpp"
 
 namespace serac::cli {
 
@@ -24,9 +23,9 @@ std::unordered_map<std::string, std::string> defineAndParse(int argc, char* argv
 
   // specify all input arguments
   axom::CLI::App app{app_description};
-  std::string    input_file_path;
+  std::string input_file_path;
   app.add_option("-i, --input-file", input_file_path, "Input file to use")->check(axom::CLI::ExistingFile);
-  int  restart_cycle;
+  int restart_cycle;
   auto restart_opt =
       app.add_option("-c, --restart-cycle", restart_cycle, "Cycle to restart from")->check(axom::CLI::PositiveNumber);
   bool create_input_file_docs{false};
@@ -49,7 +48,7 @@ std::unordered_map<std::string, std::string> defineAndParse(int argc, char* argv
     if (e.get_name() == "CallForHelp") {
       auto msg = app.help();
       SLIC_INFO_ROOT(msg);
-      serac::exitGracefully();
+      exit(0);
     } else {
       auto err_msg = axom::CLI::FailureMessage::simple(&app, e);
       SLIC_ERROR_ROOT(err_msg);

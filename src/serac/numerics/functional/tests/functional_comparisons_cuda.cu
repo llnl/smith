@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -17,20 +17,17 @@
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-#include "serac/infrastructure/profiling.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh/mesh_utils_base.hpp"
 
 using namespace serac;
 using namespace serac::profiling;
-int serial_refinement   = 1;
+int serial_refinement = 1;
 int parallel_refinement = 0;
 
-int num_procs, myid;
 int nsamples = 1;  // because mfem doesn't take in unsigned int
 
-constexpr bool                 verbose = true;
+constexpr bool verbose = true;
 std::unique_ptr<mfem::ParMesh> mesh2D;
 std::unique_ptr<mfem::ParMesh> mesh3D;
 
@@ -47,8 +44,8 @@ struct thermal_qfunction {
   {
     // get the value and the gradient from the input tuple
     auto [u, du_dx] = temperature;
-    auto source     = a * u - (100 * x[0] * x[1]);
-    auto flux       = b * du_dx;
+    auto source = a * u - (100 * x[0] * x[1]);
+    auto flux = b * du_dx;
     return serac::tuple{source, flux};
   }
 };
@@ -59,11 +56,11 @@ struct elastic_qfunction {
   __host__ __device__ auto operator()(double /*t*/, x_t x, displacement_t displacement) const
   {
     // get the value and the gradient from the input tuple
-    auto [u, du_dx]           = displacement;
-    constexpr auto I          = Identity<dim>();
-    auto           body_force = a * u + I[0];
-    auto           strain     = 0.5 * (du_dx + transpose(du_dx));
-    auto           stress     = b * tr(strain) * I + 2.0 * b * strain;
+    auto [u, du_dx] = displacement;
+    constexpr auto I = Identity<dim>();
+    auto body_force = a * u + I[0];
+    auto strain = 0.5 * (du_dx + transpose(du_dx));
+    auto stress = b * tr(strain) * I + 2.0 * b * strain;
     return serac::tuple{body_force, stress};
   }
 };
@@ -74,8 +71,8 @@ struct hcurl_qfunction {
   __host__ __device__ auto operator()(double /*t*/, x_t x, vector_potential_t vector_potential) const
   {
     auto [A, curl_A] = vector_potential;
-    auto J_term      = a * A - tensor<double, dim>{10 * x[0] * x[1], -5 * (x[0] - x[1]) * x[1]};
-    auto H_term      = b * curl_A;
+    auto J_term = a * A - tensor<double, dim>{10 * x[0] * x[1], -5 * (x[0] - x[1]) * x[1]};
+    auto H_term = b * curl_A;
     return serac::tuple{J_term, H_term};
   }
 };
@@ -98,7 +95,7 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
   serac::profiling::initialize();
 
   // Define the types for the test and trial spaces using the function arguments
-  using test_space  = decltype(test);
+  using test_space = decltype(test);
   using trial_space = decltype(trial);
 
   // Create standard MFEM bilinear and linear forms on H1
@@ -125,7 +122,7 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
       SERAC_PROFILE_EXPR(concat("mfem_parallelAssemble", postfix), A.ParallelAssemble()));
 
   // Create a linear form for the load term using the standard MFEM method
-  mfem::ParLinearForm       f(fespace.get());
+  mfem::ParLinearForm f(fespace.get());
   mfem::FunctionCoefficient load_func([&](const mfem::Vector& coords) { return 100 * coords(0) * coords(1); });
 
   // Create and assemble the linear load term into a vector
@@ -137,7 +134,8 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
 
   // Set a random state to evaluate the residual
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 3;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   U.UseDevice(true);
@@ -216,7 +214,7 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
 
   serac::profiling::initialize();
 
-  using test_space  = decltype(test);
+  using test_space = decltype(test);
   using trial_space = decltype(trial);
 
   auto [fespace, fec] = serac::generateParFiniteElementSpace<test_space>(&mesh);
@@ -238,9 +236,9 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
   std::unique_ptr<mfem::HypreParMatrix> J(
       SERAC_PROFILE_EXPR(concat("mfem_parallelAssemble", postfix), A.ParallelAssemble()));
 
-  mfem::ParLinearForm             f(fespace.get());
+  mfem::ParLinearForm f(fespace.get());
   mfem::VectorFunctionCoefficient load_func(dim, [&](const mfem::Vector& /*coords*/, mfem::Vector& force) {
-    force    = 0.0;
+    force = 0.0;
     force(0) = -1.;
   });
 
@@ -257,7 +255,8 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
   F->HostRead();
 
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 4;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   U.UseDevice(true);
@@ -308,7 +307,7 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
 
   serac::profiling::initialize();
 
-  using test_space  = decltype(test);
+  using test_space = decltype(test);
   using trial_space = decltype(trial);
 
   auto [fespace, fec] = serac::generateParFiniteElementSpace<test_space>(&mesh);
@@ -328,11 +327,11 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
   std::unique_ptr<mfem::HypreParMatrix> J(
       SERAC_PROFILE_EXPR(concat("mfem_parallelAssemble", postfix), B.ParallelAssemble()));
 
-  mfem::ParLinearForm             f(fespace.get());
+  mfem::ParLinearForm f(fespace.get());
   mfem::VectorFunctionCoefficient load_func(dim, [&](const mfem::Vector& coords, mfem::Vector& output) {
-    double x  = coords(0);
-    double y  = coords(1);
-    output    = 0.0;
+    double x = coords(0);
+    double y = coords(1);
+    output = 0.0;
     output(0) = 10 * x * y;
     output(1) = -5 * (x - y) * y;
   });
@@ -347,13 +346,14 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
   F->UseDevice(true);
 
   mfem::ParGridFunction u_global(fespace.get());
-  u_global.Randomize();
+  int seed = 5;
+  u_global.Randomize(seed);
 
   mfem::Vector U(fespace->TrueVSize());
   U.UseDevice(true);
   u_global.GetTrueDofs(U);
 
-  using test_space  = decltype(test);
+  using test_space = decltype(test);
   using trial_space = decltype(trial);
 
   Functional<test_space(trial_space), ExecutionSpace::GPU> residual(fespace.get(), fespace.get());
@@ -423,9 +423,7 @@ int main(int argc, char* argv[])
   cudaDeviceSynchronize();
   std::cout << "Initial:" << serac::accelerator::getCUDAMemInfoString() << std::endl;
 
-  auto [num_procs, myid] = serac::initialize(argc, argv);
-
-  serac::accelerator::initializeDevice();
+  serac::ApplicationManager applicationManager(argc, argv);
 
   mfem::OptionsParser args(argc, argv);
   args.AddOption(&serial_refinement, "-r", "--ref", "");
@@ -437,13 +435,10 @@ int main(int argc, char* argv[])
     if (myid == 0) {
       args.PrintUsage(std::cout);
     }
-    serac::exitGracefully(true);
+    return 1;
   }
   if (myid == 0) {
     args.PrintOptions(std::cout);
   }
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully(result);
+  return RUN_ALL_TESTS();
 }

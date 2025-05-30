@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -14,7 +14,7 @@
 #pragma once
 
 #include "serac/physics/materials/thermal_material_input.hpp"
-#include "serac/physics/common.hpp"
+#include "serac/numerics/odes.hpp"
 
 namespace serac {
 

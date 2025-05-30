@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2023, Lawrence Livermore National Security, LLC and
+// Copyright Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -16,7 +16,7 @@
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-#include "serac/infrastructure/profiling.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 #include "serac/numerics/functional/tests/check_gradient.hpp"
 
@@ -24,8 +24,6 @@ using namespace serac;
 using namespace serac::profiling;
 
 double t = 0.0;
-
-int num_procs, myid;
 
 void test(int dof)
 {
@@ -50,7 +48,7 @@ void test(int dof)
   deformed_mesh.Save("deformed_" + std::to_string(dof) + ".mesh");
 
   auto undeformed_pmesh = mesh::refineAndDistribute(std::move(undeformed_mesh), 0, 0);
-  auto deformed_pmesh   = mesh::refineAndDistribute(std::move(deformed_mesh), 0, 0);
+  auto deformed_pmesh = mesh::refineAndDistribute(std::move(deformed_mesh), 0, 0);
 
   auto [fes, fec] = generateParFiniteElementSpace<shape_space>(undeformed_pmesh.get());
 
@@ -63,7 +61,7 @@ void test(int dof)
       serac::Dimension<1>{}, serac::DependsOn<0>{}, [](auto...) { return 1.0; }, *deformed_pmesh);
 
   std::unique_ptr<mfem::HypreParVector> u(fes->NewTrueDofVector());
-  *u        = 0.0;
+  *u = 0.0;
   (*u)[dof] = 0.25;
   std::cout << "(ShapeAwareFunctional) perimeter of undeformed mesh + shape: " << saf_qoi(t, *u) << std::endl;
   std::cout << "(          Functional) perimeter of deformed mesh: " << qoi(t, *u) << std::endl;
@@ -92,13 +90,6 @@ TEST(QoI, BoundaryIntegralWithNormalShapeDisplacements)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

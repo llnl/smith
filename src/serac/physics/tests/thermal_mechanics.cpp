@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -17,6 +17,7 @@
 #include "serac/serac_config.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -25,9 +26,9 @@ void functional_test_static_3D(double expected_norm)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  constexpr int dim                 = 3;
-  int           serial_refinement   = 1;
-  int           parallel_refinement = 0;
+  constexpr int dim = 3;
+  int serial_refinement = 1;
+  int parallel_refinement = 0;
 
   // Create DataStore
   axom::sidre::DataStore datastore;
@@ -40,19 +41,22 @@ void functional_test_static_3D(double expected_norm)
 
   std::string mesh_tag{"mesh"};
 
-  serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  // Define a boundary attribute set
+  // Define the boundary subset where essential boundary conditions will be prescribed
+  // For simplicity, we apply essential boundary condtions in both the thermal and mechanics
+  // on the same boundary subset.
   std::set<int> ess_bdr = {1};
+  auto displacement_essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(ess_bdr));
 
   // define the solid solver configurations
   // no default solver options for solid yet, so make some here
-  const LinearSolverOptions default_linear_options = {.linear_solver  = LinearSolver::GMRES,
+  const LinearSolverOptions default_linear_options = {.linear_solver = LinearSolver::GMRES,
                                                       .preconditioner = Preconditioner::HypreAMG,
-                                                      .relative_tol   = 1.0e-6,
-                                                      .absolute_tol   = 1.0e-10,
+                                                      .relative_tol = 1.0e-6,
+                                                      .absolute_tol = 1.0e-10,
                                                       .max_iterations = 500,
-                                                      .print_level    = 0};
+                                                      .print_level = 0};
 
   const NonlinearSolverOptions default_nonlinear_options = {
       .relative_tol = 1.0e-4, .absolute_tol = 1.0e-8, .max_iterations = 10, .print_level = 1};
@@ -62,18 +66,20 @@ void functional_test_static_3D(double expected_norm)
       heat_transfer::default_static_options, default_nonlinear_options, default_linear_options,
       solid_mechanics::default_quasistatic_options, "thermal_solid_functional", mesh_tag);
 
-  double rho       = 1.0;
-  double E         = 1.0;
-  double nu        = 0.25;
-  double c         = 1.0;
-  double alpha     = 1.0e-3;
+  double rho = 1.0;
+  double E = 1.0;
+  double nu = 0.25;
+  double c = 1.0;
+  double alpha = 1.0e-3;
   double theta_ref = 1.0;
-  double k         = 1.0;
+  double k = 1.0;
 
-  GreenSaintVenantThermoelasticMaterial        material{rho, E, nu, c, alpha, theta_ref, k};
-  GreenSaintVenantThermoelasticMaterial::State initial_state{};
-  auto                                         qdata = thermal_solid_solver.createQuadratureDataBuffer(initial_state);
-  thermal_solid_solver.setMaterial(material, qdata);
+  thermomechanics::GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
+  thermomechanics::GreenSaintVenantThermoelasticMaterial::State initial_state{};
+  auto qdata = thermal_solid_solver.createQuadratureDataBuffer(initial_state);
+
+  Domain whole_domain = EntireDomain(pmesh);
+  thermal_solid_solver.setMaterial(material, whole_domain, qdata);
 
   // Define the function for the initial temperature and boundary condition
   auto one = [](const mfem::Vector&, double) -> double { return 1.0; };
@@ -82,12 +88,8 @@ void functional_test_static_3D(double expected_norm)
   thermal_solid_solver.setTemperatureBCs(ess_bdr, one);
   thermal_solid_solver.setTemperature(one);
 
-  // Define the function for the disolacement boundary condition
-  auto zeroVector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
-
-  // Set the initial displcament and boundary condition
-  thermal_solid_solver.setDisplacementBCs(ess_bdr, zeroVector);
-  thermal_solid_solver.setDisplacement(zeroVector);
+  // Set the boundary condition
+  thermal_solid_solver.setFixedBCs(displacement_essential_boundary);
 
   // Finalize the data structures
   thermal_solid_solver.completeSetup();
@@ -107,9 +109,9 @@ void functional_test_shrinking_3D(double expected_norm)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  constexpr int dim                 = 3;
-  int           serial_refinement   = 1;
-  int           parallel_refinement = 0;
+  constexpr int dim = 3;
+  int serial_refinement = 1;
+  int parallel_refinement = 0;
 
   // Create DataStore
   axom::sidre::DataStore datastore;
@@ -122,20 +124,20 @@ void functional_test_shrinking_3D(double expected_norm)
 
   std::string mesh_tag{"mesh"};
 
-  serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  // Define a boundary attribute set
-  std::set<int> constraint_bdr = {1};
-  std::set<int> temp_bdr       = {1, 2, 3};
+  // Define a boundary partitions where essential boundary conditions will be prescribed
+  Domain constraint_bdr = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  std::set<int> temp_bdr = {1, 2, 3};
 
   // define the solid solver configurations
   // no default solver options for solid yet, so make some here
-  const LinearSolverOptions default_linear_options = {.linear_solver  = LinearSolver::GMRES,
+  const LinearSolverOptions default_linear_options = {.linear_solver = LinearSolver::GMRES,
                                                       .preconditioner = Preconditioner::HypreAMG,
-                                                      .relative_tol   = 1.0e-6,
-                                                      .absolute_tol   = 1.0e-10,
+                                                      .relative_tol = 1.0e-6,
+                                                      .absolute_tol = 1.0e-10,
                                                       .max_iterations = 500,
-                                                      .print_level    = 0};
+                                                      .print_level = 0};
 
   const NonlinearSolverOptions default_nonlinear_options = {
       .relative_tol = 1.0e-4, .absolute_tol = 1.0e-8, .max_iterations = 10, .print_level = 1};
@@ -145,21 +147,23 @@ void functional_test_shrinking_3D(double expected_norm)
       heat_transfer::default_static_options, default_nonlinear_options, default_linear_options,
       solid_mechanics::default_quasistatic_options, "thermal_solid_functional", mesh_tag);
 
-  double                                       rho       = 1.0;
-  double                                       E         = 1.0;
-  double                                       nu        = 0.0;
-  double                                       c         = 1.0;
-  double                                       alpha     = 1.0e-3;
-  double                                       theta_ref = 2.0;
-  double                                       k         = 1.0;
-  GreenSaintVenantThermoelasticMaterial        material{rho, E, nu, c, alpha, theta_ref, k};
-  GreenSaintVenantThermoelasticMaterial::State initial_state{};
-  auto                                         qdata = thermal_solid_solver.createQuadratureDataBuffer(initial_state);
-  thermal_solid_solver.setMaterial(material, qdata);
+  double rho = 1.0;
+  double E = 1.0;
+  double nu = 0.0;
+  double c = 1.0;
+  double alpha = 1.0e-3;
+  double theta_ref = 2.0;
+  double k = 1.0;
+  thermomechanics::GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
+  thermomechanics::GreenSaintVenantThermoelasticMaterial::State initial_state{};
+  auto qdata = thermal_solid_solver.createQuadratureDataBuffer(initial_state);
+
+  Domain whole_domain = EntireDomain(pmesh);
+  thermal_solid_solver.setMaterial(material, whole_domain, qdata);
 
   // Define the function for the initial temperature
-  double theta_0                   = 1.0;
-  auto   initial_temperature_field = [theta_0](const mfem::Vector&, double) -> double { return theta_0; };
+  double theta_0 = 1.0;
+  auto initial_temperature_field = [theta_0](const mfem::Vector&, double) -> double { return theta_0; };
 
   auto one = [](const mfem::Vector&, double) -> double { return 1.0; };
 
@@ -168,12 +172,8 @@ void functional_test_shrinking_3D(double expected_norm)
   thermal_solid_solver.setTemperatureBCs(temp_bdr, one);
   thermal_solid_solver.setTemperature(initial_temperature_field);
 
-  // Define the function for the displacement boundary condition
-  auto zeroVector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
-
   // Set the initial displacement and boundary condition
-  thermal_solid_solver.setDisplacementBCs(constraint_bdr, zeroVector);
-  thermal_solid_solver.setDisplacement(zeroVector);
+  thermal_solid_solver.setFixedBCs(constraint_bdr);
 
   // Finalize the data structures
   thermal_solid_solver.completeSetup();
@@ -192,7 +192,7 @@ void parameterized()
   MPI_Barrier(MPI_COMM_WORLD);
 
   mfem::DenseMatrix A(3);
-  A       = 0.0;
+  A = 0.0;
   A(0, 0) = 0.523421770118331;
   A(0, 1) = 0.207205376077508;
   A(0, 2) = 0.600042309223256;
@@ -203,17 +203,17 @@ void parameterized()
   A(2, 1) = 0.845137263999642;
   A(2, 2) = 0.594085227873111;
   mfem::Vector b(3);
-  b(0)                             = 0.072393541428884;
-  b(1)                             = 0.020326864245481;
-  b(2)                             = 0.077181916474764;
+  b(0) = 0.072393541428884;
+  b(1) = 0.020326864245481;
+  b(2) = 0.077181916474764;
   auto exact_displacement_function = [&A, &b](const mfem::Vector& X, mfem::Vector& u) {
     A.Mult(X, u);
     u += b;
   };
 
-  constexpr int dim                 = 3;
-  int           serial_refinement   = 0;
-  int           parallel_refinement = 0;
+  constexpr int dim = 3;
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
 
   // Create DataStore
   axom::sidre::DataStore datastore;
@@ -239,16 +239,16 @@ void parameterized()
       solid_mechanics::default_linear_options, solid_mechanics::default_quasistatic_options, "thermal_solid_functional",
       mesh_tag);
 
-  double rho       = 1.0;
-  double E         = 1.0;
-  double nu        = 0.0;
-  double c         = 1.0;
-  double alpha0    = 0.0;  // 1.0e-3;
+  double rho = 1.0;
+  double E = 1.0;
+  double nu = 0.0;
+  double c = 1.0;
+  double alpha0 = 0.0;  // 1.0e-3;
   double theta_ref = 2.0;
-  double k         = 1.0;
+  double k = 1.0;
 
-  ParameterizedGreenSaintVenantThermoelasticMaterial        material{rho, E, nu, c, alpha0, theta_ref, k};
-  ParameterizedGreenSaintVenantThermoelasticMaterial::State initial_state{};
+  thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha0, theta_ref, k};
+  thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterial::State initial_state{};
   auto qdata = thermal_solid_solver.createQuadratureDataBuffer(initial_state);
   thermal_solid_solver.setMaterial(material, qdata);
 
@@ -265,7 +265,7 @@ void parameterized()
 
   // Define a boundary attribute set
   std::set<int> constraint_bdr = {1, 2, 3, 4, 5, 6};
-  std::set<int> temp_bdr       = {1, 2, 3, 4, 5, 6};
+  std::set<int> temp_bdr = {1, 2, 3, 4, 5, 6};
 
   // Set a constant initial temperature, at the thermal expansion reference temperature value.
   auto initial_temperature_field = [theta_ref](const mfem::Vector&, double) -> double { return theta_ref; };
@@ -333,8 +333,8 @@ TEST(Thermomechanics, thermalContraction)
   constexpr int p = 2;
   // this is the small strain solution, which works with a loose enought tolerance
   // TODO work out the finite deformation solution
-  double alpha       = 1e-3;
-  double L           = 8;
+  double alpha = 1e-3;
+  double L = 8;
   double delta_theta = 1.0;
   serac::functional_test_shrinking_3D<p>(std::sqrt(L * L * L / 3.0) * alpha * delta_theta);
 }
@@ -353,12 +353,6 @@ TEST(Thermomechanics, parameterized)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -15,18 +15,9 @@
 #include "serac/physics/state/finite_element_dual.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
-
-template <int dim>
-tensor<double, dim> average(std::vector<tensor<double, dim> >& positions)
-{
-  tensor<double, dim> total{};
-  for (auto x : positions) {
-    total += x;
-  }
-  return total / double(positions.size());
-}
 
 TEST(FiniteElementVector, SetScalarFieldOver2DDomain)
 {
@@ -67,7 +58,7 @@ TEST(FiniteElementVector, SetScalarFieldOver2DDomain)
 
 TEST(FiniteElementVector, SetVectorFieldOver2DDomain)
 {
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -98,9 +89,9 @@ TEST(FiniteElementVector, SetVectorFieldOver2DDomain)
   u = 0.0;
   u.project(func, essential_boundary);
 
-  auto vdim  = u.space().GetVDim();
+  auto vdim = u.space().GetVDim();
   auto ndofs = u.space().GetTrueVSize() / vdim;
-  auto dof   = [ndofs, vdim](auto node, auto component) {
+  auto dof = [ndofs, vdim](auto node, auto component) {
     return mfem::Ordering::Map<serac::ordering>(ndofs, vdim, node, component);
   };
 
@@ -124,12 +115,6 @@ TEST(FiniteElementVector, SetVectorFieldOver2DDomain)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

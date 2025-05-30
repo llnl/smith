@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -7,6 +7,7 @@
 set(infrastructure_test_depends serac_physics serac_mesh gtest)
 
 set(infrastructure_test_sources
+    debug_print.cpp
     error_handling.cpp
     input.cpp
     profiling.cpp)

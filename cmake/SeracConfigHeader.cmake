@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -67,10 +67,10 @@ serac_convert_to_native_escaped_file_path(${CMAKE_BINARY_DIR}   SERAC_BINARY_DIR
 #------------------------------------------------------------------------------
 serac_configure_file(
     ${PROJECT_SOURCE_DIR}/src/serac/serac_config.hpp.in
-    ${CMAKE_BINARY_DIR}/include/serac/serac_config.hpp
+    ${PROJECT_BINARY_DIR}/include/serac/serac_config.hpp
 )
 
-install(FILES ${CMAKE_BINARY_DIR}/include/serac/serac_config.hpp DESTINATION include/serac)
+install(FILES ${PROJECT_BINARY_DIR}/include/serac/serac_config.hpp DESTINATION include/serac)
 
 #------------------------------------------------------------------------------
 # Generate serac-config.cmake for importing serac into other CMake packages

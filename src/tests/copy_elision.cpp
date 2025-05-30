@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -8,12 +8,12 @@
 #include "mfem.hpp"
 
 class ArrayCtr {
-private:
+ private:
   mfem::Array<double> array_;
-  static std::size_t  copy_;
-  static std::size_t  default_;
+  static std::size_t copy_;
+  static std::size_t default_;
 
-public:
+ public:
   ArrayCtr() { default_++; }
   ArrayCtr(const ArrayCtr& other) : array_(other.array_) { copy_++; }
 
@@ -23,13 +23,13 @@ public:
   void Append(double elem) { array_.Append(elem); }
 };
 
-std::size_t ArrayCtr::copy_    = 0;
+std::size_t ArrayCtr::copy_ = 0;
 std::size_t ArrayCtr::default_ = 0;
 
 ArrayCtr doubleArrayMaker()
 {
   constexpr int size = 10;
-  ArrayCtr      result;
+  ArrayCtr result;
   // Just a random loop - if nothing was done to the array before returning,
   // the compiler might be able to do an unnamed returned value optimimization
   for (auto i = 0; i < size; i++) {

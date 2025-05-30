@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -52,7 +52,7 @@ struct tensor<T, m, n...> {
     return data[i](jklm...);
   }
 
-  SERAC_HOST_DEVICE constexpr auto&       operator[](int i) { return data[i]; }
+  SERAC_HOST_DEVICE constexpr auto& operator[](int i) { return data[i]; }
   SERAC_HOST_DEVICE constexpr const auto& operator[](int i) const { return data[i]; }
 
   tensor<T, n...> data[m];
@@ -70,7 +70,7 @@ struct tensor<T, m> {
   {
     return data[i];
   }
-  SERAC_HOST_DEVICE constexpr auto&       operator[](int i) { return data[i]; }
+  SERAC_HOST_DEVICE constexpr auto& operator[](int i) { return data[i]; }
   SERAC_HOST_DEVICE constexpr const auto& operator[](int i) const { return data[i]; }
 
   template <int last_dimension = m, typename = typename std::enable_if<last_dimension == 1>::type>
@@ -705,6 +705,62 @@ SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m>& A, const tensor<T, m>
 SERAC_HOST_DEVICE constexpr auto inner(double A, double B) { return A * B; }
 
 /**
+ * @brief this function contracts over all indices of the two tensor arguments
+ * @tparam S the underlying type of the tensor (lefthand) argument
+ * @tparam m the number of rows
+ * @tparam n the number of columns
+ */
+template <typename S, int m, int n>
+SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m, n>&, zero)
+{
+  return zero{};
+}
+
+/**
+ * @overload
+ * @note for first order tensors (vectors)
+ */
+template <typename S, int m>
+SERAC_HOST_DEVICE constexpr auto inner(const tensor<S, m>&, zero)
+{
+  return zero{};
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+SERAC_HOST_DEVICE constexpr auto inner(double, zero) { return zero{}; }
+
+/**
+ * @brief this function contracts over all indices of the two tensor arguments
+ * @tparam T the underlying type of the tensor (righthand) argument
+ * @tparam m the number of rows
+ * @tparam n the number of columns
+ */
+template <typename T, int m, int n>
+SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m, n>&)
+{
+  return zero{};
+}
+
+/**
+ * @overload
+ * @note for first order tensors (vectors)
+ */
+template <typename T, int m>
+SERAC_HOST_DEVICE constexpr auto inner(zero, const tensor<T, m>&)
+{
+  return zero{};
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+SERAC_HOST_DEVICE constexpr auto inner(zero, double) { return zero{}; }
+
+/**
  * @brief this function contracts over the "middle" index of the two tensor arguments
  * @tparam S the underlying type of the tensor (lefthand) argument
  * @tparam T the underlying type of the tensor (righthand) argument
@@ -1148,7 +1204,7 @@ template <typename T, int n>
 SERAC_HOST_DEVICE constexpr auto dev(const tensor<T, n, n>& A)
 {
   auto devA = A;
-  auto trA  = tr(A);
+  auto trA = tr(A);
   for (int i = 0; i < n; i++) {
     devA[i][i] -= trA / n;
   }
@@ -1359,9 +1415,9 @@ SERAC_HOST_DEVICE auto contract(const tensor<S, m, n...>& A, const tensor<T, p, 
 
   // first, we have to figure out the dimensions of the output tensor
   constexpr int new_dim = (i2 == 0) ? q : p;
-  constexpr int d1      = (i1 == 0) ? new_dim : Adims[0];
-  constexpr int d2      = (i1 == 1) ? new_dim : Adims[1];
-  constexpr int d3      = sizeof...(n) == 1 ? 0 : ((i1 == 2) ? new_dim : Adims[2]);
+  constexpr int d1 = (i1 == 0) ? new_dim : Adims[0];
+  constexpr int d2 = (i1 == 1) ? new_dim : Adims[1];
+  constexpr int d3 = sizeof...(n) == 1 ? 0 : ((i1 == 2) ? new_dim : Adims[2]);
 
   // the type of the output tensor is easier to figure out
   using U = decltype(S{} * T{});
@@ -1493,7 +1549,7 @@ inline SERAC_HOST_DEVICE bool is_symmetric_and_positive_definite(tensor<double, 
  */
 template <typename T, int n>
 struct LuFactorization {
-  tensor<int, n>  P;  ///< Row permutation indices due to partial pivoting
+  tensor<int, n> P;   ///< Row permutation indices due to partial pivoting
   tensor<T, n, n> L;  ///< Lower triangular factor. Has ones on diagonal.
   tensor<T, n, n> U;  ///< Upper triangular factor
 };

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -14,6 +14,7 @@
 #pragma once
 
 #include <string>
+#include "mpi.h"
 
 namespace serac {
 
@@ -55,5 +56,12 @@ std::string version(bool add_SHA = true);
  * @return string value of the the current compiler name and version
  */
 std::string compiler();
+
+/**
+ * @brief Get MPI Info
+ *
+ * @return std::pair<int, int> Pair containing the number of MPI processes and ranks
+ */
+std::pair<int, int> getMPIInfo(MPI_Comm comm = MPI_COMM_WORLD);
 
 }  // namespace serac

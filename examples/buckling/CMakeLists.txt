@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -10,4 +10,12 @@ if(TRIBOL_FOUND AND PETSC_FOUND)
                         OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                         DEPENDS_ON  serac_physics serac_mesh
                         )
+
+    install(
+        FILES
+            cylinder.cpp
+        DESTINATION
+            examples/serac/buckling
+    )
+
 endif()

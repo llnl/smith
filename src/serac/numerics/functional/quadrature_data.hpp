@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -55,14 +55,14 @@ namespace axom {
 /// @cond
 template <>
 class Array<serac::Nothing, 2, MemorySpace::Dynamic> {
-public:
+ public:
   Array() {}
   Array(uint32_t, uint32_t) {}
 };
 
 template <>
 class ArrayView<serac::Nothing, 2, MemorySpace::Dynamic> {
-public:
+ public:
   ArrayView(Array<serac::Nothing, 2, MemorySpace::Dynamic> /* unused */) {}
 
   /// dummy accessor to satisfy interface requirements
@@ -76,14 +76,14 @@ public:
 
 template <>
 class Array<serac::Empty, 2, MemorySpace::Dynamic> {
-public:
+ public:
   Array() {}
   Array(uint32_t, uint32_t) {}
 };
 
 template <>
 class ArrayView<serac::Empty, 2, MemorySpace::Dynamic> {
-public:
+ public:
   ArrayView(Array<serac::Empty, 2, MemorySpace::Dynamic> /* unused */) {}
 
   /// dummy accessor to satisfy interface requirements
@@ -99,6 +99,18 @@ public:
 }  // namespace axom
 
 namespace serac {
+namespace detail {
+
+// Note: The indexes between these two arrays must match the type in qdata_geometries to the name in
+// qdata_geometry_names
+/// @brief a list of mfem::Geometry types supported by QuadratureData
+constexpr std::array<mfem::Geometry::Type, 5> qdata_geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE,
+                                                                  mfem::Geometry::SQUARE, mfem::Geometry::TETRAHEDRON,
+                                                                  mfem::Geometry::CUBE};
+/// @brief a list of strings associated with the corresponding mfem::Geometry type supported by QuadratureData
+constexpr std::array<std::string_view, 5> qdata_geometry_names = {"Segment", "Triangle", "Square", "Tetrahedron",
+                                                                  "Cube"};
+}  // namespace detail
 
 /**
  * @brief A class for storing and access user-defined types at quadrature points
@@ -122,10 +134,7 @@ struct QuadratureData {
    */
   QuadratureData(geom_array_t elements, geom_array_t qpts_per_element, T value = T{})
   {
-    constexpr std::array geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE, mfem::Geometry::SQUARE,
-                                       mfem::Geometry::TETRAHEDRON, mfem::Geometry::CUBE};
-
-    for (auto geom : geometries) {
+    for (auto geom : detail::qdata_geometries) {
       if (elements[uint32_t(geom)] > 0) {
         data[geom] = axom::Array<T, 2>(elements[uint32_t(geom)], qpts_per_element[uint32_t(geom)]);
         data[geom].fill(value);
@@ -140,7 +149,7 @@ struct QuadratureData {
   axom::ArrayView<T, 2> operator[](mfem::Geometry::Type geom) { return axom::ArrayView<T, 2>(data.at(geom)); }
 
   /// @brief a 3D array indexed by (which geometry, which element, which quadrature point)
-  std::map<mfem::Geometry::Type, axom::Array<T, 2> > data;
+  std::map<mfem::Geometry::Type, axom::Array<T, 2>> data;
 };
 
 /// @cond
@@ -168,7 +177,7 @@ struct QuadratureData<Empty> {
 /// @endcond
 
 /// these values exist to serve as default arguments for materials without material state
-extern std::shared_ptr<QuadratureData<Nothing> > NoQData;
-extern std::shared_ptr<QuadratureData<Empty> >   EmptyQData;
+extern std::shared_ptr<QuadratureData<Nothing>> NoQData;
+extern std::shared_ptr<QuadratureData<Empty>> EmptyQData;
 
 }  // namespace serac

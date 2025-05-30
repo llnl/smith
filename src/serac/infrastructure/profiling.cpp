@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -40,7 +40,7 @@ void initialize([[maybe_unused]] MPI_Comm comm, [[maybe_unused]] std::string opt
 
 #ifdef SERAC_USE_CALIPER
   // Initialize Caliper
-  mgr               = cali::ConfigManager();
+  mgr = cali::ConfigManager();
   auto check_result = mgr->check(options.c_str());
 
   if (check_result.empty()) {

@@ -1,10 +1,10 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "axom/slic/core/SimpleLogger.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
@@ -13,7 +13,7 @@
 class SlicErrorException : public std::exception {};
 
 class InputTest : public ::testing::Test {
-protected:
+ protected:
   static void SetUpTestSuite()
   {
     axom::slic::setAbortFunction([]() { throw SlicErrorException{}; });
@@ -30,10 +30,10 @@ protected:
   }
 
   // Initialization cannot occur during construction, has to be initialized later
-  axom::inlet::Reader*              reader_ = nullptr;
+  axom::inlet::Reader* reader_ = nullptr;
   std::optional<axom::inlet::Inlet> inlet_;
 
-private:
+ private:
   axom::sidre::DataStore datastore_;
 };
 
@@ -81,11 +81,11 @@ TEST_F(InputTest, CoefBuildScalar)
   EXPECT_EQ(coef_opts.component, 1);
   EXPECT_FALSE(coef_opts.isVector());
   mfem::Vector test_vec(3);
-  test_vec(0)                 = 1;
-  test_vec(1)                 = 2;
-  test_vec(2)                 = 3;
-  const auto& func            = coef_opts.scalar_function;
-  auto        expected_result = test_vec(1) * 2 + test_vec(2);
+  test_vec(0) = 1;
+  test_vec(1) = 2;
+  test_vec(2) = 3;
+  const auto& func = coef_opts.scalar_function;
+  auto expected_result = test_vec(1) * 2 + test_vec(2);
   EXPECT_DOUBLE_EQ(func(test_vec, 0.0), expected_result);
   EXPECT_NO_THROW(coef_opts.constructScalar());
 }
@@ -124,12 +124,12 @@ TEST_F(InputTest, CoefBuildScalarTimedep)
   EXPECT_EQ(coef_opts.component, 1);
   EXPECT_FALSE(coef_opts.isVector());
   mfem::Vector test_vec(3);
-  test_vec(0)                  = 1;
-  test_vec(1)                  = 2;
-  test_vec(2)                  = 3;
-  const auto&  func            = coef_opts.scalar_function;
-  const double time            = 6.7;
-  auto         expected_result = (test_vec(1) * 2 + test_vec(2)) * time;
+  test_vec(0) = 1;
+  test_vec(1) = 2;
+  test_vec(2) = 3;
+  const auto& func = coef_opts.scalar_function;
+  const double time = 6.7;
+  auto expected_result = (test_vec(1) * 2 + test_vec(2)) * time;
   EXPECT_DOUBLE_EQ(func(test_vec, time), expected_result);
   EXPECT_NO_THROW(coef_opts.constructScalar());
 }
@@ -151,10 +151,10 @@ TEST_F(InputTest, CoefBuildVector)
   auto coef_opts = coef_table.get<input::CoefficientInputOptions>();
   EXPECT_TRUE(coef_opts.isVector());
   mfem::Vector test_vec(3);
-  test_vec(0)       = 1;
-  test_vec(1)       = 2;
-  test_vec(2)       = 3;
-  const auto&  func = coef_opts.vector_function;
+  test_vec(0) = 1;
+  test_vec(1) = 2;
+  test_vec(2) = 3;
+  const auto& func = coef_opts.vector_function;
   mfem::Vector expected_result(3);
   expected_result(0) = test_vec(1) * 2;
   expected_result(1) = test_vec(2);
@@ -216,10 +216,10 @@ TEST_F(InputTest, CoefBuildVectorTimedep)
   auto coef_opts = coef_table.get<input::CoefficientInputOptions>();
   EXPECT_TRUE(coef_opts.isVector());
   mfem::Vector test_vec(3);
-  test_vec(0)       = 1;
-  test_vec(1)       = 2;
-  test_vec(2)       = 3;
-  const auto&  func = coef_opts.vector_function;
+  test_vec(0) = 1;
+  test_vec(1) = 2;
+  test_vec(2) = 3;
+  const auto& func = coef_opts.vector_function;
   const double time = 6.7;
   mfem::Vector expected_result(3);
   expected_result(0) = test_vec(1) * 2;
@@ -247,17 +247,7 @@ TEST_F(InputTest, CoefBuildScalarFromVec)
 
 int main(int argc, char* argv[])
 {
-  int result = 0;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

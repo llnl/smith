@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -16,7 +16,7 @@
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-#include "serac/infrastructure/profiling.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 
 using namespace serac;
@@ -45,13 +45,15 @@ TEST(BoundaryIntegralQOI, AttrBug)
   pmesh->EnsureNodes();
   pmesh->ExchangeFaceNbrData();
 
-  using shapeFES              = serac::H1<ORDER, 2>;
+  using shapeFES = serac::H1<ORDER, 2>;
   auto [shape_fes, shape_fec] = serac::generateParFiniteElementSpace<shapeFES>(pmesh.get());
 
+  Domain whole_boundary = EntireBoundary(*pmesh);
+
   serac::ShapeAwareFunctional<shapeFES, double()> totalSurfArea(shape_fes.get(), {});
-  totalSurfArea.AddBoundaryIntegral(serac::Dimension<2 - 1>{}, serac::DependsOn<>{}, IdentityFunctor{}, *pmesh);
+  totalSurfArea.AddBoundaryIntegral(serac::Dimension<2 - 1>{}, serac::DependsOn<>{}, IdentityFunctor{}, whole_boundary);
   serac::FiniteElementState shape(*shape_fes);
-  double                    totalSurfaceArea = totalSurfArea(0.0, shape);
+  double totalSurfaceArea = totalSurfArea(0.0, shape);
 
   EXPECT_NEAR(totalSurfaceArea, 4.0, 1.0e-14);
 
@@ -66,16 +68,6 @@ TEST(BoundaryIntegralQOI, AttrBug)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -15,35 +15,37 @@ serac_configure_file(
 set(infrastructure_headers
     about.hpp
     accelerator.hpp
+    application_manager.hpp
     cli.hpp
     debug_print.hpp
     ${PROJECT_BINARY_DIR}/include/serac/infrastructure/git_sha.hpp
-    initialize.hpp
     input.hpp
     logger.hpp
+    memory.hpp
     mpi_fstream.hpp
     output.hpp
     profiling.hpp
-    terminator.hpp
     variant.hpp
     )
 
 set(infrastructure_sources
     about.cpp
     accelerator.cpp
+    application_manager.cpp
     cli.cpp
-    initialize.cpp
     input.cpp
     logger.cpp
     mpi_fstream.cpp
     output.cpp
     profiling.cpp
-    terminator.cpp
     )
 
-set(infrastructure_depends axom::inlet axom::fmt axom::cli11 mfem ${serac_device_depends})
+set(infrastructure_depends axom::inlet axom::fmt axom::cli11 camp mfem ${serac_device_depends})
 blt_list_append(TO infrastructure_depends ELEMENTS tribol IF TRIBOL_FOUND)
 blt_list_append(TO infrastructure_depends ELEMENTS caliper adiak::adiak IF SERAC_ENABLE_PROFILING)
+# TODO (EBC): mfem's openmp dependency isn't being picked up on ubuntu + clang 16.0.6.  
+#             This adds it in manually for now, but should be investigated more fully.
+blt_list_append(TO infrastructure_depends ELEMENTS blt::openmp IF SERAC_ENABLE_OPENMP)
 list(APPEND infrastructure_depends blt::mpi)
 
 blt_add_library(
@@ -56,9 +58,18 @@ blt_add_library(
 # Set file back to C++ due to nvcc compiler error
 set_source_files_properties(input.cpp PROPERTIES LANGUAGE CXX)
 
+serac_write_unified_header(
+    NAME    infrastructure
+    HEADERS ${infrastructure_headers}
+    EXCLUDE accelerator.hpp
+            debug_print.hpp
+            mpi_fstream.hpp
+            variant.hpp
+    )
+
 target_include_directories(serac_infrastructure PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
-    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+    $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
     $<INSTALL_INTERFACE:include>
     )
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -6,8 +6,7 @@
 
 #include <gtest/gtest.h>
 #include "mfem.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "petsc.h"
 
 #ifndef MFEM_USE_SLEPC
@@ -16,14 +15,14 @@
 
 TEST(PETSC_AND_SLEPC, CanComputeSmallestEigenvalueAndEigenvectors)
 {
-  int      world_rank;
+  int world_rank;
   MPI_Comm comm;
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
   MPI_Comm_split(MPI_COMM_WORLD, (0 != world_rank) ? MPI_UNDEFINED : 0, 0, &comm);
   if (world_rank != 0) return;
 
-  Mat          A; /* problem matrix */
-  int          N = 6;
+  Mat A; /* problem matrix */
+  int N = 6;
   unsigned int M = 3;
   MatCreate(comm, &A);
   MatSetSizes(A, PETSC_DECIDE, PETSC_DECIDE, N, N);
@@ -62,10 +61,6 @@ TEST(PETSC_AND_SLEPC, CanComputeSmallestEigenvalueAndEigenvectors)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  serac::initialize(argc, argv);
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully();
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -20,12 +20,13 @@ import platform
 import shutil
 import socket
 
-_host_configs_map = {"rzgenie"   : "rzgenie-toss_3_x86_64_ib-clang@10.0.0.cmake",
-                     "rzalastor" : "rzgenie-toss_3_x86_64_ib-clang@10.0.0.cmake",
-                     "rztopaz"   : "rzgenie-toss_3_x86_64_ib-clang@10.0.0.cmake",
-                     "rzansel"   : "rzansel-blueos_3_ppc64le_ib_p9-clang@10.0.1.cmake",
-                     "ruby"      : "ruby_toss_3_x86_64_ib-clang@10.0.0.cmake",
-                     "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@10.0.1.cmake"}
+_host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmake",
+                     "rzwhippet" : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmake",
+                     "rzvernal"  : "rzvernal-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
+                     "rzansel"   : "rzansel-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake",
+                     "ruby"      : "ruby-toss_4_x86_64_ib-clang@14.0.6.cmake",
+                     "tioga"     : "tioga-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
+                     "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake"}
 
 def get_machine_name():
     return socket.gethostname().rstrip('1234567890')
@@ -73,8 +74,7 @@ def parse_arguments():
                         "--buildtype",
                         type=str,
                         choices=["Release", "Debug", "RelWithDebInfo", "MinSizeRel"],
-                        default="Debug",
-                        help="build type.")
+                        help="build type. defaults to Debug")
 
     parser.add_argument("-e",
                         "--eclipse",
@@ -105,8 +105,6 @@ def parse_arguments():
                         action='store_true',
                         help="use ninja generator to build serac instead of make")
 
-
-    
     args, unknown_args = parser.parse_known_args()
     if unknown_args:
         print("[config-build]: Passing the following arguments directly to cmake... %s" % unknown_args)
@@ -230,6 +228,7 @@ def create_cmake_command_line(args, unknown_args, buildpath, installpath, hostco
 
     # Add build type (opt or debug)
     cmakeline += " -DCMAKE_BUILD_TYPE=" + args.buildtype
+
     # Set install dir
     cmakeline += " -DCMAKE_INSTALL_PREFIX=%s" % installpath
 
@@ -277,7 +276,7 @@ def run_cmake(buildpath, cmakeline):
 # Main
 ############################
 def main():
-    repodir = os.path.abspath(os.path.dirname(__file__))     
+    repodir = os.path.abspath(os.path.dirname(__file__))
     assert os.path.abspath(os.getcwd())==repodir, "config-build must be run from %s" % repodir
 
     args, unknown_args = parse_arguments()
@@ -294,6 +293,15 @@ def main():
           return True
        else:
           return False
+
+    # CMake build type is Debug by default, but if CMAKE_BUILD_TYPE is an unknown argument (i.e. a CMake argument), then
+    # use that option instead.
+    if args.buildtype == None:
+        args.buildtype = "Debug"
+        for unknown_arg in unknown_args:
+            if "-DCMAKE_BUILD_TYPE" in unknown_arg:
+                args.buildtype = unknown_arg.split("=")[1]
+                break
 
     basehostconfigpath = find_host_config(args, repodir)
     platform_info = get_platform_info(basehostconfigpath)

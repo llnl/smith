@@ -1,6 +1,13 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #include <gtest/gtest.h>
 
 #include "serac/numerics/functional/domain.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -21,21 +28,11 @@ mfem::Mesh import_mesh(std::string meshfile)
   return mesh;
 }
 
-template <int dim>
-tensor<double, dim> average(std::vector<tensor<double, dim> >& positions)
-{
-  tensor<double, dim> total{};
-  for (auto x : positions) {
-    total += x;
-  }
-  return total / double(positions.size());
-}
-
 TEST(domain, of_edges)
 {
   {
-    auto   mesh = import_mesh("onehex.mesh");
-    Domain d0   = Domain::ofEdges(mesh, std::function([](std::vector<vec3> x) {
+    auto mesh = import_mesh("onehex.mesh");
+    Domain d0 = Domain::ofEdges(mesh, std::function([](std::vector<vec3> x) {
                                   return (0.5 * (x[0][0] + x[1][0])) < 0.25;  // x coordinate of edge midpoint
                                 }));
     EXPECT_EQ(d0.edge_ids_.size(), 4);
@@ -61,8 +58,8 @@ TEST(domain, of_edges)
   }
 
   {
-    auto   mesh = import_mesh("onetet.mesh");
-    Domain d0   = Domain::ofEdges(mesh, std::function([](std::vector<vec3> x) {
+    auto mesh = import_mesh("onetet.mesh");
+    Domain d0 = Domain::ofEdges(mesh, std::function([](std::vector<vec3> x) {
                                   return (0.5 * (x[0][0] + x[1][0])) < 0.25;  // x coordinate of edge midpoint
                                 }));
     EXPECT_EQ(d0.edge_ids_.size(), 3);
@@ -88,8 +85,8 @@ TEST(domain, of_edges)
   }
 
   {
-    constexpr int dim  = 2;
-    auto          mesh = import_mesh("beam-quad.mesh");
+    constexpr int dim = 2;
+    auto mesh = import_mesh("beam-quad.mesh");
     mesh.FinalizeQuadMesh(true);
     Domain d0 = Domain::ofEdges(mesh, std::function([](std::vector<vec2> x, int /* bdr_attr */) {
                                   return (0.5 * (x[0][0] + x[1][0])) < 0.25;  // x coordinate of edge midpoint
@@ -113,6 +110,7 @@ TEST(domain, of_edges)
 
     // check that by_attr compiles
     Domain d4 = Domain::ofEdges(mesh, by_attr<dim>(3));
+    EXPECT_EQ(d4.mfem_edge_ids_.size(), 16);
 
     Domain d5 = Domain::ofBoundaryElements(mesh, [](std::vector<vec2>, int) { return true; });
     EXPECT_EQ(d5.edge_ids_.size(), 18);  // 1x8 row of quads has 18 boundary edges
@@ -122,9 +120,9 @@ TEST(domain, of_edges)
 TEST(domain, of_faces)
 {
   {
-    constexpr int dim  = 3;
-    auto          mesh = import_mesh("onehex.mesh");
-    Domain        d0   = Domain::ofFaces(mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    constexpr int dim = 3;
+    auto mesh = import_mesh("onehex.mesh");
+    Domain d0 = Domain::ofFaces(mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
                                   return average(vertices)[0] < 0.25;  // x coordinate of face center
                                 }));
     EXPECT_EQ(d0.quad_ids_.size(), 1);
@@ -152,9 +150,9 @@ TEST(domain, of_faces)
   }
 
   {
-    constexpr int dim  = 3;
-    auto          mesh = import_mesh("onetet.mesh");
-    Domain        d0   = Domain::ofFaces(mesh, std::function([](std::vector<vec3> vertices, int /* bdr_attr */) {
+    constexpr int dim = 3;
+    auto mesh = import_mesh("onetet.mesh");
+    Domain d0 = Domain::ofFaces(mesh, std::function([](std::vector<vec3> vertices, int /* bdr_attr */) {
                                   // accept face if it contains a vertex whose x coordinate is less than 0.1
                                   for (auto v : vertices) {
                                     if (v[0] < 0.1) return true;
@@ -185,9 +183,9 @@ TEST(domain, of_faces)
   }
 
   {
-    constexpr int dim  = 2;
-    auto          mesh = import_mesh("beam-quad.mesh");
-    Domain        d0   = Domain::ofFaces(mesh, std::function([](std::vector<vec2> vertices, int /* attr */) {
+    constexpr int dim = 2;
+    auto mesh = import_mesh("beam-quad.mesh");
+    Domain d0 = Domain::ofFaces(mesh, std::function([](std::vector<vec2> vertices, int /* attr */) {
                                   return average(vertices)[0] < 2.25;  // x coordinate of face center
                                 }));
     EXPECT_EQ(d0.quad_ids_.size(), 2);
@@ -215,9 +213,9 @@ TEST(domain, of_faces)
 TEST(domain, of_elements)
 {
   {
-    constexpr int dim  = 3;
-    auto          mesh = import_mesh("patch3D_tets_and_hexes.mesh");
-    Domain        d0   = Domain::ofElements(mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    constexpr int dim = 3;
+    auto mesh = import_mesh("patch3D_tets_and_hexes.mesh");
+    Domain d0 = Domain::ofElements(mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
                                      return average(vertices)[0] < 0.7;  // x coordinate of face center
                                    }));
 
@@ -247,10 +245,10 @@ TEST(domain, of_elements)
   }
 
   {
-    constexpr int dim  = 2;
-    auto          mesh = import_mesh("patch2D_tris_and_quads.mesh");
-    Domain        d0   = Domain::ofElements(
-                 mesh, std::function([](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; }));
+    constexpr int dim = 2;
+    auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
+    Domain d0 = Domain::ofElements(
+        mesh, std::function([](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; }));
     EXPECT_EQ(d0.tri_ids_.size(), 1);
     EXPECT_EQ(d0.quad_ids_.size(), 1);
     EXPECT_EQ(d0.dim_, 2);
@@ -278,9 +276,9 @@ TEST(domain, of_elements)
 
 TEST(domain, entireDomain2d)
 {
-  constexpr int dim  = 2;
-  constexpr int p    = 1;
-  auto          mesh = import_mesh("patch2D_tris_and_quads.mesh");
+  constexpr int dim = 2;
+  constexpr int p = 1;
+  auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
 
   Domain d0 = EntireDomain(mesh);
 
@@ -297,9 +295,9 @@ TEST(domain, entireDomain2d)
 
 TEST(domain, entireDomain3d)
 {
-  constexpr int dim  = 3;
-  constexpr int p    = 1;
-  auto          mesh = import_mesh("patch3D_tets_and_hexes.mesh");
+  constexpr int dim = 3;
+  constexpr int p = 1;
+  auto mesh = import_mesh("patch3D_tets_and_hexes.mesh");
 
   Domain d0 = EntireDomain(mesh);
 
@@ -316,9 +314,9 @@ TEST(domain, entireDomain3d)
 
 TEST(domain, of2dElementsFindsDofs)
 {
-  constexpr int dim  = 2;
-  constexpr int p    = 2;
-  auto          mesh = import_mesh("patch2D_tris_and_quads.mesh");
+  constexpr int dim = 2;
+  constexpr int p = 2;
+  auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
 
   auto fec = mfem::H1_FECollection(p, dim);
   auto fes = mfem::FiniteElementSpace(&mesh, &fec);
@@ -337,7 +335,7 @@ TEST(domain, of2dElementsFindsDofs)
   ///////////////////////////////////////
 
   auto find_element_4 = [](std::vector<vec2> vertices, int) {
-    auto              centroid = average(vertices);
+    auto centroid = average(vertices);
     tensor<double, 2> target{{0.533, 0.424}};
     return norm(centroid - target) < 1e-2;
   };
@@ -359,9 +357,9 @@ TEST(domain, of2dElementsFindsDofs)
 
 TEST(domain, of3dElementsFindsDofs)
 {
-  constexpr int dim  = 3;
-  constexpr int p    = 2;
-  auto          mesh = import_mesh("patch3D_tets_and_hexes.mesh");
+  constexpr int dim = 3;
+  constexpr int p = 2;
+  auto mesh = import_mesh("patch3D_tets_and_hexes.mesh");
 
   auto fec = mfem::H1_FECollection(p, dim);
   auto fes = mfem::FiniteElementSpace(&mesh, &fec);
@@ -404,21 +402,77 @@ TEST(domain, of3dElementsFindsDofs)
   EXPECT_EQ(dof_indices.Size(), 113);
 }
 
+TEST(domain, of2dBoundaryElementsFindsDofs)
+{
+  constexpr int dim = 2;
+  constexpr int p = 2;
+  auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
+
+  auto find_right_boundary = [](std::vector<vec2> vertices, int /* attr */) {
+    return std::all_of(vertices.begin(), vertices.end(), [](vec2 X) { return X[0] > 1.0 - 1e-2; });
+  };
+
+  Domain d0 = Domain::ofBoundaryElements(mesh, find_right_boundary);
+  EXPECT_EQ(d0.edge_ids_.size(), 1);
+
+  auto fec = mfem::H1_FECollection(p, dim);
+  auto fes = mfem::FiniteElementSpace(&mesh, &fec);
+
+  mfem::Array<int> dof_indices = d0.dof_list(&fes);
+
+  EXPECT_EQ(dof_indices.Size(), 3);
+
+  auto find_top_boundary = [](std::vector<vec2> vertices, int /* attr */) {
+    return std::all_of(vertices.begin(), vertices.end(), [](vec2 X) { return X[1] > 1.0 - 1e-2; });
+  };
+
+  Domain d1 = Domain::ofBoundaryElements(mesh, find_top_boundary);
+  EXPECT_EQ(d1.edge_ids_.size(), 1);
+
+  Domain d2 = d0 | d1;
+
+  dof_indices = d2.dof_list(&fes);
+
+  EXPECT_EQ(dof_indices.Size(), 5);
+}
+
+TEST(domain, of3dBoundaryElementsFindsDofs)
+{
+  constexpr int dim = 3;
+  constexpr int p = 2;
+  auto mesh = import_mesh("patch3D_tets.mesh");
+
+  auto find_xmax_boundary = [](std::vector<vec3> vertices, int /* attr */) {
+    return std::all_of(vertices.begin(), vertices.end(), [](vec3 X) { return X[0] > 1.0 - 1e-2; });
+  };
+
+  Domain d0 = Domain::ofBoundaryElements(mesh, find_xmax_boundary);
+  EXPECT_EQ(d0.tri_ids_.size(), 2);
+
+  auto fec = mfem::H1_FECollection(p, dim);
+  auto fes = mfem::FiniteElementSpace(&mesh, &fec);
+
+  mfem::Array<int> dof_indices = d0.dof_list(&fes);
+
+  EXPECT_EQ(dof_indices.Size(), 9);
+
+  auto find_ymax_boundary = [](std::vector<vec3> vertices, int /* attr */) {
+    return std::all_of(vertices.begin(), vertices.end(), [](vec3 X) { return X[1] > 1.0 - 1e-2; });
+  };
+
+  Domain d1 = Domain::ofBoundaryElements(mesh, find_ymax_boundary);
+  EXPECT_EQ(d1.tri_ids_.size(), 2);
+
+  Domain d2 = d0 | d1;
+
+  dof_indices = d2.dof_list(&fes);
+
+  EXPECT_EQ(dof_indices.Size(), 15);
+}
+
 int main(int argc, char* argv[])
 {
-  int num_procs, myid;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

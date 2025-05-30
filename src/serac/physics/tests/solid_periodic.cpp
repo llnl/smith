@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -12,10 +12,12 @@
 
 #include "serac/serac_config.hpp"
 #include "serac/mesh/mesh_utils.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -23,7 +25,7 @@ void periodic_test(mfem::Element::Type element_type)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 0;
+  int serial_refinement = 0;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -31,26 +33,26 @@ void periodic_test(mfem::Element::Type element_type)
   serac::StateManager::initialize(datastore, "solid_periodic_dir");
 
   // Construct the appropriate dimension mesh and give it to the data store
-  int    nElem = 2;
+  int nElem = 2;
   double lx = 3.0e-1, ly = 3.0e-1, lz = 0.25e-1;
-  auto   initial_mesh = mfem::Mesh(mfem::Mesh::MakeCartesian3D(4 * nElem, 4 * nElem, nElem, element_type, lx, ly, lz));
+  auto initial_mesh = mfem::Mesh(mfem::Mesh::MakeCartesian3D(4 * nElem, 4 * nElem, nElem, element_type, lx, ly, lz));
 
   // Create translation vectors defining the periodicity
-  mfem::Vector              x_translation({lx, 0.0, 0.0});
+  mfem::Vector x_translation({lx, 0.0, 0.0});
   std::vector<mfem::Vector> translations = {x_translation};
-  double                    tol          = 1e-6;
+  double tol = 1e-6;
 
   std::vector<int> periodicMap = initial_mesh.CreatePeriodicVertexMapping(translations, tol);
 
   // Create the periodic mesh using the vertex mapping defined by the translation vectors
   auto periodic_mesh = mfem::Mesh::MakePeriodic(initial_mesh, periodicMap);
-  auto mesh          = mesh::refineAndDistribute(std::move(periodic_mesh), serial_refinement, parallel_refinement);
+  auto mesh = mesh::refineAndDistribute(std::move(periodic_mesh), serial_refinement, parallel_refinement);
 
   std::string mesh_tag{"mesh"};
 
   auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 3;
 
   // Construct and initialized the user-defined moduli to be used as a differentiable parameter in
@@ -75,30 +77,24 @@ void periodic_test(mfem::Element::Type element_type)
   solid_solver.setParameter(0, user_defined_bulk_modulus);
   solid_solver.setParameter(1, user_defined_shear_modulus);
 
+  Domain whole_mesh = EntireDomain(pmesh);
+
   solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  solid_solver.setMaterial(DependsOn<0, 1>{}, mat);
+  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, whole_mesh);
 
-  // Boundary conditions:
-  // Prescribe zero displacement at the supported end of the beam
-  std::set<int> support           = {2};
-  auto          zero_displacement = [](const mfem::Vector&, mfem::Vector& u) -> void { u = 0.0; };
-  solid_solver.setDisplacementBCs(support, zero_displacement);
+  // Boundary conditions
+  Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  solid_solver.setFixedBCs(support);
 
-  double iniDispVal       = 5.0e-6;
-  auto   ini_displacement = [iniDispVal](const mfem::Vector&, mfem::Vector& u) -> void { u = iniDispVal; };
-  solid_solver.setDisplacement(ini_displacement);
+  constexpr double iniDispVal = 5.0e-6;
+  auto initial_displacement = [](tensor<double, dim>) { return make_tensor<dim>([](int) { return iniDispVal; }); };
+  solid_solver.setDisplacement(initial_displacement);
 
-  tensor<double, dim> constant_force;
-
-  constant_force[0] = 0.0;
+  tensor<double, dim> constant_force{};
   constant_force[1] = 1.0e-2;
 
-  if (dim == 3) {
-    constant_force[2] = 0.0;
-  }
-
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-  solid_solver.addBodyForce(force, EntireDomain(pmesh));
+  solid_solver.addBodyForce(force, whole_mesh);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -122,12 +118,6 @@ TEST(SolidMechanics, PeriodicHexes) { periodic_test(mfem::Element::HEXAHEDRON); 
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

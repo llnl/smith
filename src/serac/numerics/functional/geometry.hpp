@@ -1,8 +1,12 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #pragma once
 
 #include "mfem.hpp"
-
-#include "serac/numerics/functional/domain.hpp"
 
 namespace serac {
 
@@ -74,23 +78,6 @@ inline std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> geometry_counts(cons
   std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> counts{};
   for (int i = 0; i < mesh.GetNE(); i++) {
     counts[uint64_t(mesh.GetElementGeometry(i))]++;
-  }
-  return counts;
-}
-
-/**
- * @brief count the number of elements of each geometry in a domain
- * @param domain the domain to count
- */
-inline std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> geometry_counts(const Domain& domain)
-{
-  std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> counts{};
-
-  constexpr std::array<mfem::Geometry::Type, 5> geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE,
-                                                              mfem::Geometry::SQUARE, mfem::Geometry::TETRAHEDRON,
-                                                              mfem::Geometry::CUBE};
-  for (auto geom : geometries) {
-    counts[uint32_t(geom)] = uint32_t(domain.get(geom).size());
   }
   return counts;
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -16,7 +16,7 @@
 #include "serac/serac_config.hpp"
 #include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -24,10 +24,10 @@ void shape_test()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement   = 0;
+  int serial_refinement = 0;
   int parallel_refinement = 0;
 
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   // Construct the appropriate dimension mesh and give it to the data store
@@ -46,8 +46,8 @@ void shape_test()
   mfem::Vector shape_displacement;
   mfem::Vector pure_displacement;
 
-  // Define a boundary attribute set
-  std::set<int> ess_bdr = {1};
+  // Define the boundary where essential boundary conditions will be prescribed
+  auto ess_bdr = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
 
   // Use a krylov solver for the Jacobian solve
 
@@ -55,8 +55,8 @@ void shape_test()
 
   // Use tight tolerances as this is a machine precision test
 #ifdef SERAC_USE_PETSC
-  linear_options.linear_solver        = LinearSolver::PetscCG;
-  linear_options.preconditioner       = Preconditioner::Petsc;
+  linear_options.linear_solver = LinearSolver::PetscCG;
+  linear_options.preconditioner = Preconditioner::Petsc;
   linear_options.petsc_preconditioner = PetscPCType::HMG;
 #else
   linear_options.preconditioner = Preconditioner::HypreJacobi;
@@ -66,24 +66,24 @@ void shape_test()
 
   auto nonlinear_options = solid_mechanics::default_nonlinear_options;
 
-  nonlinear_options.absolute_tol   = 8.0e-15;
-  nonlinear_options.relative_tol   = 8.0e-15;
+  nonlinear_options.absolute_tol = 8.0e-15;
+  nonlinear_options.relative_tol = 8.0e-15;
   nonlinear_options.max_iterations = 10;
 
   solid_mechanics::LinearIsotropic mat{1.0, 1.0, 1.0};
 
   double shape_factor = 2.0;
 
-  // Define the function for the initial displacement and boundary condition
-  auto bc = [](const mfem::Vector& x, mfem::Vector& bc_vec) -> void {
-    bc_vec[0] = 0.0;
-    bc_vec[1] = x[0] * 0.1;
+  auto applied_displacement = [](tensor<double, dim> x, double) {
+    tensor<double, dim> u{};
+    u[1] = x[0] * 0.1;
+    return u;
   };
 
-  // Define the function for the initial displacement and boundary condition
-  auto bc_pure = [shape_factor](const mfem::Vector& x, mfem::Vector& bc_vec) -> void {
-    bc_vec[0] = 0.0;
-    bc_vec[1] = (x[0] * 0.1) / (shape_factor + 1.0);
+  auto applied_displacement_pure = [shape_factor](tensor<double, dim> x, double) {
+    tensor<double, dim> u{};
+    u[1] = (x[0] * 0.1) / (shape_factor + 1.0);
+    return u;
   };
 
   // Construct and apply a uniform body load
@@ -115,14 +115,18 @@ void shape_test()
                                         "solid_functional", mesh_tag);
 
     // Set the initial displacement and boundary condition
-    solid_solver.setDisplacementBCs(ess_bdr, bc);
-    solid_solver.setDisplacement(bc);
+    solid_solver.setDisplacementBCs(applied_displacement, ess_bdr);
+
+    // For consistency of the problem, this value should match the one in the BCs
+    solid_solver.setDisplacement(
+        [applied_displacement](tensor<double, dim> X) { return applied_displacement(X, 0.0); });
 
     solid_solver.setShapeDisplacement(user_defined_shape_displacement);
 
-    solid_solver.setMaterial(mat);
+    Domain whole_mesh = EntireDomain(StateManager::mesh(mesh_tag));
 
-    solid_solver.addBodyForce(force, EntireDomain(StateManager::mesh(mesh_tag)));
+    solid_solver.setMaterial(mat, whole_mesh);
+    solid_solver.addBodyForce(force, whole_mesh);
 
     // Finalize the data structures
     solid_solver.completeSetup();
@@ -164,12 +168,14 @@ void shape_test()
     visit_dc.Save();
 
     // Set the initial displacement and boundary condition
-    solid_solver_no_shape.setDisplacementBCs(ess_bdr, bc_pure);
-    solid_solver_no_shape.setDisplacement(bc_pure);
+    solid_solver_no_shape.setDisplacementBCs(applied_displacement_pure, ess_bdr);
+    solid_solver_no_shape.setDisplacement(
+        [applied_displacement_pure](tensor<double, dim> X) { return applied_displacement_pure(X, 0.0); });
 
-    solid_solver_no_shape.setMaterial(mat);
+    Domain whole_mesh = EntireDomain(StateManager::mesh(new_mesh_tag));
 
-    solid_solver_no_shape.addBodyForce(force, EntireDomain(StateManager::mesh(new_mesh_tag)));
+    solid_solver_no_shape.setMaterial(mat, whole_mesh);
+    solid_solver_no_shape.addBodyForce(force, whole_mesh);
 
     // Finalize the data structures
     solid_solver_no_shape.completeSetup();
@@ -182,7 +188,7 @@ void shape_test()
     visit_dc.Save();
   }
 
-  double error          = pure_displacement.DistanceTo(shape_displacement.GetData());
+  double error = pure_displacement.DistanceTo(shape_displacement.GetData());
   double relative_error = error / pure_displacement.Norml2();
   EXPECT_LT(relative_error, 4.5e-12);
 }
@@ -197,10 +203,6 @@ TEST(SolidMechanics, MoveShape) { shape_test(); }
 int main(int argc, char* argv[])
 {
   testing::InitGoogleTest(&argc, argv);
-
-  serac::initialize(argc, argv);
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully(result);
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

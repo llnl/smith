@@ -1,4 +1,4 @@
-.. ## Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+.. ## Copyright (c) Lawrence Livermore National Security, LLC and
 .. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
@@ -12,7 +12,8 @@ Quickstart Guide
 Getting Serac
 -------------
 
-Serac is hosted on `GitHub <https://github.com/LLNL/serac>`_. Serac uses git submodules, so the project must be cloned recursively. Use either of the following commands to pull Serac's repository:
+Serac is hosted on `GitHub <https://github.com/LLNL/serac>`_. Serac uses git submodules, so the project must be cloned
+recursively. Use either of the following commands to pull Serac's repository:
 
 .. code-block:: bash
 
@@ -130,7 +131,7 @@ can be found in the Spack compiler files in our repository:
 
 We currently regularly test the following Spack configuration files:
 
-* Linux Ubuntu 22.04 (via Azure)
+* Linux Ubuntu 22.04 (via Github Actions)
 * TOSS4 (On Ruby at LC)
 * BlueOS (On Lassen at LC)
 
@@ -156,7 +157,7 @@ Some helpful uberenv options include :
 * ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
 * ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Serac repository
 
-The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='%clang@14.0.6+devtools build_type=Debug'``.
+The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang@14.0.6'``.
 
 If you already have a Spack instance from another project that you would like to reuse,
 you can do so by changing the uberenv command as follows:
@@ -212,8 +213,7 @@ Some build options frequently used by Serac include:
 * ``ENABLE_ASAN``: Enables the Address Sanitizer for memory safety inspections, defaults to ``OFF``
 * ``SERAC_ENABLE_TESTS``: Enables Serac unit tests, defaults to ``ON``
 * ``SERAC_ENABLE_CODEVELOP``: Enables local development build of MFEM/Axom, see :ref:`codevelop-label`, defaults to ``OFF``
-* ``SERAC_USE_VDIM_ORDERING``: Sets the vector ordering to be ``byVDIM``, which is significantly faster for algebraic multigrid,
-   but may conflict with other packages if Serac is being used as a dependency, defaults to ``OFF``.
+* ``SERAC_USE_VDIM_ORDERING``: Sets the vector ordering to be ``byVDIM``, which is significantly faster for algebraic multigrid, defaults to ``ON``.
 
 Once the build has been configured, Serac can be built with the following commands:
 
@@ -252,17 +252,6 @@ install cmake, MPICH, openblas, OpenGL, and the various developer tools using th
    $ sudo apt-get install cmake libopenblas-dev libopenblas-base mpich mesa-common-dev libglu1-mesa-dev freeglut3-dev cppcheck doxygen libreadline-dev python3-sphinx python3-pip clang-format-10 m4 elfutils
    $ sudo ln -s /usr/lib/x86_64-linux-gnu/* /usr/lib
 
-**Ubuntu 18.04**
-
-.. code-block:: bash
-
-   $ sudo apt-get update
-   $ sudo apt-get upgrade
-   $ sudo apt-get install g++-8 gcc-8
-   $ sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 --slave /usr/bin/g++ g++ /usr/bin/g++-8
-   $ sudo apt-get install cmake libopenblas-dev libopenblas-base mpich mesa-common-dev libglu1-mesa-dev freeglut3-dev cppcheck doxygen libreadline-dev python3-distutils python3-pip
-   $ sudo ln -s /usr/lib/x86_64-linux-gnu/* /usr/lib
-
 Note that the last line is required since Spack expects the system libraries to exist in a directory
 named ``lib``. During the third party library build phase, the appropriate Spack config directory
 must be specified using either:
@@ -271,25 +260,26 @@ must be specified using either:
 
 ``python3 scripts/uberenv/uberenv.py --spack-env-file=scripts/spack/configs/linux_ubuntu_20/spack.yaml --prefix=../path/to/install``
 
-**Ubuntu 18.04**
-
-``python3 scripts/uberenv/uberenv.py --spack-env-file=scripts/spack/configs/linux_ubuntu_18/spack.yaml --prefix=../path/to/install``
-
-Building Serac Dependencies on MacOS with Homebrew
----------------------------------------------------
+Building Serac Dependencies on MacOS
+------------------------------------
 .. warning::
    These instructions are in development, but have been tested for M2 MacBooks.
+
+.. note::
+   View an example host-config for MacOS in ``host-configs/other/firion-darwin-sequoia-m2-clang@14.0.6.cmake``.
 
 Installing base dependencies using Homebrew
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Install the following packages using Homebrew.
+Homebrew is recommended to install base dependencies due to it's stability. Relying on pure Spack historically leads to more failed builds.
+
+To start, install the following packages using Homebrew.
 
 .. code-block:: bash
 
-   $ brew install autoconf automake bzip2 clingo cmake gcc gettext gnu-sed graphviz hwloc lapack libx11 llvm m4 make ninja open-mpi openblas pkg-config python readline spack zlib
+   $ brew install autoconf automake bzip2 clingo cmake diffutils fmt gcc gettext gnu-sed graphviz hwloc lapack libx11 llvm@14 m4 make ninja open-mpi openblas pkg-config readline zlib
 
-If you plan to install the developer tools, you should also run
+If you plan to install the developer tools, you should also run:
 
 .. code-block:: bash
 
@@ -308,10 +298,11 @@ This is also useful for a few additional packages:
 
 .. code-block:: bash
 
-   $ export PATH="/opt/homebrew/opt/llvm/bin:/opt/homebrew/opt/m4/bin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:$PATH"
+   $ export PATH="/opt/homebrew/opt/llvm@14/bin:/opt/homebrew/opt/m4/bin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:$PATH"
 
 Configuring Spack
 ^^^^^^^^^^^^^^^^^
+
 In order to build Serac, we must define a ``spack.yaml`` file which tells Spack what packages we have installed.
 You will likely need to update the versions of packages in the provided example script ``scripts/spack/configs/macos_sonoma_aarch64/spack.yaml`` to match the versions installed by Homebrew.
 The versions for all installed packages can be listed via:
@@ -325,35 +316,70 @@ Note that the version format output by the above command is not the same as that
 If you are not using an M2 or M3 Mac, you will need to change the ``target`` for the compiler to ``x86_64`` or ``aarch64`` for Intel and M1-based Macs, respectively.
 Similarly, you need to set the ``operating_system`` to the proper value if you are not using ``sonoma`` (MacOS 14.X).
 
-If you want to install the devtools, you should also add the following under ``packages`` in the ``spack.yaml`` files.
+Installing Project Developer Tools with Pip
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This step is only required if you wish to use Serac's developer tools. In order to use Python devtools, you will need to create a Python venv. This is much more reliable than having Spack install 20+ Python packages.
+In this example, we are using the builtin Python in ``/usr/bin``, but it is possible to use a version installed from Homebrew or elsewhere.
+
+Next, you will need to install wheel, Sphinx, and `ATS <https://github.com/LLNL/ATS/tree/7.0.105>`_:
+
+.. code-block:: bash
+
+   python3 -m venv --system-site-packages venv
+   source venv/bin/activate
+   pip install wheel
+   pip install sphinx
+   git clone git@github.com:LLNL/ATS.git --branch 7.0.105
+   pip install ATS/
+
+Keep track of the Sphinx version while installing, since you'll need it for the next step.
+
+Adding Developer Tools to Spack Environment File
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Again, skip this step if not using devtools. After setting up a Python venv, you should add the following under ``packages`` in the ``spack.yaml`` files. Versions may vary.
 
 .. code-block:: yaml
 
-  # optional, for dev tools
-  cppcheck:
-    version: [2.14.2]
-    buildable: false
-    externals:
-    - spec: cppcheck@2.14.2
-      prefix: /opt/homebrew
-  doxygen:
-    version: [1.11.0]
-    buildable: false
-    externals:
-    - spec: doxygen@1.11.0
-      prefix: /opt/homebrew
+    # Devtools (optional)
+    cppcheck:
+      version: [2.15.0]
+      buildable: false
+      externals:
+      - spec: cppcheck@2.15.0
+        prefix: /opt/homebrew
+    doxygen:
+      version: [1.12.0]
+      buildable: false
+      externals:
+      - spec: doxygen@1.12.0
+        prefix: /opt/homebrew
+    llvm:
+      version: [14.0.6]
+      buildable: false
+      externals:
+      - spec: llvm+clang@14.0.6
+        prefix: /opt/homebrew/opt/llvm@14
+    py-sphinx:
+      buildable: false
+      externals:
+      - spec: py-sphinx@7.4.7
+        prefix: /path/to/venv
+    py-ats:
+      buildable: false
+      externals:
+      - spec: py-ats@7.0.105
+        prefix: /path/to/venv
 
 Building dependencies
 ^^^^^^^^^^^^^^^^^^^^^
 
-The invocation of ``uberenv.py`` is slightly modified from the standard instructions above in order to force the use of the Homebrew-installed MPI and compilers:
+Uberenv is a Spack wrapper simplifing the TPL build process. The invocation of ``uberenv.py`` is slightly modified from the standard instructions above in order to force the use of the Homebrew-installed MPI and compilers:
 
 .. code-block:: bash
 
-   $ ./scripts/uberenv/uberenv.py --spack-env-file=scripts/spack/configs/macos_sonoma_aarch64/spack.yaml --prefix=../path/to/install --spec="%clang@18.1.8 ^openmpi@5.0.3_1"
+   $ ./scripts/uberenv/uberenv.py --spack-env-file=/path/to/spack.yaml --prefix=/path/to/install --spec="^openmpi@5 clang@14"
 
-Note: If you want to build with PETSc, you should instead use the command
-
-.. code-block:: bash
-
-   $ ./scripts/uberenv/uberenv.py --spack-env-file=scripts/spack/configs/macos_sonoma_aarch64/spack.yaml --prefix=../path/to/install --spec="+petsc %clang@18.1.8 ^openmpi@5.0.3_1 ^petsc+tetgen+scalapack+strumpack"
+.. note::
+   To build with devtools and profiling enabled, change the spec to ``"+devtools+profiling ^openmpi@5 %clang@14"``

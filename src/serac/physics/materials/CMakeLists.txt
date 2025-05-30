@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -16,6 +16,7 @@ set(materials_headers
     material_verification_tools.hpp
     parameterized_solid_material.hpp
     parameterized_thermal_material.hpp
+    parameterized_thermoelastic_material.hpp
     solid_material_input.hpp
     solid_material.hpp
     thermal_material_input.hpp
@@ -33,6 +34,11 @@ blt_add_library(
    HEADERS     ${materials_headers}
    DEPENDS_ON  ${materials_depends}
    )
+
+serac_write_unified_header(
+    NAME    materials
+    HEADERS ${materials_headers}
+    )
 
 install(FILES ${materials_headers} DESTINATION include/serac/physics/materials )
 

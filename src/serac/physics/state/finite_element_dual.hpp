@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -26,7 +26,7 @@ namespace serac {
  * space of linear forms as applied to a specific basis set)
  */
 class FiniteElementDual : public FiniteElementVector {
-public:
+ public:
   using FiniteElementVector::FiniteElementVector;
   using FiniteElementVector::operator=;
   using mfem::Vector::Print;
@@ -62,6 +62,7 @@ public:
    */
   FiniteElementDual& operator=(FiniteElementDual&& rhs)
   {
+    FiniteElementVector::operator=(rhs);
     this->linear_form_ = std::move(rhs.linear_form_);
     return *this;
   }
@@ -129,7 +130,7 @@ public:
     return *linear_form_;
   }
 
-protected:
+ protected:
   /**
    * @brief An optional container for a linear form (L-vector) view of the finite element dual.
    *

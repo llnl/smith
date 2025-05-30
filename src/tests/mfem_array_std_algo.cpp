@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -16,7 +16,7 @@
 
 TEST(ArrayAlgo, StdTransform)
 {
-  constexpr int    size = 10;
+  constexpr int size = 10;
   mfem::Array<int> input(size);
   for (int i = 0; i < size; i++) {
     input[i] = i;
@@ -30,9 +30,9 @@ TEST(ArrayAlgo, StdTransform)
 
 TEST(ArrayAlgo, StdAccumulate)
 {
-  constexpr int    size = 10;
+  constexpr int size = 10;
   mfem::Array<int> input(size);
-  int              sum = 0;
+  int sum = 0;
   for (int i = 0; i < size; i++) {
     input[i] = i;
     sum += i;

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -369,6 +369,15 @@ struct LinearSolverOptions {
 };
 // _linear_options_end
 
+/// Enumerated options for when to use trust-region subspace solver
+enum SubSpaceOptions
+{
+  NEVER,
+  WHEN_INDEFINITE,
+  WHEN_INDEFINITE_OR_BOUNDARY,
+  ALWAYS
+};
+
 // _nonlinear_options_start
 /// Nonlinear solution scheme parameters
 struct NonlinearSolverOptions {
@@ -395,6 +404,12 @@ struct NonlinearSolverOptions {
 
   /// Scaling for the initial trust region size
   double trust_region_scaling = 0.1;
+
+  /// Option for how when the subspace solver should be utilized within trust-region solver
+  SubSpaceOptions subspace_option = SubSpaceOptions::NEVER;
+
+  /// Number of extra leftmost eigenvector to be stored between solves
+  int num_leftmost = 1;
 
   /// Should the gradient be converted to a monolithic matrix
   bool force_monolithic = false;

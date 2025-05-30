@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -13,27 +13,27 @@ namespace serac {
 
 // Initialize StateManager's static members - these will be fully initialized in StateManager::initialize
 std::unordered_map<std::string, axom::sidre::MFEMSidreDataCollection> StateManager::datacolls_;
-std::unordered_map<std::string, std::unique_ptr<FiniteElementState>>  StateManager::shape_displacements_;
-bool                                                                  StateManager::is_restart_ = false;
-axom::sidre::DataStore*                                               StateManager::ds_         = nullptr;
-std::string                                                           StateManager::output_dir_ = "";
-std::unordered_map<std::string, mfem::ParGridFunction*>               StateManager::named_states_;
-std::unordered_map<std::string, mfem::ParGridFunction*>               StateManager::named_duals_;
+std::unordered_map<std::string, std::unique_ptr<FiniteElementState>> StateManager::shape_displacements_;
+bool StateManager::is_restart_ = false;
+axom::sidre::DataStore* StateManager::ds_ = nullptr;
+std::string StateManager::output_dir_ = "";
+std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_states_;
+std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_duals_;
 
-double StateManager::newDataCollection(const std::string& name, const std::optional<int> cycle_to_load)
+double StateManager::newDataCollection(const std::string& mesh_tag, const std::optional<int> cycle_to_load)
 {
   SLIC_ERROR_ROOT_IF(!ds_, "Cannot construct a DataCollection without a DataStore");
-  std::string coll_name = name + "_datacoll";
+  std::string coll_name = getCollectionName(mesh_tag);
 
-  auto global_grp   = ds_->getRoot()->createGroup(coll_name + "_global");
+  auto global_grp = ds_->getRoot()->createGroup(coll_name + "_global");
   auto bp_index_grp = global_grp->createGroup("blueprint_index/" + coll_name);
-  auto domain_grp   = ds_->getRoot()->createGroup(coll_name);
+  auto domain_grp = ds_->getRoot()->createGroup(coll_name);
 
   // Needs to be configured to own the mesh data so all mesh data is saved to datastore/output file
   constexpr bool owns_mesh_data = true;
-  auto [iter, _]                = datacolls_.emplace(std::piecewise_construct, std::forward_as_tuple(name),
-                                                     std::forward_as_tuple(coll_name, bp_index_grp, domain_grp, owns_mesh_data));
-  auto& datacoll                = iter->second;
+  auto [iter, _] = datacolls_.emplace(std::piecewise_construct, std::forward_as_tuple(mesh_tag),
+                                      std::forward_as_tuple(coll_name, bp_index_grp, domain_grp, owns_mesh_data));
+  auto& datacoll = iter->second;
   datacoll.SetComm(MPI_COMM_WORLD);
 
   datacoll.SetPrefixPath(output_dir_);
@@ -50,38 +50,15 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
     datacoll.UpdateStateFromDS();
     datacoll.UpdateMeshAndFieldsFromDS();
 
-    // Functional needs the nodal grid function and neighbor data in the mesh
-
-    // Determine if the existing nodal grid function is discontinuous. This
-    // indicates that the mesh is periodic and the new nodal grid function must also
-    // be discontinuous.
-    bool is_discontinuous = false;
-    auto nodes            = mesh(name).GetNodes();
-    if (nodes) {
-      is_discontinuous = nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS;
-      SLIC_WARNING_ROOT_IF(
-          is_discontinuous,
-          "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 fields and "
-          "has not been thoroughly tested. Proceed at your own risk.");
-    }
-
-    // This mfem call ensures the mesh contains an H1 grid function describing nodal
-    // cordinates. The parameters do the following:
-    // 1. Sets the order of the mesh to  p = 1
-    // 2. Uses the existing continuity of the mesh finite element space (periodic meshes are discontinuous)
-    // 3. Uses the spatial dimension as the mesh dimension (i.e. it is not a lower dimension manifold)
-    // 4. Uses the ordering set by serac::ordering
-    mesh(name).SetCurvature(1, is_discontinuous, -1, serac::ordering);
-
-    // Sidre will destruct the nodal grid function instead of the mesh
-    mesh(name).SetNodesOwner(false);
-
+    // TODO: This should not be necessary, figure out why on restart this information is not being restored
     // Generate the face neighbor information in the mesh. This is needed by the face restriction
     // operators used by Functional
-    mesh(name).ExchangeFaceNbrData();
+    mesh(mesh_tag).ExchangeFaceNbrData();
+
+    checkMesh(mesh(mesh_tag), is_restart_);
 
     // Construct and store the shape displacement fields and sensitivities associated with this mesh
-    constructShapeFields(name);
+    constructShapeFields(mesh_tag);
 
   } else {
     datacoll.SetCycle(0);   // Iteration counter
@@ -94,10 +71,10 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
 void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteElementState*> states_to_load)
 {
   SERAC_MARK_FUNCTION;
-  mfem::ParMesh* meshPtr   = &(*states_to_load.begin())->mesh();
-  std::string    mesh_name = collectionID(meshPtr);
+  const mfem::ParMesh* meshPtr = &(*states_to_load.begin())->mesh();
+  std::string mesh_tag = collectionID(meshPtr);
 
-  std::string coll_name = mesh_name + "_datacoll";
+  std::string coll_name = getCollectionName(mesh_tag);
 
   axom::sidre::MFEMSidreDataCollection previous_datacoll(coll_name);
 
@@ -107,7 +84,7 @@ void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteE
 
   for (auto state : states_to_load) {
     meshPtr = &state->mesh();
-    SLIC_ERROR_ROOT_IF(collectionID(meshPtr) != mesh_name,
+    SLIC_ERROR_ROOT_IF(collectionID(meshPtr) != mesh_tag,
                        "Loading FiniteElementStates from two different meshes at one time is not allowed.");
     mfem::ParGridFunction* datacoll_owned_grid_function = previous_datacoll.GetParField(state->name());
 
@@ -121,7 +98,7 @@ void StateManager::initialize(axom::sidre::DataStore& ds, const std::string& out
   if (ds_) {
     reset();
   }
-  ds_         = &ds;
+  ds_ = &ds;
   output_dir_ = output_directory;
   if (output_directory.empty()) {
     SLIC_ERROR_ROOT(
@@ -141,8 +118,8 @@ void StateManager::storeState(FiniteElementState& state)
   auto mesh_tag = collectionID(&state.mesh());
   SLIC_ERROR_ROOT_IF(hasState(state.name()),
                      axom::fmt::format("StateManager already contains a state named '{}'", state.name()));
-  auto&                  datacoll = datacolls_.at(mesh_tag);
-  const std::string      name     = state.name();
+  auto& datacoll = datacolls_.at(mesh_tag);
+  const std::string name = state.name();
   mfem::ParGridFunction* grid_function;
   if (is_restart_) {
     grid_function = datacoll.GetParField(name);
@@ -154,7 +131,7 @@ void StateManager::storeState(FiniteElementState& state)
     // Create a new grid function with unallocated data. This will be managed by sidre.
     grid_function = new mfem::ParGridFunction(&state.space(), static_cast<double*>(nullptr));
     datacoll.RegisterField(name, grid_function);
-    state.setFromGridFunction(*grid_function);
+    state.fillGridFunction(*grid_function);
   }
   named_states_[name] = grid_function;
 }
@@ -178,8 +155,8 @@ void StateManager::storeDual(FiniteElementDual& dual)
   auto mesh_tag = collectionID(&dual.mesh());
   SLIC_ERROR_ROOT_IF(hasDual(dual.name()),
                      axom::fmt::format("StateManager already contains a state named '{}'", dual.name()));
-  auto&                  datacoll = datacolls_.at(mesh_tag);
-  const std::string      name     = dual.name();
+  auto& datacoll = datacolls_.at(mesh_tag);
+  const std::string name = dual.name();
   mfem::ParGridFunction* grid_function;
   if (is_restart_) {
     grid_function = datacoll.GetParField(name);
@@ -192,8 +169,7 @@ void StateManager::storeDual(FiniteElementDual& dual)
     // Create a new grid function with unallocated data. This will be managed by sidre.
     grid_function = new mfem::ParGridFunction(&dual.space(), static_cast<double*>(nullptr));
     datacoll.RegisterField(name, grid_function);
-    std::unique_ptr<mfem::HypreParVector> true_dofs(grid_function->GetTrueDofs());
-    dual = *true_dofs;
+    grid_function->SetFromTrueDofs(dual);
   }
   named_duals_[name] = grid_function;
 }
@@ -216,7 +192,7 @@ void StateManager::save(const double t, const int cycle, const std::string& mesh
   SERAC_MARK_FUNCTION;
   SLIC_ERROR_ROOT_IF(!ds_, "Serac's data store was not initialized - call StateManager::initialize first");
   SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag '{}' not found in the data store", mesh_tag));
-  auto&       datacoll  = datacolls_.at(mesh_tag);
+  auto& datacoll = datacolls_.at(mesh_tag);
   std::string file_path = axom::utilities::filesystem::joinPath(datacoll.GetPrefixPath(), datacoll.GetCollectionName());
   SLIC_INFO_ROOT(
       axom::fmt::format("Saving data collection at time: '{0:1.12e}' and cycle: '{1}' to path: '{2}'", t, cycle, file_path));
@@ -228,26 +204,7 @@ void StateManager::save(const double t, const int cycle, const std::string& mesh
 
 mfem::ParMesh& StateManager::setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag)
 {
-  // Determine if the existing nodal grid function is discontinuous. This
-  // indicates that the mesh is periodic and the new nodal grid function must also
-  // be discontinuous.
-  bool is_discontinuous = false;
-  auto nodes            = pmesh->GetNodes();
-  if (nodes) {
-    is_discontinuous = nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS;
-    SLIC_WARNING_ROOT_IF(
-        is_discontinuous,
-        "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 fields and "
-        "has not been thoroughly tested. Proceed at your own risk.");
-  }
-
-  // This mfem call ensures the mesh contains an H1 grid function describing nodal
-  // cordinates. The parameters do the following:
-  // 1. Sets the order of the mesh to  p = 1
-  // 2. Uses the existing continuity of the mesh finite element space (periodic meshes are discontinuous)
-  // 3. Uses the spatial dimension as the mesh dimension (i.e. it is not a lower dimension manifold)
-  // 4. Uses the ordering set by serac::ordering
-  pmesh->SetCurvature(1, is_discontinuous, -1, serac::ordering);
+  checkMesh(*pmesh);
 
   // Sidre will destruct the nodal grid function instead of the mesh
   pmesh->SetNodesOwner(false);
@@ -257,15 +214,12 @@ mfem::ParMesh& StateManager::setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const
   datacoll.SetMesh(pmesh.release());
   datacoll.SetOwnData(true);
 
-  // Functional needs the nodal grid function and neighbor data in the mesh
   auto& new_pmesh = mesh(mesh_tag);
-
-  // Generate the face neighbor information in the mesh. This is needed by the face restriction
-  // operators used by Functional
-  new_pmesh.ExchangeFaceNbrData();
 
   // We must construct the shape fields here as the mesh did not exist during the newDataCollection call
   // for the non-restart case
+  // BT: Consider storing shape fields on the mesh class and making them on mesh construction.
+  // The setMesh() call wouldn't mutate the mesh at all, just store it as name implies.
   constructShapeFields(mesh_tag);
 
   return new_pmesh;
@@ -321,6 +275,36 @@ double StateManager::time(std::string mesh_tag)
 {
   SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag \"{}\" not found in the data store", mesh_tag));
   return datacolls_.at(mesh_tag).GetTime();
+}
+
+void checkMesh(const mfem::ParMesh& pmesh, bool is_restart)
+{
+  const mfem::GridFunction* nodes = pmesh.GetNodes();
+
+  SLIC_ERROR_ROOT_IF(!nodes,
+                     "The mesh must have a grid function for the nodes defined. Call the EnsureNodes() method on "
+                     "your mesh before setting it with the state manager.");
+
+  if (!is_restart) {
+    SLIC_ERROR_ROOT_IF(!pmesh.OwnsNodes(),
+                       "The mesh must own its node grid function, as ownership will be passed to the state manager.");
+  }
+
+  SLIC_WARNING_ROOT_IF(nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS,
+                       "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 "
+                       "fields and has not been thoroughly tested. Proceed at your own risk.");
+
+  const std::string ordering_string = serac::ordering == mfem::Ordering::byNODES ? "byNODES" : "byVDIM";
+  SLIC_ERROR_ROOT_IF(nodes->FESpace()->GetOrdering() != serac::ordering,
+                     "The dof ordering of the mesh coordinates grid function must be the same as the global setting "
+                     "in serac::ordering. The serac ordering is currently " +
+                         ordering_string);
+
+  // Mesh must have face restriction operators, as they are used by Functional
+  SLIC_ERROR_ROOT_IF(!pmesh.have_face_nbr_data,
+                     "The mesh must have face neighbor data defined. Serac mesh building tools should ensure this "
+                     "automatically. If you built your mesh with native MFEM tools, make sure to call the "
+                     "ExchangeFaceNbrData() before setting it with the state manager.");
 }
 
 }  // namespace serac

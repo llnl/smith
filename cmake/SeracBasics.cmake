@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -43,6 +43,9 @@ endif()
 
 option(SERAC_ENABLE_PROFILING "Enable profiling functionality" OFF)
 
+# ENABLE_BENCHMARKS must be ON in order to modify SERAC_ENABLE_BENCHMARKS.
+# SERAC_ENABLE_BENCHMARKS will automatically be set to ON if ENABLE_BENCHMARKS is ON.
+# SERAC_ENABLE_BENCHMARKS is an option to allow external projects to disable Serac benchmarks while enabling theirs.
 cmake_dependent_option(SERAC_ENABLE_BENCHMARKS "Enable benchmark executables" ON "ENABLE_BENCHMARKS" OFF)
 
 # User turned on benchmarking but explicitly turned off profiling. Error out.

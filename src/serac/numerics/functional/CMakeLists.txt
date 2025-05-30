@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -10,7 +10,6 @@ set(functional_depends serac_mesh ${serac_device_depends})
 set(functional_headers
     differentiate_wrt.hpp
     boundary_integral_kernels.hpp
-    dof_numbering.hpp
     element_restriction.hpp
     geometry.hpp
     geometric_factors.hpp
@@ -22,6 +21,7 @@ set(functional_headers
     function_signature.hpp
     functional_qoi.inl
     integral.hpp
+    interior_face_integral_kernels.hpp
     isotropic_tensor.hpp
     polynomials.hpp
     quadrature.hpp
@@ -30,6 +30,7 @@ set(functional_headers
     tensor.hpp
     tuple.hpp
     tuple_tensor_dual_functions.hpp
+    typedefs.hpp
     )
 
 set(functional_sources 
@@ -70,6 +71,12 @@ blt_add_library(
       DEPENDS_ON  ${functional_depends}
       )
 
+serac_write_unified_header(
+    NAME    functional
+    HEADERS domain.hpp
+            functional.hpp
+            shape_aware_functional.hpp
+    )
 
 install(FILES ${functional_headers} DESTINATION include/serac/numerics/functional )
 install(FILES ${functional_detail_headers} DESTINATION include/serac/numerics/functional/detail )

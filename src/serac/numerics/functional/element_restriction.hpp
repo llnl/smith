@@ -1,3 +1,9 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #pragma once
 
 #include <vector>
@@ -5,6 +11,10 @@
 #include "mfem.hpp"
 #include "axom/core.hpp"
 #include "geometry.hpp"
+#include "domain.hpp"
+
+#include "serac/infrastructure/memory.hpp"
+#include "serac/numerics/functional/typedefs.hpp"
 
 inline bool isH1(const mfem::FiniteElementSpace& fes)
 {
@@ -34,13 +44,13 @@ struct DoF {
   // with -Wconversion enabled, see: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=39170
   // So, we resort to masks and bitshifting instead.
 
-  static constexpr uint64_t sign_mask        = 0x8000'0000'0000'0000;       ///< bits for sign field
-  static constexpr uint64_t orientation_mask = 0x7000'0000'0000'0000;       ///< bits for orientation field
-  static constexpr uint64_t index_mask       = 0x0000'FFFF'FFFF'FFFF'FFFF;  ///< bits for the index field
+  static constexpr uint64_t sign_mask = 0x8000'0000'0000'0000;         ///< bits for sign field
+  static constexpr uint64_t orientation_mask = 0x7000'0000'0000'0000;  ///< bits for orientation field
+  static constexpr uint64_t index_mask = 0x0000'FFFF'FFFF'FFFF'FFFF;   ///< bits for the index field
 
-  static constexpr uint64_t sign_shift        = 63;  ///< number of trailing zeros in `sign_mask`
+  static constexpr uint64_t sign_shift = 63;         ///< number of trailing zeros in `sign_mask`
   static constexpr uint64_t orientation_shift = 60;  ///< number of trailing zeros in `orientation_mask`
-  static constexpr uint64_t index_shift       = 0;   ///< number of trailing zeros in `index_mask`
+  static constexpr uint64_t index_shift = 0;         ///< number of trailing zeros in `index_mask`
 
   /**
    * @brief a 64-bit word encoding the following metadata (laid out from MSB to LSB);
@@ -136,10 +146,12 @@ struct Array2D {
   const T& operator()(int i, int j) const { return values[uint64_t(i) * dim[1] + uint64_t(j)]; }
 
   std::vector<T> values;  ///< the values of each element in the array
-  uint64_t       dim[2];  ///< the number of rows and columns in the array, respectively
+  uint64_t dim[2];        ///< the number of rows and columns in the array, respectively
 };
 
 namespace serac {
+
+struct Domain;
 
 /// a more complete version of mfem::ElementRestriction that works with {H1, Hcurl, L2} spaces (including on the
 /// boundary)
@@ -147,11 +159,8 @@ struct ElementRestriction {
   /// default ctor leaves this object uninitialized
   ElementRestriction() {}
 
-  /// create an ElementRestriction for all domain-type (geom dim == spatial dim) elements of the specified geometry
-  ElementRestriction(const mfem::FiniteElementSpace* fes, mfem::Geometry::Type elem_geom);
-
-  /// create an ElementRestriction for all face-type (geom dim == spatial dim) elements of the specified geometry
-  ElementRestriction(const mfem::FiniteElementSpace* fes, mfem::Geometry::Type face_geom, FaceType type);
+  /// ctor from a list of elements (e.g. from a serac::Domain)
+  ElementRestriction(const fes_t* fes, mfem::Geometry::Type elem_geom, const std::vector<int>& domain_elements);
 
   /// the size of the "E-vector" associated with this restriction operator
   uint64_t ESize() const;
@@ -195,7 +204,7 @@ struct ElementRestriction {
   uint64_t nodes_per_elem;
 
   /// a 2D array (num_elements-by-nodes_per_elem) holding the dof info extracted from the finite element space
-  axom::Array<DoF, 2, axom::MemorySpace::Host> dof_info;
+  axom::Array<DoF, 2, serac::detail::host_memory_space> dof_info;
 
   /// whether the underlying dofs are arranged "byNodes" or "byVDim"
   mfem::Ordering::Type ordering;
@@ -210,11 +219,8 @@ struct BlockElementRestriction {
   /// default ctor leaves this object uninitialized
   BlockElementRestriction() {}
 
-  /// create a BlockElementRestriction for all domain-elements (geom dim == spatial dim)
-  BlockElementRestriction(const mfem::FiniteElementSpace* fes);
-
-  /// create a BlockElementRestriction for all face-elements (geom dim + 1 == spatial dim)
-  BlockElementRestriction(const mfem::FiniteElementSpace* fes, FaceType type);
+  /// create a BlockElementRestriction for the elements in a given domain
+  BlockElementRestriction(const fes_t* fes, const Domain& domain);
 
   /// the size of the "E-vector" associated with this restriction operator
   uint64_t ESize() const;
@@ -243,13 +249,20 @@ struct BlockElementRestriction {
  * @param fes the finite element space containing the dof information
  * @param geom the kind of element geometry
  */
-Array2D<DoF> GetElementDofs(mfem::FiniteElementSpace* fes, mfem::Geometry::Type geom);
+axom::Array<DoF, 2, serac::detail::host_memory_space> GetElementDofs(const serac::fes_t* fes,
+                                                                     mfem::Geometry::Type geom);
 
 /**
- * @brief Get the list of dofs for each face element (of the specified geometry) from the mfem::FiniteElementSpace
+ * @brief Get the list of dofs for each face element (of the specified geometry) from the fes_t
  *
  * @param fes the finite element space containing the dof information
  * @param geom the kind of element geometry
  * @param type whether the face is of interior or boundary type
  */
-Array2D<DoF> GetFaceDofs(mfem::FiniteElementSpace* fes, mfem::Geometry::Type face_geom, FaceType type);
+axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::fes_t* fes,
+                                                                  mfem::Geometry::Type face_geom, FaceType type);
+
+/// @overload
+axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::fes_t* fes,
+                                                                  mfem::Geometry::Type face_geom,
+                                                                  const std::vector<int>& mfem_face_ids);

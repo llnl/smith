@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -49,7 +49,7 @@ std::string removePrefix(const std::string& prefix, const std::string& target);
  * @brief This is the abstract base class for a generic forward solver
  */
 class BasePhysics {
-public:
+ public:
   /**
    * @brief Empty constructor
    * @param[in] physics_name Name of the physics module instance
@@ -140,7 +140,7 @@ public:
    */
   virtual void resetAdjointStates()
   {
-    time_  = max_time_;
+    time_ = max_time_;
     cycle_ = max_cycle_;
   }
 
@@ -226,7 +226,7 @@ public:
    *
    * @return The shape displacement finite element state
    */
-  const FiniteElementState& shapeDisplacement() const { return shape_displacement_; }
+  virtual const FiniteElementState& shapeDisplacement() const { return shape_displacement_; }
 
   /**
    * @brief Accessor for getting named finite element state parameter fields from the physics modules
@@ -237,7 +237,7 @@ public:
    * @note The input parameter name should not contain the base physics name. It should be identical to what
    * is in the physics module constructor argument list.
    */
-  const FiniteElementState& parameter(const std::string& parameter_name) const
+  virtual const FiniteElementState& parameter(const std::string& parameter_name) const
   {
     std::string appended_name = detail::addPrefix(name_, parameter_name);
 
@@ -259,7 +259,7 @@ public:
    * @param parameter_index The index of the Finite Element State parameter to retrieve
    * @return The indexed parameter Finite Element State
    */
-  const FiniteElementState& parameter(std::size_t parameter_index) const
+  virtual const FiniteElementState& parameter(std::size_t parameter_index) const
   {
     SLIC_ERROR_ROOT_IF(
         parameter_index >= parameters_.size(),
@@ -274,7 +274,7 @@ public:
    *
    * @return The parameter names
    */
-  std::vector<std::string> parameterNames()
+  virtual std::vector<std::string> parameterNames() const
   {
     std::vector<std::string> parameter_names;
 
@@ -297,7 +297,7 @@ public:
    * The physics module constructs its own parameter FiniteElementState in the physics module constructor. This
    * call sets the internally-owned parameter object by value (i.e. deep copies) from the given argument.
    */
-  void setParameter(const size_t parameter_index, const FiniteElementState& parameter_state);
+  virtual void setParameter(const size_t parameter_index, const FiniteElementState& parameter_state);
 
   /**
    * @brief Set the current shape displacement for the underlying mesh
@@ -307,7 +307,7 @@ public:
    * This updates the shape displacement field associated with the underlying mesh. Note that the input
    * FiniteElementState is deep copied into the shape displacement object owned by the StateManager.
    */
-  void setShapeDisplacement(const FiniteElementState& shape_displacement);
+  virtual void setShapeDisplacement(const FiniteElementState& shape_displacement);
 
   /**
    * @brief Compute the implicit sensitivity of the quantity of interest used in defining the adjoint load with respect
@@ -347,8 +347,9 @@ public:
    * the forward advance is called.
    */
   virtual const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity()
+      const
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Initial condition sensitivities not enabled in physics module {}", name_));
+    SLIC_WARNING_ROOT(axom::fmt::format("Initial condition sensitivities not enabled in physics module {}", name_));
     return {};
   }
 
@@ -363,19 +364,29 @@ public:
 
   /**
    * @brief Set the loads for the adjoint reverse timestep solve
+   * @param string_to_dual An unorder map from the state field name string to the finite element adjoint/dual load
+   * The adjoint load is d(qoi)/d(state)
    */
-  virtual void setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&>)
+  virtual void setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&> string_to_dual)
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Adjoint analysis not defined for physics module {}", name_));
+    if (!string_to_dual.empty()) {
+      SLIC_ERROR_ROOT(
+          axom::fmt::format("Failed to setAdjointLoad.  Adjoint analysis not defined for physics module {}", name_));
+    }
   }
 
   /**
    * @brief Set the dual loads (dirichlet values) for the adjoint reverse timestep solve
    * This must be called after setAdjointLoad
+   * @param string_to_bc An unorder map from dual name string to finite element adjoint/state boundary condition
+   * The adjoint bc is d(qoi)/d(dual)
    */
-  virtual void setDualAdjointBcs(std::unordered_map<std::string, const serac::FiniteElementState&>)
+  virtual void setDualAdjointBcs(std::unordered_map<std::string, const serac::FiniteElementState&> string_to_bc)
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Adjoint analysis not defined for physics module {}", name_));
+    if (!string_to_bc.empty()) {
+      SLIC_ERROR_ROOT(
+          axom::fmt::format("Failed to setDualAdjointBCs.  Adjoint analysis not defined for physics module {}", name_));
+    }
   }
 
   /**
@@ -387,6 +398,16 @@ public:
   {
     SLIC_ERROR_ROOT(axom::fmt::format("Adjoint analysis not defined for physics module {}", name_));
   }
+
+  /**
+   * @brief Initialize any fields nessary for before the first step of the time integration
+   */
+  virtual void initializationStep() {}
+
+  /**
+   * @brief Compute adjoint sensitivities back through initializationStep
+   */
+  virtual void reverseAdjointInitializationStep() {}
 
   /**
    * @brief Output the current state of the PDE fields in Sidre format and optionally in Paraview format
@@ -411,7 +432,7 @@ public:
    * @param cycle The cycle to retrieve state from
    * @return The named primal Finite Element State
    */
-  FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle);
+  virtual FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle);
 
   /**
    * @brief Accessor for getting a single named finite element dual solution from the physics modules at a given
@@ -422,7 +443,7 @@ public:
    * @return The named Finite Element Dual
    */
   virtual FiniteElementDual loadCheckpointedDual([[maybe_unused]] const std::string& state_name,
-                                                 [[maybe_unused]] int                cycle)
+                                                 [[maybe_unused]] int cycle)
   {
     SLIC_ERROR_ROOT(axom::fmt::format("loadCheckpointedDual not enabled in physics module {}", name_));
     return *duals_[0];
@@ -502,10 +523,16 @@ public:
    * @brief Returns a reference to the mesh object
    */
   const mfem::ParMesh& mesh() const { return mesh_; }
+
   /// @overload
   mfem::ParMesh& mesh() { return mesh_; }
 
-protected:
+  /**
+   * @brief Return the name of the physics
+   */
+  std::string name() const { return name_; }
+
+ protected:
   /**
    * @brief Create a paraview data collection for the physics package if requested
    */
@@ -604,9 +631,9 @@ protected:
     template <typename FunctionSpace>
     ParameterInfo(mfem::ParMesh& mesh, FunctionSpace space, const std::string& name = "")
     {
-      state          = std::make_unique<FiniteElementState>(mesh, space, name);
+      state = std::make_unique<FiniteElementState>(mesh, space, name);
       previous_state = std::make_unique<FiniteElementState>(mesh, space, "previous_" + name);
-      sensitivity    = std::make_unique<FiniteElementDual>(mesh, space, name + "_sensitivity");
+      sensitivity = std::make_unique<FiniteElementDual>(mesh, space, name + "_sensitivity");
       StateManager::storeState(*state);
       StateManager::storeDual(*sensitivity);
     }
@@ -667,6 +694,11 @@ protected:
    * @brief Current time for the forward pass
    */
   double time_;
+
+  /**
+   * @brief Current time step
+   */
+  double dt_;
 
   /**
    * @brief The maximum time reached for the forward solver
