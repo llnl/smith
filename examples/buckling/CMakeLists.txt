@@ -17,17 +17,17 @@ if(TRIBOL_FOUND AND PETSC_FOUND)
 
     # TODO Fix this test
     # `InvIso: Newtons method did not converge.`
+    # configure_file(cylinder_petsc_options.yml
+    #                ${PROJECT_BINARY_DIR}/examples/buckling/cylinder_petsc_options.yml
+    #                COPYONLY)
+    #
     # blt_add_test(NAME            buckling_cylinder_mortar_contact
-    #              COMMAND         buckling_cylinder --fast --contact --contact-type 1 --preconditioner 6 -options_file examples/cylinder_petsc_options.yml
+    #              COMMAND         buckling_cylinder --fast --contact --contact-type 1 --preconditioner 6 -options_file examples/buckling/cylinder_petsc_options.yml
     #              NUM_MPI_TASKS   4)
 
     blt_add_test(NAME            buckling_cylinder_no_contact
                  COMMAND         buckling_cylinder --fast --no-contact
                  NUM_MPI_TASKS   4)
-
-    configure_file(cylinder_petsc_options.yml
-                   ${PROJECT_BINARY_DIR}/examples/cylinder_petsc_options.yml
-                   COPYONLY)
 
     install(
         FILES

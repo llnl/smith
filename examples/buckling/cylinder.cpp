@@ -12,7 +12,7 @@
  * @note Run with mortar contact and PETSc preconditioners:
  * @code{.sh}
  * ./build/examples/buckling_cylinder --contact --contact-type 1 --preconditioner 6 \
- *    -options_file examples/cylinder_petsc_options.yml
+ *    -options_file examples/buckling/cylinder_petsc_options.yml
  * @endcode
  * @note Run with penalty contact and HYPRE BoomerAMG preconditioner
  * @code{.sh}
