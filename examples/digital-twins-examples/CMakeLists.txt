@@ -7,19 +7,19 @@
 blt_add_executable( NAME        first_driver
                     SOURCES     first_driver.cpp
                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                    DEPENDS_ON  serac_physics serac_mesh
+                    DEPENDS_ON  serac_physics
                     )
 
 blt_add_executable( NAME        curing_study_driver
                     SOURCES     curing_study_driver.cpp
                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                    DEPENDS_ON  serac_physics serac_mesh
+                    DEPENDS_ON  serac_physics
                     )
 
 blt_add_executable( NAME        curing_study_driver_nonlinear
                     SOURCES     curing_study_driver_nonlinear.cpp
                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                    DEPENDS_ON  serac_physics serac_mesh
+                    DEPENDS_ON  serac_physics
                     )
 install(
     FILES

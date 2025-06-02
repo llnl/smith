@@ -1,8 +1,6 @@
 // Driver for Digital Twins SI to run generated meshes though a solid mechanics solver.
 // Later, we can add Functional-based QOIs to define acceptance scores.
 
-#include "serac/physics/solid_mechanics.hpp"
-
 #include <functional>
 #include <fstream>
 #include <set>
@@ -10,15 +8,7 @@
 
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "mfem.hpp"
-
-#include "serac/infrastructure/about.hpp"
-#include "serac/infrastructure/cli.hpp"
-#include "serac/infrastructure/terminator.hpp"
-#include "serac/mesh/mesh_utils.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/materials/solid_material.hpp"
-#include "serac/physics/materials/parameterized_solid_material.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac.hpp"
 
 // template <typename lambda>
 // struct ParameterizedBodyForce {
