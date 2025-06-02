@@ -24,7 +24,7 @@
 #include "serac/physics/common.hpp"
 #include "mfem.hpp"
 #include "serac/physics/tests/physics_test_utils.hpp"
-
+#include "serac/numerics/functional/tensor.hpp"
 
 #include "serac/numerics/continuation_solvers/problems/Problems.hpp"
 #include "serac/numerics/continuation_solvers/solvers/HomotopySolver.hpp"
@@ -127,33 +127,21 @@ private:
 }
 
 
-// Q = [r + J^T l] = 0
-//     [c] 
-// 
-
 /* NLMCP of the form
  * 0 <= x \perp F(x, y) >= 0
  *              Q(x, y)  = 0
- *  [ dF / dx   dF / dy]
- *  [ dQ / dx   dQ / dy]
- *
- *
- * 0 <= x \perp z >= 0
- *           [ F(x,y) -z ] = [0]
- *           [ Q(x,y)]     = [0]
- * [0  0         I]
- * [dF/dx dF/dy -I]
- * [dQ/dx dQ/dy  0]
- * with F(x, y) = y - u_l
- *      Q(x, y) = y - x
- * which corresponds to the first-order optimality conditions
- * for the convex quadratic programming problem
- * min_u (u^T u) / 2
- *  s.t.  u - u_l >= 0
- *  where x = z (Lagrange multiplier)
- *        y = u primal variable)
+ * Here, F and x are both 0-dimensional
+ * and   Q(x, y) = [ r(u) + (dc/du)^T l]
+ *                 [-c(u)]
+ *            y  = [ u ]
+ *                 [ l ]
+ * we use the approximate Jacobian
+ *       dQ/dy \approx [ dr/du     (dc/du)^T]
+ *                     [-dc/du        0 ]
+ * we note that the sign-convention with regard to "c" is important
+ * as  the approximate Jacobian is positive semi-definite when dr/du is
+ * and thus the NLMC problem is guaranteed to be semi-monotone.
  */
-#if 1
 class InertialReliefProblem : public GeneralNLMCProblem
 {
 protected:
@@ -174,23 +162,18 @@ protected:
    double dt = 0.0;
    std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, 0.0, 0.0}; 
 public:
-   // pass opt_state pointer
-   // lambdas that take in opt_state
    InertialReliefProblem(std::vector<serac::FiniteElementState *> obj_states_, 
 		   std::vector<serac::FiniteElementState *> all_states_,
 		   std::shared_ptr<serac::Residual> residual_, 
                    std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_);
-#if 1
    void F(const mfem::Vector &x, const mfem::Vector &y, mfem::Vector &feval, int &Feval_err) const;
    void Q(const mfem::Vector &x, const mfem::Vector &y, mfem::Vector &qeval, int &Qeval_err) const;
    mfem::HypreParMatrix * DxF(const mfem::Vector &x, const mfem::Vector &y);
    mfem::HypreParMatrix * DyF(const mfem::Vector &x, const mfem::Vector &y);
    mfem::HypreParMatrix * DxQ(const mfem::Vector &x, const mfem::Vector &y);
    mfem::HypreParMatrix * DyQ(const mfem::Vector &x, const mfem::Vector &y);
-#endif
    virtual ~InertialReliefProblem();
 };
-#endif
 
 
 int main(int argc, char* argv[])
@@ -231,7 +214,6 @@ int main(int argc, char* argv[])
   params = {density};
   
   std::string physics_name = "solid";
-  //std::vector<std::string> param_names{"density"};
 
   // construct residual
   auto solid_mechanics_residual = std::make_shared<SolidResidualT>(physics_name, mesh, states[SHAPE_DISP].space(), states[DISP].space(), getSpaces(params));
@@ -248,6 +230,15 @@ int main(int argc, char* argv[])
   mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
   solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return -1.0 * n; });
 
+  serac::tensor<double, dim> constant_force{};
+  for (int i = 0; i < dim; i++)
+  {
+     constant_force[i] = 1.e0;
+  }
+
+  solid_mechanics_residual->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
+  return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
+  });
   residual = solid_mechanics_residual;
   
   
@@ -321,9 +312,6 @@ int main(int argc, char* argv[])
     });
 
 
-  //serac::FiniteElementDual res_vector(all_states[DISP]->space(), "residual");
-  //res_vector = solid_mechanics_residual->residual(time, all_states);
-  
   auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "");
   writer.write(0, 0.0, objective_states);
   InertialReliefProblem problem(objective_states, all_states, solid_mechanics_residual, constraints);
@@ -335,40 +323,6 @@ int main(int argc, char* argv[])
   mfem::Vector xf(dimx); xf = 0.0;
   mfem::Vector yf(dimy); yf = 0.0;
   
-  // finite difference check
-  //{
-  //   y0 = 3.0;
-  //   mfem::Vector ydir(dimy); ydir.Randomize();
-  //   mfem::Vector y1(dimy); y1 = 0.0;
-  //   mfem::Vector q0(dimy); q0 = 0.0;
-  //   mfem::Vector q1(dimy); q1 = 0.0;
-  //   mfem::Vector err(dimy); err = 0.0;
-  //   int qeval_err;
-  //   problem.Q(x0, y0, q0, qeval_err);
-  //   HypreParMatrix * dyQ = problem.DyQ(x0, y0);
-  //   double eps = 1.0;
-  //   for (int j = 0; j < 30; j++)
-  //   {
-  //      y1.Set(1.0, y0);
-  //      y1.Add(eps, ydir);
-  //      problem.Q(x0, y1, q1, qeval_err);
-  //      if (qeval_err)
-  //      {
-  //         eps /= 2.0;
-  //         continue;
-  //      }
-  //      dyQ->Mult(ydir, err);
-  //      err.Add(-1. / eps, q1);
-  //      err.Add(1./ eps, q0);
-  //      std::cout << "||dQdy * yhat - (q(y0 + eps * yhat) - q(y0))/ eps||_2 = " << err.Norml2() << std::endl;
-  //      std::cout << "eps = " << eps << std::endl;
-
-  //      eps /= 2.0;
-  //   }
-
-  //}
-
-  
   HomotopySolver solver(&problem);
   double tol = 1.e-6;
   int maxIter = 100;
@@ -377,23 +331,21 @@ int main(int argc, char* argv[])
 
 
   solver.Mult(x0, y0, xf, yf);
-  //objective_states[DISP]->Set(1.0, yf);
+  bool converged = solver.GetConverged();
+  if (myid == 0)
+  {
+     if (converged)
+     {
+        std::cout << "converged !\n";
+     }
+     else
+     {
+        std::cout << "homotopy solver did not converge\n";
+     }
+  }
   writer.write(1, 1.0, objective_states);
-  //bool converged = solver.GetConverged();
-  //if (myid == 0)
-  //{
-  //   if (converged)
-  //   {
-  //      std::cout << "converged !\n";
-  //   }
-  //   else
-  //   {
-  //      std::cout << "homotopy solver did not converge\n";
-  //   }
-  //}
 }
 
-#if 1
 InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementState *> obj_states_, 
 		std::vector<serac::FiniteElementState *> all_states_,
 		std::shared_ptr<serac::Residual> residual_, 
@@ -630,4 +582,3 @@ InertialReliefProblem::~InertialReliefProblem()
    delete dQdx;
    delete dQdy;
 }
-#endif
