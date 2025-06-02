@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -6,4 +6,4 @@
 
 blt_add_executable(NAME       partitioner
                    SOURCES    partitioner.cpp
-                   DEPENDS_ON serac_mesh)
+                   DEPENDS_ON serac_mesh_utils)

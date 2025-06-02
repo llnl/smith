@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -13,11 +13,13 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/materials/parameterized_thermal_material.hpp"
 #include "serac/serac_config.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -231,7 +233,7 @@ struct HeatTransferSensitivityFixture : public ::testing::Test {
     MPI_Barrier(MPI_COMM_WORLD);
     StateManager::initialize(data_store, "thermal_dynamic_solve");
     std::string filename = std::string(SERAC_REPO_DIR) + "/data/meshes/star.mesh";
-    mesh = &StateManager::setMesh(mesh::refineAndDistribute(buildMeshFromFile(filename), 0), mesh_tag);
+    mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
   }
 
   void fillDirection(FiniteElementState& direction) const
@@ -244,7 +246,7 @@ struct HeatTransferSensitivityFixture : public ::testing::Test {
 
   // Create DataStore
   axom::sidre::DataStore data_store;
-  mfem::ParMesh* mesh;
+  std::shared_ptr<serac::Mesh> mesh;
 
   // Solver options
   NonlinearSolverOptions nonlinear_opts{.relative_tol = 5.0e-13, .absolute_tol = 5.0e-13};
@@ -264,8 +266,8 @@ struct HeatTransferSensitivityFixture : public ::testing::Test {
 
 TEST_F(HeatTransferSensitivityFixture, InitialTemperatureSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
-  auto thermal_solver = createNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, nonlinearMat, whole_domain);
+  auto thermal_solver =
+      createNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, nonlinearMat, mesh->entireBody());
 
   auto [qoi_base, temperature_sensitivity, _] =
       computeThermalQoiAndInitialTemperatureAndShapeSensitivity(*thermal_solver, tsInfo);
@@ -283,8 +285,8 @@ TEST_F(HeatTransferSensitivityFixture, InitialTemperatureSensitivities)
 
 TEST_F(HeatTransferSensitivityFixture, ShapeSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
-  auto thermal_solver = createNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, nonlinearMat, whole_domain);
+  auto thermal_solver =
+      createNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, nonlinearMat, mesh->entireBody());
 
   auto [qoi_base, _, shape_sensitivity] =
       computeThermalQoiAndInitialTemperatureAndShapeSensitivity(*thermal_solver, tsInfo);
@@ -301,9 +303,8 @@ TEST_F(HeatTransferSensitivityFixture, ShapeSensitivities)
 
 TEST_F(HeatTransferSensitivityFixture, ConductivityParameterSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
   auto thermal_solver =
-      createParameterizedHeatTransfer(data_store, nonlinear_opts, dyn_opts, parameterizedMat, whole_domain);
+      createParameterizedHeatTransfer(data_store, nonlinear_opts, dyn_opts, parameterizedMat, mesh->entireBody());
   auto [qoi_base, conductivity_sensitivity] = computeThermalConductivitySensitivity(*thermal_solver, tsInfo);
 
   thermal_solver->resetStates();
@@ -318,9 +319,8 @@ TEST_F(HeatTransferSensitivityFixture, ConductivityParameterSensitivities)
 
 TEST_F(HeatTransferSensitivityFixture, NonlinearConductivityParameterSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
   auto thermal_solver = createParameterizedNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts,
-                                                                 parameterizedNonlinearMat, whole_domain);
+                                                                 parameterizedNonlinearMat, mesh->entireBody());
   auto [qoi_base, conductivity_sensitivity] = computeThermalConductivitySensitivity(*thermal_solver, tsInfo);
 
   thermal_solver->resetStates();
@@ -338,12 +338,6 @@ TEST_F(HeatTransferSensitivityFixture, NonlinearConductivityParameterSensitiviti
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

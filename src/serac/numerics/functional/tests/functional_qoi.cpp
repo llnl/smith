@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -11,9 +11,9 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
-#include "serac/infrastructure/accelerator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils_base.hpp"
+#include "serac/mesh_utils/mesh_utils_base.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
@@ -24,7 +24,6 @@
 using namespace serac;
 using namespace serac::profiling;
 
-int num_procs, myid;
 int nsamples = 1;  // because mfem doesn't take in unsigned int
 
 double t = 0.0;
@@ -199,7 +198,11 @@ void qoi_test(mfem::ParMesh& mesh, H1<p> trial, Dimension<dim>, WhichTest which)
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
 
-  mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
+  ::std::unique_ptr<mfem::HypreParVector> tmp(fespace->NewTrueDofVector());
   mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
@@ -207,7 +210,11 @@ void qoi_test(mfem::ParMesh& mesh, H1<p> trial, Dimension<dim>, WhichTest which)
   mfem::FunctionCoefficient x_coord([](mfem::Vector x) { return x[0]; });
   V_gf.ProjectCoefficient(x_coord);
 
-  mfem::HypreParVector* tmp2 = fespace->NewTrueDofVector();
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
+  ::std::unique_ptr<mfem::HypreParVector> tmp2(fespace->NewTrueDofVector());
   mfem::HypreParVector V = *tmp2;
   V_gf.GetTrueDofs(V);
 
@@ -285,8 +292,6 @@ void qoi_test(mfem::ParMesh& mesh, H1<p> trial, Dimension<dim>, WhichTest which)
 
     } break;
   }
-
-  delete tmp;
 }
 
 template <int p1, int p2, int dim>
@@ -308,9 +313,11 @@ void qoi_test(mfem::ParMesh& mesh, H1<p1> trial1, H1<p2> trial2, Dimension<dim>)
   mfem::ParGridFunction U2_gf(fespace2.get());
   U2_gf.ProjectCoefficient(y);
 
-  std::unique_ptr<mfem::HypreParVector> tmp;
-
-  tmp.reset(fespace1->NewTrueDofVector());
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
+  std::unique_ptr<mfem::HypreParVector> tmp(fespace1->NewTrueDofVector());
   mfem::HypreParVector U1 = *tmp;
   U1_gf.GetTrueDofs(U1);
 
@@ -359,7 +366,11 @@ TEST(QoI, DependsOnVectorValuedInput)
   });
   U_gf.ProjectCoefficient(x_squared);
 
-  mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
+  ::std::unique_ptr<mfem::HypreParVector> tmp(fespace->NewTrueDofVector());
   mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
@@ -371,8 +382,6 @@ TEST(QoI, DependsOnVectorValuedInput)
   double exact_answer = 141.3333333333333;
   double relative_error = (f(t, U) - exact_answer) / exact_answer;
   EXPECT_NEAR(0.0, relative_error, 1.0e-10);
-
-  delete tmp;
 }
 
 TEST(QoI, AddAreaIntegral)
@@ -390,7 +399,11 @@ TEST(QoI, AddAreaIntegral)
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
 
-  mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
+  ::std::unique_ptr<mfem::HypreParVector> tmp(fespace->NewTrueDofVector());
   mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
@@ -400,8 +413,6 @@ TEST(QoI, AddAreaIntegral)
   measure.AddAreaIntegral(DependsOn<>{}, TrivialIntegrator{}, whole_mesh);
   double relative_error = (measure(t, U) - measure_mfem(mesh)) / measure(t, U);
   EXPECT_NEAR(0.0, relative_error, 1.0e-10);
-
-  delete tmp;
 }
 
 TEST(QoI, AddVolumeIntegral)
@@ -420,7 +431,11 @@ TEST(QoI, AddVolumeIntegral)
   mfem::FunctionCoefficient x_squared([](mfem::Vector x) { return x[0] * x[0]; });
   U_gf.ProjectCoefficient(x_squared);
 
-  mfem::HypreParVector* tmp = fespace->NewTrueDofVector();
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
+  ::std::unique_ptr<mfem::HypreParVector> tmp(fespace->NewTrueDofVector());
   mfem::HypreParVector U = *tmp;
   U_gf.GetTrueDofs(U);
 
@@ -430,8 +445,6 @@ TEST(QoI, AddVolumeIntegral)
   measure.AddVolumeIntegral(DependsOn<>{}, TrivialIntegrator{}, whole_mesh);
   double relative_error = (measure(t, U) - measure_mfem(mesh)) / measure(t, U);
   EXPECT_NEAR(0.0, relative_error, 1.0e-10);
-
-  delete tmp;
 }
 
 TEST(QoI, UsingL2)
@@ -448,9 +461,17 @@ TEST(QoI, UsingL2)
 
   auto [fespace_1, fec1] = serac::generateParFiniteElementSpace<trial_space_1>(&mesh);
 
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
   std::unique_ptr<mfem::HypreParVector> U0(fespace_0->NewTrueDofVector());
   U0->Randomize(0);
 
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
   std::unique_ptr<mfem::HypreParVector> U1(fespace_1->NewTrueDofVector());
   U1->Randomize(1);
 
@@ -505,9 +526,17 @@ TEST(QoI, ShapeAndParameter)
 
   serac_volume.AddDomainIntegral(serac::Dimension<dim>{}, serac::DependsOn<>{}, TrivialIntegrator{}, whole_mesh);
 
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
   std::unique_ptr<mfem::HypreParVector> shape_displacement(shape_fe_space->NewTrueDofVector());
   *shape_displacement = 1.0;
 
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
   std::unique_ptr<mfem::HypreParVector> parameter(parameter_fe_space->NewTrueDofVector());
   *parameter = 0.1;
 
@@ -569,9 +598,17 @@ TEST(QoI, ShapeAndParameterBoundary)
   serac_area.AddBoundaryIntegral(serac::Dimension<dim - 1>{}, serac::DependsOn<>{}, TrivialIntegrator{},
                                  whole_boundary);
 
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
   std::unique_ptr<mfem::HypreParVector> shape_displacement(shape_fe_space->NewTrueDofVector());
   *shape_displacement = 1.0;
 
+  // NewTrueDofVector returns a raw pointer allocated using new and gives
+  // ownership of the pointer to the caller. Here we wrap the return value
+  // in a std::unique_ptr to discharge our ownership responsibility to
+  // delete it when we're done with it.
   std::unique_ptr<mfem::HypreParVector> parameter(parameter_fe_space->NewTrueDofVector());
   *parameter = 5.0;
 
@@ -674,11 +711,7 @@ TEST(Variadic, 3DQuadratic) { qoi_test(*mesh3D, H1<2>{}, H1<2>{}, Dimension<3>{}
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
+  serac::ApplicationManager applicationManager(argc, argv);
 
   int serial_refinement = 1;
   int parallel_refinement = 0;
@@ -688,8 +721,5 @@ int main(int argc, char* argv[])
 
   std::string meshfile3D = SERAC_REPO_DIR "/data/meshes/patch3D_tets_and_hexes.mesh";
   mesh3D = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), serial_refinement, parallel_refinement);
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-  return result;
+  return RUN_ALL_TESTS();
 }

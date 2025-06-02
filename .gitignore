@@ -15,4 +15,5 @@ __pycache__/
 view
 /_serac_build_and_test*
 build-linux-*-*-*
+build-darwin-*-*-*
 *.core

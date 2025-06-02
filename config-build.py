@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -24,7 +24,7 @@ _host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmak
                      "rzwhippet" : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmake",
                      "rzvernal"  : "rzvernal-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
                      "rzansel"   : "rzansel-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake",
-                     "ruby"      : "ruby_toss_4_x86_64_ib-clang@14.0.6.cmake",
+                     "ruby"      : "ruby-toss_4_x86_64_ib-clang@14.0.6.cmake",
                      "tioga"     : "tioga-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
                      "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake"}
 

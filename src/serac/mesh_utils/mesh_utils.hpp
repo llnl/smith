@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "serac/mesh/mesh_utils_base.hpp"
+#include "serac/mesh_utils/mesh_utils_base.hpp"
 
 /**
  * The Serac namespace

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -11,12 +11,12 @@
  *
  * @note Run with mortar contact and PETSc preconditioners:
  * @code{.sh}
- * ./build/examples/buckling_cylinder --contact-type 1 --preconditioner 6 \
- *     -options_file examples/buckling/cylinder_petsc_options.yml
+ * ./build/examples/buckling_cylinder --contact --contact-type 1 --preconditioner 6 \
+ *    -options_file examples/buckling/cylinder_petsc_options.yml
  * @endcode
  * @note Run with penalty contact and HYPRE BoomerAMG preconditioner
  * @code{.sh}
- * ./build/examples/buckling_cylinder --penalty 1e3
+ * ./build/examples/buckling_cylinder
  * @endcode
  * @note Run without contact:
  * @code{.sh}
@@ -27,26 +27,15 @@
 #include <set>
 #include <string>
 
-#include "axom/slic/core/SimpleLogger.hpp"
+#include "axom/slic.hpp"
 #include "axom/inlet.hpp"
 #include "axom/CLI11.hpp"
 
 #include "mfem.hpp"
 
-#include "serac/numerics/functional/domain.hpp"
-#include "serac/physics/boundary_conditions/components.hpp"
-#include "serac/physics/solid_mechanics_contact.hpp"
-#include "serac/infrastructure/terminator.hpp"
-#include "serac/mesh/mesh_utils.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/materials/parameterized_solid_material.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac.hpp"
 
 using namespace serac;
-
-std::function<std::string(const std::string&)> petscPCTypeValidator = [](const std::string& in) -> std::string {
-  return std::to_string(static_cast<int>(mfem_ext::stringToPetscPCType(in)));
-};
 
 /**
  * @brief Run buckling cylinder example
@@ -87,60 +76,54 @@ int main(int argc, char* argv[])
   bool use_contact = true;
   auto contact_type = serac::ContactEnforcement::Penalty;
 
-  // Initialize Serac and all of the external libraried
-  serac::initialize(argc, argv);
+  // Option for testing purposes only, to reduce runtime
+  bool use_fast_options = false;
+
+  // Initialize and automatically finalize MPI and other libraries
+  serac::ApplicationManager applicationManager(argc, argv);
 
   // Handle command line arguments
   axom::CLI::App app{"Hollow cylinder buckling example"};
   // Mesh options
-  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")
-      ->default_val("0")  // Matches value set above
-      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")->check(axom::CLI::PositiveNumber);
   app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps")
-      ->default_val("0")  // Matches value set above
       ->check(axom::CLI::PositiveNumber);
   // Solver options
   app.add_option("--nonlinear-solver", nonlinear_options.nonlin_solver,
                  "Nonlinear solver (Index of enum serac::NonlinearSolver)")
-      ->default_val("3")  // Matches index of value set above
       ->expected(0, 10);
   app.add_option("--linear-solver", linear_options.linear_solver, "Linear solver (Index of enum serac::LinearSolver)")
-      ->default_val("1")  // Matches index of value set above
       ->expected(0, 5);
   app.add_option("--preconditioner", linear_options.preconditioner,
                  "Preconditioner (Index of enum serac::NonlinearSolver)")
-      ->default_val("3")  // Matches index of value set above
       ->expected(0, 7);
   app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
                  "Petsc preconditioner (Index of enum serac::PetscPCType)")
-      ->transform(
-          [](const std::string& in) -> std::string {
-            return std::to_string(static_cast<int>(mfem_ext::stringToPetscPCType(in)));
-          },
-          "Convert string to PetscPCType", "PetscPCTypeTransform")
-      ->default_val("0")  // Matches index of value set by class
       ->expected(0, 14);
-  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")
-      ->default_val("0.1")  // Matches value set above
-      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")->check(axom::CLI::PositiveNumber);
   // Contact options
-  app.add_flag("--contact,!--no-contact", use_contact, "Use contact for the inner faces of the cylinder");
+  auto opt_contact =
+      app.add_flag("--contact,!--no-contact", use_contact, "Use contact for the inner faces of the cylinder");
   app.add_option("--contact-type", contact_type,
                  "Type of contact enforcement, 0 for penalty or 1 for Lagrange multipliers (Index of enum "
                  "serac::ContactEnforcement)")
-      ->needs("--contact")
-      ->default_val("0")  // Matches index of value set above
+      ->needs(opt_contact)
       ->expected(0, 1);
-  app.add_option("--penalty", penalty, "Penalty for contact")
-      ->needs("--contact")
-      ->default_val("1e3")  // Matches value set above
-      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--penalty", penalty, "Penalty for contact")->needs(opt_contact)->check(axom::CLI::PositiveNumber);
+  // Misc options
+  app.add_flag("--fast", use_fast_options, "Reduce max iterations and delta-time for testing purposes.");
 
   // Need to allow extra arguments for PETSc support
   app.set_help_flag("--help");
   app.allow_extras()->parse(argc, argv);
 
   nonlinear_options.force_monolithic = linear_options.preconditioner != Preconditioner::Petsc;
+
+  if (use_fast_options) {
+    dt = 1;
+    nonlinear_options.max_iterations = 5;
+    linear_options.max_iterations = 5;
+  }
 
   // Create DataStore
   std::string name = use_contact ? "buckling_cylinder_contact" : "buckling_cylinder";
@@ -228,6 +211,5 @@ int main(int argc, char* argv[])
   }
   SLIC_INFO_ROOT(axom::fmt::format("final time = {}", solid_solver->time()));
 
-  // Exit without error
-  serac::exitGracefully();
+  return 0;
 }

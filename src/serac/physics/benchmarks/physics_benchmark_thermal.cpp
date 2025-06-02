@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -10,11 +10,12 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/profiling.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/heat_transfer.hpp"
+#include "serac/physics/mesh.hpp"
 
 template <int p, int dim>
 void functional_test_static()
@@ -34,10 +35,7 @@ void functional_test_static()
   std::string filename =
       (dim == 2) ? SERAC_REPO_DIR "/data/meshes/star.mesh" : SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
-  auto mesh =
-      serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "default_mesh");
+  auto pmesh = std::make_shared<serac::Mesh>(filename, "default_mesh", serial_refinement, parallel_refinement);
 
   // Define a boundary attribute set
   std::set<int> ess_bdr = {1};
@@ -64,10 +62,8 @@ void functional_test_static()
     cond = {{{1.5, 0.01, 0.0}, {0.01, 1.0, 0.0}, {0.0, 0.0, 1.0}}};
   }
 
-  serac::Domain whole_domain = serac::EntireDomain(pmesh);
-
   serac::heat_transfer::LinearConductor<dim> mat(1.0, 1.0, cond);
-  thermal_solver.setMaterial(mat, whole_domain);
+  thermal_solver.setMaterial(mat, pmesh->entireBody());
 
   // Define the function for the initial temperature and boundary condition
   auto one = [](const mfem::Vector&, double) -> double { return 1.0; };
@@ -78,7 +74,7 @@ void functional_test_static()
 
   // Define a constant source term
   serac::heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source, whole_domain);
+  thermal_solver.setSource(source, pmesh->entireBody());
 
   // Finalize the data structures
   thermal_solver.completeSetup();
@@ -109,10 +105,7 @@ void functional_test_dynamic()
   std::string filename =
       (dim == 2) ? SERAC_REPO_DIR "/data/meshes/star.mesh" : SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
-  auto mesh =
-      serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "default_mesh");
+  auto pmesh = std::make_shared<serac::Mesh>(filename, "default_mesh", serial_refinement, parallel_refinement);
 
   // Define a boundary attribute set
   std::set<int> ess_bdr = {1};
@@ -122,12 +115,10 @@ void functional_test_dynamic()
       serac::heat_transfer::default_nonlinear_options, serac::heat_transfer::default_linear_options,
       serac::heat_transfer::default_timestepping_options, "thermal_functional", "default_mesh");
 
-  serac::Domain whole_domain = serac::EntireDomain(pmesh);
-
   // Define an isotropic conductor material model
   serac::heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, 1.0);
 
-  thermal_solver.setMaterial(mat, whole_domain);
+  thermal_solver.setMaterial(mat, pmesh->entireBody());
 
   // Define the function for the initial temperature and boundary condition
   auto initial_temp = [](const mfem::Vector& x, double) -> double {
@@ -143,7 +134,7 @@ void functional_test_dynamic()
 
   // Define a constant source term
   serac::heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source, whole_domain);
+  thermal_solver.setSource(source, pmesh->entireBody());
 
   // Finalize the data structures
   thermal_solver.completeSetup();
@@ -162,12 +153,7 @@ void functional_test_dynamic()
 
 int main(int argc, char* argv[])
 {
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  // Initialize profiling
-  serac::profiling::initialize();
+  serac::ApplicationManager applicationManager(argc, argv);
 
   // Add metadata
   SERAC_SET_METADATA("test", "thermal_functional");
@@ -203,11 +189,6 @@ int main(int argc, char* argv[])
   SERAC_MARK_BEGIN("3D Quadratic Dynamic");
   functional_test_dynamic<2, 3>();
   SERAC_MARK_END("3D Quadratic Dynamic");
-
-  // Finalize profiling
-  serac::profiling::finalize();
-
-  MPI_Finalize();
 
   return 0;
 }

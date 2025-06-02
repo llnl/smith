@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -10,10 +10,10 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/thermomechanics.hpp"
 
@@ -78,13 +78,11 @@ TEST(Thermomechanics, ParameterizedMaterial)
   double outer_radius = 1.25;
   double height = 2.0;
 
-  auto mesh =
-      mesh::refineAndDistribute(build_hollow_quarter_cylinder(radial_divisions, angular_divisions, vertical_divisions,
-                                                              inner_radius, outer_radius, height),
-                                serial_refinement, parallel_refinement);
-
   std::string mesh_tag{"mesh"};
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh = std::make_shared<serac::Mesh>(
+      build_hollow_quarter_cylinder(radial_divisions, angular_divisions, vertical_divisions, inner_radius, outer_radius,
+                                    height),
+      mesh_tag, serial_refinement, parallel_refinement);
 
   NonlinearSolverOptions nonlinear_opts = solid_mechanics::default_nonlinear_options;
   LinearSolverOptions linear_opts = solid_mechanics::default_linear_options;
@@ -109,30 +107,29 @@ TEST(Thermomechanics, ParameterizedMaterial)
   double theta_ref = 0.0;  ///< datum temperature for thermal expansion
 
   ParameterizedThermoelasticMaterial material{density, E, nu, theta_ref};
-  Domain material_block = EntireDomain(pmesh);
-  simulation.setMaterial(DependsOn<0, 1>{}, material, material_block);
+  simulation.setMaterial(DependsOn<0, 1>{}, material, pmesh->entireBody());
 
   double deltaT = 1.0;
-  FiniteElementState temperature(pmesh, H1<p>{}, "theta");
+  FiniteElementState temperature(pmesh->mfemParMesh(), H1<p>{}, "theta");
 
   temperature = theta_ref;
   simulation.setParameter(0, temperature);
 
   double alpha0 = 1.0e-3;
   auto alpha_fec = std::unique_ptr<mfem::FiniteElementCollection>(new mfem::H1_FECollection(p, dim));
-  FiniteElementState alpha(pmesh, H1<p>{}, "alpha");
+  FiniteElementState alpha(pmesh->mfemParMesh(), H1<p>{}, "alpha");
 
   alpha = alpha0;
   simulation.setParameter(1, alpha);
 
   // set up essential boundary conditions
-  Domain x_equals_0 = Domain::ofBoundaryElements(pmesh, by_attr<dim>(4));
-  Domain y_equals_0 = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
-  Domain z_equals_0 = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("x_equals_0", by_attr<dim>(4));
+  pmesh->addDomainOfBoundaryElements("y_equals_0", by_attr<dim>(2));
+  pmesh->addDomainOfBoundaryElements("z_equals_0", by_attr<dim>(1));
 
-  simulation.setFixedBCs(x_equals_0, Component::X);
-  simulation.setFixedBCs(y_equals_0, Component::Y);
-  simulation.setFixedBCs(z_equals_0, Component::Z);
+  simulation.setFixedBCs(pmesh->domain("x_equals_0"), Component::X);
+  simulation.setFixedBCs(pmesh->domain("y_equals_0"), Component::Y);
+  simulation.setFixedBCs(pmesh->domain("z_equals_0"), Component::Z);
 
   // Finalize the data structures
   simulation.completeSetup();
@@ -147,7 +144,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
   simulation.outputStateToDisk("paraview");
 
   // create Domains to integrate over
-  Domain top_surface = Domain::ofBoundaryElements(pmesh, [=](std::vector<vec3> vertices, int /* attr */) {
+  pmesh->addDomainOfBoundaryElements("top_surface", [=](std::vector<vec3> vertices, int /* attr */) {
     // select the faces whose "average" z coordinate is close to the top of the mesh
     return average(vertices)[2] > 0.99 * height;
   });
@@ -162,7 +159,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
         auto n = normalize(cross(dX_dxi));
         return dot(u, n);
       },
-      top_surface);
+      pmesh->domain("top_surface"));
 
   double initial_qoi = qoi(time, simulation.displacement());
   SLIC_INFO_ROOT(axom::fmt::format("vertical displacement integrated over the top surface: {}", initial_qoi));
@@ -170,7 +167,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
 
   Functional<double(H1<p, dim>)> area({&simulation.displacement().space()});
   area.AddSurfaceIntegral(
-      DependsOn<>{}, [=](double /*t*/, auto /*position*/) { return 1.0; }, top_surface);
+      DependsOn<>{}, [=](double /*t*/, auto /*position*/) { return 1.0; }, pmesh->domain("top_surface"));
 
   double top_area = area(time, simulation.displacement());
 
@@ -239,10 +236,6 @@ TEST(Thermomechanics, ParameterizedMaterial)
 int main(int argc, char* argv[])
 {
   testing::InitGoogleTest(&argc, argv);
-
-  serac::initialize(argc, argv);
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully(result);
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

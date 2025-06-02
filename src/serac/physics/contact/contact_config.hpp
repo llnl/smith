@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -19,7 +19,7 @@ namespace serac {
  */
 enum class ContactMethod
 {
-  SingleMortar /**< Puso and Laursen 2004 w/ approximate tangent */
+  SingleMortar /**< Puso and Laursen 2004 */
 };
 
 /**
@@ -41,6 +41,15 @@ enum class ContactType
 };
 
 /**
+ * @brief Method for computing Jacobian of contact terms
+ */
+enum class ContactJacobian
+{
+  Approximate, /**< Ignore higher order contributions to the Jacobian */
+  Exact        /**< Compute exact Jacobian (needed for quadratic convergence with Newton) */
+};
+
+/**
  * @brief Stores the options for a contact pair
  */
 struct ContactOptions {
@@ -55,6 +64,9 @@ struct ContactOptions {
 
   /// Penalty parameter (only used when enforcement == ContactEnforcement::Penalty)
   double penalty = 1.0e3;
+
+  /// The method to use for Jacobian calculations
+  ContactJacobian jacobian = ContactJacobian::Approximate;
 };
 
 }  // namespace serac

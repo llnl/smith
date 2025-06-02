@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -10,8 +10,9 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/profiling.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/heat_transfer.hpp"
@@ -29,14 +30,14 @@ void functional_test(int parallel_refinement)
   std::string filename =
       (dim == 2) ? SERAC_REPO_DIR "/data/meshes/star.mesh" : SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
-  auto mesh =
-      serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), serial_refinement, parallel_refinement);
+  ::axom::sidre::DataStore datastore;
+  ::serac::StateManager::initialize(datastore, "sidreDataStore");
+
+  auto pmesh = std::make_shared<serac::Mesh>(filename, "mesh_tag", serial_refinement, parallel_refinement);
 
   // Create standard MFEM bilinear and linear forms on H1
   using space = serac::H1<p, components>;
-  auto [fespace, fec] = serac::generateParFiniteElementSpace<space>(mesh.get());
-
-  serac::Domain whole_domain = serac::EntireDomain(*mesh);
+  auto [fespace, fec] = serac::generateParFiniteElementSpace<space>(&pmesh->mfemParMesh());
 
   serac::Functional<space(space)> residual(fespace.get(), {fespace.get()});
 
@@ -48,7 +49,7 @@ void functional_test(int parallel_refinement)
         auto [u, du_dx] = phi;
         return serac::tuple{u, du_dx};
       },
-      whole_domain);
+      pmesh->entireBody());
 
   // Set a random state to evaluate the residual
   mfem::ParGridFunction u_global(fespace.get());
@@ -80,14 +81,9 @@ void functional_test(int parallel_refinement)
 
 int main(int argc, char* argv[])
 {
-  MPI_Init(&argc, &argv);
+  serac::ApplicationManager applicationManager(argc, argv);
 
   int parallel_refinement = 3;
-
-  axom::slic::SimpleLogger logger;
-
-  // Initialize profiling
-  serac::profiling::initialize();
 
   // Add metadata
   SERAC_SET_METADATA("test", "functional");
@@ -131,11 +127,6 @@ int main(int argc, char* argv[])
   SERAC_MARK_END("dimension 3, order 2");
 
   SERAC_MARK_END("vector H1");
-
-  // Finalize profiling
-  serac::profiling::finalize();
-
-  MPI_Finalize();
 
   return 0;
 }

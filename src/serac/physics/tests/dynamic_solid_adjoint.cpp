@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -16,10 +16,11 @@
 #include "mfem.hpp"
 
 #include "serac/numerics/functional/domain.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
@@ -273,7 +274,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
     MPI_Barrier(MPI_COMM_WORLD);
     StateManager::initialize(dataStore, "solid_mechanics_solve");
     std::string filename = std::string(SERAC_REPO_DIR) + "/data/meshes/star.mesh";
-    mesh = &StateManager::setMesh(mesh::refineAndDistribute(buildMeshFromFile(filename), 1), mesh_tag);
+    mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
     mat.density = 1.0;
     mat.K = 1.0;
     mat.G = 0.1;
@@ -288,7 +289,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
   }
 
   axom::sidre::DataStore dataStore;
-  mfem::ParMesh* mesh;
+  std::shared_ptr<serac::Mesh> mesh;
 
   NonlinearSolverOptions nonlinear_opts{
       .nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1.0e-15, .absolute_tol = 1.0e-14};
@@ -310,7 +311,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
 
   static constexpr double eps = 1e-7;
 
-  std::unique_ptr<SolidMechanics<p, dim>> createNonlinearSolidMechanicsSolver(Domain& whole_domain)
+  std::unique_ptr<SolidMechanics<p, dim>> createNonlinearSolidMechanicsSolver()
   {
     static int iter = 0;
 
@@ -318,7 +319,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
     auto solid = std::make_unique<SolidMechanics<p, dim>>(
         nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh_tag,
         std::vector<std::string>{}, 0, 0.0, checkpoint_to_disk, false);
-    solid->setMaterial(mat, whole_domain);
+    solid->setMaterial(mat, mesh->entireBody());
 
     auto applied_displacement = [](tensor<double, dim>, double t) {
       auto u = make_tensor<dim>([t](int) { return (1.0 + 10 * t) * boundary_disp; });
@@ -333,7 +334,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
           Y[1] = -0.05 - 0.08 * X[0] + 0.15 * X[1] + 0.3 * t;
           return 0.4 * X + Y;
         },
-        whole_domain);
+        mesh->entireBody());
     solid->completeSetup();
 
     applyInitialAndBoundaryConditions(*solid);
@@ -344,8 +345,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
 
 TEST_F(SolidMechanicsSensitivityFixture, InitialDisplacementSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
-  auto solid_solver = createNonlinearSolidMechanicsSolver(whole_domain);
+  auto solid_solver = createNonlinearSolidMechanicsSolver();
   auto [qoi_base, init_disp_sensitivity, _, __] = computeSolidMechanicsQoiSensitivities(*solid_solver, tsInfo);
 
   solid_solver->resetStates();
@@ -362,8 +362,7 @@ TEST_F(SolidMechanicsSensitivityFixture, InitialDisplacementSensitivities)
 
 TEST_F(SolidMechanicsSensitivityFixture, InitialVelocitySensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
-  auto solid_solver = createNonlinearSolidMechanicsSolver(whole_domain);
+  auto solid_solver = createNonlinearSolidMechanicsSolver();
   auto [qoi_base, _, init_velo_sensitivity, __] = computeSolidMechanicsQoiSensitivities(*solid_solver, tsInfo);
 
   solid_solver->resetStates();
@@ -379,8 +378,7 @@ TEST_F(SolidMechanicsSensitivityFixture, InitialVelocitySensitivities)
 
 TEST_F(SolidMechanicsSensitivityFixture, ShapeSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
-  auto solid_solver = createNonlinearSolidMechanicsSolver(whole_domain);
+  auto solid_solver = createNonlinearSolidMechanicsSolver();
   auto [qoi_base, _, __, shape_sensitivity] = computeSolidMechanicsQoiSensitivities(*solid_solver, tsInfo);
 
   solid_solver->resetStates();
@@ -396,9 +394,8 @@ TEST_F(SolidMechanicsSensitivityFixture, ShapeSensitivities)
 
 TEST_F(SolidMechanicsSensitivityFixture, QuasiStaticShapeSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
   dyn_opts.timestepper = TimestepMethod::QuasiStatic;
-  auto solid_solver = createNonlinearSolidMechanicsSolver(whole_domain);
+  auto solid_solver = createNonlinearSolidMechanicsSolver();
   auto [qoi_base, _, __, shape_sensitivity] = computeSolidMechanicsQoiSensitivities(*solid_solver, tsInfo);
 
   solid_solver->resetStates();
@@ -414,8 +411,7 @@ TEST_F(SolidMechanicsSensitivityFixture, QuasiStaticShapeSensitivities)
 
 TEST_F(SolidMechanicsSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjectiveAndGradient)
 {
-  Domain whole_domain = EntireDomain(*mesh);
-  auto solid_solver = createNonlinearSolidMechanicsSolver(whole_domain);
+  auto solid_solver = createNonlinearSolidMechanicsSolver();
   auto [qoi1, _, __, shape_sensitivity1] = computeSolidMechanicsQoiSensitivities(*solid_solver, tsInfo);
 
   solid_solver->resetStates();
@@ -442,9 +438,8 @@ struct BucklingSensitivityFixture : public ::testing::Test {
     // double Lx = 1.0; double Ly = 5.0;
     double Lx = 5.0;
     double Ly = 5.0;
-    mfem::Mesh smesh = mfem::Mesh::MakeCartesian2D(Nx, Ny, mfem::Element::QUADRILATERAL, true, Lx, Ly);
-    auto pmesh = mesh::refineAndDistribute(std::move(smesh), 0, 0);
-    mesh = &serac::StateManager::setMesh(std::move(pmesh), mesh_tag);
+    mesh = std::make_shared<serac::Mesh>(
+        mfem::Mesh::MakeCartesian2D(Nx, Ny, mfem::Element::QUADRILATERAL, true, Lx, Ly), mesh_tag, 0, 0);
     mat.density = 1.0;
     mat.K0 = 1.0;
     mat.G0 = 0.1;
@@ -459,7 +454,7 @@ struct BucklingSensitivityFixture : public ::testing::Test {
   }
 
   axom::sidre::DataStore dataStore;
-  mfem::ParMesh* mesh;
+  std::shared_ptr<serac::Mesh> mesh;
 
   NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
                                         .relative_tol = 1.0e-15,
@@ -489,7 +484,7 @@ struct BucklingSensitivityFixture : public ::testing::Test {
   std::string gname = "shear";
 
   template <typename DensitySpace>
-  auto createBucklingSolidMechanicsSolver(Domain& whole_domain)
+  auto createBucklingSolidMechanicsSolver()
   {
     static int iter = 0;
 
@@ -498,19 +493,18 @@ struct BucklingSensitivityFixture : public ::testing::Test {
         nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh_tag,
         std::vector<std::string>{kname, gname}, 0, 0.0, checkpoint_to_disk, false);
 
-    solid->setMaterial(serac::DependsOn<0, 1>{}, mat, whole_domain);
+    solid->setMaterial(serac::DependsOn<0, 1>{}, mat, mesh->entireBody());
     return solid;
   }
 };
 
 TEST_F(BucklingSensitivityFixture, QuasiStaticShapeSensitivities)
 {
-  Domain whole_domain = EntireDomain(*mesh);
   dyn_opts.timestepper = TimestepMethod::QuasiStatic;
 
   using DensitySpace = serac::L2<0>;
 
-  auto solid_solver = createBucklingSolidMechanicsSolver<DensitySpace>(whole_domain);
+  auto solid_solver = createBucklingSolidMechanicsSolver<DensitySpace>();
 
   auto applied_displacement_surface = Domain::ofBoundaryElements(solid_solver->mesh(), by_attr<dim>(1));
   auto applied_traction_surface = Domain::ofBoundaryElements(solid_solver->mesh(), by_attr<dim>(3));
@@ -558,8 +552,6 @@ TEST_F(BucklingSensitivityFixture, QuasiStaticShapeSensitivities)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  serac::initialize(argc, argv);
-  int result = RUN_ALL_TESTS();
-  serac::exitGracefully(result);
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

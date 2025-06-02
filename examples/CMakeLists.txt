@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -18,8 +18,8 @@ install(
         examples/serac/using-with-cmake
 )
 
-# Add the simple conduction examples
-add_subdirectory(simple_conduction)
+# Add the conduction examples
+add_subdirectory(conduction)
 
 # Add the contact examples
 add_subdirectory(contact)

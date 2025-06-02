@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -19,12 +19,12 @@
 
 #include "serac/physics/materials/liquid_crystal_elastomer.hpp"
 
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/profiling.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -229,9 +229,8 @@ void functional_solid_test_euler(NonlinSolve nonlinSolve, Prec prec)
   double load = 0.002;  // 0.004
 
   std::string meshTag = "mesh";
-  mfem::Mesh mesh = mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz);
-  auto pmesh = std::make_unique<mfem::ParMesh>(MPI_COMM_WORLD, mesh);
-  mfem::ParMesh* meshPtr = &serac::StateManager::setMesh(std::move(pmesh), meshTag);
+  auto pmesh = std::make_shared<serac::Mesh>(
+      mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz), meshTag, 0, 0);
 
   // solid mechanics
   using seracSolidType = serac::SolidMechanics<ORDER, DIM, serac::Parameters<>>;
@@ -242,25 +241,25 @@ void functional_solid_test_euler(NonlinSolve nonlinSolve, Prec prec)
                                                      serac::solid_mechanics::default_quasistatic_options, "serac_solid",
                                                      meshTag, std::vector<std::string>{});
 
-  Domain whole_domain = EntireDomain(*meshPtr);
-
   serac::solid_mechanics::NeoHookean material{density, bulkMod, shearMod};
-  seracSolid->setMaterial(material, whole_domain);
+  seracSolid->setMaterial(material, pmesh->entireBody());
 
-  serac::Domain backSurface =
-      serac::Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(3));  // 4,5 with traction makes a twist
-  serac::Domain topSurface = serac::Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(6));
+  std::string backSurfaceName = "back_surface";
+  std::string topSurfaceName = "top_surface";
+  pmesh->addDomainOfBoundaryElements(backSurfaceName, serac::by_attr<DIM>(3));  // 4,5 with traction makes a twist
+  pmesh->addDomainOfBoundaryElements(topSurfaceName, serac::by_attr<DIM>(6));
 
   int num_time_steps = 2;
   double total_time = 1.0;
   double dt = total_time / num_time_steps;
 
-  seracSolid->setTraction([&](auto, auto n, auto t) { return -load * t * n; }, topSurface);
-  seracSolid->setTraction([&](auto, auto n, auto) { return 1e-5 * n; }, backSurface);
+  seracSolid->setTraction([&](auto, auto n, auto t) { return -load * t * n; }, pmesh->domain(topSurfaceName));
+  seracSolid->setTraction([&](auto, auto n, auto) { return 1e-5 * n; }, pmesh->domain(backSurfaceName));
 
   // displacement on bottom surface
-  serac::Domain bottom_surface = Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(1));
-  seracSolid->setFixedBCs(bottom_surface);
+  std::string bottomSurfaceName = "bottom_surface";
+  pmesh->addDomainOfBoundaryElements(bottomSurfaceName, serac::by_attr<DIM>(1));
+  seracSolid->setFixedBCs(pmesh->domain(bottomSurfaceName));
 
   seracSolid->completeSetup();
 
@@ -310,9 +309,8 @@ void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, 
   SERAC_MARK_FUNCTION;
 
   std::string meshTag = "mesh";
-  mfem::Mesh mesh = mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz);
-  auto pmesh = std::make_unique<mfem::ParMesh>(MPI_COMM_WORLD, mesh);
-  mfem::ParMesh* meshPtr = &serac::StateManager::setMesh(std::move(pmesh), meshTag);
+  auto pmesh = std::make_shared<serac::Mesh>(
+      mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz), meshTag, 0, 0);
 
   // solid mechanics
   using seracSolidType = serac::SolidMechanics<ORDER, DIM, serac::Parameters<>>;
@@ -323,19 +321,17 @@ void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, 
                                                      serac::solid_mechanics::default_quasistatic_options, "serac_solid",
                                                      meshTag, std::vector<std::string>{});
 
-  Domain whole_domain = EntireDomain(*meshPtr);
-
   serac::solid_mechanics::NeoHookean material{density, bulkMod, shearMod};
-  seracSolid->setMaterial(material, whole_domain);
+  seracSolid->setMaterial(material, pmesh->entireBody());
 
   // fix displacement on side surface
-  serac::Domain side_surface = serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>({2, 3, 4, 5}));
-  seracSolid->setFixedBCs(side_surface);
-  // seracSolid->setFixedBCs(serac::Domain::ofBoundaryElements(*meshPtr, by_attr<DIM>(3));
+  std::string sideSurfaceName = "side_surface";
+  pmesh->addDomainOfBoundaryElements(sideSurfaceName, serac::by_attr<DIM>({2, 3, 4, 5}));
+  seracSolid->setFixedBCs(pmesh->domain(sideSurfaceName));
 
-  serac::Domain topSurface = serac::Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(6));
-  // seracSolid->setTraction([&](auto, auto n, auto) { return -loadMagnitude * n; }, topSurface);
-  seracSolid->setPressure([&](auto, auto) { return loadMagnitude; }, topSurface);
+  std::string topSurfaceName = "top_surface";
+  pmesh->addDomainOfBoundaryElements(topSurfaceName, serac::by_attr<DIM>(6));
+  seracSolid->setPressure([&](auto, auto) { return loadMagnitude; }, pmesh->domain(topSurfaceName));
   seracSolid->completeSetup();
   seracSolid->advanceTimestep(1.0);
 
@@ -344,7 +340,7 @@ void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, 
 
 int main(int argc, char* argv[])
 {
-  serac::initialize(argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv);
 
   SERAC_MARK_FUNCTION;
 
@@ -369,7 +365,7 @@ int main(int argc, char* argv[])
     if (e.get_name() == "CallForHelp") {
       auto msg = app.help();
       SLIC_INFO_ROOT(msg);
-      serac::exitGracefully();
+      return 0;
     } else {
       auto err_msg = axom::CLI::FailureMessage::simple(&app, e);
       SLIC_ERROR_ROOT(err_msg);
@@ -404,5 +400,5 @@ int main(int argc, char* argv[])
 
   // functional_solid_test_euler();
 
-  serac::exitGracefully(0);
+  return 0;
 }

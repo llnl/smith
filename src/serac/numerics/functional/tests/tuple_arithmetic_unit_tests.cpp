@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -11,6 +11,7 @@
 
 #include "serac/numerics/functional/tuple.hpp"
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -128,5 +129,6 @@ TEST(TupleArithmeticUnitTests, ReadTheDocsExample)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv);
   return RUN_ALL_TESTS();
 }

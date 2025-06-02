@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -11,10 +11,10 @@
 #include "axom/slic/core/SimpleLogger.hpp"
 #include <gtest/gtest.h>
 
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/infrastructure/cli.hpp"
-#include "serac/infrastructure/initialize.hpp"
 #include "serac/infrastructure/profiling.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 
 namespace serac {
 
@@ -103,16 +103,7 @@ TEST(Profiling, Exception)
 
 int main(int argc, char* argv[])
 {
-  int result = 0;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-  result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

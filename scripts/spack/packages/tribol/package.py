@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Tribol Project Developers. See the top-level COPYRIGHT file for details.
 #
 # SPDX-License-Identifier: (MIT)
@@ -44,7 +44,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     # SERAC EDIT START
     # Note: We add a number to the end of the real version number to indicate that we have
     #  moved forward past the release. Increment the last number when updating the commit sha.
-    version("0.1.0.17", commit="478ebe98c37334b4bea9f218eec6e7b7adff54c5", submodules=True, preferred=True)
+    version("0.1.0.18", commit="8351aa4e104fce00ee25c760a5c3f3c882557d50", submodules=True, preferred=True)
     # SERAC EDIT END
 
     # -----------------------------------------------------------------------

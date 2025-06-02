@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -272,6 +272,36 @@ template <typename gradient_type>
 SERAC_HOST_DEVICE auto min(dual<gradient_type> a, dual<gradient_type> b)
 {
   return (a < b) ? a : b;
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+template <typename S, typename T>
+SERAC_HOST_DEVICE constexpr auto inner(const dual<S>& A, const dual<T>& B)
+{
+  return A * B;
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+template <typename T>
+SERAC_HOST_DEVICE constexpr auto inner(double A, const dual<T>& B)
+{
+  return A * B;
+}
+
+/**
+ * @overload
+ * @note for zeroth-order tensors (scalars)
+ */
+template <typename S>
+SERAC_HOST_DEVICE constexpr auto inner(const dual<S>& A, double B)
+{
+  return A * B;
 }
 
 /** @brief implementation of square root for dual numbers */

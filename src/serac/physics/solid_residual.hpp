@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -7,19 +7,17 @@
 /**
  * @file solid_residual.hpp
  *
- * @brief Implement the residual interface for solid mechanics physics
+ * @brief Implements the residual interface for solid mechanics physics.
+ * Derives from functional_residual.
  */
 
 #pragma once
 
-#include "serac/physics/residual.hpp"
-#include "serac/physics/mesh.hpp"
-#include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/functional_residual.hpp"
 
 namespace serac {
 
-template <int order, int dim, typename parameters = Parameters<>,
-          typename parameter_indices = std::make_integer_sequence<int, parameters::n>>
+template <int order, int dim, typename InputSpaces = Parameters<>>
 class SolidResidual;
 
 /**
@@ -31,83 +29,38 @@ class SolidResidual;
  * @tparam order The order of the discretization of the displacement and velocity fields
  * @tparam dim The spatial dimension of the mesh
  */
-template <int order, int dim, typename... parameter_space, int... parameter_indices>
-class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_sequence<int, parameter_indices...>>
-    : public Residual {
+template <int order, int dim, typename... InputSpaces>
+class SolidResidual<order, dim, Parameters<InputSpaces...>>
+    : public FunctionalResidual<dim, H1<order, dim>, H1<order, dim>,
+                                Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>> {
  public:
-  static constexpr auto NUM_STATE_VARS = 3;                                  ///< displacement, velocity, acceleration
-  static constexpr auto NUM_PRE_PARAMS = 1;                                  ///< shape_displacement
-  static constexpr auto NUM_FIELD_OFFSET = NUM_STATE_VARS + NUM_PRE_PARAMS;  ///< sum of num states and num params
+  /// @brief typedef for underlying functional type with templates
+  using BaseResidualT = FunctionalResidual<dim, H1<order, dim>, H1<order, dim>,
+                                           Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>>;
 
   /// @brief a container holding quadrature point data of the specified type
   /// @tparam T the type of data to store at each quadrature point
   template <typename T>
   using qdata_type = std::shared_ptr<QuadratureData<T>>;
 
+  /// @brief disp, velo, accel
+  static constexpr int NUM_STATE_VARS = 3;
+
   /**
    * @brief Construct a new SolidResidual object
    *
    * @param physics_name A name for the physics module instance
-   * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param mesh The serac Mesh
    * @param shape_disp_space Shape displacement space
    * @param test_space Test space
    * @param parameter_fe_spaces Vector of parameters spaces
-   * @param parameter_names Vector of parameter names, must match size of parameter_fe_spaces
    */
-  SolidResidual(std::string physics_name, std::string mesh_tag, const mfem::ParFiniteElementSpace& shape_disp_space,
-                const mfem::ParFiniteElementSpace& test_space,
-                std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {},
-                std::vector<std::string> parameter_names = {})
-      : Residual(physics_name), mesh_tag_(mesh_tag), mesh_(StateManager::mesh(mesh_tag_))
+  SolidResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
+                const mfem::ParFiniteElementSpace& shape_disp_space, const mfem::ParFiniteElementSpace& test_space,
+                std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
+      : BaseResidualT(physics_name, mesh, shape_disp_space, test_space,
+                      constructAllSpaces(test_space, parameter_fe_spaces))
   {
-    std::array<const mfem::ParFiniteElementSpace*, NUM_STATE_VARS + sizeof...(parameter_space)> trial_spaces;
-    trial_spaces[0] = &test_space;
-    trial_spaces[1] = &test_space;
-    trial_spaces[2] = &test_space;
-
-    SLIC_ERROR_ROOT_IF(
-        sizeof...(parameter_space) != parameter_names.size(),
-        axom::fmt::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
-                          sizeof...(parameter_space), parameter_names.size()));
-
-    if constexpr (sizeof...(parameter_space) > 0) {
-      for_constexpr<sizeof...(parameter_space)>(
-          [&](auto i) { trial_spaces[i + NUM_STATE_VARS] = parameter_fe_spaces[i]; });
-    }
-
-    residual_ = std::make_unique<ShapeAwareFunctional<shape_trial, test(trial, trial, trial, parameter_space...)>>(
-        &shape_disp_space, &test_space, trial_spaces);
-  }
-
-  /**
-   * @brief register a custom boundary integral calculation as part of the residual
-   *
-   * @tparam active_parameters a list of indices, describing which parameters to pass to the q-function
-   * @param qfunction a callable that returns the traction on a boundary surface
-   * @param optional_domain The domain over which the boundary integral is evaluated. If nothing is supplied the entire
-   * boundary is used.
-   * ~~~ {.cpp}
-   *
-   *  solid_mechanics.addCustomBoundaryIntegral(DependsOn<>{}, [](double t, auto position, auto displacement, auto
-   * acceleration, auto shape){ auto [X, dX_dxi] = position;
-   *
-   *     auto [u, du_dxi] = displacement;
-   *     auto f           = u * 3.0 (X[0] < 0.01);
-   *     return f;  // define a displacement-proportional traction at a given support
-   *  });
-   *
-   * ~~~
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  template <int... active_parameters, typename callable>
-  void addCustomBoundaryIntegral(DependsOn<active_parameters...>, callable qfunction,
-                                 const std::optional<Domain>& optional_domain = std::nullopt)
-  {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh_);
-
-    residual_->AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<0, 1, 2, active_parameters + NUM_FIELD_OFFSET...>{},
-                                   qfunction, domain);
   }
 
   /**
@@ -115,8 +68,8 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
    *
    * @tparam MaterialType The solid material type
    * @tparam StateType the type that contains the internal variables for MaterialType
+   * @param body_name string name for a registered body Domain on the mesh
    * @param material A material that provides a function to evaluate stress
-   * @param domain Domain for material to be integrated over
    * @pre material must be a object that can be called with the following arguments:
    *    1. `MaterialType::State & state` an mutable reference to the internal variables for this quadrature point
    *    2. `tensor<T,dim,dim> du_dx` the displacement gradient at this quadrature point
@@ -133,24 +86,34 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
    * @pre MaterialType must have a public method `density` which can take FiniteElementState parameter inputs
    * @pre MaterialType must have a public method 'pkStress' which returns the first Piola-Kirchhoff stress
    *
-   * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename MaterialType, typename StateType = Empty>
-  void setMaterial(DependsOn<active_parameters...>, const MaterialType& material, Domain& domain,
+  void setMaterial(DependsOn<active_parameters...>, std::string body_name, const MaterialType& material,
                    qdata_type<StateType> qdata = EmptyQData)
   {
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
                   "invalid quadrature data provided in setMaterial()");
     MaterialStressFunctor<MaterialType> material_functor(material);
-    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 2, active_parameters + NUM_STATE_VARS...>{},
-                                 std::move(material_functor), domain, qdata);
+    BaseResidualT::residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
+        BaseResidualT::mesh_->domain(body_name), qdata);
+
+    BaseResidualT::v_residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 1, 3, active_parameters + 1 + NUM_STATE_VARS...>{},
+        [material_functor](double t, auto X, auto state, auto V, auto... params) {
+          auto flux = material_functor(t, X, state, params...);
+          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
+                 serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
+        },
+        BaseResidualT::mesh_->domain(body_name), qdata);
   }
 
   /// @overload
   template <typename MaterialType, typename StateType = Empty>
-  void setMaterial(const MaterialType& material, std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
+  void setMaterial(std::string body_name, const MaterialType& material,
+                   std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
-    setMaterial(DependsOn<>{}, material, qdata);
+    setMaterial(DependsOn<>{}, body_name, material, qdata);
   }
 
   /**
@@ -158,8 +121,8 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
    *
    * @tparam MaterialType The solid material type
    * @tparam StateType the type that contains the internal variables for MaterialType
+   * @param body_name string name for a registered domain on the mesh
    * @param material A material that provides a function to evaluate stress
-   * @param domain Domain for material to be integrated over
    * @pre material must be a object that can be called with the following arguments:
    *    1. `MaterialType::State & state` an mutable reference to the internal variables for this quadrature point
    *    2. `tensor<T,dim,dim> du_dx` the displacement gradient at this quadrature point
@@ -176,151 +139,48 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
    * @pre MaterialType must have a public method `density` which can take FiniteElementState parameter inputs
    * @pre MaterialType must have a public method 'pkStress' which returns the first Piola-Kirchhoff stress
    *
-   * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename MaterialType, typename StateType = Empty>
-  void setRateMaterial(DependsOn<active_parameters...>, const MaterialType& material, Domain& domain,
+  void setRateMaterial(DependsOn<active_parameters...>, std::string body_name, const MaterialType& material,
                        qdata_type<StateType> qdata = EmptyQData)
   {
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
                   "invalid quadrature data provided in setMaterial()");
-    RateMaterialStressFunctor<MaterialType> material_functor(material);
-    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{},
-                                 std::move(material_functor), domain, qdata);
+    RateMaterialStressFunctor<MaterialType> material_functor(material, &this->dt_);
+    BaseResidualT::residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
+        BaseResidualT::mesh_->domain(body_name), qdata);
+
+    BaseResidualT::v_residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 1, 2, 3, active_parameters + 1 + NUM_STATE_VARS...>{},
+        [material_functor, qdata](double t, auto X, auto state, auto V, auto... params) {
+          auto flux = material_functor(t, X, state, params...);
+          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
+                 serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
+        },
+        BaseResidualT::mesh_->domain(body_name), qdata);
   }
 
   /// @overload
   template <typename MaterialType, typename StateType = Empty>
-  void setRateMaterial(const MaterialType& material, std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
+  void setRateMaterial(std::string body_name, const MaterialType& material,
+                       std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
-    setRateMaterial(DependsOn<>{}, material, qdata);
-  }
-
-  /**
-   * @brief Functor representing a body force integrand.  A functor is necessary instead
-   * of an extended, generic lambda for compatibility with NVCC.
-   */
-  template <typename BodyForceType>
-  struct BodyForceIntegrand {
-    /// @brief Body force model
-    BodyForceType body_force_;
-    /// @brief Constructor for the functor
-    BodyForceIntegrand(BodyForceType body_force) : body_force_(body_force) {}
-
-    /**
-     * @brief Body force call
-     *
-     * @tparam T temperature
-     * @tparam Position Spatial position type
-     * @tparam Displacement displacement
-     * @tparam Velocity displacement
-     * @tparam Acceleration acceleration
-     * @tparam Params variadic parameters for call
-     * @param[in] t temperature
-     * @param[in] position position
-     * @param[in] params parameter pack
-     * @return The calculated material response (tuple of volumetric heat capacity and thermal flux) for a linear
-     * isotropic material
-     */
-    template <typename T, typename Position, typename Displacement, typename Velocity, typename Acceleration,
-              typename... Params>
-    auto SERAC_HOST_DEVICE operator()(T t, Position position, Displacement, Velocity, Acceleration,
-                                      Params... params) const
-    {
-      return serac::tuple{-1.0 * body_force_(get<VALUE>(position), t, params...), zero{}};
-    }
-  };
-
-  /**
-   * @brief Set the body forcefunction
-   *
-   * @tparam BodyForceType The type of the body force load
-   * @param body_force A function describing the body force applied
-   * @param optional_domain The domain over which the body force is applied. If nothing is supplied the entire domain is
-   * used.
-   * @pre body_force must be a object that can be called with the following arguments:
-   *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
-   *    2. `double t` the time (note: time will be handled differently in the future)
-   *    3. `tuple{value, derivative}`, a variadic list of tuples (each with a values and derivative),
-   *            one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
-   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
-   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
-   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
-   * 3>`)
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  template <int... active_parameters, typename BodyForceType>
-  void addBodyForce(DependsOn<active_parameters...>, BodyForceType body_force,
-                    const std::optional<Domain>& optional_domain = std::nullopt)
-  {
-    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
-    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{},
-                                 BodyForceIntegrand<BodyForceType>(body_force), domain);
-  }
-
-  /// @overload
-  template <typename BodyForceType>
-  void addBodyForce(BodyForceType body_force, const std::optional<Domain>& optional_domain = std::nullopt)
-  {
-    addBodyForce(DependsOn<>{}, body_force, optional_domain);
-  }
-
-  /**
-   * @brief Set the traction boundary condition
-   *
-   * @tparam TractionType The type of the traction load
-   * @param traction_function A function describing the traction applied to a boundary
-   * @param optional_domain The domain over which the traction is applied. If nothing is supplied the entire boundary is
-   * used.
-   * @pre TractionType must be a object that can be called with the following arguments:
-   *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
-   *    2. `tensor<T,dim> n` the outward-facing unit normal for the quadrature point
-   *    3. `double t` the time (note: time will be handled differently in the future)
-   *    4. `tuple{value, derivative}`, a variadic list of tuples (each with a values and derivative),
-   *            one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
-   *
-   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
-   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
-   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
-   * 3>`)
-   *
-   * @note This traction is applied in the reference (undeformed) configuration.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  template <int... active_parameters, typename TractionType>
-  void setTraction(DependsOn<active_parameters...>, TractionType traction_function,
-                   const std::optional<Domain>& optional_domain = std::nullopt)
-  {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh_);
-
-    residual_->AddBoundaryIntegral(
-        Dimension<dim - 1>{}, DependsOn<0, active_parameters + NUM_FIELD_OFFSET...>{},
-        [traction_function](double t, auto X, auto /* displacement */, auto... params) {
-          auto n = cross(get<DERIVATIVE>(X));
-          return -1.0 * traction_function(get<VALUE>(X), normalize(n), t, params...);
-        },
-        domain);
-  }
-
-  /// @overload
-  template <typename TractionType>
-  void setTraction(TractionType traction_function, const std::optional<Domain>& optional_domain = std::nullopt)
-  {
-    setTraction(DependsOn<>{}, traction_function, optional_domain);
+    setRateMaterial(DependsOn<>{}, body_name, material, qdata);
   }
 
   /**
    * @brief Set the pressure boundary condition
    *
+   * @tparam active_parameters the indices for active non-state params (i.e., indexing starts just after disp, velo, or
+   * accel)
    * @tparam PressureType The type of the pressure load
+   * @param boundary_name string, name of boundary domain
    * @param pressure_function A function describing the pressure applied to a boundary
-   * @param optional_domain The domain over which the pressure is applied. If nothing is supplied the entire boundary is
    * used.
    * @pre PressureType must be a object that can be called with the following arguments:
-   *    1. `tensor<T,dim> x` the reference configuration spatial coordinates for the quadrature point
-   *    2. `double t` the time (note: time will be handled differently in the future)
+   *    1. `double t` the time (note: time will be handled differently in the future)
+   *    2. `tensor<T,dim> x` the reference configuration spatial coordinates for the quadrature point
    *    3. `tuple{value, derivative}`, a variadic list of tuples (each with a values and derivative),
    *            one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
    *
@@ -330,25 +190,16 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
    * 3>`)
    *
    * @note This pressure is applied in the deformed (current) configuration if GeometricNonlinearities are on.
-   *
-   * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename PressureType>
-  void setPressure(DependsOn<active_parameters...>, PressureType pressure_function,
-                   const std::optional<Domain>& optional_domain = std::nullopt)
+  void addPressure(DependsOn<active_parameters...>, std::string boundary_name, PressureType pressure_function)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh_);
-
-    residual_->AddBoundaryIntegral(
-        Dimension<dim - 1>{}, DependsOn<0, active_parameters + NUM_FIELD_OFFSET...>{},
+    BaseResidualT::residual_->AddBoundaryIntegral(
+        Dimension<dim - 1>{}, DependsOn<0, active_parameters + NUM_STATE_VARS...>{},
         [pressure_function](double t, auto X, auto displacement, auto... params) {
           // Calculate the position and normal in the shape perturbed deformed configuration
-          auto x = X + 0.0 * displacement;
-
-          x = x + displacement;
-
+          auto x = X + displacement;
           auto n = cross(get<DERIVATIVE>(x));
-
           // serac::Functional's boundary integrals multiply the q-function output by
           // norm(cross(dX_dxi)) at that quadrature point, but if we impose a shape displacement
           // then that weight needs to be corrected. The new weight should be
@@ -361,132 +212,43 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
           // = pressure * (normal_new / norm(normal_old)) * w_old
 
           // We always query the pressure function in the undeformed configuration
-          return pressure_function(get<VALUE>(X), t, params...) * (n / norm(cross(get<DERIVATIVE>(X))));
+          return pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
         },
-        domain);
+        BaseResidualT::mesh_->domain(boundary_name));
+
+    BaseResidualT::v_residual_->AddBoundaryIntegral(
+        Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + 1 + NUM_STATE_VARS...>{},
+        [pressure_function](double t, auto X, auto V, auto displacement, auto... params) {
+          auto x = X + displacement;
+          auto n = cross(get<DERIVATIVE>(x));
+          auto pressure = pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
+          return inner(get<VALUE>(V), pressure);
+        },
+        BaseResidualT::mesh_->domain(boundary_name));
   }
 
   /// @overload
   template <typename PressureType>
-  void setPressure(PressureType pressure_function, const std::optional<Domain>& optional_domain = std::nullopt)
+  void addPressure(std::string boundary_name, PressureType pressure_function)
   {
-    setPressure(DependsOn<>{}, pressure_function, optional_domain);
+    addPressure(DependsOn<>{}, boundary_name, pressure_function);
   }
 
-  /// @overload
-  mfem::Vector residual(double time, const std::vector<FieldPtr>& fields, int block_row = 0) const override
+ protected:
+  /// @brief For use in the constructor, combined the correct number of state spaces (disp,velo,accel) with the vector
+  /// of parameters
+  /// @param state_space H1<order,dim> displacement space
+  /// @param spaces parameter spaces
+  /// @return
+  std::vector<const mfem::ParFiniteElementSpace*> constructAllSpaces(
+      const mfem::ParFiniteElementSpace& state_space, const std::vector<const mfem::ParFiniteElementSpace*>& spaces)
   {
-    SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
-    auto& disp = *fields[0];
-    auto& velo = *fields[1];
-    auto& acceleration = *fields[2];
-    auto& shape_disp = *fields[3];
-    return (*residual_)(time, shape_disp, disp, velo, acceleration, *fields[parameter_indices + NUM_FIELD_OFFSET]...);
-  }
-
-  /// @overload
-  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, const std::vector<FieldPtr>& fields,
-                                                 const std::vector<double>& jacobian_weights,
-                                                 int block_row = 0) const override
-  {
-    SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for SolidResidual");
-
-    std::unique_ptr<mfem::HypreParMatrix> J;
-
-    auto addToJ = [&J](double factor, std::unique_ptr<mfem::HypreParMatrix> jac_contrib) {
-      if (J) {
-        SLIC_ERROR_IF(J->N() != jac_contrib->N(),
-                      "Multiple nonzero jacobian weights are being used on inconsistently sized input arguments.");
-        SLIC_ERROR_IF(J->M() != jac_contrib->M(),
-                      "Multiple nonzero jacobian weights are being used on inconsistently sized input arguments.");
-        J->Add(factor, *jac_contrib);
-      } else {
-        J.reset(jac_contrib.release());
-        if (factor != 1.0) (*J) *= factor;
-      }
-    };
-
-    auto fields_in_residual_order = reorder_fields(fields);
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{},
-                                  time, fields_in_residual_order);
-
-    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      if (jacobian_weights[input_col] != 0.0) {
-        auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
-        addToJ(jacobian_weights[input_col], assemble(K));
-      }
+    std::vector<const mfem::ParFiniteElementSpace*> all_spaces{&state_space, &state_space, &state_space};
+    for (auto& s : spaces) {
+      all_spaces.push_back(s);
     }
-
-    return J;
+    return all_spaces;
   }
-
-  /// @overload
-  void jvp([[maybe_unused]] double time, [[maybe_unused]] const std::vector<FieldPtr>& fields,
-           [[maybe_unused]] const std::vector<FieldPtr>& vFields,
-           [[maybe_unused]] std::vector<DualFieldPtr>& jvpReactions) const override
-  {
-    SLIC_ERROR_IF(vFields.size() != fields.size(),
-                  "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(jvpReactions.size() != 1, "Solid mechanics nonlinear system only supports 1 output residual");
-
-    auto fields_in_residual_order = reorder_fields(fields);
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{},
-                                  time, fields_in_residual_order);
-
-    *jvpReactions[0] = 0.0;
-    serac::FiniteElementDual tmp = *jvpReactions[0];
-
-    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      if (vFields[input_col] != nullptr) {
-        auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
-        tmp = 0.0;
-        K.Mult(*vFields[input_col], tmp);
-        *jvpReactions[0] += tmp;
-      }
-    }
-    return;
-  }
-
-  /// @overload
-  void vjp([[maybe_unused]] double time, [[maybe_unused]] const std::vector<FieldPtr>& fields,
-           [[maybe_unused]] const std::vector<DualFieldPtr>& vReactions,
-           [[maybe_unused]] std::vector<FieldPtr>& vjpFields) const override
-  {
-    SLIC_ERROR_IF(vjpFields.size() != fields.size(),
-                  "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(vReactions.size() != 1, "Solid mechanics nonlinear system only supports 1 output residual");
-
-    auto fields_in_residual_order = reorder_fields(fields);
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(parameter_indices) + NUM_FIELD_OFFSET>{},
-                                  time, fields_in_residual_order);
-
-    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      auto K = serac::get<DERIVATIVE>(jacs[residual_index(input_col)](time, fields_in_residual_order));
-      std::unique_ptr<mfem::HypreParMatrix> J = assemble(K);
-      J->MultTranspose(1.0, *vReactions[0], 1.0, *vjpFields[input_col]);
-    }
-
-    return;
-  }
-
- private:
-  /// @brief Utility to evaluate residual using all fields in vector
-  template <int... i>
-  auto evaluateResidual(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
-  {
-    return (*residual_)(time, *fs[i]...);
-  };
-
-  /// @brief Utility to get array of jacobian functions, one for each input field in fs
-  template <int... i>
-  auto jacobianFunctions(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
-  {
-    using JacFuncType = std::function<decltype((*residual_)(DifferentiateWRT<1>{}, time, *fs[i]...))(
-        double, const std::vector<FieldPtr>&)>;
-    return std::array<JacFuncType, sizeof...(i)>{[=](double _time, const std::vector<FieldPtr>& _fs) {
-      return (*residual_)(DifferentiateWRT<i>{}, _time, *_fs[i]...);
-    }...};
-  };
 
   /**
    * @brief Functor representing a material stress.  A functor is used here instead of an
@@ -535,10 +297,13 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
   template <typename Material>
   struct RateMaterialStressFunctor {
     /// Constructor for the functor
-    RateMaterialStressFunctor(Material material) : material_(material) {}
+    RateMaterialStressFunctor(Material material, const double* dt) : material_(material), dt_(dt) {}
 
     /// Material model
     Material material_;
+
+    /// Time step
+    const double* dt_;
 
     /**
      * @brief Material stress response call
@@ -551,6 +316,7 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
      * @tparam Params variadic parameters for call
      * @param[in] state state
      * @param[in] displacement displacement
+     * @param[in] velocity velocity
      * @param[in] acceleration acceleration
      * @param[in] params parameter pack
      * @return The calculated material response (tuple of volumetric heat capacity and thermal flux) for a linear
@@ -558,72 +324,47 @@ class SolidResidual<order, dim, Parameters<parameter_space...>, std::integer_seq
      */
     template <typename X, typename State, typename Displacement, typename Velocity, typename Acceleration,
               typename... Params>
-    auto SERAC_HOST_DEVICE operator()(double dt, X, State& state, Displacement displacement, Velocity velocity,
+    auto SERAC_HOST_DEVICE operator()(double /*t*/, X, State& state, Displacement displacement, Velocity velocity,
                                       Acceleration acceleration, Params... params) const
     {
       auto du_dX = get<DERIVATIVE>(displacement);
       auto dv_dX = get<DERIVATIVE>(velocity);
       auto d2u_dt2 = get<VALUE>(acceleration);
 
-      auto stress = material_.pkStress(dt, state, du_dX, dv_dX, params...);
+      auto stress = material_.pkStress(*dt_, state, du_dX, dv_dX, params...);
 
       return serac::tuple{material_.density(params...) * d2u_dt2, stress};
     }
   };
-
-  /// convert between the input argument order and the argument order expected by the residual call
-  /// here we go from u, v, a, shape_u to shape_u, u, v, a
-  static constexpr std::array<size_t, 4> input_to_residual_index_map{1, 2, 3, 0};
-
-  /// @brief reorder fields from input into residual order
-  std::vector<FieldPtr> reorder_fields(const std::vector<FieldPtr>& fields) const
-  {
-    std::vector<FieldPtr> residual_fields = fields;
-    for (size_t input_col = 0; input_col < input_to_residual_index_map.size(); ++input_col) {
-      size_t res_index = input_to_residual_index_map[input_col];
-      residual_fields[res_index] = fields[input_col];
-    }
-    return residual_fields;
-  }
-
-  /// @brief convert from input ordering to ordering expected by shapeAwareFunctional
-  constexpr size_t residual_index(size_t input_index) const
-  {
-    return input_index < input_to_residual_index_map.size() ? input_to_residual_index_map[input_index] : input_index;
-  }
-
-  using trial = H1<order, dim>;        /// typedef
-  using test = H1<order, dim>;         /// typedef
-  using shape_trial = H1<order, dim>;  /// typedef
-
-  /// @brief string tag for the mesh
-  std::string mesh_tag_;
-
-  /// @brief primary mesh
-  mfem::ParMesh& mesh_;
-
-  /// @brief functional
-  std::unique_ptr<ShapeAwareFunctional<shape_trial, test(trial, trial, trial, parameter_space...)>> residual_;
 };
 
 /**
  * @brief Utility function for creating a shared_ptr<SolidResidual<>>
  */
-template <int order, int dim, typename... parameter_space>
-auto create_solid_residual(const std::string& physics_name, const serac::Mesh& mesh,
-                           const std::vector<serac::FiniteElementState*>& states,
-                           const std::vector<serac::FiniteElementState*>& params,
-                           const std::vector<std::string>& parameter_names)
+template <int order, int dim, typename... ParameterSpaces>
+auto create_solid_residual(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
+                           const std::vector<serac::FiniteElementState*>& states,  // shape, u, v, a, e
+                           const std::vector<serac::FiniteElementState*>& params)
 {
+  /// Local enum to better document the expected indexing order to states
+  enum FieldNumbering
+  {
+    SHAPE,
+    DISP,
+    VELO,
+    ACCEL,
+  };
+
   std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces;
-  if constexpr (sizeof...(parameter_space) > 0) {
-    for_constexpr<sizeof...(parameter_space)>([&](auto) { parameter_fe_spaces.push_back(&params.back()->space()); });
+
+  if constexpr (sizeof...(ParameterSpaces) > 0) {
+    for_constexpr<sizeof...(ParameterSpaces)>([&](auto i) { parameter_fe_spaces.push_back(&params[i]->space()); });
   }
 
-  using ResidualT = SolidResidual<order, dim, Parameters<parameter_space...>>;
+  using ResidualT = SolidResidual<order, dim, Parameters<ParameterSpaces...>>;
 
-  return std::make_shared<ResidualT>(physics_name, mesh.tag(), states[3]->space(), states[0]->space(),
-                                     parameter_fe_spaces, parameter_names);
+  return std::make_shared<ResidualT>(physics_name, mesh, states[SHAPE]->space(), states[DISP]->space(),
+                                     parameter_fe_spaces);
 }
 
 }  // namespace serac

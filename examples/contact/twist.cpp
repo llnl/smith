@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -9,21 +9,16 @@
 #include <set>
 #include <string>
 
-#include "axom/slic/core/SimpleLogger.hpp"
+#include "axom/slic.hpp"
 
 #include "mfem.hpp"
 
-#include "serac/numerics/functional/domain.hpp"
-#include "serac/physics/solid_mechanics_contact.hpp"
-#include "serac/infrastructure/terminator.hpp"
-#include "serac/mesh/mesh_utils.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/materials/parameterized_solid_material.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac.hpp"
 
 int main(int argc, char* argv[])
 {
-  serac::initialize(argc, argv);
+  // Initialize and automatically finalize MPI and other libraries
+  serac::ApplicationManager applicationManager(argc, argv);
 
   // NOTE: p must be equal to 1 to work with Tribol's mortar method
   constexpr int p = 1;
@@ -38,38 +33,37 @@ int main(int argc, char* argv[])
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
 
-  auto mesh = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 3, 0);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "twist_mesh");
+  auto pmesh = std::make_shared<serac::Mesh>(serac::buildMeshFromFile(filename), "twist_mesh", 3, 0);
 
-  auto fixed_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
-  auto driven_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
+  pmesh->addDomainOfBoundaryElements("fixed_surface", serac::by_attr<dim>(3));
+  pmesh->addDomainOfBoundaryElements("driven_surface", serac::by_attr<dim>(6));
 
-  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 1};
+  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
   return 1;
 #endif
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
-                                                  .relative_tol = 1.0e-7,
-                                                  .absolute_tol = 1.0e-4,
+                                                  .relative_tol = 1.0e-13,
+                                                  .absolute_tol = 1.0e-13,
                                                   .max_iterations = 200,
                                                   .print_level = 1};
 
   serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                         .enforcement = serac::ContactEnforcement::Penalty,
                                         .type = serac::ContactType::Frictionless,
-                                        .penalty = 1.0e5};
+                                        .penalty = 1.0e4,
+                                        .jacobian = serac::ContactJacobian::Exact};
 
   serac::SolidMechanicsContact<p, dim> solid_solver(
       nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "twist_mesh");
 
   serac::solid_mechanics::NeoHookean mat{1.0, 10.0, 10.0};
-  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, whole_mesh);
+  solid_solver.setMaterial(mat, pmesh->entireBody());
 
   // Pass the BC information to the solver object
-  solid_solver.setFixedBCs(fixed_surface);
+  solid_solver.setFixedBCs(pmesh->domain("fixed_surface"));
 
   auto applied_displacement = [](serac::tensor<double, dim> x, double t) {
     serac::tensor<double, dim> u{};
@@ -85,7 +79,7 @@ int main(int argc, char* argv[])
     return u;
   };
 
-  solid_solver.setDisplacementBCs(applied_displacement, driven_surface);
+  solid_solver.setDisplacementBCs(applied_displacement, pmesh->domain("driven_surface"));
 
   // Add the contact interaction
   auto contact_interaction_id = 0;
@@ -109,8 +103,6 @@ int main(int argc, char* argv[])
     // Output the sidre-based plot files
     solid_solver.outputStateToDisk(paraview_name);
   }
-
-  serac::exitGracefully();
 
   return 0;
 }

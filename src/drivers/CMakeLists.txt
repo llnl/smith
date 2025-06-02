@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -6,7 +6,7 @@
 
 #blt_add_executable( NAME        serac_driver
 #                    SOURCES     serac.cpp
-#                    DEPENDS_ON  serac_physics serac_mesh
+#                    DEPENDS_ON  serac_physics
 #                    OUTPUT_NAME serac
 #                    )
 #

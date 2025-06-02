@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -10,10 +10,10 @@
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "mfem.hpp"
 
-#include "serac/infrastructure/accelerator.hpp"
-#include "serac/infrastructure/input.hpp"
+#include "serac/infrastructure/about.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils_base.hpp"
+#include "serac/mesh_utils/mesh_utils_base.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
@@ -22,7 +22,6 @@
 
 using namespace serac;
 
-int num_procs, myid;
 int nsamples = 1;  // because mfem doesn't take in unsigned int
 
 constexpr bool verbose = false;
@@ -462,13 +461,9 @@ TEST(Elasticity, 3DCubic) { functional_test(*mesh3D, H1<3, 3>{}, H1<3, 3>{}, Dim
 
 int main(int argc, char* argv[])
 {
-  serac::accelerator::initializeDevice();
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
+  serac::ApplicationManager applicationManager(argc, argv);
+  auto [num_ranks, rank] = serac::getMPIInfo();
 
   int serial_refinement = 1;
   int parallel_refinement = 0;
@@ -480,13 +475,12 @@ int main(int argc, char* argv[])
 
   args.Parse();
   if (!args.Good()) {
-    if (myid == 0) {
+    if (rank == 0) {
       args.PrintUsage(std::cout);
     }
-    MPI_Finalize();
     exit(1);
   }
-  if (myid == 0) {
+  if (rank == 0) {
     args.PrintOptions(std::cout);
   }
 
@@ -497,10 +491,5 @@ int main(int argc, char* argv[])
   std::string meshfile3D = SERAC_REPO_DIR "/data/meshes/patch3D_hexes.mesh";
   mesh3D = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), serial_refinement, parallel_refinement);
   mesh3D->ExchangeFaceNbrData();
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  serac::accelerator::terminateDevice();
-  return result;
+  return RUN_ALL_TESTS();
 }

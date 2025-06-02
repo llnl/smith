@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -13,9 +13,10 @@
 
 #include <gtest/gtest.h>
 
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/input.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 class SlicErrorException : public std::exception {};
 
@@ -146,21 +147,10 @@ TEST(MeshGen, SuccessfulCreation)
 
 int main(int argc, char* argv[])
 {
-  int result = 0;
-
   ::testing::InitGoogleTest(&argc, argv);
-
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
+  serac::ApplicationManager applicationManager(argc, argv);
   axom::slic::setAbortFunction([]() { throw SlicErrorException{}; });
   axom::slic::setAbortOnError(true);
   axom::slic::setAbortOnWarning(false);
-
-  result = RUN_ALL_TESTS();
-
-  MPI_Finalize();
-
-  return result;
+  return RUN_ALL_TESTS();
 }

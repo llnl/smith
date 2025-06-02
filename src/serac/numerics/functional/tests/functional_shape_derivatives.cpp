@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -67,9 +67,9 @@
 #include "mfem.hpp"
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/infrastructure/input.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils_base.hpp"
+#include "serac/mesh_utils/mesh_utils_base.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
@@ -81,8 +81,6 @@
 
 using namespace serac;
 using namespace serac::profiling;
-
-int num_procs, myid;
 
 std::unique_ptr<mfem::ParMesh> mesh2D;
 std::unique_ptr<mfem::ParMesh> mesh3D;
@@ -366,11 +364,7 @@ TEST(ShapeDerivative, 3DQuadratic) { functional_test_3D<2>(*mesh3D, 1.5e-2); }
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-  axom::slic::SimpleLogger logger;
+  serac::ApplicationManager applicationManager(argc, argv);
 
   int serial_refinement = 1;
   int parallel_refinement = 0;
@@ -380,9 +374,5 @@ int main(int argc, char* argv[])
 
   std::string meshfile3D = SERAC_REPO_DIR "/data/meshes/patch3D_tets_and_hexes.mesh";
   mesh3D = mesh::refineAndDistribute(buildMeshFromFile(meshfile3D), serial_refinement, parallel_refinement);
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  return RUN_ALL_TESTS();
 }

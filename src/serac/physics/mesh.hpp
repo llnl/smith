@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -45,16 +45,34 @@ class Mesh {
   Mesh(const std::string& meshfile, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0);
 
   /// @brief Returns string tag for mesh
-  const std::string& tag() const { return mesh_tag; }
+  const std::string& tag() const { return mesh_tag_; }
 
-  /// @brief Returns parallel mfem mesh, ignores const for mfem interfaces
-  mfem::ParMesh& mfemParMesh() const { return *mfem_mesh; }
+  /// @brief Returns const parallel mfem mesh
+  const mfem::ParMesh& mfemParMesh() const { return *mfem_mesh_; }
+
+  /// @brief Returns parallel mfem mesh
+  mfem::ParMesh& mfemParMesh() { return *mfem_mesh_; }
 
   /// @brief Returns parallel communicator
   MPI_Comm getComm() const;
 
+  /// @brief  Returns string, name used to access the entire domain body
+  static std::string entireBodyName() { return "entire_body"; }
+
   /// @brief Returns domain corresponding to the entire mesh
-  serac::Domain& entireDomain() const;
+  serac::Domain& entireBody() const;
+
+  /// @brief  Returns string, name used to access the entire boundary
+  static std::string entireBoundaryName() { return "entire_boundary"; }
+
+  /// @brief Returns domain boundary corresponding to the entire mesh
+  serac::Domain& entireBoundary() const;
+
+  /// @brief  Returns string, name used to access the internal boundary elements
+  static std::string internalBoundaryName() { return "internal_boundary"; }
+
+  /// @brief Returns domain boundary corresponding to the internal boundary elements
+  serac::Domain& internalBoundary() const;
 
   /// @brief Returns registered domain with specified name
   serac::Domain& domain(const std::string& domain_name) const;
@@ -71,18 +89,30 @@ class Mesh {
   serac::Domain& addDomainOfBoundaryElements(const std::string& domain_name,
                                              std::function<bool(std::vector<vec2>, int)> func);
 
+  /// @brief create domain of 3D elements with specified name
+  /// The second argument is a function taking a std::vector<vec3> corresponding
+  /// to the nodal coordinates of the element as well as an integer corresponding to the attribute id
+  serac::Domain& addDomainOfBodyElements(const std::string& domain_name,
+                                         std::function<bool(std::vector<vec3>, int)> func);
+
+  /// @brief create domain of 2D boundary elements with specified name
+  /// The second argument is a function taking a std::vector<vec2> corresponding
+  /// to the nodal coordinates of the element as well as an integer corresponding to the attribute id
+  serac::Domain& addDomainOfBodyElements(const std::string& domain_name,
+                                         std::function<bool(std::vector<vec2>, int)> func);
+
  private:
   /// @brief Sets up some initial domains, for now just the 'entire_domain', but eventually we can read of
   /// names/blocks/attributes from the mesh and create default domains
   void createDomains();
 
-  /// @brief
-  std::string mesh_tag;
+  /// @brief String identifying mesh in the state manager
+  std::string mesh_tag_;
 
-  /// @brief
-  mfem::ParMesh* mfem_mesh;
+  /// @brief Parallel mfem mesh
+  mfem::ParMesh* mfem_mesh_;
 
-  /// @brief
+  /// @brief Map from registered domain name to the domain instance
   mutable std::map<std::string, serac::Domain> domains_;
 };
 

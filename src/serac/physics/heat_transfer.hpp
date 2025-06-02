@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -14,7 +14,6 @@
 
 #include "mfem.hpp"
 
-#include "serac/infrastructure/initialize.hpp"
 #include "serac/physics/common.hpp"
 #include "serac/physics/heat_transfer_input.hpp"
 #include "serac/physics/base_physics.hpp"
@@ -550,23 +549,6 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
   {
     setFluxBCs(DependsOn<>{}, flux_function, domain);
   }
-
-  /**
-   * @brief Set the underlying finite element state to a prescribed shape displacement
-   *
-   * This field will perturb the mesh nodes as required by shape optimization workflows.
-   *
-   * @param shape_disp The function describing the shape displacement field
-   */
-  void setShapeDisplacement(std::function<void(const mfem::Vector& x, mfem::Vector& shape_disp)> shape_disp)
-  {
-    // Project the coefficient onto the grid function
-    mfem::VectorFunctionCoefficient shape_disp_coef(dim, shape_disp);
-    shape_displacement_.project(shape_disp_coef);
-  }
-
-  /// @overload
-  void setShapeDisplacement(FiniteElementState& shape_disp) { shape_displacement_ = shape_disp; }
 
   /**
    * @brief Get the temperature state

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -11,12 +11,12 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/materials/liquid_crystal_elastomer.hpp"
-#include "serac/infrastructure/initialize.hpp"
-#include "serac/infrastructure/terminator.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;
 
@@ -38,6 +38,7 @@ TEST(LiquidCrystalElastomer, Bertoldi)
   double lx = 3.0e-3, ly = 3.0e-3, lz = 0.25e-3;
   auto initial_mesh =
       mfem::Mesh(mfem::Mesh::MakeCartesian3D(4 * nElem, 4 * nElem, nElem, mfem::Element::HEXAHEDRON, lx, ly, lz));
+  std::string mesh_tag{"mesh"};
 
 #ifdef PERIODIC_MESH
   // Create translation vectors defining the periodicity
@@ -49,14 +50,11 @@ TEST(LiquidCrystalElastomer, Bertoldi)
 
   // Create the periodic mesh using the vertex mapping defined by the translation vectors
   auto periodic_mesh = mfem::Mesh::MakePeriodic(initial_mesh, periodicMap);
-  auto mesh = mesh::refineAndDistribute(std::move(periodic_mesh), serial_refinement, parallel_refinement);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(std::move(periodic_mesh), mesh_tag, serial_refinement, parallel_refinement);
 #else
-  auto mesh = mesh::refineAndDistribute(std::move(initial_mesh), serial_refinement, parallel_refinement);
+  auto pmesh = std::make_shared<serac::Mesh>(std::move(initial_mesh), mesh_tag, serial_refinement, parallel_refinement);
 #endif
-
-  std::string mesh_tag{"mesh"};
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // Construct a functional-based solid mechanics solver
   LinearSolverOptions linear_options = {.linear_solver = LinearSolver::SuperLU};
@@ -116,13 +114,12 @@ TEST(LiquidCrystalElastomer, Bertoldi)
   // Set material
   LiquidCrystalElastomerBertoldi lceMat(density, young_modulus, possion_ratio, max_order_param, beta_param);
 
-  Domain whole_domain = EntireDomain(pmesh);
-  solid_solver.setMaterial(DependsOn<ORDER_INDEX, GAMMA_INDEX, ETA_INDEX>{}, lceMat, whole_domain);
+  solid_solver.setMaterial(DependsOn<ORDER_INDEX, GAMMA_INDEX, ETA_INDEX>{}, lceMat, pmesh->entireBody());
 
   // Boundary conditions:
   // Prescribe zero displacement at the supported end of the beam
-  auto support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
-  solid_solver.setFixedBCs(support);
+  pmesh->addDomainOfBoundaryElements("support", by_attr<dim>(2));
+  solid_solver.setFixedBCs(pmesh->domain("support"));
 
   constexpr double iniDispVal = 5.0e-6;
   auto initial_displacement = [lx](vec3 X) { return vec3{0.0, (X[0] / lx) * iniDispVal, 0.0}; };
@@ -189,10 +186,6 @@ TEST(LiquidCrystalElastomer, Bertoldi)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-
-  serac::initialize(argc, argv);
-
-  int result = RUN_ALL_TESTS();
-
-  serac::exitGracefully(result);
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }
