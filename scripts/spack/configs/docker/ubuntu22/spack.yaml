@@ -60,6 +60,10 @@ spack:
   # Regular TPLs do not need views
   view: false
 
+  include:
+    - ../defaults.yaml
+    - ../versions.yaml
+
   packages:
     all:
       target: [x86_64]
@@ -184,30 +188,3 @@ spack:
       externals:
       - spec: py-sphinx@4.3.2
         prefix: /usr
-
-    # Globally lock version of third party libraries
-    arpack-ng:
-      # 3.9.1 has this error: undefined reference to `pdsaupd_'
-      require: "@3.9.0"
-    axom:
-      require: "@0.10.1.1"
-    camp:
-      require: "@2024.07.0"
-    conduit:
-      require: "@0.9.2~test~examples~utilities"
-    hdf5:
-      variants: ~shared~mpi
-    hypre:
-      require: "@2.26.0"
-    mfem:
-      require: "@4.8.0.1"
-    petsc:
-      require: "@3.21.5"
-    raja:
-      require: "@2024.07.0~examples~exercises"
-    sundials:
-      require: "@6.7.0"
-    tribol:
-      require: "@0.1.0.18~examples~tests"
-    umpire:
-      require: "@2024.07.0~examples~werror"
