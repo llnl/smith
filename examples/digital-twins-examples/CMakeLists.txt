@@ -16,10 +16,16 @@ blt_add_executable( NAME        curing_study_driver
                     DEPENDS_ON  serac_physics serac_mesh
                     )
 
+blt_add_executable( NAME        curing_study_driver_nonlinear
+                    SOURCES     curing_study_driver_nonlinear.cpp
+                    OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                    DEPENDS_ON  serac_physics serac_mesh
+                    )
 install(
     FILES
         first_driver.cpp,
-        curing_study_driver
+        curing_study_driver.cpp,
+        curing_study_driver_nonlinear.cpp
     DESTINATION
         /g/g90/barrera/runs/digitalTwins/results
 )

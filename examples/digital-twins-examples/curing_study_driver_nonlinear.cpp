@@ -71,8 +71,9 @@ int main(int argc, char *argv[])
   // Thus, loads in Newtons yields stresses and stiffnesses in units of MPa
   //       mass in kilograms yields densities in Tg/m^3
   //       density of kg/m^3 is equivalent to mg/mm^3
-  const double shear_modulus_value = 2.69; // MPa
-  const double bulk_modulus_value = 43.9; // MPa
+  const double shear_modulus_value = 43.9; // MPa [between 0.47 and 0.495]
+  const double poisson_ratio_value = 0.48; // MPa [between 0.47 and 0.495]
+  const double bulk_modulus_value = (2.0*shear_modulus_value*(1.0+poisson_ratio_value)) / (3.0*(1.0 - 2.0*poisson_ratio_value)); // MPa  
   const double mass_density_value = 1.20; // mg/mm^3; = 1.20 kg/m^3
   const double body_force_value = 11.76e-9; // N/mm^3; = (1.2 kg/m^3)*(9.8 m/s^2) = 11.76 N/m^3
 
@@ -140,20 +141,23 @@ int main(int argc, char *argv[])
   auto linearOptions = serac::LinearSolverOptions {
       .linear_solver = serac::LinearSolver::CG,
       .preconditioner = serac::Preconditioner::HypreAMG, // HypreJacobi
-      .relative_tol = 1.0e-9,
-      .absolute_tol = 1.0e-9,
-      .max_iterations = 4000,
+      .relative_tol = 0.7*1.0e-9,
+      .absolute_tol = 0.7*1.0e-9,
+      .max_iterations = 5000,
       .print_level = 1};
   auto nonlinearOptions = serac::NonlinearSolverOptions {
-      .nonlin_solver  = serac::NonlinearSolver::Newton,
+      // .nonlin_solver  = serac::NonlinearSolver::Newton,
+      .nonlin_solver  = serac::NonlinearSolver::TrustRegion,
       .relative_tol   = 1.0e-9,
       .absolute_tol   = 1.0e-9,
-      .max_iterations = 3,
+      .min_iterations = 1, 
+      .max_iterations = 75,
+      .max_line_search_iterations = 15,
       .print_level    = 1};
   SolidMechanics<order, dim, Parameters<H1<1>, H1<1>>> solid_solver(
       nonlinearOptions, linearOptions, serac::solid_mechanics::default_quasistatic_options,
       // serac::GeometricNonlinearities::Off, // TODO
-      "curing_study_solid", mesh_tag, {"shear", "bulk"},
+      "curing_study_solid_neoHookean", mesh_tag, {"bulk_mod", "shear_mod"},
       0, // initial cycle index
       0.0, // initial time
       false, // checkpoint to disk
@@ -162,19 +166,19 @@ int main(int argc, char *argv[])
   if (0 == myid) { std::cout << "Completed creation of SolidMechanics object; moving on to define loads, etc." << std::endl; }
 
   // Create user-defied material property fields. We can compute derivatives w.r.t. these terms. TODO add shape
-  FiniteElementState user_defined_shear_modulus(pmesh, H1<1>{}, "parameterized_shear"); // TODO could project coefficient
-  user_defined_shear_modulus = shear_modulus_value;
-  FiniteElementState user_defined_bulk_modulus(pmesh, H1<1>{}, "parameterized_bulk"); // TODO could use attribute or field value
+  FiniteElementState user_defined_bulk_modulus(pmesh, H1<1>{}, "parameterized_bulk_modulus"); // TODO could use attribute or field value
   user_defined_bulk_modulus = bulk_modulus_value;
-  FiniteElementState user_defined_mass_density(pmesh, H1<1>{}, "parameterized_density"); // TODO could use attribute or coeff
-  user_defined_mass_density = mass_density_value;
+  FiniteElementState user_defined_shear_modulus(pmesh, H1<1>{}, "parameterized_shear_modulus"); // TODO could project coefficient
+  user_defined_shear_modulus = shear_modulus_value;
+  // FiniteElementState user_defined_mass_density(pmesh, H1<1>{}, "parameterized_density"); // TODO could use attribute or coeff
+  // user_defined_mass_density = mass_density_value;
 
   // Define the material property fields as parameters for the solver.
   solid_solver.setParameter(0, user_defined_bulk_modulus);
   solid_solver.setParameter(1, user_defined_shear_modulus);
 
   // Create a material model for the solver. Material property fields override the values defined at initialization
-  solid_mechanics::ParameterizedLinearIsotropicSolid mat{mass_density_value, 0.0, 0.0}; // density, delta bulk, delta shear
+  solid_mechanics::ParameterizedNeoHookeanSolid mat{mass_density_value, 0.0, 0.0}; // density, delta bulk, delta shear
   solid_solver.setMaterial(DependsOn<0, 1>{}, mat, entireDomain);
 
   // Set essential BCs
