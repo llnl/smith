@@ -47,11 +47,11 @@ int main(int argc, char* argv[])
   cube_mesh.SetCurvature(p);
 
   std::vector<mfem::Mesh*> mesh_ptrs{&ball_mesh, &cube_mesh};
-  auto mesh = serac::mesh::refineAndDistribute(mfem::Mesh(mesh_ptrs.data(), static_cast<int>(mesh_ptrs.size())), 0, 0);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "sphere_mesh");
+  auto pmesh = std::make_shared<serac::Mesh>(mfem::Mesh(mesh_ptrs.data(), static_cast<int>(mesh_ptrs.size())),
+                                             "sphere_mesh", 0, 0);
 
-  auto fixed_boundary = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
-  auto driven_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(12));
+  pmesh->addDomainOfBoundaryElements("fixed_boundary", serac::by_attr<dim>(3));
+  pmesh->addDomainOfBoundaryElements("driven_surface", serac::by_attr<dim>(12));
 
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 #ifndef MFEM_USE_STRUMPACK
@@ -75,11 +75,10 @@ int main(int argc, char* argv[])
       nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "sphere_mesh");
 
   serac::solid_mechanics::NeoHookean mat{1.0, 10.0, 0.25};
-  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, whole_mesh);
+  solid_solver.setMaterial(mat, pmesh->entireBody());
 
   // Pass the BC information to the solver object
-  solid_solver.setFixedBCs(fixed_boundary);
+  solid_solver.setFixedBCs(pmesh->domain("fixed_boundary"));
 
   auto applied_displacement = [](serac::tensor<double, dim> x, double t) {
     serac::tensor<double, dim> u{};
@@ -95,7 +94,7 @@ int main(int argc, char* argv[])
     return u;
   };
 
-  solid_solver.setDisplacementBCs(applied_displacement, driven_surface);
+  solid_solver.setDisplacementBCs(applied_displacement, pmesh->domain("driven_surface"));
 
   // Add the contact interaction
   auto contact_interaction_id = 0;

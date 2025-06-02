@@ -11,8 +11,9 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/infrastructure/application_manager.hpp"
@@ -32,21 +33,19 @@ TEST(FiniteElementVector, SetScalarFieldOver2DDomain)
   //  3--4--5
   //  |  |  |
   //  0--1--2
-  auto mesh = buildRectangleMesh(2, 2, 1.0, 1.0);
-
-  auto pmesh = mesh::refineAndDistribute(std::move(mesh), 0, 0);
+  auto pmesh = std::make_shared<serac::Mesh>(buildRectangleMesh(2, 2, 1.0, 1.0), "mesh", 0, 0);
 
   constexpr int p = 1;
 
-  FiniteElementState u(*pmesh, H1<p, 1>{});
+  FiniteElementState u(pmesh->mfemParMesh(), H1<p, 1>{});
 
-  Domain essential_boundary =
-      Domain::ofBoundaryElements(*pmesh, [](std::vector<serac::vec2> x, int /*attr*/) { return average(x)[1] < 0.1; });
+  pmesh->addDomainOfBoundaryElements("essential_boundary",
+                                     [](std::vector<serac::vec2> x, int /*attr*/) { return average(x)[1] < 0.1; });
 
   mfem::FunctionCoefficient func([](const mfem::Vector& x, double) -> double { return x[0] + 1.0; });
 
   u = 0.0;
-  u.project(func, essential_boundary);
+  u.project(func, pmesh->domain("essential_boundary"));
 
   EXPECT_NEAR(u[0], 1.0, 1.0e-15);
   EXPECT_NEAR(u[1], 1.5, 1.0e-15);
@@ -72,14 +71,12 @@ TEST(FiniteElementVector, SetVectorFieldOver2DDomain)
   //  3--4--5
   //  |  |  |
   //  0--1--2
-  auto mesh = buildRectangleMesh(2, 2, 1.0, 1.0);
+  auto pmesh = std::make_shared<serac::Mesh>(buildRectangleMesh(2, 2, 1.0, 1.0), "mesh", 0, 0);
 
-  auto pmesh = mesh::refineAndDistribute(std::move(mesh), 0, 0);
+  FiniteElementState u(pmesh->mfemParMesh(), H1<p, dim>{});
 
-  FiniteElementState u(*pmesh, H1<p, dim>{});
-
-  Domain essential_boundary =
-      Domain::ofBoundaryElements(*pmesh, [](std::vector<serac::vec2> x, int /*attr*/) { return average(x)[1] < 0.1; });
+  pmesh->addDomainOfBoundaryElements("essential_boundary",
+                                     [](std::vector<serac::vec2> x, int /*attr*/) { return average(x)[1] < 0.1; });
 
   mfem::VectorFunctionCoefficient func(dim, [](const mfem::Vector& x, mfem::Vector& v) {
     v[0] = x[0] + 1.0;
@@ -87,7 +84,7 @@ TEST(FiniteElementVector, SetVectorFieldOver2DDomain)
   });
 
   u = 0.0;
-  u.project(func, essential_boundary);
+  u.project(func, pmesh->domain("essential_boundary"));
 
   auto vdim = u.space().GetVDim();
   auto ndofs = u.space().GetTrueVSize() / vdim;

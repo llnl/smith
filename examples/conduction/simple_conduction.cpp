@@ -28,11 +28,9 @@ int main(int argc, char* argv[])
   // _statemanager_end
 
   // _create_mesh_start
-  auto mesh = serac::mesh::refineAndDistribute(serac::buildRectangleMesh(10, 10));
-
   std::string mesh_tag{"mesh"};
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh = std::make_shared<serac::Mesh>(serac::buildRectangleMesh(10, 10), mesh_tag);
   // _create_mesh_end
 
   // _create_module_start
@@ -49,8 +47,7 @@ int main(int argc, char* argv[])
   constexpr double kappa = 0.5;
   serac::heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, kappa);
 
-  serac::Domain whole_domain = serac::EntireDomain(pmesh);
-  heat_transfer.setMaterial(mat, whole_domain);
+  heat_transfer.setMaterial(mat, pmesh->entireBody());
 
   // _conductivity_end
   // _bc_start

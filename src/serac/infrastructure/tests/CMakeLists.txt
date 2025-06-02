@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause) 
 
-set(infrastructure_test_depends serac_physics serac_mesh gtest)
+set(infrastructure_test_depends serac_physics gtest)
 
 set(infrastructure_test_sources
     debug_print.cpp
