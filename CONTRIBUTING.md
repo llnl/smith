@@ -4,3 +4,7 @@ We welcome contributions to Serac. To do so please submit a pull request through
 Serac github page at https://github.com/LLNL/serac.
 
 All contributions to Serac must be made under the BSD License.
+
+# Attribution
+
+The Serac project uses git's commit history to track contributions from individual developers.
