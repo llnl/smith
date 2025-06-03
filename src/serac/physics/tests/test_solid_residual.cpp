@@ -131,8 +131,12 @@ struct ResidualFixture : public testing::Test {
     states = {shape_disp, disp, velo, accel};
     params = {density};
 
-    dual_states = states;
-    dual_params = params;
+    for (auto s : states) {
+      dual_states.push_back(serac::FiniteElementDual(s.space(), s.name() + "_dual"));
+    }
+    for (auto p : params) {
+      dual_params.push_back(serac::FiniteElementDual(p.space(), p.name() + "_dual"));
+    }
 
     v_rhs_states = states;
     v_rhs_params = params;
@@ -200,8 +204,8 @@ struct ResidualFixture : public testing::Test {
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
 
-  std::vector<serac::FiniteElementState> dual_states;
-  std::vector<serac::FiniteElementState> dual_params;
+  std::vector<serac::FiniteElementDual> dual_states;
+  std::vector<serac::FiniteElementDual> dual_params;
 
   std::vector<serac::FiniteElementState> v_rhs_states;
   std::vector<serac::FiniteElementState> v_rhs_params;
@@ -223,7 +227,7 @@ TEST_F(ResidualFixture, VjpConsistency)
   };
 
   // test vjp
-  serac::FiniteElementDual v(res_vector.space(), "v");
+  serac::FiniteElementState v(res_vector.space(), "v");
   pseudoRand(v);
   auto all_vjps = getPointers(dual_states, dual_params);
 

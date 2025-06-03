@@ -233,22 +233,22 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   }
 
   /// @overload
-  void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<DualFieldPtr>& v_reactions,
-           const std::vector<FieldPtr>& vjp_fields) const override
+  void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
+           const std::vector<DualFieldPtr>& vjp_sensitivities) const override
   {
-    SLIC_ERROR_IF(vjp_fields.size() != fields.size(),
+    SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(v_reactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
+    SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time,
-                                           v_reactions[0], fields);
+                                           v_fields[0], fields);
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      if (vjp_fields[input_col] != nullptr) {
-        auto vecJac = serac::get<DERIVATIVE>(vecJacs[input_col](time, v_reactions[0], fields));
+      if (vjp_sensitivities[input_col] != nullptr) {
+        auto vecJac = serac::get<DERIVATIVE>(vecJacs[input_col](time, v_fields[0], fields));
         auto vecJacMfemVector = assemble(vecJac);
-        *vjp_fields[input_col] += *vecJacMfemVector;
+        *vjp_sensitivities[input_col] += *vecJacMfemVector;
       }
     }
   }
@@ -279,12 +279,12 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
 
   /// @brief Utility to get array of jvp functions, one for each input field in fs
   template <int... i>
-  auto vectorJacobianFunctions(std::integer_sequence<int, i...>, double time, DualFieldPtr v,
+  auto vectorJacobianFunctions(std::integer_sequence<int, i...>, double time, FieldPtr v,
                                const std::vector<FieldPtr>& fs) const
   {
     using GradFuncType = std::function<decltype((*v_residual_)(DifferentiateWRT<1>{}, time, *v, *fs[i]...))(
-        double, DualFieldPtr, const std::vector<FieldPtr>&)>;
-    return std::array<GradFuncType, sizeof...(i)>{[=](double _time, DualFieldPtr _v, const std::vector<FieldPtr>& _fs) {
+        double, FieldPtr, const std::vector<FieldPtr>&)>;
+    return std::array<GradFuncType, sizeof...(i)>{[=](double _time, FieldPtr _v, const std::vector<FieldPtr>& _fs) {
       std::vector<mfem::Vector*> _vfs{_v};
       _vfs.insert(_vfs.end(), _fs.begin() + 1, _fs.end());
       constexpr bool is_shape_disp = i == 0;
