@@ -281,16 +281,7 @@ int main(int argc, char* argv[])
   res_vector = residual->residual(time, dt, all_states);
 
   std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, 0.0, 0.0};
-  ////std::vector<serac::FiniteElementState *> r_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[VELO],
-  ///all_states[ACCEL]};
   auto drdu_unique = residual->jacobian(time, dt, all_states, jacobian_weights);
-
-  // for (const auto & c : constraints)
-  //{
-  //    std::cout << "c_i" << c->evaluate(time, dt, objective_states) << std::endl;
-  //    std::cout << "dim(grad_u c_i) = " << c->gradient(time, dt, objective_states, DISP).Size() << std::endl;
-  //
-  // }
 
   // initialize displacement
   states[FIELD::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {

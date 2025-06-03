@@ -30,10 +30,10 @@ class HomotopySolver {
   HypreParMatrix *dFdx, *dFdy, *dQdx, *dQdy;
 
   HypreParMatrix *JGxx, *JGxs, *JGsx, *JGss, *JGsy, *JGyx, *JGyy;
-  
+
   // linear-solver of the continuation system
   Solver* linSolver;
-  
+
   // Homotopy variable/parameters (eq 12.)
   double theta0 = 0.9;
   const double p = 1.5;
@@ -69,7 +69,6 @@ class HomotopySolver {
   bool converged;
   int max_outer_iter = 100;
   int jOpt;
-
 
   int MyRank;
   bool iAmRoot;
