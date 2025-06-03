@@ -114,7 +114,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   void resetStates(int cycle = 0, double time = 0.0) override
   {
     SolidMechanicsBase::resetStates(cycle, time);
-    printf("resetting state\n");
     forces_ = 0.0;
     contact_.setDisplacements(shape_displacement_, displacement_);
     contact_.reset();
