@@ -247,6 +247,7 @@ class ContactData {
    */
   int num_pressure_dofs_;
 
+#ifdef SERAC_USE_TRIBOL
   /**
    * @brief Tracks whether the Jacobian and pressure offsets need to be updated
    *
@@ -254,6 +255,7 @@ class ContactData {
    *
    */
   mutable bool offsets_up_to_date_;
+#endif
 
   /**
    * @brief Offsets giving size of each block Jacobian contribution
@@ -284,9 +286,11 @@ class ContactData {
    */
   mutable mfem::Array<HYPRE_BigInt> global_pressure_dof_offsets_;
 
+#ifdef SERAC_USE_TRIBOL
   int cycle_{0};
   double time_{0.0};
   double dt_{1.0};
+#endif
 };
 
 }  // namespace serac
