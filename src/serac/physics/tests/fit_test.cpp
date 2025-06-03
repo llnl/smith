@@ -7,8 +7,9 @@
 #include "serac/physics/fit.hpp"
 #include "serac/numerics/functional/functional.hpp"
 
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/solid_mechanics.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 
@@ -29,8 +30,6 @@ void stress_extrapolation_test()
 
   std::string filename = SERAC_REPO_DIR "/data/meshes/notched_plate.mesh";
 
-  auto mesh_ = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
   constexpr int p = 2;
   constexpr int dim = 2;
 
@@ -41,10 +40,9 @@ void stress_extrapolation_test()
   serac::StateManager::initialize(datastore, "solid_mechanics_J2_test");
 
   // Construct the appropriate dimension mesh and give it to the data store
-
   std::string mesh_tag{"mesh"};
-
-  auto& pmesh = StateManager::setMesh(std::move(mesh_), mesh_tag);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
@@ -54,7 +52,7 @@ void stress_extrapolation_test()
                                            .max_iterations = 5000,
                                            .print_level = 1};
 
-  FiniteElementState sigma_J2(pmesh, output_space{}, "sigma_J2");
+  FiniteElementState sigma_J2(pmesh->mfemParMesh(), output_space{}, "sigma_J2");
 
   SolidMechanics<p, dim, serac::Parameters<output_space> > solid_solver(nonlinear_options, linear_options,
                                                                         solid_mechanics::default_quasistatic_options,
@@ -66,22 +64,20 @@ void stress_extrapolation_test()
       50.0    // shear modulus
   };
 
-  Domain whole_domain = EntireDomain(pmesh);
-
-  solid_solver.setMaterial(mat, whole_domain);
+  solid_solver.setMaterial(mat, pmesh->entireBody());
 
   // prescribe small displacement at each hole, pulling the plate apart
-  Domain top_hole = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
+  pmesh->addDomainOfBoundaryElements("top_hole", by_attr<dim>(2));
   auto up = [](tensor<double, dim>, double) {
     tensor<double, dim> u{};
     u[1] = 0.01;
     return u;
   };
-  solid_solver.setDisplacementBCs(up, top_hole);
+  solid_solver.setDisplacementBCs(up, pmesh->domain("top_hole"));
 
-  Domain bottom_hole = Domain::ofBoundaryElements(pmesh, by_attr<dim>(3));
+  pmesh->addDomainOfBoundaryElements("bottom_hole", by_attr<dim>(3));
   auto down = [up](tensor<double, dim> X, double time) { return -up(X, time); };
-  solid_solver.setDisplacementBCs(down, bottom_hole);
+  solid_solver.setDisplacementBCs(down, pmesh->domain("bottom_hole"));
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -101,7 +97,7 @@ void stress_extrapolation_test()
         auto stress = mat(internal_variables, du_dx);
         return tuple{I2(dev(stress)), zero{}};
       },
-      pmesh, u);
+      pmesh->mfemParMesh(), u);
 
   solid_solver.setParameter(0, sigma_J2);
 

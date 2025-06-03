@@ -14,7 +14,7 @@
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils_base.hpp"
+#include "serac/mesh_utils/mesh_utils_base.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"

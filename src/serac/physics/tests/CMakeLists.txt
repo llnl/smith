@@ -13,7 +13,7 @@ blt_add_library(
     HEADERS     ${physics_test_headers}
     )
       
-set(physics_test_depends serac_physics serac_mesh serac_physics_test_utils gtest)
+set(physics_test_depends serac_physics serac_physics_test_utils gtest)
 
 set(physics_serial_test_sources
     beam_bending.cpp

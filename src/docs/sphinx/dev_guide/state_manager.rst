@@ -51,7 +51,8 @@ to which data will be saved.
 Before any other kinds of state can be created, a mesh must be registered via ``SetMesh()``.
 In order for a restart to work properly, all state data must be owned by the underlying
 ``StateManager``, so ownership of the mesh is transferred via a ``unique_ptr``.  In the case of multi-mesh
-simulations, a name should also be used to uniquely identify the mesh.
+simulations, a name or "tag" should also be used to uniquely identify the mesh. This is done automatically via
+the ``serac::Mesh`` class.
 
 Individual physics modules - that are of course based on these kinds of state - can now be constructed.
 In general, this process looks something like the following:

@@ -7,7 +7,7 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
@@ -89,8 +89,12 @@ struct ResidualFixture : public testing::Test {
     states = {disp, velo};
     params = {shape_disp, density};
 
-    dual_states = states;
-    dual_params = params;
+    for (auto s : states) {
+      dual_states.push_back(serac::FiniteElementDual(s.space(), s.name() + "_dual"));
+    }
+    for (auto p : params) {
+      dual_params.push_back(serac::FiniteElementDual(p.space(), p.name() + "_dual"));
+    }
 
     v_rhs_states = states;
     v_rhs_params = params;
@@ -166,8 +170,8 @@ struct ResidualFixture : public testing::Test {
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
 
-  std::vector<serac::FiniteElementState> dual_states;
-  std::vector<serac::FiniteElementState> dual_params;
+  std::vector<serac::FiniteElementDual> dual_states;
+  std::vector<serac::FiniteElementDual> dual_params;
 
   std::vector<serac::FiniteElementState> v_rhs_states;
   std::vector<serac::FiniteElementState> v_rhs_params;
@@ -190,17 +194,17 @@ TEST_F(ResidualFixture, VjpConsistency)
   };
 
   // test vjp
-  serac::FiniteElementDual v(res_vector.space(), "v");
+  serac::FiniteElementState v(res_vector.space(), "v");
   pseudoRand(v);
   auto all_jvps = getPointers(dual_states, dual_params);
 
-  std::vector<serac::FiniteElementState> all_Jvps;
+  std::vector<serac::FiniteElementDual> all_Jvps;
   for (auto& jvp : all_jvps) {
     all_Jvps.push_back(*jvp);
   }
 
   for (size_t i = 0; i < all_states.size(); ++i) {
-    serac::FiniteElementState& vjp = all_Jvps[i];
+    serac::FiniteElementDual& vjp = all_Jvps[i];
     auto J = residual->jacobian(time, dt, all_states, jacobian_weights(i));
     J->AddMultTranspose(v, vjp);
   }

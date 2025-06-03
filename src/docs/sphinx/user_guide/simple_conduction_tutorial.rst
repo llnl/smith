@@ -57,8 +57,9 @@ Constructing the Mesh
 
 Serac's mesh utilities include support for reading meshes from a file and for generating meshes of common solids,
 like cuboids, rectangles, disks, and cylinders. In this introductory example, we will use a simple square 
-mesh with 10 quadrilateral elements in each space dimension for 100 elements total.  Once created, the primary
-mesh must always be registered with the ``StateManager``: 
+mesh with 10 quadrilateral elements in each space dimension for 100 elements total. Serac's mesh class,
+``serac::Mesh``, takes in one of these meshes and automatically adds it to the ``StateManager``. Once created, the
+primary mesh will be registered with the ``StateManager``: 
 
 .. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _create_mesh_start
