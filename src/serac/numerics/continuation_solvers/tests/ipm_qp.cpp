@@ -140,7 +140,7 @@ double QPTestProblem::E(const Vector& u, int& eval_err)
 
 void QPTestProblem::DdE(const Vector& u, Vector& gradE) { gradE.Set(1.0, u); }
 
-HypreParMatrix* QPTestProblem::DddE(const Vector& u) { return d2Edu2; }
+HypreParMatrix* QPTestProblem::DddE(const Vector& /*u*/) { return d2Edu2; }
 
 void QPTestProblem::g(const Vector& u, Vector& gu, int& eval_err)
 {
@@ -150,7 +150,7 @@ void QPTestProblem::g(const Vector& u, Vector& gu, int& eval_err)
   gu.Add(-1.0, ul);
 }
 
-HypreParMatrix* QPTestProblem::Ddg(const Vector& u) { return dgdu; }
+HypreParMatrix* QPTestProblem::Ddg(const Vector& /*u*/) { return dgdu; }
 
 QPTestProblem::~QPTestProblem()
 {
