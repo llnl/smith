@@ -7,4 +7,4 @@
 add_subdirectory(infrastructure)
 add_subdirectory(numerics)
 add_subdirectory(physics)
-add_subdirectory(mesh)
+add_subdirectory(mesh_utils)

@@ -6,4 +6,4 @@
 
 blt_add_executable(NAME       partitioner
                    SOURCES    partitioner.cpp
-                   DEPENDS_ON serac_mesh)
+                   DEPENDS_ON serac_mesh_utils)

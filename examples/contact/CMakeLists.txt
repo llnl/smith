@@ -18,7 +18,12 @@ if(TRIBOL_FOUND)
         blt_add_executable(NAME        contact_${example_name}
                            SOURCES     ${filename}
                            OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
-                           DEPENDS_ON  serac_physics serac_mesh)
+                           DEPENDS_ON  serac_physics serac_mesh_utils)
+
+        # TODO Shorten runtime down to less than one minute
+        # blt_add_test(NAME            contact_${example_name}
+        #              COMMAND         contact_${example_name}
+        #              NUM_MPI_TASKS   4)
 
         if(SERAC_ENABLE_HIP)
             blt_add_target_compile_flags(TO contact_${example_name} FLAGS "-fgpu-rdc")

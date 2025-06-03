@@ -31,8 +31,7 @@ int main(int argc, char* argv[])
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/ironing.mesh";
 
-  auto mesh = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 2, 0);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "ironing_mesh");
+  std::shared_ptr<serac::Mesh> mesh = std::make_shared<serac::Mesh>(filename, "ironing_mesh", 2, 0);
 
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 
@@ -54,10 +53,10 @@ int main(int argc, char* argv[])
                                         .jacobian = serac::ContactJacobian::Exact};
 
   serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
-      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "ironing_mesh",
+      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh->tag(),
       {"bulk_mod", "shear_mod"});
 
-  serac::FiniteElementState K_field(serac::StateManager::newState(serac::L2<0>{}, "bulk_mod", "ironing_mesh"));
+  serac::FiniteElementState K_field(serac::StateManager::newState(serac::L2<0>{}, "bulk_mod", mesh->tag()));
   // each vector value corresponds to a different element attribute:
   // [0] (element attribute 1) : the substrate
   // [1] (element attribute 2) : indenter block
@@ -66,7 +65,7 @@ int main(int argc, char* argv[])
   K_field.project(K_coeff);
   solid_solver.setParameter(0, K_field);
 
-  serac::FiniteElementState G_field(serac::StateManager::newState(serac::L2<0>{}, "shear_mod", "ironing_mesh"));
+  serac::FiniteElementState G_field(serac::StateManager::newState(serac::L2<0>{}, "shear_mod", mesh->tag()));
   // each vector value corresponds to a different element attribute:
   // [0] (element attribute 1) : the substrate
   // [1] (element attribute 2) : indenter block
@@ -76,14 +75,13 @@ int main(int argc, char* argv[])
   solid_solver.setParameter(1, G_field);
 
   serac::solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
-  solid_solver.setMaterial(serac::DependsOn<0, 1>{}, mat, whole_mesh);
+  solid_solver.setMaterial(serac::DependsOn<0, 1>{}, mat, mesh->entireBody());
 
   // Pass the BC information to the solver object
-  serac::Domain bottom_of_substrate = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(5));
-  solid_solver.setFixedBCs(bottom_of_substrate);
+  mesh->addDomainOfBoundaryElements("bottom_of_subtrate", serac::by_attr<dim>(5));
+  solid_solver.setFixedBCs(mesh->domain("bottom_of_subtrate"));
 
-  serac::Domain top_of_indenter = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(12));
+  mesh->addDomainOfBoundaryElements("top_of_indenter", serac::by_attr<dim>(12));
   auto applied_displacement = [](serac::tensor<double, dim>, double t) {
     constexpr double init_steps = 2.0;
     serac::tensor<double, dim> u{};
@@ -95,7 +93,7 @@ int main(int argc, char* argv[])
     }
     return u;
   };
-  solid_solver.setDisplacementBCs(applied_displacement, top_of_indenter);
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("top_of_indenter"));
 
   // Add the contact interaction
   auto contact_interaction_id = 0;

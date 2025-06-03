@@ -26,7 +26,7 @@
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/output.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/heat_transfer.hpp"
 #include "serac/numerics/equation_solver.hpp"

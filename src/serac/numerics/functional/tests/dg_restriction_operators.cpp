@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include "serac/mesh/mesh_utils_base.hpp"
+#include "serac/mesh_utils/mesh_utils_base.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"
 #include "serac/numerics/functional/functional.hpp"
