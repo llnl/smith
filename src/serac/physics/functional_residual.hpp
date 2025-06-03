@@ -233,20 +233,20 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   }
 
   /// @overload
-  void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& vs,
+  void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
            const std::vector<DualFieldPtr>& vjp_sensitivities) const override
   {
     SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(vs.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
+    SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
-    auto vecJacs =
-        vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, vs[0], fields);
+    auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time,
+                                           v_fields[0], fields);
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-        auto vecJac = serac::get<DERIVATIVE>(vecJacs[input_col](time, vs[0], fields));
+        auto vecJac = serac::get<DERIVATIVE>(vecJacs[input_col](time, v_fields[0], fields));
         auto vecJacMfemVector = assemble(vecJac);
         *vjp_sensitivities[input_col] += *vecJacMfemVector;
       }
