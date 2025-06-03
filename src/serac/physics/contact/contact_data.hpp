@@ -75,7 +75,7 @@ class ContactData {
   void update(int cycle, double time, double& dt);
 
   /**
-   * @brief Updates the positions, forces, and Jacobian contributions associated with contact
+   * @brief Resets the contact pressures to zero
    *
    */
   void reset();

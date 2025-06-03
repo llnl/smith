@@ -14,48 +14,10 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-
-namespace serac {
-
-/// Serac wrapper for mfem mesh to handle construction of parallel mesh
-/// and also management of domains
-class Mesh {
- public:
-  Mesh(const std::string& mesh_path, const std::string& mesh_tag, int serial_refine, int parallel_refine)
-  {
-    pmesh = &StateManager::setMesh(
-        mesh::refineAndDistribute(buildMeshFromFile(mesh_path), serial_refine, parallel_refine), mesh_tag);
-    domains.insert({"entire_domain", EntireDomain(*pmesh)});
-  }
-
-  mfem::ParMesh& parallelMesh() { return *pmesh; }
-  const mfem::ParMesh& parallelMesh() const { return *pmesh; }
-
-  Domain& domain(const std::string& domain_name) const
-  {
-    SLIC_ERROR_IF(domains.find(domain_name) == domains.end(),
-                  axom::fmt::format("Domain named '{} is not registered on the serac mesh", domain_name));
-    return domains.at(domain_name);
-  }
-
-  Domain& entire_domain() const { return domain("entire_domain"); }
-
-  Domain& addDomainOfBoundaryElements(const std::string& domain_name, std::function<bool(std::vector<vec3>, int)> func)
-  {
-    domains.insert({domain_name, Domain::ofBoundaryElements(*pmesh, func)});
-    return domain(domain_name);
-  }
-
- private:
-  mutable std::map<std::string, serac::Domain> domains;
-  mfem::ParMesh* pmesh;
-};
-
-}  // namespace serac
 
 namespace serac {
 
@@ -101,7 +63,7 @@ std::unique_ptr<SolidMechT> createContactSolver(const Mesh& mesh, const Nonlinea
                                             physics_prefix + std::to_string(iter++), mesh_tag,
                                             std::vector<std::string>{}, 0, 0.0, false, true);
 
-  solid->setMaterial(mat, mesh.entire_domain());
+  solid->setMaterial(mat, mesh.entireBody());
   solid->setFixedBCs(mesh.domain("two"));
   solid->setDisplacementBCs(
       [](tensor<double, dim> x, double) {
