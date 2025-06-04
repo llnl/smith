@@ -14,7 +14,7 @@
 
 #include <vector>
 #include <string>
-#include "serac/physics/common.hpp"
+#include <memory>
 
 namespace mfem {
 class Vector;

@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "serac/physics/common.hpp"
 #include "serac/physics/residual.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
