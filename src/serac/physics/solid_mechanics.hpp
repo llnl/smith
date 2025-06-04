@@ -490,6 +490,39 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   }
 
   /**
+    * @brief Set the displacement essential boundary conditions on a set of true degrees of freedom
+    *
+    * @param true_dofs A set of true degrees of freedom to set the displacement on
+    * @param disp The vector function containing the prescribed displacement values
+    *
+    * The @a true_dofs list can be determined using functions from the @a mfem::ParFiniteElementSpace related to the
+    * displacement @a serac::FiniteElementState .
+    *
+    * For the displacement function, the first argument is the input position, the second argument is time,
+    * and the third argument is the prescribed output displacement vector.
+    *
+    * @note The displacement function is required to be vector-valued. However, only the dofs specified in the @a
+    * true_dofs array will be set. This means that if the @a true_dofs array only contains dofs for a specific vector
+    * component in a vector-valued finite element space, only that component will be set.
+    *
+    * @note This method must be called prior to completeSetup()
+    */
+   template <typename AppliedDisplacementFunction>
+   void setDisplacementBCsByDofList(AppliedDisplacementFunction applied_displacement, const mfem::Array<int> true_dofs)
+   {
+    // std::function<void(const mfem::Vector&, double, mfem::Vector&)> disp
+    auto mfem_vector_coefficient_function = [applied_displacement](const mfem::Vector& X_mfem, double t, mfem::Vector& u_mfem) {
+          auto X = make_tensor<dim>([&X_mfem](int k) { return X_mfem[k]; });
+          auto u = applied_displacement(X, t);
+          for (int i = 0; i < dim; i++) {
+            u_mfem(i) = u[i];
+          }
+        };
+     disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, mfem_vector_coefficient_function);
+     bcs_.addEssentialByTrueDofs(true_dofs, disp_bdr_coef_, displacement_.space());
+   }
+
+  /**
    * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area for a single
    * displacement vector component
    *

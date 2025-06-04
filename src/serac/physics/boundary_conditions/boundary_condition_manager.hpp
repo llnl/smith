@@ -54,6 +54,10 @@ class BoundaryConditionManager {
   void addEssential(const mfem::Array<int>& local_dofs, std::shared_ptr<mfem::Coefficient> ess_bdr_coef,
                     mfem::ParFiniteElementSpace& space, std::optional<int> component = {});
 
+  void addEssentialByTrueDofs(const mfem::Array<int>& true_dofs, 
+                              std::shared_ptr<mfem::VectorCoefficient> ess_bdr_coef,
+                              mfem::ParFiniteElementSpace& space);
+
   /**
    * @brief Returns all the true degrees of freedom associated with all the essential BCs
    * @return A const reference to the list of true DOF indices, without duplicates and sorted
