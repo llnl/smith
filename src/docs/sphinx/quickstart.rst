@@ -1,4 +1,4 @@
-.. ## Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+.. ## Copyright (c) Lawrence Livermore National Security, LLC and
 .. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
@@ -157,7 +157,7 @@ Some helpful uberenv options include :
 * ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
 * ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Serac repository
 
-The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='%clang@14.0.6+devtools build_type=Debug'``.
+The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang@14.0.6'``.
 
 If you already have a Spack instance from another project that you would like to reuse,
 you can do so by changing the uberenv command as follows:
@@ -264,6 +264,9 @@ Building Serac Dependencies on MacOS
 ------------------------------------
 .. warning::
    These instructions are in development, but have been tested for M2 MacBooks.
+
+.. note::
+   View an example host-config for MacOS in ``host-configs/other/firion-darwin-sequoia-m2-clang@14.0.6.cmake``.
 
 Installing base dependencies using Homebrew
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -376,7 +379,7 @@ Uberenv is a Spack wrapper simplifing the TPL build process. The invocation of `
 
 .. code-block:: bash
 
-   $ ./scripts/uberenv/uberenv.py --spack-env-file=/path/to/spack.yaml --prefix=/path/to/install --spec="%clang@14 ^openmpi@5"
+   $ ./scripts/uberenv/uberenv.py --spack-env-file=/path/to/spack.yaml --prefix=/path/to/install --spec="^openmpi@5 clang@14"
 
 .. note::
-   To build with devtools and profiling enabled, change the spec to ``"%clang@14+devtools+profiling ^openmpi@5"``
+   To build with devtools and profiling enabled, change the spec to ``"+devtools+profiling ^openmpi@5 %clang@14"``

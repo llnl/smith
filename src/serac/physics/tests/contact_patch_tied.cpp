@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -15,8 +15,9 @@
 #include "mfem.hpp"
 
 #include "serac/numerics/functional/domain.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
@@ -41,13 +42,12 @@ TEST_P(ContactPatchTied, patch)
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 3, 0);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "patch_mesh");
+  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), "patch_mesh", 3, 0);
 
-  Domain x0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  Domain y0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
-  Domain z0_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
-  Domain zmax_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
+  pmesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(2));
+  pmesh->addDomainOfBoundaryElements("z0_face", serac::by_attr<dim>(3));
+  pmesh->addDomainOfBoundaryElements("zmax_face", serac::by_attr<dim>(6));
 
 // TODO: investigate performance with Petsc
 // #ifdef SERAC_USE_PETSC
@@ -60,7 +60,7 @@ TEST_P(ContactPatchTied, patch)
 //   };
 // #elif defined(MFEM_USE_STRUMPACK)
 #ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 1};
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #else
   LinearSolverOptions linear_options{};
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -68,15 +68,16 @@ TEST_P(ContactPatchTied, patch)
 #endif
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
-                                           .relative_tol = 1.0e-10,
-                                           .absolute_tol = 1.0e-10,
+                                           .relative_tol = 1.0e-13,
+                                           .absolute_tol = 1.0e-13,
                                            .max_iterations = 20,
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = GetParam().first,
                                  .type = ContactType::TiedNormal,
-                                 .penalty = 1.0e4};
+                                 .penalty = 8.0e2,
+                                 .jacobian = ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, "patch_mesh");
@@ -84,18 +85,17 @@ TEST_P(ContactPatchTied, patch)
   double K = 10.0;
   double G = 0.25;
   solid_mechanics::NeoHookean mat{1.0, K, G};
-  Domain material_block = EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, material_block);
+  solid_solver.setMaterial(mat, pmesh->entireBody());
 
   // NOTE: Tribol will miss this contact if warm start doesn't account for contact
   constexpr double max_disp = 0.2;
   auto nonzero_disp_bc = [](vec3, double t) { return vec3{{0.0, 0.0, -max_disp * t}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  solid_solver.setFixedBCs(x0_faces, Component::X);
-  solid_solver.setFixedBCs(y0_faces, Component::Y);
-  solid_solver.setFixedBCs(z0_face, Component::Z);
-  solid_solver.setDisplacementBCs(nonzero_disp_bc, zmax_face, Component::Z);
+  solid_solver.setFixedBCs(pmesh->domain("x0_faces"), Component::X);
+  solid_solver.setFixedBCs(pmesh->domain("y0_faces"), Component::Y);
+  solid_solver.setFixedBCs(pmesh->domain("z0_face"), Component::Z);
+  solid_solver.setDisplacementBCs(nonzero_disp_bc, pmesh->domain("zmax_face"), Component::Z);
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {4}, {5}, contact_options);

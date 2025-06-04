@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -8,16 +8,10 @@
 #include <fstream>
 
 #include "axom/inlet.hpp"
-#include "axom/slic/core/SimpleLogger.hpp"
+#include "axom/slic.hpp"
 #include "mfem.hpp"
 
-#include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh/mesh_utils.hpp"
-#include "serac/physics/boundary_conditions/components.hpp"
-#include "serac/physics/materials/solid_material.hpp"
-#include "serac/physics/solid_mechanics.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac.hpp"
 
 template <class Physics>
 void output(double u, double f, const Physics& solid, const std::string& paraview_tag, std::ofstream& file)
@@ -89,17 +83,15 @@ int main(int argc, char* argv[])
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, simulation_tag + "_data");
 
-  auto mesh = serac::mesh::refineAndDistribute(
-      serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length),
+  auto pmesh = std::make_shared<serac::Mesh>(
+      serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length), mesh_tag,
       serial_refinement, parallel_refinement);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // create boundary domains for boundary conditions
-  auto fix_x = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(5));
-  auto fix_y = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
-  auto fix_z = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  auto apply_displacement = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
-  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
+  pmesh->addDomainOfBoundaryElements("fix_x", serac::by_attr<dim>(5));
+  pmesh->addDomainOfBoundaryElements("fix_y", serac::by_attr<dim>(2));
+  pmesh->addDomainOfBoundaryElements("fix_z", serac::by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("apply_displacement", serac::by_attr<dim>(3));
 
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 
@@ -118,24 +110,24 @@ int main(int argc, char* argv[])
   Hardening hardening{sigma_y, sigma_sat, strain_constant, eta};
   Material material{E, nu, hardening, density};
 
-  auto internal_states = solid_solver.createQuadratureDataBuffer(Material::State{}, whole_mesh);
+  auto internal_states = solid_solver.createQuadratureDataBuffer(Material::State{}, pmesh->entireBody());
 
-  solid_solver.setRateDependentMaterial(material, whole_mesh, internal_states);
+  solid_solver.setRateDependentMaterial(material, pmesh->entireBody(), internal_states);
 
-  solid_solver.setFixedBCs(fix_x, serac::Component::X);
-  solid_solver.setFixedBCs(fix_y, serac::Component::Y);
-  solid_solver.setFixedBCs(fix_z, serac::Component::Z);
+  solid_solver.setFixedBCs(pmesh->domain("fix_x"), serac::Component::X);
+  solid_solver.setFixedBCs(pmesh->domain("fix_y"), serac::Component::Y);
+  solid_solver.setFixedBCs(pmesh->domain("fix_z"), serac::Component::Z);
   auto applied_displacement = [strain_rate](serac::vec3, double t) {
     return serac::vec3{strain_rate * x_length * t, 0., 0.};
   };
-  solid_solver.setDisplacementBCs(applied_displacement, apply_displacement, serac::Component::X);
+  solid_solver.setDisplacementBCs(applied_displacement, pmesh->domain("apply_displacement"), serac::Component::X);
 
   solid_solver.completeSetup();
 
   double dt = max_time / (time_steps - 1);
 
   // get nodes and dofs to compute total force
-  mfem::Array<int> dof_list = apply_displacement.dof_list(&solid_solver.displacement().space());
+  mfem::Array<int> dof_list = pmesh->domain("apply_displacement").dof_list(&solid_solver.displacement().space());
   solid_solver.displacement().space().DofsToVDofs(0, dof_list);
 
   auto compute_net_force = [&dof_list](const serac::FiniteElementDual& reaction) -> double {

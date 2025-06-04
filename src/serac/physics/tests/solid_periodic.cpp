@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -11,9 +11,10 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/solid_mechanics.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
@@ -44,26 +45,24 @@ void periodic_test(mfem::Element::Type element_type)
 
   std::vector<int> periodicMap = initial_mesh.CreatePeriodicVertexMapping(translations, tol);
 
-  // Create the periodic mesh using the vertex mapping defined by the translation vectors
-  auto periodic_mesh = mfem::Mesh::MakePeriodic(initial_mesh, periodicMap);
-  auto mesh = mesh::refineAndDistribute(std::move(periodic_mesh), serial_refinement, parallel_refinement);
-
   std::string mesh_tag{"mesh"};
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  // Create the periodic mesh using the vertex mapping defined by the translation vectors
+  auto pmesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakePeriodic(initial_mesh, periodicMap), mesh_tag,
+                                             serial_refinement, parallel_refinement);
 
   constexpr int p = 1;
   constexpr int dim = 3;
 
   // Construct and initialized the user-defined moduli to be used as a differentiable parameter in
   // the solid physics module.
-  FiniteElementState user_defined_shear_modulus(pmesh, L2<1>{}, "parameterized_shear");
+  FiniteElementState user_defined_shear_modulus(pmesh->mfemParMesh(), L2<1>{}, "parameterized_shear");
 
   double shear_modulus_value = 1.0;
 
   user_defined_shear_modulus = shear_modulus_value;
 
-  FiniteElementState user_defined_bulk_modulus(pmesh, L2<1>{}, "parameterized_bulk");
+  FiniteElementState user_defined_bulk_modulus(pmesh->mfemParMesh(), L2<1>{}, "parameterized_bulk");
 
   double bulk_modulus_value = 1.0;
 
@@ -77,14 +76,11 @@ void periodic_test(mfem::Element::Type element_type)
   solid_solver.setParameter(0, user_defined_bulk_modulus);
   solid_solver.setParameter(1, user_defined_shear_modulus);
 
-  Domain whole_mesh = EntireDomain(pmesh);
-
   solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, whole_mesh);
+  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, pmesh->entireBody());
 
-  // Boundary conditions
-  Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
-  solid_solver.setFixedBCs(support);
+  pmesh->addDomainOfBoundaryElements("support", by_attr<dim>(2));
+  solid_solver.setFixedBCs(pmesh->domain("support"));
 
   constexpr double iniDispVal = 5.0e-6;
   auto initial_displacement = [](tensor<double, dim>) { return make_tensor<dim>([](int) { return iniDispVal; }); };
@@ -94,7 +90,7 @@ void periodic_test(mfem::Element::Type element_type)
   constant_force[1] = 1.0e-2;
 
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-  solid_solver.addBodyForce(force, whole_mesh);
+  solid_solver.addBodyForce(force, pmesh->entireBody());
 
   // Finalize the data structures
   solid_solver.completeSetup();

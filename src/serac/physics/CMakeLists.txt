@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -20,8 +20,8 @@ set(physics_sources
 
 set(physics_headers
     base_physics.hpp
-    common.hpp
     mesh.hpp
+    common.hpp
     fit.hpp
     heat_transfer.hpp
     heat_transfer_input.hpp
@@ -34,6 +34,9 @@ set(physics_headers
     residual.hpp
     functional_residual.hpp
     solid_residual.hpp
+    heat_transfer_residual.hpp
+    scalar_objective.hpp
+    functional_objective.hpp
     )
 
 set(physics_depends
@@ -49,6 +52,11 @@ blt_add_library(
     SOURCES     ${physics_sources}
     HEADERS     ${physics_headers}
     DEPENDS_ON  ${physics_depends}
+    )
+
+serac_write_unified_header(
+    NAME    physics
+    HEADERS ${physics_headers}
     )
 
 install(FILES ${physics_headers} DESTINATION include/serac/physics )

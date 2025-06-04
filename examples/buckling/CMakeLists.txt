@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -8,8 +8,26 @@ if(TRIBOL_FOUND AND PETSC_FOUND)
     blt_add_executable( NAME        buckling_cylinder
                         SOURCES     cylinder.cpp
                         OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                        DEPENDS_ON  serac_physics serac_mesh
+                        DEPENDS_ON  serac_physics
                         )
+
+    blt_add_test(NAME            buckling_cylinder
+                 COMMAND         buckling_cylinder --fast
+                 NUM_MPI_TASKS   4)
+
+    # TODO Fix this test
+    # `InvIso: Newtons method did not converge.`
+    # configure_file(cylinder_petsc_options.yml
+    #                ${PROJECT_BINARY_DIR}/examples/buckling/cylinder_petsc_options.yml
+    #                COPYONLY)
+    #
+    # blt_add_test(NAME            buckling_cylinder_mortar_contact
+    #              COMMAND         buckling_cylinder --fast --contact --contact-type 1 --preconditioner 6 -options_file examples/buckling/cylinder_petsc_options.yml
+    #              NUM_MPI_TASKS   4)
+
+    blt_add_test(NAME            buckling_cylinder_no_contact
+                 COMMAND         buckling_cylinder --fast --no-contact
+                 NUM_MPI_TASKS   4)
 
     install(
         FILES

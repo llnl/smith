@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -57,6 +57,15 @@ blt_add_library(
 
 # Set file back to C++ due to nvcc compiler error
 set_source_files_properties(input.cpp PROPERTIES LANGUAGE CXX)
+
+serac_write_unified_header(
+    NAME    infrastructure
+    HEADERS ${infrastructure_headers}
+    EXCLUDE accelerator.hpp
+            debug_print.hpp
+            mpi_fstream.hpp
+            variant.hpp
+    )
 
 target_include_directories(serac_infrastructure PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>

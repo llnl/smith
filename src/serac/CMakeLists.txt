@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -7,5 +7,5 @@
 add_subdirectory(infrastructure)
 add_subdirectory(numerics)
 add_subdirectory(physics)
-add_subdirectory(mesh)
+add_subdirectory(mesh_utils)
 add_subdirectory(gretl)

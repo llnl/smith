@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -96,9 +96,114 @@ class StateManager {
   static void storeState(FiniteElementState& state);
 
   /**
+   * @brief Store a pre-constructed Quadrature Data in the state manager
+   *
+   * @tparam T the type to be created at each quadrature point
+   * @param mesh_tag The tag for the stored mesh used to locate the datacollection
+   * @param qdata The quadrature data to store
+   */
+  template <typename T>
+  static void storeQuadratureData(const std::string& mesh_tag, std::shared_ptr<QuadratureData<T>> qdata)
+  {
+    SLIC_ERROR_ROOT_IF(!ds_, "Serac's data store was not initialized - call StateManager::initialize first");
+    SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag),
+                       axom::fmt::format("Serac's state manager does not have a mesh with given tag '{}'", mesh_tag));
+
+    constexpr const char* qds_group_name = "quadraturedatas";
+
+    // Get Sidre location for quadrature data inside data collection
+    auto& datacoll = datacolls_.at(mesh_tag);
+    axom::sidre::Group* bp_group = datacoll.GetBPGroup();  // mesh_datacoll
+    // For each geometry type, use i to get both type and name from matching arrays
+    for (std::size_t i = 0; i < detail::qdata_geometries.size(); ++i) {
+      auto geom_type = detail::qdata_geometries[i];
+
+      // Check if geometry type has any data
+      if ((*qdata).data.find(geom_type) != (*qdata).data.end()) {
+        auto geom_name = detail::qdata_geometry_names[i];
+
+        // Get axom::Array of states in map
+        auto states = (*qdata)[geom_type];
+
+        // Get various size information
+        auto num_states = static_cast<axom::IndexType>(states.size());
+        SLIC_ERROR_ROOT_IF(num_states == 0, "Number of States should be more than 0 at this point.");
+        auto state_size = static_cast<axom::IndexType>(sizeof(*(states.begin())));
+        auto total_size = num_states * state_size;
+        // Sidre treats information as an array of uint8s
+        auto num_uint8s = total_size / static_cast<axom::IndexType>(sizeof(std::uint8_t));
+
+        if (!is_restart_) {
+          axom::sidre::Group* qdatas_group = bp_group->createGroup(qds_group_name);
+
+          // Create Sidre group, store basic information, and point Sidre at the array external to Sidre
+          // Note: Sidre will not own this data.
+          axom::sidre::Group* geom_group = qdatas_group->createGroup(std::string(geom_name));
+          geom_group->createViewScalar("num_states", num_states);
+          geom_group->createViewScalar("state_size", state_size);
+          geom_group->createViewScalar("total_size", total_size);
+
+          // Tell Sidre where the external array is, how large it is (calculated above), and what is in it (faking
+          // uint8)
+          axom::sidre::View* states_view = geom_group->createView("states");
+          states_view->setExternalDataPtr(axom::sidre::UINT8_ID, num_uint8s, states.data());
+        } else {
+          // Get Sidre group of where the states were stored.
+          // Note: this data is not owned by Sidre and the array should have been created at this point but
+          // the previous data has not been loaded yet into the array.
+          SLIC_ERROR_ROOT_IF(!bp_group->hasGroup(qds_group_name),
+                             axom::fmt::format("Loaded Sidre Datastore did not have group for Quadrature Datas"));
+          axom::sidre::Group* qdatas_group = bp_group->getGroup(qds_group_name);
+          SLIC_ERROR_ROOT_IF(
+              !qdatas_group->hasGroup(std::string(geom_name)),
+              axom::fmt::format("Loaded Sidre Datastore did not have group for Quadrature Data geometry type '{}'",
+                                std::string(geom_name)));
+          axom::sidre::Group* geom_group = qdatas_group->getGroup(std::string(geom_name));
+
+          // Verify size correctness
+          auto verify_size = [](axom::sidre::Group* group, int value, const std::string& view_name,
+                                const std::string& err_msg) {
+            SLIC_ERROR_IF(
+                !group->hasView(view_name),
+                axom::fmt::format("Loaded Sidre Datastore does not have value '{}' for Quadrature Data.", view_name));
+            auto prev_value = group->getView(view_name)->getData<axom::IndexType>();
+            SLIC_ERROR_IF(value != prev_value, axom::fmt::format(err_msg, value, prev_value));
+          };
+          verify_size(geom_group, num_states, "num_states",
+                      "Current number of Quadrature Data States '{}' does not match value in restart '{}'.");
+          verify_size(geom_group, state_size, "state_size",
+                      "Current size of Quadrature Data State '{}' does not match value in restart '{}'.");
+          verify_size(geom_group, total_size, "total_size",
+                      "Current total size of Quadrature Data States '{}' does not match value in restart '{}'.");
+
+          // Tell Sidre where the external array is
+          SLIC_ERROR_ROOT_IF(!geom_group->hasView("states"),
+                             "Loaded Quadrature Data geometry Sidre view did not have 'states'");
+          axom::sidre::View* states_view = geom_group->getView("states");
+          states_view->setExternalDataPtr(states.data());
+
+          // TODO: swap this code for the one below after updating Axom
+          // Load this set of quadrature data only
+          // std::string group_name_to_load = axom::fmt::format("{0}/{1}", qds_group_name, geom_name);
+          // datacoll.LoadExternalData("", group_name_to_load);
+        }
+      }
+    }
+    if (is_restart_) {
+      // NOTE: This call will reload all external buffers from file stored in the DataStore
+      // TODO: This should be changed to load only the current material quadrature data after
+      // MFEMSidreDatacollection::LoadExternalData is enhanced to allow loading the
+      // external data piecemeal. After Axom PR#1555 goes in, uncomment the loadExternalData call
+      // above and remove this if block.
+      datacoll.LoadExternalData();
+    }
+  }
+
+  /**
    * @brief Create a shared ptr to a quadrature data buffer for the given material type
    *
    * @tparam T the type to be created at each quadrature point
+   * @param mesh_tag The tag for the stored mesh used to locate the datacollection
    * @param domain The spatial domain over which to allocate the quadrature data
    * @param order The order of the discretization of the primal fields
    * @param dim The spatial dimension of the mesh
@@ -106,8 +211,8 @@ class StateManager {
    * @return shared pointer to quadrature data buffer
    */
   template <typename T>
-  static std::shared_ptr<QuadratureData<T>> newQuadratureDataBuffer(const Domain& domain, int order, int dim,
-                                                                    T initial_state)
+  static std::shared_ptr<QuadratureData<T>> newQuadratureDataBuffer(const std::string& mesh_tag, const Domain& domain,
+                                                                    int order, int dim, T initial_state)
   {
     int Q = order + 1;
 
@@ -125,7 +230,9 @@ class StateManager {
       qpts_per_elem[size_t(geom)] = uint32_t(num_quadrature_points(geom, Q));
     }
 
-    return std::make_shared<QuadratureData<T>>(elems, qpts_per_elem, initial_state);
+    auto qdata = std::make_shared<QuadratureData<T>>(elems, qpts_per_elem, initial_state);
+    storeQuadratureData<T>(mesh_tag, qdata);
+    return qdata;
   }
 
   /**
@@ -336,11 +443,18 @@ class StateManager {
  private:
   /**
    * @brief Creates a new datacollection based on a registered mesh
-   * @param[in] name The name of the new datacollection
+   * @param[in] mesh_tag The mesh name used to name the new datacollection
    * @param[in] cycle_to_load What cycle to load the DataCollection from, if applicable
    * @return The time from specified restart cycle. Otherwise zero.
    */
-  static double newDataCollection(const std::string& name, const std::optional<int> cycle_to_load = {});
+  static double newDataCollection(const std::string& mesh_tag, const std::optional<int> cycle_to_load = {});
+
+  /**
+   * @brief Returns the name of the data collection's name for a given mesh_tag
+   * @param[in] mesh_tag The mesh name used to name the new datacollection
+   * @return The name of the data collection for the given mesh_tag
+   */
+  static std::string getCollectionName(const std::string& mesh_tag) { return mesh_tag + "_datacoll"; }
 
   /**
    * @brief Construct the shape displacement field for the requested mesh
@@ -375,6 +489,6 @@ class StateManager {
 };
 
 /// @brief Check that a mesh satisfies our required properties
-void checkMesh(const mfem::ParMesh& pmesh);
+void checkMesh(const mfem::ParMesh& pmesh, bool is_restart = false);
 
 }  // namespace serac

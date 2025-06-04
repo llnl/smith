@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -20,10 +20,10 @@ std::string StateManager::output_dir_ = "";
 std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_states_;
 std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_duals_;
 
-double StateManager::newDataCollection(const std::string& name, const std::optional<int> cycle_to_load)
+double StateManager::newDataCollection(const std::string& mesh_tag, const std::optional<int> cycle_to_load)
 {
   SLIC_ERROR_ROOT_IF(!ds_, "Cannot construct a DataCollection without a DataStore");
-  std::string coll_name = name + "_datacoll";
+  std::string coll_name = getCollectionName(mesh_tag);
 
   auto global_grp = ds_->getRoot()->createGroup(coll_name + "_global");
   auto bp_index_grp = global_grp->createGroup("blueprint_index/" + coll_name);
@@ -31,7 +31,7 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
 
   // Needs to be configured to own the mesh data so all mesh data is saved to datastore/output file
   constexpr bool owns_mesh_data = true;
-  auto [iter, _] = datacolls_.emplace(std::piecewise_construct, std::forward_as_tuple(name),
+  auto [iter, _] = datacolls_.emplace(std::piecewise_construct, std::forward_as_tuple(mesh_tag),
                                       std::forward_as_tuple(coll_name, bp_index_grp, domain_grp, owns_mesh_data));
   auto& datacoll = iter->second;
   datacoll.SetComm(MPI_COMM_WORLD);
@@ -50,13 +50,15 @@ double StateManager::newDataCollection(const std::string& name, const std::optio
     datacoll.UpdateStateFromDS();
     datacoll.UpdateMeshAndFieldsFromDS();
 
-    checkMesh(mesh(name));
+    // TODO: This should not be necessary, figure out why on restart this information is not being restored
+    // Generate the face neighbor information in the mesh. This is needed by the face restriction
+    // operators used by Functional
+    mesh(mesh_tag).ExchangeFaceNbrData();
 
-    // Sidre will destruct the nodal grid function instead of the mesh
-    mesh(name).SetNodesOwner(false);
+    checkMesh(mesh(mesh_tag), is_restart_);
 
     // Construct and store the shape displacement fields and sensitivities associated with this mesh
-    constructShapeFields(name);
+    constructShapeFields(mesh_tag);
 
   } else {
     datacoll.SetCycle(0);   // Iteration counter
@@ -70,9 +72,9 @@ void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteE
 {
   SERAC_MARK_FUNCTION;
   const mfem::ParMesh* meshPtr = &(*states_to_load.begin())->mesh();
-  std::string mesh_name = collectionID(meshPtr);
+  std::string mesh_tag = collectionID(meshPtr);
 
-  std::string coll_name = mesh_name + "_datacoll";
+  std::string coll_name = getCollectionName(mesh_tag);
 
   axom::sidre::MFEMSidreDataCollection previous_datacoll(coll_name);
 
@@ -82,7 +84,7 @@ void StateManager::loadCheckpointedStates(int cycle_to_load, std::vector<FiniteE
 
   for (auto state : states_to_load) {
     meshPtr = &state->mesh();
-    SLIC_ERROR_ROOT_IF(collectionID(meshPtr) != mesh_name,
+    SLIC_ERROR_ROOT_IF(collectionID(meshPtr) != mesh_tag,
                        "Loading FiniteElementStates from two different meshes at one time is not allowed.");
     mfem::ParGridFunction* datacoll_owned_grid_function = previous_datacoll.GetParField(state->name());
 
@@ -275,7 +277,7 @@ double StateManager::time(std::string mesh_tag)
   return datacolls_.at(mesh_tag).GetTime();
 }
 
-void checkMesh(const mfem::ParMesh& pmesh)
+void checkMesh(const mfem::ParMesh& pmesh, bool is_restart)
 {
   const mfem::GridFunction* nodes = pmesh.GetNodes();
 
@@ -283,8 +285,10 @@ void checkMesh(const mfem::ParMesh& pmesh)
                      "The mesh must have a grid function for the nodes defined. Call the EnsureNodes() method on "
                      "your mesh before setting it with the state manager.");
 
-  SLIC_ERROR_ROOT_IF(!pmesh.OwnsNodes(),
-                     "The mesh must own its node grid function, as ownership will be passed to the state manager.");
+  if (!is_restart) {
+    SLIC_ERROR_ROOT_IF(!pmesh.OwnsNodes(),
+                       "The mesh must own its node grid function, as ownership will be passed to the state manager.");
+  }
 
   SLIC_WARNING_ROOT_IF(nodes->FESpace()->FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS,
                        "Periodic mesh detected! This will only work on translational periodic surfaces for vector H1 "

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -12,8 +12,9 @@
 
 #include "serac/serac_config.hpp"
 #include "serac/numerics/functional/domain.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/solid_mechanics.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
@@ -35,24 +36,22 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
   std::string mesh_tag{"mesh"};
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   constexpr int p = 1;
   constexpr int dim = 2;
 
   // Construct and initialized the user-defined moduli to be used as a differentiable parameter in
   // the solid physics module.
-  FiniteElementState user_defined_shear_modulus(pmesh, H1<p>{}, "parameterized_shear");
+  FiniteElementState user_defined_shear_modulus(pmesh->mfemParMesh(), H1<p>{}, "parameterized_shear");
 
   double shear_modulus_value = 1.0;
 
   user_defined_shear_modulus = shear_modulus_value;
 
-  FiniteElementState user_defined_bulk_modulus(pmesh, H1<p>{}, "parameterized_bulk");
+  FiniteElementState user_defined_bulk_modulus(pmesh->mfemParMesh(), H1<p>{}, "parameterized_bulk");
 
   double bulk_modulus_value = 1.0;
 
@@ -75,12 +74,11 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   constexpr int bulk_parameter_index = 0;
 
   solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  Domain whole_mesh = EntireDomain(pmesh);
-  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, whole_mesh);
+  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, pmesh->entireBody());
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
-  solid_solver.setFixedBCs(essential_boundary);
+  pmesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(1));
+  solid_solver.setFixedBCs(pmesh->domain("essential_boundary"));
 
   tensor<double, dim> constant_force;
 
@@ -92,7 +90,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   }
 
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-  solid_solver.addBodyForce(force, whole_mesh);
+  solid_solver.addBodyForce(force, pmesh->entireBody());
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -126,7 +124,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   // to check if computed qoi sensitivity is consistent
   // with finite difference on the displacement
   double eps = 1.0e-5;
-  FiniteElementState zero_state(pmesh, H1<p, dim>{}, "zero");
+  FiniteElementState zero_state(pmesh->mfemParMesh(), H1<p, dim>{}, "zero");
   for (int i = 0; i < user_defined_bulk_modulus.gridFunction().Size(); ++i) {
     // Perturb the bulk modulus
     user_defined_bulk_modulus(i) = bulk_modulus_value + eps;
@@ -198,17 +196,15 @@ void finite_difference_shape_test(LoadingType load)
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/patch2D_tris.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
   std::string mesh_tag{"mesh"};
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   constexpr int p = 1;
   constexpr int dim = 2;
 
   // Define the boundary for essential bcs
-  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(1));
 
   double shape_displacement_value = 1.0;
 
@@ -221,18 +217,17 @@ void finite_difference_shape_test(LoadingType load)
                                       solid_mechanics::default_quasistatic_options, "solid_functional", mesh_tag);
 
   solid_mechanics::NeoHookean mat{1.0, 1.0, 1.0};
-  Domain whole_mesh = EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, whole_mesh);
+  solid_solver.setMaterial(mat, pmesh->entireBody());
 
-  FiniteElementState shape_displacement(pmesh, H1<SHAPE_ORDER, dim>{});
+  FiniteElementState shape_displacement(pmesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{});
 
   shape_displacement = shape_displacement_value;
   solid_solver.setShapeDisplacement(shape_displacement);
 
   // Set the initial displacement and boundary condition
-  solid_solver.setFixedBCs(essential_boundary);
+  solid_solver.setFixedBCs(pmesh->domain("essential_boundary"));
 
-  Domain top_face = Domain::ofBoundaryElements(pmesh, [](std::vector<vec2> vertices, int /*attr*/) {
+  pmesh->addDomainOfBoundaryElements("top_face", [](std::vector<vec2> vertices, int /*attr*/) {
     return average(vertices)[1] > 0.99;  // select faces by y-coordinate
   });
 
@@ -241,11 +236,15 @@ void finite_difference_shape_test(LoadingType load)
     constant_force[1] = 1.0e-1;
 
     solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-    solid_solver.addBodyForce(force, whole_mesh);
+    solid_solver.addBodyForce(force, pmesh->entireBody());
   } else if (load == LoadingType::Pressure) {
-    solid_solver.setPressure([](auto /*X*/, double /*t*/) { return 0.1; }, top_face);
+    solid_solver.setPressure([](auto /*X*/, double /*t*/) { return 0.1; }, pmesh->domain("top_face"));
   } else if (load == LoadingType::Traction) {
-    solid_solver.setTraction([](auto /*X*/, auto /*n*/, double /*t*/) { return vec2{0.01, 0.01}; }, top_face);
+    solid_solver.setTraction(
+        [](auto /*X*/, auto /*n*/, double /*t*/) {
+          return vec2{0.01, 0.01};
+        },
+        pmesh->domain("top_face"));
   }
 
   // Finalize the data structures

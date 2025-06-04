@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -14,8 +14,9 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
@@ -37,17 +38,16 @@ void shape_test()
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "solid_functional_shape_solve");
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
   std::string mesh_tag{"mesh"};
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   mfem::Vector shape_displacement;
   mfem::Vector pure_displacement;
 
   // Define the boundary where essential boundary conditions will be prescribed
-  auto ess_bdr = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("ess_bdr", by_attr<dim>(1));
 
   // Use a krylov solver for the Jacobian solve
 
@@ -106,7 +106,7 @@ void shape_test()
 
   {
     // Construct and initialized the user-defined shape velocity to offset the computational mesh
-    FiniteElementState user_defined_shape_displacement(pmesh, H1<SHAPE_ORDER, dim>{});
+    FiniteElementState user_defined_shape_displacement(pmesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{});
 
     user_defined_shape_displacement.project(shape_coef);
 
@@ -115,7 +115,7 @@ void shape_test()
                                         "solid_functional", mesh_tag);
 
     // Set the initial displacement and boundary condition
-    solid_solver.setDisplacementBCs(applied_displacement, ess_bdr);
+    solid_solver.setDisplacementBCs(applied_displacement, pmesh->domain("ess_bdr"));
 
     // For consistency of the problem, this value should match the one in the BCs
     solid_solver.setDisplacement(
@@ -123,10 +123,8 @@ void shape_test()
 
     solid_solver.setShapeDisplacement(user_defined_shape_displacement);
 
-    Domain whole_mesh = EntireDomain(StateManager::mesh(mesh_tag));
-
-    solid_solver.setMaterial(mat, whole_mesh);
-    solid_solver.addBodyForce(force, whole_mesh);
+    solid_solver.setMaterial(mat, pmesh->entireBody());
+    solid_solver.addBodyForce(force, pmesh->entireBody());
 
     // Finalize the data structures
     solid_solver.completeSetup();
@@ -141,21 +139,22 @@ void shape_test()
   StateManager::reset();
   serac::StateManager::initialize(new_datastore, "solid_functional_pure_solve");
 
-  auto new_mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
   std::string new_mesh_tag{"new_mesh"};
 
-  auto& new_pmesh = serac::StateManager::setMesh(std::move(new_mesh), new_mesh_tag);
+  auto new_pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), new_mesh_tag, serial_refinement, parallel_refinement);
+
+  new_pmesh->addDomainOfBoundaryElements("ess_bdr", by_attr<dim>(1));
 
   {
     // Construct and initialized the user-defined shape velocity to offset the computational mesh
-    FiniteElementState user_defined_shape_displacement(new_pmesh, H1<SHAPE_ORDER, dim>{});
+    FiniteElementState user_defined_shape_displacement(new_pmesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{});
 
     user_defined_shape_displacement.project(shape_coef);
 
     // Delete the pre-computed geometry factors as we are mutating the mesh
-    new_pmesh.DeleteGeometricFactors();
-    auto* mesh_nodes = new_pmesh.GetNodes();
+    new_pmesh->mfemParMesh().DeleteGeometricFactors();
+    auto* mesh_nodes = new_pmesh->mfemParMesh().GetNodes();
     *mesh_nodes += user_defined_shape_displacement.gridFunction();
 
     // Construct a functional-based solid mechanics solver including references to the shape velocity field.
@@ -168,14 +167,12 @@ void shape_test()
     visit_dc.Save();
 
     // Set the initial displacement and boundary condition
-    solid_solver_no_shape.setDisplacementBCs(applied_displacement_pure, ess_bdr);
+    solid_solver_no_shape.setDisplacementBCs(applied_displacement_pure, new_pmesh->domain("ess_bdr"));
     solid_solver_no_shape.setDisplacement(
         [applied_displacement_pure](tensor<double, dim> X) { return applied_displacement_pure(X, 0.0); });
 
-    Domain whole_mesh = EntireDomain(StateManager::mesh(new_mesh_tag));
-
-    solid_solver_no_shape.setMaterial(mat, whole_mesh);
-    solid_solver_no_shape.addBodyForce(force, whole_mesh);
+    solid_solver_no_shape.setMaterial(mat, new_pmesh->entireBody());
+    solid_solver_no_shape.addBodyForce(force, new_pmesh->entireBody());
 
     // Finalize the data structures
     solid_solver_no_shape.completeSetup();

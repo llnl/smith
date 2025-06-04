@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -7,7 +7,7 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
@@ -61,6 +61,38 @@ void pseudoRand(serac::FiniteElementDual& dual)
   }
 }
 
+namespace serac {
+
+struct NeoHookeanWithFieldWithRateForTesting {
+  using State = Empty;  ///< this material has no internal variables
+
+  template <typename T1, typename T2, int dim>
+  SERAC_HOST_DEVICE auto pkStress(double /*dt*/, State& /* state */, const tensor<T1, dim, dim>& du_dX,
+                                  const tensor<T2, dim, dim>& /*dv_dX*/) const
+  {
+    using std::log1p;
+    constexpr auto I = Identity<dim>();
+    auto lambda = K - (2.0 / 3.0) * G;
+    auto B_minus_I = dot(du_dX, transpose(du_dX)) + transpose(du_dX) + du_dX;
+
+    auto logJ = log1p(detApIm1(du_dX));
+    // Kirchoff stress, in form that avoids cancellation error when F is near I
+    auto TK = lambda * logJ * I + G * B_minus_I;
+
+    // Pull back to Piola
+    auto F = du_dX + I;
+    return dot(TK, inv(transpose(F)));
+  }
+
+  SERAC_HOST_DEVICE auto density() const { return Rho; }
+
+  double K;    ///< bulk modulus
+  double G;    ///< shear modulus
+  double Rho;  ///< density
+};
+
+}  // namespace serac
+
 struct ResidualFixture : public testing::Test {
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
@@ -69,6 +101,7 @@ struct ResidualFixture : public testing::Test {
   using DensitySpace = serac::L2<disp_order - 1>;
 
   using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
+  using SolidRateMaterial = serac::NeoHookeanWithFieldWithRateForTesting;
 
   enum StateOrder
   {
@@ -98,8 +131,12 @@ struct ResidualFixture : public testing::Test {
     states = {shape_disp, disp, velo, accel};
     params = {density};
 
-    dual_states = states;
-    dual_params = params;
+    for (auto s : states) {
+      dual_states.push_back(serac::FiniteElementDual(s.space(), s.name() + "_dual"));
+    }
+    for (auto p : params) {
+      dual_params.push_back(serac::FiniteElementDual(p.space(), p.name() + "_dual"));
+    }
 
     v_rhs_states = states;
     v_rhs_params = params;
@@ -112,15 +149,21 @@ struct ResidualFixture : public testing::Test {
     SolidMaterial mat;
     mat.K = 1.0;
     mat.G = 0.5;
+    SolidRateMaterial rate_mat;
+    rate_mat.K = 1.0;
+    rate_mat.G = 0.5;
+    rate_mat.Rho = 1.5;
+
     solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
+    solid_mechanics_residual->setRateMaterial(serac::DependsOn<>{}, mesh->entireBodyName(), rate_mat);
 
     // apply traction boundary conditions
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
     solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*t*/, auto /*x*/, auto n) { return 1.0 * n; });
+    solid_mechanics_residual->addPressure(surface_name, [](auto /*t*/, auto /*x*/) { return 0.6; });
 
     // initialize fields for testing
-
     for (auto& s : v_rhs_states) {
       pseudoRand(s);
     }
@@ -161,8 +204,8 @@ struct ResidualFixture : public testing::Test {
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
 
-  std::vector<serac::FiniteElementState> dual_states;
-  std::vector<serac::FiniteElementState> dual_params;
+  std::vector<serac::FiniteElementDual> dual_states;
+  std::vector<serac::FiniteElementDual> dual_params;
 
   std::vector<serac::FiniteElementState> v_rhs_states;
   std::vector<serac::FiniteElementState> v_rhs_params;
@@ -184,7 +227,7 @@ TEST_F(ResidualFixture, VjpConsistency)
   };
 
   // test vjp
-  serac::FiniteElementDual v(res_vector.space(), "v");
+  serac::FiniteElementState v(res_vector.space(), "v");
   pseudoRand(v);
   auto all_vjps = getPointers(dual_states, dual_params);
 

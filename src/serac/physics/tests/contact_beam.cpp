@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -15,15 +15,17 @@
 #include "mfem.hpp"
 
 #include "serac/numerics/functional/domain.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
 
-class ContactTest : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactType, std::string>> {};
+class ContactTest
+    : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactType, ContactJacobian, std::string>> {};
 
 TEST_P(ContactTest, beam)
 {
@@ -34,38 +36,32 @@ TEST_P(ContactTest, beam)
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
-  std::string name = "contact_beam_" + std::get<2>(GetParam());
+  std::string name = "contact_beam_" + std::get<3>(GetParam());
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex-with-contact-block.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "beam_mesh");
+  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), "beam_mesh", 1, 0);
 
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 1};
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
   return;
 #endif
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
-                                           .relative_tol = 1.0e-12,
-                                           .absolute_tol = 1.0e-12,
-                                           .max_iterations = 200,
+                                           .relative_tol = 1.0e-13,
+                                           .absolute_tol = 1.0e-13,
+                                           .max_iterations = 20,
                                            .print_level = 1};
-#ifdef SERAC_USE_SUNDIALS
-  // KINFullStep is preferred, but has issues when active set is enabled
-  if (std::get<1>(GetParam()) == ContactType::TiedNormal) {
-    nonlinear_options.nonlin_solver = NonlinearSolver::KINFullStep;
-  }
-#endif
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type = std::get<1>(GetParam()),
-                                 .penalty = 1.0e2};
+                                 .penalty = 8.0e2,
+                                 .jacobian = std::get<2>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, "beam_mesh");
@@ -73,19 +69,18 @@ TEST_P(ContactTest, beam)
   double K = 10.0;
   double G = 0.25;
   solid_mechanics::NeoHookean mat{1.0, K, G};
-  Domain material_block = EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, material_block);
+  solid_solver.setMaterial(mat, pmesh->entireBody());
 
   // Pass the BC information to the solver object
-  Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
-  solid_solver.setFixedBCs(support);
+  pmesh->addDomainOfBoundaryElements("support", by_attr<dim>(1));
+  solid_solver.setFixedBCs(pmesh->domain("support"));
   auto applied_displacement = [](tensor<double, dim>, double) {
     tensor<double, dim> u{};
     u[2] = -0.15;
     return u;
   };
-  auto driven_surface = Domain::ofBoundaryElements(pmesh, by_attr<dim>(6));
-  solid_solver.setDisplacementBCs(applied_displacement, driven_surface);
+  pmesh->addDomainOfBoundaryElements("driven_surface", by_attr<dim>(6));
+  solid_solver.setDisplacementBCs(applied_displacement, pmesh->domain("driven_surface"));
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {7}, {5}, contact_options);
@@ -93,8 +88,8 @@ TEST_P(ContactTest, beam)
   // Finalize the data structures
   solid_solver.completeSetup();
 
-  // std::string paraview_name = name + "_paraview";
-  // solid_solver.outputStateToDisk(paraview_name);
+  std::string paraview_name = name + "_paraview";
+  solid_solver.outputStateToDisk(paraview_name);
 
   // Perform the quasi-static solve
   double dt = 1.0;
@@ -115,12 +110,22 @@ TEST_P(ContactTest, beam)
 // NOTE: if Penalty is first and Lagrange Multiplier is second, SuperLU gives a zero diagonal error
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTest,
-    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, "penalty_tiednormal"),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless, "penalty_frictionless"),
+    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Approximate,
+                                    "penalty_tiednormal_Japprox"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
+                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox"),
                     std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::TiedNormal,
-                                    "lagrange_multiplier_tiednormal"),
+                                    ContactJacobian::Approximate, "lagrange_multiplier_tiednormal_Japprox"),
                     std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::Frictionless,
-                                    "lagrange_multiplier_frictionless")));
+                                    ContactJacobian::Approximate, "lagrange_multiplier_frictionless_Japprox"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Exact,
+                                    "penalty_tiednormal_Jexact"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless, ContactJacobian::Exact,
+                                    "penalty_frictionless_Jexact"),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::TiedNormal,
+                                    ContactJacobian::Exact, "lagrange_multiplier_tiednormal_Jexact"),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactType::Frictionless,
+                                    ContactJacobian::Exact, "lagrange_multiplier_frictionless_Jexact")));
 
 }  // namespace serac
 

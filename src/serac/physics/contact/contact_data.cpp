@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -19,13 +19,12 @@ namespace serac {
 
 ContactData::ContactData(const mfem::ParMesh& mesh)
     : mesh_{mesh},
-      reference_nodes_{dynamic_cast<const mfem::ParGridFunction*>(mesh.GetNodes())},
+      reference_nodes_{static_cast<const mfem::ParGridFunction*>(mesh.GetNodes())},
       current_coords_{*reference_nodes_},
       have_lagrange_multipliers_{false},
       num_pressure_dofs_{0},
       offsets_up_to_date_{false}
 {
-  tribol::initialize(mesh_.SpaceDimension(), mesh_.GetComm());
 }
 
 ContactData::~ContactData() { tribol::finalize(); }
@@ -114,7 +113,12 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
   block_J->owns_blocks = true;
   // rather than returning different blocks for each contact interaction with Lagrange multipliers, merge them all into
   // a single block
-  mfem::Array2D<const mfem::HypreParMatrix*> constraint_matrices(static_cast<int>(interactions_.size()), 1);
+  mfem::Array2D<const mfem::HypreParMatrix*> dgdu_blocks(static_cast<int>(interactions_.size()), 1);
+  mfem::Array2D<const mfem::HypreParMatrix*> dfdp_blocks(1, static_cast<int>(interactions_.size()));
+  for (size_t i{0}; i < interactions_.size(); ++i) {
+    dgdu_blocks(static_cast<int>(i), 0) = nullptr;
+    dfdp_blocks(0, static_cast<int>(i)) = nullptr;
+  }
 
   for (size_t i{0}; i < interactions_.size(); ++i) {
     // this is the BlockOperator for one of the contact interactions
@@ -127,28 +131,28 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
       if (block_J->IsZeroBlock(0, 0)) {
         block_J->SetBlock(0, 0, &interaction_J->GetBlock(0, 0));
       } else {
-        if (block_J->IsZeroBlock(0, 0)) {
-          block_J->SetBlock(0, 0, &interaction_J->GetBlock(0, 0));
-        } else {
-          block_J->SetBlock(0, 0,
-                            mfem::Add(1.0, static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(0, 0)), 1.0,
-                                      static_cast<mfem::HypreParMatrix&>(interaction_J->GetBlock(0, 0))));
-        }
+        block_J->SetBlock(0, 0,
+                          mfem::Add(1.0, static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(0, 0)), 1.0,
+                                    static_cast<mfem::HypreParMatrix&>(interaction_J->GetBlock(0, 0))));
         delete &interaction_J->GetBlock(0, 0);
       }
     }
     // add the contact interaction's (other) contribution to df_(contact)/dx (for penalty) or to df_(contact)/dp and
     // dg/dx (for Lagrange multipliers)
-    if (!interaction_J->IsZeroBlock(1, 0)) {
-      auto B = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(1, 0));
-      SLIC_ERROR_ROOT_IF(!B, "Only HypreParMatrix constraint matrix blocks are currently supported.");
-      // zero out rows not in the active set
-      B->EliminateRows(interactions_[i].inactiveDofs());
+    if (!interaction_J->IsZeroBlock(1, 0) && !interaction_J->IsZeroBlock(0, 1)) {
+      auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(1, 0));
+      auto dfdp = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 1));
+      SLIC_ERROR_ROOT_IF(!dgdu, "Only HypreParMatrix constraint matrix blocks are currently supported.");
+      SLIC_ERROR_ROOT_IF(!dfdp, "Only HypreParMatrix constraint matrix blocks are currently supported.");
+      // zero out rows and cols not in the active set
+      auto inactive_dofs = interactions_[i].inactiveDofs();
+      dgdu->EliminateRows(inactive_dofs);
+      dfdp->EliminateCols(inactive_dofs);
       if (interactions_[i].getContactOptions().enforcement == ContactEnforcement::Penalty) {
         // compute contribution to df_(contact)/dx (the 0, 0 block) for penalty
-        std::unique_ptr<mfem::HypreParMatrix> BTB(
-            mfem::ParMult(std::unique_ptr<mfem::HypreParMatrix>(B->Transpose()).get(), B, true));
+        std::unique_ptr<mfem::HypreParMatrix> BTB(mfem::ParMult(dfdp, dgdu, true));
         delete &interaction_J->GetBlock(1, 0);
+        delete &interaction_J->GetBlock(0, 1);
         if (block_J->IsZeroBlock(0, 0)) {
           mfem::Vector penalty(reference_nodes_->ParFESpace()->GetTrueVSize());
           penalty = interactions_[i].getContactOptions().penalty;
@@ -159,16 +163,12 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
                             mfem::Add(1.0, static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(0, 0)),
                                       interactions_[i].getContactOptions().penalty, *BTB));
         }
-        constraint_matrices(static_cast<int>(i), 0) = nullptr;
       } else  // enforcement == ContactEnforcement::LagrangeMultiplier
       {
         // compute contribution to off-diagonal blocks for Lagrange multiplier
-        constraint_matrices(static_cast<int>(i), 0) = static_cast<mfem::HypreParMatrix*>(B);
+        dgdu_blocks(static_cast<int>(i), 0) = dgdu;
+        dfdp_blocks(0, static_cast<int>(i)) = dfdp;
       }
-      if (interaction_J->IsZeroBlock(0, 1)) {
-        SLIC_ERROR_ROOT("Only symmetric constraint matrices are currently supported.");
-      }
-      delete &interaction_J->GetBlock(0, 1);
       if (!interaction_J->IsZeroBlock(1, 1)) {
         // we track our own active set, so get rid of the tribol inactive dof block
         delete &interaction_J->GetBlock(1, 1);
@@ -177,9 +177,14 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
   }
   if (haveLagrangeMultipliers()) {
     // merge all of the contributions from all of the contact interactions
-    block_J->SetBlock(1, 0, mfem::HypreParMatrixFromBlocks(constraint_matrices));
+    block_J->SetBlock(1, 0, mfem::HypreParMatrixFromBlocks(dgdu_blocks));
     // store the transpose explicitly (rather than as a TransposeOperator) for solvers that need HypreParMatrixs
-    block_J->SetBlock(0, 1, static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(1, 0)).Transpose());
+    block_J->SetBlock(0, 1, mfem::HypreParMatrixFromBlocks(dfdp_blocks));
+    // explicitly delete the blocks
+    for (size_t i{0}; i < interactions_.size(); ++i) {
+      delete dgdu_blocks(static_cast<int>(i), 0);
+      delete dfdp_blocks(0, static_cast<int>(i));
+    }
     // build I_(inactive): a diagonal matrix with ones on inactive dofs and zeros elsewhere
     mfem::Array<const mfem::Array<int>*> inactive_tdofs_vector(static_cast<int>(interactions_.size()));
     int inactive_tdofs_ct = 0;
@@ -216,9 +221,9 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
     // if the size of ones is zero, SparseMatrix creates its own memory which it
     // owns.  explicitly prevent this...
     inactive_diag.SetDataOwner(false);
-    auto& block_1_0 = static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(1, 0));
-    auto block_1_1 = new mfem::HypreParMatrix(block_1_0.GetComm(), block_1_0.GetGlobalNumRows(),
-                                              block_1_0.GetRowStarts(), &inactive_diag);
+    auto block_1_1 =
+        new mfem::HypreParMatrix(mesh_.GetComm(), global_pressure_dof_offsets_[global_pressure_dof_offsets_.Size() - 1],
+                                 global_pressure_dof_offsets_, &inactive_diag);
     block_1_1->SetOwnerFlags(3, 3, 1);
     block_J->SetBlock(1, 1, block_1_1);
     // end building I_(inactive)
@@ -241,10 +246,16 @@ void ContactData::residualFunction(const mfem::Vector& u, mfem::Vector& r)
 
   setDisplacements(u_blk);
   // we need to call update first to update gaps
+  for (auto& interaction : interactions_) {
+    interaction.evalJacobian(false);
+  }
   update(cycle_, time_, dt_);
   // with updated gaps, we can update pressure for contact interactions with penalty enforcement
   setPressures(p_blk);
   // call update again with the right pressures
+  for (auto& interaction : interactions_) {
+    interaction.evalJacobian(true);
+  }
   update(cycle_, time_, dt_);
 
   r_blk += forces();

@@ -1,4 +1,4 @@
-.. ## Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+.. ## Copyright (c) Lawrence Livermore National Security, LLC and
 .. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
@@ -25,6 +25,7 @@ Developer Guide
    state_manager
    equation_solver
    macmini
+   ubuntu_build
 
 Developing a New Physics Module
 -------------------------------

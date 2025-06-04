@@ -1,10 +1,10 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-set(functional_depends serac_mesh ${serac_device_depends})
+set(functional_depends serac_mesh_utils ${serac_device_depends})
 
 # Add the library first
 set(functional_headers
@@ -71,6 +71,12 @@ blt_add_library(
       DEPENDS_ON  ${functional_depends}
       )
 
+serac_write_unified_header(
+    NAME    functional
+    HEADERS domain.hpp
+            functional.hpp
+            shape_aware_functional.hpp
+    )
 
 install(FILES ${functional_headers} DESTINATION include/serac/numerics/functional )
 install(FILES ${functional_detail_headers} DESTINATION include/serac/numerics/functional/detail )

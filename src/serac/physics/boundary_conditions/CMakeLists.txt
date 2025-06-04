@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -17,7 +17,7 @@ set(boundary_conditions_sources
     boundary_condition_manager.cpp
     )
 
-set(boundary_conditions_depends serac_state)
+set(boundary_conditions_depends serac_infrastructure serac_state)
 
 blt_add_library(
     NAME        serac_boundary_conditions
@@ -25,6 +25,8 @@ blt_add_library(
     SOURCES     ${boundary_conditions_sources}
     DEPENDS_ON  ${boundary_conditions_depends}
     )
+
+# Unified header is not needed in this component
 
 install(FILES ${boundary_conditions_headers} DESTINATION include/serac/physics/boundary_conditions )
 

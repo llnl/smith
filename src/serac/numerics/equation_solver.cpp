@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -85,7 +85,7 @@ class NewtonSolver : public mfem::NewtonSolver {
 
     using real_t = mfem::real_t;
 
-    real_t norm, norm_goal;
+    real_t norm, norm_goal, prev_norm = 0;
     norm = initial_norm = evaluateNorm(x, r);
 
     if (print_options.first_and_last && !print_options.iterations) {
@@ -102,6 +102,7 @@ class NewtonSolver : public mfem::NewtonSolver {
         mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
         if (it > 0) {
           mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
+          mfem::out << ", Rate = " << std::setw(10) << std::log10(prev_norm / norm);
         }
         mfem::out << '\n';
       }
@@ -130,6 +131,8 @@ class NewtonSolver : public mfem::NewtonSolver {
       x0.SetSize(x.Size());
       x0 = 0.0;
       x0.Add(1.0, x);
+
+      prev_norm = norm;
 
       real_t stepScale = 1.0;
       add(x0, -stepScale, c, x);
@@ -625,7 +628,7 @@ class TrustRegion : public mfem::NewtonSolver {
     num_subspace_solves = 0;
     num_jacobian_assembles = 0;
 
-    real_t norm, norm_goal;
+    real_t norm, norm_goal, prev_norm = 0.0;
     norm = initial_norm = computeResidual(X, r);
     norm_goal = std::max(rel_tol * initial_norm, abs_tol);
     if (print_options.first_and_last && !print_options.iterations) {
@@ -662,6 +665,7 @@ class TrustRegion : public mfem::NewtonSolver {
         mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
         if (it > 0) {
           mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
+          mfem::out << ", Rate = " << std::setw(10) << std::log10(prev_norm / norm);
           mfem::out << ", x_incr = " << std::setw(13) << trResults.d.Norml2();
         } else {
           mfem::out << ", norm goal = " << std::setw(13) << norm_goal << "\n";
@@ -684,6 +688,8 @@ class TrustRegion : public mfem::NewtonSolver {
       }
 
       assembleJacobian(X);
+
+      prev_norm = norm;
 
       if (it == 0 || (trResults.cg_iterations_count >= settings.max_cg_iterations ||
                       cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -419,7 +419,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   qdata_type<T> createQuadratureDataBuffer(T initial_state, const std::optional<Domain>& optional_domain = std::nullopt)
   {
     Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
-    return StateManager::newQuadratureDataBuffer(domain, order, dim, initial_state);
+    return StateManager::newQuadratureDataBuffer(mesh_tag_, domain, order, dim, initial_state);
   }
 
   /**

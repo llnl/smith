@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+# Copyright (c) Lawrence Livermore National Security, LLC and
 # other Serac Project Developers. See the top-level LICENSE file for
 # details.
 #
@@ -72,3 +72,11 @@ if (SERAC_USE_VDIM_ORDERING)
 else()
   message(STATUS "Using byNODES degree-of-freedom vector ordering.")
 endif()
+
+#------------------------------------------------------------------------------
+# CMake GraphViz
+#------------------------------------------------------------------------------
+configure_file(${PROJECT_SOURCE_DIR}/cmake/CMakeGraphVizOptions.cmake
+               ${CMAKE_BINARY_DIR}/CMakeGraphVizOptions.cmake
+               COPYONLY)
+

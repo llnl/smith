@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -15,8 +15,9 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/domain.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
@@ -38,11 +39,8 @@ TEST(BeamBending, TwoDimensional)
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-quad.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 0, 0);
-
   std::string mesh_tag{"mesh"};
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh = std::make_shared<serac::Mesh>(filename, mesh_tag, 0, 0);
 
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::GMRES,
                                             .preconditioner = Preconditioner::HypreAMG,
@@ -71,16 +69,18 @@ TEST(BeamBending, TwoDimensional)
   double K = 1.91666666666667;
   double G = 1.0;
   solid_mechanics::StVenantKirchhoff mat{1.0, K, G};
-  Domain material_block = EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, material_block);
+  solid_solver.setMaterial(mat, pmesh->entireBody());
 
-  Domain support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
-  solid_solver.setFixedBCs(support);
+  std::string support_domain_name = "support";
+  pmesh->addDomainOfBoundaryElements(support_domain_name, by_attr<dim>(1));
+  solid_solver.setFixedBCs(pmesh->domain(support_domain_name));
 
-  Domain top_face = Domain::ofBoundaryElements(
-      pmesh, [](std::vector<vec2> vertices, int /*attr*/) { return (average(vertices)[1] > 0.99); });
+  std::string top_face_domain_name = "top_face";
+  pmesh->addDomainOfBoundaryElements(
+      top_face_domain_name, [](std::vector<vec2> vertices, int /*attr*/) { return (average(vertices)[1] > 0.99); });
 
-  solid_solver.setTraction([](auto /*x*/, auto n, auto /*t*/) { return -0.01 * n; }, top_face);
+  solid_solver.setTraction([](auto /*x*/, auto n, auto /*t*/) { return -0.01 * n; },
+                           pmesh->domain(top_face_domain_name));
 
   // Finalize the data structures
   solid_solver.completeSetup();
