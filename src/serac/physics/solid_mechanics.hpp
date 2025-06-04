@@ -38,7 +38,7 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
                        mfem::HypreParVector& accel_adjoint_load_vector, mfem::HypreParVector& adjoint_displacement_,
                        mfem::HypreParVector& implicit_sensitivity_displacement_start_of_step_,
                        mfem::HypreParVector& implicit_sensitivity_velocity_start_of_step_,
-                       mfem::HypreParVector& adjoint_essential, BoundaryConditionManager& bcs_,
+                       mfem::HypreParVector& adjoint_essential_, BoundaryConditionManager& bcs_,
                        mfem::Solver& lin_solver);
 }  // namespace detail
 
@@ -1352,8 +1352,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   void reverseAdjointTimestep() override
   {
     SERAC_MARK_FUNCTION;
-    auto& lin_solver = nonlin_solver_->linearSolver();
-
     SLIC_ERROR_ROOT_IF(cycle_ <= min_cycle_,
                        "Maximum number of adjoint timesteps exceeded! The number of adjoint timesteps must equal the "
                        "number of forward timesteps");
@@ -1368,29 +1366,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     displacement_ = end_step_solution.at("displacement");
 
     if (is_quasistatic_) {
-      auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
-                                    *parameters_[parameter_indices].state...);
-      J_.reset();
-      J_ = assemble(drdu);
-
-      auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-
-      J_e_.reset();
-      J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_T);
-
-      auto& constrained_dofs = bcs_.allEssentialTrueDofs();
-
-      mfem::EliminateBC(*J_T, *J_e_, constrained_dofs, reactions_adjoint_bcs_, displacement_adjoint_load_);
-      for (int i = 0; i < constrained_dofs.Size(); i++) {
-        int j = constrained_dofs[i];
-        displacement_adjoint_load_[j] = reactions_adjoint_bcs_[j];
-      }
-
-      lin_solver.SetOperator(*J_T);
-      lin_solver.Mult(displacement_adjoint_load_, adjoint_displacement_);
-
-      // Reset the equation solver to use the full nonlinear residual operator.  MRT, is this needed?
-      nonlin_solver_->setOperator(*residual_with_bcs_);
+      quasiStaticAdjointSolve(dt_n_to_np1);
     } else {
       SLIC_ERROR_ROOT_IF(ode2_.GetTimestepper() != TimestepMethod::Newmark,
                          "Only Newmark implemented for transient adjoint solid mechanics.");
@@ -1411,6 +1387,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
                                                    *parameters_[parameter_indices].state...));
       std::unique_ptr<mfem::HypreParMatrix> m_mat(assemble(M));
 
+      auto& lin_solver = nonlin_solver_->linearSolver();
       solid_mechanics::detail::adjoint_integrate(
           dt_n_to_np1, dt_np1_to_np2, m_mat.get(), k_mat.get(), displacement_adjoint_load_, velocity_adjoint_load_,
           acceleration_adjoint_load_, adjoint_displacement_, implicit_sensitivity_displacement_start_of_step_,
@@ -1602,6 +1579,35 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     // this method is essentially equivalent to the 1-liner
     // u += dot(inv(J), dot(J_elim[:, dofs], (U(t + dt) - u)[dofs]));
     nonlin_solver_->solve(displacement_);
+  }
+
+  /// @brief Solve the Quasi-static adjoint linear
+  virtual void quasiStaticAdjointSolve(double /*dt*/)
+  {
+    auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
+                                  *parameters_[parameter_indices].state...);
+    J_.reset();
+    J_ = assemble(drdu);
+
+    auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+
+    J_e_.reset();
+    J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_T);
+
+    auto& constrained_dofs = bcs_.allEssentialTrueDofs();
+
+    mfem::EliminateBC(*J_T, *J_e_, constrained_dofs, reactions_adjoint_bcs_, displacement_adjoint_load_);
+    for (int i = 0; i < constrained_dofs.Size(); i++) {
+      int j = constrained_dofs[i];
+      displacement_adjoint_load_[j] = reactions_adjoint_bcs_[j];
+    }
+
+    auto& lin_solver = nonlin_solver_->linearSolver();
+    lin_solver.SetOperator(*J_T);
+    lin_solver.Mult(displacement_adjoint_load_, adjoint_displacement_);
+
+    // Reset the equation solver to use the full nonlinear residual operator.  MRT, is this needed?
+    nonlin_solver_->setOperator(*residual_with_bcs_);
   }
 
   /**
