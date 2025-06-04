@@ -203,9 +203,9 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
         find_dependency(Enzyme REQUIRED)
 
-        # serac_assert_find_succeeded(PROJECT_NAME Enzyme
-        #                             TARGET       LLDEnzymeFlags
-        #                             DIR_VARIABLE ENZYME_DIR)
+        serac_assert_find_succeeded(PROJECT_NAME Enzyme
+                                    TARGET       LLDEnzymeFlags
+                                    DIR_VARIABLE ENZYME_DIR)
 
         serac_assert_find_succeeded(PROJECT_NAME Enzyme
                                     TARGET       ClangEnzymeFlags
