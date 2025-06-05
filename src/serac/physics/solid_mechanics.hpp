@@ -522,53 +522,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
      bcs_.addEssentialByTrueDofs(true_dofs, disp_bdr_coef_, displacement_.space());
    }
 
-  /**
-   * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area for a single
-   * displacement vector component
-   *
-   * @param is_node_constrained A callback function that returns true if displacement nodes at a certain position should
-   * be constrained by this boundary condition
-   * @param disp The scalar function containing the prescribed component displacement values
-   * @param component The component of the displacement vector that should be set by this boundary condition. The other
-   * components of displacement are unconstrained.
-   *
-   * The displacement function takes a spatial position as the first argument and current time as the second argument.
-   * It computes the desired displacement scalar for the given component and returns that value.
-   *
-   * @note This method searches over the entire mesh, not just the boundary nodes.
-   *
-   * @note This method must be called prior to completeSetup()
-   */
-  void setDisplacementBCs(std::function<bool(const mfem::Vector&)> is_node_constrained,
-                          std::function<double(const mfem::Vector&, double)> disp, int component)
-  {
-    // Get the nodal positions for the displacement vector in grid function form
-    mfem::ParGridFunction coordinates(
-        const_cast<mfem::ParFiniteElementSpace*>(&displacement_.space()));  // mfem const correctness issue
-    mesh_.GetNodes(coordinates);
-
-    mfem::Array<int> ldof_list;
-
-    const int num_nodes = coordinates.FESpace()->GetNDofs();
-    for (int i = 0; i < num_nodes; i++) {
-      mfem::Array<int> dofs;
-      dofs.Append(i);
-      displacement_.space().DofsToVDofs(dofs);
-      mfem::Vector X(dim);
-      for (int j = 0; j < dim; j++) {
-        X(j) = coordinates(dofs[j]);
-      }
-      if (is_node_constrained(X)) {
-        int ldof = displacement_.space().DofToVDof(i, component);
-        ldof_list.Append(ldof);
-      }
-    }
-
-    component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(disp);
-
-    bcs_.addEssential(ldof_list, component_disp_bdr_coef_, displacement_.space(), component);
-  }
-
   /// @overload
   const FiniteElementState& state(const std::string& state_name) const override
   {
