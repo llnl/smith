@@ -94,9 +94,8 @@ struct ResidualFixture : public testing::Test {
 
     std::string physics_name = "solid";
 
-    auto solid_mechanics_residual =
-        std::make_shared<SolidResidualT>(physics_name, mesh,
-                                         states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
+    auto solid_mechanics_residual = std::make_shared<SolidResidualT>(
+        physics_name, mesh, states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
     SolidMaterial mat;
     mat.K = 1.0;
     mat.G = 0.5;

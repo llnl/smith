@@ -65,8 +65,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
    */
   SolidResidual(std::string physics_name, std::shared_ptr<Mesh> mesh, const mfem::ParFiniteElementSpace& test_space,
                 std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
-      : BaseResidualT(physics_name, mesh, test_space,
-                      constructAllSpaces(test_space, parameter_fe_spaces))
+      : BaseResidualT(physics_name, mesh, test_space, constructAllSpaces(test_space, parameter_fe_spaces))
   {
   }
 
@@ -369,8 +368,7 @@ auto create_solid_residual(const std::string& physics_name, std::shared_ptr<sera
 
   using ResidualT = SolidResidual<order, dim, Parameters<ParameterSpaces...>>;
 
-  return std::make_shared<ResidualT>(physics_name, mesh, states[DISP]->space(),
-                                     parameter_fe_spaces);
+  return std::make_shared<ResidualT>(physics_name, mesh, states[DISP]->space(), parameter_fe_spaces);
 }
 
 }  // namespace serac

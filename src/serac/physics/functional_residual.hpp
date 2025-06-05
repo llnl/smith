@@ -38,6 +38,8 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
  public:
   using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
 
+  using ShapeDispSpace = H1<1, spatial_dim>;  ///< typedef
+
   /**
    * @brief Construct a new FunctionalResidual object
    *
@@ -65,13 +67,13 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
           [&](auto i) { vector_residual_trial_spaces[i + 1] = input_mfem_spaces[i]; });
     }
 
-    auto shape_disp_space_ptr = &mesh_->shape_displacement().space();
+    auto& shape_disp_space = mesh_->shape_displacement().space();
 
     residual_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>>(
-        shape_disp_space_ptr, &output_mfem_space, trial_spaces);
+        &shape_disp_space, &output_mfem_space, trial_spaces);
 
     v_residual_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>>(
-        shape_disp_space_ptr, vector_residual_trial_spaces);
+        &shape_disp_space, vector_residual_trial_spaces);
   }
 
   /**
@@ -244,11 +246,11 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
-    auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time, &mesh_->shape_displacement(),
-                                           v_fields[0],  fields);
+    auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
+                                           &mesh_->shape_displacement(), v_fields[0], fields);
     {
-      auto shape_vjp = serac::get<DERIVATIVE>((*v_residual_)(DifferentiateWRT<0>{}, time, mesh_->shape_displacement(), *v_fields[0],
-                                                             *fields[input_indices]...));
+      auto shape_vjp = serac::get<DERIVATIVE>((*v_residual_)(DifferentiateWRT<0>{}, time, mesh_->shape_displacement(),
+                                                             *v_fields[0], *fields[input_indices]...));
       auto shape_vjp_vector = assemble(shape_vjp);
       mesh_->shape_displacement_dual() += *shape_vjp_vector;
     }
@@ -262,9 +264,6 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       }
     }
   }
-
-  /// @brief using
-  using ShapeDispSpace = H1<1, spatial_dim>;
 
   /// @brief Accessor to get a reference to the underlying ShapeAwareFunctional in case more direct access is needed.
   /// @return Reference to ShapeAwareFunctional instance.

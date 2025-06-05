@@ -35,7 +35,8 @@ struct ResidualFixture : public testing::Test {
                                          "this_mesh_name", 0, 0);
 
     serac::FiniteElementState temperature = serac::StateManager::newState(ScalarSpace{}, "temperature", mesh->tag());
-    serac::FiniteElementState temperature_rate = serac::StateManager::newState(ScalarSpace{}, "temperature_rate", mesh->tag());
+    serac::FiniteElementState temperature_rate =
+        serac::StateManager::newState(ScalarSpace{}, "temperature_rate", mesh->tag());
     serac::FiniteElementState conductivity_offset =
         serac::StateManager::newState(ParamSpace{}, "conductivity_offset", mesh->tag());
 
