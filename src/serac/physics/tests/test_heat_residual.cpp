@@ -103,8 +103,8 @@ struct ResidualFixture : public testing::Test {
       dual_params.push_back(serac::FiniteElementDual(p.space(), p.name() + "_dual"));
     }
 
-    v_rhs_states = states;
-    v_rhs_params = params;
+    tangent_states = states;
+    tangent_params = params;
 
     std::string physics_name = "heat";
 
@@ -121,10 +121,10 @@ struct ResidualFixture : public testing::Test {
     heat_transfer_residual->addBoundaryIntegral(source_name,
                                                 [](auto /* t */, auto /* x */, auto /* n */) { return -1.0; });
 
-    for (auto& s : v_rhs_states) {
+    for (auto& s : tangent_states) {
       pseudoRand(s);
     }
-    for (auto& p : v_rhs_params) {
+    for (auto& p : tangent_params) {
       pseudoRand(p);
     }
 
@@ -153,8 +153,8 @@ struct ResidualFixture : public testing::Test {
   std::vector<serac::FiniteElementDual> dual_states;
   std::vector<serac::FiniteElementDual> dual_params;
 
-  std::vector<serac::FiniteElementState> v_rhs_states;
-  std::vector<serac::FiniteElementState> v_rhs_params;
+  std::vector<serac::FiniteElementState> tangent_states;
+  std::vector<serac::FiniteElementState> tangent_params;
 };
 
 TEST_F(ResidualFixture, VjpConsistency)
@@ -203,7 +203,7 @@ TEST_F(ResidualFixture, JvpConsistency)
   };
 
   auto selectStates = [&](size_t i) {
-    auto pts = getPointers(v_rhs_states, v_rhs_params);
+    auto pts = getPointers(tangent_states, tangent_params);
     for (size_t j = 0; j < pts.size(); ++j) {
       if (i != j) {
         pts[j] = nullptr;
@@ -217,7 +217,7 @@ TEST_F(ResidualFixture, JvpConsistency)
   jvp = 4.0;
   std::vector<serac::FiniteElementDual*> jvps = getPointers(jvp);
 
-  auto all_v_rhs_states = getPointers(v_rhs_states, v_rhs_params);
+  auto all_v_rhs_states = getPointers(tangent_states, tangent_params);
 
   for (size_t i = 0; i < all_states.size(); ++i) {
     auto J = residual->jacobian(time, dt, all_states, jacobianWeights(i));

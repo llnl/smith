@@ -12,6 +12,18 @@
 
 #pragma once
 
+// reverse residual sign
+// enums on residuals for state?
+// shared_ptr for field inputs
+// proper const correctness
+// shape_disp on mesh
+
+// action of the mass...
+// force, residual, inertial terms
+// lumped-mass residual, acceleration needs to be 0
+
+// C(u) u_dot + K(u) u = 0
+
 #include <vector>
 #include <string>
 #include "serac/physics/common.hpp"
@@ -43,6 +55,12 @@ class Residual {
   /// @brief using
   using DualFieldPtr = FiniteElementDual*;
 
+  /// @brief using
+  using ConstFieldPtr = FiniteElementState const*;
+
+  /// @brief using
+  using ConstDualFieldPtr = FiniteElementDual const*;
+
   /** @brief Virtual interface for computing residual from a vector of serac::FiniteElementState*
    *
    * @param time time
@@ -51,7 +69,7 @@ class Residual {
    * @param block_row integer which specifies which row of a block system to get the residual for, defaults to 0
    * @return mfem::Vector
    */
-  virtual mfem::Vector residual(double time, double dt, const std::vector<FieldPtr>& fields,
+  virtual mfem::Vector residual(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                 int block_row = 0) const = 0;
 
   /** @brief Derivative of the residual with respect to specified field arguments: sum_j d{r}_i/d{fields}_j *
@@ -65,7 +83,8 @@ class Residual {
    * @return std::unique_ptr<mfem::HypreParMatrix> returns sum_j d{r}_i/d{fields}_j * argument_tangents[j], where
    * {fields}_j is the jth field, {r}_i is the ith residual block row
    */
-  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<FieldPtr>& fields,
+  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt,
+                                                         const std::vector<ConstFieldPtr>& fields,
                                                          const std::vector<double>& argument_tangents,
                                                          int block_row = 0) const = 0;
 
@@ -78,7 +97,8 @@ class Residual {
    * @param jvp_reactions output vjps, 1 per row of a block system: d{r}_i / d{fields}_j * fieldsV[j]
    * nullptr fieldsV are assumed to be all zero to avoid extra calculations
    */
-  virtual void jvp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
+  virtual void jvp(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                   const std::vector<ConstFieldPtr>& v_fields,
                    const std::vector<DualFieldPtr>& jvp_reactions) const = 0;
 
   /**
@@ -89,7 +109,8 @@ class Residual {
    * @param v_fields left hand side 'v' fields
    * @param vjp_sensitivities output jvps, 1 per input field: v_fields[i] * d{r}_i / d{fields}_j
    */
-  virtual void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
+  virtual void vjp(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                   const std::vector<ConstFieldPtr>& v_fields,
                    const std::vector<DualFieldPtr>& vjp_sensitivities) const = 0;
 
   /// @brief name
@@ -99,5 +120,69 @@ class Residual {
   /// name
   std::string name_;
 };
+
+template <typename T>
+auto residualPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
+{
+  std::vector<T*> pointers;
+  for (auto& t : states) {
+    pointers.push_back(t.get());
+  }
+  for (auto& t : params) {
+    pointers.push_back(t.get());
+  }
+  return pointers;
+}
+
+template <typename T>
+auto residualPointers(std::vector<T>& states, std::vector<T>& params)
+{
+  std::vector<T*> pointers;
+  for (auto& t : states) {
+    pointers.push_back(&t);
+  }
+  for (auto& t : params) {
+    pointers.push_back(&t);
+  }
+  return pointers;
+}
+
+template <typename T>
+auto residualPointers(T& state)
+{
+  return std::vector<T*>{&state};
+}
+
+template <typename T>
+auto constResidualPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
+{
+  std::vector<T const*> pointers;
+  for (auto& t : states) {
+    pointers.push_back(t.get());
+  }
+  for (auto& t : params) {
+    pointers.push_back(t.get());
+  }
+  return pointers;
+}
+
+template <typename T>
+auto constResidualPointers(const std::vector<T>& states, const std::vector<T>& params = {})
+{
+  std::vector<T const*> pointers;
+  for (auto& t : states) {
+    pointers.push_back(&t);
+  }
+  for (auto& t : params) {
+    pointers.push_back(&t);
+  }
+  return pointers;
+}
+
+template <typename T>
+auto constResidualPointers(const T& state)
+{
+  return std::vector<T const*>{&state};
+}
 
 }  // namespace serac
