@@ -11,9 +11,11 @@ if (STRUMPACK_DIR)
                         DEPENDS_ON  serac_physics
                         )
 
-    blt_add_test(NAME            uniaxial_tension
-                COMMAND         uniaxial_tension
-                NUM_MPI_TASKS   4)
+    if("$ENV{SERAC_CI_WORKFLOW_TYPE}" STREQUAL "full")
+        blt_add_test(NAME            uniaxial_tension
+                     COMMAND         uniaxial_tension
+                     NUM_MPI_TASKS   4)
+    endif()
 
     install(
         FILES
