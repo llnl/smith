@@ -238,12 +238,16 @@ TEST(SolidMechanics, 3DQuadStaticJ2) { functional_solid_test_static_J2(); }
 
 TEST(SolidMechanics, TDofBoundaryCondition)
 {
+  /* 
+    Verifies that the solution obtained by specifying displacement BCs by tdof
+    is identical to the solution obtained by specifying the BCs by domains.
+  */
   MPI_Barrier(MPI_COMM_WORLD);
 
   constexpr int p = 1;
   constexpr int dim = 2;
-  int serial_refinement = 1;
-  int parallel_refinement = 0;
+  int serial_refinement = 0;
+  int parallel_refinement = 1;
 
   // Create DataStore
   axom::sidre::DataStore datastore;
@@ -255,7 +259,6 @@ TEST(SolidMechanics, TDofBoundaryCondition)
   auto pmesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
-  // _solver_params_start
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
@@ -267,26 +270,30 @@ TEST(SolidMechanics, TDofBoundaryCondition)
   using Material = solid_mechanics::LinearIsotropic;
   Material mat{.density = 1.0, .K = 0.5, .G = 1.0};
 
+  auto body_force_function = [](auto, auto) { return tensor<double, dim>{0.1, 0.0}; };
+
+  // GENERATE REFERENCE SOLUTION
+  // Make a solid mechanics module, specify the disp BCs by domain (ie, the standard method)
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                       "solid_mechanics", mesh_tag);
-
   solid.setMaterial(mat, pmesh->entireBody());
   pmesh->addDomainOfBoundaryElements("essential_boundary_x", by_attr<dim>(1));
   solid.setFixedBCs(pmesh->domain("essential_boundary_x"), Component::X);
   pmesh->addDomainOfBoundaryElements("essential_boundary_y", by_attr<dim>(2));
   solid.setFixedBCs(pmesh->domain("essential_boundary_y"), Component::Y);
-  solid.addBodyForce([](auto, auto) { return tensor<double, dim>{1.0, 0.0}; }, pmesh->entireBody());
+  solid.addBodyForce(body_force_function, pmesh->entireBody());
   solid.completeSetup();
   solid.advanceTimestep(1.0);
   
-  // find tdofs
+  // GENERATE THE SOLUTION TO TEST
+  // find the tdofs in the domain-based BCs
   auto dof_list = pmesh->domain("essential_boundary_x").dof_list(&solid.displacement().space());
   solid.displacement().space().DofsToVDofs(0, dof_list);
 
   auto dof_list2 = pmesh->domain("essential_boundary_y").dof_list(&solid.displacement().space());
   solid.displacement().space().DofsToVDofs(1, dof_list2);
 
-  dof_list.Append(dof_list2);
+  dof_list.Append(dof_list2); // contains all the tdofs
 
   // make another solver and set bcs by tdof
   SolidMechanics<p, dim> solid_by_tdof(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
@@ -294,13 +301,13 @@ TEST(SolidMechanics, TDofBoundaryCondition)
 
   solid_by_tdof.setMaterial(mat, pmesh->entireBody());
   solid_by_tdof.setDisplacementBCsByDofList([](auto, auto) { return tensor<double, dim>{}; }, dof_list);
-  solid_by_tdof.addBodyForce([](auto, auto) { return tensor<double, dim>{1.0, 0.0}; }, pmesh->entireBody());
+  solid_by_tdof.addBodyForce(body_force_function, pmesh->entireBody());
   solid_by_tdof.completeSetup();
   solid_by_tdof.advanceTimestep(1.0);
 
   // compare solutions
   for (int i = 0; i < solid.displacement().Size(); i++) {
-    ASSERT_EQ(solid.displacement()[i], solid_by_tdof.displacement()[i]);
+    EXPECT_DOUBLE_EQ(solid.displacement()[i], solid_by_tdof.displacement()[i]);
   }
 }
 
