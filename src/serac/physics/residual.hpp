@@ -13,16 +13,8 @@
 #pragma once
 
 // reverse residual sign
-// enums on residuals for state?
 // shared_ptr for field inputs
-// proper const correctness
 // shape_disp on mesh
-
-// action of the mass...
-// force, residual, inertial terms
-// lumped-mass residual, acceleration needs to be 0
-
-// C(u) u_dot + K(u) u = 0
 
 #include <vector>
 #include <string>

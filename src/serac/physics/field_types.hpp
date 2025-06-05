@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file residual_types.hpp
+ * @file field_types.hpp
  *
  * @brief Defines common types and helper functions for using the residual and scalar_objective classes
  */
@@ -29,9 +29,13 @@ using ConstFieldPtr = FiniteElementState const*;
 /// @brief using
 using ConstDualFieldPtr = FiniteElementDual const*;
 
+/// @brief Get a vector of FieldPtr or DualFieldPtr from a vector of shared_pointers to FiniteElementState or
+/// FiniteElementDual
 template <typename T>
 auto getFieldPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
 {
+  static_assert(std::is_same_v<T, FiniteElementState> || std::is_same_v<T, FiniteElementDual>,
+                "Type must be either FiniteElementState or FiniteElementDual");
   std::vector<T*> pointers;
   for (auto& t : states) {
     pointers.push_back(t.get());
@@ -42,6 +46,7 @@ auto getFieldPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::
   return pointers;
 }
 
+/// @brief Get a vector of FieldPtr or DualFieldPtr from a vector of FiniteElementState or FiniteElementDual
 template <typename T>
 auto getFieldPointers(std::vector<T>& states, std::vector<T>& params)
 {
@@ -55,12 +60,15 @@ auto getFieldPointers(std::vector<T>& states, std::vector<T>& params)
   return pointers;
 }
 
+/// @brief Get a vector of FieldPtr or DualFieldPtr from a single FiniteElementState or FiniteElementDual
 template <typename T>
 auto getFieldPointers(T& state)
 {
   return std::vector<T*>{&state};
 }
 
+/// @brief Get a vector of ConstFieldPtr or ConstDualFieldPtr from a vector of shared_pointers to FiniteElementState or
+/// FiniteElementDual
 template <typename T>
 auto getConstFieldPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
 {
@@ -74,6 +82,7 @@ auto getConstFieldPointers(std::vector<std::shared_ptr<T>>& states, std::vector<
   return pointers;
 }
 
+/// @brief Get a vector of ConstFieldPtr or ConstDualFieldPtr from a vector of FiniteElementState or FiniteElementDual
 template <typename T>
 auto getConstFieldPointers(const std::vector<T>& states, const std::vector<T>& params = {})
 {
@@ -87,6 +96,7 @@ auto getConstFieldPointers(const std::vector<T>& states, const std::vector<T>& p
   return pointers;
 }
 
+/// @brief Get a vector of ConstFieldPtr or ConstDualFieldPtr from a single FiniteElementState or FiniteElementDual
 template <typename T>
 auto getConstFieldPointers(const T& state)
 {

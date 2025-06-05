@@ -77,14 +77,15 @@ struct ResidualFixture : public testing::Test {
       pseudoRand(p);
     }
 
-    state_duals[HeatResidualT::TEMPERATURE] =
-        1.0;  // used to test that vjp acts via +=, add initial value to shape displacement dual
+    // used to test that vjp acts via +=, add initial value to shape displacement dual
+    state_duals[HeatResidualT::TEMPERATURE] = 1.0;
 
+    states[HeatResidualT::SHAPE_DISPLACEMENT] = 0.0;
     states[HeatResidualT::TEMPERATURE].setFromFieldFunction(
         [](serac::tensor<double, dim> x) { return 0.1 * std::pow(std::pow(x[0], 2.0) + std::pow(x[1], 2.0), 0.5); });
-    states[HeatResidualT::TEMPERATURE_RATE].setFromFieldFunction(
-        [](serac::tensor<double, dim> x) { return 0.01 * std::pow(std::pow(x[0], 2.0) + std::pow(x[1], 2.0), 0.5); });
-    states[HeatResidualT::SHAPE_DISPLACEMENT] = 0.0;
+    states[HeatResidualT::TEMPERATURE_RATE].setFromFieldFunction([](serac::tensor<double, dim> x) {
+      return 0.01 * std::pow(std::pow(x[0], 2.0) + std::pow(0.5 * x[1], 2.0), 0.5);
+    });
     params[0] = 0.5;
 
     residual = heat_transfer_residual;
@@ -135,7 +136,7 @@ TEST_F(ResidualFixture, VjpConsistency)
     vjp = 0.0;
     auto J = residual->jacobian(time, dt, input_fields, jacobian_weights(i));
     J->MultTranspose(v, vjp);
-    if (i == 0) vjp += 1.0;  // make sure vjp uses +=
+    if (i == HeatResidualT::TEMPERATURE) vjp += 1.0;  // make sure vjp uses +=
     EXPECT_NEAR(vjp.Norml2(), field_vjps[i]->Norml2(), 1e-12);
   }
 }
