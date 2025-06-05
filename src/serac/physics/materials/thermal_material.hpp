@@ -51,7 +51,7 @@ struct LinearIsotropicConductor {
   SERAC_HOST_DEVICE auto operator()(const T1& /* x */, const T2& /* temperature */,
                                     const T3& temperature_gradient) const
   {
-    return serac::tuple{(-density_) * specific_heat_capacity_, conductivity_ * temperature_gradient};
+    return serac::tuple{density_ * specific_heat_capacity_, -1.0 * conductivity_ * temperature_gradient};
   }
 
  private:

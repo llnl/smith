@@ -12,10 +12,6 @@
 
 #pragma once
 
-// reverse residual sign
-// shared_ptr for field inputs
-// shape_disp on mesh
-
 #include <vector>
 #include <string>
 #include "serac/physics/common.hpp"
