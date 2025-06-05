@@ -56,13 +56,12 @@ class BoundaryConditionManager {
 
   /**
    * @ brief Set a list of true degrees of feedom from a vector coefficient
-   * 
+   *
    * @param[in] local_dofs Indices of tdofs to set with a Dirichlet condition
    * @param[in] ess_bdr_coef The coefficient that evaluates to the Dirichlet condition
    * @param[in] space The finite element space to which the BC should be applied
    */
-  void addEssentialByTrueDofs(const mfem::Array<int>& true_dofs, 
-                              std::shared_ptr<mfem::VectorCoefficient> ess_bdr_coef,
+  void addEssentialByTrueDofs(const mfem::Array<int>& true_dofs, std::shared_ptr<mfem::VectorCoefficient> ess_bdr_coef,
                               mfem::ParFiniteElementSpace& space);
 
   /**

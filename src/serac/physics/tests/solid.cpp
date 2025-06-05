@@ -238,7 +238,7 @@ TEST(SolidMechanics, 3DQuadStaticJ2) { functional_solid_test_static_J2(); }
 
 TEST(SolidMechanics, TDofBoundaryCondition)
 {
-  /* 
+  /*
     Verifies that the solution obtained by specifying displacement BCs by tdof
     is identical to the solution obtained by specifying the BCs by domains.
   */
@@ -285,7 +285,7 @@ TEST(SolidMechanics, TDofBoundaryCondition)
   solid.addBodyForce(body_force_function, pmesh->entireBody());
   solid.completeSetup();
   solid.advanceTimestep(1.0);
-  
+
   // GENERATE THE SOLUTION TO TEST
   // find the tdofs in the domain-based BCs
   auto dof_list = pmesh->domain("essential_boundary_x").dof_list(&solid.displacement().space());
@@ -294,11 +294,11 @@ TEST(SolidMechanics, TDofBoundaryCondition)
   auto dof_list2 = pmesh->domain("essential_boundary_y").dof_list(&solid.displacement().space());
   solid.displacement().space().DofsToVDofs(1, dof_list2);
 
-  dof_list.Append(dof_list2); // contains all the tdofs
+  dof_list.Append(dof_list2);  // contains all the tdofs
 
   // make another solver and set bcs by tdof
   SolidMechanics<p, dim> solid_by_tdof(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                                      "solid_mechanics_by_tdof", mesh_tag);
+                                       "solid_mechanics_by_tdof", mesh_tag);
 
   solid_by_tdof.setMaterial(mat, pmesh->entireBody());
   solid_by_tdof.setDisplacementBCsByDofList(displacement_bc_function, dof_list);
