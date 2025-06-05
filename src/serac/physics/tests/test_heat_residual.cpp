@@ -21,7 +21,6 @@ struct ResidualFixture : public testing::Test {
   static constexpr int dim = 2;
   static constexpr int order = 1;
 
-  using VectorSpace = serac::H1<order, dim>;
   using ScalarSpace = serac::H1<order>;
   using ParamSpace = serac::L2<order - 1>;
 
@@ -36,13 +35,11 @@ struct ResidualFixture : public testing::Test {
                                          "this_mesh_name", 0, 0);
 
     serac::FiniteElementState temperature = serac::StateManager::newState(ScalarSpace{}, "temperature", mesh->tag());
-    serac::FiniteElementState temp_rate = serac::StateManager::newState(ScalarSpace{}, "temperature_rate", mesh->tag());
-    serac::FiniteElementState shape_disp =
-        serac::StateManager::newState(VectorSpace{}, "shape_displacement", mesh->tag());
+    serac::FiniteElementState temperature_rate = serac::StateManager::newState(ScalarSpace{}, "temperature_rate", mesh->tag());
     serac::FiniteElementState conductivity_offset =
         serac::StateManager::newState(ParamSpace{}, "conductivity_offset", mesh->tag());
 
-    states = {shape_disp, temperature, temp_rate};
+    states = {temperature, temperature_rate};
     params = {conductivity_offset};
 
     for (auto s : states) {
@@ -57,9 +54,8 @@ struct ResidualFixture : public testing::Test {
 
     std::string physics_name = "heat";
 
-    auto heat_transfer_residual =
-        std::make_shared<HeatResidualT>(physics_name, mesh, states[HeatResidualT::SHAPE_DISPLACEMENT].space(),
-                                        states[HeatResidualT::TEMPERATURE].space(), getSpaces(params));
+    auto heat_transfer_residual = std::make_shared<HeatResidualT>(
+        physics_name, mesh, states[HeatResidualT::TEMPERATURE].space(), getSpaces(params));
 
     ThermalMaterial mat(1.0, 1.0, 1.0);
     heat_transfer_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
@@ -68,7 +64,7 @@ struct ResidualFixture : public testing::Test {
     mesh->addDomainOfBoundaryElements(source_name, serac::by_attr<dim>({1, 2}));
 
     heat_transfer_residual->addBoundaryIntegral(source_name,
-                                                [](auto /* t */, auto /* x */, auto /* n */) { return -1.0; });
+                                                [](auto /* t */, auto /* x */, auto /* n */) { return 1.0; });
 
     for (auto& s : state_tangents) {
       pseudoRand(s);
@@ -80,7 +76,6 @@ struct ResidualFixture : public testing::Test {
     // used to test that vjp acts via +=, add initial value to shape displacement dual
     state_duals[HeatResidualT::TEMPERATURE] = 1.0;
 
-    states[HeatResidualT::SHAPE_DISPLACEMENT] = 0.0;
     states[HeatResidualT::TEMPERATURE].setFromFieldFunction(
         [](serac::tensor<double, dim> x) { return 0.1 * std::pow(std::pow(x[0], 2.0) + std::pow(x[1], 2.0), 0.5); });
     states[HeatResidualT::TEMPERATURE_RATE].setFromFieldFunction([](serac::tensor<double, dim> x) {
@@ -149,7 +144,7 @@ TEST_F(ResidualFixture, JvpConsistency)
   res_vector = residual->residual(time, dt, input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
-  auto jacobianWeights = [&](size_t i) {
+  auto jacobian_weights = [&](size_t i) {
     std::vector<double> tangents(input_fields.size());
     tangents[i] = 1.0;
     return tangents;
@@ -173,7 +168,7 @@ TEST_F(ResidualFixture, JvpConsistency)
   auto field_tangents = getFieldPointers(state_tangents, param_tangents);
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
-    auto J = residual->jacobian(time, dt, input_fields, jacobianWeights(i));
+    auto J = residual->jacobian(time, dt, input_fields, jacobian_weights(i));
     J->Mult(*field_tangents[i], jvp_slow);
     residual->jvp(time, dt, input_fields, selectStates(i), jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);

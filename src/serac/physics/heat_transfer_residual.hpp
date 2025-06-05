@@ -31,11 +31,10 @@ class HeatTransferResidual;
  */
 template <int order, int dim, typename... InputSpaces>
 class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
-    : public FunctionalResidual<dim, H1<order, dim>, H1<order>, Parameters<H1<order>, H1<order>, InputSpaces...>> {
+    : public FunctionalResidual<dim, H1<order>, Parameters<H1<order>, H1<order>, InputSpaces...>> {
  public:
   /// @brief typedef for underlying functional type with templates
-  using BaseResidualT =
-      FunctionalResidual<dim, H1<order, dim>, H1<order>, Parameters<H1<order>, H1<order>, InputSpaces...>>;
+  using BaseResidualT = FunctionalResidual<dim, H1<order>, Parameters<H1<order>, H1<order>, InputSpaces...>>;
 
   // /// @brief a container holding quadrature point data of the specified type
   // /// @tparam T the type of data to store at each quadrature point
@@ -48,7 +47,6 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
   /// @brief enumeration of the required heat transfer states
   enum STATE
   {
-    SHAPE_DISPLACEMENT,
     TEMPERATURE,
     TEMPERATURE_RATE,
     NUM_STATES
@@ -59,16 +57,13 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
    *
    * @param physics_name A name for the physics module instance
    * @param mesh The serac Mesh
-   * @param shape_disp_space Shape displacement space
    * @param test_space Test space
    * @param parameter_fe_spaces Vector of parameters spaces
    */
   HeatTransferResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
-                       const mfem::ParFiniteElementSpace& shape_disp_space,
                        const mfem::ParFiniteElementSpace& test_space,
                        std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
-      : BaseResidualT(physics_name, mesh, shape_disp_space, test_space,
-                      constructAllSpaces(test_space, parameter_fe_spaces))
+      : BaseResidualT(physics_name, mesh, test_space, constructAllSpaces(test_space, parameter_fe_spaces))
   {
   }
 
