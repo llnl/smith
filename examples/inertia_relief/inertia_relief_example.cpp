@@ -25,9 +25,16 @@
 #include "serac/physics/tests/physics_test_utils.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 
-#include "serac/numerics/continuation_solvers/problems/Problems.hpp"
-#include "serac/numerics/continuation_solvers/solvers/HomotopySolver.hpp"
-#include "serac/numerics/continuation_solvers/utilities.hpp"
+// WORKS WITH CODEVELOP OFF
+#include "problems/Problems.hpp"
+#include "solvers/HomotopySolver.hpp"
+#include "utilities.hpp"
+
+// WORKS WITH CODEVELOP ON
+//#include "ContinuationSolvers/problems/Problems.hpp"
+//#include "ContinuationSolvers/solvers/HomotopySolver.hpp"
+//#include "ContinuationSolvers/utilities.hpp"
+
 
 #include <axom/sidre.hpp>
 
@@ -193,7 +200,7 @@ int main(int argc, char* argv[])
   int nz = 4;
   mesh = std::make_shared<serac::Mesh>(
       mfem::Mesh::MakeCartesian3D(nx, ny, nz, element_shape, xlength, ylength, zlength), "this_mesh_name", 0, 0);
-
+  
   serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
   serac::FiniteElementState shape_disp = serac::StateManager::newState(VectorSpace{}, "shape_disp", mesh->tag());
   serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
