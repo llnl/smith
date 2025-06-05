@@ -38,6 +38,8 @@ if(TRIBOL_FOUND AND PETSC_FOUND)
                  COMMAND        buckling_cylinder ${_fast} --no-contact
                  NUM_MPI_TASKS  4)
 
+    unset(_fast)
+
     install(
         FILES
             cylinder.cpp
