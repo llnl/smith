@@ -51,7 +51,8 @@ class ScalarObjective {
    * @param direction index for which field to take the gradient with respect to
    * @return mfem::Vector
    */
-  virtual mfem::Vector gradient(double time, double dt, const std::vector<ConstFieldPtr>& fields, int direction) const = 0;
+  virtual mfem::Vector gradient(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                int direction) const = 0;
 
   /// @brief name
   std::string name() const { return name_; }

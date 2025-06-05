@@ -23,4 +23,3 @@ void pseudoRand(serac::FiniteElementVector& dual)
     dual(i) = -1.2 + 2.02 * (double(i) / sz);
   }
 }
-

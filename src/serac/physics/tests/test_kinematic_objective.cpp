@@ -64,7 +64,7 @@ struct ConstrainedResidualFixture : public testing::Test {
 
     double time = 0.0;
     double dt = 0.0;
-    auto input_fields = constResidualPointers(states, params);
+    auto input_fields = getConstFieldPointers(states, params);
     auto objective_states = {input_fields[SHAPE_DISP], input_fields[DISP], input_fields[DENSITY]};
 
     ObjectiveT::SpacesT param_space_ptrs{&input_fields[DISP]->space(), &input_fields[DENSITY]->space()};
@@ -91,8 +91,8 @@ struct ConstrainedResidualFixture : public testing::Test {
     }
 
     for (int i = 0; i < dim; ++i) {
-      auto center_rotation_objective = std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh,
-                                                                    input_fields[SHAPE_DISP]->space(), param_space_ptrs);
+      auto center_rotation_objective = std::make_shared<ObjectiveT>(
+          "rotation" + std::to_string(i), mesh, input_fields[SHAPE_DISP]->space(), param_space_ptrs);
       center_rotation_objective->addBodyIntegral(serac::DependsOn<0, 1>{}, mesh->entireBodyName(),
                                                  [i, initial_cg](double /*time*/, auto X, auto U, auto RHO) {
                                                    auto u = get<serac::VALUE>(U);
@@ -153,7 +153,7 @@ TEST_F(ConstrainedResidualFixture, CanComputeResidualObjectivesAndTheirGradients
 {
   double time = 0.0;
   double dt = 1.0;
-  auto input_fields = constResidualPointers(states, params);
+  auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
   res_vector = residual->residual(time, dt, input_fields);

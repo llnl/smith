@@ -29,8 +29,8 @@ using ConstFieldPtr = FiniteElementState const*;
 /// @brief using
 using ConstDualFieldPtr = FiniteElementDual const*;
 
-  template <typename T>
-auto residualPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
+template <typename T>
+auto getFieldPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
 {
   std::vector<T*> pointers;
   for (auto& t : states) {
@@ -43,7 +43,7 @@ auto residualPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::
 }
 
 template <typename T>
-auto residualPointers(std::vector<T>& states, std::vector<T>& params)
+auto getFieldPointers(std::vector<T>& states, std::vector<T>& params)
 {
   std::vector<T*> pointers;
   for (auto& t : states) {
@@ -56,13 +56,13 @@ auto residualPointers(std::vector<T>& states, std::vector<T>& params)
 }
 
 template <typename T>
-auto residualPointers(T& state)
+auto getFieldPointers(T& state)
 {
   return std::vector<T*>{&state};
 }
 
 template <typename T>
-auto constResidualPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
+auto getConstFieldPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
 {
   std::vector<T const*> pointers;
   for (auto& t : states) {
@@ -75,7 +75,7 @@ auto constResidualPointers(std::vector<std::shared_ptr<T>>& states, std::vector<
 }
 
 template <typename T>
-auto constResidualPointers(const std::vector<T>& states, const std::vector<T>& params = {})
+auto getConstFieldPointers(const std::vector<T>& states, const std::vector<T>& params = {})
 {
   std::vector<T const*> pointers;
   for (auto& t : states) {
@@ -88,9 +88,9 @@ auto constResidualPointers(const std::vector<T>& states, const std::vector<T>& p
 }
 
 template <typename T>
-auto constResidualPointers(const T& state)
+auto getConstFieldPointers(const T& state)
 {
   return std::vector<T const*>{&state};
 }
 
-}
+}  // namespace serac
