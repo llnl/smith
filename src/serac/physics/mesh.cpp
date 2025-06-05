@@ -8,6 +8,8 @@
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/numerics/functional/domain.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
 
 namespace serac {
 
@@ -41,6 +43,22 @@ void Mesh::createDomains()
   domains_.insert({entireBodyName(), serac::EntireDomain(*mfem_mesh_)});
   domains_.insert({entireBoundaryName(), serac::EntireBoundary(*mfem_mesh_)});
   domains_.insert({internalBoundaryName(), serac::InteriorFaces(*mfem_mesh_)});
+
+  int dim = mfem_mesh_->Dimension();
+
+  auto addPrefix = [](const std::string& prefix, const std::string& target) {
+    if (prefix.empty()) {
+      return target;
+    }
+    return prefix + "_" + target;
+  };
+
+  auto shape_disp_name = addPrefix(mesh_tag_, "shape_displacement");
+  shape_displacement_ = dim == 2 ? std::make_shared<FiniteElementState>(StateManager::newState(H1<1, 2>{}, shape_disp_name, mesh_tag_))
+                                 : std::make_shared<FiniteElementState>(StateManager::newState(H1<1, 3>{}, shape_disp_name, mesh_tag_));
+  auto shape_disp_dual_name = addPrefix(mesh_tag_, "shape_displacement_dual");
+  shape_displacement_dual_ = dim == 2 ? std::make_shared<FiniteElementDual>(StateManager::newDual(H1<1, 2>{}, shape_disp_dual_name, mesh_tag_))
+                                      : std::make_shared<FiniteElementDual>(StateManager::newDual(H1<1, 3>{}, shape_disp_dual_name, mesh_tag_));
 }
 
 serac::Domain& Mesh::entireBody() const { return domain(entireBodyName()); }

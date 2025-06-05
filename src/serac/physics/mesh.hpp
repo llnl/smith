@@ -19,6 +19,8 @@ namespace serac {
 
 // Forward declare
 struct Domain;
+class FiniteElementState;
+class FiniteElementDual;
 
 /**
  * @brief Helper class for constructing a mesh consistent with serac
@@ -114,6 +116,12 @@ class Mesh {
 
   /// @brief Map from registered domain name to the domain instance
   mutable std::map<std::string, serac::Domain> domains_;
+
+  /// @brief shape_displacement
+  std::shared_ptr<serac::FiniteElementState> shape_displacement_;
+
+  /// @brief shape_displacement dual
+  std::shared_ptr<serac::FiniteElementDual> shape_displacement_dual_;
 };
 
 }  // namespace serac
