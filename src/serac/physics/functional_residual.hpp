@@ -246,8 +246,6 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     dt_ = dt;
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
                                            v_fields[0], &mesh_->shape_displacement(), fields);
-    printf("a\n");
-    // always compute the shape displacement
     {
       auto shape_vjp = serac::get<DERIVATIVE>((*v_residual_)(DifferentiateWRT<0>{}, time, *v_fields[0],
                                                              mesh_->shape_displacement(), *fields[input_indices]...));
@@ -255,17 +253,12 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       mesh_->shape_displacement_dual() += *shape_vjp_vector;
     }
 
-    printf("b\n");
-
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-        printf("c\n");
-        std::cout << "sizes = " << vjp_sensitivities.size() << " " << fields.size() << std::endl;
         auto vecJac =
             serac::get<DERIVATIVE>(vecJacs[input_col](time, v_fields[0], &mesh_->shape_displacement(), fields));
         auto vecJacMfemVector = assemble(vecJac);
         *vjp_sensitivities[input_col] += *vecJacMfemVector;
-        printf("d\n");
       }
     }
   }

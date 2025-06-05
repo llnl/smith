@@ -74,8 +74,6 @@ struct ResidualFixture : public testing::Test {
 
     auto f_residual = std::make_shared<ResidualT>(physics_name, mesh, states[STATE::DISP].space(), inputs);
 
-    printf("a\n");
-
     // apply some traction boundary conditions
 
     std::string surface_name = "side";
@@ -117,8 +115,6 @@ struct ResidualFixture : public testing::Test {
 
     // residual is abstract Residual class to ensure usage only through BasePhysics interface
     residual = f_residual;
-
-    printf("c\n");
   }
 
   const double time = 0.0;
@@ -156,8 +152,6 @@ TEST_F(ResidualFixture, VjpConsistency)
     return tangents;
   };
 
-  printf("g\n");
-
   // test vjp
   serac::FiniteElementState v(res_vector.space(), "v");
   pseudoRand(v);
@@ -173,10 +167,7 @@ TEST_F(ResidualFixture, VjpConsistency)
     auto J = residual->jacobian(time, dt, input_fields, jacobian_weights(i));
     J->AddMultTranspose(v, vjp);
   }
-  printf("d\n");
   residual->vjp(time, dt, input_fields, getConstFieldPointers(v), field_vjps);
-
-  printf("e\n");
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
     EXPECT_NEAR(field_vjps_slow[i].Norml2(), field_vjps[i]->Norml2(), 1e-12)
@@ -228,7 +219,7 @@ TEST_F(ResidualFixture, JvpConsistency)
     field_tangents[NUM_STATES] = nullptr;
 
     double velo_factor = 0.2;
-    std::vector<double> jacobian_weights = {0.0, 1.0, velo_factor, 0.0};
+    std::vector<double> jacobian_weights = {1.0, velo_factor, 0.0};
 
     auto J = residual->jacobian(time, dt, input_fields, jacobian_weights);
     J->Mult(*field_tangents[DISP], jvp_slow);
