@@ -132,46 +132,6 @@ include(${PROJECT_SOURCE_DIR}/cmake/SeracMacros.cmake)
 include(${PROJECT_SOURCE_DIR}/cmake/SeracBasics.cmake)
 include(${PROJECT_SOURCE_DIR}/cmake/SeracCompilerFlags.cmake)
 
-#------------------------------------------------------------------------------
-# Add homotopy solver
-#------------------------------------------------------------------------------
-# Note: we do this after serac so we can use serac's mfem target
-if (SERAC_ENABLE_CONTINUATION)
-    add_subdirectory(${CONTINUATION_SOURCE_DIR} "${PROJECT_SOURCE_DIR}/ContinuationSolvers")
-endif()
-
-#------------------------------------------------------------------------------
-# Setup Homotopy solver
-#------------------------------------------------------------------------------
-
-if (NOT DEFINED SERAC_ENABLE_CONTINUATION)
-    set(SERAC_ENABLE_CONTINUATION ON)
-endif()
-message(STATUS "Serac Enable Continuation: ${SERAC_ENABLE_CONTINUATION}")
-
-if(SERAC_ENABLE_CONTINUATION)
-    # Allow homotopy solver as a non-submodule
-    if (DEFINED CONTINUATION_SOURCE_DIR)
-        if(NOT EXISTS ${CONTINUATION_SOURCE_DIR}/CMakeLists.txt)
-		message(FATAL_ERROR "Given CONTINUATION_SOURCE_DIR does not contain CMakeLists.txt")
-        endif()
-    else()
-        set(CONTINUATION_SOURCE_DIR "${PROJECT_SOURCE_DIR}/ContinuationSolvers" CACHE PATH "")
-	if (NOT EXISTS ${CONTINUATION_SOURCE_DIR}/CMakeLists.txt)
-            message(FATAL_ERROR
-                "The continuationsolver repo is not present. "
-                "Either run the following command in your git repository: \n"
-                "    git submodule update --init --recursive\n"
-		"Or add -DCONTINUATION_SOURCE_DIR=/path/to/ContinuationSolvers to your CMake command." )
-        endif()
-    endif()
-    # Add MUMPS direct solver to MFEM codevelop (we have to do this before serac's MFEM library is added)
-    if (SERAC_ENABLE_CODEVELOP)
-        if (MUMPS_DIR)
-            set(MFEM_USE_MUMPS ON CACHE BOOL "")
-        endif()
-    endif()
-endif()
 
 #------------------------------------------------------------------------------
 # Add Code Checks
