@@ -492,14 +492,19 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /**
     * @brief Set the displacement essential boundary conditions on a set of true degrees of freedom
     *
-    * @param true_dofs A set of true degrees of freedom to set the displacement on
-    * @param disp The vector function containing the prescribed displacement values
+    * @param applied_displacement Function specifying the applied displacement vector
+    * @param true_dofs Indices of true degrees of freedom to set the displacement on
     *
     * The @a true_dofs list can be determined using functions from the @a mfem::ParFiniteElementSpace related to the
     * displacement @a serac::FiniteElementState .
     *
-    * For the displacement function, the first argument is the input position, the second argument is time,
-    * and the third argument is the prescribed output displacement vector.
+    * The signature of the applied_displacement callable must be:
+    * tensor<double, dim> applied_displacement(tensor<double, dim> X, double t)
+    * Parameters:
+    *   X - coordinates of node
+    *   t - time
+    * Returns:
+    *   u, vector of applied displacements
     *
     * @note The displacement function is required to be vector-valued. However, only the dofs specified in the @a
     * true_dofs array will be set. This means that if the @a true_dofs array only contains dofs for a specific vector
