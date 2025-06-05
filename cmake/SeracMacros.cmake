@@ -4,6 +4,50 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+#------------------------------------------------------------------------------
+# serac_add_nightly_ci_test(NAME              [name]
+#                           COMMAND           [command] 
+#                           NUM_MPI_TASKS     [n]
+#                           NUM_OMP_THREADS   [n]
+#                           CONFIGURATIONS    [config1 [config2...]]
+#                           WORKING_DIRECTORY [dir]
+#                           TIMEOUT           [time_seconds])
+#
+# Wrapper for blt_add_test, adds test only if a certain CI flag is set,
+# and increases the default time limit (as examples tend to take longer than
+# regular tests).
+#
+# Unlike serac_add_tests, this macro takes in a pre-existing executable.
+#------------------------------------------------------------------------------
+macro(serac_add_nightly_ci_test)
+
+    set(options)
+    set(singleValueArgs NAME NUM_MPI_TASKS NUM_OMP_THREADS WORKING_DIRECTORY)
+    set(multiValueArgs COMMAND CONFIGURATIONS)
+
+    # Parse the arguments to the macro
+    cmake_parse_arguments(arg
+        "${options}" "${singleValueArgs}" "${multiValueArgs}" ${ARGN} )
+
+    if (NOT DEFINED arg_TIMEOUT)
+        set(_timeout 4800)
+    else()
+        set(_timeout ${arg_TIMEOUT})
+    endif()
+
+    if("$ENV{SERAC_CI_WORKFLOW_TYPE}" STREQUAL "full")
+        blt_add_test(NAME              ${arg_NAME}
+                     COMMAND           ${arg_COMMAND}
+                     NUM_MPI_TASKS     ${arg_NUM_MPI_TASKS}
+                     NUM_OMP_THREADS   ${arg_NUM_OMP_THREADS}
+                     CONFIGURATIONS    ${arg_CONFIGURATIONS}
+                     WORKING_DIRECTORY ${arg_WORKING_DIRECTORY})
+        set_tests_properties(${arg_NAME} PROPERTIES TIMEOUT ${_timeout})
+    endif()
+
+    unset(_timeout)
+
+endmacro(serac_add_nightly_ci_test)
 
 #------------------------------------------------------------------------------
 # Adds code checks for all cpp/hpp files recursively under the current directory
