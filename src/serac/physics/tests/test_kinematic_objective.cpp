@@ -39,7 +39,7 @@ struct ConstrainedResidualFixture : public testing::Test {
   auto constructResidual(const std::string& physics_name)
   {
     using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
-    auto solid_mechanics_residual = std::make_shared<SolidResidualT>(physics_name, mesh, states[SHAPE_DISP].space(),
+    auto solid_mechanics_residual = std::make_shared<SolidResidualT>(physics_name, mesh,
                                                                      states[DISP].space(), getSpaces(params));
     // setup material model
     SolidMaterial mat;

@@ -49,7 +49,6 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
   /// @brief enumeration of the required states
   enum STATE
   {
-    SHAPE_DISPLACEMENT,
     DISPLACEMENT,
     VELOCITY,
     ACCELERATION,
@@ -61,14 +60,12 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
    *
    * @param physics_name A name for the physics module instance
    * @param mesh The serac Mesh
-   * @param shape_disp_space Shape displacement space
    * @param test_space Test space
    * @param parameter_fe_spaces Vector of parameters spaces
    */
-  SolidResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
-                const mfem::ParFiniteElementSpace& shape_disp_space, const mfem::ParFiniteElementSpace& test_space,
+  SolidResidual(std::string physics_name, std::shared_ptr<Mesh> mesh, const mfem::ParFiniteElementSpace& test_space,
                 std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
-      : BaseResidualT(physics_name, mesh, shape_disp_space, test_space,
+      : BaseResidualT(physics_name, mesh, test_space,
                       constructAllSpaces(test_space, parameter_fe_spaces))
   {
   }
@@ -353,13 +350,12 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
  */
 template <int order, int dim, typename... ParameterSpaces>
 auto create_solid_residual(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
-                           const std::vector<serac::FiniteElementState*>& states,  // shape, u, v, a, e
+                           const std::vector<serac::FiniteElementState*>& states,  // u, v, a, e
                            const std::vector<serac::FiniteElementState*>& params)
 {
   /// Local enum to better document the expected indexing order to states
   enum FieldNumbering
   {
-    SHAPE,
     DISP,
     VELO,
     ACCEL,
@@ -373,7 +369,7 @@ auto create_solid_residual(const std::string& physics_name, std::shared_ptr<sera
 
   using ResidualT = SolidResidual<order, dim, Parameters<ParameterSpaces...>>;
 
-  return std::make_shared<ResidualT>(physics_name, mesh, states[SHAPE]->space(), states[DISP]->space(),
+  return std::make_shared<ResidualT>(physics_name, mesh, states[DISP]->space(),
                                      parameter_fe_spaces);
 }
 
