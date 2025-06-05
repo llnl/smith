@@ -271,16 +271,17 @@ TEST(SolidMechanics, TDofBoundaryCondition)
   Material mat{.density = 1.0, .K = 0.5, .G = 1.0};
 
   auto body_force_function = [](auto, auto) { return tensor<double, dim>{0.1, 0.0}; };
+  auto displacement_bc_function = [](auto X, auto) { return tensor<double, dim>{X[0], 0.0}; };
 
   // GENERATE REFERENCE SOLUTION
   // Make a solid mechanics module, specify the disp BCs by domain (ie, the standard method)
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                                      "solid_mechanics", mesh_tag);
+                               "solid_mechanics", mesh_tag);
   solid.setMaterial(mat, pmesh->entireBody());
   pmesh->addDomainOfBoundaryElements("essential_boundary_x", by_attr<dim>(1));
-  solid.setFixedBCs(pmesh->domain("essential_boundary_x"), Component::X);
+  solid.setDisplacementBCs(displacement_bc_function, pmesh->domain("essential_boundary_x"), Component::X);
   pmesh->addDomainOfBoundaryElements("essential_boundary_y", by_attr<dim>(2));
-  solid.setFixedBCs(pmesh->domain("essential_boundary_y"), Component::Y);
+  solid.setDisplacementBCs(displacement_bc_function, pmesh->domain("essential_boundary_y"), Component::Y);
   solid.addBodyForce(body_force_function, pmesh->entireBody());
   solid.completeSetup();
   solid.advanceTimestep(1.0);
@@ -300,7 +301,7 @@ TEST(SolidMechanics, TDofBoundaryCondition)
                                       "solid_mechanics_by_tdof", mesh_tag);
 
   solid_by_tdof.setMaterial(mat, pmesh->entireBody());
-  solid_by_tdof.setDisplacementBCsByDofList([](auto, auto) { return tensor<double, dim>{}; }, dof_list);
+  solid_by_tdof.setDisplacementBCsByDofList(displacement_bc_function, dof_list);
   solid_by_tdof.addBodyForce(body_force_function, pmesh->entireBody());
   solid_by_tdof.completeSetup();
   solid_by_tdof.advanceTimestep(1.0);
