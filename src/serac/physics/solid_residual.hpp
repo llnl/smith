@@ -46,7 +46,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
   /// @brief disp, velo, accel
   static constexpr int NUM_STATE_VARS = 3;
 
-  static enum SOLID_STATE { SHAPE_DISPLACEMENT, DISPLACEMENT, VELOCITY, ACCELERATION };
+  enum STATES { SHAPE_DISPLACEMENT, DISPLACEMENT, VELOCITY, ACCELERATION, NUM_STATES };
 
   /**
    * @brief Construct a new SolidResidual object

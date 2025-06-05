@@ -27,6 +27,7 @@
 #include <vector>
 #include <string>
 #include "serac/physics/common.hpp"
+#include "serac/physics/field_types.hpp"
 
 namespace mfem {
 class Vector;
@@ -48,18 +49,6 @@ class Residual {
 
   /// @brief destructor
   virtual ~Residual() {}
-
-  /// @brief using
-  using FieldPtr = FiniteElementState*;
-
-  /// @brief using
-  using DualFieldPtr = FiniteElementDual*;
-
-  /// @brief using
-  using ConstFieldPtr = FiniteElementState const*;
-
-  /// @brief using
-  using ConstDualFieldPtr = FiniteElementDual const*;
 
   /** @brief Virtual interface for computing residual from a vector of serac::FiniteElementState*
    *
@@ -120,69 +109,5 @@ class Residual {
   /// name
   std::string name_;
 };
-
-template <typename T>
-auto residualPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
-{
-  std::vector<T*> pointers;
-  for (auto& t : states) {
-    pointers.push_back(t.get());
-  }
-  for (auto& t : params) {
-    pointers.push_back(t.get());
-  }
-  return pointers;
-}
-
-template <typename T>
-auto residualPointers(std::vector<T>& states, std::vector<T>& params)
-{
-  std::vector<T*> pointers;
-  for (auto& t : states) {
-    pointers.push_back(&t);
-  }
-  for (auto& t : params) {
-    pointers.push_back(&t);
-  }
-  return pointers;
-}
-
-template <typename T>
-auto residualPointers(T& state)
-{
-  return std::vector<T*>{&state};
-}
-
-template <typename T>
-auto constResidualPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
-{
-  std::vector<T const*> pointers;
-  for (auto& t : states) {
-    pointers.push_back(t.get());
-  }
-  for (auto& t : params) {
-    pointers.push_back(t.get());
-  }
-  return pointers;
-}
-
-template <typename T>
-auto constResidualPointers(const std::vector<T>& states, const std::vector<T>& params = {})
-{
-  std::vector<T const*> pointers;
-  for (auto& t : states) {
-    pointers.push_back(&t);
-  }
-  for (auto& t : params) {
-    pointers.push_back(&t);
-  }
-  return pointers;
-}
-
-template <typename T>
-auto constResidualPointers(const T& state)
-{
-  return std::vector<T const*>{&state};
-}
 
 }  // namespace serac

@@ -64,12 +64,12 @@ struct ConstrainedResidualFixture : public testing::Test {
 
     double time = 0.0;
     double dt = 0.0;
-    auto all_states = getPointers(states, params);
-    auto objective_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[DENSITY]};
+    auto input_fields = constResidualPointers(states, params);
+    auto objective_states = {input_fields[SHAPE_DISP], input_fields[DISP], input_fields[DENSITY]};
 
-    ObjectiveT::SpacesT param_space_ptrs{&all_states[DISP]->space(), &all_states[DENSITY]->space()};
+    ObjectiveT::SpacesT param_space_ptrs{&input_fields[DISP]->space(), &input_fields[DENSITY]->space()};
 
-    ObjectiveT mass_objective("mass constraining", mesh, all_states[SHAPE_DISP]->space(), param_space_ptrs);
+    ObjectiveT mass_objective("mass constraining", mesh, input_fields[SHAPE_DISP]->space(), param_space_ptrs);
     mass_objective.addBodyIntegral(serac::DependsOn<1>{}, mesh->entireBodyName(),
                                    [](double /*time*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
 
@@ -79,7 +79,7 @@ struct ConstrainedResidualFixture : public testing::Test {
 
     for (int i = 0; i < dim; ++i) {
       auto cg_objective = std::make_shared<ObjectiveT>("translation" + std::to_string(i), mesh,
-                                                       all_states[SHAPE_DISP]->space(), param_space_ptrs);
+                                                       input_fields[SHAPE_DISP]->space(), param_space_ptrs);
       cg_objective->addBodyIntegral(
           serac::DependsOn<0, 1>{}, mesh->entireBodyName(),
           [i](double
@@ -92,7 +92,7 @@ struct ConstrainedResidualFixture : public testing::Test {
 
     for (int i = 0; i < dim; ++i) {
       auto center_rotation_objective = std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh,
-                                                                    all_states[SHAPE_DISP]->space(), param_space_ptrs);
+                                                                    input_fields[SHAPE_DISP]->space(), param_space_ptrs);
       center_rotation_objective->addBodyIntegral(serac::DependsOn<0, 1>{}, mesh->entireBodyName(),
                                                  [i, initial_cg](double /*time*/, auto X, auto U, auto RHO) {
                                                    auto u = get<serac::VALUE>(U);
@@ -153,13 +153,13 @@ TEST_F(ConstrainedResidualFixture, CanComputeResidualObjectivesAndTheirGradients
 {
   double time = 0.0;
   double dt = 1.0;
-  auto all_states = getPointers(states, params);
+  auto input_fields = constResidualPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = residual->residual(time, dt, all_states);
+  res_vector = residual->residual(time, dt, input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
-  auto objective_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[DENSITY]};
+  auto objective_states = {input_fields[SHAPE_DISP], input_fields[DISP], input_fields[DENSITY]};
   for (const auto& c : constraints) {
     ASSERT_NE(0.0, c->evaluate(time, dt, objective_states));
     for (int i = 0; i < dim; ++i) {

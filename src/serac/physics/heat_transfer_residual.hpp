@@ -45,6 +45,13 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
   /// @brief temperature, temperature rate
   static constexpr int NUM_STATE_VARS = 2;
 
+  enum STATE
+  {
+    SHAPE_DISPLACEMENT,
+    TEMPERATURE,
+    TEMPERATURE_RATE
+  };
+
   /**
    * @brief Construct a new HeatTransferResidual object
    *
