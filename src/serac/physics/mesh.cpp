@@ -54,11 +54,20 @@ void Mesh::createDomains()
   };
 
   auto shape_disp_name = addPrefix(mesh_tag_, "shape_displacement");
-  shape_displacement_ = dim == 2 ? std::make_shared<FiniteElementState>(StateManager::newState(H1<1, 2>{}, shape_disp_name, mesh_tag_))
-                                 : std::make_shared<FiniteElementState>(StateManager::newState(H1<1, 3>{}, shape_disp_name, mesh_tag_));
+  if (dim == 2) {
+    shape_displacement_ = std::make_shared<FiniteElementState>(StateManager::shapeDisplacement(mesh_tag_));
+  } else if (dim == 3) {
+    shape_displacement_ = std::make_shared<FiniteElementState>(StateManager::shapeDisplacement(mesh_tag_));
+  }
+
   auto shape_disp_dual_name = addPrefix(mesh_tag_, "shape_displacement_dual");
-  shape_displacement_dual_ = dim == 2 ? std::make_shared<FiniteElementDual>(StateManager::newDual(H1<1, 2>{}, shape_disp_dual_name, mesh_tag_))
-                                      : std::make_shared<FiniteElementDual>(StateManager::newDual(H1<1, 3>{}, shape_disp_dual_name, mesh_tag_));
+  if (dim == 2) {
+    shape_displacement_dual_ =
+        std::make_shared<FiniteElementDual>(StateManager::newDual(H1<1, 2>{}, shape_disp_dual_name, mesh_tag_));
+  } else if (dim == 3) {
+    shape_displacement_dual_ =
+        std::make_shared<FiniteElementDual>(StateManager::newDual(H1<1, 3>{}, shape_disp_dual_name, mesh_tag_));
+  }
 }
 
 serac::Domain& Mesh::entireBody() const { return domain(entireBodyName()); }
@@ -109,5 +118,13 @@ serac::Domain& Mesh::addDomainOfBodyElements(const std::string& domain_name,
   domains_.emplace(domain_name, Domain::ofElements(*mfem_mesh_, func));
   return domain(domain_name);
 }
+
+serac::FiniteElementState& Mesh::shape_displacement() { return *shape_displacement_; }
+
+const serac::FiniteElementState& Mesh::shape_displacement() const { return *shape_displacement_; }
+
+serac::FiniteElementDual& Mesh::shape_displacement_dual() { return *shape_displacement_dual_; }
+
+const serac::FiniteElementDual& Mesh::shape_displacement_dual() const { return *shape_displacement_dual_; }
 
 }  // namespace serac

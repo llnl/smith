@@ -25,9 +25,9 @@ struct ResidualFixture : public testing::Test {
 
   enum STATE
   {
-    SHAPE_DISP,
     DISP,
-    VELO
+    VELO,
+    NUM_STATES
   };
 
   enum PAR
@@ -47,11 +47,9 @@ struct ResidualFixture : public testing::Test {
 
     serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
     serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
-    serac::FiniteElementState shape_disp =
-        serac::StateManager::newState(VectorSpace{}, "shape_displacement", mesh->tag());
     serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-    states = {shape_disp, disp, velo};
+    states = {disp, velo};
     params = {density};
 
     for (auto s : states) {
@@ -67,16 +65,16 @@ struct ResidualFixture : public testing::Test {
     std::string physics_name = "fake_physics";
 
     using TrialSpace = VectorSpace;
-    using ShapeSpace = VectorSpace;
 
-    using ResidualT = serac::FunctionalResidual<dim, ShapeSpace, TrialSpace,
-                                                serac::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
+    using ResidualT =
+        serac::FunctionalResidual<dim, TrialSpace, serac::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
 
     std::vector<const mfem::ParFiniteElementSpace*> inputs{&states[STATE::DISP].space(), &states[STATE::VELO].space(),
                                                            &params[PAR::DENSITY].space()};
 
-    auto f_residual = std::make_shared<ResidualT>(physics_name, mesh, states[STATE::SHAPE_DISP].space(),
-                                                  states[STATE::DISP].space(), inputs);
+    auto f_residual = std::make_shared<ResidualT>(physics_name, mesh, states[STATE::DISP].space(), inputs);
+
+    printf("a\n");
 
     // apply some traction boundary conditions
 
@@ -101,7 +99,6 @@ struct ResidualFixture : public testing::Test {
       pseudoRand(p);
     }
 
-    state_duals[SHAPE_DISP] = 4.0;
     state_duals[DISP] = 1.0;
     state_duals[VELO] = 2.0;
     state_params[DENSITY] = 3.0;
@@ -116,11 +113,12 @@ struct ResidualFixture : public testing::Test {
       return u;
     });
 
-    states[SHAPE_DISP] = 0.0;
     params[DENSITY] = 1.2;
 
     // residual is abstract Residual class to ensure usage only through BasePhysics interface
     residual = f_residual;
+
+    printf("c\n");
   }
 
   const double time = 0.0;
@@ -158,6 +156,8 @@ TEST_F(ResidualFixture, VjpConsistency)
     return tangents;
   };
 
+  printf("g\n");
+
   // test vjp
   serac::FiniteElementState v(res_vector.space(), "v");
   pseudoRand(v);
@@ -173,7 +173,10 @@ TEST_F(ResidualFixture, VjpConsistency)
     auto J = residual->jacobian(time, dt, input_fields, jacobian_weights(i));
     J->AddMultTranspose(v, vjp);
   }
+  printf("d\n");
   residual->vjp(time, dt, input_fields, getConstFieldPointers(v), field_vjps);
+
+  printf("e\n");
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
     EXPECT_NEAR(field_vjps_slow[i].Norml2(), field_vjps[i]->Norml2(), 1e-12)
@@ -222,8 +225,7 @@ TEST_F(ResidualFixture, JvpConsistency)
 
   // test jacobians in weighted combinations
   {
-    field_tangents[SHAPE_DISP] = nullptr;
-    field_tangents[3] = nullptr;
+    field_tangents[NUM_STATES] = nullptr;
 
     double velo_factor = 0.2;
     std::vector<double> jacobian_weights = {0.0, 1.0, velo_factor, 0.0};
