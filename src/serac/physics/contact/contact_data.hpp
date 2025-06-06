@@ -75,6 +75,12 @@ class ContactData {
   void update(int cycle, double time, double& dt);
 
   /**
+   * @brief Resets the contact pressures to zero
+   *
+   */
+  void reset();
+
+  /**
    * @brief Get the contact constraint residual (i.e. nodal forces) from all contact interactions
    *
    * @return Nodal contact forces on the true DOFs
@@ -125,6 +131,7 @@ class ContactData {
   /**
    * @brief Computes the residual including contact terms
    *
+   * @param [in] u_shape Shape displacement vector (size of [displacement] block)
    * @param [in] u Solution vector ([displacement; pressure] block vector)
    * @param [in,out] r Residual vector ([force; gap] block vector); takes in initialized residual force vector and adds
    * contact contributions
@@ -133,7 +140,7 @@ class ContactData {
    *
    * @note This method calls update() to compute residual and Jacobian contributions based on the current configuration
    */
-  void residualFunction(const mfem::Vector& u, mfem::Vector& r);
+  void residualFunction(const mfem::Vector& u_shape, const mfem::Vector& u, mfem::Vector& r);
 
   /**
    * @brief Computes the Jacobian including contact terms, given the non-contact Jacobian terms
@@ -161,9 +168,10 @@ class ContactData {
   /**
    * @brief Update the current coordinates based on the new displacement field
    *
+   * @param u_shape Shape displacement vector
    * @param u Current displacement dof values
    */
-  void setDisplacements(const mfem::Vector& u);
+  void setDisplacements(const mfem::Vector& u_shape, const mfem::Vector& u);
 
   /**
    * @brief Have there been contact interactions added?
