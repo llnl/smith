@@ -258,7 +258,7 @@ TEST(SolidMechanics, TDofBoundaryCondition)
   std::string mesh_tag{"mesh"};
   auto pmesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
-  
+
   pmesh->addDomainOfBoundaryElements("essential_boundary_x", by_attr<dim>(1));
   pmesh->addDomainOfBoundaryElements("essential_boundary_y", by_attr<dim>(2));
 
