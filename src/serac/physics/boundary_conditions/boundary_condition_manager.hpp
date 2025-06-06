@@ -57,7 +57,7 @@ class BoundaryConditionManager {
   /**
    * @ brief Set a list of true degrees of feedom from a vector coefficient
    *
-   * @param[in] local_dofs Indices of tdofs to set with a Dirichlet condition
+   * @param[in] true_dofs Indices of tdofs to set with a Dirichlet condition
    * @param[in] ess_bdr_coef The coefficient that evaluates to the Dirichlet condition
    * @param[in] space The finite element space to which the BC should be applied
    */
