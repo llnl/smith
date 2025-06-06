@@ -246,8 +246,8 @@ TEST(SolidMechanics, TDofBoundaryCondition)
 
   constexpr int p = 1;
   constexpr int dim = 2;
-  int serial_refinement = 0;
-  int parallel_refinement = 1;
+  int serial_refinement = 2;
+  int parallel_refinement = 0;
 
   // Create DataStore
   axom::sidre::DataStore datastore;
@@ -258,6 +258,9 @@ TEST(SolidMechanics, TDofBoundaryCondition)
   std::string mesh_tag{"mesh"};
   auto pmesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  
+  pmesh->addDomainOfBoundaryElements("essential_boundary_x", by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("essential_boundary_y", by_attr<dim>(2));
 
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
@@ -278,9 +281,7 @@ TEST(SolidMechanics, TDofBoundaryCondition)
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                "solid_mechanics", mesh_tag);
   solid.setMaterial(mat, pmesh->entireBody());
-  pmesh->addDomainOfBoundaryElements("essential_boundary_x", by_attr<dim>(1));
   solid.setDisplacementBCs(displacement_bc_function, pmesh->domain("essential_boundary_x"), Component::X);
-  pmesh->addDomainOfBoundaryElements("essential_boundary_y", by_attr<dim>(2));
   solid.setDisplacementBCs(displacement_bc_function, pmesh->domain("essential_boundary_y"), Component::Y);
   solid.addBodyForce(body_force_function, pmesh->entireBody());
   solid.completeSetup();
@@ -288,20 +289,26 @@ TEST(SolidMechanics, TDofBoundaryCondition)
 
   // GENERATE THE SOLUTION TO TEST
   // find the tdofs in the domain-based BCs
-  auto dof_list = pmesh->domain("essential_boundary_x").dof_list(&solid.displacement().space());
-  solid.displacement().space().DofsToVDofs(0, dof_list);
+  auto ldofs = pmesh->domain("essential_boundary_x").dof_list(&solid.displacement().space());
+  solid.displacement().space().DofsToVDofs(0, ldofs);
 
-  auto dof_list2 = pmesh->domain("essential_boundary_y").dof_list(&solid.displacement().space());
-  solid.displacement().space().DofsToVDofs(1, dof_list2);
+  auto ldofs2 = pmesh->domain("essential_boundary_y").dof_list(&solid.displacement().space());
+  solid.displacement().space().DofsToVDofs(1, ldofs2);
 
-  dof_list.Append(dof_list2);  // contains all the tdofs
+  ldofs.Append(ldofs2);
+
+  mfem::Array<int> true_dofs;
+  for (int j = 0; j < ldofs.Size(); ++j) {
+    int tdof = solid.displacement().space().GetLocalTDofNumber(ldofs[j]);
+    if (tdof >= 0) true_dofs.Append(tdof);
+  }
 
   // make another solver and set bcs by tdof
   SolidMechanics<p, dim> solid_by_tdof(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                        "solid_mechanics_by_tdof", mesh_tag);
 
   solid_by_tdof.setMaterial(mat, pmesh->entireBody());
-  solid_by_tdof.setDisplacementBCsByDofList(displacement_bc_function, dof_list);
+  solid_by_tdof.setDisplacementBCsByDofList(displacement_bc_function, true_dofs);
   solid_by_tdof.addBodyForce(body_force_function, pmesh->entireBody());
   solid_by_tdof.completeSetup();
   solid_by_tdof.advanceTimestep(1.0);
