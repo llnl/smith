@@ -160,8 +160,8 @@ TEST_F(ConstrainedResidualFixture, CanComputeResidualObjectivesAndTheirGradients
   auto objective_states = {input_fields[DISP], input_fields[DENSITY]};
   for (const auto& c : constraints) {
     ASSERT_NE(0.0, c->evaluate(time, dt, objective_states));
-    for (int f_ordinal = 0; f_ordinal < objective_states.size(); ++f_ordinal) {
-      ASSERT_NE(0.0, c->gradient(time, dt, objective_states, f_ordinal).Norml2());
+    for (size_t f_ordinal = 0; f_ordinal < objective_states.size(); ++f_ordinal) {
+      ASSERT_NE(0.0, c->gradient(time, dt, objective_states, int(f_ordinal)).Norml2());
     }
     ASSERT_NE(0.0, c->mesh_coordinate_gradient(time, dt, objective_states).Norml2());
   }
