@@ -247,23 +247,40 @@ class Functional<test(trials...), exec> {
   {
     SERAC_MARK_FUNCTION;
 
-    for (uint32_t i = 0; i < num_trial_spaces; i++) {
-      P_trial_[i] = trial_space_[i]->GetProlongationMatrix();
-
-      input_L_[i].SetSize(P_trial_[i]->Height(), mfem::Device::GetMemoryType());
-
-      // create the necessary number of empty mfem::Vectors, to be resized later
-      input_E_.push_back({});
-      input_E_buffer_.push_back({});
-    }
-
     test_function_space_ = {test::family, test::order, test::components};
 
     std::array<Family, num_trial_spaces> trial_families = {trials::family...};
     std::array<int, num_trial_spaces> trial_orders = {trials::order...};
     std::array<int, num_trial_spaces> trial_components = {trials::components...};
+
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
       trial_function_spaces_[i] = {trial_families[i], trial_orders[i], trial_components[i]};
+
+      P_trial_[i] = trial_space_[i]->GetProlongationMatrix();
+
+      // For L2 spaces, configure a ParGridFunction with external data to exchange face neighbor data
+      // This is for DG method where interior faces on the processor boundary need to access data on the neighrbor element
+      if (trial_function_spaces_[i].family == Family::L2) {
+        // Set the vector size to store tdof data
+        tdof_values_[i].SetSize(P_trial_[i]->Height(), mfem::Device::GetMemoryType());
+
+        // Link the ParGridFunction to external FE space and data by reference
+        trial_pargrid_functions_[i].MakeRef(const_cast<mfem::ParFiniteElementSpace*>(trial_space_[i]), tdof_values_[i].GetData());
+
+        // Exchange face nbr data to set the vector in ParGridFunction with the right size
+        trial_pargrid_functions_[i].ExchangeFaceNbrData();
+
+        // Set the local input vector size to store local + ghost data
+        input_L_[i].SetSize(tdof_values_[i].Size() + trial_pargrid_functions_[i].FaceNbrData().Size(), mfem::Device::GetMemoryType());
+      }
+      else {
+        input_L_[i].SetSize(P_trial_[i]->Height(), mfem::Device::GetMemoryType());
+      }
+      // std::cout << "local size = " << input_L_[i].Size() << std::endl;
+
+      // create the necessary number of empty mfem::Vectors, to be resized later
+      input_E_.push_back({});
+      input_E_buffer_.push_back({});
     }
 
     // for (auto type : {Domain::Type::Elements, Domain::Type::BoundaryElements, Domain::Type::InteriorFaces}) {
@@ -466,36 +483,64 @@ class Functional<test(trials...), exec> {
 
     // get the values for each local processor
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
-#if 0
+// #if 0
+//       if (trial_function_spaces_[i].family == Family::L2) {
+// 
+//         // make a PGF on the fly
+//         // TODO: don't allocate/deallocate this data every invocation
+//         mfem::ParGridFunction X;
+//         X.MakeRef(trial_space_[i], input_L_[i].GetData());
+// 
+//         // call exchange face nbr
+//         X.ExchangeFaceNbrData();
+// 
+//         // copy input_L[i] and facenbrdata [i] into a common array like:
+//         //          first part        second part
+//         //    [   ---   L    ---   |  ---  FND ---  ]
+//         mfem::Vector first_part;
+//         first_part.MakeRef(input_L_[i], 0);
+//         P_trial_[i]->Mult(*input_T[i], first_part);
+// 
+//         mfem::Vector second_part;
+//         second_part.MakeRef(input_L_[i], first_part.Size());
+//         second_part = X.FaceNbrData();
+// 
+//       } else {
+// 
+//         P_trial_[i]->Mult(*input_T[i], input_L_[i]);
+// 
+//       }
+// #else
+//       P_trial_[i]->Mult(*input_T[i], input_L_[i]);
+// #endif
       if (trial_function_spaces_[i].family == Family::L2) {
-
-        // make a PGF on the fly
-        // TODO: don't allocate/deallocate this data every invocation
-        mfem::ParGridFunction X;
-        X.MakeRef(trial_space_[i], input_L_[i].GetData());
-
-        // call exchange face nbr
-        X.ExchangeFaceNbrData();
-
         // copy input_L[i] and facenbrdata [i] into a common array like:
         //          first part        second part
         //    [   ---   L    ---   |  ---  FND ---  ]
-        mfem::Vector first_part;
-        first_part.MakeRef(input_L_[i], 0);
-        P_trial_[i]->Mult(*input_T[i], first_part);
+        P_trial_[i]->Mult(*input_T[i], tdof_values_[i]);
+        // MakeRef from mfem::Vector will actually delete the data in the original vector, so we assign the
+        // values directly by SetVector, which invokes additional operations. This can be optimized later.
+        input_L_[i].SetVector(tdof_values_[i], 0);
+        // // Debug
+        // std::cout << "TDOFs" << std::endl;
+        // for (int j = 0; j < tdof_values_[i].Size(); ++j) {
+        //   std::cout << tdof_values_[i][j] << " ";
+        // }
+        // std::cout << std::endl;
 
-        mfem::Vector second_part;
-        second_part.MakeRef(input_L_[i], first_part.Size());
-        second_part = X.FaceNbrData();
-
+        // Point ParGridFunction to the new data and call exchange face nbr data
+        trial_pargrid_functions_[i].MakeRef(const_cast<mfem::ParFiniteElementSpace*>(trial_space_[i]), tdof_values_[i].GetData());
+        trial_pargrid_functions_[i].ExchangeFaceNbrData();
+        input_L_[i].SetVector(trial_pargrid_functions_[i].FaceNbrData(), tdof_values_[i].Size());
       } else {
-
         P_trial_[i]->Mult(*input_T[i], input_L_[i]);
-
       }
-#else
-      P_trial_[i]->Mult(*input_T[i], input_L_[i]);
-#endif
+      // // Debug
+      // std::cout << "Local vector" << std::endl;
+      // for (int j = 0; j < input_L_[i].Size(); ++j) {
+      //   std::cout << input_L_[i][j] << " ";
+      // }
+      // std::cout << std::endl;
     }
 
     output_L_ = 0.0;
@@ -822,6 +867,12 @@ class Functional<test(trials...), exec> {
 
   std::array<FunctionSpace, num_trial_spaces> trial_function_spaces_;
   FunctionSpace test_function_space_;
+
+  /// @brief For access of neighbor element info for processor boundary faces
+  std::array<mfem::ParGridFunction, num_trial_spaces> trial_pargrid_functions_;
+
+  /// @brief Store values on true dofs of the local processor
+  std::array<mfem::Vector, num_trial_spaces> tdof_values_;
 
   /**
    * @brief Operator that converts true (global) DOF values to local (current rank) DOF values

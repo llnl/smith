@@ -69,8 +69,8 @@ void L2_test(std::string meshfile)
 
   double t = 0.0;
 
-  auto value = residual(t, U);
-  // check_gradient(residual, t, U);
+  // auto value = residual(t, U);
+  check_gradient(residual, t, U);
 }
 
 TEST(basic, L2_test_tris_and_quads_linear) { L2_test<2, 1>(SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh"); }
