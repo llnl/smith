@@ -70,7 +70,7 @@ struct StateBase {
   }
 
   template <typename T, typename D, typename ZeroCopyT>
-  State<T, D> create_state(const std::vector<StateBase>& upstreams, const ZeroCopyT initialize_zero_dual)
+  State<T, D> create_state(const std::vector<StateBase>& upstreams, const ZeroCopyT initialize_zero_dual) const
   {
     return stateData->dataStore.create_empty_state<T, D>(initialize_zero_dual, upstreams);
   }
@@ -78,8 +78,7 @@ struct StateBase {
   template <typename T, typename D = T>
   State<T, D> create_state(const std::vector<StateBase>& upstreams) const
   {
-    auto initialize_zero_dual = [](const T&) -> T { return T(); };
-    return stateData->dataStore.create_empty_state<T, D>(initialize_zero_dual, upstreams);
+    return StateBase::create_state<T, D>(upstreams, [](const T&) -> T { return T(); });
   }
 
   const StateDataBase* data() const { return stateData.get(); }
@@ -93,10 +92,11 @@ struct StateBase {
   size_t step_index() const;
   void clear();
 
-  void evaluate_and_remove_disposable();
+  void evaluate_and_remove_disposable_checkpoints();
   void evaluate_vjp();
 
   std::shared_ptr<StateDataBase> stateData;
+  std::vector< std::shared_ptr<StateDataBase> > upstreamsForNextStep;
 };
 
 }  // namespace gretl

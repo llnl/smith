@@ -73,10 +73,6 @@ struct StateDataBase {
   size_t step_index() const { return stepIndex; }
   virtual size_t parent_step_index() const { return 0; }
 
-  virtual std::shared_ptr<StateDataBase> create_ghost(const std::shared_ptr<StateDataBase>& parentGhost,
-                                                      const std::shared_ptr<StateDataBase>& lastGhost,
-                                                      size_t step) const = 0;
-
   size_t stepIndex;
   DataStore& dataStore;
   UpstreamStates upstreams;

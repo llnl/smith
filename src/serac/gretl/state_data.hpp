@@ -53,7 +53,8 @@ struct StateData : public StateDataBase {
   virtual T& get_primal() const
   {
     if (!p) {
-      dataStore.fetch_state_data(stepIndex);
+      std::cout << "getting primal failed\n";
+      //dataStore.fetch_state_data(stepIndex);
     }
     gretl_assert(p);
     return *p;
@@ -92,21 +93,6 @@ struct StateData : public StateDataBase {
       : StateData(cpd, step, zc, ustreams)
   {
     p = std::make_shared<T>(t);
-  }
-
-  std::shared_ptr<StateDataBase> create_ghost(const std::shared_ptr<StateDataBase>& parentGhost,
-                                              const std::shared_ptr<StateDataBase>& lastGhost,
-                                              size_t step) const override
-  {
-    // this is the parent ghost
-    gretl_assert(parentGhost);
-    gretl_assert(lastGhost);
-    gretl_assert(lastGhost->stepIndex >= parentGhost->stepIndex);
-    gretl_assert(step > parentGhost->stepIndex);
-    gretl_assert(step == lastGhost->stepIndex + 1);
-    auto ghostState =
-        std::make_shared<GhostStateData<T, D>>(dataStore, step, initialize_zero_dual, parentGhost, lastGhost);
-    return ghostState;
   }
 
  protected:
