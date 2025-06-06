@@ -42,20 +42,19 @@ class Thermomechanics : public BasePhysics {
    * @param solid_lin_opts The options for solving the linearized Jacobian solid mechanics equations
    * @param solid_timestepping The timestepping options for the solid solver
    * @param physics_name A name for the physics module instance
-   * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param serac_mesh Serac mesh for physics
    * @param cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param time The simulation time to initialize the physics module to
    */
   Thermomechanics(const NonlinearSolverOptions thermal_nonlin_opts, const LinearSolverOptions thermal_lin_opts,
                   TimesteppingOptions thermal_timestepping, const NonlinearSolverOptions solid_nonlin_opts,
                   const LinearSolverOptions solid_lin_opts, TimesteppingOptions solid_timestepping,
-                  const std::string& physics_name, std::string mesh_tag, int cycle = 0, double time = 0.0)
-      : Thermomechanics(
-            std::make_unique<EquationSolver>(thermal_nonlin_opts, thermal_lin_opts,
-                                             StateManager::mesh(mesh_tag).GetComm()),
-            thermal_timestepping,
-            std::make_unique<EquationSolver>(solid_nonlin_opts, solid_lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-            solid_timestepping, physics_name, mesh_tag, cycle, time)
+                  const std::string& physics_name, std::shared_ptr<serac::Mesh> serac_mesh, int cycle = 0,
+                  double time = 0.0)
+      : Thermomechanics(std::make_unique<EquationSolver>(thermal_nonlin_opts, thermal_lin_opts, serac_mesh->getComm()),
+                        thermal_timestepping,
+                        std::make_unique<EquationSolver>(solid_nonlin_opts, solid_lin_opts, serac_mesh->getComm()),
+                        solid_timestepping, physics_name, serac_mesh, cycle, time)
   {
   }
 
@@ -67,20 +66,21 @@ class Thermomechanics : public BasePhysics {
    * @param solid_solver The nonlinear equation solver for the solid mechanics equations
    * @param solid_timestepping The timestepping options for the solid solver
    * @param physics_name A name for the physics module instance
-   * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param serac_mesh Serac mesh for physics
    * @param cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param time The simulation time to initialize the physics module to
    */
   Thermomechanics(std::unique_ptr<EquationSolver> thermal_solver, TimesteppingOptions thermal_timestepping,
                   std::unique_ptr<EquationSolver> solid_solver, TimesteppingOptions solid_timestepping,
-                  const std::string& physics_name, std::string mesh_tag, int cycle = 0, double time = 0.0)
-      : BasePhysics(physics_name, mesh_tag),
-        thermal_(std::move(thermal_solver), thermal_timestepping, physics_name + "thermal", mesh_tag, {"displacement"},
-                 cycle, time),
-        solid_(std::move(solid_solver), solid_timestepping, physics_name + "mechanical", mesh_tag, {"temperature"},
+                  const std::string& physics_name, std::shared_ptr<serac::Mesh> serac_mesh, int cycle = 0,
+                  double time = 0.0)
+      : BasePhysics(physics_name, serac_mesh),
+        thermal_(std::move(thermal_solver), thermal_timestepping, physics_name + "thermal", serac_mesh,
+                 {"displacement"}, cycle, time),
+        solid_(std::move(solid_solver), solid_timestepping, physics_name + "mechanical", serac_mesh, {"temperature"},
                cycle, time)
   {
-    SLIC_ERROR_ROOT_IF(mesh_.Dimension() != dim,
+    SLIC_ERROR_ROOT_IF(mesh().Dimension() != dim,
                        axom::fmt::format("Compile time dimension and runtime mesh dimension mismatch"));
 
     states_.push_back(&thermal_.temperature());

@@ -317,7 +317,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
 
     bool checkpoint_to_disk = true;
     auto solid = std::make_unique<SolidMechanics<p, dim>>(
-        nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh_tag,
+        nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh,
         std::vector<std::string>{}, 0, 0.0, checkpoint_to_disk, false);
     solid->setMaterial(mat, mesh->entireBody());
 
@@ -490,7 +490,7 @@ struct BucklingSensitivityFixture : public ::testing::Test {
 
     bool checkpoint_to_disk = false;
     auto solid = std::make_unique<SolidMechanics<p, dim, Parameters<DensitySpace, DensitySpace>>>(
-        nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh_tag,
+        nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh,
         std::vector<std::string>{kname, gname}, 0, 0.0, checkpoint_to_disk, false);
 
     solid->setMaterial(serac::DependsOn<0, 1>{}, mat, mesh->entireBody());

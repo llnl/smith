@@ -50,10 +50,9 @@ TEST(LiquidCrystalElastomer, Bertoldi)
 
   // Create the periodic mesh using the vertex mapping defined by the translation vectors
   auto periodic_mesh = mfem::Mesh::MakePeriodic(initial_mesh, periodicMap);
-  auto pmesh =
-      std::make_shared<serac::Mesh>(std::move(periodic_mesh), mesh_tag, serial_refinement, parallel_refinement);
+  auto mesh = std::make_shared<serac::Mesh>(std::move(periodic_mesh), mesh_tag, serial_refinement, parallel_refinement);
 #else
-  auto pmesh = std::make_shared<serac::Mesh>(std::move(initial_mesh), mesh_tag, serial_refinement, parallel_refinement);
+  auto mesh = std::make_shared<serac::Mesh>(std::move(initial_mesh), mesh_tag, serial_refinement, parallel_refinement);
 #endif
 
   // Construct a functional-based solid mechanics solver
@@ -74,7 +73,7 @@ TEST(LiquidCrystalElastomer, Bertoldi)
 #endif
 
   SolidMechanics<p, dim, Parameters<H1<p>, L2<p>, L2<p> > > solid_solver(
-      nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options, "lce_solid_functional", mesh_tag,
+      nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options, "lce_solid_functional", mesh,
       {"order", "eta", "gamma"});
 
   // Material properties
@@ -114,12 +113,12 @@ TEST(LiquidCrystalElastomer, Bertoldi)
   // Set material
   LiquidCrystalElastomerBertoldi lceMat(density, young_modulus, possion_ratio, max_order_param, beta_param);
 
-  solid_solver.setMaterial(DependsOn<ORDER_INDEX, GAMMA_INDEX, ETA_INDEX>{}, lceMat, pmesh->entireBody());
+  solid_solver.setMaterial(DependsOn<ORDER_INDEX, GAMMA_INDEX, ETA_INDEX>{}, lceMat, mesh->entireBody());
 
   // Boundary conditions:
   // Prescribe zero displacement at the supported end of the beam
-  pmesh->addDomainOfBoundaryElements("support", by_attr<dim>(2));
-  solid_solver.setFixedBCs(pmesh->domain("support"));
+  mesh->addDomainOfBoundaryElements("support", by_attr<dim>(2));
+  solid_solver.setFixedBCs(mesh->domain("support"));
 
   constexpr double iniDispVal = 5.0e-6;
   auto initial_displacement = [lx](vec3 X) { return vec3{0.0, (X[0] / lx) * iniDispVal, 0.0}; };

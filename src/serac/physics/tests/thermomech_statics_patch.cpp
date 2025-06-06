@@ -36,13 +36,12 @@ void ThermomechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
   std::string filename = SERAC_REPO_DIR "/data/meshes/square_attribute.mesh";
 
   const std::string mesh_tag = "mesh";
-
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   auto linear_opts = thermomechanics::direct_linear_options;
   auto nonlinear_opts = thermomechanics::default_nonlinear_options;
-  ThermomechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, "thermomechHeatedDeform", mesh_tag);
+  ThermomechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, "thermomechHeatedDeform", mesh);
 
   double rho = 1.0;
   double E = 100.0;
@@ -53,22 +52,22 @@ void ThermomechHeatedDeform(const std::set<int>& temp_ess_bcs, const TempBC& tem
   double k = 1.0;
   thermomechanics::GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
 
-  thermomech_solver.setMaterial(material, pmesh->entireBody());
+  thermomech_solver.setMaterial(material, mesh->entireBody());
 
   auto zero = [](const mfem::Vector&, double) -> double { return 0.0; };
   thermomech_solver.setTemperatureBCs(temp_ess_bcs, temp_bc_function);
-  thermomech_solver.setFluxBCs(flux_bc_function, pmesh->entireBoundary());
+  thermomech_solver.setFluxBCs(flux_bc_function, mesh->entireBoundary());
 
-  thermomech_solver.setSource(source_function, pmesh->entireBody());
+  thermomech_solver.setSource(source_function, mesh->entireBody());
   thermomech_solver.setTemperature(zero);
 
   std::set<int> disp_ess_bdr_y = {1};
   std::set<int> disp_ess_bdr_x = {3};
-  pmesh->addDomainOfBoundaryElements("ess_y_bdr", by_attr<dim>(disp_ess_bdr_y));
-  pmesh->addDomainOfBoundaryElements("ess_x_bdr", by_attr<dim>(disp_ess_bdr_x));
+  mesh->addDomainOfBoundaryElements("ess_y_bdr", by_attr<dim>(disp_ess_bdr_y));
+  mesh->addDomainOfBoundaryElements("ess_x_bdr", by_attr<dim>(disp_ess_bdr_x));
 
-  thermomech_solver.setFixedBCs(pmesh->domain("ess_y_bdr"), Component::Y);
-  thermomech_solver.setFixedBCs(pmesh->domain("ess_x_bdr"), Component::X);
+  thermomech_solver.setFixedBCs(mesh->domain("ess_y_bdr"), Component::Y);
+  thermomech_solver.setFixedBCs(mesh->domain("ess_x_bdr"), Component::X);
 
   auto zeroVector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
   thermomech_solver.setDisplacement(zeroVector);
@@ -389,7 +388,7 @@ std::array<double, 2> SolutionError(
     serial_refinement = 0;
 
   const std::string mesh_tag = "mesh";
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, 0);
+  auto mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, 0);
 
   auto linear_opts = thermomechanics::direct_linear_options;
   linear_opts.relative_tol = 1e-14;
@@ -398,7 +397,7 @@ std::array<double, 2> SolutionError(
   nonlinear_opts.relative_tol = 1e-14;
   nonlinear_opts.absolute_tol = 1e-14;
   nonlinear_opts.print_level = 0;
-  ThermomechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, "thermomech_patch_test", mesh_tag);
+  ThermomechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, "thermomech_patch_test", mesh);
 
   double rho = 1.0;
   double E = 100.0;
@@ -408,11 +407,11 @@ std::array<double, 2> SolutionError(
   double k = 1.0;
   thermomechanics::GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
 
-  thermomech_solver.setMaterial(material, pmesh->entireBody());
+  thermomech_solver.setMaterial(material, mesh->entireBody());
 
-  pmesh->addDomainOfBoundaryElements("temp_ess_bdr", by_attr<dim>(essentialBoundaryAttributes<dim>(temp_bc)));
-  pmesh->addDomainOfBoundaryElements("disp_ess_bdr", by_attr<dim>(essentialBoundaryAttributes<dim>(disp_bc)));
-  exact_solution.applyLoads(material, thermomech_solver, pmesh->domain("temp_ess_bdr"), pmesh->domain("disp_ess_bdr"));
+  mesh->addDomainOfBoundaryElements("temp_ess_bdr", by_attr<dim>(essentialBoundaryAttributes<dim>(temp_bc)));
+  mesh->addDomainOfBoundaryElements("disp_ess_bdr", by_attr<dim>(essentialBoundaryAttributes<dim>(disp_bc)));
+  exact_solution.applyLoads(material, thermomech_solver, mesh->domain("temp_ess_bdr"), mesh->domain("disp_ess_bdr"));
 
   // Finalize the data structures
   thermomech_solver.completeSetup();

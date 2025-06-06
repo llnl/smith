@@ -56,7 +56,7 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
   std::string filename = SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";
   std::string mesh_tag("mesh");
 
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   constexpr int p = 1;
@@ -64,10 +64,10 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
 
   // Construct and initialized the user-defined Young's modulus, thermal conductivity
   // to be used as a differentiable parameter in the thermomechanics physics module.
-  FiniteElementState user_defined_youngs_modulus(pmesh->mfemParMesh(), H1<p>{}, "parameterized_youngs_modulus");
-  FiniteElementState user_defined_thermal_conductivity(pmesh->mfemParMesh(), H1<p>{},
+  FiniteElementState user_defined_youngs_modulus(mesh->mfemParMesh(), H1<p>{}, "parameterized_youngs_modulus");
+  FiniteElementState user_defined_thermal_conductivity(mesh->mfemParMesh(), H1<p>{},
                                                        "parameterized_thermal_conductivity");
-  FiniteElementState user_defined_coupling_coefficient(pmesh->mfemParMesh(), H1<p>{},
+  FiniteElementState user_defined_coupling_coefficient(mesh->mfemParMesh(), H1<p>{},
                                                        "parameterized_coupling_coefficient");
 
   std::array<double, 3> parameter_values = {0.5, 0.5, 1.0};
@@ -87,7 +87,7 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
   nonlinear_opts.print_level = 0;
 
   ThermomechanicsMonolithic<p, dim, Parameters<H1<1>, H1<1>, H1<1>>> thermomech_solver(
-      nonlinear_opts, linear_opts, "thermomech_parameterized_sensitivities", MESHTAG,
+      nonlinear_opts, linear_opts, "thermomech_parameterized_sensitivities", mesh,
       {"Delta E", "Delta Kappa", "Scale Alpha"});
 
   thermomech_solver.setParameter(0, user_defined_youngs_modulus);
@@ -103,15 +103,15 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
   double k = 1.0;
   thermomechanics::ParameterizedThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
 
-  thermomech_solver.setMaterial(DependsOn<0, 1, 2>{}, material, pmesh->entireBody());
+  thermomech_solver.setMaterial(DependsOn<0, 1, 2>{}, material, mesh->entireBody());
 
   std::set<int> temp_flux_bcs = {1, 2};
   std::set<int> disp_trac_bcs = {3, 4};
-  pmesh->addDomainOfBoundaryElements("flux_boundary", by_attr<dim>(temp_flux_bcs));
-  pmesh->addDomainOfBoundaryElements("trac_boundary", by_attr<dim>(disp_trac_bcs));
+  mesh->addDomainOfBoundaryElements("flux_boundary", by_attr<dim>(temp_flux_bcs));
+  mesh->addDomainOfBoundaryElements("trac_boundary", by_attr<dim>(disp_trac_bcs));
 
   std::set<int> temp_ess_bcs = {3, 4};
-  pmesh->addDomainOfBoundaryElements("temp_bdr", by_attr<dim>(temp_ess_bcs));
+  mesh->addDomainOfBoundaryElements("temp_bdr", by_attr<dim>(temp_ess_bcs));
   thermomech_solver.setTemperatureBCs(temp_ess_bcs, [&theta_ref](const auto&, auto) { return theta_ref; });
 
   auto initTemp = [&theta_ref](const mfem::Vector&, double) -> double { return theta_ref; };
@@ -119,20 +119,20 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
 
   std::set<int> disp_ess_bdr_y = {2};
   std::set<int> disp_ess_bdr_x = {1};
-  pmesh->addDomainOfBoundaryElements("ess_y_bdr", by_attr<dim>(disp_ess_bdr_y));
-  pmesh->addDomainOfBoundaryElements("ess_x_bdr", by_attr<dim>(disp_ess_bdr_x));
-  thermomech_solver.setFixedBCs(pmesh->domain("ess_y_bdr"), Component::Y);
-  thermomech_solver.setFixedBCs(pmesh->domain("ess_x_bdr"), Component::X);
+  mesh->addDomainOfBoundaryElements("ess_y_bdr", by_attr<dim>(disp_ess_bdr_y));
+  mesh->addDomainOfBoundaryElements("ess_x_bdr", by_attr<dim>(disp_ess_bdr_x));
+  thermomech_solver.setFixedBCs(mesh->domain("ess_y_bdr"), Component::Y);
+  thermomech_solver.setFixedBCs(mesh->domain("ess_x_bdr"), Component::X);
 
   auto zeroVector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
   thermomech_solver.setDisplacement(zeroVector);
 
   if (load == LoadingType::Source) {
     auto source_function = [](auto /* X */, auto /* time */, auto /* T */, auto /* dT_dx */) { return 1.0; };
-    thermomech_solver.setSource(source_function, pmesh->entireBody());
+    thermomech_solver.setSource(source_function, mesh->entireBody());
   } else if (load == LoadingType::Flux) {
     auto flux_bc_function = [](auto /* X */, auto /* n */, auto /* time */, auto /* T */) { return -1.0; };
-    thermomech_solver.setFluxBCs(flux_bc_function, pmesh->domain("flux_boundary"));
+    thermomech_solver.setFluxBCs(flux_bc_function, mesh->domain("flux_boundary"));
   } else if (load == LoadingType::BodyForce) {
     auto body_force_function = [](auto /* X */, auto /* time */) {
       tensor<double, dim> bf{};
@@ -141,10 +141,10 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
       }
       return bf;
     };
-    thermomech_solver.addBodyForce(body_force_function, pmesh->entireBody());
+    thermomech_solver.addBodyForce(body_force_function, mesh->entireBody());
   } else if (load == LoadingType::Traction) {
     auto traction_bc_function = [](auto /* X */, auto n0, auto /* T */) { return -1.0 * n0; };
-    thermomech_solver.setTraction(traction_bc_function, pmesh->domain("trac_boundary"));
+    thermomech_solver.setTraction(traction_bc_function, mesh->domain("trac_boundary"));
   }
 
   thermomech_solver.completeSetup();
@@ -268,14 +268,13 @@ void FiniteDifferenceShapeTest(LoadingType load)
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";
   std::string mesh_tag("mesh");
-
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   constexpr int p = 1;
   constexpr int dim = 2;
 
-  FiniteElementState shape_displacement(pmesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{});
+  FiniteElementState shape_displacement(mesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{});
   double shape_displacement_value = 1.0;
   shape_displacement = shape_displacement_value;
 
@@ -288,7 +287,7 @@ void FiniteDifferenceShapeTest(LoadingType load)
   nonlinear_opts.print_level = 0;
 
   ThermomechanicsMonolithic<p, dim> thermomech_solver(nonlinear_opts, linear_opts, "thermomech_shape_sensitivities",
-                                                      MESHTAG);
+                                                      mesh);
   thermomech_solver.setShapeDisplacement(shape_displacement);
 
   double rho = 1.0;
@@ -300,15 +299,15 @@ void FiniteDifferenceShapeTest(LoadingType load)
   double k = 1.0;
   thermomechanics::GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
 
-  thermomech_solver.setMaterial(DependsOn<>{}, material, pmesh->entireBody());
+  thermomech_solver.setMaterial(DependsOn<>{}, material, mesh->entireBody());
 
   std::set<int> temp_flux_bcs = {1, 2};
   std::set<int> disp_trac_bcs = {3, 4};
-  pmesh->addDomainOfBoundaryElements("flux_boundary", by_attr<dim>(temp_flux_bcs));
-  pmesh->addDomainOfBoundaryElements("trac_boundary", by_attr<dim>(disp_trac_bcs));
+  mesh->addDomainOfBoundaryElements("flux_boundary", by_attr<dim>(temp_flux_bcs));
+  mesh->addDomainOfBoundaryElements("trac_boundary", by_attr<dim>(disp_trac_bcs));
 
   std::set<int> temp_ess_bcs = {3, 4};
-  pmesh->addDomainOfBoundaryElements("temp_bdr", by_attr<dim>(temp_ess_bcs));
+  mesh->addDomainOfBoundaryElements("temp_bdr", by_attr<dim>(temp_ess_bcs));
   thermomech_solver.setTemperatureBCs(temp_ess_bcs, [&theta_ref](const auto&, auto) { return theta_ref; });
 
   auto initTemp = [&theta_ref](const mfem::Vector&, double) -> double { return theta_ref; };
@@ -316,20 +315,20 @@ void FiniteDifferenceShapeTest(LoadingType load)
 
   std::set<int> disp_ess_bdr_y = {2};
   std::set<int> disp_ess_bdr_x = {1};
-  pmesh->addDomainOfBoundaryElements("ess_y_bdr", by_attr<dim>(disp_ess_bdr_y));
-  pmesh->addDomainOfBoundaryElements("ess_x_bdr", by_attr<dim>(disp_ess_bdr_x));
-  thermomech_solver.setFixedBCs(pmesh->domain("ess_y_bdr"), Component::Y);
-  thermomech_solver.setFixedBCs(pmesh->domain("ess_x_bdr"), Component::X);
+  mesh->addDomainOfBoundaryElements("ess_y_bdr", by_attr<dim>(disp_ess_bdr_y));
+  mesh->addDomainOfBoundaryElements("ess_x_bdr", by_attr<dim>(disp_ess_bdr_x));
+  thermomech_solver.setFixedBCs(mesh->domain("ess_y_bdr"), Component::Y);
+  thermomech_solver.setFixedBCs(mesh->domain("ess_x_bdr"), Component::X);
 
   auto zeroVector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
   thermomech_solver.setDisplacement(zeroVector);
 
   if (load == LoadingType::Source) {
     auto source_function = [](auto /* X */, auto /* time */, auto /* T */, auto /* dT_dx */) { return 1.0; };
-    thermomech_solver.setSource(source_function, pmesh->entireBody());
+    thermomech_solver.setSource(source_function, mesh->entireBody());
   } else if (load == LoadingType::Flux) {
     auto flux_bc_function = [](auto /* X */, auto /* n */, auto /* time */, auto /* T */) { return -1.0; };
-    thermomech_solver.setFluxBCs(flux_bc_function, pmesh->domain("flux_boundary"));
+    thermomech_solver.setFluxBCs(flux_bc_function, mesh->domain("flux_boundary"));
   } else if (load == LoadingType::BodyForce) {
     auto body_force_function = [](auto /* X */, auto /* time */) {
       tensor<double, dim> bf{};
@@ -338,10 +337,10 @@ void FiniteDifferenceShapeTest(LoadingType load)
       }
       return bf;
     };
-    thermomech_solver.addBodyForce(body_force_function, pmesh->entireBody());
+    thermomech_solver.addBodyForce(body_force_function, mesh->entireBody());
   } else if (load == LoadingType::Traction) {
     auto traction_bc_function = [](auto /* X */, auto n0, auto /* T */) { return -1.0 * n0; };
-    thermomech_solver.setTraction(traction_bc_function, pmesh->domain("trac_boundary"));
+    thermomech_solver.setTraction(traction_bc_function, mesh->domain("trac_boundary"));
   }
 
   thermomech_solver.completeSetup();

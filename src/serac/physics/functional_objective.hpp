@@ -54,7 +54,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
       for_constexpr<sizeof...(InputSpaces)>([&](auto i) { mfem_spaces[i] = input_mfem_spaces[i]; });
     }
 
-    auto& shape_disp_space = mesh_->shape_displacement().space();
+    auto& shape_disp_space = mesh_->shapeDisplacement().space();
 
     objective_ =
         std::make_unique<ShapeAwareFunctional<ShapeDispSpace, double(InputSpaces...)>>(&shape_disp_space, mfem_spaces);
@@ -80,7 +80,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
   {
     dt_ = dt;
     return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time,
-                             &mesh_->shape_displacement(), fields);
+                             &mesh_->shapeDisplacement(), fields);
   }
 
   /// @overload
@@ -89,9 +89,9 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
   {
     dt_ = dt;
     auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time,
-                                    &mesh_->shape_displacement(), fields);
+                                    &mesh_->shapeDisplacement(), fields);
     auto g =
-        serac::get<DERIVATIVE>(grads[static_cast<size_t>(field_ordinal)](time, &mesh_->shape_displacement(), fields));
+        serac::get<DERIVATIVE>(grads[static_cast<size_t>(field_ordinal)](time, &mesh_->shapeDisplacement(), fields));
     return *assemble(g);
   }
 
@@ -101,7 +101,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
   {
     dt_ = dt;
     auto g = serac::get<DERIVATIVE>(
-        (*objective_)(DifferentiateWRT<0>{}, time, mesh_->shape_displacement(), *fields[parameter_indices]...));
+        (*objective_)(DifferentiateWRT<0>{}, time, mesh_->shapeDisplacement(), *fields[parameter_indices]...));
     return *assemble(g);
   }
 

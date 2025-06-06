@@ -67,7 +67,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
           [&](auto i) { vector_residual_trial_spaces[i + 1] = input_mfem_spaces[i]; });
     }
 
-    auto& shape_disp_space = mesh_->shape_displacement().space();
+    auto& shape_disp_space = mesh_->shapeDisplacement().space();
 
     residual_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>>(
         &shape_disp_space, &output_mfem_space, trial_spaces);
@@ -174,7 +174,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
     dt_ = dt;
-    auto ret = (*residual_)(time, mesh_->shape_displacement(), *fields[input_indices]...);
+    auto ret = (*residual_)(time, mesh_->shapeDisplacement(), *fields[input_indices]...);
     return ret;
   }
 
@@ -203,11 +203,11 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     };
 
     auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
-                                  &mesh_->shape_displacement(), fields);
+                                  &mesh_->shapeDisplacement(), fields);
 
     for (size_t input_col = 0; input_col < jacobian_weights.size(); ++input_col) {
       if (jacobian_weights[input_col] != 0.0) {
-        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, &mesh_->shape_displacement(), fields));
+        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, &mesh_->shapeDisplacement(), fields));
         addToJ(jacobian_weights[input_col], assemble(K));
       }
     }
@@ -225,13 +225,13 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
     dt_ = dt;
     auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
-                                  &mesh_->shape_displacement(), fields);
+                                  &mesh_->shapeDisplacement(), fields);
 
     *jvp_reactions[0] = 0.0;
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (v_fields[input_col] != nullptr) {
-        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, &mesh_->shape_displacement(), fields));
+        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, &mesh_->shapeDisplacement(), fields));
         K.AddMult(*v_fields[input_col], *jvp_reactions[0]);
       }
     }
@@ -247,18 +247,18 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
     dt_ = dt;
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
-                                           &mesh_->shape_displacement(), v_fields[0], fields);
+                                           &mesh_->shapeDisplacement(), v_fields[0], fields);
     {
-      auto shape_vjp = serac::get<DERIVATIVE>((*v_residual_)(DifferentiateWRT<0>{}, time, mesh_->shape_displacement(),
+      auto shape_vjp = serac::get<DERIVATIVE>((*v_residual_)(DifferentiateWRT<0>{}, time, mesh_->shapeDisplacement(),
                                                              *v_fields[0], *fields[input_indices]...));
       auto shape_vjp_vector = assemble(shape_vjp);
-      mesh_->shape_displacement_dual() += *shape_vjp_vector;
+      mesh_->shapeDisplacementDual() += *shape_vjp_vector;
     }
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
         auto vecJac =
-            serac::get<DERIVATIVE>(vecJacs[input_col](time, &mesh_->shape_displacement(), v_fields[0], fields));
+            serac::get<DERIVATIVE>(vecJacs[input_col](time, &mesh_->shapeDisplacement(), v_fields[0], fields));
         auto vecJacMfemVector = assemble(vecJac);
         *vjp_sensitivities[input_col] += *vecJacMfemVector;
       }

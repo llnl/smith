@@ -55,9 +55,11 @@ void Mesh::createDomains()
 
   auto shape_disp_name = addPrefix(mesh_tag_, "shape_displacement");
   if (dim == 2) {
-    shape_displacement_ = std::make_shared<FiniteElementState>(StateManager::shapeDisplacement(mesh_tag_));
+    shape_displacement_ =
+        std::shared_ptr<FiniteElementState>(&StateManager::shapeDisplacement(mesh_tag_), [](FiniteElementState*) {});
   } else if (dim == 3) {
-    shape_displacement_ = std::make_shared<FiniteElementState>(StateManager::shapeDisplacement(mesh_tag_));
+    shape_displacement_ =
+        std::shared_ptr<FiniteElementState>(&StateManager::shapeDisplacement(mesh_tag_), [](FiniteElementState*) {});
   }
 
   auto shape_disp_dual_name = addPrefix(mesh_tag_, "shape_displacement_dual");
@@ -119,12 +121,12 @@ serac::Domain& Mesh::addDomainOfBodyElements(const std::string& domain_name,
   return domain(domain_name);
 }
 
-serac::FiniteElementState& Mesh::shape_displacement() { return *shape_displacement_; }
+serac::FiniteElementState& Mesh::shapeDisplacement() { return *shape_displacement_; }
 
-const serac::FiniteElementState& Mesh::shape_displacement() const { return *shape_displacement_; }
+const serac::FiniteElementState& Mesh::shapeDisplacement() const { return *shape_displacement_; }
 
-serac::FiniteElementDual& Mesh::shape_displacement_dual() { return *shape_displacement_dual_; }
+serac::FiniteElementDual& Mesh::shapeDisplacementDual() { return *shape_displacement_dual_; }
 
-const serac::FiniteElementDual& Mesh::shape_displacement_dual() const { return *shape_displacement_dual_; }
+const serac::FiniteElementDual& Mesh::shapeDisplacementDual() const { return *shape_displacement_dual_; }
 
 }  // namespace serac

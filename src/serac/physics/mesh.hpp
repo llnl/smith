@@ -106,16 +106,16 @@ class Mesh {
                                          std::function<bool(std::vector<vec2>, int)> func);
 
   /// @brief get non-const shape displacement
-  serac::FiniteElementState& shape_displacement();
+  serac::FiniteElementState& shapeDisplacement();
 
   /// @brief get const shape displacement
-  const serac::FiniteElementState& shape_displacement() const;
+  const serac::FiniteElementState& shapeDisplacement() const;
 
   /// @brief get non-const shape displacement dual
-  serac::FiniteElementDual& shape_displacement_dual();
+  serac::FiniteElementDual& shapeDisplacementDual();
 
   /// @brief get const shape displacement dual
-  const serac::FiniteElementDual& shape_displacement_dual() const;
+  const serac::FiniteElementDual& shapeDisplacementDual() const;
 
  private:
   /// @brief Sets up some initial domains, for now just the 'entire_domain', but eventually we can read of
