@@ -914,7 +914,7 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     auto dr1_dparam_mat = assemble(dr1_dparam);
     auto dr2_dparam_mat = assemble(dr2_dparam);
 
-    dr1_dparam_mat->AddMultTranspose(temperature_adjoint_, *parameters_[parameter_field].sensitivity);
+    dr1_dparam_mat->MultTranspose(temperature_adjoint_, *parameters_[parameter_field].sensitivity);
     dr2_dparam_mat->AddMultTranspose(displacement_adjoint_, *parameters_[parameter_field].sensitivity);
 
     return *parameters_[parameter_field].sensitivity;
@@ -933,7 +933,7 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     auto dr1_dshape_mat = assemble(dr1_dshape);
     auto dr2_dshape_mat = assemble(dr2_dshape);
 
-    dr1_dshape_mat->AddMultTranspose(temperature_adjoint_, shapeDisplacementSensitivity());
+    dr1_dshape_mat->MultTranspose(temperature_adjoint_, shapeDisplacementSensitivity());
     dr2_dshape_mat->AddMultTranspose(displacement_adjoint_, shapeDisplacementSensitivity());
 
     return shapeDisplacementSensitivity();
