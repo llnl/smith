@@ -46,7 +46,7 @@ struct UpstreamState {
     return state->set_dual<T, D>(d);
   }
 
-  friend struct DataStore;
+  friend class DataStore;
 
  private:
   std::shared_ptr<StateDataBase> state;
@@ -76,7 +76,7 @@ struct DownstreamState {
     return stateDataBase.template get_dual<T, D>();
   }
 
-  friend struct DataStore;
+  friend class DataStore;
 
  private:
   StateDataBase& stateDataBase;

@@ -51,7 +51,7 @@ struct State : public StateBase {
     return *this;
   }
 
-  friend struct DataStore;
+  friend class DataStore;
 
  protected:
   template <typename InitDualFromValue>

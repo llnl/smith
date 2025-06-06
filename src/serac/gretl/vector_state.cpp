@@ -9,7 +9,6 @@
 
 namespace gretl {
 
-
 VectorState testing_update(const VectorState& a)
 {
   VectorState b = a.clone({a});
