@@ -8,7 +8,7 @@
 
 namespace gretl {
 
-void StateBase::evaluate_and_remove_disposable()
+void StateBase::evaluate_and_remove_disposable_checkpoints()
 {
   stateData->evaluate();  // eventually could adjust cost factor by timing this?
   stateData->dataStore.clear_disposable_state();

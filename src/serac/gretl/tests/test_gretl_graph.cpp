@@ -10,7 +10,6 @@
 #include <iostream>
 #include "serac/gretl/vector_state.hpp"
 #include "gtest/gtest.h"
-#include "serac/gretl/data_store_for_testing.hpp"
 
 // extension ideas
 // clean up how to modify upstream states when there are ghosts, don't pass by pointer?

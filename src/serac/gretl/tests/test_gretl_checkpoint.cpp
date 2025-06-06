@@ -10,7 +10,7 @@
 #include "gtest/gtest.h"
 #include "serac/gretl/checkpoint.hpp"
 #include "serac/gretl/state.hpp"
-#include "serac/gretl/data_store_for_testing.hpp"
+#include "serac/gretl/data_store.hpp"
 
 static size_t count = 0;
 
@@ -149,7 +149,7 @@ TEST_F(CheckpointFixture, Automated)
   std::vector<double> reverseStates(N + 1);
   std::vector<double> advanceStates(N + 1);
 
-  gretl::DataStoreForTesting dataStore(S);
+  gretl::DataStore dataStore(S);
   gretl::State<double> X = dataStore.create_state(x, gretl::defaultInitializeZeroDual<double>());
 
   advanceStates[0] = X.get();
@@ -164,7 +164,7 @@ TEST_F(CheckpointFixture, Automated)
   reverseStates[N] = X.get();
   EXPECT_EQ(X.get_dual(), 1.0);
   for (size_t n = N; n > 0; --n) {
-    auto rev = dataStore.reverse_state(n);
+    auto rev = dataStore.reverse_state();
     reverseStates[n - 1] = rev.get<double>();
     ASSERT_NEAR(rev.get_dual<double>(), std::pow(1. / 3., (N - n + 1)), 1e-14);
   }

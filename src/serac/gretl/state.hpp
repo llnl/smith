@@ -47,7 +47,7 @@ struct State : public StateBase {
 
   State<T, D> finalize()
   {
-    this->evaluate_and_remove_disposable();
+    this->evaluate_and_remove_disposable_checkpoints();
     return *this;
   }
 

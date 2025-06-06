@@ -14,7 +14,6 @@
 #include "serac/gretl/checkpoint.hpp"
 #include "serac/gretl/state.hpp"
 #include "serac/gretl/vector_state.hpp"
-#include "serac/gretl/data_store_for_testing.hpp"
 
 static constexpr size_t numParams = 4;
 
