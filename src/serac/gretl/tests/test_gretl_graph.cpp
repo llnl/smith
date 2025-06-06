@@ -78,7 +78,7 @@ TEST(Graph, NonlinearGraphGradients)
   ASSERT_EQ(fFirstTime, f.get());
 }
 
-TEST(Graph, Linear_Gradients)
+TEST(Graph, LinearGraphGradients)
 {
   std::vector<double> dataA = {1.2, 3.2};
 
@@ -137,4 +137,33 @@ TEST(Graph, LargeNonlinearGraphGradients)
   gretl::check_array_gradients(qoi, a, dataStore, eps, 800 * eps);
   gretl::check_array_gradients(qoi, b, dataStore, eps, 100 * eps);
   gretl::check_array_gradients(qoi, c, dataStore, eps, 100 * eps);
+}
+
+
+TEST(Graph, Explore)
+{
+  std::vector<double> dataA = {0.3, 0.35};
+  std::vector<double> dataB = {0.6, 0.87};
+  std::vector<double> dataC = {-0.8, 0.32};
+
+  gretl::DataStore dataStore(800);
+
+  auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual());
+  auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual());
+  auto c = dataStore.create_state(dataC, gretl::vec::initialize_zero_dual());
+
+  auto g = a * b;
+  auto h = a + 3 * c;
+  auto f = c * g;
+
+  for (int j = 0; j < 7; ++j) {
+    for (int i = 0; i < 13; ++i) {
+      auto tmp = h + g;
+      g = a * tmp;
+      h = testing_update(f) + g;
+      h = h * b;
+    }
+    f = g * h;
+    f = f + g;
+  }
 }
