@@ -77,7 +77,7 @@ struct StateDataBase {
   DataStore& dataStore;
   UpstreamStates upstreams;
 
-  friend struct DataStore;
+  friend class DataStore;
 
  protected:
   StateDataBase(DataStore& cpd, size_t step, const std::vector<StateBase>& ustreams);

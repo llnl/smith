@@ -85,7 +85,7 @@ struct StateBase {
 
   void clear_dual();
 
-  friend struct DataStore;
+  friend class DataStore;
   friend struct StateDataBase;
 
  protected:
@@ -96,7 +96,7 @@ struct StateBase {
   void evaluate_vjp();
 
   std::shared_ptr<StateDataBase> stateData;
-  std::vector< std::shared_ptr<StateDataBase> > upstreamsForNextStep;
+  std::vector<std::shared_ptr<StateDataBase>> upstreamsForNextStep;
 };
 
 }  // namespace gretl

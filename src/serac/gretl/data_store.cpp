@@ -4,9 +4,7 @@
 
 namespace gretl {
 
-DataStore::DataStore(size_t maxStates) : checkpoints{.maxNumStates = maxStates, .cps{}} {
-  step = 0;
-}
+DataStore::DataStore(size_t maxStates) : checkpoints{.maxNumStates = maxStates, .cps{}} { step = 0; }
 
 void DataStore::back_prop()
 {
@@ -18,17 +16,15 @@ void DataStore::back_prop()
 void DataStore::reset()
 {
   for (size_t n = states.size(); n > 0; --n) {
-    if (!states[n].data()->persistent()) {
-      states[n].clear();
-      states[n].clear_dual();
+    if (!states[n-1].data()->persistent()) {
+      states[n-1].clear();
     }
+    states[n-1].clear_dual();
   }
+  std::cout << "states left = " << states.size() << " " << num_active_states() << " " << num_dual_states() <<  std::endl;
 }
 
-void DataStore::vjp(StateBase& state)
-{
-  state.evaluate_vjp();
-}
+void DataStore::vjp(StateBase& state) { state.evaluate_vjp(); }
 
 StateBase DataStore::reverse_state()
 {
@@ -44,14 +40,24 @@ void DataStore::add_state(StateBase& newState)
   ++step;
 }
 
-size_t DataStore::num_active_states() const
-{
-  return states.size();
+size_t DataStore::num_active_states() const { 
+  size_t numActive = 0;
+  for (const auto& s : states) {
+    if (s.data()->primal_active()) {
+      ++numActive;
+    }
+  }
+  return numActive;
 }
 
-size_t DataStore::num_dual_states() const
-{
-  return states.size();
+size_t DataStore::num_dual_states() const {
+  size_t numActive = 0;
+  for (const auto& s : states) {
+    if (s.data()->dual_active()) {
+      ++numActive;
+    }
+  }
+  return numActive;
 }
 
 }  // namespace gretl

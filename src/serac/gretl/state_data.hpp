@@ -54,7 +54,7 @@ struct StateData : public StateDataBase {
   {
     if (!p) {
       std::cout << "getting primal failed\n";
-      //dataStore.fetch_state_data(stepIndex);
+      dataStore.fetch_state_data(stepIndex);
     }
     gretl_assert(p);
     return *p;

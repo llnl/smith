@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <iostream>
 #include "serac/gretl/vector_state.hpp"
+#include "serac/gretl/data_store_for_testing.hpp"
 #include "gtest/gtest.h"
 
 // extension ideas
@@ -116,6 +117,8 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto h = a + 3 * c;
   auto f = c * g;
 
+  printf("a\n");
+
   for (int j = 0; j < 7; ++j) {
     for (int i = 0; i < 13; ++i) {
       auto tmp = h + g;
@@ -133,11 +136,13 @@ TEST(Graph, LargeNonlinearGraphGradients)
   dataStore.back_prop();
 
   double constexpr eps = 1e-7;
+  printf("b\n");
   gretl::check_array_gradients(qoi, a, dataStore, eps, 800 * eps);
+  printf("c\n");
   gretl::check_array_gradients(qoi, b, dataStore, eps, 100 * eps);
+  printf("d\n");
   gretl::check_array_gradients(qoi, c, dataStore, eps, 100 * eps);
 }
-
 
 TEST(Graph, Explore)
 {
