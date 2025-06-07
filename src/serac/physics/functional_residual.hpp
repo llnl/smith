@@ -167,7 +167,8 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   }
 
   /// @overload
-  mfem::Vector residual(double time, double dt, const std::vector<FieldPtr>& fields, int block_row = 0) const override
+  mfem::Vector residual(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                        int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
     dt_ = dt;
@@ -176,7 +177,7 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   }
 
   /// @overload
-  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<FieldPtr>& fields,
+  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                                  const std::vector<double>& jacobian_weights,
                                                  int block_row = 0) const override
   {
@@ -212,7 +213,7 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   }
 
   /// @overload
-  void jvp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
+  void jvp(double time, double dt, const std::vector<ConstFieldPtr>& fields, const std::vector<ConstFieldPtr>& v_fields,
            const std::vector<DualFieldPtr>& jvp_reactions) const override
   {
     SLIC_ERROR_IF(v_fields.size() != fields.size(),
@@ -233,7 +234,7 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   }
 
   /// @overload
-  void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
+  void vjp(double time, double dt, const std::vector<ConstFieldPtr>& fields, const std::vector<ConstFieldPtr>& v_fields,
            const std::vector<DualFieldPtr>& vjp_sensitivities) const override
   {
     SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
@@ -268,29 +269,30 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
  protected:
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
   template <int... i>
-  auto jacobianFunctions(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
+  auto jacobianFunctions(std::integer_sequence<int, i...>, double time, const std::vector<ConstFieldPtr>& fs) const
   {
     using JacFuncType = std::function<decltype((*residual_)(DifferentiateWRT<1>{}, time, *fs[i]...))(
-        double, const std::vector<FieldPtr>&)>;
-    return std::array<JacFuncType, sizeof...(i)>{[=](double _time, const std::vector<FieldPtr>& _fs) {
+        double, const std::vector<ConstFieldPtr>&)>;
+    return std::array<JacFuncType, sizeof...(i)>{[=](double _time, const std::vector<ConstFieldPtr>& _fs) {
       return (*residual_)(DifferentiateWRT<i>{}, _time, *_fs[i]...);
     }...};
   };
 
   /// @brief Utility to get array of jvp functions, one for each input field in fs
   template <int... i>
-  auto vectorJacobianFunctions(std::integer_sequence<int, i...>, double time, FieldPtr v,
-                               const std::vector<FieldPtr>& fs) const
+  auto vectorJacobianFunctions(std::integer_sequence<int, i...>, double time, ConstFieldPtr v,
+                               const std::vector<ConstFieldPtr>& fs) const
   {
     using GradFuncType = std::function<decltype((*v_residual_)(DifferentiateWRT<1>{}, time, *v, *fs[i]...))(
-        double, FieldPtr, const std::vector<FieldPtr>&)>;
-    return std::array<GradFuncType, sizeof...(i)>{[=](double _time, FieldPtr _v, const std::vector<FieldPtr>& _fs) {
-      std::vector<mfem::Vector*> _vfs{_v};
-      _vfs.insert(_vfs.end(), _fs.begin() + 1, _fs.end());
-      constexpr bool is_shape_disp = i == 0;
-      constexpr int diff_index = is_shape_disp ? 0 : i + 1;
-      return (*v_residual_)(DifferentiateWRT<diff_index>{}, _time, *_fs[0], *_vfs[i]...);
-    }...};
+        double, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
+    return std::array<GradFuncType, sizeof...(i)>{
+        [=](double _time, ConstFieldPtr _v, const std::vector<ConstFieldPtr>& _fs) {
+          std::vector<mfem::Vector const*> _vfs{_v};
+          _vfs.insert(_vfs.end(), _fs.begin() + 1, _fs.end());
+          constexpr bool is_shape_disp = i == 0;
+          constexpr int diff_index = is_shape_disp ? 0 : i + 1;
+          return (*v_residual_)(DifferentiateWRT<diff_index>{}, _time, *_fs[0], *_vfs[i]...);
+        }...};
   };
 
   /// @brief timestep, this needs to be held here and modified for rate dependent applications
