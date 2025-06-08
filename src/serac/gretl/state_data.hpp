@@ -13,8 +13,9 @@ struct StateData : public StateDataBase {
 
   void clear_primal() override
   {
-    if (debugPrint) printf("clearing main primal at step %zu\n", stepIndex);
-    p = nullptr;
+    if (p.use_count() == 1) {
+      p = nullptr;
+    }
   }
 
   void clear_dual() override { d = nullptr; }
