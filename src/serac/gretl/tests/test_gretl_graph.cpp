@@ -13,7 +13,6 @@
 #include "gtest/gtest.h"
 
 // extension ideas
-// clean up how to modify upstream states when there are ghosts, don't pass by pointer?
 // clarify const correctness of states
 // add capability to add persistent states mid-way through
 // insert states which were expensive (relative to their memory storage) to compute at higher levels
@@ -117,8 +116,6 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto h = a + 3 * c;
   auto f = c * g;
 
-  printf("a\n");
-
   for (int j = 0; j < 7; ++j) {
     for (int i = 0; i < 13; ++i) {
       auto tmp = h + g;
@@ -136,12 +133,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
   dataStore.back_prop();
 
   double constexpr eps = 1e-7;
-  printf("b\n");
-  gretl::check_array_gradients(qoi, a, dataStore, eps, 800 * eps);
-  printf("c\n");
-  gretl::check_array_gradients(qoi, b, dataStore, eps, 100 * eps);
-  printf("d\n");
-  gretl::check_array_gradients(qoi, c, dataStore, eps, 100 * eps);
+  gretl::check_array_gradients(qoi, {a,b,c}, dataStore, {eps,eps,eps}, {800 * eps, 100*eps, 100*eps});
 }
 
 TEST(Graph, Explore)
