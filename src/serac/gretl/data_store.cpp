@@ -16,12 +16,13 @@ void DataStore::back_prop()
 void DataStore::reset()
 {
   for (size_t n = states.size(); n > 0; --n) {
-    if (!states[n-1].data()->persistent()) {
-      states[n-1].clear();
+    if (!states[n - 1].data()->persistent()) {
+      states[n - 1].clear();
     }
-    states[n-1].clear_dual();
+    states[n - 1].clear_dual();
   }
-  std::cout << "states left = " << states.size() << " " << num_active_states() << " " << num_dual_states() <<  std::endl;
+  step = 0;
+  std::cout << "states left = " << states.size() << " " << num_active_states() << " " << num_dual_states() << std::endl;
 }
 
 void DataStore::vjp(StateBase& state) { state.evaluate_vjp(); }
@@ -30,7 +31,6 @@ StateBase DataStore::reverse_state()
 {
   --step;
   vjp(states[step]);
-
   return states[step > 0 ? step - 1 : step];  // return step earlier, unless at 0
 }
 
@@ -40,7 +40,21 @@ void DataStore::add_state(StateBase& newState)
   ++step;
 }
 
-size_t DataStore::num_active_states() const { 
+void DataStore::fetch_state_data(size_t stepIndex) {
+  if (states[stepIndex].data()->primal_active()) {
+    return;
+  }
+
+  fetch_state_data(stepIndex-1);
+  step = stepIndex;
+
+  states[stepIndex].evaluate_and_remove_disposable_checkpoints();
+
+  std::cout << "step, index in = " << step << " " << stepIndex << std::endl;
+}
+
+size_t DataStore::num_active_states() const
+{
   size_t numActive = 0;
   for (const auto& s : states) {
     if (s.data()->primal_active()) {
@@ -50,7 +64,8 @@ size_t DataStore::num_active_states() const {
   return numActive;
 }
 
-size_t DataStore::num_dual_states() const {
+size_t DataStore::num_dual_states() const
+{
   size_t numActive = 0;
   for (const auto& s : states) {
     if (s.data()->dual_active()) {

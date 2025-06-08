@@ -46,8 +46,6 @@ class DataStore {
   /// @brief clear all but persistent state, keeping the graph
   void reset();
 
-  void fetch_state_data(size_t stepIndex) { (void)stepIndex; }
-
   size_t num_active_states() const;
   size_t num_dual_states() const;
 
@@ -80,11 +78,10 @@ class DataStore {
 
   void clear_disposable_state() {}
 
+  void fetch_state_data(size_t stepIndex);
+
   // vector of all states in the graph.  states know how to re-evaluate themselves and how to vjp
   std::vector<StateBase> states;
-
-  //
-  // std::vector<Measure> checkpointed_states;
 
   // container which track the states in the graph with allocated data
   CheckpointManager checkpoints;
