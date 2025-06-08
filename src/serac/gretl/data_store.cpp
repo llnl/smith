@@ -39,12 +39,13 @@ void DataStore::add_state(StateBase& newState)
   ++step;
 }
 
-void DataStore::fetch_state_data(size_t stepIndex) {
+void DataStore::fetch_state_data(size_t stepIndex)
+{
   if (states[stepIndex].data()->primal_active()) {
     return;
   }
 
-  fetch_state_data(stepIndex-1);
+  fetch_state_data(stepIndex - 1);
   step = stepIndex;
 
   states[stepIndex].evaluate_and_remove_disposable_checkpoints();
