@@ -22,7 +22,7 @@ inline double rand_in_range(double x0, double xf)
 }
 
 void check_array_gradients(gretl::State<double>& objectiveState, std::vector<gretl::VectorState> inputStates,
-                           gretl::DataStore& dataStore, std::vector<double> eps, std::vector<double> tol)
+                          std::vector<double> eps, std::vector<double> tol)
 {
   double objectiveBase = objectiveState.get();
   srand(5);
@@ -59,7 +59,7 @@ void check_array_gradients(gretl::State<double>& objectiveState, std::vector<gre
     auto& perturbedInput = perturbed_inputs[iInput];
 
     auto s0 = inputState.get();
-    dataStore.reset();
+    objectiveState.data_store().reset();
     inputState.set(perturbedInput);
     double objectivePlus = objectiveState.get();
     EXPECT_NEAR(directionalDerivs[iInput], (objectivePlus - objectiveBase) / eps[iInput], tol[iInput]);

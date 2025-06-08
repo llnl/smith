@@ -22,7 +22,6 @@ void DataStore::reset()
     states[n - 1].clear_dual();
   }
   step = 0;
-  std::cout << "states left = " << states.size() << " " << num_active_states() << " " << num_dual_states() << std::endl;
 }
 
 void DataStore::vjp(StateBase& state) { state.evaluate_vjp(); }
@@ -49,8 +48,6 @@ void DataStore::fetch_state_data(size_t stepIndex) {
   step = stepIndex;
 
   states[stepIndex].evaluate_and_remove_disposable_checkpoints();
-
-  std::cout << "step, index in = " << step << " " << stepIndex << std::endl;
 }
 
 size_t DataStore::num_active_states() const

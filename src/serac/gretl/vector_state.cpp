@@ -16,7 +16,6 @@ VectorState testing_update(const VectorState& a)
   b.set_eval([](const UpstreamStates& upstreams, DownstreamState& downstream) {
     static size_t fwd_count = 0;
     fwd_count++;
-    std::cout << "forward solve " << fwd_count << std::endl;
     const auto& a_ = upstreams[0];
     auto& b_ = downstream;
 
@@ -32,7 +31,6 @@ VectorState testing_update(const VectorState& a)
   b.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
     static size_t rev_count = 0;
     ++rev_count;
-    std::cout << "rev solve " << rev_count << std::endl;
     Vector& Abar = upstreams[0].get_dual<Vector>();
     const Vector& Bbar = downstream.get_dual<Vector>();
     const size_t sz = Bbar.size();
