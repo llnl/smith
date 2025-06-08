@@ -22,18 +22,18 @@ inline double rand_in_range(double x0, double xf)
 }
 
 void check_array_gradients(gretl::State<double>& objectiveState, std::vector<gretl::VectorState> inputStates,
-                          std::vector<double> eps, std::vector<double> tol)
+                           std::vector<double> eps, std::vector<double> tol)
 {
   double objectiveBase = objectiveState.get();
   srand(5);
 
   size_t num_inputs = inputStates.size();
-  assert(num_inputs==eps.size());
-  assert(num_inputs==tol.size());
-  std::vector< std::vector<double> > perturbed_inputs(num_inputs);
+  assert(num_inputs == eps.size());
+  assert(num_inputs == tol.size());
+  std::vector<std::vector<double> > perturbed_inputs(num_inputs);
   std::vector<double> directionalDerivs(num_inputs);
 
-  for (size_t iInput =0; iInput < num_inputs; ++iInput) {
+  for (size_t iInput = 0; iInput < num_inputs; ++iInput) {
     auto& inputState = inputStates[iInput];
     auto& perturbedInput = perturbed_inputs[iInput];
 
@@ -54,7 +54,7 @@ void check_array_gradients(gretl::State<double>& objectiveState, std::vector<gre
     }
   }
 
-  for (size_t iInput =0; iInput < num_inputs; ++iInput) {
+  for (size_t iInput = 0; iInput < num_inputs; ++iInput) {
     auto& inputState = inputStates[iInput];
     auto& perturbedInput = perturbed_inputs[iInput];
 

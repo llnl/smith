@@ -27,10 +27,7 @@ struct StateData : public StateDataBase {
     eval(this->upstreams, ds);
   }
 
-  void evaluate_vjp() override
-  {
-    vjp(this->upstreams, DownstreamState(*this));
-  }
+  void evaluate_vjp() override { vjp(this->upstreams, DownstreamState(*this)); }
 
   State<T, D> clone(const std::vector<StateBase>& upstreams_) const
   {
