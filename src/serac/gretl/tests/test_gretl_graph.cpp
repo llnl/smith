@@ -133,7 +133,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
   dataStore.back_prop();
 
   double constexpr eps = 1e-7;
-  gretl::check_array_gradients(qoi, {a,b,c}, dataStore, {eps,eps,eps}, {800 * eps, 100*eps, 100*eps});
+  gretl::check_array_gradients(qoi, {a,b,c}, {eps,eps,eps}, {800 * eps, 100*eps, 100*eps});
 }
 
 TEST(Graph, Explore)

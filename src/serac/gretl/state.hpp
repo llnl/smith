@@ -51,6 +51,8 @@ struct State : public StateBase {
     return *this;
   }
 
+  DataStore& data_store() { return stateData->dataStore; }
+
   friend class DataStore;
 
  protected:
