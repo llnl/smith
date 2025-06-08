@@ -14,8 +14,6 @@ VectorState testing_update(const VectorState& a)
   VectorState b = a.clone({a});
 
   b.set_eval([](const UpstreamStates& upstreams, DownstreamState& downstream) {
-    static size_t fwd_count = 0;
-    fwd_count++;
     const auto& a_ = upstreams[0];
     auto& b_ = downstream;
 
@@ -29,8 +27,6 @@ VectorState testing_update(const VectorState& a)
   });
 
   b.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
-    static size_t rev_count = 0;
-    ++rev_count;
     Vector& Abar = upstreams[0].get_dual<Vector>();
     const Vector& Bbar = downstream.get_dual<Vector>();
     const size_t sz = Bbar.size();
