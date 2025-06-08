@@ -104,8 +104,7 @@ TEST_F(MeshFixture, NonlinearGraphGradients)
   dataStore->back_prop();
 
   double constexpr eps = 1e-7;
-  check_array_gradients(rateNorm, state0, *dataStore, eps, 40 * eps);
-  check_array_gradients(rateNorm, params, *dataStore, eps, 40 * eps);
+  check_array_gradients(rateNorm, {state0, params}, {eps, eps}, {40 * eps, 40 * eps});
 }
 
 TEST_F(MeshFixture, Dynamics)
@@ -124,8 +123,7 @@ TEST_F(MeshFixture, Dynamics)
   dataStore->back_prop();
 
   double constexpr eps = 1e-7;
-  check_array_gradients(stateNorm, state0, *dataStore, eps, 40 * eps);
-  check_array_gradients(stateNorm, params, *dataStore, eps, 40 * eps);
+  check_array_gradients(stateNorm, {state0, params}, {eps,eps}, {40 * eps, 40 * eps});
 
   for (size_t i = 0; i < numParams; ++i) {
     std::cout << "param sensitivity = " << params.get_dual()[i] << std::endl;
