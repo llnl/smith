@@ -277,7 +277,7 @@ TEST(SolidMechanics, TDofBoundaryCondition)
   // GENERATE REFERENCE SOLUTION
   // Make a solid mechanics module, specify the disp BCs by domain (ie, the standard method)
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                               "solid_mechanics", mesh_tag);
+                               "solid_mechanics", pmesh);
   solid.setMaterial(mat, pmesh->entireBody());
   solid.setDisplacementBCs(displacement_bc_function, pmesh->domain("essential_boundary_x"), Component::X);
   solid.setDisplacementBCs(displacement_bc_function, pmesh->domain("essential_boundary_y"), Component::Y);
@@ -303,7 +303,7 @@ TEST(SolidMechanics, TDofBoundaryCondition)
 
   // make another solver and set bcs by tdof
   SolidMechanics<p, dim> solid_by_tdof(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                                       "solid_mechanics_by_tdof", mesh_tag);
+                                       "solid_mechanics_by_tdof", pmesh);
 
   solid_by_tdof.setMaterial(mat, pmesh->entireBody());
   solid_by_tdof.setDisplacementBCsByDofList(displacement_bc_function, true_dofs);
