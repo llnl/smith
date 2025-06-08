@@ -47,6 +47,7 @@ if(NOT SERAC_FOUND)
   set(SERAC_USE_SUNDIALS       @SERAC_USE_SUNDIALS@)
   set(SERAC_USE_TRIBOL         @SERAC_USE_TRIBOL@)
   set(SERAC_USE_UMPIRE         @SERAC_USE_UMPIRE@)
+  set(SERAC_USE_ENZYME         @SERAC_USE_ENZYME@)
 
   set(SERAC_ADIAK_DIR          "@ADIAK_DIR@")
   set(SERAC_AXOM_DIR           "@AXOM_DIR@")
@@ -156,6 +157,12 @@ if(NOT SERAC_FOUND)
   # Tribol
   if(SERAC_USE_TRIBOL)
     find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
+  endif()
+
+  # Enzyme
+  if(SERAC_USE_ENZYME)
+    set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
+    find_dependency(Enzyme REQUIRED)
   endif()
 
   #----------------------------------------------------------------------------

@@ -482,9 +482,11 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
                                     DIR_VARIABLE ENZYME_DIR)
 
         message(STATUS "Enzyme support is ON")
+        set(SERAC_USE_ENZYME ON CACHE BOOL "")
         set(ENZYME_FOUND TRUE)
     else()
         message(STATUS "Enzyme support is OFF")
+        set(SERAC_USE_ENZYME OFF CACHE BOOL "")
         set(ENZYME_FOUND FALSE)
     endif()
 

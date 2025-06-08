@@ -11,6 +11,14 @@
 
 namespace serac {
 
+Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_serial, int refine_parallel)
+    : mesh_tag_(meshtag)
+{
+  auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel);
+  mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
+  createDomains();
+}
+
 Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int refine_parallel) : mesh_tag_(meshtag)
 {
   auto meshtmp = serac::mesh::refineAndDistribute(std::move(mesh), refine_serial, refine_parallel);
@@ -21,14 +29,8 @@ Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int
 Mesh::Mesh(mfem::ParMesh& mesh, const std::string& meshtag) : mesh_tag_(meshtag)
 {
   mfem_mesh_ = &mesh;
-  createDomains();
-}
-
-Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_serial, int refine_parallel)
-    : mesh_tag_(meshtag)
-{
-  auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel);
-  mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
+  mfem_mesh_->EnsureNodes();
+  mfem_mesh_->ExchangeFaceNbrData();
   createDomains();
 }
 
