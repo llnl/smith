@@ -123,7 +123,7 @@ TEST_F(MeshFixture, Dynamics)
   dataStore->back_prop();
 
   double constexpr eps = 1e-7;
-  check_array_gradients(stateNorm, {state0, params}, {eps,eps}, {40 * eps, 40 * eps});
+  check_array_gradients(stateNorm, {state0, params}, {eps, eps}, {40 * eps, 40 * eps});
 
   for (size_t i = 0; i < numParams; ++i) {
     std::cout << "param sensitivity = " << params.get_dual()[i] << std::endl;
