@@ -111,10 +111,10 @@ stages:
 
 .examples_build_script:
   script:
-    # Similar to src workflow, but also runs examples
+    # Build src and run examples
     - echo -e "section_start:$(date +%s):examples_build_and_unit_test\r\e[0K
       Source Build and Unit Test with Examples ${CI_PROJECT_NAME}"
-    - ./scripts/gitlab/build_and_test.sh
+    - ${ALLOC_COMMAND} python3 scripts/llnl/run_examples.py
     - echo -e "section_end:$(date +%s):examples_build_and_unit_test\r\e[0K"
   artifacts:
     expire_in: 2 weeks
@@ -124,10 +124,6 @@ stages:
       - _serac_build_and_test_*/build-*/output.log*.txt
       - _serac_build_and_test_*/build-*/*.*.logs/*.log
       - _serac_build_and_test_*/build-*/*.*.logs/*.err
-    reports:
-      junit:
-      - _serac_build_and_test_*/build-*/junit.xml
-      - _serac_build_and_test_*/build-*/*.*.logs/atsr.xml
 
 .benchmarks_build_script:
   script:

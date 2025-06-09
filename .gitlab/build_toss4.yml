@@ -65,7 +65,6 @@ toss4-clang_16_0_6-src:
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
     EXTRA_BUILD_OPTIONS: "--skip-install"
-    ALLOC_NODES: "2"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
 
@@ -103,10 +102,16 @@ toss4-gcc_10_3_1-tpl:
     ALLOC_TIME: "45"
   extends: .tpl_build_on_toss4
 
+toss4-clang_16_0_6-examples:
+  variables:
+    COMPILER: "clang@16.0.6"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "160"
+  extends: .examples_build_on_toss4
+
 toss4-clang_14_0_6-examples:
   variables:
     COMPILER: "clang@14.0.6"
-    SPEC: "--spec=%${COMPILER}"
     ALLOC_NODES: "1"
     ALLOC_TIME: "160"
   extends: .examples_build_on_toss4
@@ -114,7 +119,6 @@ toss4-clang_14_0_6-examples:
 toss4-gcc_10_3_1-examples:
   variables:
     COMPILER: "gcc@10.3.1"
-    SPEC: "--spec=%${COMPILER}"
     ALLOC_NODES: "1"
     ALLOC_TIME: "160"
   extends: .examples_build_on_toss4

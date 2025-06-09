@@ -5,21 +5,21 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 #------------------------------------------------------------------------------
-# serac_add_nightly_ci_test(NAME              [name]
-#                           COMMAND           [command] 
-#                           NUM_MPI_TASKS     [n]
-#                           NUM_OMP_THREADS   [n]
-#                           CONFIGURATIONS    [config1 [config2...]]
-#                           WORKING_DIRECTORY [dir]
-#                           TIMEOUT           [time_seconds])
+# serac_add_example_test(NAME              [name]
+#                        COMMAND           [command]
+#                        NUM_MPI_TASKS     [n]
+#                        NUM_OMP_THREADS   [n]
+#                        CONFIGURATIONS    [config1 [config2...]]
+#                        WORKING_DIRECTORY [dir]
+#                        TIMEOUT           [time_seconds])
 #
-# Wrapper for blt_add_test, adds test only if a certain CI flag is set,
-# and increases the default time limit (as examples tend to take longer than
-# regular tests).
+# Wrapper for blt_add_test designed to run lengthier example tests.
+#
+# To run examples, use `make run_examples` custom CMake target.
 #
 # Unlike serac_add_tests, this macro takes in a pre-existing executable.
 #------------------------------------------------------------------------------
-macro(serac_add_nightly_ci_test)
+macro(serac_add_example_test)
 
     set(options)
     set(singleValueArgs NAME NUM_MPI_TASKS NUM_OMP_THREADS WORKING_DIRECTORY)
@@ -35,19 +35,24 @@ macro(serac_add_nightly_ci_test)
         set(_timeout ${arg_TIMEOUT})
     endif()
 
-    if("$ENV{SERAC_CI_WORKFLOW_TYPE}" STREQUAL "examples")
-        blt_add_test(NAME              ${arg_NAME}
-                     COMMAND           ${arg_COMMAND}
-                     NUM_MPI_TASKS     ${arg_NUM_MPI_TASKS}
-                     NUM_OMP_THREADS   ${arg_NUM_OMP_THREADS}
-                     CONFIGURATIONS    ${arg_CONFIGURATIONS}
-                     WORKING_DIRECTORY ${arg_WORKING_DIRECTORY})
-        set_tests_properties(${arg_NAME} PROPERTIES TIMEOUT ${_timeout})
-    endif()
+    # The 'CONFIGURATIONS Example' line excludes examples
+    # from the general list of tests
+    blt_add_test(NAME              ${arg_NAME}
+                 COMMAND           ${arg_COMMAND}
+                 NUM_MPI_TASKS     ${arg_NUM_MPI_TASKS}
+                 NUM_OMP_THREADS   ${arg_NUM_OMP_THREADS}
+                 CONFIGURATIONS    Example ${arg_CONFIGURATIONS}
+                 WORKING_DIRECTORY ${arg_WORKING_DIRECTORY})
+
+    set_tests_properties(${arg_NAME} PROPERTIES TIMEOUT ${_timeout})
+
+    # The 'LABELS Example` prevents regular tests from
+    # running when running example custom target
+    set_tests_properties(${arg_NAME} PROPERTIES LABELS "Example")
 
     unset(_timeout)
 
-endmacro(serac_add_nightly_ci_test)
+endmacro(serac_add_example_test)
 
 #------------------------------------------------------------------------------
 # Adds code checks for all cpp/hpp files recursively under the current directory
