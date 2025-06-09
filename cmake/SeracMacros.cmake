@@ -46,7 +46,7 @@ macro(serac_add_example_test)
 
     set_tests_properties(${arg_NAME} PROPERTIES TIMEOUT ${_timeout})
 
-    # The 'LABELS Example` prevents regular tests from
+    # The 'LABELS Example' prevents regular tests from
     # running when running example custom target
     set_tests_properties(${arg_NAME} PROPERTIES LABELS "Example")
 
