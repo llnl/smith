@@ -3,7 +3,6 @@
 .on_toss4:
   variables:
     SCHEDULER_PARAMETERS: "--reservation=ci --exclusive=user --deadline=now+${ALLOC_DEADLINE}minutes -N ${ALLOC_NODES} -t ${ALLOC_TIME} -A ${ALLOC_BANK}"
-    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_DEADLINE: "180"
   tags:
     - batch
@@ -44,6 +43,7 @@
 toss4-clang_14_0_6-src:
   variables:
     COMPILER: "clang@14.0.6"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
     #DO_INTEGRATION_TESTS: "yes"
     ALLOC_NODES: "2"
@@ -53,6 +53,7 @@ toss4-clang_14_0_6-src:
 toss4-gcc_10_3_1-src:
   variables:
     COMPILER: "gcc@10.3.1"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
@@ -61,6 +62,7 @@ toss4-gcc_10_3_1-src:
 toss4-clang_16_0_6-src:
   variables:
     COMPILER: "clang@16.0.6"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
     EXTRA_BUILD_OPTIONS: "--skip-install"
     ALLOC_TIME: "30"
@@ -69,6 +71,7 @@ toss4-clang_16_0_6-src:
 toss4-gcc_10_3_1-src-no-tribol:
   variables:
     COMPILER: "gcc@10.3.1"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -UTRIBOL_DIR"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
@@ -77,6 +80,7 @@ toss4-gcc_10_3_1-src-no-tribol:
 toss4-gcc_10_3_1-src-no-optional-solvers:
   variables:
     COMPILER: "gcc@10.3.1"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -USUNDIALS_DIR -UPETSC_DIR"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
@@ -101,6 +105,7 @@ toss4-gcc_10_3_1-tpl:
 toss4-clang_16_0_6-examples:
   variables:
     COMPILER: "clang@16.0.6"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "160"
   extends: .examples_build_on_toss4
@@ -108,6 +113,7 @@ toss4-clang_16_0_6-examples:
 toss4-clang_14_0_6-examples:
   variables:
     COMPILER: "clang@14.0.6"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "160"
   extends: .examples_build_on_toss4
@@ -115,6 +121,7 @@ toss4-clang_14_0_6-examples:
 toss4-gcc_10_3_1-examples:
   variables:
     COMPILER: "gcc@10.3.1"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "160"
   extends: .examples_build_on_toss4
@@ -122,6 +129,7 @@ toss4-gcc_10_3_1-examples:
 toss4-clang_14_0_6-benchmarks:
   variables:
     COMPILER: "clang@14.0.6"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "120"
   extends: .benchmarks_build_on_toss4
@@ -129,6 +137,7 @@ toss4-clang_14_0_6-benchmarks:
 toss4-gcc_10_3_1-benchmarks:
   variables:
     COMPILER: "gcc@10.3.1"
+    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "120"
   extends: .benchmarks_build_on_toss4
