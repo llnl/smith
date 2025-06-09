@@ -490,50 +490,42 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   }
 
   /**
-   * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area for a single
-   * displacement vector component
+   * @brief Set the displacement essential boundary conditions on a set of true degrees of freedom
    *
-   * @param is_node_constrained A callback function that returns true if displacement nodes at a certain position should
-   * be constrained by this boundary condition
-   * @param disp The scalar function containing the prescribed component displacement values
-   * @param component The component of the displacement vector that should be set by this boundary condition. The other
-   * components of displacement are unconstrained.
+   * @param applied_displacement Function specifying the applied displacement vector
+   * @param true_dofs Indices of true degrees of freedom to set the displacement on
    *
-   * The displacement function takes a spatial position as the first argument and current time as the second argument.
-   * It computes the desired displacement scalar for the given component and returns that value.
+   * The @a true_dofs list can be determined using functions from the @a mfem::ParFiniteElementSpace related to the
+   * displacement @a serac::FiniteElementState .
    *
-   * @note This method searches over the entire mesh, not just the boundary nodes.
+   * The signature of the applied_displacement callable must be:
+   * tensor<double, dim> applied_displacement(tensor<double, dim> X, double t)
+   * Parameters:
+   *   X - coordinates of node
+   *   t - time
+   * Returns:
+   *   u, vector of applied displacements
+   *
+   * @note The displacement function is required to be vector-valued. However, only the dofs specified in the @a
+   * true_dofs array will be set. This means that if the @a true_dofs array only contains dofs for a specific vector
+   * component in a vector-valued finite element space, only that component will be set.
    *
    * @note This method must be called prior to completeSetup()
    */
-  void setDisplacementBCs(std::function<bool(const mfem::Vector&)> is_node_constrained,
-                          std::function<double(const mfem::Vector&, double)> disp, int component)
+  template <typename AppliedDisplacementFunction>
+  void setDisplacementBCsByDofList(AppliedDisplacementFunction applied_displacement, const mfem::Array<int> true_dofs)
   {
-    // Get the nodal positions for the displacement vector in grid function form
-    mfem::ParGridFunction coordinates(
-        const_cast<mfem::ParFiniteElementSpace*>(&displacement_.space()));  // mfem const correctness issue
-    mesh_.GetNodes(coordinates);
-
-    mfem::Array<int> ldof_list;
-
-    const int num_nodes = coordinates.FESpace()->GetNDofs();
-    for (int i = 0; i < num_nodes; i++) {
-      mfem::Array<int> dofs;
-      dofs.Append(i);
-      displacement_.space().DofsToVDofs(dofs);
-      mfem::Vector X(dim);
-      for (int j = 0; j < dim; j++) {
-        X(j) = coordinates(dofs[j]);
+    // std::function<void(const mfem::Vector&, double, mfem::Vector&)> disp
+    auto mfem_vector_coefficient_function = [applied_displacement](const mfem::Vector& X_mfem, double t,
+                                                                   mfem::Vector& u_mfem) {
+      auto X = make_tensor<dim>([&X_mfem](int k) { return X_mfem[k]; });
+      auto u = applied_displacement(X, t);
+      for (int i = 0; i < dim; i++) {
+        u_mfem(i) = u[i];
       }
-      if (is_node_constrained(X)) {
-        int ldof = displacement_.space().DofToVDof(i, component);
-        ldof_list.Append(ldof);
-      }
-    }
-
-    component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(disp);
-
-    bcs_.addEssential(ldof_list, component_disp_bdr_coef_, displacement_.space(), component);
+    };
+    disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, mfem_vector_coefficient_function);
+    bcs_.addEssentialByTrueDofs(true_dofs, disp_bdr_coef_, displacement_.space());
   }
 
   /// @overload

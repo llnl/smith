@@ -15,6 +15,7 @@
 #include <vector>
 #include <string>
 #include "serac/physics/common.hpp"
+#include "serac/physics/field_types.hpp"
 
 namespace mfem {
 class Vector;
@@ -37,12 +38,6 @@ class Residual {
   /// @brief destructor
   virtual ~Residual() {}
 
-  /// @brief using
-  using FieldPtr = FiniteElementState*;
-
-  /// @brief using
-  using DualFieldPtr = FiniteElementDual*;
-
   /** @brief Virtual interface for computing residual from a vector of serac::FiniteElementState*
    *
    * @param time time
@@ -51,7 +46,7 @@ class Residual {
    * @param block_row integer which specifies which row of a block system to get the residual for, defaults to 0
    * @return mfem::Vector
    */
-  virtual mfem::Vector residual(double time, double dt, const std::vector<FieldPtr>& fields,
+  virtual mfem::Vector residual(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                 int block_row = 0) const = 0;
 
   /** @brief Derivative of the residual with respect to specified field arguments: sum_j d{r}_i/d{fields}_j *
@@ -65,7 +60,8 @@ class Residual {
    * @return std::unique_ptr<mfem::HypreParMatrix> returns sum_j d{r}_i/d{fields}_j * argument_tangents[j], where
    * {fields}_j is the jth field, {r}_i is the ith residual block row
    */
-  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<FieldPtr>& fields,
+  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt,
+                                                         const std::vector<ConstFieldPtr>& fields,
                                                          const std::vector<double>& argument_tangents,
                                                          int block_row = 0) const = 0;
 
@@ -78,7 +74,8 @@ class Residual {
    * @param jvp_reactions output vjps, 1 per row of a block system: d{r}_i / d{fields}_j * fieldsV[j]
    * nullptr fieldsV are assumed to be all zero to avoid extra calculations
    */
-  virtual void jvp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
+  virtual void jvp(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                   const std::vector<ConstFieldPtr>& v_fields,
                    const std::vector<DualFieldPtr>& jvp_reactions) const = 0;
 
   /**
@@ -89,7 +86,8 @@ class Residual {
    * @param v_fields left hand side 'v' fields
    * @param vjp_sensitivities output jvps, 1 per input field: v_fields[i] * d{r}_i / d{fields}_j
    */
-  virtual void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
+  virtual void vjp(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                   const std::vector<ConstFieldPtr>& v_fields,
                    const std::vector<DualFieldPtr>& vjp_sensitivities) const = 0;
 
   /// @brief name

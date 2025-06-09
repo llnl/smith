@@ -46,6 +46,16 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
   /// @brief disp, velo, accel
   static constexpr int NUM_STATE_VARS = 3;
 
+  /// @brief enumeration of the required states
+  enum STATE
+  {
+    SHAPE_DISPLACEMENT,
+    DISPLACEMENT,
+    VELOCITY,
+    ACCELERATION,
+    NUM_STATES
+  };
+
   /**
    * @brief Construct a new SolidResidual object
    *
@@ -212,7 +222,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
           // = pressure * (normal_new / norm(normal_old)) * w_old
 
           // We always query the pressure function in the undeformed configuration
-          return pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
+          return -pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
         },
         BaseResidualT::mesh_->domain(boundary_name));
 
@@ -222,7 +232,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
           auto x = X + displacement;
           auto n = cross(get<DERIVATIVE>(x));
           auto pressure = pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
-          return inner(get<VALUE>(V), pressure);
+          return -inner(get<VALUE>(V), pressure);
         },
         BaseResidualT::mesh_->domain(boundary_name));
   }
@@ -286,7 +296,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
 
       auto stress = material_.pkStress(state, du_dX, params...);
 
-      return serac::tuple{material_.density(params...) * d2u_dt2, stress};
+      return serac::tuple{-material_.density(params...) * d2u_dt2, -stress};
     }
   };
 
@@ -333,7 +343,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
 
       auto stress = material_.pkStress(*dt_, state, du_dX, dv_dX, params...);
 
-      return serac::tuple{material_.density(params...) * d2u_dt2, stress};
+      return serac::tuple{-material_.density(params...) * d2u_dt2, -stress};
     }
   };
 };
