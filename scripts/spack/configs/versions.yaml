@@ -1,9 +1,5 @@
 # Globally lock version of third party libraries
 packages:
-  arpack-ng:
-    # 3.9.1 has this error: undefined reference to `pdsaupd_'
-    require:
-    - spec: "@3.9.0"
   axom:
     require:
     - spec: "@0.10.1.1"
