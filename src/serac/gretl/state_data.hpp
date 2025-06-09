@@ -11,12 +11,7 @@ template <typename T, typename D>
 struct StateData : public StateDataBase {
   virtual ~StateData() {}
 
-  void clear_primal() override
-  {
-    if (p.use_count() == 1) {
-      p = nullptr;
-    }
-  }
+  void clear_primal() override { p = nullptr; }
 
   void clear_dual() override { d = nullptr; }
 
