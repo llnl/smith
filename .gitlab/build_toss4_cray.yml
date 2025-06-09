@@ -3,6 +3,7 @@
 .on_toss4_cray:
   variables:
     SCHEDULER_PARAMETERS: "--queue pci --exclusive --time-limit=${ALLOC_TIME}m --nodes=${ALLOC_NODES}"
+    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
   tags:
     - batch
     - tioga
@@ -35,7 +36,6 @@
 toss4_cray-rocmcc_6_2_1-src:
  variables:
    COMPILER: "rocmcc@6.2.1"
-   HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
    ALLOC_NODES: "1"
    ALLOC_TIME: "30"
@@ -44,7 +44,6 @@ toss4_cray-rocmcc_6_2_1-src:
 toss4_cray-rocmcc_6_2_1-src-codevelop:
  variables:
    COMPILER: "rocmcc@6.2.1"
-   HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DSERAC_ENABLE_CODEVELOP=ON"
    EXTRA_BUILD_OPTIONS: "--skip-install"
    ALLOC_NODES: "1"
@@ -53,12 +52,14 @@ toss4_cray-rocmcc_6_2_1-src-codevelop:
 
 toss4_cray-rocmcc_6_2_1-tpl:
   variables:
+    COMPILER: "rocmcc@6.2.1"
     ALLOC_NODES: "1"
     ALLOC_TIME: "45"
   extends: .tpl_build_on_toss4_cray
 
 toss4_cray-rocmcc_6_2_1-examples:
   variables:
+    COMPILER: "rocmcc@6.2.1"
     ALLOC_NODES: "1"
     ALLOC_TIME: "120"
   extends: .examples_build_on_toss4_cray
@@ -66,7 +67,6 @@ toss4_cray-rocmcc_6_2_1-examples:
 toss4_cray-rocmcc_6_2_1-benchmarks:
   variables:
     COMPILER: "rocmcc@6.2.1"
-    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "120"
   extends: .benchmarks_build_on_toss4_cray
