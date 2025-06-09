@@ -21,8 +21,11 @@
 .src_build_on_toss4:
   extends: [.src_build_script, .on_toss4, .src_workflow]
 
-.full_build_on_toss4:
-  extends: [.full_build_script, .on_toss4, .full_workflow]
+.examples_build_on_toss4:
+  extends: [.examples_build_script, .on_toss4, .examples_workflow]
+
+.tpl_build_on_toss4:
+  extends: [.tpl_build_script, .on_toss4, .tpl_workflow]
   before_script:
     # LC version of pip is ancient
     - if [[ $(python3 -c 'import pip; print(pip.__version__ < "19.3")') == "True" ]]; then python3 -m pip install --user --upgrade pip; fi
@@ -84,21 +87,37 @@ toss4-gcc_10_3_1-src-no-optional-solvers:
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
 
-toss4-clang_14_0_6-full:
+toss4-clang_14_0_6-tpl:
+  variables:
+    COMPILER: "clang@14.0.6"
+    SPEC: "--spec=%${COMPILER}"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "45"
+  extends: .tpl_build_on_toss4
+
+toss4-gcc_10_3_1-tpl:
+  variables:
+    COMPILER: "gcc@10.3.1"
+    SPEC: "--spec=%${COMPILER}"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "45"
+  extends: .tpl_build_on_toss4
+
+toss4-clang_14_0_6-examples:
   variables:
     COMPILER: "clang@14.0.6"
     SPEC: "--spec=%${COMPILER}"
     ALLOC_NODES: "1"
     ALLOC_TIME: "160"
-  extends: .full_build_on_toss4
+  extends: .examples_build_on_toss4
 
-toss4-gcc_10_3_1-full:
+toss4-gcc_10_3_1-examples:
   variables:
     COMPILER: "gcc@10.3.1"
     SPEC: "--spec=%${COMPILER}"
     ALLOC_NODES: "1"
     ALLOC_TIME: "160"
-  extends: .full_build_on_toss4
+  extends: .examples_build_on_toss4
 
 toss4-clang_14_0_6-benchmarks:
   variables:

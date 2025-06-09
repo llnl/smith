@@ -35,7 +35,7 @@ macro(serac_add_nightly_ci_test)
         set(_timeout ${arg_TIMEOUT})
     endif()
 
-    if("$ENV{SERAC_CI_WORKFLOW_TYPE}" STREQUAL "full")
+    if("$ENV{SERAC_CI_WORKFLOW_TYPE}" STREQUAL "examples")
         blt_add_test(NAME              ${arg_NAME}
                      COMMAND           ${arg_COMMAND}
                      NUM_MPI_TASKS     ${arg_NUM_MPI_TASKS}

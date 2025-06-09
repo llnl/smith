@@ -32,8 +32,11 @@
 .src_build_on_blueos:
   extends: [.src_build_script, .on_blueos, .src_workflow]
 
-.full_build_on_blueos:
-  extends: [.full_build_script, .on_blueos, .full_workflow]
+.examples_build_on_blueos:
+  extends: [.examples_build_script, .on_blueos, .examples_workflow]
+
+.tpl_build_on_blueos:
+  extends: [.tpl_build_script, .on_blueos, .tpl_workflow]
 
 .benchmarks_build_on_blueos:
   extends: [.benchmarks_build_script, .on_blueos, .benchmarks_workflow]
@@ -51,14 +54,23 @@ blueos-clang_14_0_5-src:
 
 # Note: to reduce duplication SPEC is not defined here, if we move to more than one
 # spec on blueos add it back like toss4
-blueos-clang_14_0_5-full:
+blueos-clang_14_0_5-tpl:
+  variables:
+    COMPILER: "clang@14.0.5"
+    HOST_CONFIG: "lassen-blueos_3_ppc64le_ib_p9-${COMPILER}_cuda.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "90"
+  extends: [.tpl_build_on_blueos, .with_cuda]
+
+blueos-clang_14_0_5-examples:
   variables:
     COMPILER: "clang@14.0.5"
     HOST_CONFIG: "lassen-blueos_3_ppc64le_ib_p9-${COMPILER}_cuda.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF"
     ALLOC_NODES: "1"
     ALLOC_TIME: "160"
-  extends: [.full_build_on_blueos, .with_cuda]
+  extends: [.examples_build_on_blueos, .with_cuda]
 
 blueos-clang_14_0_5-benchmarks:
   variables:

@@ -17,8 +17,11 @@
 .src_build_on_toss4_cray:
   extends: [.src_build_script, .on_toss4_cray, .src_workflow]
 
-.full_build_on_toss4_cray:
-  extends: [.full_build_script, .on_toss4_cray, .full_workflow]
+.examples_build_on_toss4_cray:
+  extends: [.examples_build_script, .on_toss4_cray, .examples_workflow]
+
+.tpl_build_on_toss4_cray:
+  extends: [.tpl_build_script, .on_toss4_cray, .tpl_workflow]
   before_script:
     # LC version of pip is ancient
     - if [[ $(python3 -c 'import pip; print(pip.__version__ < "19.3")') == "True" ]]; then python3 -m pip install --user --upgrade pip; fi
@@ -48,11 +51,17 @@ toss4_cray-rocmcc_6_2_1-src-codevelop:
    ALLOC_TIME: "30"
  extends: .src_build_on_toss4_cray
 
-toss4_cray-rocmcc_6_2_1-full:
+toss4_cray-rocmcc_6_2_1-tpl:
   variables:
     ALLOC_NODES: "1"
-    ALLOC_TIME: "160"
-  extends: .full_build_on_toss4_cray
+    ALLOC_TIME: "45"
+  extends: .tpl_build_on_toss4_cray
+
+toss4_cray-rocmcc_6_2_1-examples:
+  variables:
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "120"
+  extends: .examples_build_on_toss4_cray
 
 toss4_cray-rocmcc_6_2_1-benchmarks:
   variables:
