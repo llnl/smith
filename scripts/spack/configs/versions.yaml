@@ -1,5 +1,11 @@
 # Globally lock version of third party libraries
 packages:
+  arpack-ng:
+    # 3.9.1 has this error: undefined reference to `pdsaupd_'
+    # NOTE (EBC): i think this is fixed by https://github.com/LLNL/serac/pull/1404, but needs to be verified with a new
+    # TPL build
+    require:
+    - spec: "@3.9.0"
   axom:
     require:
     - spec: "@0.10.1.1"
