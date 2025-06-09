@@ -87,6 +87,14 @@ toss4-gcc_10_3_1-src-no-optional-solvers:
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
 
+toss4-clang_16_0_6-tpl:
+  variables:
+    COMPILER: "clang@16.0.6"
+    SPEC: "--spec=%${COMPILER}~openmp"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "45"
+  extends: .tpl_build_on_toss4
+
 toss4-clang_14_0_6-tpl:
   variables:
     COMPILER: "clang@14.0.6"
