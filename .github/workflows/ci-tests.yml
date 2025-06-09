@@ -75,7 +75,7 @@ jobs:
           echo "compiler_image ${{ matrix.config.compiler_image }}"
           echo "host_config    ${{ matrix.config.host_config }}"
       - name: Build and Test ${{ matrix.config.host_config }} ${{ matrix.build_type }}
-        timeout-minutes: 40
+        timeout-minutes: 30
         run: |
           ./scripts/llnl/build_src.py ${{ matrix.config.build_src_opts }} \
             --verbose \
