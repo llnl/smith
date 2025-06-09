@@ -520,7 +520,7 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ([[maybe_unused]] const mfem::Ve
       for (int i = 0; i < dimc; i++) {
         entries = 0.;
         entries.Add(
-            1.0, constraints[i]->gradient(time, dt, obj_states, DISP));  // j = 0 shape displacement, u displacemtn j =1
+            1.0, constraints[static_cast<size_t>(i)]->gradient(time, dt, obj_states, DISP));  // j = 0 shape displacement, u displacemtn j =1
         dcdumat->SetRow(i, cols, entries);
       }
     } else {
