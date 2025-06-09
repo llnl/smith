@@ -51,7 +51,7 @@ toss4_cray-rocmcc_6_2_1-src-codevelop:
 toss4_cray-rocmcc_6_2_1-full:
   variables:
     ALLOC_NODES: "1"
-    ALLOC_TIME: "45"
+    ALLOC_TIME: "160"
   extends: .full_build_on_toss4_cray
 
 toss4_cray-rocmcc_6_2_1-benchmarks:
