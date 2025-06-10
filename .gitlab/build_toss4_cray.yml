@@ -55,7 +55,7 @@ toss4_cray-rocmcc_6_2_1-tpl:
   variables:
     COMPILER: "rocmcc@6.2.1"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "45"
+    ALLOC_TIME: "70"
   extends: .tpl_build_on_toss4_cray
 
 toss4_cray-rocmcc_6_2_1-examples:

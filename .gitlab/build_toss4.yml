@@ -92,7 +92,7 @@ toss4-clang_16_0_6-tpl:
     COMPILER: "clang@16.0.6"
     SPEC: "--spec=%${COMPILER}~openmp"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "45"
+    ALLOC_TIME: "70"
   extends: .tpl_build_on_toss4
 
 toss4-clang_14_0_6-tpl:
@@ -100,7 +100,7 @@ toss4-clang_14_0_6-tpl:
     COMPILER: "clang@14.0.6"
     SPEC: "--spec=%${COMPILER}"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "45"
+    ALLOC_TIME: "70"
   extends: .tpl_build_on_toss4
 
 toss4-gcc_10_3_1-tpl:
@@ -108,7 +108,7 @@ toss4-gcc_10_3_1-tpl:
     COMPILER: "gcc@10.3.1"
     SPEC: "--spec=%${COMPILER}"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "45"
+    ALLOC_TIME: "70"
   extends: .tpl_build_on_toss4
 
 toss4-clang_16_0_6-examples:
