@@ -457,26 +457,13 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   }
 }
 
-mfem::HypreParMatrix* InertialReliefProblem::DxF(const mfem::Vector& /*x*/,
-                                                 const mfem::Vector& /*y*/)
-{
-  return dFdx;
-}
+mfem::HypreParMatrix* InertialReliefProblem::DxF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdx; }
 
-mfem::HypreParMatrix* InertialReliefProblem::DyF(const mfem::Vector& /*x*/,
-                                                 const mfem::Vector& /*y*/)
-{
-  return dFdy;
-}
+mfem::HypreParMatrix* InertialReliefProblem::DyF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdy; }
 
-mfem::HypreParMatrix* InertialReliefProblem::DxQ(const mfem::Vector& /*x*/,
-                                                 const mfem::Vector& /*y*/)
-{
-  return dQdx;
-}
+mfem::HypreParMatrix* InertialReliefProblem::DxQ(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dQdx; }
 
-mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/,
-                                                 const mfem::Vector& y)
+mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, const mfem::Vector& y)
 {
   // dQdy = [dr/du   dc/du^T]
   //        [dc/du   0  ]
@@ -503,15 +490,16 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/,
     if (dimc > 0) {
       dcdumat = new mfem::SparseMatrix(dimc, drdu->GetGlobalNumCols(), dimu);
 
-      mfem::Array<int> cols; cols.SetSize(dimu);
-      mfem::Vector entries(dimu); entries = 0.;
+      mfem::Array<int> cols;
+      cols.SetSize(dimu);
+      mfem::Vector entries(dimu);
+      entries = 0.;
       for (int i = 0; i < dimu; i++) {
         cols[i] = i;
       }
       for (int i = 0; i < dimc; i++) {
         entries = 0.;
-        entries.Add(
-            1.0, constraints[static_cast<size_t>(i)]->gradient(time, dt, obj_states, DISP));
+        entries.Add(1.0, constraints[static_cast<size_t>(i)]->gradient(time, dt, obj_states, DISP));
         dcdumat->SetRow(i, cols, entries);
       }
     } else {
