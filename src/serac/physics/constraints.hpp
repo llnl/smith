@@ -53,21 +53,20 @@ class Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                int direction) const = 0;
-  
-  /** @brief constraint Hessian-vector productVirtual interface for computing objective gradient from a vector of serac::FiniteElementState*
+  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt,
+                                                         const std::vector<ConstFieldPtr>& fields,
+                                                         int direction) const = 0;
+
+  /** @brief constraint Hessian-vector productVirtual interface for computing objective gradient from a vector of
+   * serac::FiniteElementState*
    *
    * @param time time
    * @param dt time step
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
-   * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  virtual std::unique_ptr<mfem::HypreParMatrix> hvp(double time, double dt, const std::vector<ConstFieldPtr>& fields, 
-		 const std::vector<ConstFieldPtr>& v_fields); 
+  virtual std::unique_ptr<mfem::HypreParMatrix> hvp(double time, double dt, const std::vector<ConstFieldPtr>& fields);
 
-  
   /// @brief name
   std::string name() const { return name_; }
 

@@ -38,6 +38,7 @@ set(physics_headers
     heat_transfer_residual.hpp
     scalar_objective.hpp
     functional_objective.hpp
+    constraints.hpp
     )
 
 set(physics_depends
