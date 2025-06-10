@@ -48,8 +48,7 @@ void functional_test_static()
 
   // Construct a functional-based heat transfer solver
   serac::HeatTransfer<p, dim> thermal_solver(serac::heat_transfer::default_nonlinear_options, linear_options,
-                                             serac::heat_transfer::default_static_options, "thermal_functional",
-                                             pmesh);
+                                             serac::heat_transfer::default_static_options, "thermal_functional", pmesh);
 
   serac::tensor<double, dim, dim> cond;
 
