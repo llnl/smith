@@ -320,7 +320,7 @@ class BasePhysics {
    *
    * @pre completeSetup(), advanceTimestep(), and reverseAdjointTimestep() must be called prior to this method.
    */
-  virtual const FiniteElementDual& computeTimestepSensitivity(size_t parameter_index);
+  virtual FiniteElementDual computeTimestepSensitivity(size_t parameter_index);
 
   /**
    * @brief Compute the implicit sensitivity of the quantity of interest used in defining the adjoint load with respect

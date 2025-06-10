@@ -118,7 +118,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   solid_solver.reverseAdjointTimestep();
 
   // Compute the sensitivity (d QOI/ d state * d state/d parameter) given the current adjoint solution
-  [[maybe_unused]] auto& sensitivity = solid_solver.computeTimestepSensitivity(bulk_parameter_index);
+  auto sensitivity = solid_solver.computeTimestepSensitivity(bulk_parameter_index);
 
   // Perform finite difference on each bulk modulus value
   // to check if computed qoi sensitivity is consistent

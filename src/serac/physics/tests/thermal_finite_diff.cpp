@@ -112,7 +112,7 @@ TEST(Thermal, FiniteDifference)
   thermal_solver.reverseAdjointTimestep();
 
   // Compute the sensitivity (d QOI/ d state * d state/d parameter) given the current adjoint solution
-  [[maybe_unused]] auto& sensitivity = thermal_solver.computeTimestepSensitivity(conductivity_parameter_index);
+  [[maybe_unused]] auto sensitivity = thermal_solver.computeTimestepSensitivity(conductivity_parameter_index);
 
   // Perform finite difference on each conduction value
   // to check if computed qoi sensitivity is consistent

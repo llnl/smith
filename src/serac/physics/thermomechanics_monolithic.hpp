@@ -903,7 +903,7 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   }
 
   /// @overload
-  FiniteElementDual& computeTimestepSensitivity(size_t parameter_field) override
+  FiniteElementDual computeTimestepSensitivity(size_t parameter_field) override
   {
     SLIC_ASSERT_MSG(parameter_field < sizeof...(parameter_indices),
                     axom::fmt::format("Invalid parameter index '{}' requested for sensitivity."));

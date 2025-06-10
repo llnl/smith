@@ -197,7 +197,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
 
   simulation.reverseAdjointTimestep();
 
-  auto& dqoi_dalpha = simulation.computeTimestepSensitivity(1);
+  auto dqoi_dalpha = simulation.computeTimestepSensitivity(1);
 
   double epsilon = 1.0e-5;
   auto dalpha = alpha.CreateCompatibleVector();
@@ -214,6 +214,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
   double final_qoi = qoi(time, simulation.displacement());
 
   double adjoint_qoi_derivative = mfem::InnerProduct(dqoi_dalpha, dalpha);
+
   double fd_qoi_derivative = (final_qoi - initial_qoi) / epsilon;
 
   // compare the expected change in the QoI to the actual change:
@@ -221,7 +222,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
       axom::fmt::format("directional derivative of QoI by adjoint-state method: {}", adjoint_qoi_derivative));
   SLIC_INFO_ROOT(axom::fmt::format("directional derivative of QoI by finite-difference:    {}", fd_qoi_derivative));
 
-  EXPECT_NEAR(0.0, (fd_qoi_derivative - adjoint_qoi_derivative) / fd_qoi_derivative, 3.0e-5);
+  EXPECT_NEAR(fd_qoi_derivative, adjoint_qoi_derivative, fd_qoi_derivative * 3.0e-5);
 }
 
 // output:

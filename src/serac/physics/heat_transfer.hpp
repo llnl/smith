@@ -902,7 +902,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    *
    * @pre `reverseAdjointTimestep` with an appropriate adjoint load must be called prior to this method.
    */
-  const FiniteElementDual& computeTimestepSensitivity(size_t parameter_field) override
+  FiniteElementDual computeTimestepSensitivity(size_t parameter_field) override
   {
     // TODO: the time is likely not being handled correctly on the reverse pass, but we don't
     //       have tests to confirm.

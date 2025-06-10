@@ -99,7 +99,7 @@ void BasePhysics::setShapeDisplacement(const FiniteElementState& shape_displacem
 
 FiniteElementDual& BasePhysics::shapeDisplacementSensitivity() const { return mesh_->shapeDisplacementDual(); }
 
-const FiniteElementDual& BasePhysics::computeTimestepSensitivity(size_t parameter_index)
+FiniteElementDual BasePhysics::computeTimestepSensitivity(size_t parameter_index)
 {
   SLIC_ERROR_ROOT(axom::fmt::format("Parameter sensitivities not enabled in physics module {}", name_));
   return *parameters_[parameter_index].sensitivity;

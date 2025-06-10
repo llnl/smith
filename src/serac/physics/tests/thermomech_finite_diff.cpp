@@ -173,7 +173,7 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
   thermomech_solver.reverseAdjointTimestep();
 
   // Compute the sensitivity (d QOI/ d state * d state/d parameter) given the current adjoint solution
-  [[maybe_unused]] auto& sensitivity = thermomech_solver.computeTimestepSensitivity(sensitivity_parameter_index);
+  auto sensitivity = thermomech_solver.computeTimestepSensitivity(sensitivity_parameter_index);
 
   // Perform finite difference on each parameter value
   // to check if computed qoi sensitivity is consistent
