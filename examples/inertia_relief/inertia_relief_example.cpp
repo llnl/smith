@@ -23,6 +23,7 @@
 #include "mfem.hpp"
 #include "serac/physics/tests/physics_test_utils.hpp"
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/physics/scalar_objective.hpp"
 
 #include "problems/Problems.hpp"
 #include "solvers/HomotopySolver.hpp"
@@ -66,7 +67,7 @@ class ParaviewWriter {
   {
   }
 
-  void write(int step, double time, const std::vector<serac::FiniteElementState*>& current_states)
+  void write(int step, double time, const std::vector<serac::FiniteElementState const *>& current_states)
   {
     SERAC_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
@@ -88,7 +89,7 @@ class ParaviewWriter {
   StateVecs dual_states;
 };
 
-auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<serac::FiniteElementState*>& states,
+auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<serac::FiniteElementState const*>& states,
                           std::string output_name)
 {
   if (output_name == "") {
@@ -145,8 +146,8 @@ class InertialReliefProblem : public GeneralNLMCProblem {
   int dimu;
   int dimc;
   mfem::Array<int> y_partition;
-  std::vector<serac::FiniteElementState*> obj_states;
-  std::vector<serac::FiniteElementState*> all_states;
+  std::vector<serac::FieldPtr> obj_states;
+  std::vector<serac::FieldPtr> all_states;
   std::shared_ptr<serac::Residual> residual;
   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints;
   double time = 0.0;
@@ -154,8 +155,8 @@ class InertialReliefProblem : public GeneralNLMCProblem {
   std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, 0.0, 0.0};
 
  public:
-  InertialReliefProblem(std::vector<serac::FiniteElementState*> obj_states_,
-                        std::vector<serac::FiniteElementState*> all_states_, std::shared_ptr<serac::Residual> residual_,
+  InertialReliefProblem(std::vector<serac::FieldPtr> obj_states_,
+                        std::vector<serac::FieldPtr> all_states_, std::shared_ptr<serac::Residual> residual_,
                         std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_);
   void F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int& Feval_err) const;
   void Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval, int& Qeval_err) const;
@@ -236,7 +237,7 @@ int main(int argc, char* argv[])
 
   double time = 0.0;
   double dt = 1.0;
-  auto all_states = getPointers(states, params);
+  auto all_states = getConstFieldPointers(states, params);
   auto objective_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[DENSITY]};
 
   ObjectiveT::SpacesT param_space_ptrs{&all_states[DISP]->space(), &all_states[DENSITY]->space()};
@@ -290,7 +291,8 @@ int main(int argc, char* argv[])
 
   auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "");
   writer.write(0, 0.0, objective_states);
-  InertialReliefProblem problem(objective_states, all_states, solid_mechanics_residual, constraints);
+  auto non_const_states = getFieldPointers(states, params);
+  InertialReliefProblem problem({non_const_states[SHAPE_DISP], non_const_states[DISP], non_const_states[DENSITY]}, non_const_states, solid_mechanics_residual, constraints);
   int dimx = problem.GetDimx();
   int dimy = problem.GetDimy();
 
@@ -430,7 +432,7 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   obj_states[DISP]->Set(1.0, yblock.GetBlock(0));
 
   serac::FiniteElementDual res_vector(all_states[DISP]->space(), "tempresidual");
-  res_vector = residual->residual(time, dt, all_states);
+  res_vector = residual->residual(time, dt, serac::getConstFieldPointers(all_states));
   qblock.GetBlock(0).Set(1.0, res_vector);
 
   mfem::Vector gradc(dimu);
@@ -440,9 +442,9 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
     const size_t i2 = static_cast<size_t>(idx);
     SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
     gradc = 0.0;
-    gradc.Set(1.0, constraints[i]->gradient(time, dt, obj_states, DISP));
+    gradc.Set(1.0, constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
     qblock.GetBlock(0).Add(yblock.GetBlock(1)(idx), gradc);
-    qblock.GetBlock(1)(idx) = -1.0 * constraints[i]->evaluate(time, dt, obj_states);
+    qblock.GetBlock(1)(idx) = -1.0 * constraints[i]->evaluate(time, dt, serac::getConstFieldPointers(obj_states));
   }
   qeval.Set(1.0, qblock);
   Qeval_err = 0;
@@ -479,7 +481,7 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
   }
   {
     mfem::HypreParMatrix* drdu = nullptr;
-    auto drdu_unique = residual->jacobian(time, dt, all_states, jacobian_weights);
+    auto drdu_unique = residual->jacobian(time, dt, getConstFieldPointers(all_states), jacobian_weights);
     MFEM_VERIFY(drdu_unique->Height() == dimu, "size error");
 
     drdu = drdu_unique.release();
@@ -499,7 +501,7 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
       }
       for (int i = 0; i < dimc; i++) {
         entries = 0.;
-        entries.Add(1.0, constraints[static_cast<size_t>(i)]->gradient(time, dt, obj_states, DISP));
+        entries.Add(1.0, constraints[static_cast<size_t>(i)]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
         dcdumat->SetRow(i, cols, entries);
       }
     } else {
