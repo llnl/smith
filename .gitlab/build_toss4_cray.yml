@@ -63,7 +63,7 @@ toss4_cray-rocmcc_6_2_1-examples:
     COMPILER: "rocmcc@6.2.1"
     HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "120"
+    ALLOC_TIME: "30"
   extends: .examples_build_on_toss4_cray
 
 toss4_cray-rocmcc_6_2_1-benchmarks:
