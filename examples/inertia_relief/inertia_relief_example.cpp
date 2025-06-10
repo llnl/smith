@@ -404,7 +404,6 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   }
 }
 
-#if 1
 void InertialReliefProblem::F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int& Feval_err) const
 {
   MFEM_VERIFY(x.Size() == dimx && y.Size() == dimy && feval.Size() == dimx,
@@ -434,7 +433,7 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   res_vector = residual->residual(time, dt, all_states);
   qblock.GetBlock(0).Set(1.0, res_vector);
 
-  Vector gradc(dimu);
+  mfem::Vector gradc(dimu);
   gradc = 0.0;
   for (size_t i = 0; i < constraints.size(); i++) {
     const int idx = static_cast<int>(i);
@@ -450,6 +449,7 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   for (int i = 0; i < qeval.Size(); i++) {
     if (std::isnan(qeval(i))) {
       Qeval_err = 1;
+      break;
     }
   }
   if (Qeval_err > 0 && mfem::Mpi::WorldRank() == 0) {
@@ -457,28 +457,27 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   }
 }
 
-mfem::HypreParMatrix* InertialReliefProblem::DxF([[maybe_unused]] const mfem::Vector& x,
-                                                 [[maybe_unused]] const mfem::Vector& y)
+mfem::HypreParMatrix* InertialReliefProblem::DxF(const mfem::Vector& /*x*/,
+                                                 const mfem::Vector& /*y*/)
 {
   return dFdx;
 }
 
-mfem::HypreParMatrix* InertialReliefProblem::DyF([[maybe_unused]] const mfem::Vector& x,
-                                                 [[maybe_unused]] const mfem::Vector& y)
+mfem::HypreParMatrix* InertialReliefProblem::DyF(const mfem::Vector& /*x*/,
+                                                 const mfem::Vector& /*y*/)
 {
   return dFdy;
 }
 
-mfem::HypreParMatrix* InertialReliefProblem::DxQ([[maybe_unused]] const mfem::Vector& x,
-                                                 [[maybe_unused]] const mfem::Vector& y)
+mfem::HypreParMatrix* InertialReliefProblem::DxQ(const mfem::Vector& /*x*/,
+                                                 const mfem::Vector& /*y*/)
 {
   return dQdx;
 }
 
-mfem::HypreParMatrix* InertialReliefProblem::DyQ([[maybe_unused]] const mfem::Vector& x,
-                                                 [[maybe_unused]] const mfem::Vector& y)
+mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/,
+                                                 const mfem::Vector& y)
 {
-  // see Homotopy Example5
   // dQdy = [dr/du   dc/du^T]
   //        [dc/du   0  ]
   // note we are neglecting Hessian constraint terms
@@ -504,17 +503,15 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ([[maybe_unused]] const mfem::Ve
     if (dimc > 0) {
       dcdumat = new mfem::SparseMatrix(dimc, drdu->GetGlobalNumCols(), dimu);
 
-      mfem::Array<int> cols;
-      cols.SetSize(dimu);
-      mfem::Vector entries(dimu);
-      entries = 0.;
+      mfem::Array<int> cols; cols.SetSize(dimu);
+      mfem::Vector entries(dimu); entries = 0.;
       for (int i = 0; i < dimu; i++) {
         cols[i] = i;
       }
       for (int i = 0; i < dimc; i++) {
         entries = 0.;
         entries.Add(
-            1.0, constraints[static_cast<size_t>(i)]->gradient(time, dt, obj_states, DISP));  // j = 0 shape displacement, u displacemtn j =1
+            1.0, constraints[static_cast<size_t>(i)]->gradient(time, dt, obj_states, DISP));
         dcdumat->SetRow(i, cols, entries);
       }
     } else {
@@ -522,7 +519,7 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ([[maybe_unused]] const mfem::Ve
     }
     dcdumat->Threshold(1.e-20);
     dcdumat->Finalize();
-    dcdu = GenerateHypreParMatrixFromSparseMatrix(uOffsets, cOffsets, dcdumat);  // utility function call
+    dcdu = GenerateHypreParMatrixFromSparseMatrix(uOffsets, cOffsets, dcdumat);
     mfem::HypreParMatrix* dcduT = dcdu->Transpose();
     mfem::Vector scale(dcdu->Height());
     scale = -1.0;
@@ -541,7 +538,6 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ([[maybe_unused]] const mfem::Ve
   }
   return dQdy;
 }
-#endif
 
 InertialReliefProblem::~InertialReliefProblem()
 {
