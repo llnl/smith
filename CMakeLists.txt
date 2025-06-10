@@ -196,7 +196,7 @@ configure_file(
 #------------------------------------------------------------------------------
 set(exported_targets
     serac_infrastructure
-    serac_mesh
+    serac_mesh_utils
     serac_numerics
     serac_physics)
 

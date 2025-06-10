@@ -5,40 +5,32 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file without_input_file.cpp
+ * @file simple_conduction.cpp
  *
  * @brief A simple example of steady-state heat transfer that uses
  * the C++ API to configure the simulation
  */
 
-// _incl_heat_transfer_header_start
-#include "serac/physics/heat_transfer.hpp"
-#include "serac/physics/materials/thermal_material.hpp"
-// _incl_heat_transfer_header_end
-// _incl_state_manager_start
-#include "serac/physics/state/state_manager.hpp"
-// _incl_state_manager_end
-// _incl_infra_start
-#include "serac/infrastructure/application_manager.hpp"
-// _incl_infra_end
-// _incl_mesh_start
-#include "serac/mesh/mesh_utils.hpp"
-// _incl_mesh_end
+// _serac_include_header_start
+#include "serac/serac.hpp"
+// _serac_include_header_end
 
 // _main_init_start
 int main(int argc, char* argv[])
 {
   // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
+  // _main_init_end
+
+  // _statemanager_start
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "without_input_file_example");
-  // _main_init_end
-  // _create_mesh_start
-  auto mesh = serac::mesh::refineAndDistribute(serac::buildRectangleMesh(10, 10));
+  // _statemanager_end
 
+  // _create_mesh_start
   std::string mesh_tag{"mesh"};
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh = std::make_shared<serac::Mesh>(serac::buildRectangleMesh(10, 10), mesh_tag);
   // _create_mesh_end
 
   // _create_module_start
@@ -55,8 +47,7 @@ int main(int argc, char* argv[])
   constexpr double kappa = 0.5;
   serac::heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, kappa);
 
-  serac::Domain whole_domain = serac::EntireDomain(pmesh);
-  heat_transfer.setMaterial(mat, whole_domain);
+  heat_transfer.setMaterial(mat, pmesh->entireBody());
 
   // _conductivity_end
   // _bc_start

@@ -5,11 +5,19 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/physics/mesh.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/numerics/functional/domain.hpp"
 
 namespace serac {
+
+Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_serial, int refine_parallel)
+    : mesh_tag_(meshtag)
+{
+  auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel);
+  mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
+  createDomains();
+}
 
 Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int refine_parallel) : mesh_tag_(meshtag)
 {
@@ -21,14 +29,8 @@ Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int
 Mesh::Mesh(mfem::ParMesh& mesh, const std::string& meshtag) : mesh_tag_(meshtag)
 {
   mfem_mesh_ = &mesh;
-  createDomains();
-}
-
-Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_serial, int refine_parallel)
-    : mesh_tag_(meshtag)
-{
-  auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel);
-  mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
+  mfem_mesh_->EnsureNodes();
+  mfem_mesh_->ExchangeFaceNbrData();
   createDomains();
 }
 

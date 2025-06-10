@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+// Copyright Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -58,9 +58,6 @@ class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...
         std::make_unique<ShapeAwareFunctional<ShapeDispSpace, double(InputSpaces...)>>(&shape_disp_space, mfem_spaces);
   }
 
-  /// @brief using
-  using FieldPtr = FiniteElementState*;
-
   /**
    * @brief register a custom domain integral calculation as part of the residual
    *
@@ -77,14 +74,14 @@ class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...
   }
 
   /// @overload
-  virtual double evaluate(double time, double dt, const std::vector<FieldPtr>& fields) const override
+  virtual double evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields) const override
   {
     dt_ = dt;
     return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);
   }
 
   /// @overload
-  virtual mfem::Vector gradient(double time, double dt, const std::vector<FieldPtr>& fields,
+  virtual mfem::Vector gradient(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                 int direction) const override
   {
     dt_ = dt;
@@ -96,18 +93,18 @@ class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...
  private:
   /// @brief Utility to evaluate residual using all fields in vector
   template <int... i>
-  auto evaluateObjective(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
+  auto evaluateObjective(std::integer_sequence<int, i...>, double time, const std::vector<ConstFieldPtr>& fs) const
   {
     return (*objective_)(time, *fs[i]...);
   };
 
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
   template <int... i>
-  auto gradientEvaluators(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
+  auto gradientEvaluators(std::integer_sequence<int, i...>, double time, const std::vector<ConstFieldPtr>& fs) const
   {
     using JacFuncType = std::function<decltype((*objective_)(DifferentiateWRT<1>{}, time, *fs[i]...))(
-        double, const std::vector<FieldPtr>&)>;
-    return std::array<JacFuncType, sizeof...(i)>{[=](double _time, const std::vector<FieldPtr>& _fs) {
+        double, const std::vector<ConstFieldPtr>&)>;
+    return std::array<JacFuncType, sizeof...(i)>{[=](double _time, const std::vector<ConstFieldPtr>& _fs) {
       return (*objective_)(DifferentiateWRT<i>{}, _time, *_fs[i]...);
     }...};
   };

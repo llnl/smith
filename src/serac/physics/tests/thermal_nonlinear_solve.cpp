@@ -15,8 +15,9 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
@@ -41,8 +42,8 @@ void functional_thermal_test_nonlinear()
 
   std::string mesh_tag{"mesh"};
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
                                                   .relative_tol = 1.0e-12,
@@ -59,13 +60,10 @@ void functional_thermal_test_nonlinear()
       21.0  // isotropic thermal conductivity
   };
 
-  Domain whole_domain = EntireDomain(pmesh);
-  Domain whole_boundary = EntireBoundary(pmesh);
-
-  thermal_solver.setMaterial(mat, whole_domain);
+  thermal_solver.setMaterial(mat, pmesh->entireBody());
 
   // set heat source
-  thermal_solver.setSource([](auto, auto, auto, auto) { return 2.0; }, whole_domain);
+  thermal_solver.setSource([](auto, auto, auto, auto) { return 2.0; }, pmesh->entireBody());
 
   // clang-format off
   thermal_solver.addCustomBoundaryIntegral(serac::DependsOn<>{}, [&](auto, auto, auto temperature, auto) {
@@ -74,7 +72,7 @@ void functional_thermal_test_nonlinear()
     using std::pow;
     auto T = serac::get<0>(temperature);
     return radiateConstant * (pow(T, 4.0) - pow(T0, 4.0));
-  }, whole_boundary);
+  }, pmesh->entireBoundary());
   //  clang-format on
 
   // prescribe zero temperature at one end of the beam

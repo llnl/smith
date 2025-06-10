@@ -13,7 +13,7 @@ blt_add_library(
     HEADERS     ${physics_test_headers}
     )
       
-set(physics_test_depends serac_physics serac_mesh serac_physics_test_utils gtest)
+set(physics_test_depends serac_physics serac_physics_test_utils gtest)
 
 set(physics_serial_test_sources
     beam_bending.cpp
@@ -29,20 +29,36 @@ set(physics_serial_test_sources
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
     test_solid_residual.cpp
+    test_heat_residual.cpp
     test_functional_residual.cpp
     thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
     test_kinematic_objective.cpp
     )
-if (TRIBOL_FOUND AND ENZYME_FOUND)
-    list(APPEND physics_serial_test_sources 
-                contact_finite_diff.cpp
-                tribol_finite_diff.cpp)
+
+if (TRIBOL_FOUND)
+    set(physics_serial_tribol_test_sources 
+        contact_solid_adjoint.cpp)
+    if (ENZYME_FOUND)
+        list(APPEND physics_serial_tribol_test_sources 
+                    contact_finite_diff.cpp
+                    tribol_finite_diff.cpp)
+    endif()
+    list(APPEND physics_serial_test_sources
+        ${physics_serial_tribol_test_sources})
 endif()
 
 serac_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 1)
+
+if(SERAC_ENABLE_HIP AND TRIBOL_FOUND)
+    foreach(filename ${physics_serial_tribol_test_sources})
+        get_filename_component(test_name ${filename} NAME_WE)
+        blt_add_target_compile_flags(TO ${test_name} FLAGS "-fgpu-rdc")
+        blt_add_target_link_flags(TO ${test_name} FLAGS "-fgpu-rdc")
+    endforeach()
+endif()
 
 set(physics_parallel_test_sources
     lce_Brighenti_tensile.cpp

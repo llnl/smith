@@ -92,13 +92,15 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("py-sphinx", when="+devtools")
     depends_on("py-ats", when="+devtools")
 
-    # MFEM is deprecating the monitoring support with sundials v6.0 and later
-    # NOTE: Sundials must be built static to prevent the following runtime error:
-    # "error while loading shared libraries: libsundials_nvecserial.so.6:
-    # cannot open shared object file: No such file or directory"
-    depends_on("sundials+hypre~monitoring~examples~examples-install+static~shared",
-               when="+sundials")
-    depends_on("sundials+asan", when="+sundials+asan")
+    with when("+sundials"):
+        # Going to sundials@7: causes 80%+ test failures
+        depends_on("sundials@:6.999", when="+sundials")
+        # MFEM is deprecating the monitoring support with sundials v6.0 and later
+        # NOTE: Sundials must be built static to prevent the following runtime error:
+        # "error while loading shared libraries: libsundials_nvecserial.so.6:
+        # cannot open shared object file: No such file or directory"
+        depends_on("sundials+hypre~monitoring~examples~examples-install+static~shared")
+        depends_on("sundials+asan", when="+asan")
 
     depends_on("mfem+netcdf+metis+superlu-dist+lapack+mpi")
     depends_on("mfem+sundials", when="+sundials")
@@ -236,6 +238,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     conflicts("+openmp", when="+rocm")
     conflicts("+cuda", when="+rocm")
+    conflicts("~umpire", when="+raja", msg="Axom requires both raja and umpire in order to properly set CAMP_DIR.")
 
     conflicts("%intel", msg="Intel has a bug with C++17 support as of May 2020")
 
@@ -269,31 +272,28 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     conflicts("cuda_arch=none", when="+cuda",
               msg="CUDA architecture is required")
     depends_on("amgx", when="+cuda")
-    # Always add these variants if +cuda
-    cuda_deps = ["axom", "mfem"]
-    for dep in cuda_deps:
-        depends_on("{0}+cuda".format(dep), when="+cuda")
-        for sm_ in CudaPackage.cuda_arch_values:
-            depends_on("{0} cuda_arch={1}".format(dep, sm_),
-                    when="cuda_arch={0}".format(sm_))
-    
-    # Check if these variants are true and +cuda before adding
-    cuda_deps_with_variants = ["raja", "sundials", "tribol", "umpire", "petsc", "slepc"]
-    for dep in cuda_deps_with_variants:
-        depends_on("{0}+cuda".format(dep), when="+{0}+cuda".format(dep))
-        for sm_ in CudaPackage.cuda_arch_values:
-            depends_on("{0} cuda_arch={1}".format(dep, sm_),
-                    when="+{0}+cuda cuda_arch={1}".format(dep, sm_))
 
-    depends_on("caliper+cuda", when="+profiling+cuda")
-    for sm_ in CudaPackage.cuda_arch_values:
-        depends_on("caliper cuda_arch={0}".format(sm_),
-                when="+profiling cuda_arch={0}".format(sm_))
+    for val in CudaPackage.cuda_arch_values:
+        ext_rocm_dep = f"+cuda cuda_arch={val}"
 
+        # required
+        depends_on(f"axom {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"mfem {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+
+        # optional
+        depends_on(f"caliper {ext_rocm_dep}", when=f"+profiling {ext_rocm_dep}")
+        depends_on(f"petsc {ext_rocm_dep}", when=f"+petsc {ext_rocm_dep}")
+        depends_on(f"raja {ext_rocm_dep}", when=f"+raja {ext_rocm_dep}")
+        depends_on(f"slepc {ext_rocm_dep}", when=f"+slepc {ext_rocm_dep}")
+        depends_on(f"sundials {ext_rocm_dep}", when=f"+sundials {ext_rocm_dep}")
+        depends_on(f"tribol {ext_rocm_dep}", when=f"+tribol {ext_rocm_dep}")
+        depends_on(f"umpire {ext_rocm_dep}", when=f"+umpire {ext_rocm_dep}")
 
     #
     # ROCm
     #
+    conflicts("amdgpu_target=none", when="+rocm",
+              msg="AMD GPU target is required when building with ROCm")
 
     with when("+profiling"):
         depends_on("caliper+rocm", when="+rocm")
@@ -450,11 +450,13 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
                                               "mpibind"))
 
         # Replace /usr/bin/srun path with srun flux wrapper path on TOSS 4
+        # TODO Remove this once we move past https://github.com/spack/spack/pull/49033
         if 'toss_4' in self._get_sys_type(spec):
             srun_wrapper = which_string("srun")
             mpi_exec_index = [index for index,entry in enumerate(entries)
                                                   if "MPIEXEC_EXECUTABLE" in entry]
-            del entries[mpi_exec_index[0]]
+            if len(mpi_exec_index) != 0:
+                del entries[mpi_exec_index[0]]
             entries.append(cmake_cache_path("MPIEXEC_EXECUTABLE", srun_wrapper))
 
         return entries

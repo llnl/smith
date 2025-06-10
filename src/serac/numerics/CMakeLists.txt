@@ -32,6 +32,11 @@ blt_add_library(
     DEPENDS_ON  ${numerics_depends}
     )
 
+serac_write_unified_header(
+    NAME    numerics
+    HEADERS solver_config.hpp
+    )
+
 install(FILES ${numerics_headers} DESTINATION include/serac/numerics )
 
 install(TARGETS              serac_numerics

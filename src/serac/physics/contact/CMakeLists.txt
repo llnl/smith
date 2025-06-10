@@ -28,13 +28,11 @@ blt_add_library(
     DEPENDS_ON  ${contact_depends}
     )
 
+# Unified header is not needed in this component
+
 install(FILES ${contact_headers} DESTINATION include/serac/physics/contact )
 
 install(TARGETS              serac_contact
         EXPORT               serac-targets
         DESTINATION          lib
         )
-
-# if(SERAC_ENABLE_TESTS)
-#     add_subdirectory(tests)
-# endif()

@@ -16,10 +16,11 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/serac_config.hpp"
@@ -43,11 +44,10 @@ void functional_solid_test_static_J2()
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
   std::string mesh_tag{"mesh"};
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // _solver_params_start
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
@@ -78,12 +78,11 @@ void functional_solid_test_static_J2()
 
   auto qdata = solid_solver.createQuadratureDataBuffer(initial_state);
 
-  Domain whole_domain = EntireDomain(pmesh);
-  solid_solver.setRateDependentMaterial(mat, whole_domain, qdata);
+  solid_solver.setRateDependentMaterial(mat, pmesh->entireBody(), qdata);
 
   // prescribe zero displacement at the supported end of the beam,
-  auto support = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
-  solid_solver.setFixedBCs(support);
+  pmesh->addDomainOfBoundaryElements("support", by_attr<dim>(1));
+  solid_solver.setFixedBCs(pmesh->domain("support"));
 
   // apply a displacement along z to the the tip of the beam
   auto translated_in_z = [](tensor<double, dim>, double t) {
@@ -91,8 +90,8 @@ void functional_solid_test_static_J2()
     u[2] = t * (t - 1);
     return u;
   };
-  auto tip = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
-  solid_solver.setDisplacementBCs(translated_in_z, tip, Component::Z);
+  pmesh->addDomainOfBoundaryElements("tip", by_attr<dim>(2));
+  solid_solver.setDisplacementBCs(translated_in_z, pmesh->domain("tip"), Component::Z);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -143,30 +142,29 @@ void functional_parameterized_solid_test(double expected_disp_norm)
   std::string filename =
       (dim == 2) ? SERAC_REPO_DIR "/data/meshes/beam-quad.mesh" : SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
   std::string mesh_tag{"mesh"};
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // Construct and initialized the user-defined moduli to be used as a differentiable parameter in
   // the solid mechanics physics module.
-  FiniteElementState user_defined_shear_modulus(pmesh, H1<1>{}, "parameterized_shear");
+  FiniteElementState user_defined_shear_modulus(pmesh->mfemParMesh(), H1<1>{}, "parameterized_shear");
 
   user_defined_shear_modulus = 1.0;
 
-  FiniteElementState user_defined_bulk_modulus(pmesh, H1<1>{}, "parameterized_bulk");
+  FiniteElementState user_defined_bulk_modulus(pmesh->mfemParMesh(), H1<1>{}, "parameterized_bulk");
 
   user_defined_bulk_modulus = 1.0;
 
   // _custom_solver_start
-  auto nonlinear_solver = std::make_unique<mfem::NewtonSolver>(pmesh.GetComm());
+  auto nonlinear_solver = std::make_unique<mfem::NewtonSolver>(pmesh->getComm());
   nonlinear_solver->SetPrintLevel(1);
   nonlinear_solver->SetMaxIter(30);
   nonlinear_solver->SetAbsTol(1.0e-12);
   nonlinear_solver->SetRelTol(1.0e-10);
 
-  auto linear_solver = std::make_unique<mfem::HypreGMRES>(pmesh.GetComm());
+  auto linear_solver = std::make_unique<mfem::HypreGMRES>(pmesh->getComm());
   linear_solver->SetPrintLevel(1);
   linear_solver->SetMaxIter(500);
   linear_solver->SetTol(1.0e-6);
@@ -185,16 +183,13 @@ void functional_parameterized_solid_test(double expected_disp_norm)
   solid_solver.setParameter(0, user_defined_bulk_modulus);
   solid_solver.setParameter(1, user_defined_shear_modulus);
 
-  Domain whole_domain = EntireDomain(pmesh);
-  Domain whole_boundary = EntireBoundary(pmesh);
-
   solid_mechanics::ParameterizedLinearIsotropicSolid mat{1.0, 0.0, 0.0};
-  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, whole_domain);
+  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, pmesh->entireBody());
 
   // Specify initial / boundary conditions
-  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(1));
 
-  solid_solver.setFixedBCs(essential_boundary);
+  solid_solver.setFixedBCs(pmesh->domain("essential_boundary"));
 
   tensor<double, dim> constant_force;
 
@@ -206,16 +201,16 @@ void functional_parameterized_solid_test(double expected_disp_norm)
   }
 
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-  solid_solver.addBodyForce(force, whole_domain);
+  solid_solver.addBodyForce(force, pmesh->entireBody());
 
   // add some nonexistent body forces / tractions to check that
   // these parameterized versions compile and run without error
   solid_solver.addBodyForce(
-      DependsOn<0>{}, [](const auto& x, double /*t*/, auto /* bulk */) { return x * 0.0; }, whole_domain);
+      DependsOn<0>{}, [](const auto& x, double /*t*/, auto /* bulk */) { return x * 0.0; }, pmesh->entireBody());
   solid_solver.addBodyForce(DependsOn<1>{}, ParameterizedBodyForce{[](const auto& x) { return 0.0 * x; }},
-                            whole_domain);
+                            pmesh->entireBody());
   solid_solver.setTraction(
-      DependsOn<1>{}, [](const auto& x, auto...) { return 0 * x; }, whole_boundary);
+      DependsOn<1>{}, [](const auto& x, auto...) { return 0 * x; }, pmesh->entireBoundary());
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -240,6 +235,89 @@ void functional_parameterized_solid_test(double expected_disp_norm)
 TEST(SolidMechanics, 2DQuadParameterizedStatic) { functional_parameterized_solid_test<2, 2>(2.2378592112148716); }
 
 TEST(SolidMechanics, 3DQuadStaticJ2) { functional_solid_test_static_J2(); }
+
+TEST(SolidMechanics, TDofBoundaryCondition)
+{
+  /*
+    Verifies that the solution obtained by specifying displacement BCs by tdof
+    is identical to the solution obtained by specifying the BCs by domains.
+  */
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  constexpr int p = 1;
+  constexpr int dim = 2;
+  int serial_refinement = 2;
+  int parallel_refinement = 0;
+
+  // Create DataStore
+  axom::sidre::DataStore datastore;
+  serac::StateManager::initialize(datastore, "tdof_bc_test");
+
+  // Construct the mesh
+  std::string filename = SERAC_REPO_DIR "/data/meshes/square.mesh";
+  std::string mesh_tag{"mesh"};
+  auto pmesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+
+  pmesh->addDomainOfBoundaryElements("essential_boundary_x", by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("essential_boundary_y", by_attr<dim>(2));
+
+  serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
+
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-12,
+                                                  .absolute_tol = 1.0e-12,
+                                                  .max_iterations = 1,
+                                                  .print_level = 1};
+
+  using Material = solid_mechanics::LinearIsotropic;
+  Material mat{.density = 1.0, .K = 0.5, .G = 1.0};
+
+  auto body_force_function = [](auto, auto) { return tensor<double, dim>{0.1, 0.0}; };
+  auto displacement_bc_function = [](auto X, auto) { return tensor<double, dim>{X[0], 0.0}; };
+
+  // GENERATE REFERENCE SOLUTION
+  // Make a solid mechanics module, specify the disp BCs by domain (ie, the standard method)
+  SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
+                               "solid_mechanics", mesh_tag);
+  solid.setMaterial(mat, pmesh->entireBody());
+  solid.setDisplacementBCs(displacement_bc_function, pmesh->domain("essential_boundary_x"), Component::X);
+  solid.setDisplacementBCs(displacement_bc_function, pmesh->domain("essential_boundary_y"), Component::Y);
+  solid.addBodyForce(body_force_function, pmesh->entireBody());
+  solid.completeSetup();
+  solid.advanceTimestep(1.0);
+
+  // GENERATE THE SOLUTION TO TEST
+  // find the tdofs in the domain-based BCs
+  auto ldofs = pmesh->domain("essential_boundary_x").dof_list(&solid.displacement().space());
+  solid.displacement().space().DofsToVDofs(0, ldofs);
+
+  auto ldofs2 = pmesh->domain("essential_boundary_y").dof_list(&solid.displacement().space());
+  solid.displacement().space().DofsToVDofs(1, ldofs2);
+
+  ldofs.Append(ldofs2);
+
+  mfem::Array<int> true_dofs;
+  for (int j = 0; j < ldofs.Size(); ++j) {
+    int tdof = solid.displacement().space().GetLocalTDofNumber(ldofs[j]);
+    if (tdof >= 0) true_dofs.Append(tdof);
+  }
+
+  // make another solver and set bcs by tdof
+  SolidMechanics<p, dim> solid_by_tdof(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
+                                       "solid_mechanics_by_tdof", mesh_tag);
+
+  solid_by_tdof.setMaterial(mat, pmesh->entireBody());
+  solid_by_tdof.setDisplacementBCsByDofList(displacement_bc_function, true_dofs);
+  solid_by_tdof.addBodyForce(body_force_function, pmesh->entireBody());
+  solid_by_tdof.completeSetup();
+  solid_by_tdof.advanceTimestep(1.0);
+
+  // compare solutions
+  for (int i = 0; i < solid.displacement().Size(); i++) {
+    EXPECT_DOUBLE_EQ(solid.displacement()[i], solid_by_tdof.displacement()[i]);
+  }
+}
 
 }  // namespace serac
 

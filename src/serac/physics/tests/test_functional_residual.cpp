@@ -7,49 +7,14 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
+#include "serac/physics/tests/physics_test_utils.hpp"
 #include "serac/physics/functional_residual.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
-
-template <typename T>
-auto getPointers(std::vector<T>& states, std::vector<T>& params)
-{
-  assert(params.size() > 0);
-  std::vector<T*> pointers{&params[0]};
-  for (auto& t : states) {
-    pointers.push_back(&t);
-  }
-  for (size_t n = 1; n < params.size(); ++n) {
-    pointers.push_back(&params[n]);
-  }
-  return pointers;
-}
-
-template <typename T>
-auto getPointers(T& v)
-{
-  return std::vector<T*>{&v};
-}
-
-void pseudoRand(serac::FiniteElementState& dual)
-{
-  int sz = dual.Size();
-  for (int i = 0; i < sz; ++i) {
-    dual(i) = -1.2 + 2.02 * (double(i) / sz);
-  }
-}
-
-void pseudoRand(serac::FiniteElementDual& dual)
-{
-  int sz = dual.Size();
-  for (int i = 0; i < sz; ++i) {
-    dual(i) = -1.2 + 2.02 * (double(i) / sz);
-  }
-}
 
 struct ResidualFixture : public testing::Test {
   static constexpr int dim = 2;
@@ -60,13 +25,13 @@ struct ResidualFixture : public testing::Test {
 
   enum STATE
   {
+    SHAPE_DISP,
     DISP,
     VELO
   };
 
   enum PAR
   {
-    SHAPE,
     DENSITY
   };
 
@@ -86,14 +51,18 @@ struct ResidualFixture : public testing::Test {
         serac::StateManager::newState(VectorSpace{}, "shape_displacement", mesh->tag());
     serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-    states = {disp, velo};
-    params = {shape_disp, density};
+    states = {shape_disp, disp, velo};
+    params = {density};
 
-    dual_states = states;
-    dual_params = params;
+    for (auto s : states) {
+      state_duals.push_back(serac::FiniteElementDual(s.space(), s.name() + "_dual"));
+    }
+    for (auto p : params) {
+      state_params.push_back(serac::FiniteElementDual(p.space(), p.name() + "_dual"));
+    }
 
-    v_rhs_states = states;
-    v_rhs_params = params;
+    state_tangents = states;
+    param_tangents = params;
 
     std::string physics_name = "fake_physics";
 
@@ -103,10 +72,10 @@ struct ResidualFixture : public testing::Test {
     using ResidualT = serac::FunctionalResidual<dim, ShapeSpace, TrialSpace,
                                                 serac::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
 
-    std::vector<const mfem::ParFiniteElementSpace*> inputs{&states[STATE::DISP].space(), &states[STATE::DISP].space(),
+    std::vector<const mfem::ParFiniteElementSpace*> inputs{&states[STATE::DISP].space(), &states[STATE::VELO].space(),
                                                            &params[PAR::DENSITY].space()};
 
-    auto f_residual = std::make_shared<ResidualT>(physics_name, mesh, params[PAR::SHAPE].space(),
+    auto f_residual = std::make_shared<ResidualT>(physics_name, mesh, states[STATE::SHAPE_DISP].space(),
                                                   states[STATE::DISP].space(), inputs);
 
     // apply some traction boundary conditions
@@ -125,30 +94,30 @@ struct ResidualFixture : public testing::Test {
 
     // initialize fields for testing
 
-    for (auto& s : v_rhs_states) {
+    for (auto& s : state_tangents) {
       pseudoRand(s);
     }
-    for (auto& p : v_rhs_params) {
+    for (auto& p : param_tangents) {
       pseudoRand(p);
     }
 
-    dual_states[0] = 1.0;
-    dual_states[1] = 2.0;
-    dual_params[0] = 1.0;
-    dual_params[1] = 2.0;
+    state_duals[SHAPE_DISP] = 4.0;
+    state_duals[DISP] = 1.0;
+    state_duals[VELO] = 2.0;
+    state_params[DENSITY] = 3.0;
 
-    states[0].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = 0.1 * x;
       return u;
     });
 
-    states[1].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[VELO].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = -0.01 * x;
       return u;
     });
 
-    params[0] = 0.0;
-    params[1] = 1.2;
+    states[SHAPE_DISP] = 0.0;
+    params[DENSITY] = 1.2;
 
     // residual is abstract Residual class to ensure usage only through BasePhysics interface
     residual = f_residual;
@@ -166,105 +135,104 @@ struct ResidualFixture : public testing::Test {
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
 
-  std::vector<serac::FiniteElementState> dual_states;
-  std::vector<serac::FiniteElementState> dual_params;
+  std::vector<serac::FiniteElementDual> state_duals;
+  std::vector<serac::FiniteElementDual> state_params;
 
-  std::vector<serac::FiniteElementState> v_rhs_states;
-  std::vector<serac::FiniteElementState> v_rhs_params;
+  std::vector<serac::FiniteElementState> state_tangents;
+  std::vector<serac::FiniteElementState> param_tangents;
 };
 
 TEST_F(ResidualFixture, VjpConsistency)
 {
   // initialize the displacement and acceleration to a non-trivial field
-  auto all_states = getPointers(states, params);
+  auto input_fields = getConstFieldPointers(states, params);
 
-  serac::FiniteElementDual res_vector(states[0].space(), "residual");
+  serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
 
-  res_vector = residual->residual(time, dt, all_states);
+  res_vector = residual->residual(time, dt, input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {
-    std::vector<double> tangents(all_states.size());
+    std::vector<double> tangents(input_fields.size());
     tangents[i] = 1.0;
     return tangents;
   };
 
   // test vjp
-  serac::FiniteElementDual v(res_vector.space(), "v");
+  serac::FiniteElementState v(res_vector.space(), "v");
   pseudoRand(v);
-  auto all_jvps = getPointers(dual_states, dual_params);
+  auto field_vjps = getFieldPointers(state_duals, state_params);
 
-  std::vector<serac::FiniteElementState> all_Jvps;
-  for (auto& jvp : all_jvps) {
-    all_Jvps.push_back(*jvp);
+  std::vector<serac::FiniteElementDual> field_vjps_slow;
+  for (auto& vjp : field_vjps) {
+    field_vjps_slow.push_back(*vjp);
   }
 
-  for (size_t i = 0; i < all_states.size(); ++i) {
-    serac::FiniteElementState& vjp = all_Jvps[i];
-    auto J = residual->jacobian(time, dt, all_states, jacobian_weights(i));
+  for (size_t i = 0; i < input_fields.size(); ++i) {
+    serac::FiniteElementDual& vjp = field_vjps_slow[i];
+    auto J = residual->jacobian(time, dt, input_fields, jacobian_weights(i));
     J->AddMultTranspose(v, vjp);
   }
-  residual->vjp(time, dt, all_states, getPointers(v), all_jvps);
+  residual->vjp(time, dt, input_fields, getConstFieldPointers(v), field_vjps);
 
-  for (size_t i = 0; i < all_states.size(); ++i) {
-    EXPECT_NEAR(all_Jvps[i].Norml2(), all_jvps[i]->Norml2(), 1e-12);
+  for (size_t i = 0; i < input_fields.size(); ++i) {
+    EXPECT_NEAR(field_vjps_slow[i].Norml2(), field_vjps[i]->Norml2(), 1e-12)
+        << " " << field_vjps_slow[i].name() << std::endl;
   }
 }
 
 TEST_F(ResidualFixture, JvpConsistency)
 {
   // initialize the displacement and acceleration to a non-trivial field
-  auto all_states = getPointers(states, params);
+  auto input_fields = getConstFieldPointers(states, params);
 
-  serac::FiniteElementDual res_vector(states[0].space(), "residual");
-  res_vector = residual->residual(time, dt, all_states);
+  serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
+  res_vector = residual->residual(time, dt, input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobianWeights = [&](size_t i) {
-    std::vector<double> tangents(all_states.size());
+    std::vector<double> tangents(input_fields.size());
     tangents[i] = 1.0;
     return tangents;
   };
 
   auto selectStates = [&](size_t i) {
-    auto pts = getPointers(v_rhs_states, v_rhs_params);
-    for (size_t j = 0; j < pts.size(); ++j) {
+    auto field_tangents = getConstFieldPointers(state_tangents, param_tangents);
+    for (size_t j = 0; j < field_tangents.size(); ++j) {
       if (i != j) {
-        pts[j] = nullptr;
+        field_tangents[j] = nullptr;
       }
     }
-    return pts;
+    return field_tangents;
   };
 
-  serac::FiniteElementDual jvp_slow(states[0].space(), "jvp_slow");
-  serac::FiniteElementDual jvp(states[0].space(), "jvp");
+  serac::FiniteElementDual jvp_slow(states[DISP].space(), "jvp_slow");
+  serac::FiniteElementDual jvp(states[DISP].space(), "jvp");
   jvp = 4.0;  // set to some value to test jvp resets these values
-  std::vector<serac::FiniteElementDual*> jvps = getPointers(jvp);
+  auto jvps = getFieldPointers(jvp);
 
-  auto all_v_rhs_states = getPointers(v_rhs_states, v_rhs_params);
+  auto field_tangents = getConstFieldPointers(state_tangents, param_tangents);
 
-  for (size_t i = 0; i < all_states.size(); ++i) {
-    auto J = residual->jacobian(time, dt, all_states, jacobianWeights(i));
-    J->Mult(*all_v_rhs_states[i], jvp_slow);
-    residual->jvp(time, dt, all_states, selectStates(i), jvps);
+  for (size_t i = 0; i < input_fields.size(); ++i) {
+    auto J = residual->jacobian(time, dt, input_fields, jacobianWeights(i));
+    J->Mult(*field_tangents[i], jvp_slow);
+    residual->jvp(time, dt, input_fields, selectStates(i), jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 
   // test jacobians in weighted combinations
   {
-    all_v_rhs_states[1] = nullptr;
-    all_v_rhs_states[3] = nullptr;
-    all_v_rhs_states[4] = nullptr;
+    field_tangents[SHAPE_DISP] = nullptr;
+    field_tangents[3] = nullptr;
 
-    double acceleration_factor = 0.2;
-    std::vector<double> jacobian_weights = {1.0, 0.0, acceleration_factor, 0.0, 0.0};
+    double velo_factor = 0.2;
+    std::vector<double> jacobian_weights = {0.0, 1.0, velo_factor, 0.0};
 
-    auto J = residual->jacobian(time, dt, all_states, jacobian_weights);
-    J->Mult(*all_v_rhs_states[0], jvp_slow);
+    auto J = residual->jacobian(time, dt, input_fields, jacobian_weights);
+    J->Mult(*field_tangents[DISP], jvp_slow);
 
-    *all_v_rhs_states[2] = *all_v_rhs_states[0];
-    *all_v_rhs_states[2] *= acceleration_factor;
-    residual->jvp(time, dt, all_states, all_v_rhs_states, jvps);
+    state_tangents[VELO] *= velo_factor;
+    residual->jvp(time, dt, input_fields, field_tangents, jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 }

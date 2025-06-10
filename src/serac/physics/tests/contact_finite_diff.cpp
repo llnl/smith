@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -17,8 +17,9 @@
 #include "shared/mesh/MeshBuilder.hpp"
 
 #include "serac/numerics/functional/domain.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
@@ -46,7 +47,7 @@ TEST_P(ContactFiniteDiff, patch)
 
   double shift = eps * 10;
   // clang-format off
-  auto mesh = mesh::refineAndDistribute(shared::MeshBuilder::Unify({
+  auto pmesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
     shared::MeshBuilder::CubeMesh(1, 1, 1),
     shared::MeshBuilder::CubeMesh(1, 1, 1)
       // shift up height of element
@@ -57,15 +58,13 @@ TEST_P(ContactFiniteDiff, patch)
       .updateBdrAttrib(1, 7)
       // change the mesh1 boundary attribute from 6 to 8
       .updateBdrAttrib(6, 8)
-  }), 0, 0);
+  }), "patch_mesh", 0, 0);
   // clang-format on
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "patch_mesh");
-
-  Domain x0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(5));
-  Domain y0_faces = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
-  Domain z0_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  Domain zmax_face = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(8));
+  pmesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(5));
+  pmesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(2));
+  pmesh->addDomainOfBoundaryElements("z0_face", serac::by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("zmax_face", serac::by_attr<dim>(8));
 
 #ifdef MFEM_USE_STRUMPACK
   LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
@@ -95,22 +94,21 @@ TEST_P(ContactFiniteDiff, patch)
   double K = 10.0;
   double G = 0.25;
   solid_mechanics::NeoHookean mat{1.0, K, G};
-  Domain material_block = EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, material_block);
+  solid_solver.setMaterial(mat, pmesh->entireBody());
 
   auto nonzero_disp_bc = [](vec3, double) { return vec3{{0.0, 0.0, 0.0}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  solid_solver.setFixedBCs(x0_faces, Component::X);
-  solid_solver.setFixedBCs(y0_faces, Component::Y);
-  solid_solver.setFixedBCs(z0_face, Component::Z);
-  solid_solver.setDisplacementBCs(nonzero_disp_bc, zmax_face, Component::Z);
+  solid_solver.setFixedBCs(pmesh->domain("x0_faces"), Component::X);
+  solid_solver.setFixedBCs(pmesh->domain("y0_faces"), Component::Y);
+  solid_solver.setFixedBCs(pmesh->domain("z0_face"), Component::Z);
+  solid_solver.setDisplacementBCs(nonzero_disp_bc, pmesh->domain("zmax_face"), Component::Z);
 
   // Create a list of vdofs from Domains
-  auto x0_face_dofs = x0_faces.dof_list(&solid_solver.displacement().space());
-  auto y0_face_dofs = y0_faces.dof_list(&solid_solver.displacement().space());
-  auto z0_face_dofs = z0_face.dof_list(&solid_solver.displacement().space());
-  auto zmax_face_dofs = zmax_face.dof_list(&solid_solver.displacement().space());
+  auto x0_face_dofs = pmesh->domain("x0_faces").dof_list(&solid_solver.displacement().space());
+  auto y0_face_dofs = pmesh->domain("y0_faces").dof_list(&solid_solver.displacement().space());
+  auto z0_face_dofs = pmesh->domain("z0_face").dof_list(&solid_solver.displacement().space());
+  auto zmax_face_dofs = pmesh->domain("zmax_face").dof_list(&solid_solver.displacement().space());
   mfem::Array<int> bc_vdofs(dim *
                             (x0_face_dofs.Size() + y0_face_dofs.Size() + z0_face_dofs.Size() + zmax_face_dofs.Size()));
   int dof_ct = 0;

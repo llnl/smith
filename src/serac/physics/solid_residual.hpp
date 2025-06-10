@@ -46,6 +46,16 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
   /// @brief disp, velo, accel
   static constexpr int NUM_STATE_VARS = 3;
 
+  /// @brief enumeration of the required states
+  enum STATE
+  {
+    SHAPE_DISPLACEMENT,
+    DISPLACEMENT,
+    VELOCITY,
+    ACCELERATION,
+    NUM_STATES
+  };
+
   /**
    * @brief Construct a new SolidResidual object
    *
@@ -97,6 +107,15 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
     BaseResidualT::residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
         BaseResidualT::mesh_->domain(body_name), qdata);
+
+    BaseResidualT::v_residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 1, 3, active_parameters + 1 + NUM_STATE_VARS...>{},
+        [material_functor](double t, auto X, auto state, auto V, auto... params) {
+          auto flux = material_functor(t, X, state, params...);
+          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
+                 serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
+        },
+        BaseResidualT::mesh_->domain(body_name), qdata);
   }
 
   /// @overload
@@ -141,6 +160,15 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
     BaseResidualT::residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
         BaseResidualT::mesh_->domain(body_name), qdata);
+
+    BaseResidualT::v_residual_->AddDomainIntegral(
+        Dimension<dim>{}, DependsOn<0, 1, 2, 3, active_parameters + 1 + NUM_STATE_VARS...>{},
+        [material_functor, qdata](double t, auto X, auto state, auto V, auto... params) {
+          auto flux = material_functor(t, X, state, params...);
+          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
+                 serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
+        },
+        BaseResidualT::mesh_->domain(body_name), qdata);
   }
 
   /// @overload
@@ -180,12 +208,8 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
         Dimension<dim - 1>{}, DependsOn<0, active_parameters + NUM_STATE_VARS...>{},
         [pressure_function](double t, auto X, auto displacement, auto... params) {
           // Calculate the position and normal in the shape perturbed deformed configuration
-          auto x = X + 0.0 * displacement;
-
-          x = x + displacement;
-
+          auto x = X + displacement;
           auto n = cross(get<DERIVATIVE>(x));
-
           // serac::Functional's boundary integrals multiply the q-function output by
           // norm(cross(dX_dxi)) at that quadrature point, but if we impose a shape displacement
           // then that weight needs to be corrected. The new weight should be
@@ -198,7 +222,17 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
           // = pressure * (normal_new / norm(normal_old)) * w_old
 
           // We always query the pressure function in the undeformed configuration
-          return pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
+          return -pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
+        },
+        BaseResidualT::mesh_->domain(boundary_name));
+
+    BaseResidualT::v_residual_->AddBoundaryIntegral(
+        Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + 1 + NUM_STATE_VARS...>{},
+        [pressure_function](double t, auto X, auto V, auto displacement, auto... params) {
+          auto x = X + displacement;
+          auto n = cross(get<DERIVATIVE>(x));
+          auto pressure = pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
+          return -inner(get<VALUE>(V), pressure);
         },
         BaseResidualT::mesh_->domain(boundary_name));
   }
@@ -262,7 +296,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
 
       auto stress = material_.pkStress(state, du_dX, params...);
 
-      return serac::tuple{material_.density(params...) * d2u_dt2, stress};
+      return serac::tuple{-material_.density(params...) * d2u_dt2, -stress};
     }
   };
 
@@ -309,7 +343,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
 
       auto stress = material_.pkStress(*dt_, state, du_dX, dv_dX, params...);
 
-      return serac::tuple{material_.density(params...) * d2u_dt2, stress};
+      return serac::tuple{-material_.density(params...) * d2u_dt2, -stress};
     }
   };
 };
