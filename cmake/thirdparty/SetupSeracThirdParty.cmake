@@ -396,6 +396,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
                 set(MFEM_USE_MUMPS ON CACHE BOOL "")
             endif()
         endif()
+	set(CONTINUATION_FOUND TRUE)
         add_subdirectory("${CONTINUATION_SOURCE_DIR}")
     endif()
     #------------------------------------------------------------------------------

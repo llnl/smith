@@ -24,15 +24,9 @@
 #include "serac/physics/tests/physics_test_utils.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 
-// WORKS WITH CODEVELOP OFF
 #include "problems/Problems.hpp"
 #include "solvers/HomotopySolver.hpp"
 #include "utilities.hpp"
-
-// WORKS WITH CODEVELOP ON
-// #include "ContinuationSolvers/problems/Problems.hpp"
-// #include "ContinuationSolvers/solvers/HomotopySolver.hpp"
-// #include "ContinuationSolvers/utilities.hpp"
 
 #include <axom/sidre.hpp>
 
@@ -319,7 +313,7 @@ int main(int argc, char* argv[])
   bool converged = solver.GetConverged();
   if (myid == 0) {
     if (converged) {
-      std::cout << "converged !\n";
+      std::cout << "converged!\n";
     } else {
       std::cout << "homotopy solver did not converge\n";
     }
