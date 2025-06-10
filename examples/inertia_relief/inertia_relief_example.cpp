@@ -67,7 +67,7 @@ class ParaviewWriter {
   {
   }
 
-  void write(int step, double time, const std::vector<serac::FiniteElementState const *>& current_states)
+  void write(int step, double time, const std::vector<serac::FiniteElementState const*>& current_states)
   {
     SERAC_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
@@ -155,8 +155,8 @@ class InertialReliefProblem : public GeneralNLMCProblem {
   std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, 0.0, 0.0};
 
  public:
-  InertialReliefProblem(std::vector<serac::FieldPtr> obj_states_,
-                        std::vector<serac::FieldPtr> all_states_, std::shared_ptr<serac::Residual> residual_,
+  InertialReliefProblem(std::vector<serac::FieldPtr> obj_states_, std::vector<serac::FieldPtr> all_states_,
+                        std::shared_ptr<serac::Residual> residual_,
                         std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_);
   void F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int& Feval_err) const;
   void Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval, int& Qeval_err) const;
@@ -292,7 +292,8 @@ int main(int argc, char* argv[])
   auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "");
   writer.write(0, 0.0, objective_states);
   auto non_const_states = getFieldPointers(states, params);
-  InertialReliefProblem problem({non_const_states[SHAPE_DISP], non_const_states[DISP], non_const_states[DENSITY]}, non_const_states, solid_mechanics_residual, constraints);
+  InertialReliefProblem problem({non_const_states[SHAPE_DISP], non_const_states[DISP], non_const_states[DENSITY]},
+                                non_const_states, solid_mechanics_residual, constraints);
   int dimx = problem.GetDimx();
   int dimy = problem.GetDimy();
 
@@ -501,7 +502,8 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
       }
       for (int i = 0; i < dimc; i++) {
         entries = 0.;
-        entries.Add(1.0, constraints[static_cast<size_t>(i)]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
+        entries.Add(1.0, constraints[static_cast<size_t>(i)]->gradient(time, dt,
+                                                                       serac::getConstFieldPointers(obj_states), DISP));
         dcdumat->SetRow(i, cols, entries);
       }
     } else {

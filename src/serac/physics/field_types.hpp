@@ -74,7 +74,8 @@ auto getFieldPointers(T& state)
 /// @brief Get a vector of ConstFieldPtr or ConstDualFieldPtr from a vector of shared_pointers to FiniteElementState or
 /// FiniteElementDual
 template <typename T>
-auto getConstFieldPointers(const std::vector<std::shared_ptr<T>>& states, const std::vector<std::shared_ptr<T>>& params = {})
+auto getConstFieldPointers(const std::vector<std::shared_ptr<T>>& states,
+                           const std::vector<std::shared_ptr<T>>& params = {})
 {
   static_assert(std::is_same_v<T, FiniteElementState> || std::is_same_v<T, FiniteElementDual>,
                 "Type must be either FiniteElementState or FiniteElementDual");
