@@ -112,7 +112,7 @@ void functional_test_dynamic()
   // Construct a functional-based heat transfer solver
   serac::HeatTransfer<p, dim> thermal_solver(
       serac::heat_transfer::default_nonlinear_options, serac::heat_transfer::default_linear_options,
-      serac::heat_transfer::default_timestepping_options, "thermal_functional", "default_mesh");
+      serac::heat_transfer::default_timestepping_options, "thermal_functional", pmesh);
 
   // Define an isotropic conductor material model
   serac::heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, 1.0);
