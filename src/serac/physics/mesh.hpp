@@ -39,7 +39,7 @@ class Mesh {
   /// @brief Construct from existing parallel mfem mesh
   /// @param mesh parallel mfem mesh
   /// @param meshtag string tag name for mesh
-  Mesh(mfem::ParMesh& mesh, const std::string& meshtag);
+  Mesh(mfem::ParMesh&& mesh, const std::string& meshtag);
 
   /// @brief Construct from path to mesh (typically .g or .mesh)
   /// @param meshfile path and name of mesh to read in

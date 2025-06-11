@@ -28,11 +28,12 @@ Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int
   createDomains();
 }
 
-Mesh::Mesh(mfem::ParMesh& mesh, const std::string& meshtag) : mesh_tag_(meshtag)
+Mesh::Mesh(mfem::ParMesh&& mesh, const std::string& meshtag) : mesh_tag_(meshtag)
 {
-  mfem_mesh_ = &mesh;
-  mfem_mesh_->EnsureNodes();
-  mfem_mesh_->ExchangeFaceNbrData();
+  auto meshtmp = std::make_unique<mfem::ParMesh>(std::move(mesh));
+  meshtmp->EnsureNodes();
+  meshtmp->ExchangeFaceNbrData();
+  mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
   createDomains();
 }
 
