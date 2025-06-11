@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file constraint.hpp
+ * @file constraints.hpp
  *
  * @brief Specifies interface for evaluating vector of constriants from fields and their field gradients
  */
