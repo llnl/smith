@@ -509,7 +509,7 @@ def full_build_and_test_of_tpls(builds_dir, timestamp, spec, report_to_stdout = 
             print("[SUCCESS: Finished build tpls for spec %s]\n" % spec)
 
     # Copy generated host-configs into TPL install directory
-    print("[Copying spack generated host-configs to TPL build directory]")
+    print("[Copying spack generated host-configs to TPL build directory] ")
     host_configs = get_host_configs_for_current_machine(repo_dir, True)
     for host_config in host_configs:
         dst = pjoin(prefix, os.path.basename(host_config))
