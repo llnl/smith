@@ -100,7 +100,7 @@ void DynamicDataStore::add_state(StateBase& newState)
   auto allUpstreams = newState.data()->upstreams;
   for (auto& upstream : allUpstreams) {
     auto upState = upstream.get_state();
-    size_t index = upState->step_index();
+    size_t index = upState->stepIndex;
     for (size_t i=index+1; i < step; ++i) {
       auto previousState = states[i];
       previousState.upstreamsForNextStep->emplace(upState);

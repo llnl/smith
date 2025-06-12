@@ -70,9 +70,6 @@ struct StateDataBase {
 
   bool persistent() const;
 
-  size_t step_index() const { return stepIndex; }
-  virtual size_t parent_step_index() const { return 0; }
-
   size_t stepIndex;
   DataStore& dataStore;
   UpstreamStates upstreams;
