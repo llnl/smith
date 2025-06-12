@@ -90,7 +90,7 @@ toss4-gcc_10_3_1-src-no-optional-solvers:
 toss4-clang_16_0_6-tpl:
   variables:
     COMPILER: "clang@16.0.6"
-    SPEC: "--spec=%${COMPILER}~openmp"
+    SPEC: "--spec %${COMPILER}~openmp"
     ALLOC_NODES: "1"
     ALLOC_TIME: "70"
   extends: .tpl_build_on_toss4
@@ -98,7 +98,7 @@ toss4-clang_16_0_6-tpl:
 toss4-clang_14_0_6-tpl:
   variables:
     COMPILER: "clang@14.0.6"
-    SPEC: "--spec=%${COMPILER}"
+    SPEC: "--spec %${COMPILER}"
     ALLOC_NODES: "1"
     ALLOC_TIME: "70"
   extends: .tpl_build_on_toss4
@@ -106,7 +106,7 @@ toss4-clang_14_0_6-tpl:
 toss4-gcc_10_3_1-tpl:
   variables:
     COMPILER: "gcc@10.3.1"
-    SPEC: "--spec=%${COMPILER}"
+    SPEC: "--spec %${COMPILER}"
     ALLOC_NODES: "1"
     ALLOC_TIME: "70"
   extends: .tpl_build_on_toss4

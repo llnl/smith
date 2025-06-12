@@ -56,7 +56,7 @@ blueos-clang_14_0_5-src:
 blueos-clang_14_0_5-tpl:
   variables:
     COMPILER: "clang@14.0.5"
-    SPEC: "--spec='%${COMPILER}+cuda~strumpack cuda_arch=70'"
+    SPEC: "--spec \"%${COMPILER}+cuda~strumpack cuda_arch=70\""
     ALLOC_NODES: "1"
     ALLOC_TIME: "180"
   extends: [.tpl_build_on_blueos, .with_cuda]
