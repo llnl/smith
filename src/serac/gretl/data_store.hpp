@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <vector>
@@ -6,8 +7,6 @@
 #include "checkpoint.hpp"
 
 namespace gretl {
-
-static constexpr bool debugPrint = false;
 
 struct StateBase;
 template <typename T, typename D = T>
@@ -38,7 +37,7 @@ class DataStore {
   }
 
   /// @brief  unwind one step of the graph
-  StateBase virtual reverse_state();
+  StateBase reverse_state();
 
   /// @brief unwind the entire graph
   void back_prop();
@@ -46,6 +45,7 @@ class DataStore {
   /// @brief clear all but persistent state, keeping the graph
   void reset();
 
+  size_t num_allocated_states() const;
   size_t num_active_states() const;
   size_t num_dual_states() const;
 
@@ -56,8 +56,6 @@ class DataStore {
 
   template <typename T, typename D>
   friend struct StateData;
-
-  using Measure = std::vector<std::shared_ptr<StateDataBase>>;
 
  protected:
   // create a new state in the graph, store it, return it
@@ -70,24 +68,46 @@ class DataStore {
     return newState;
   }
 
-  // internal function for safely adding new states to graph and checkpoint
-  void add_state(StateBase& newState);
-
   /// @brief vjp
   void vjp(StateBase& state);
 
-  void clear_disposable_state() {}
+  /// @brief function for safely adding new states to graph and checkpoint
+  virtual void add_state(StateBase& newState);
 
-  void fetch_state_data(size_t stepIndex);
+  /// @brief method for clearing states in the past that are no longer needed
+  virtual void clear_disposable_state() {}
 
-  // vector of all states in the graph.  states know how to re-evaluate themselves and how to vjp
+  /// @brief method for fetching states at a particular moment in time
+  virtual void fetch_state_data(size_t stepIndex);
+
+  /// vector of all states in the graph.  States know how to re-evaluate themselves and how to vjp.
   std::vector<StateBase> states;
 
-  // container which track the states in the graph with allocated data
-  CheckpointManager checkpoints;
-
-  //
+  /// step counter
   size_t step;
+};
+
+class DynamicDataStore : public DataStore {
+ public:
+  DynamicDataStore(size_t maxStates);
+  virtual ~DynamicDataStore() {}
+
+ protected:
+
+  friend struct StateBase;
+  friend struct UpstreamState;
+
+  /// @overload
+  virtual void add_state(StateBase& newState) override;
+
+  /// @overload
+  void clear_disposable_state() override;
+
+  /// @overload
+  void fetch_state_data(size_t stepIndex) override;
+
+  /// container which track the states in the graph with allocated data
+  CheckpointManager checkpoints;
 };
 
 }  // namespace gretl

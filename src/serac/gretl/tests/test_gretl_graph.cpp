@@ -106,7 +106,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
   std::vector<double> dataB = {0.6, 0.87};
   std::vector<double> dataC = {-0.8, 0.32};
 
-  gretl::DataStore dataStore(3);
+  gretl::DynamicDataStore dataStore(3);
 
   auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual());
   auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual());
@@ -123,6 +123,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
       h = f + g;
       h = h * b;
     }
+    std::cout << "num active = " << dataStore.num_active_states() << std::endl;
     f = g * h;
     f = f + g;
   }
@@ -130,36 +131,16 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto qoi = gretl::inner_product(a, f);
   gretl::set_as_objective(qoi);
 
+  std::cout << "num active = " << dataStore.num_active_states() << std::endl;
+  std::cout << "num allocated = " << dataStore.num_allocated_states() << std::endl;
+  std::cout << "num duals = " << dataStore.num_dual_states() << std::endl;
+
   dataStore.back_prop();
+
+  std::cout << "num active = " << dataStore.num_active_states() << std::endl;
+  std::cout << "num allocated = " << dataStore.num_allocated_states() << std::endl;
+  std::cout << "num duals = " << dataStore.num_dual_states() << std::endl;
 
   double constexpr eps = 1e-7;
   gretl::check_array_gradients(qoi, {a, b, c}, {eps, eps, eps}, {800 * eps, 100 * eps, 100 * eps});
-}
-
-TEST(Graph, Explore)
-{
-  std::vector<double> dataA = {0.3, 0.35};
-  std::vector<double> dataB = {0.6, 0.87};
-  std::vector<double> dataC = {-0.8, 0.32};
-
-  gretl::DataStore dataStore(800);
-
-  auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual());
-  auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual());
-  auto c = dataStore.create_state(dataC, gretl::vec::initialize_zero_dual());
-
-  auto g = a * b;
-  auto h = a + 3 * c;
-  auto f = c * g;
-
-  for (int j = 0; j < 7; ++j) {
-    for (int i = 0; i < 13; ++i) {
-      auto tmp = h + g;
-      g = a * tmp;
-      h = testing_update(f) + g;
-      h = h * b;
-    }
-    f = g * h;
-    f = f + g;
-  }
 }

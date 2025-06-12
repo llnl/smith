@@ -11,12 +11,13 @@
 #pragma once
 
 #include <vector>
+#include <set>
 #include "state_data.hpp"
 
 namespace gretl {
 
 struct StateBase {
-  StateBase() {}
+  StateBase() { upstreamsForNextStep = std::make_shared<std::set<std::shared_ptr<StateDataBase>>>(); }
   StateBase(const StateBase&) = default;
   StateBase& operator=(const StateBase&) = default;
   virtual ~StateBase() = default;
@@ -86,17 +87,18 @@ struct StateBase {
   void clear_dual();
 
   friend class DataStore;
+  friend class DynamicDataStore;
   friend struct StateDataBase;
+
+  void evaluate_and_remove_disposable_checkpoints();
+  void evaluate_vjp();
 
  protected:
   size_t step_index() const;
   void clear();
 
-  void evaluate_and_remove_disposable_checkpoints();
-  void evaluate_vjp();
-
   std::shared_ptr<StateDataBase> stateData;
-  std::vector<std::shared_ptr<StateDataBase>> upstreamsForNextStep;
+  std::shared_ptr<std::set<std::shared_ptr<StateDataBase>>> upstreamsForNextStep;
 };
 
 }  // namespace gretl

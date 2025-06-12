@@ -11,7 +11,7 @@
 #pragma once
 
 #include <memory>
-#include "upstream_state.hpp"
+#include "data_store.hpp"
 
 namespace gretl {
 
@@ -47,6 +47,10 @@ struct UpstreamState {
   }
 
   friend class DataStore;
+  friend class DynamicDataStore;
+
+ protected:
+  const std::shared_ptr<StateDataBase>& get_state() { return state; }
 
  private:
   std::shared_ptr<StateDataBase> state;
