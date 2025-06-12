@@ -70,7 +70,6 @@ def main():
 
     # Handle case where spec is a List (i.e. spec contained spaces and wasn't wrapped in quotes)
     spec = args["spec"]
-    print(spec)
     if len(spec) > 0:
         spec = " ".join(spec)
 
