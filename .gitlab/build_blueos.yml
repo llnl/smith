@@ -52,12 +52,11 @@ blueos-clang_14_0_5-src:
     ALLOC_TIME: "30"
   extends: [.src_build_on_blueos, .with_cuda]
 
-# Note: to reduce duplication SPEC is not defined here, if we move to more than one
-# spec on blueos add it back like toss4
+# NOTE: SPEC should matches specs.json, but devtools and profiling variants removed
 blueos-clang_14_0_5-tpl:
   variables:
     COMPILER: "clang@14.0.5"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF"
+    SPEC: "--spec=%${COMPILER}+cuda~strumpack cuda_arch=70"
     ALLOC_NODES: "1"
     ALLOC_TIME: "180"
   extends: [.tpl_build_on_blueos, .with_cuda]

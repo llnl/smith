@@ -51,9 +51,11 @@ toss4_cray-rocmcc_6_2_1-src-codevelop:
    ALLOC_TIME: "30"
  extends: .src_build_on_toss4_cray
 
+# NOTE: SPEC should matches specs.json, but devtools and profiling variants removed
 toss4_cray-rocmcc_6_2_1-tpl:
   variables:
     COMPILER: "rocmcc@6.2.1"
+    SPEC: "--spec=%${COMPILER}~openmp+rocm~petsc amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion"
     ALLOC_NODES: "1"
     ALLOC_TIME: "70"
   extends: .tpl_build_on_toss4_cray
