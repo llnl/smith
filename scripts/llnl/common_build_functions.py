@@ -278,6 +278,7 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
     ####
 
     # build the code
+    start_time = time.time()
     bld_output_file =  pjoin(build_dir,"output.log.make.txt")
     print("[starting build]")
     print("[log file: %s]" % bld_output_file)
@@ -289,8 +290,11 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
     if res != 0:
         print("[ERROR: Build for host-config: %s failed]\n" % host_config)
         return res
+    end_time = time.time()
+    print("[serac build time: {0}]\n".format(convertSecondsToReadableTime(end_time - start_time)))
 
     # test the code
+    start_time = time.time()
     if not skip_tests:
         tst_output_file = pjoin(build_dir,"output.log.make.test.txt")
         print("[starting unit tests]")
@@ -328,8 +332,11 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
             return res
     else:
         print("[skipping unit tests]")
+    end_time = time.time()
+    print("[unit test time: {0}]\n".format(convertSecondsToReadableTime(end_time - start_time)))
 
     # build the docs
+    start_time = time.time()
     docs_output_file = pjoin(build_dir,"output.log.make.docs.txt")
     print("[starting docs generation]")
     print("[log file: %s]" % docs_output_file)
@@ -342,8 +349,11 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
     if res != 0:
         print("[ERROR: Docs generation for host-config: %s failed]\n\n" % host_config)
         return res
+    end_time = time.time()
+    print("[docs time: {0}]\n".format(convertSecondsToReadableTime(end_time - start_time)))
 
     # Install and test examples
+    start_time = time.time()
     if skip_install:
         print("[Skipping 'make install']\n")
     else:
@@ -352,6 +362,8 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
         if res != 0:
             print("[ERROR: Building examples for host-config: %s failed]\n\n" % host_config)
             return res
+    end_time = time.time()
+    print("[install time: {0}]\n".format(convertSecondsToReadableTime(end_time - start_time)))
 
     print("[SUCCESS: Build, test, and install for host-config: {0} complete]\n".format(host_config))
 
@@ -388,7 +400,7 @@ def build_and_test_host_configs(prefix, timestamp, use_generated_host_configs, r
             bad.append(host_config)
             log_failure(build_dir, "[Error: Failed to build host-config: {0}]".format(host_config), timestamp)
         end_time = time.time()
-        print("[build time: {0}]\n".format(convertSecondsToReadableTime(end_time - start_time)))
+        print("[host config build time: {0}]\n".format(convertSecondsToReadableTime(end_time - start_time)))
 
     # Log overall job success/failure
     if len(bad) != 0:
@@ -488,7 +500,7 @@ def full_build_and_test_of_tpls(builds_dir, timestamp, spec, report_to_stdout = 
         fullspec = "{0}".format(spec)
         res = uberenv_build(prefix, fullspec, "", mirror_dir, report_to_stdout)
         end_time = time.time()
-        print("[build time: {0}]".format(convertSecondsToReadableTime(end_time - start_time)))
+        print("[uberenv build time: {0}]".format(convertSecondsToReadableTime(end_time - start_time)))
         if res != 0:
             print("[ERROR: Failed build of tpls for spec %s]\n" % spec)
             tpl_build_failed = True
