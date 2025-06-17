@@ -11,19 +11,21 @@ if(TRIBOL_FOUND AND PETSC_FOUND)
                         DEPENDS_ON  serac_physics
                         )
 
+    blt_add_test(NAME           buckling_cylinder_fast
+                 COMMAND        buckling_cylinder --fast
+                 NUM_MPI_TASKS  4)
+
     serac_add_example_test(NAME           buckling_cylinder
                            COMMAND        buckling_cylinder
                            NUM_MPI_TASKS  4)
 
-    # TODO Fix this test
-    # `InvIso: Newtons method did not converge.`
-    # configure_file(cylinder_petsc_options.yml
-    #                ${PROJECT_BINARY_DIR}/examples/buckling/cylinder_petsc_options.yml
-    #                COPYONLY)
-    #
-    # serac_add_example_test(NAME            buckling_cylinder_mortar_contact
-    #                        COMMAND         buckling_cylinder --contact --contact-type 1 --preconditioner 6 -options_file examples/buckling/cylinder_petsc_options.yml
-    #                        NUM_MPI_TASKS   4)
+    configure_file(cylinder_petsc_options.yml
+                   ${PROJECT_BINARY_DIR}/examples/buckling/cylinder_petsc_options.yml
+                   COPYONLY)
+
+    serac_add_example_test(NAME            buckling_cylinder_mortar_contact
+                           COMMAND         buckling_cylinder --contact --contact-type 1 --preconditioner 6 -options_file examples/buckling/cylinder_petsc_options.yml
+                           NUM_MPI_TASKS   4)
 
     serac_add_example_test(NAME           buckling_cylinder_no_contact
                            COMMAND        buckling_cylinder --no-contact
