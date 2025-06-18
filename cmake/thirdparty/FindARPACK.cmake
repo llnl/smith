@@ -22,7 +22,7 @@ endif()
 # Find include dirs
 find_path(ARPACK_INCLUDE_DIRS
   NAMES arpackdef.h
-  PATHS ${ARPACK_DIR}/include/arpack-ng
+  PATHS ${ARPACK_DIR}/include/arpack ${ARPACK_DIR}/include/arpack-ng
   NO_DEFAULT_PATH
   NO_CMAKE_ENVIRONMENT_PATH
   NO_CMAKE_PATH
