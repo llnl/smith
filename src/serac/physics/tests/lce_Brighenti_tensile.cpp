@@ -46,13 +46,6 @@ TEST(LiquidCrystalElastomer, Brighenti)
   mesh->addDomainOfBoundaryElements("ymax_face", by_attr<dim>(4));
   mesh->addDomainOfBoundaryElements("zmax_face", by_attr<dim>(6));
 
-  // auto xmin_face = Domain::ofBoundaryElements(mesh, by_attr<dim>(5));
-  // auto ymin_face = Domain::ofBoundaryElements(mesh, by_attr<dim>(2));
-  // auto zmin_face = Domain::ofBoundaryElements(mesh, by_attr<dim>(1));
-  // auto xmax_face = Domain::ofBoundaryElements(mesh, by_attr<dim>(3));
-  // auto ymax_face = Domain::ofBoundaryElements(mesh, by_attr<dim>(4));
-  // auto zmax_face = Domain::ofBoundaryElements(mesh, by_attr<dim>(6));
-
   double initial_temperature = 25 + 273;
   double final_temperature = 430.0;
   FiniteElementState temperature(StateManager::newState(H1<p>{}, "temperature", mesh_tag));
