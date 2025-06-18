@@ -90,7 +90,7 @@ class AffineSolution {
     typename Material::State state;
     tensor<double, dim, dim> P = material(state, A);
     auto traction = [P](auto, auto n0, auto) { return dot(P, n0); };
-    solid.setTraction(traction, solid.mesh().entireBody());
+    solid.setTraction(traction, solid.mesh().entireBoundary());
   }
 
   const tensor<double, dim, dim> A;  /// Linear part of solution. Equivalently, the displacement gradient
