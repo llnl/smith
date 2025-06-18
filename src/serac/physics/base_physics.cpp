@@ -21,7 +21,6 @@ namespace serac {
 BasePhysics::BasePhysics(std::string physics_name, std::shared_ptr<serac::Mesh> mesh, int cycle, double time,
                          bool checkpoint_to_disk)
     : name_(physics_name),
-      mesh_tag_(mesh->tag()),
       mesh_(mesh),
       comm_(mesh_->getComm()),
       bcs_(mesh_->mfemParMesh()),
@@ -46,9 +45,11 @@ int BasePhysics::minCycle() const { return min_cycle_; }
 
 const std::vector<double>& BasePhysics::timesteps() const { return timesteps_; }
 
-const mfem::ParMesh& BasePhysics::mesh() const { return mesh_->mfemParMesh(); }
+const serac::Mesh& BasePhysics::mesh() const { return *mesh_; }
 
-mfem::ParMesh& BasePhysics::mesh() { return mesh_->mfemParMesh(); }
+const mfem::ParMesh& BasePhysics::mfemParMesh() const { return mesh_->mfemParMesh(); }
+
+mfem::ParMesh& BasePhysics::mfemParMesh() { return mesh_->mfemParMesh(); }
 
 void BasePhysics::initializeBasePhysicsStates(int cycle, double time)
 {
@@ -77,7 +78,7 @@ void BasePhysics::setParameter(const size_t parameter_index, const FiniteElement
       axom::fmt::format("Parameter '{}' requested when only '{}' parameters exist in physics module '{}'",
                         parameter_index, parameters_.size(), name_));
 
-  SLIC_ERROR_ROOT_IF(&parameter_state.mesh() != &mesh(),
+  SLIC_ERROR_ROOT_IF(&parameter_state.mesh() != &mfemParMesh(),
                      axom::fmt::format("Mesh of parameter '{}' is not the same as the physics mesh", parameter_index));
 
   SLIC_ERROR_ROOT_IF(
@@ -115,7 +116,8 @@ void BasePhysics::CreateParaviewDataCollection() const
 {
   std::string output_name = name_.empty() ? "default" : name_;
 
-  paraview_dc_ = std::make_unique<mfem::ParaViewDataCollection>(output_name, const_cast<mfem::ParMesh*>(&mesh()));
+  paraview_dc_ =
+      std::make_unique<mfem::ParaViewDataCollection>(output_name, const_cast<mfem::ParMesh*>(&mfemParMesh()));
 
   // Register finite element fields
 
@@ -142,7 +144,7 @@ void BasePhysics::CreateParaviewDataCollection() const
 
   // Identify maximum polynomial order in output fields in order to set detail level
 
-  int max_order_in_fields = mesh().GetNodalFESpace()->GetMaxElementOrder();
+  int max_order_in_fields = mfemParMesh().GetNodalFESpace()->GetMaxElementOrder();
 
   for (const auto& [_, field] : paraview_dc_->GetFieldMap()) {
     max_order_in_fields = std::max(field->FESpace()->GetMaxElementOrder(), max_order_in_fields);
@@ -198,7 +200,7 @@ void BasePhysics::outputStateToDisk(std::optional<std::string> paraview_output_d
   StateManager::updateDual(shapeDisplacementSensitivity());
 
   // Save the restart/Sidre file
-  StateManager::save(time_, cycle_, mesh_tag_);
+  StateManager::save(time_, cycle_, mesh_->tag());
 
   // Optionally output a paraview datacollection for visualization
   if (paraview_output_dir) {

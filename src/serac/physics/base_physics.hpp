@@ -475,10 +475,17 @@ class BasePhysics {
   /**
    * @brief Returns a reference to the mesh object
    */
-  const mfem::ParMesh& mesh() const;
+  const serac::Mesh& mesh() const;
 
-  /// @overload
-  mfem::ParMesh& mesh();
+  /**
+   * @brief Returns a reference to the mfem ParMesh object
+   */
+  const mfem::ParMesh& mfemParMesh() const;
+
+  /**
+   * @brief Returns a reference to the mfem ParMesh object
+   */
+  mfem::ParMesh& mfemParMesh();
 
   /**
    * @brief Return the name of the physics
@@ -525,9 +532,6 @@ class BasePhysics {
 
   /// @brief Name of the physics module
   std::string name_ = {};
-
-  /// @brief ID of the corresponding MFEMSidreDataCollection (denoting a mesh)
-  std::string mesh_tag_ = {};
 
   /**
    * @brief The primary mesh

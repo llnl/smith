@@ -204,9 +204,6 @@ class ManufacturedSolution {
     auto disp_ebc_func = [*this](const auto& X, auto) { return this->evalU(X); };
     tm.setDisplacementBCs(disp_ebc_func, disp_ess_bdr);
 
-    Domain entire_domain = EntireDomain(tm.mesh());
-    Domain entire_boundary = EntireBoundary(tm.mesh());
-
     // natural BCs
     auto flux = [=](auto X, auto n0, auto /* time */, auto /* T */) {
       typename MaterialType::State state{};
@@ -218,7 +215,7 @@ class ManufacturedSolution {
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
       return dot(heat_flux, n0);
     };
-    tm.setFluxBCs(flux, entire_boundary);
+    tm.setFluxBCs(flux, tm.mesh().entireBoundary());
 
     auto traction = [=](auto X, auto n0, auto /* time */) {
       typename MaterialType::State state{};
@@ -230,7 +227,7 @@ class ManufacturedSolution {
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
       return dot(stress, n0);
     };
-    tm.setTraction(traction, entire_boundary);
+    tm.setTraction(traction, tm.mesh().entireBoundary());
 
     // Forcing functions
     auto heat_source = [=](auto X, auto /* time */, auto /* T */, auto /* dTdX*/) {
@@ -247,7 +244,7 @@ class ManufacturedSolution {
       auto divFlux = tr(dFluxdX);
       return (divFlux - internal_heat_source);
     };
-    tm.setSource(heat_source, entire_domain);
+    tm.setSource(heat_source, tm.mesh().entireBody());
 
     auto body_force = [=](auto X, auto /* time */) {
       typename MaterialType::State state{};
@@ -265,7 +262,7 @@ class ManufacturedSolution {
       }
       return (-1.0 * divP);
     };
-    tm.addBodyForce(body_force, entire_domain);
+    tm.addBodyForce(body_force, tm.mesh().entireBody());
   }
 
  private:

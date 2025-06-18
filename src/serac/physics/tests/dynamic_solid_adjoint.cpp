@@ -325,7 +325,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
       auto u = make_tensor<dim>([t](int) { return (1.0 + 10 * t) * boundary_disp; });
       return u;
     };
-    auto applied_displacement_surface = Domain::ofBoundaryElements(solid->mesh(), by_attr<dim>(1));
+    auto applied_displacement_surface = Domain::ofBoundaryElements(solid->mfemParMesh(), by_attr<dim>(1));
     solid->setDisplacementBCs(applied_displacement, applied_displacement_surface);
     solid->addBodyForce(
         [](auto X, auto t) {
@@ -506,8 +506,8 @@ TEST_F(BucklingSensitivityFixture, QuasiStaticShapeSensitivities)
 
   auto solid_solver = createBucklingSolidMechanicsSolver<DensitySpace>();
 
-  auto applied_displacement_surface = Domain::ofBoundaryElements(solid_solver->mesh(), by_attr<dim>(1));
-  auto applied_traction_surface = Domain::ofBoundaryElements(solid_solver->mesh(), by_attr<dim>(3));
+  auto applied_displacement_surface = Domain::ofBoundaryElements(solid_solver->mfemParMesh(), by_attr<dim>(1));
+  auto applied_traction_surface = Domain::ofBoundaryElements(solid_solver->mfemParMesh(), by_attr<dim>(3));
   double load = 0.1;
 
   solid_solver->setTraction([&](auto, auto n, auto t) { return -load * t * n; }, applied_traction_surface);

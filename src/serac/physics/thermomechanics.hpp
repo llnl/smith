@@ -80,7 +80,7 @@ class Thermomechanics : public BasePhysics {
         solid_(std::move(solid_solver), solid_timestepping, physics_name + "mechanical", serac_mesh, {"temperature"},
                cycle, time)
   {
-    SLIC_ERROR_ROOT_IF(mesh().Dimension() != dim,
+    SLIC_ERROR_ROOT_IF(mfemParMesh().Dimension() != dim,
                        axom::fmt::format("Compile time dimension and runtime mesh dimension mismatch"));
 
     states_.push_back(&thermal_.temperature());

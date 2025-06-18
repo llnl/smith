@@ -154,8 +154,7 @@ class AffineSolution {
       tensor<double, dim, dim> P = material(state, H);
       return dot(P, n0);
     };
-    Domain entire_boundary = EntireBoundary(solid.mesh());
-    solid.setTraction(traction, entire_boundary);
+    solid.setTraction(traction, solid.mesh().entireBoundary());
   }
 
  private:

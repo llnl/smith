@@ -79,19 +79,18 @@ class AffineSolution {
    * @param essential_boundaries Boundary attributes on which essential boundary conditions are desired
    */
   template <int p, typename Material>
-  void applyLoads(const Material& material, SolidMechanics<p, dim>& sf, Domain essential_boundary) const
+  void applyLoads(const Material& material, SolidMechanics<p, dim>& solid, Domain essential_boundary) const
   {
     // essential BCs
     auto ebc_func = [*this](tensor<double, dim> X, double) { return this->eval(X); };
 
-    sf.setDisplacementBCs(ebc_func, essential_boundary);
+    solid.setDisplacementBCs(ebc_func, essential_boundary);
 
     // natural BCs
     typename Material::State state;
     tensor<double, dim, dim> P = material(state, A);
     auto traction = [P](auto, auto n0, auto) { return dot(P, n0); };
-    Domain entire_boundary = EntireBoundary(sf.mesh());
-    sf.setTraction(traction, entire_boundary);
+    solid.setTraction(traction, solid.mesh().entireBody());
   }
 
   const tensor<double, dim, dim> A;  /// Linear part of solution. Equivalently, the displacement gradient

@@ -84,7 +84,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
                         int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
       : SolidMechanicsBase(std::move(solver), timestepping_opts, physics_name, serac_mesh, parameter_names, cycle, time,
                            checkpoint_to_disk, use_warm_start),
-        contact_(BasePhysics::mesh()),
+        contact_(BasePhysics::mfemParMesh()),
         forces_(StateManager::newDual(displacement_.space(), detail::addPrefix(physics_name, "contact_forces")))
   {
     forces_ = 0;

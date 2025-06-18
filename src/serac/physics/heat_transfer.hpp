@@ -144,11 +144,11 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
                std::vector<std::string> parameter_names = {}, int cycle = 0, double time = 0.0,
                bool checkpoint_to_disk = false)
       : BasePhysics(physics_name, serac_mesh, cycle, time, checkpoint_to_disk),
-        temperature_(StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature"), mesh_tag_)),
+        temperature_(StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature"), mesh_->tag())),
         temperature_rate_(
-            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature_rate"), mesh_tag_)),
+            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature_rate"), mesh_->tag())),
         adjoint_temperature_(
-            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "adjoint_temperature"), mesh_tag_)),
+            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "adjoint_temperature"), mesh_->tag())),
         implicit_sensitivity_temperature_start_of_step_(adjoint_temperature_.space(),
                                                         detail::addPrefix(physics_name, "total_deriv_wrt_temperature")),
         temperature_adjoint_load_(temperature_.space(), detail::addPrefix(physics_name, "temperature_adjoint_load")),
@@ -161,7 +161,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
              *nonlin_solver_, bcs_)
   {
     SLIC_ERROR_ROOT_IF(
-        mesh().Dimension() != dim,
+        mfemParMesh().Dimension() != dim,
         axom::fmt::format("Compile time class dimension template parameter and runtime mesh dimension do not match"));
 
     SLIC_ERROR_ROOT_IF(
@@ -200,7 +200,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
     if constexpr (sizeof...(parameter_space) > 0) {
       tuple<parameter_space...> types{};
       for_constexpr<sizeof...(parameter_space)>([&](auto i) {
-        parameters_.emplace_back(mesh(), get<i>(types), detail::addPrefix(name_, parameter_names[i]));
+        parameters_.emplace_back(mfemParMesh(), get<i>(types), detail::addPrefix(name_, parameter_names[i]));
 
         trial_spaces[i + NUM_STATE_VARS] = &(parameters_[i].state->space());
       });
@@ -225,14 +225,14 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    *
    * @param[in] input_options The solver information parsed from the input file
    * @param[in] physics_name A name for the physics module instance
-   * @param[in] mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param serac_mesh Serac mesh used for physics
    * @param[in] cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param[in] time The simulation time to initialize the physics module to
    */
   HeatTransfer(const HeatTransferInputOptions& input_options, const std::string& physics_name,
-               const std::string& mesh_tag, int cycle = 0, double time = 0.0)
+               std::shared_ptr<serac::Mesh> serac_mesh, int cycle = 0, double time = 0.0)
       : HeatTransfer(input_options.nonlin_solver_options, input_options.lin_solver_options,
-                     input_options.timestepping_options, physics_name, mesh_tag, {}, cycle, time)
+                     input_options.timestepping_options, physics_name, serac_mesh, {}, cycle, time)
   {
     for (const auto& mat : input_options.materials) {
       if (std::holds_alternative<serac::heat_transfer::LinearIsotropicConductor>(mat)) {

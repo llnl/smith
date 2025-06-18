@@ -111,25 +111,25 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
                             std::shared_ptr<serac::Mesh> serac_mesh, std::vector<std::string> parameter_names = {},
                             int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false)
       : BasePhysics(physics_name, serac_mesh, cycle, time, checkpoint_to_disk),
-        temperature_(StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature"), mesh_tag_)),
+        temperature_(StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature"), mesh_->tag())),
         displacement_(
-            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_tag_)),
+            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_->tag())),
         temperature_adjoint_(
-            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature_adjoint"), mesh_tag_)),
+            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature_adjoint"), mesh_->tag())),
         displacement_adjoint_(StateManager::newState(
-            H1<order, dim>{}, detail::addPrefix(physics_name, "dispacement_adjoint"), mesh_tag_)),
-        temperature_adjoint_load_(
-            StateManager::newDual(H1<order>{}, detail::addPrefix(physics_name, "temperature_adjoint_load"), mesh_tag_)),
+            H1<order, dim>{}, detail::addPrefix(physics_name, "dispacement_adjoint"), mesh_->tag())),
+        temperature_adjoint_load_(StateManager::newDual(
+            H1<order>{}, detail::addPrefix(physics_name, "temperature_adjoint_load"), mesh_->tag())),
         displacement_adjoint_load_(StateManager::newDual(
-            H1<order, dim>{}, detail::addPrefix(physics_name, "displacement_adjoint_load"), mesh_tag_)),
-        bcs_displacement_(mesh()),
+            H1<order, dim>{}, detail::addPrefix(physics_name, "displacement_adjoint_load"), mesh_->tag())),
+        bcs_displacement_(mfemParMesh()),
         block_residual_with_bcs_(temperature_.space().TrueVSize() + displacement_.space().TrueVSize()),
         nonlin_solver_(std::move(solver))
   {
     SERAC_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(mesh().Dimension() != dim,
+    SLIC_ERROR_ROOT_IF(mfemParMesh().Dimension() != dim,
                        axom::fmt::format("Compile time dimension, {0}, and runtime mesh dimension, {1}, mismatch", dim,
-                                         mesh().Dimension()));
+                                         mfemParMesh().Dimension()));
     SLIC_ERROR_ROOT_IF(!nonlin_solver_,
                        "EquationSolver argument is nullptr in ThermoMechanics constructor. It is possible that it was "
                        "previously moved.");
@@ -158,8 +158,7 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     if constexpr (sizeof...(parameter_space) > 0) {
       tuple<parameter_space...> types{};
       for_constexpr<sizeof...(parameter_space)>([&](auto i) {
-        parameters_.emplace_back(mesh(), get<i>(types), detail::addPrefix(name_, parameter_names[i]));
-
+        parameters_.emplace_back(mfemParMesh(), get<i>(types), detail::addPrefix(name_, parameter_names[i]));
         trial_spaces[i + NUM_STATE_VARS] = &(parameters_[i].state->space());
       });
     }

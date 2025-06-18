@@ -159,7 +159,8 @@ void shape_test()
     SolidMechanics<p, dim> solid_solver_no_shape(
         nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options, "solid_functional", new_mesh);
 
-    mfem::VisItDataCollection visit_dc("pure_version", const_cast<mfem::ParMesh*>(&solid_solver_no_shape.mesh()));
+    mfem::VisItDataCollection visit_dc("pure_version",
+                                       const_cast<mfem::ParMesh*>(&solid_solver_no_shape.mfemParMesh()));
     visit_dc.RegisterField("displacement", &solid_solver_no_shape.displacement().gridFunction());
     visit_dc.Save();
 

@@ -168,18 +168,18 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
                  bool checkpoint_to_disk = false, bool use_warm_start = true)
       : BasePhysics(physics_name, serac_mesh, cycle, time, checkpoint_to_disk),
         displacement_(
-            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_tag_)),
-        velocity_(StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "velocity"), mesh_tag_)),
+            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_->tag())),
+        velocity_(StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "velocity"), mesh_->tag())),
         acceleration_(
-            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "acceleration"), mesh_tag_)),
+            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "acceleration"), mesh_->tag())),
         adjoint_displacement_(StateManager::newState(
-            H1<order, dim>{}, detail::addPrefix(physics_name, "adjoint_displacement"), mesh_tag_)),
+            H1<order, dim>{}, detail::addPrefix(physics_name, "adjoint_displacement"), mesh_->tag())),
         displacement_adjoint_load_(displacement_.space(), detail::addPrefix(physics_name, "displacement_adjoint_load")),
         velocity_adjoint_load_(displacement_.space(), detail::addPrefix(physics_name, "velocity_adjoint_load")),
         acceleration_adjoint_load_(displacement_.space(), detail::addPrefix(physics_name, "acceleration_adjoint_load")),
         implicit_sensitivity_displacement_start_of_step_(displacement_.space(), "total_deriv_wrt_displacement."),
         implicit_sensitivity_velocity_start_of_step_(displacement_.space(), "total_deriv_wrt_velocity."),
-        reactions_(StateManager::newDual(H1<order, dim>{}, detail::addPrefix(physics_name, "reactions"), mesh_tag_)),
+        reactions_(StateManager::newDual(H1<order, dim>{}, detail::addPrefix(physics_name, "reactions"), mesh_->tag())),
         reactions_adjoint_bcs_(reactions_.space(), "reactions_shape_sensitivity"),
         nonlin_solver_(std::move(solver)),
         ode2_(displacement_.space().TrueVSize(),
@@ -188,9 +188,9 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
         use_warm_start_(use_warm_start)
   {
     SERAC_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(mesh().Dimension() != dim,
+    SLIC_ERROR_ROOT_IF(mfemParMesh().Dimension() != dim,
                        axom::fmt::format("Compile time dimension, {0}, and runtime mesh dimension, {1}, mismatch", dim,
-                                         mesh().Dimension()));
+                                         mfemParMesh().Dimension()));
 
     SLIC_ERROR_ROOT_IF(!nonlin_solver_,
                        "EquationSolver argument is nullptr in SolidMechanics constructor. It is possible that it was "
@@ -231,7 +231,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     if constexpr (sizeof...(parameter_space) > 0) {
       tuple<parameter_space...> types{};
       for_constexpr<sizeof...(parameter_space)>([&](auto i) {
-        parameters_.emplace_back(mesh(), get<i>(types), detail::addPrefix(name_, parameter_names[i]));
+        parameters_.emplace_back(mfemParMesh(), get<i>(types), detail::addPrefix(name_, parameter_names[i]));
 
         trial_spaces[i + NUM_STATE_VARS] = &(parameters_[i].state->space());
       });
@@ -328,8 +328,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   template <typename T>
   qdata_type<T> createQuadratureDataBuffer(T initial_state, const std::optional<Domain>& optional_domain = std::nullopt)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh());
-    return StateManager::newQuadratureDataBuffer(mesh_tag_, domain, order, dim, initial_state);
+    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mfemParMesh());
+    return StateManager::newQuadratureDataBuffer(mesh_->tag(), domain, order, dim, initial_state);
   }
 
   /**
@@ -519,7 +519,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   void addCustomBoundaryIntegral(DependsOn<active_parameters...>, callable qfunction,
                                  const std::optional<Domain>& optional_domain = std::nullopt)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh());
+    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mfemParMesh());
 
     residual_->AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
                                    qfunction, domain);
@@ -1428,7 +1428,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// because are associated with essential boundary conditions
   std::unique_ptr<mfem::HypreParMatrix> J_e_;
 
-  /// an intermediate variable used to store the predicted end-step displacement
+  // / an intermediate variable used to store the predicted end-step displacement
   mfem::Vector predicted_displacement_;
 
   /// vector used to store the change in essential bcs between timesteps
@@ -1527,7 +1527,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     // Get the nodal positions for the displacement vector in grid function form
     mfem::ParGridFunction nodal_positions(
         const_cast<mfem::ParFiniteElementSpace*>(&displacement_.space()));  // MRT mfem const correctness issue
-    mesh().GetNodes(nodal_positions);
+    mfemParMesh().GetNodes(nodal_positions);
 
     const int num_nodes = nodal_positions.Size() / dim;
     mfem::Array<int> constrained_dofs;
