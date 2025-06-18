@@ -20,7 +20,8 @@ variables:
 
 stages:
   - src
-  - full
+  - tpl
+  - examples
   - benchmarks
   - comparison
 
@@ -29,15 +30,22 @@ stages:
 .src_workflow:
   stage: src
   rules:
-    - if: $SERAC_CI_WORKFLOW_TYPE != "full" &&
+    - if: $SERAC_CI_WORKFLOW_TYPE != "examples" &&
+          $SERAC_CI_WORKFLOW_TYPE != "tpl" &&
           $SERAC_CI_WORKFLOW_TYPE != "benchmarks" &&
           $SERAC_CI_WORKFLOW_TYPE != "comparison"
 
-# Run full build as a nightly scheduled pipeline
-.full_workflow:
-  stage: full
+# Run examples as a nightly scheduled pipeline
+.examples_workflow:
+  stage: examples
   rules:
-    - if: $SERAC_CI_WORKFLOW_TYPE == "full"
+    - if: $SERAC_CI_WORKFLOW_TYPE == "examples"
+
+# Run tpl build as a nightly scheduled pipeline
+.tpl_workflow:
+  stage: tpl
+  rules:
+    - if: $SERAC_CI_WORKFLOW_TYPE == "tpl"
 
 # Run benchmarks build as a weekly scheduled pipeline
 # or, run benchmarks and save them in tmp location for comparison
@@ -83,14 +91,14 @@ stages:
       - _serac_build_and_test_*/build-*/junit.xml
       - _serac_build_and_test_*/build-*/*.*.logs/atsr.xml
 
-.full_build_script:
+.tpl_build_script:
   script:
     - *run_update_uberenv
     # Build TPLs, src, and run unit tests
-    - echo -e "section_start:$(date +%s):full_build_and_unit_test\r\e[0K
-      Full Build and Unit Test ${CI_PROJECT_NAME}"
+    - echo -e "section_start:$(date +%s):tpl_build_and_unit_test\r\e[0K
+      TPL Build and Unit Test ${CI_PROJECT_NAME}"
     - ${ALLOC_COMMAND} python3 scripts/llnl/build_tpls.py -v ${SPEC} --directory=${FULL_BUILD_ROOT} --short-path
-    - echo -e "section_end:$(date +%s):full_build_and_unit_test\r\e[0K"
+    - echo -e "section_end:$(date +%s):tpl_build_and_unit_test\r\e[0K"
   artifacts:
     expire_in: 2 weeks
     when: always
@@ -100,6 +108,22 @@ stages:
       - ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_serac_build_and_test_*/build-*/output.log*.txt
     reports:
       junit: ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_serac_build_and_test_*/build-*/junit.xml
+
+.examples_build_script:
+  script:
+    # Build src and run examples
+    - echo -e "section_start:$(date +%s):examples_build_and_unit_test\r\e[0K
+      Source Build and Unit Test with Examples ${CI_PROJECT_NAME}"
+    - ${ALLOC_COMMAND} python3 scripts/llnl/run_examples.py
+    - echo -e "section_end:$(date +%s):examples_build_and_unit_test\r\e[0K"
+  artifacts:
+    expire_in: 2 weeks
+    when: always
+    paths:
+      - _serac_build_and_test_*/output.log*.txt
+      - _serac_build_and_test_*/build-*/output.log*.txt
+      - _serac_build_and_test_*/build-*/*.*.logs/*.log
+      - _serac_build_and_test_*/build-*/*.*.logs/*.err
 
 .benchmarks_build_script:
   script:

@@ -38,6 +38,7 @@ def parse_args():
     # Spack spec to use for the build
     parser.add_argument("-s", "--spec",
                       dest="spec",
+                      nargs="+",
                       default="",
                       help="Spack spec to build (defaults to all available on SYS_TYPE)")
     parser.add_argument("-v", "--verbose",
@@ -67,6 +68,11 @@ def parse_args():
 def main():
     args = parse_args()
 
+    # Handle case where spec is a List (i.e. spec contained spaces and wasn't wrapped in quotes)
+    spec = args["spec"]
+    if len(spec) > 0:
+        spec = " ".join(spec)
+
     # Determine location to do all the building
     if args["directory"] != "":
         builds_dir = args["directory"]
@@ -83,7 +89,7 @@ def main():
         os.chdir(repo_dir)
 
         timestamp = get_timestamp()
-        res = full_build_and_test_of_tpls(builds_dir, timestamp, args["spec"], args["verbose"], args["short_path"], args["mirror"], args["jobs"])
+        res = full_build_and_test_of_tpls(builds_dir, timestamp, spec, args["verbose"], args["short_path"], args["mirror"], args["jobs"])
     finally:
         os.chdir(original_wd)
 
