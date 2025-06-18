@@ -1428,7 +1428,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// because are associated with essential boundary conditions
   std::unique_ptr<mfem::HypreParMatrix> J_e_;
 
-  // / an intermediate variable used to store the predicted end-step displacement
+  /// an intermediate variable used to store the predicted end-step displacement
   mfem::Vector predicted_displacement_;
 
   /// vector used to store the change in essential bcs between timesteps
