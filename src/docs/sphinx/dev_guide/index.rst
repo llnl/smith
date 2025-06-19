@@ -11,6 +11,7 @@ Developer Guide
    :hidden:
    :maxdepth: 2
 
+   enzyme_compiler.rst
    style_guide
    docker_env
    modern_cpp

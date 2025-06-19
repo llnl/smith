@@ -5,9 +5,9 @@
 
 .. _ubuntu_build-label:
 
-=====================
-Serac Ubuntu 24 Build
-=====================
+===============================
+Serac Enzyme Build on Ubuntu 24
+===============================
 
 ------------------
 Basic System Setup
@@ -16,21 +16,11 @@ Basic System Setup
 We recommend installing some basic system-level development packages to minimize the
 amount of packages that Spack will build.
 
-Install clang version 14 and make it the default compiler:
-
-.. code-block:: bash
-
-    sudo apt install -y --no-install-recommends clang-14 clang-format-14 llvm-14 libomp-14-dev gfortran-13
-    # Set clang-14 as the default clang
-    sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 100 \
-    && sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 100 \
-    && sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-14 100
-
 Install required build packages to minimize what Spack will build:
 
 .. code-block:: bash
 
-    sudo apt install -y --no-install-recommends build-essential bzip2 cmake libopenblas-dev \
+    sudo apt install -y --no-install-recommends libomp-14-dev gfortran-13 build-essential bzip2 cmake libopenblas-dev \
     lua5.2 liblua5.2-dev openmpi-bin libopenmpi-dev unzip
 
 Optionally you can install packages to generate documentation:
@@ -63,27 +53,6 @@ Spack builds.
     ./scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --setup-and-env-only
 
 This command will create a Spack environment file, ``spack.yaml``, where you ran the above command.
-If you want to use Clang as your compiler. Alter the following section in that file, by changing
-``null`` in the ``f77`` and ``fc`` lines to ``/usr/bin/gfortran``:
-
-.. code-block:: yaml
-
-    - compiler:
-        spec: clang@=14.0.6
-        paths:
-            cc: /usr/bin/clang
-            cxx: /usr/bin/clang++
-            f77: null # Change null to /usr/bin/gfortran
-            fc: null # and this one too
-        flags: {}
-        operating_system: ubuntu24.04
-        target: x86_64
-        modules: []
-        environment: {}
-        extra_rpaths: []
-
-
-If you are using the GNU compiler, you can ignore the above step.
 
 To speed up the build, you can add packages that exist on your system to the same Spack environment file. For example,
 we installed lua in the above ``apt`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
@@ -160,6 +129,20 @@ by another package, so you can also add it with this yaml section:
 .. _ubuntu_tpl_build-label:
 
 -----------------------------------
+Build Clang 19 with Enzyme Support
+-----------------------------------
+
+Serac uses's `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform the automatic differentiation (AD) via
+the LLVM plugin system. This requires us to build LLVM with plugin support. If you already have this then you can skip
+this step.
+
+.. code-block:: bash
+
+    ./scripts/uberenv/uberenv.py --prefix=../devtools --spec="+compiler_only" --spack-env-file=ubuntu24.yaml --project-json=scripts/spack/devtools.json
+
+.. Currently here and testing above step
+
+-----------------------------------
 Build Serac's Third-party Libraries
 -----------------------------------
 
@@ -170,8 +153,6 @@ that you want to develop with:
 
     # clang
     scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=ubuntu24.yaml --spec="%clang@=14.0.6"
-    # gcc
-    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=ubuntu24.yaml --spec="%gcc@=13.3.0"
 
 If successful, you will see two things. The first is what we call a host-config. It is all the CMake
 inputs you need to build Serac. This file will be a new CMake file in the current directory with your machine
