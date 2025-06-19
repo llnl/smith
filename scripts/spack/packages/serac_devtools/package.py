@@ -10,10 +10,17 @@ class SeracDevtools(BundlePackage):
 
     version('fakeversion')
 
-    depends_on('cmake')
-    depends_on('cppcheck')
-    depends_on('doxygen')
-    depends_on('py-ats')
-    depends_on('py-sphinx')
-    depends_on('python')
-    depends_on("llvm@14+clang+python")
+    variant('compiler_only', default=False, description="Build only required compiler with Enzyme")
+
+    depends_on('enzyme@0.0.180')
+    depends_on("llvm@19+clang")
+    depends_on("llvm+python", when="~compiler_only")
+
+    depends_on('cmake', when="~compiler_only")
+    depends_on('cppcheck', when="~compiler_only")
+    depends_on('doxygen', when="~compiler_only")
+    # Disabled due to integration tests being disabled
+    # depends_on('py-ats', when="~compiler_only")
+    depends_on('py-sphinx', when="~compiler_only")
+    depends_on('python', when="~compiler_only")
+    
