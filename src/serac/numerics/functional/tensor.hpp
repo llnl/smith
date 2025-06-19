@@ -1318,8 +1318,8 @@ SERAC_HOST_DEVICE constexpr auto det(const tensor<T, 3, 3>& A)
  * @param A Input matrix
  * @return det(A + I) - 1, where I is the identity matrix
  */
-template <typename T>
-SERAC_HOST_DEVICE constexpr auto detApIm1(const tensor<T, 2, 2>& A)
+template <typename T, template <typename, int, int> class TensorType>
+SERAC_HOST_DEVICE constexpr auto detApIm1(const TensorType<T, 2, 2>& A)
 {
   // From the Cayley-Hamilton theorem, we get that for any N by N matrix A,
   // det(A - I) - 1 = I1(A) + I2(A) + ... + IN(A),
@@ -1331,8 +1331,8 @@ SERAC_HOST_DEVICE constexpr auto detApIm1(const tensor<T, 2, 2>& A)
 }
 
 /// @overload
-template <typename T>
-SERAC_HOST_DEVICE constexpr auto detApIm1(const tensor<T, 3, 3>& A)
+template <typename T, template <typename, int, int> class TensorType>
+SERAC_HOST_DEVICE constexpr auto detApIm1(const TensorType<T, 3, 3>& A)
 {
   // For notes on the implementation, see the 2x2 version.
 
