@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 #------------------------------------------------------------------------------
-# Basic CMake Setup
+# Basic CMake Setup 
 #------------------------------------------------------------------------------
 
 # Do not bump this over 3.14 due to it changing CMake policies and breaking
