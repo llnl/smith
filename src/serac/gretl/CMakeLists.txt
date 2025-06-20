@@ -2,7 +2,6 @@
 set(smith_gretl_sources
       data_store.cpp
       state_base.cpp
-      state_data_base.cpp
       vector_state.cpp
     )
 
@@ -12,8 +11,6 @@ set(smith_gretl_headers
       data_store_for_testing.hpp
       state_base.hpp
       state.hpp
-      state_data_base.hpp
-      state_data.hpp
       create_state.hpp
       upstream_state.hpp
       double_state.hpp

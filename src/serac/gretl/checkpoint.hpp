@@ -40,7 +40,7 @@ inline std::ostream& operator<<(std::ostream& stream, const CheckpointManager& s
 struct CheckpointManager {
   static constexpr size_t invalidCheckpointIndex = std::numeric_limits<size_t>::max();
 
-  bool valid_checkpoint_index(size_t i) const { return i != invalidCheckpointIndex; }
+  static bool valid_checkpoint_index(size_t i) { return i != invalidCheckpointIndex; }
 
   std::set<gretl::Checkpoint>::const_iterator most_dispensable() const
   {

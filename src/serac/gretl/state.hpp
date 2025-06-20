@@ -16,33 +16,34 @@
 
 namespace gretl {
 
+using Int = unsigned int;
+
 template <typename T, typename D>
 struct State : public StateBase {
   using type = T;
   using dual_type = D;
 
-  inline void set(const T& t) { get_data().set_primal(t); }
+  inline void set(const T& t) { dataStore_->set_primal(step_, t); }
 
-  inline void set(T&& t) { get_data().set_primal(std::move(t)); }
+  inline const T& get() const { return dataStore_->get_primal<T>(step_); }
 
-  inline void set_dual(const D& d) { get_data().set_dual(d); }
-
-  inline void set_dual(D&& d) { get_data().set_dual(std::move(d)); }
-
-  inline const T& get() const { return get_data().get_primal(); }
-
-  inline const D& get_dual() const { return get_data().get_dual(); }
-
-  State<T, D> clone(const std::vector<StateBase>& upstreams) const { return get_data().clone(upstreams); }
+  inline const D& get_dual() const { return dataStore_->get_dual<D>(step_); }
 
   void set_eval(const std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)>& e)
   {
-    get_data().eval = e;
+    dataStore_->evals_[step_] = e;
   }
 
   void set_vjp(const std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)>& v)
   {
-    get_data().vjp = v;
+    dataStore_->vjps_[step_] = v;
+  }
+
+  State<T, D> clone(const std::vector<StateBase>& upstreams) const {
+    gretl_assert(!upstreams.empty());
+    State<T, D> newState(*dataStore_, dataStore_->states_.size(), initialize_zero_dual_);
+    dataStore_->add_state(newState, upstreams);
+    return newState;
   }
 
   State<T, D> finalize()
@@ -51,30 +52,16 @@ struct State : public StateBase {
     return *this;
   }
 
-  DataStore& data_store() { return stateData->dataStore; }
-
   friend class DataStore;
 
  protected:
-  template <typename InitDualFromValue>
-  State(DataStore& store, const T& t, size_t step, InitDualFromValue initialize_zero_dual,
-        const std::vector<StateBase>& ustreams)
+  State(DataStore& store, size_t step, const InitializeZeroDual<T, D>& initialize_zero_dual)
+      : StateBase(store), initialize_zero_dual_(initialize_zero_dual)
   {
-    stateData = std::make_shared<StateData<T, D>>(store, t, step, initialize_zero_dual, ustreams);
+    step_ = static_cast<Int>(step);
   }
 
-  template <typename InitDualFromValue>
-  State(DataStore& store, size_t step, InitDualFromValue initialize_zero_dual, const std::vector<StateBase>& ustreams)
-  {
-    stateData = std::make_shared<StateData<T, D>>(store, step, initialize_zero_dual, ustreams);
-  }
-
-  inline StateData<T, D>& get_data() const
-  {
-    auto typedData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    gretl_assert(typedData);
-    return *typedData;
-  }
+  InitializeZeroDual<T, D> initialize_zero_dual_;
 };
 
 inline State<double> set_as_objective(State<double> o)

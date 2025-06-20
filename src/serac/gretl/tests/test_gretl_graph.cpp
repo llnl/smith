@@ -9,8 +9,11 @@
 #include <stdio.h>
 #include <iostream>
 #include "serac/gretl/vector_state.hpp"
+#include "serac/gretl/data_store.hpp"
 #include "serac/gretl/data_store_for_testing.hpp"
 #include "gtest/gtest.h"
+
+using gretl::print;
 
 // extension ideas
 // clarify const correctness of states
@@ -24,7 +27,6 @@
 // refactor to allow for the max memory usage to be directly specified so small entries don't
 //   take away essential capacity
 // refactor to make the state # quota exact
-
 TEST(Graph, NonlinearGraphGradients)
 {
   std::vector<double> dataA = {1.3, 3.5};
@@ -33,11 +35,16 @@ TEST(Graph, NonlinearGraphGradients)
 
   gretl::DataStore dataStore(3);
 
-  auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual());
-  auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual());
-  auto z = dataStore.create_state(dataZ, gretl::vec::initialize_zero_dual());
+  auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
+  auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);
+  auto z = dataStore.create_state(dataZ, gretl::vec::initialize_zero_dual);
+  print("a");
+
   auto c = a + b;      // a + b
+  print("b");
+
   auto d = c + c + b;  // 2a + 3b
+  print("c");
   auto e = c + d;      // 3a + 4b
   auto g = d + c;      // 3a + 4b
   auto h = g + c;      // 4a + 5b  // completely unused
@@ -49,9 +56,13 @@ TEST(Graph, NonlinearGraphGradients)
   e = d + e;           // 8a + 11b
   e = z + e;
 
+  print("d");
+
   for (size_t i = 0; i < 2; ++i) {
     EXPECT_NEAR(g.get()[i], 3 * dataA[i] + 4 * dataB[i], 1e-14);
   }
+
+  print("e");
 
   for (size_t i = 0; i < 2; ++i) {
     EXPECT_NEAR(e.get()[i], 8 * dataA[i] + 11 * dataB[i] + dataZ[i], 1e-14);
@@ -61,9 +72,13 @@ TEST(Graph, NonlinearGraphGradients)
   // da = 3 * (8*a + 11*b + z) + 8 * (3a+4b)
   // db = 4 * (8*a + 11*b + z) + 11 * (3a+4b)
   double fFirstTime = f.get();
-  f.set_dual(1);
+  gretl::set_as_objective(f);
+
+  print("f");
 
   dataStore.back_prop();
+
+  print("g");
 
   for (size_t i = 0; i < 2; ++i) {
     double A = a.get()[i];
@@ -83,7 +98,7 @@ TEST(Graph, LinearGraphGradients)
 
   gretl::DataStore dataStore(6);
 
-  auto initial = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual());
+  auto initial = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto a = gretl::copy(initial);
 
   int N = 3;
@@ -91,7 +106,8 @@ TEST(Graph, LinearGraphGradients)
     a = gretl::testing_update(a);
   }
 
-  a.set_dual({1.0, 0.0});
+  a.set_dual(std::vector<double>{1.0, 0.0});
+  // set_as_objective(a);
   dataStore.back_prop();
 
   EXPECT_EQ(initial.get()[0], dataA[0]);
@@ -108,9 +124,9 @@ TEST(Graph, LargeNonlinearGraphGradients)
 
   gretl::DynamicDataStore dataStore(3);
 
-  auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual());
-  auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual());
-  auto c = dataStore.create_state(dataC, gretl::vec::initialize_zero_dual());
+  auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
+  auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);
+  auto c = dataStore.create_state(dataC, gretl::vec::initialize_zero_dual);
 
   auto g = a * b;
   auto h = a + 3 * c;
@@ -143,4 +159,34 @@ TEST(Graph, LargeNonlinearGraphGradients)
 
   double constexpr eps = 1e-7;
   gretl::check_array_gradients(qoi, {a, b, c}, {eps, eps, eps}, {800 * eps, 100 * eps, 100 * eps});
+}
+
+auto compute_f(const gretl::State<std::vector<double>>& c, const gretl::State<std::vector<double>>& b)
+{
+  auto d = c + b;
+  d = d + b;
+  d = d + b;
+  d = d + b;
+  print("comp f");
+  return d + b;
+}
+
+TEST(Graph, Explore)
+{
+  std::vector<double> dataA = {1.3, 3.5};
+  std::vector<double> dataB = {1.7, 1.1};
+
+  gretl::DynamicDataStore dataStore(2);
+
+  auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
+  auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);
+  auto c = a + b;
+  auto f = compute_f(c, a);
+  f = compute_f(f, a);
+  auto g = c + f;
+
+  auto h = gretl::inner_product(g, g);
+  gretl::set_as_objective(h);
+
+  dataStore.back_prop();
 }

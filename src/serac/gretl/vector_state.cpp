@@ -41,9 +41,11 @@ VectorState testing_update(const VectorState& a)
 
 VectorState operator+(const VectorState& a, const VectorState& b)
 {
+  printf("plussing\n");
   VectorState c = a.clone({a, b});
 
   c.set_eval([](const UpstreamStates& upstreams, DownstreamState& downstream) {
+    printf("plus eval a\n");
     Vector C = upstreams[0].get<Vector>();  // just making a copy
     const Vector& B = upstreams[1].get<Vector>();
     size_t sz = C.size();
@@ -51,9 +53,11 @@ VectorState operator+(const VectorState& a, const VectorState& b)
       C[i] += B[i];
     }
     downstream.set(std::move(C));
+    printf("plus eval b\n");
   });
 
   c.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
+    printf("plus vjp a\n");
     const Vector& Cbar = downstream.get_dual<Vector>();
     size_t sz = Cbar.size();
 
@@ -66,6 +70,7 @@ VectorState operator+(const VectorState& a, const VectorState& b)
     for (size_t i = 0; i < sz; ++i) {
       Bbar[i] += Cbar[i];
     }
+    printf("plus vjp b\n");
   });
 
   return c.finalize();
@@ -112,19 +117,26 @@ State<double> inner_product(const VectorState& a, const VectorState& b)
   });
 
   c.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
+    print("start duala");
     double Cbar = downstream.get_dual<double>();
 
-    auto& a_ = upstreams[0];
-    auto& b_ = upstreams[1];
+    auto a_ = upstreams[0];
+    auto b_ = upstreams[1];
+
+    print("b");
 
     const Vector& A = a_.get<Vector>();
     const Vector& B = b_.get<Vector>();
     size_t sz = get_same_size<double>({&A, &B});
 
+    print("c");
+
     Vector& Abar = a_.get_dual<Vector>();
     for (size_t i = 0; i < sz; ++i) {
       Abar[i] += B[i] * Cbar;
     }
+
+    printt("d");
 
     Vector& Bbar = b_.get_dual<Vector>();
     for (size_t i = 0; i < sz; ++i) {
@@ -152,8 +164,8 @@ VectorState operator*(const VectorState& a, const VectorState& b)
   c.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
     const Vector& Cbar = downstream.get_dual<Vector>();
 
-    auto& a_ = upstreams[0];
-    auto& b_ = upstreams[1];
+    auto a_ = upstreams[0];
+    auto b_ = upstreams[1];
 
     const Vector& A = a_.get<Vector>();
     const Vector& B = b_.get<Vector>();
@@ -182,7 +194,7 @@ VectorState copy(const VectorState& a)
 
   b.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
     const Vector& Bbar = downstream.get_dual<Vector>();
-    auto& a_ = upstreams[0];
+    auto a_ = upstreams[0];
     Vector& Abar = a_.get_dual<Vector>();
     for (size_t i = 0; i < Abar.size(); ++i) {
       Abar[i] += Bbar[i];
@@ -192,8 +204,8 @@ VectorState copy(const VectorState& a)
   return b.finalize();
 }
 
-namespace vec {
-Vector initialize_zero_dual::operator()(const Vector& from) { return Vector(from.size(), 0.0); }
-};  // namespace vec
+//namespace vec {
+//Vector initialize_zero_dual::operator()(const Vector& from) { return Vector(from.size(), 0.0); }
+//};  // namespace vec
 
 }  // namespace gretl

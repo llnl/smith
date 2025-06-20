@@ -31,9 +31,14 @@ VectorState operator*(const VectorState& a, const VectorState& b);
 State<double> inner_product(const VectorState& a, const VectorState& b);
 
 namespace vec {
-struct initialize_zero_dual {
-  Vector operator()(const Vector& from);
+
+static gretl::InitializeZeroDual<Vector, Vector> initialize_zero_dual = [](const Vector& from) {
+  printf("zero start\n");
+  Vector to(from.size(), 0.0);
+  printf("zero end\n");
+  return to;
 };
+
 }  // namespace vec
 
 template <typename T>

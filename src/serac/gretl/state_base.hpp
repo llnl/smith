@@ -12,12 +12,13 @@
 
 #include <vector>
 #include <set>
-#include "state_data.hpp"
+#include "data_store.hpp"
 
 namespace gretl {
 
 struct StateBase {
-  StateBase() { upstreamsForNextStep = std::make_shared<std::set<std::shared_ptr<StateDataBase>>>(); }
+  // StateBase(DataStore& store) : dataStore_(&store) {}
+  StateBase(DataStore& store) : dataStore_(&store) {}
   StateBase(const StateBase&) = default;
   StateBase& operator=(const StateBase&) = default;
   virtual ~StateBase() = default;
@@ -25,55 +26,31 @@ struct StateBase {
   template <typename T, typename D = T>
   const T& get() const
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    gretl_assert(typedStateData);
-    return typedStateData->get_primal();
-  }
-
-  template <typename D, typename T = D>
-  const D& get_dual() const
-  {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    gretl_assert(typedStateData);
-    return typedStateData->get_dual();
+    return dataStore_->get_primal<T>(step_);
   }
 
   template <typename T, typename D = T>
   void set(const T& t)
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    gretl_assert(typedStateData);
-    typedStateData->set(t);
+    dataStore_->set_primal<T>(step_, t);
   }
 
-  template <typename T, typename D = T>
-  void set(T&& t)
+  template <typename D, typename T = D>
+  const D& get_dual() const
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    gretl_assert(typedStateData);
-    typedStateData->set(std::move(t));
+    return dataStore_->get_dual<D>(step_);
   }
-
+  
   template <typename D, typename T = D>
   void set_dual(const D& d)
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    gretl_assert(typedStateData);
-    typedStateData->set_dual(d);
+    dataStore_->set_dual<D>(step_, d);
   }
 
-  template <typename D, typename T = D>
-  void set_dual(D&& d)
+  template <typename T, typename D>
+  State<T, D> create_state(const std::vector<StateBase>& upstreams, InitializeZeroDual<T,D> initialize_zero_dual) const
   {
-    auto typedStateData = std::dynamic_pointer_cast<StateData<T, D>>(stateData);
-    gretl_assert(typedStateData);
-    typedStateData->set_dual(std::move(d));
-  }
-
-  template <typename T, typename D, typename ZeroCopyT>
-  State<T, D> create_state(const std::vector<StateBase>& upstreams, const ZeroCopyT initialize_zero_dual) const
-  {
-    return stateData->dataStore.create_empty_state<T, D>(initialize_zero_dual, upstreams);
+    return dataStore_->create_empty_state<T, D>(initialize_zero_dual, upstreams);
   }
 
   template <typename T, typename D = T>
@@ -82,10 +59,6 @@ struct StateBase {
     return StateBase::create_state<T, D>(upstreams, [](const T&) -> T { return T(); });
   }
 
-  const StateDataBase* data() const { return stateData.get(); }
-
-  void clear_dual();
-
   friend class DataStore;
   friend class DynamicDataStore;
   friend struct StateDataBase;
@@ -93,12 +66,17 @@ struct StateBase {
   void evaluate_and_remove_disposable_checkpoints();
   void evaluate_vjp();
 
- protected:
-  size_t step_index() const;
-  void clear();
+  DataStore& data_store() const { return *dataStore_; }
 
-  std::shared_ptr<StateDataBase> stateData;
-  std::shared_ptr<std::set<std::shared_ptr<StateDataBase>>> upstreamsForNextStep;
+ protected:
+  // const StateDataBase* data() const { return dataStore..get(); }
+
+  Int step_index() const;
+  void clear_primal();
+  void clear_dual();
+
+  DataStore* dataStore_;
+  Int step_;
 };
 
 }  // namespace gretl

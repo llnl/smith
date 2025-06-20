@@ -1,88 +1,115 @@
+#include <any>
 #include "data_store.hpp"
 #include "state.hpp"
 #include <iostream>
 
 namespace gretl {
 
-DataStore::DataStore(size_t /*maxStates*/) { step = 0; }
+DataStore::DataStore(size_t /*maxStates*/) { current_step_ = 0; }
 
 void DataStore::back_prop()
 {
-  for (size_t n = states.size(); n > 0; --n) {
+  goingForward_ = false;
+  printf("a\n");
+  for (size_t n = states_.size(); n > 0; --n) {
     reverse_state();
   }
+  goingForward_ = true;
 }
 
 void DataStore::reset()
 {
-  for (size_t n = states.size(); n > 0; --n) {
-    if (!states[n - 1].data()->persistent()) {
-      states[n - 1].clear();
+  for (size_t n = states_.size(); n > 0; --n) {
+    if (!upstreams_[n - 1].size()) {
+      primals_[n-1] = nullptr;
     }
-    states[n - 1].clear_dual();
+    duals_[n - 1] = nullptr;
   }
-  step = 0;
+  current_step_ = 0;
 }
 
 void DataStore::vjp(StateBase& state) { state.evaluate_vjp(); }
 
 StateBase DataStore::reverse_state()
 {
-  --step;
-  vjp(states[step]);
-  return states[step > 0 ? step - 1 : step];  // return step earlier, unless at 0
+  --current_step_;
+  printf("b\n");
+  vjp(states_[current_step_]);
+  printf("c\n");
+  return states_[current_step_ > 0 ? current_step_ - 1 : current_step_];  // return step earlier, unless at 0
 }
 
-void DataStore::add_state(StateBase& newState)
+void DataStore::add_state(StateBase newState, const std::vector<StateBase>& upstreams)
 {
-  states.emplace_back(newState);
-  ++step;
+  ++current_step_;
+  states_.emplace_back(newState);
+  primals_.emplace_back(nullptr);
+  duals_.emplace_back(nullptr);
+  std::vector<Int> upstreamSteps;
+  upstreamSteps.reserve(upstreams.size());
+  for (auto& u : upstreams) {
+    upstreamSteps.push_back(u.step_); 
+  }
+  upstreams_.emplace_back(*this, upstreamSteps);
+
+  evals_.emplace_back([=](const UpstreamStates&, DownstreamState&) {
+    std::cout << "you forgot to implement eval for step " << current_step_ << std::endl;
+    exit(1);
+  });
+
+  vjps_.emplace_back([=](UpstreamStates&, const DownstreamState&) {
+    std::cout << "you forgot to implement eval for step " << current_step_ << std::endl;
+    exit(1);
+  });
+
+  assert(current_step_ == states_.size());
+  assert(current_step_ == primals_.size());
+  assert(current_step_ == duals_.size());
+  assert(current_step_ == upstreams_.size());
+  // states.emplace_back(newState);
+  // duals.emplace_back(nullptr);
+  //++step;
 }
 
-void DataStore::fetch_state_data(size_t stepIndex)
+void DataStore::fetch_state_data(Int stepIndex)
 {
-  if (states[stepIndex].data()->primal_active()) {
+  if (primals_[stepIndex]) {
     return;
   }
 
   fetch_state_data(stepIndex - 1);
-  step = stepIndex;
+  current_step_ = stepIndex;
 
-  states[stepIndex].evaluate_and_remove_disposable_checkpoints();
+  states_[stepIndex].evaluate_and_remove_disposable_checkpoints();
 }
 
-
-size_t DataStore::num_allocated_states() const
+Int DataStore::num_allocated_states() const
 {
-  std::set<const StateDataBase*> datas;
-  for (const auto& s : states) {
-    if (s.data()->primal_active()) {
-      datas.emplace(s.data());
-    }
-    for (auto& g : *s.upstreamsForNextStep) {
-      datas.emplace(g.get());
-    }
-  }
-  return datas.size();
-}
-
-
-size_t DataStore::num_active_states() const
-{
-  size_t numActive = 0;
-  for (const auto& s : states) {
-    if (s.data()->primal_active()) {
+  Int numActive = 0;
+  for (const auto& s : states_) {
+    if (primals_[s.step_]) {
       ++numActive;
     }
   }
   return numActive;
 }
 
-size_t DataStore::num_dual_states() const
+Int DataStore::num_active_states() const
 {
-  size_t numActive = 0;
-  for (const auto& s : states) {
-    if (s.data()->dual_active()) {
+  Int numActive = 0;
+  for (const auto& s : states_) {
+    if (primals_[s.step_]) {
+      ++numActive;
+    }
+  }
+  return numActive;
+}
+
+Int DataStore::num_dual_states() const
+{
+  Int numActive = 0;
+  for (const auto& s : states_) {
+    if (duals_[s.step_]) {
       ++numActive;
     }
   }
@@ -94,37 +121,41 @@ DynamicDataStore::DynamicDataStore(size_t maxStates)
 {
 }
 
-void DynamicDataStore::add_state(StateBase& newState) 
+/*
+void DynamicDataStore::add_state(StateBase& newState)
 {
   states.emplace_back(newState);
-  auto allUpstreams = newState.data()->upstreams;
-  for (auto& upstream : allUpstreams) {
-    auto upState = upstream.get_state();
-    size_t index = upState->stepIndex;
-    for (size_t i=index+1; i < step; ++i) {
-      auto previousState = states[i];
-      previousState.upstreamsForNextStep->emplace(upState);
-    }
+  size_t stepToErase =
+      checkpoints.add_checkpoint_and_get_index_to_remove(newState.step_index(), newState.data()->persistent());
+
+  if (CheckpointManager::valid_checkpoint_index(stepToErase)) {
+    states[stepToErase].stateData = nullptr;
   }
-  step = states.size();
-  std::cout << "step, states size = " << step << " " << states.size() << std::endl;
+
+  std::cout << "use count at " << step_ << " = ";
+  for (auto& s : states) {
+    std::cout << s.stateData.use_count() << " ";
+  }
+  std::cout << std::endl;
+
+  for (const auto& upstream : newState.data()->upstreams) {
+    upstream.state->lastStepUsed = step_;
+  }
+  step_ = states.size();
 }
 
-void DynamicDataStore::clear_disposable_state() 
-{
-  
-}
+void DynamicDataStore::clear_disposable_state() {}
 
 void DynamicDataStore::fetch_state_data(size_t stepIndex)
 {
-  if (states[stepIndex].data()->primal_active()) {
+  if (data[stepIndex]) {
     return;
   }
-
   fetch_state_data(stepIndex - 1);
-  step = stepIndex;
+  step_ = stepIndex;
 
   states[stepIndex].evaluate_and_remove_disposable_checkpoints();
 }
+*/
 
 }  // namespace gretl

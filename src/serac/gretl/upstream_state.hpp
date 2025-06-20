@@ -16,74 +16,60 @@
 namespace gretl {
 
 struct UpstreamState {
-  UpstreamState(const std::shared_ptr<StateDataBase>& s) : state(s) {}
+  DataStore* dataStore_;
+  Int step_;
 
-  bool valid() const { return state->primal_active(); }
-
-  bool dual_valid() const { return state->dual_active(); }
-
-  template <typename T, typename D = T>
+  template <typename T>
   const T& get() const
   {
-    return state->template get<T, D>();
+    return dataStore_->get_primal<T>(step_);
   }
 
-  template <typename D, typename T = D>
-  D& get_dual()
+  template <typename D>
+  D& get_dual() const
   {
-    return state->template get_dual<T, D>();
+    return dataStore_->get_dual<D>(step_);
   }
+};
 
-  template <typename D, typename T = D>
-  const D& get_dual() const
-  {
-    return state->template get_dual<T, D>();
-  }
+struct UpstreamStates {
+  UpstreamStates(DataStore& s, std::vector<Int> steps) : dataStore_(&s), steps_(steps) {}
 
-  template <typename D, typename T = D>
-  void set_dual(const D& d)
-  {
-    return state->set_dual<T, D>(d);
-  }
+  UpstreamState operator[](Int index) const { return UpstreamState{.dataStore_ = dataStore_, .step_ = steps_[index]}; }
 
-  friend class DataStore;
-  friend class DynamicDataStore;
+  Int size() const { return static_cast<Int>(steps_.size()); }
 
- protected:
-  const std::shared_ptr<StateDataBase>& get_state() { return state; }
-
- private:
-  std::shared_ptr<StateDataBase> state;
+ // private:
+  DataStore* dataStore_;
+  std::vector<Int> steps_;
 };
 
 struct DownstreamState {
-  DownstreamState(StateDataBase& s) : stateDataBase(s) {}
-
-  bool dual_valid() const { return stateDataBase.dual_active(); }
+  DownstreamState(DataStore* s, Int step) : dataStore_(s), step_(step) {}
 
   template <typename T, typename D = T>
   void set(const T& t)
   {
-    return stateDataBase.set_primal<T, D>(t);
+    return dataStore_->set_primal<T>(step_, t);
   }
 
-  // this call will give incorrect behavior if called on the forward pass.  Consider adding ConstDownStreamState type to
-  // allow this on reverse, but not forward
   template <typename T, typename D = T>
   const T& get() const
   {
-    return stateDataBase.template get<T, D>();
+    return *dataStore_->get_primal<T>(step_);
   }
+
   template <typename D, typename T = D>
   const D& get_dual() const
   {
-    return stateDataBase.template get_dual<T, D>();
+    return dataStore_->get_dual<D>(step_);
   }
 
   friend class DataStore;
 
  private:
-  StateDataBase& stateDataBase;
+  DataStore* dataStore_;
+  Int step_;
 };
 
 }  // namespace gretl

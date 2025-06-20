@@ -5,21 +5,26 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "state_base.hpp"
+#include "upstream_state.hpp"
 
 namespace gretl {
 
 void StateBase::evaluate_and_remove_disposable_checkpoints()
 {
-  stateData->evaluate();  // eventually could adjust cost factor by timing this?
-  stateData->dataStore.clear_disposable_state();
+  DownstreamState ds(dataStore_, step_);
+  dataStore_->evals_[step_](dataStore_->upstreams_[step_], ds);
 }
 
-void StateBase::evaluate_vjp() { stateData->evaluate_vjp(); }
-
-size_t StateBase::step_index() const { return stateData->stepIndex; }
-
-void StateBase::clear() { stateData->clear_primal(); }
-
-void StateBase::clear_dual() { stateData->clear_dual(); }
+void StateBase::evaluate_vjp()
+{
+  std::cout << "trying eval j " << step_ << " " << dataStore_->upstreams_[step_].size() << std::endl;
+  std::cout << "trying eval j " << dataStore_->vjps_.size() << std::endl;
+  const DownstreamState ds(dataStore_, step_);
+  for (auto s : dataStore_->upstreams_[step_].steps_) {
+    std::cout << "up state = " << s << std::endl;
+  }
+  dataStore_->vjps_[step_](dataStore_->upstreams_[step_], ds);
+  printf("did eval j\n");
+}
 
 }  // namespace gretl
