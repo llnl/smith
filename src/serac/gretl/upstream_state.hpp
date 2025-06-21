@@ -39,7 +39,7 @@ struct UpstreamStates {
 
   Int size() const { return static_cast<Int>(steps_.size()); }
 
- // private:
+  // private:
   DataStore* dataStore_;
   std::vector<Int> steps_;
 };

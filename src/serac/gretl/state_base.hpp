@@ -17,8 +17,7 @@
 namespace gretl {
 
 struct StateBase {
-  // StateBase(DataStore& store) : dataStore_(&store) {}
-  StateBase(DataStore& store) : dataStore_(&store) {}
+  StateBase(DataStore* store) : dataStore_(store) {}
   StateBase(const StateBase&) = default;
   StateBase& operator=(const StateBase&) = default;
   virtual ~StateBase() = default;
@@ -40,7 +39,7 @@ struct StateBase {
   {
     return dataStore_->get_dual<D>(step_);
   }
-  
+
   template <typename D, typename T = D>
   void set_dual(const D& d)
   {
@@ -48,7 +47,7 @@ struct StateBase {
   }
 
   template <typename T, typename D>
-  State<T, D> create_state(const std::vector<StateBase>& upstreams, InitializeZeroDual<T,D> initialize_zero_dual) const
+  State<T, D> create_state(const std::vector<StateBase>& upstreams, InitializeZeroDual<T, D> initialize_zero_dual) const
   {
     return dataStore_->create_empty_state<T, D>(initialize_zero_dual, upstreams);
   }

@@ -33,9 +33,7 @@ State<double> inner_product(const VectorState& a, const VectorState& b);
 namespace vec {
 
 static gretl::InitializeZeroDual<Vector, Vector> initialize_zero_dual = [](const Vector& from) {
-  printf("zero start\n");
   Vector to(from.size(), 0.0);
-  printf("zero end\n");
   return to;
 };
 

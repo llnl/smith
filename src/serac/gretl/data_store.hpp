@@ -41,42 +41,39 @@ std::string typeString(T& var)
 }
 
 // Base case for the recursive variadic macro
-inline void print() {
-  std::cout << std::endl;
-}
+inline void print() { std::cout << std::endl; }
 
 // Recursive case for the variadic macro
 template <typename T, typename... Args>
-void print(T value, Args... args) {
-    // Find the current variable name in the comma-separated string
-    std::cout << value << " ";
-    print(args...); // Recurse for remaining arguments
+void print(T value, Args... args)
+{
+  // Find the current variable name in the comma-separated string
+  std::cout << value << " ";
+  print(args...);  // Recurse for remaining arguments
 }
 
 // Base case for the recursive variadic macro
-inline void printt() {
-  std::cout << std::endl;
-}
+inline void printt() { std::cout << std::endl; }
 
 // Recursive case for the variadic macro
 template <typename T, typename... Args>
-void printt(T value, Args... args) {
-    // Find the current variable name in the comma-separated string
-    std::cout << value << " (" << typeString(value) << ") ";
-    printt(args...); // Recurse for remaining arguments
+void printt(T value, Args... args)
+{
+  // Find the current variable name in the comma-separated string
+  std::cout << value << " (" << typeString(value) << ") ";
+  printt(args...);  // Recurse for remaining arguments
 }
 
 // Base case for the recursive variadic macro
-inline void printtype() {
-  std::cout << std::endl;
-}
+inline void printtype() { std::cout << std::endl; }
 
 // Recursive case for the variadic macro
 template <typename T, typename... Args>
-void printtype(T value, Args... args) {
-    // Find the current variable name in the comma-separated string
-    std::cout << typeString(value) << " ";
-    printtype(args...); // Recurse for remaining arguments
+void printtype(T value, Args... args)
+{
+  // Find the current variable name in the comma-separated string
+  std::cout << typeString(value) << " ";
+  printtype(args...);  // Recurse for remaining arguments
 }
 
 using Int = unsigned int;
@@ -107,15 +104,15 @@ class DataStore {
   template <typename T, typename D = T>
   State<T, D> create_state(const T& t, InitializeZeroDual<T, D> initial_zero_dual = defaultInitializeZeroDual<D>())
   {
-    State<T, D> newState(*this, states_.size(), initial_zero_dual);
-    add_state(newState, {});
-    gretl_assert(current_step_-1 < primals_.size());
-    primals_[current_step_-1] = std::make_shared<std::any>(t);
-    return newState;
+    State<T, D> state(this, states_.size(), initial_zero_dual);
+    add_state(std::make_unique<State<T, D>>(state), {});
+    gretl_assert(current_step_ - 1 < primals_.size());
+    primals_[current_step_ - 1] = std::make_shared<std::any>(t);
+    return state;
   }
 
   /// @brief  unwind one step of the graph
-  StateBase reverse_state();
+  void reverse_state();
 
   /// @brief unwind the entire graph
   void back_prop();
@@ -141,16 +138,16 @@ class DataStore {
   State<T, D> create_empty_state(InitDualFromValue initial_zero_dual, const std::vector<StateBase>& upstreams)
   {
     gretl_assert(!upstreams.empty());
-    State<T, D> newState(*this, states_.size(), initial_zero_dual);
-    add_state(newState, upstreams);
-    return newState;
+    State<T, D> state(this, states_.size(), initial_zero_dual);
+    add_state(std::make_unique<State<T, D>>(state), upstreams);
+    return state;
   }
 
   /// @brief vjp
   void vjp(StateBase& state);
 
   /// @brief function for safely adding new states to graph and checkpoint
-  virtual void add_state(StateBase newState, const std::vector<StateBase>& upstreams);
+  virtual void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams);
 
   /// @brief method for clearing states in the past that are no longer needed
   virtual void clear_disposable_state() {}
@@ -161,7 +158,7 @@ class DataStore {
   using EvalT = std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)>;
   using VjpT = std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)>;
 
-  std::vector<StateBase> states_;
+  std::vector<std::unique_ptr<StateBase>> states_;
 
   std::vector<UpstreamStates> upstreams_;
   std::vector<EvalT> evals_;
@@ -171,9 +168,12 @@ class DataStore {
   mutable std::vector<std::unique_ptr<std::any>> duals_;
 
   template <typename T>
-  const T& get_primal(Int step) const
+  const T& get_primal(Int step)
   {
-    gretl_assert(primals_[step]);
+    // gretl_assert(primals_[step]);
+    if (!primals_[step]) {
+      fetch_state_data(step);
+    }
     auto tptr = std::any_cast<T>(primals_[step].get());
     gretl_assert(tptr);
     return *tptr;
@@ -182,35 +182,30 @@ class DataStore {
   template <typename T>
   void set_primal(Int step, const T& t)
   {
-    gretl_assert(!primals_[step]);
     primals_[step] = std::make_shared<std::any>(t);
   }
 
-  template <typename D, typename T=D>
-  D& get_dual(Int step) const
+  template <typename D, typename T = D>
+  D& get_dual(Int step)
   {
-    print("trying to get upstream dual");
     if (!duals_[step]) {
-      print("nope");
       const T& thisPrimal = get_primal<T>(step);
-      printtype("primal = ", thisPrimal);
-      auto thisState = dynamic_cast<const State<T,D>*>(&states_[step]);
+      auto thisState = dynamic_cast<const State<T, D>*>(states_[step].get());
       gretl_assert(thisState);
       duals_[step] = std::make_unique<std::any>(thisState->initialize_zero_dual_(thisPrimal));
     }
     auto dualData = std::any_cast<D>(duals_[step].get());
-    std::cout << "at step " << step << " / " << duals_.size() << " getting type = " << typeString(dualData) << std::endl; // << " " << *dualData << std::endl;
     gretl_assert(dualData);
     return *dualData;
   }
 
   template <typename D>
-  void set_dual(Int step, const D& d) const {
+  void set_dual(Int step, const D& d)
+  {
     if (!duals_[step]) {
       duals_[step] = std::move(std::make_unique<std::any>(d));
     }
     auto dualData = std::any_cast<D>(duals_[step].get());
-    std::cout << "at step " << step << " / " << duals_.size() << " setting dual type = " << typeString(dualData) << std::endl;
     gretl_assert(dualData);
     *dualData = d;
   }

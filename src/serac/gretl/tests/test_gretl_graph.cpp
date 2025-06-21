@@ -38,13 +38,8 @@ TEST(Graph, NonlinearGraphGradients)
   auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);
   auto z = dataStore.create_state(dataZ, gretl::vec::initialize_zero_dual);
-  print("a");
-
   auto c = a + b;      // a + b
-  print("b");
-
   auto d = c + c + b;  // 2a + 3b
-  print("c");
   auto e = c + d;      // 3a + 4b
   auto g = d + c;      // 3a + 4b
   auto h = g + c;      // 4a + 5b  // completely unused
@@ -56,13 +51,9 @@ TEST(Graph, NonlinearGraphGradients)
   e = d + e;           // 8a + 11b
   e = z + e;
 
-  print("d");
-
   for (size_t i = 0; i < 2; ++i) {
     EXPECT_NEAR(g.get()[i], 3 * dataA[i] + 4 * dataB[i], 1e-14);
   }
-
-  print("e");
 
   for (size_t i = 0; i < 2; ++i) {
     EXPECT_NEAR(e.get()[i], 8 * dataA[i] + 11 * dataB[i] + dataZ[i], 1e-14);
@@ -74,11 +65,7 @@ TEST(Graph, NonlinearGraphGradients)
   double fFirstTime = f.get();
   gretl::set_as_objective(f);
 
-  print("f");
-
   dataStore.back_prop();
-
-  print("g");
 
   for (size_t i = 0; i < 2; ++i) {
     double A = a.get()[i];
@@ -139,7 +126,6 @@ TEST(Graph, LargeNonlinearGraphGradients)
       h = f + g;
       h = h * b;
     }
-    std::cout << "num active = " << dataStore.num_active_states() << std::endl;
     f = g * h;
     f = f + g;
   }
@@ -147,15 +133,13 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto qoi = gretl::inner_product(a, f);
   gretl::set_as_objective(qoi);
 
-  std::cout << "num active = " << dataStore.num_active_states() << std::endl;
-  std::cout << "num allocated = " << dataStore.num_allocated_states() << std::endl;
-  std::cout << "num duals = " << dataStore.num_dual_states() << std::endl;
+  print("num active = ", dataStore.num_active_states());
+  print("num duals = ", dataStore.num_dual_states());
 
   dataStore.back_prop();
 
-  std::cout << "num active = " << dataStore.num_active_states() << std::endl;
-  std::cout << "num allocated = " << dataStore.num_allocated_states() << std::endl;
-  std::cout << "num duals = " << dataStore.num_dual_states() << std::endl;
+  print("num active = ", dataStore.num_active_states());
+  print("num duals = ", dataStore.num_dual_states());
 
   double constexpr eps = 1e-7;
   gretl::check_array_gradients(qoi, {a, b, c}, {eps, eps, eps}, {800 * eps, 100 * eps, 100 * eps});
@@ -167,7 +151,6 @@ auto compute_f(const gretl::State<std::vector<double>>& c, const gretl::State<st
   d = d + b;
   d = d + b;
   d = d + b;
-  print("comp f");
   return d + b;
 }
 

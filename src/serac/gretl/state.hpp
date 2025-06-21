@@ -39,11 +39,12 @@ struct State : public StateBase {
     dataStore_->vjps_[step_] = v;
   }
 
-  State<T, D> clone(const std::vector<StateBase>& upstreams) const {
+  State<T, D> clone(const std::vector<StateBase>& upstreams) const
+  {
     gretl_assert(!upstreams.empty());
-    State<T, D> newState(*dataStore_, dataStore_->states_.size(), initialize_zero_dual_);
-    dataStore_->add_state(newState, upstreams);
-    return newState;
+    State<T, D> state(dataStore_, dataStore_->states_.size(), initialize_zero_dual_);
+    dataStore_->add_state(std::make_unique<State<T, D>>(state), upstreams);
+    return state;
   }
 
   State<T, D> finalize()
@@ -55,7 +56,7 @@ struct State : public StateBase {
   friend class DataStore;
 
  protected:
-  State(DataStore& store, size_t step, const InitializeZeroDual<T, D>& initialize_zero_dual)
+  State(DataStore* store, size_t step, const InitializeZeroDual<T, D>& initialize_zero_dual)
       : StateBase(store), initialize_zero_dual_(initialize_zero_dual)
   {
     step_ = static_cast<Int>(step);
