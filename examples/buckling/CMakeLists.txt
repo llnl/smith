@@ -4,13 +4,17 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if(TRIBOL_FOUND AND PETSC_FOUND)
-    blt_add_executable( NAME        buckling_cylinder
-                        SOURCES     cylinder.cpp
-                        OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                        DEPENDS_ON  serac_physics
-                        )
+blt_add_executable( NAME        buckling_cylinder
+                    SOURCES     cylinder.cpp
+                    OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                    DEPENDS_ON  serac_physics
+                    )
 
+serac_add_example_test(NAME           buckling_cylinder_no_contact
+                       COMMAND        buckling_cylinder --no-contact
+                       NUM_MPI_TASKS  4)
+
+if(TRIBOL_FOUND)
     blt_add_test(NAME           buckling_cylinder_fast
                  COMMAND        buckling_cylinder --fast
                  NUM_MPI_TASKS  4)
@@ -18,25 +22,22 @@ if(TRIBOL_FOUND AND PETSC_FOUND)
     serac_add_example_test(NAME           buckling_cylinder
                            COMMAND        buckling_cylinder
                            NUM_MPI_TASKS  4)
+endif()
 
+if(TRIBOL_FOUND AND ENZYME_FOUND AND PETSC_FOUND)
     configure_file(cylinder_petsc_options.yml
-                   ${PROJECT_BINARY_DIR}/examples/buckling/cylinder_petsc_options.yml
-                   COPYONLY)
+                    ${PROJECT_BINARY_DIR}/examples/buckling/cylinder_petsc_options.yml
+                    COPYONLY)
 
     serac_add_example_test(NAME            buckling_cylinder_mortar_contact
                            COMMAND         buckling_cylinder --contact --contact-type 1 --preconditioner 6 -options_file examples/buckling/cylinder_petsc_options.yml
                            NUM_MPI_TASKS   4
                            WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
-
-    serac_add_example_test(NAME           buckling_cylinder_no_contact
-                           COMMAND        buckling_cylinder --no-contact
-                           NUM_MPI_TASKS  4)
-
-    install(
-        FILES
-            cylinder.cpp
-        DESTINATION
-            examples/serac/buckling
-    )
-
 endif()
+
+install(
+    FILES
+        cylinder.cpp
+    DESTINATION
+        examples/serac/buckling
+)

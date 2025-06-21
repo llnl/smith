@@ -9,7 +9,7 @@
  *
  * @brief A buckling cylinder under compression, run with or without contact
  *
- * @note Run with mortar contact and PETSc preconditioners:
+ * @note Run with mortar contact and PETSc preconditioners (enabling enzyme is recommended):
  * @code{.sh}
  * ./build/examples/buckling_cylinder --contact --contact-type 1 --preconditioner 6 \
  *    -options_file examples/buckling/cylinder_petsc_options.yml
@@ -73,7 +73,12 @@ int main(int argc, char* argv[])
 
   // Contact specific options
   double penalty = 1e3;
+#ifdef SERAC_USE_TRIBOL
   bool use_contact = true;
+#else
+  bool use_contact = false;
+#endif
+
   auto contact_type = serac::ContactEnforcement::Penalty;
 
   // Option for testing purposes only, to reduce runtime
@@ -146,6 +151,7 @@ int main(int argc, char* argv[])
   // Create solver, either with or without contact
   std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
   if (use_contact) {
+#ifdef SERAC_USE_CONTACT
     auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim>>(
         nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
 
@@ -157,6 +163,9 @@ int main(int argc, char* argv[])
     auto contact_interaction_id = 0;
     solid_contact_solver->addContactInteraction(contact_interaction_id, {xpos_attr}, {xneg_attr}, contact_options);
     solid_solver = std::move(solid_contact_solver);
+#else
+    SLIC_ERROR("serac built without tribol enabled!");
+#endif
   } else {
     solid_solver = std::make_unique<serac::SolidMechanics<p, dim>>(
         nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
