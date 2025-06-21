@@ -15,6 +15,7 @@ set(smith_gretl_headers
       upstream_state.hpp
       double_state.hpp
       vector_state.hpp
+      print_utils.hpp
     )
 
 blt_add_library(

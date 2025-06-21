@@ -9,26 +9,21 @@ DataStore::DataStore(size_t /*maxStates*/) { current_step_ = 0; }
 
 void DataStore::back_prop()
 {
-  print("start back");
   goingForward_ = false;
   for (size_t n = states_.size(); n > 0; --n) {
     reverse_state();
   }
   goingForward_ = true;
-  print("end back");
 }
 
 void DataStore::reset()
 {
-  printf("reset\n");
   for (size_t n = states_.size(); n > 0; --n) {
     if (upstreams_[n - 1].size()) {
       primals_[n - 1] = nullptr;
     }
     duals_[n - 1] = nullptr;
   }
-  print("num active = ", num_active_states());
-  print("num duals = ", num_dual_states());
   current_step_ = 0;
 }
 
