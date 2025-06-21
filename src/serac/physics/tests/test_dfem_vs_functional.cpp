@@ -93,11 +93,15 @@ struct NeoHookeanWithFieldWithRateFunctional {
 
 struct NeoHookeanWithFieldWithRateDfem {
   static constexpr int state_size = 0;
+  static constexpr bool has_parameters = true;
+  static constexpr bool has_state = false;
 
-  template <typename T1, typename T2, typename T3, int dim>
-  SERAC_HOST_DEVICE auto pkStress(double /*dt*/, const mfem::future::tensor<T3, state_size>& /* state */,
-                                  const mfem::future::tensor<T1, dim, dim>& du_dX,
-                                  const mfem::future::tensor<T2, dim, dim>& /*dv_dX*/) const
+  using param_type = double;
+  std::unique_ptr<mfem::FiniteElementCollection> fe_collection = std::make_unique<mfem::L2_FECollection>(0);
+
+  template <typename T, int dim, template <typename, int, int> typename TensorT>
+  SERAC_HOST_DEVICE auto pkStress(double /*dt*/, const TensorT<T, dim, dim>& du_dX,
+                                  const TensorT<T, dim, dim>& /*dv_dX*/, double K) const
   {
     using std::log1p;
     constexpr auto I = mfem::future::IdentityMatrix<dim>();
@@ -115,7 +119,7 @@ struct NeoHookeanWithFieldWithRateDfem {
 
   SERAC_HOST_DEVICE auto density() const { return Rho; }
 
-  double K;    ///< bulk modulus
+  // double K;    ///< bulk modulus
   double G;    ///< shear modulus
   double Rho;  ///< density
 };

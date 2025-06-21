@@ -17,18 +17,21 @@
 
 namespace serac {
 
-template <typename Material, int dim>
-struct MomentumQFunction {
+template <typename Material, typename... Parameters>
+struct StressDivQFunction {
   SERAC_HOST_DEVICE inline auto operator()(
-      mfem::real_t dt, const mfem::future::tensor<mfem::real_t, Material::state_size>& internal_state,
-      const mfem::future::tensor<mfem::real_t, dim, dim>& du_dxi,
-      const mfem::future::tensor<mfem::real_t, dim, dim>& dv_dxi, const mfem::future::tensor<mfem::real_t, dim, dim>&,
-      const mfem::future::tensor<mfem::real_t, dim, dim>& dX_dxi, mfem::real_t weight) const
+      // mfem::real_t dt, // TODO: figure out how to pass this in
+      const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& du_dxi,
+      const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dv_dxi,
+      const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>&,
+      const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dX_dxi, mfem::real_t weight,
+      Parameters... params) const
   {
     auto dxi_dX = mfem::future::inv(dX_dxi);
     auto du_dX = mfem::future::dot(du_dxi, dxi_dX);
     auto dv_dX = mfem::future::dot(dv_dxi, dxi_dX);
-    auto P = mfem::future::get<0>(material.pkStress(dt, internal_state, du_dX, dv_dxi));
+    double dt = 1.0;  // TODO: figure out how to pass this in to the qfunction
+    auto P = mfem::future::get<0>(material.pkStress(dt, du_dX, dv_dxi, params...));
     auto JxW = mfem::future::det(dX_dxi) * weight * mfem::future::transpose(dxi_dX);
     return mfem::future::tuple{P * JxW};
   }
@@ -49,7 +52,17 @@ template <int dim>
 class SolidDfemResidual : public DfemResidual {
  public:
   /// @brief disp, velo, accel
-  static constexpr int NUM_STATE_VARS = 3;
+  static constexpr int NUM_STATE_VARS = 4;
+
+  enum FieldIDs
+  {
+    DISP,   ///< displacement
+    VELO,   ///< velocity
+    ACCEL,  ///< acceleration
+    COORD,  ///< coordinates
+    PARAM,  ///< parameter field, if any
+    STATE   ///< internal state field, if any
+  };
 
   /**
    * @brief Construct a new SolidResidual object
@@ -58,9 +71,14 @@ class SolidDfemResidual : public DfemResidual {
    * @param mesh The serac Mesh
    * @param diff_op A differentiable operator that computes the residual and jacobian
    */
-  SolidDfemResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
-                    mfem::future::DifferentiableOperator&& diff_op)
-      : DfemResidual(physics_name, mesh, std::move(diff_op))
+  SolidDfemResidual(std::string physics_name, std::shared_ptr<Mesh> mesh, const mfem::ParFiniteElementSpace& test_space,
+                    std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
+      : DfemResidual(
+            physics_name, mesh,
+            mfem::future::DifferentiableOperator(solutionFieldDescriptors(mesh->mfemParMesh(), test_space),
+                                                 parameterFieldDescriptors(parameter_fe_spaces), mesh->mfemParMesh())),
+        solution_fields_(solutionFieldDescriptors(mesh->mfemParMesh(), test_space)),
+        parameter_fields_(parameterFieldDescriptors(parameter_fe_spaces))
   {
   }
 
@@ -89,15 +107,87 @@ class SolidDfemResidual : public DfemResidual {
    *
    */
   template <typename MaterialType>
-  void setMaterial(std::string, const MaterialType& material, const mfem::IntegrationRule& displacement_ir)
+  void setMaterial(std::string /*body_name*/, const MaterialType& material,
+                   const mfem::IntegrationRule& displacement_ir)
   {
-    mfem::future::tuple inputs{mfem::future::Gradient<0>{}, mfem::future::Gradient<1>{}, mfem::future::Gradient<2>{},
-                               mfem::future::Gradient<3>{}, mfem::future::Weight{}};
-    mfem::future::tuple outputs{mfem::future::Gradient<4>{}};
+    mfem::future::tuple outputs{mfem::future::Gradient<DISP>{}};
+    // TODO: find out the right attributes from the body name
     mfem::Array<int> solid_domain_attributes(DfemResidual::mesh_->mfemParMesh().attributes.Max());
-    auto momentum_qf = MomentumQFunction<MaterialType, dim>{.material = material};
-    DfemResidual::diff_op_.AddDomainIntegrator(momentum_qf, inputs, outputs, displacement_ir, solid_domain_attributes);
+    if constexpr (MaterialType::has_state && MaterialType::has_parameters) {
+      // build new diff_op_ with state and parameter fields
+      mfem::future::tuple inputs{// TODO: figure out how to pass in dt
+                                 mfem::future::Gradient<DISP>{},  mfem::future::Gradient<VELO>{},
+                                 mfem::future::Gradient<ACCEL>{}, mfem::future::Gradient<COORD>{},
+                                 mfem::future::Weight{},          mfem::future::Value<PARAM>{},
+                                 mfem::future::Value<STATE>{}};
+      auto stress_div_qf =
+          StressDivQFunction<MaterialType, typename MaterialType::state_type, typename MaterialType::param_type>{
+              .material = material};
+      DfemResidual::diff_op_.AddDomainIntegrator(stress_div_qf, inputs, outputs, displacement_ir,
+                                                 solid_domain_attributes);
+    } else if constexpr (MaterialType::has_parameters) {
+      // build new diff_op_ with parameter fields
+      mfem::future::tuple inputs{// TODO: figure out how to pass in dt
+                                 mfem::future::Gradient<DISP>{},  mfem::future::Gradient<VELO>{},
+                                 mfem::future::Gradient<ACCEL>{}, mfem::future::Gradient<COORD>{},
+                                 mfem::future::Weight{},          mfem::future::Value<PARAM>{}};
+      auto stress_div_qf = StressDivQFunction<MaterialType, typename MaterialType::param_type>{.material = material};
+      DfemResidual::diff_op_.AddDomainIntegrator(stress_div_qf, inputs, outputs, displacement_ir,
+                                                 solid_domain_attributes);
+    } else if constexpr (MaterialType::has_state) {
+      // build new diff_op_ with state fields
+      mfem::future::tuple inputs{// TODO: figure out how to pass in dt
+                                 mfem::future::Gradient<DISP>{},  mfem::future::Gradient<VELO>{},
+                                 mfem::future::Gradient<ACCEL>{}, mfem::future::Gradient<COORD>{},
+                                 mfem::future::Weight{},          mfem::future::Value<STATE>{}};
+      auto stress_div_qf = StressDivQFunction<MaterialType, typename MaterialType::state_type>{.material = material};
+      DfemResidual::diff_op_.AddDomainIntegrator(stress_div_qf, inputs, outputs, displacement_ir,
+                                                 solid_domain_attributes);
+    } else {
+      // existing diff_op_ should work fine
+      mfem::future::tuple inputs{// TODO: figure out how to pass in dt
+                                 mfem::future::Gradient<DISP>{}, mfem::future::Gradient<VELO>{},
+                                 mfem::future::Gradient<ACCEL>{}, mfem::future::Gradient<COORD>{},
+                                 mfem::future::Weight{}};
+      auto stress_div_qf = StressDivQFunction<MaterialType>{.material = material};
+      DfemResidual::diff_op_.AddDomainIntegrator(stress_div_qf, inputs, outputs, displacement_ir,
+                                                 solid_domain_attributes);
+    }
   }
+
+ protected:
+  /**
+   * @brief Construct the field descriptors for the differentiable operator
+   *
+   * @param parameter_fe_spaces The parameter finite element spaces
+   * @return A vector of field descriptors for the differentiable operator
+   */
+  static std::vector<mfem::future::FieldDescriptor> parameterFieldDescriptors(
+      std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces)
+  {
+    std::vector<mfem::future::FieldDescriptor> field_descriptors;
+    field_descriptors.reserve(parameter_fe_spaces.size());
+    for (const auto& space : parameter_fe_spaces) {
+      field_descriptors.emplace_back(NUM_STATE_VARS + field_descriptors.size(), space);
+    }
+    return field_descriptors;
+  }
+  /**
+   * @brief Construct the field descriptors for the solution fields
+   *
+   */
+  static std::vector<mfem::future::FieldDescriptor> solutionFieldDescriptors(
+      const mfem::ParMesh& mesh, const mfem::ParFiniteElementSpace& test_space)
+  {
+    return {
+        {DISP, &test_space},
+        {VELO, &test_space},
+        {ACCEL, &test_space},
+        {COORD, static_cast<const mfem::ParFiniteElementSpace*>(mesh.GetNodalFESpace())},
+    };
+  }
+  std::vector<mfem::future::FieldDescriptor> solution_fields_;
+  std::vector<mfem::future::FieldDescriptor> parameter_fields_;
 };
 
 }  // namespace serac
