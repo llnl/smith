@@ -10,6 +10,11 @@ blt_add_executable( NAME        buckling_cylinder
                     DEPENDS_ON  serac_physics
                     )
 
+if(SERAC_ENABLE_HIP)
+    blt_add_target_compile_flags(TO buckling_cylinder FLAGS "-fgpu-rdc")
+    blt_add_target_link_flags(TO buckling_cylinder FLAGS "-fgpu-rdc")
+endif()
+
 serac_add_example_test(NAME           buckling_cylinder_no_contact
                        COMMAND        buckling_cylinder --no-contact
                        NUM_MPI_TASKS  4)
