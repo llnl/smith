@@ -46,7 +46,7 @@ struct StateBase {
     dataStore_->set_dual<D>(step_, d);
   }
 
-  template <typename T, typename D>
+  template <typename T, typename D = T>
   State<T, D> create_state(const std::vector<StateBase>& upstreams, InitializeZeroDual<T, D> initialize_zero_dual) const
   {
     return dataStore_->create_empty_state<T, D>(initialize_zero_dual, upstreams);
@@ -55,7 +55,7 @@ struct StateBase {
   template <typename T, typename D = T>
   State<T, D> create_state(const std::vector<StateBase>& upstreams) const
   {
-    return StateBase::create_state<T, D>(upstreams, [](const T&) -> T { return T(); });
+    return StateBase::create_state<T, D>(upstreams, defaultInitializeZeroDual<T>());
   }
 
   friend class DataStore;
@@ -70,11 +70,8 @@ struct StateBase {
  protected:
   // const StateDataBase* data() const { return dataStore..get(); }
 
-  Int step_index() const;
-  void clear_primal();
-  void clear_dual();
-
   DataStore* dataStore_;
+  std::shared_ptr<std::any> primal_;
   Int step_;
 };
 

@@ -20,7 +20,7 @@ void DataStore::reset()
 {
   for (size_t n = states_.size(); n > 0; --n) {
     if (upstreams_[n - 1].size()) {
-      primals_[n - 1] = nullptr;
+      states_[n - 1]->primal_ = nullptr;
     }
     duals_[n - 1] = nullptr;
   }
@@ -41,13 +41,21 @@ void DataStore::reverse_state()
 void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams)
 {
   ++current_step_;
+
   states_.emplace_back(std::move(newState));
-  primals_.emplace_back(nullptr);
   duals_.emplace_back(nullptr);
+
   std::vector<Int> upstreamSteps;
   upstreamSteps.reserve(upstreams.size());
   for (auto& u : upstreams) {
-    upstreamSteps.push_back(u.step_);
+    Int upstreamStep = u.step_;
+    upstreamSteps.push_back(upstreamStep);
+    // repopulate the upstreams data, in case the checkpointer has decided to remove it.
+    if (upstreams_[upstreamStep].size()) {
+      if (!states_[u.step_]->primal_) {
+        states_[u.step_]->primal_ = u.primal_;
+      }
+    }
   }
   upstreams_.emplace_back(*this, upstreamSteps);
 
@@ -62,18 +70,29 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
   });
 
   assert(current_step_ == states_.size());
-  assert(current_step_ == primals_.size());
   assert(current_step_ == duals_.size());
   assert(current_step_ == upstreams_.size());
+  assert(current_step_ == vjps_.size());
+}
+
+void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams, const std::shared_ptr<std::any>& value)
+{
+  add_state(std::move(newState), upstreams);
+  gretl_assert(current_step_ - 1 < states_.size());
+  states_[current_step_ - 1]->primal_ = value;
+}
+
+std::shared_ptr<std::any>& DataStore::any_primal(Int step)
+{
+  return states_[step]->primal_;
 }
 
 void DataStore::fetch_state_data(Int stepIndex)
 {
-  if (primals_[stepIndex]) {
+  if (states_[stepIndex]->primal_) {
     return;
   }
   
-  fetch_state_data(stepIndex - 1);
   current_step_ = stepIndex;
 
   states_[stepIndex]->evaluate_and_remove_disposable_checkpoints();
@@ -83,7 +102,7 @@ Int DataStore::num_active_states() const
 {
   Int numActive = 0;
   for (const auto& s : states_) {
-    if (primals_[s->step_]) {
+    if (states_[s->step_]->primal_) {
       ++numActive;
     }
   }

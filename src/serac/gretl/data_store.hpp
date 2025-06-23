@@ -33,7 +33,7 @@ using InitializeZeroDual = std::function<D(const T&)>;
 
 template <typename T>
 struct defaultInitializeZeroDual {
-  T operator()(const T&) { return T(0.0); }
+  T operator()(const T&) { return T{}; }
 };
 
 class DataStore {
@@ -46,9 +46,8 @@ class DataStore {
   State<T, D> create_state(const T& t, InitializeZeroDual<T, D> initial_zero_dual = defaultInitializeZeroDual<D>())
   {
     State<T, D> state(this, states_.size(), initial_zero_dual);
-    add_state(std::make_unique<State<T, D>>(state), {});
-    gretl_assert(current_step_ - 1 < primals_.size());
-    primals_[current_step_ - 1] = std::make_shared<std::any>(t);
+    add_state(std::make_unique<State<T, D>>(state), {}, std::make_shared<std::any>(t));
+    
     return state;
   }
 
@@ -88,6 +87,9 @@ class DataStore {
   void vjp(StateBase& state);
 
   /// @brief function for safely adding new states to graph and checkpoint
+  virtual void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams, const std::shared_ptr<std::any>& value);
+
+  /// @brief function for safely adding new states to graph and checkpoint
   virtual void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams);
 
   /// @brief method for clearing states in the past that are no longer needed
@@ -104,18 +106,17 @@ class DataStore {
   std::vector<UpstreamStates> upstreams_;
   std::vector<EvalT> evals_;
   std::vector<VjpT> vjps_;
+  std::vector<std::unique_ptr<std::any>> duals_;
 
-  mutable std::vector<std::shared_ptr<std::any>> primals_;
-  mutable std::vector<std::unique_ptr<std::any>> duals_;
+  std::shared_ptr<std::any>& any_primal(Int step);
 
   template <typename T>
   const T& get_primal(Int step)
   {
-    // gretl_assert(primals_[step]);
-    if (!primals_[step]) {
+    if (!any_primal(step)) {
       fetch_state_data(step);
     }
-    auto tptr = std::any_cast<T>(primals_[step].get());
+    auto tptr = std::any_cast<T>(any_primal(step).get());
     gretl_assert(tptr);
     return *tptr;
   }
@@ -123,7 +124,7 @@ class DataStore {
   template <typename T>
   void set_primal(Int step, const T& t)
   {
-    primals_[step] = std::make_shared<std::any>(t);
+    any_primal(step) = std::make_shared<std::any>(t);
   }
 
   template <typename D, typename T = D>
