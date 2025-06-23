@@ -474,15 +474,6 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
   std::vector<Array2D<int> > local_face_dofs = geom_local_face_dofs(p);
   std::vector<std::vector<int> > lex_perm = lexicographic_permutations(p);
 
-  // sam: this function contains several comments that relate to an investigation into adopting
-  //      mfem's FaceNbrData pattern (which ended up being too invasive to implement initially).
-  //      I leave some of the commented code here so Julian's recommendations are not lost.
-  //
-  // int components_per_node = fes->GetVDim();
-  // bool by_vdim = fes->GetOrdering() == mfem::Ordering::byVDIM;
-  // fes->ExchangeFaceNbrData();
-  // int LSize = fes->GetProlongationMatrix()->Height();
-
   uint64_t n = 0;
 
   for (int f : mfem_face_ids) {
@@ -498,24 +489,6 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
       // 1. find the element(s) that this face belongs to
       mfem::Array<int> elem_ids;
       face_to_elem->GetRow(f, elem_ids);
-
-#if 0
-      mpi::out << f << " elem ids: ";
-      for (auto elem : elem_ids) {
-        mpi::out << elem << " ";
-      }
-      mpi::out << std::endl;
-
-      mfem::Array<int> test_dofs;
-      fes->GetFaceDofs(f, test_dofs);
-
-      mpi::out << " dofs (sz = " << test_dofs.Size() << "): ";
-      for (int z = 0; z < test_dofs.Size(); z++) {
-        mpi::out << test_dofs[z] << " ";
-      }
-      mpi::out << std::endl;
-      mpi::out << std::endl;
-#endif
 
       for (auto elem : elem_ids) {
         // 2a. get the list of faces (and their orientations) that belong to that element ...
@@ -537,6 +510,7 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
         }
 
         // 2b. ... and find `i` such that `elem_side_ids[i] == f`
+        // This generates a local_face_index that coincides with ones from GetFaceInformation
         int i;
         for (i = 0; i < elem_side_ids.Size(); i++) {
           if (elem_side_ids[i] == f) break;
@@ -545,6 +519,11 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
         // 3. get the dofs for the entire element
         mfem::Array<int> elem_dof_ids;
         fes->GetElementDofs(elem, elem_dof_ids);
+        // // Debug hanyu
+        // mpi::out << " Shared face = " << info.IsShared() << " Face id = " << f << " Elem id = " << elem << std::endl
+        //          << i << " " << info.element[0].local_face_id << " " << info.element[1].local_face_id << std::endl
+        //          << orientations[i] << " " << info.element[0].orientation << " " << info.element[1].orientation <<
+        //          std::endl;
 
         mfem::Geometry::Type elem_geom = mesh->GetElementGeometry(elem);
 
@@ -557,38 +536,75 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
         int orientation = (mesh->Dimension() == 2 && info.IsBoundary()) ? 0 : orientations[i];
 
         // 4. extract only the dofs that correspond to side `i`
+        // mpi::out << "face local dofs: ";
         for (auto k : face_perm(orientation)) {
           face_dofs.push_back(uint64_t(elem_dof_ids[local_face_dofs[uint32_t(elem_geom)](i, k)]));
+          // mpi::out << face_dofs.back().index() << " ";
         }
+        // mpi::out << std::endl;
 
-#if 0
-        // (5. optional) add remaining dofs that were omitted on shared faces
+        // 5. add remaining dofs that were omitted on shared faces
+        // FaceNbrData includes all dofs in the "volumetric" element adjacent to the shared faces
+        // We need to again find our face on the ghost element and extract only the face dofs
+        // This may not yet work for NC faces
         if (info.IsShared()) {
+          // FaceNbrData should be already exchanged in Functional when invoked by ParGridFunction
+          // which also invokes ExchangeFaceNbrData on subsequent ParFiniteElementSpace and ParMesh
+          int components_per_node = fes->GetVDim();
+          bool by_vdim = fes->GetOrdering() == mfem::Ordering::byVDIM;
+          int LSize = fes->GetProlongationMatrix()->Height();
+
+          // Additional safeguard to make sure ByNODES ordering in vector L2 field raise an error
+          SLIC_ERROR_IF(!by_vdim && components_per_node > 1, "Unsupported: L2 vector field ordered by nodes");
 
           mfem::Array<int> shared_elem_vdof_ids;
+          mfem::Array<int> shared_elem_dof_ids;
 
           //                on my processor
-          //                    VVVVVVV     
+          //                    VVVVVVV
           // dofs for the face [0 1 3 4 | 5 8 12 13]
           //                              ^^^^^^^^^
           //                         on the other processor
           int other_element_id = info.element[1].index;
-          fes->GetFaceNbrElementVDofs(other_element_id, shared_elem_vdof_ids); // indices into vector from FaceNbrData
+          fes->GetFaceNbrElementVDofs(other_element_id, shared_elem_vdof_ids);  // indices into vector from FaceNbrData
 
-          mpi::out << " this face is also shared so it has additional dofs: ";
-          int dofs_per_face = shared_elem_vdof_ids.Size() / components_per_node;
-          int stride = (by_vdim) ? components_per_node : 1;
-
-          // sam: is this right?
           // byVDIM == x y z x y z x y z x y z
           // byNODES == x x x x y y y y z z z z
-          for (int k = 0; k < dofs_per_face; k++) {
-            face_dofs.push_back(uint64_t(fes->VDofToDof(shared_elem_vdof_ids[k * stride]) + LSize));
-            mpi::out << face_dofs.back().index() << " ";
+          int dofs_per_element = shared_elem_vdof_ids.Size() / components_per_node;
+          int stride = (by_vdim) ? components_per_node : 1;
+
+          shared_elem_dof_ids.SetSize(dofs_per_element);
+          for (int k = 0; k < dofs_per_element; ++k) {
+            shared_elem_dof_ids[k] = fes->VDofToDof(shared_elem_vdof_ids[k * stride]);  // Change vdof to dof indices
           }
-          mpi::out << std::endl;
+
+          // Find the dofs on the shared face on the ghost element side
+          // Neighbor element local_face_index and orientation is already available from GetFaceInformation
+          // mpi::out << " this face is also shared so it has additional dofs: ";
+          mfem::Geometry::Type ghost_geom = fes->GetParMesh()->face_nbr_elements[other_element_id]->GetGeometryType();
+          int j = info.element[1].local_face_id;
+          int ghost_orientation;
+          if (mesh->Dimension() == 2) {
+            // In 2D, orientations[i] sometimes is inverted as compared to the ones from GetFaceInformation
+            // In this case, we stay with the orientations constructed previously by GetElementEdges, which is strictly
+            // CCW So we set ghost orientation to be exactly the opposite of the original orientation (orientations[i])
+            // side note: even if you use info.element[1].orientation, looks like it's still fine.
+            // The only difference is the order those face dof indices gets registered in std::vector face_dofs
+            ghost_orientation = (orientation == 0) ? 1 : 0;
+          } else {
+            // In 3D, I think it's consistently CCW. So we directly use the orientation from GetFaceInformation
+            // This orientation is already consistent with the permutation in {0, 1, ... , n} form
+            ghost_orientation = info.element[1].orientation;
+          }
+
+          // extract only the dofs that correspond to side `j`
+          for (auto k : face_perm(ghost_orientation)) {
+            face_dofs.push_back(uint64_t(shared_elem_dof_ids[local_face_dofs[uint32_t(ghost_geom)](j, k)] +
+                                         LSize / components_per_node));
+            // mpi::out << face_dofs.back().index() << " ";
+          }
+          // mpi::out << std::endl;
         }
-#endif
       }
 
       // H1 and Hcurl spaces are more straight-forward, since
@@ -682,6 +698,9 @@ void ElementRestriction::Gather(const mfem::Vector& L_vector, mfem::Vector& E_ve
       for (uint64_t j = 0; j < nodes_per_elem; j++) {
         uint64_t E_id = (i * components + c) * nodes_per_elem + j;
         uint64_t L_id = GetVDof(dof_info(i, j), c).index();
+        // // debug
+        // mpi::out << "elem #" << i << " " << "E_id = " << E_id << " " << dof_info(i, j).index()
+        //          << " " << "L_id = " << L_id << std::endl;
         E_vector[int(E_id)] = L_vector[int(L_id)];
       }
     }

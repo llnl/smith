@@ -47,6 +47,7 @@ set(functional_parallel_test_sources
     functional_boundary_test.cpp
     functional_comparisons.cpp
     functional_comparison_L2.cpp
+    dg_ghost_face_index.cpp
     )
 
 serac_add_tests(SOURCES       ${functional_parallel_test_sources}

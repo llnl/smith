@@ -166,6 +166,24 @@ generateParFiniteElementSpace(mfem::ParMesh* mesh)
   return std::pair(std::move(fes), std::move(fec));
 }
 
+/**
+ * @brief helper function to locally cast away const on FE space to update face neighbor data.
+ *  this is ok because the original FE space is declared without const and we constrained
+ *  the non-constness locally
+ */
+inline void updateFaceNbrData(const mfem::ParFiniteElementSpace* const_trial_space, mfem::ParGridFunction& trial_pgf,
+                              mfem::Vector& trial_tdof_vals)
+{
+  mfem::ParFiniteElementSpace* nonconst_trial_space = const_cast<mfem::ParFiniteElementSpace*>(const_trial_space);
+
+  // Link the ParGridFunction to external FE space and data by reference
+  trial_pgf.MakeRef(nonconst_trial_space, trial_tdof_vals.GetData());
+
+  // Exchange face nbr data to set the vector in ParGridFunction with the right size
+  // This should automatically invoke ExchangeFaceNbrData on the subsequent ParFESpace and ParMesh
+  trial_pgf.ExchangeFaceNbrData();
+}
+
 /// @cond
 template <typename T, ExecutionSpace exec = serac::default_execution_space>
 class Functional;
@@ -259,24 +277,20 @@ class Functional<test(trials...), exec> {
       P_trial_[i] = trial_space_[i]->GetProlongationMatrix();
 
       // For L2 spaces, configure a ParGridFunction with external data to exchange face neighbor data
-      // This is for DG method where interior faces on the processor boundary need to access data on the neighrbor element
+      // This is for DG method where interior faces on the processor boundary need to access data on the neighrbor
+      // element
       if (trial_function_spaces_[i].family == Family::L2) {
         // Set the vector size to store tdof data
-        tdof_values_[i].SetSize(P_trial_[i]->Height(), mfem::Device::GetMemoryType());
+        input_ldof_values_[i].SetSize(P_trial_[i]->Height(), mem_type);
 
-        // Link the ParGridFunction to external FE space and data by reference
-        trial_pargrid_functions_[i].MakeRef(const_cast<mfem::ParFiniteElementSpace*>(trial_space_[i]), tdof_values_[i].GetData());
-
-        // Exchange face nbr data to set the vector in ParGridFunction with the right size
-        trial_pargrid_functions_[i].ExchangeFaceNbrData();
+        // Initialize face neighbor data vector
+        updateFaceNbrData(trial_space_[i], trial_pargrid_functions_[i], input_ldof_values_[i]);
 
         // Set the local input vector size to store local + ghost data
-        input_L_[i].SetSize(tdof_values_[i].Size() + trial_pargrid_functions_[i].FaceNbrData().Size(), mfem::Device::GetMemoryType());
+        input_L_[i].SetSize(input_ldof_values_[i].Size() + trial_pargrid_functions_[i].FaceNbrData().Size(), mem_type);
+      } else {
+        input_L_[i].SetSize(P_trial_[i]->Height(), mem_type);
       }
-      else {
-        input_L_[i].SetSize(P_trial_[i]->Height(), mfem::Device::GetMemoryType());
-      }
-      // std::cout << "local size = " << input_L_[i].Size() << std::endl;
 
       // create the necessary number of empty mfem::Vectors, to be resized later
       input_E_.push_back({});
@@ -374,10 +388,10 @@ class Functional<test(trials...), exec> {
     std::vector<uint32_t> arg_vec = {args...};
     for (uint32_t i : arg_vec) {
       domain.insert_restriction(trial_space_[i], trial_function_spaces_[i]);
-      check_interior_face_compatibility(domain.mesh_, trial_function_spaces_[i]);
+      // check_interior_face_compatibility(domain.mesh_, trial_function_spaces_[i]);
     }
     domain.insert_restriction(test_space_, test_function_space_);
-    check_interior_face_compatibility(domain.mesh_, test_function_space_);
+    // check_interior_face_compatibility(domain.mesh_, test_function_space_);
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
     integrals_.push_back(
@@ -483,59 +497,75 @@ class Functional<test(trials...), exec> {
 
     // get the values for each local processor
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
-// #if 0
-//       if (trial_function_spaces_[i].family == Family::L2) {
-// 
-//         // make a PGF on the fly
-//         // TODO: don't allocate/deallocate this data every invocation
-//         mfem::ParGridFunction X;
-//         X.MakeRef(trial_space_[i], input_L_[i].GetData());
-// 
-//         // call exchange face nbr
-//         X.ExchangeFaceNbrData();
-// 
-//         // copy input_L[i] and facenbrdata [i] into a common array like:
-//         //          first part        second part
-//         //    [   ---   L    ---   |  ---  FND ---  ]
-//         mfem::Vector first_part;
-//         first_part.MakeRef(input_L_[i], 0);
-//         P_trial_[i]->Mult(*input_T[i], first_part);
-// 
-//         mfem::Vector second_part;
-//         second_part.MakeRef(input_L_[i], first_part.Size());
-//         second_part = X.FaceNbrData();
-// 
-//       } else {
-// 
-//         P_trial_[i]->Mult(*input_T[i], input_L_[i]);
-// 
-//       }
-// #else
-//       P_trial_[i]->Mult(*input_T[i], input_L_[i]);
-// #endif
       if (trial_function_spaces_[i].family == Family::L2) {
         // copy input_L[i] and facenbrdata [i] into a common array like:
         //          first part        second part
         //    [   ---   L    ---   |  ---  FND ---  ]
-        P_trial_[i]->Mult(*input_T[i], tdof_values_[i]);
+        P_trial_[i]->Mult(*input_T[i], input_ldof_values_[i]);
+
         // MakeRef from mfem::Vector will actually delete the data in the original vector, so we assign the
         // values directly by SetVector, which invokes additional operations. This can be optimized later.
-        input_L_[i].SetVector(tdof_values_[i], 0);
-        // // Debug
-        // std::cout << "TDOFs" << std::endl;
-        // for (int j = 0; j < tdof_values_[i].Size(); ++j) {
-        //   std::cout << tdof_values_[i][j] << " ";
-        // }
-        // std::cout << std::endl;
+        input_L_[i].SetVector(input_ldof_values_[i], 0);
 
-        // Point ParGridFunction to the new data and call exchange face nbr data
-        trial_pargrid_functions_[i].MakeRef(const_cast<mfem::ParFiniteElementSpace*>(trial_space_[i]), tdof_values_[i].GetData());
-        trial_pargrid_functions_[i].ExchangeFaceNbrData();
-        input_L_[i].SetVector(trial_pargrid_functions_[i].FaceNbrData(), tdof_values_[i].Size());
+        // Update again with new data
+        updateFaceNbrData(trial_space_[i], trial_pargrid_functions_[i], input_ldof_values_[i]);
+
+        // Set the values of neighbor ghost dofs
+        // The entries in face_nbr_data vector is ALWAYS arranged byNODES per "volumetric" element.
+        // For example with two quadrilateral ghost elements we would have such face_nbr_data
+        //  ----------- Ghost elem 1 ----------   ----------- Ghost elem 2 ----------
+        // {X1 X1 X1 X1 Y1 Y1 Y1 Y1 Z1 Z1 Z1 Z1   X2 X2 X2 X2 Y2 Y2 Y2 Y2 Z2 Z2 Z2 Z2}
+        //
+        // This is because 1. mfem prepares face neighbor data element by element to communicate later (standard)
+        // 2. mfem uses GetElementVDofs to gather the data for communication which returns a set of indices ALWAYS
+        // ordered byNODES (???). If the ordering we set for ParFiniteElementSpace is byVDIM, we need the entries to be
+        //  ----------- Ghost elem 1 ----------   ----------- Ghost elem 2 ----------
+        // {X1 Y1 Z1 X1 Y1 Z1 X1 Y1 Z1 X1 Y1 Z1   X2 Y2 Z2 X2 Y2 Z2 X2 Y2 Z2 X2 Y2 Z2}
+        // so it's consistent with the local data. Therefore, we need to manually change this ordering
+        if (trial_space_[i]->GetVDim() == 1) {
+          // For scalar fields, this weird ordering doesn't cause any problems
+          input_L_[i].SetVector(trial_pargrid_functions_[i].FaceNbrData(), input_ldof_values_[i].Size());
+        } else {
+          if (trial_space_[i]->GetOrdering() == mfem::Ordering::byVDIM) {
+            // For vector fields with byVDIM ordering, we manually set the entries in VDIM order. By the way this
+            // is really annoying because we have to get face neighbor vdof indices again in element restriction
+            int num_ghost_elem = trial_space_[i]->GetParMesh()->GetNFaceNeighborElements();
+            int components_per_node = trial_space_[i]->GetVDim();
+            const mfem::Vector& face_neighbor_data = trial_pargrid_functions_[i].FaceNbrData();
+
+            int offset = 0;
+            int local_size = input_ldof_values_[i].Size();
+
+            for (int n = 0; n < num_ghost_elem; ++n) {
+              mfem::Array<int> old_shared_elem_vdof_ids;
+              trial_space_[i]->GetFaceNbrElementVDofs(n, old_shared_elem_vdof_ids);
+              int dofs_per_element = old_shared_elem_vdof_ids.Size() / components_per_node;
+
+              // Put the entries into their new index
+              for (int m = 0; m < old_shared_elem_vdof_ids.Size(); ++m) {
+                //            -------------- dofs before --------------     ---- component -----
+                int new_id = (m % dofs_per_element) * components_per_node + m / dofs_per_element + offset;
+                input_L_[i][local_size + new_id] = face_neighbor_data(old_shared_elem_vdof_ids[m]);
+              }
+              // Increase offset for next ghost element
+              offset += old_shared_elem_vdof_ids.Size();
+            }
+          } else {
+            // For vector fields with byNODES ordering, we need to prepare the local input vector in the form
+            // { true_comp_X ghost_comp_X true_comp_Y ghost_comp_Y true_comp_Z ghost_comp_Z }
+            // In this form, to ensure the correct mapping between dof and vdof, we need to change the ndofs in
+            // FiniteElementSpace to include ones from ghost element. Additionally, we need to prepare
+            // ghost_comp_X / ghost_comp_Y / ghost_comp_Z from element wise entries in face_nbr_data
+            // eg. ghost_comp_X includes X component entries of all ghost element dofs
+            // This requires significant renumbering of the dofs and therefore is not supported for now
+            SLIC_ERROR_ROOT("Unsupported: L2 vector field ordered by nodes");
+          }
+        }
       } else {
         P_trial_[i]->Mult(*input_T[i], input_L_[i]);
       }
       // // Debug
+      // std::cout << "local size = " << input_L_[i].Size() << std::endl;
       // std::cout << "Local vector" << std::endl;
       // for (int j = 0; j < input_L_[i].Size(); ++j) {
       //   std::cout << input_L_[i][j] << " ";
@@ -555,6 +585,13 @@ class Functional<test(trials...), exec> {
         input_E_buffer_[i].SetSize(int(G_trial.ESize()));
         input_E_[i].Update(input_E_buffer_[i], G_trial.bOffsets());
         G_trial.Gather(input_L_[i], input_E_[i]);
+        // // Debug
+        // std::cout << "element size = " << G_trial.ESize() << std::endl;
+        // std::cout << "Element vector" << std::endl;
+        // for (int j = 0; j < input_E_[i].Size(); ++j) {
+        //   std::cout << input_E_[i][j] << " ";
+        // }
+        // std::cout << std::endl;
       }
 
       output_E_buffer_.SetSize(int(G_test.ESize()));
@@ -871,8 +908,8 @@ class Functional<test(trials...), exec> {
   /// @brief For access of neighbor element info for processor boundary faces
   std::array<mfem::ParGridFunction, num_trial_spaces> trial_pargrid_functions_;
 
-  /// @brief Store values on true dofs of the local processor
-  std::array<mfem::Vector, num_trial_spaces> tdof_values_;
+  /// @brief Store values on L2 ldofs of the local processor
+  std::array<mfem::Vector, num_trial_spaces> input_ldof_values_;
 
   /**
    * @brief Operator that converts true (global) DOF values to local (current rank) DOF values
