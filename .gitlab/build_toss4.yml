@@ -3,7 +3,7 @@
 .on_toss4:
   variables:
     SCHEDULER_PARAMETERS: "--reservation=ci --exclusive=user --deadline=now+${ALLOC_DEADLINE}minutes -N ${ALLOC_NODES} -t ${ALLOC_TIME} -A ${ALLOC_BANK}"
-    ALLOC_DEADLINE: "180"
+    ALLOC_DEADLINE: "180" # Allocation times must be less than this value
   tags:
     - batch
     - ruby
@@ -116,7 +116,7 @@ toss4-clang_16_0_6-examples:
     COMPILER: "clang@16.0.6"
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "90"
+    ALLOC_TIME: "140"
   extends: .examples_build_on_toss4
 
 toss4-clang_14_0_6-examples:
