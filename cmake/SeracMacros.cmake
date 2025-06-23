@@ -367,7 +367,7 @@ endmacro(serac_get_src_subdirectory)
 ##
 ##------------------------------------------------------------------------------
 # List to hold all unified headers to be later used to create a master unified header
-set(_serac_unified_headers "" CACHE STRING "")
+set(_${PROJECT_NAME}_unified_headers "" CACHE STRING "" FORCE)
 macro(serac_write_unified_header)
 
     set(options)
@@ -392,7 +392,7 @@ macro(serac_write_unified_header)
     endif()
 
     file(WRITE ${_tmp_header} "\/\/ Copyright Lawrence Livermore National Security, LLC and
-\/\/ other Serac Project Developers. See the top-level LICENSE file for details.
+\/\/ other ${PROJECT_NAME} Project Developers. See the top-level LICENSE file for details.
 \/\/
 \/\/ SPDX-License-Identifier: (BSD-3-Clause)
 \n
@@ -434,9 +434,9 @@ macro(serac_write_unified_header)
 
     # Add this component's unified header to the list to be added to the project specific unified header
     set(_component_header "${_project_name}/${_unified_header_name}.hpp")
-    if("${_serac_unified_headers}" STREQUAL "")
-        set(_serac_unified_headers "${_component_header}" CACHE STRING "" FORCE)
+    if("${_${PROJECT_NAME}_unified_headers}" STREQUAL "")
+        set(_${PROJECT_NAME}_unified_headers "${_component_header}" CACHE STRING "" FORCE)
     else()
-        set(_serac_unified_headers "${_serac_unified_headers};${_component_header}" CACHE STRING "" FORCE)
+        set(_${PROJECT_NAME}_unified_headers "${_${PROJECT_NAME}_unified_headers};${_component_header}" CACHE STRING "" FORCE)
     endif()
 endmacro(serac_write_unified_header)
