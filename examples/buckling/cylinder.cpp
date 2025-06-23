@@ -9,7 +9,7 @@
  *
  * @brief A buckling cylinder under compression, run with or without contact
  *
- * @note Run with mortar contact and PETSc preconditioners (enabling enzyme is recommended):
+ * @note Run with mortar contact and PETSc preconditioners (enabling enzyme is required):
  * @code{.sh}
  * ./build/examples/buckling_cylinder --contact --contact-type 1 --preconditioner 6 \
  *    -options_file examples/buckling/cylinder_petsc_options.yml
