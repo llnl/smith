@@ -151,7 +151,7 @@ int main(int argc, char* argv[])
   // Create solver, either with or without contact
   std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
   if (use_contact) {
-#ifdef SERAC_USE_CONTACT
+#ifdef SERAC_USE_TRIBOL
     auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim>>(
         nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
 
