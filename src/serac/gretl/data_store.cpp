@@ -43,6 +43,10 @@ void DataStore::reverse_state()
 
 void DynamicDataStore::reverse_state()
 {
+  // must erase the final step in the cp manager before we get started
+  if (current_step_ == states_.size()) {
+    checkpointManager.erase_step(current_step_-1);
+  }
   --current_step_;
   gretl::print("reverse from step", current_step_);
   if (upstreams_[current_step_].size()) {
@@ -50,6 +54,7 @@ void DynamicDataStore::reverse_state()
     vjp(*states_[current_step_]);
     duals_[current_step_] = nullptr;
     states_[current_step_]->primal_ = nullptr;
+    checkpointManager.erase_step(current_step_-1);
   }
 }
 
@@ -59,6 +64,7 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
 
   states_.emplace_back(std::move(newState));
   duals_.emplace_back(nullptr);
+  activeCount_.push_back(1);
 
   std::vector<Int> upstreamSteps;
   upstreamSteps.reserve(upstreams.size());
@@ -157,8 +163,7 @@ void DynamicDataStore::add_state(std::unique_ptr<StateBase> newState, const std:
   
   lastStepUsed_.push_back(step);
   passthroughs_.push_back({});
-  activeCount_.push_back(1);
-
+  
   for (auto& u : upstreams) {
     if (upstreams_[u.step_].size()) { // is not persistent upstream 
       Int lastLastStepUsed = lastStepUsed_[u.step_];
@@ -181,18 +186,22 @@ void DynamicDataStore::fetch_state_data(Int stepIndex)
   gretl_assert(!goingForward_);
 
   Int lastCheckpoint = static_cast<Int>(checkpointManager.last_checkpoint_step());
+  gretl_assert(lastCheckpoint <= stepIndex);
   std::cout << "at step " << current_step_ <<  " last checkpoint = " << lastCheckpoint << " fetching step " << stepIndex << std::endl;
-  
-  gretl_assert(states_[lastCheckpoint]->primal_);
 
+  gretl_assert(states_[lastCheckpoint]->primal_);
+  for (auto& passThroughState : passthroughs_[lastCheckpoint]) {
+    gretl_assert(activeCount_[passThroughState]);
+  }
 
   for (Int i=lastCheckpoint; i < stepIndex; ++i) {
+    std::cout << "trying to evaluate step " << i+1 << std::endl;
     states_[i+1]->evaluate_forward();
+    for (auto& passThroughState : passthroughs_[i+1]) {
+      activeCount_[passThroughState]++;
+    }
+    print();
     remove_things(i+1);
-    //size_t stepToErase = checkpointManager.add_checkpoint_and_get_index_to_remove(i+1);
-    //if (checkpointManager.valid_checkpoint_index(stepToErase)) {
-    //  states_[stepToErase]->primal_ = nullptr;
-    //}
   }
 }
 
@@ -203,12 +212,8 @@ void DynamicDataStore::remove_things(Int step) {
     size_t stepToErase = checkpointManager.add_checkpoint_and_get_index_to_remove(step);
     if (checkpointManager.valid_checkpoint_index(stepToErase)) {
       gretl_assert(activeCount_[stepToErase]);
-      if (stepToErase==11) {
-        gretl::print("at", step, "remove 11, active = ", activeCount_[11]);
-      }
       activeCount_[stepToErase]--;
       if (activeCount_[stepToErase]==0) {
-        if (stepToErase==11) {printf("null\n");}
         states_[stepToErase]->primal_ = nullptr;
       }
       for (Int stepPassingThrough : passthroughs_[stepToErase]) {

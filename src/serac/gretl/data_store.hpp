@@ -106,12 +106,13 @@ class DataStore {
   std::vector<VjpT> vjps_;
   std::vector<std::unique_ptr<std::any>> duals_;
 
+  mutable std::vector<Int> activeCount_;
+
   std::shared_ptr<std::any>& any_primal(Int step);
 
   template <typename T>
   const T& get_primal(Int step)
   {
-    // fetch_state_data(step);
     auto tptr = std::any_cast<T>(any_primal(step).get());
     gretl_assert(tptr);
     return *tptr;
@@ -121,6 +122,14 @@ class DataStore {
   void set_primal(Int step, const T& t)
   {
     auto tptr = std::any_cast<T>(any_primal(step).get());
+    if (!tptr) {
+      gretl_assert(!goingForward_);
+      gretl_assert(activeCount_[step]==0);
+
+      any_primal(step) = std::make_shared<std::any>(t);
+      activeCount_[step] = 1;
+      return;
+    }
     gretl_assert(tptr);
     *tptr = t;
   }
@@ -143,7 +152,7 @@ class DataStore {
   void set_dual(Int step, const D& d)
   {
     if (!duals_[step]) {
-      duals_[step] = std::move(std::make_unique<std::any>(d));
+      duals_[step] = std::make_unique<std::any>(d);
     }
     auto dualData = std::any_cast<D>(duals_[step].get());
     gretl_assert(dualData);
@@ -184,7 +193,6 @@ class DynamicDataStore : public DataStore {
   std::vector<Int> lastStepUsed_;
   std::vector< std::vector<Int> > passthroughs_;
 
-  mutable std::vector<Int> activeCount_;
 
   /// container which track the states in the graph with allocated data
   CheckpointManager checkpointManager;
