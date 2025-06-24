@@ -12,24 +12,16 @@
  * Intended to verify that external projects can include Smith
  */
 
-#include "serac/physics/solid_residual.hpp"
-#include "serac/physics/functional_objective.hpp"
+#include "serac/serac.hpp"
 
-#include "serac/infrastructure/application_manager.hpp"
-#include <serac/physics/state/state_manager.hpp>
-#include "serac/physics/materials/solid_material.hpp"
-#include "serac/physics/mesh.hpp"
-#include "serac/physics/common.hpp"
 #include "mfem.hpp"
-#include "serac/physics/tests/physics_test_utils.hpp"
-#include "serac/numerics/functional/tensor.hpp"
-#include "serac/physics/scalar_objective.hpp"
 
+// ContinuationSolver headers
 #include "problems/Problems.hpp"
 #include "solvers/HomotopySolver.hpp"
 #include "utilities.hpp"
 
-#include <axom/sidre.hpp>
+#include "axom/sidre.hpp"
 
 enum FIELD
 {
