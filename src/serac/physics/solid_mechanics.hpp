@@ -38,7 +38,7 @@ void adjoint_integrate(double dt_n, double dt_np1, mfem::HypreParMatrix* m_mat, 
                        mfem::HypreParVector& accel_adjoint_load_vector, mfem::HypreParVector& adjoint_displacement_,
                        mfem::HypreParVector& implicit_sensitivity_displacement_start_of_step_,
                        mfem::HypreParVector& implicit_sensitivity_velocity_start_of_step_,
-                       mfem::HypreParVector& adjoint_essential, BoundaryConditionManager& bcs_,
+                       mfem::HypreParVector& adjoint_essential_, BoundaryConditionManager& bcs_,
                        mfem::Solver& lin_solver);
 }  // namespace detail
 
@@ -490,50 +490,42 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   }
 
   /**
-   * @brief Set the displacement boundary conditions on a set of nodes within a spatially-defined area for a single
-   * displacement vector component
+   * @brief Set the displacement essential boundary conditions on a set of true degrees of freedom
    *
-   * @param is_node_constrained A callback function that returns true if displacement nodes at a certain position should
-   * be constrained by this boundary condition
-   * @param disp The scalar function containing the prescribed component displacement values
-   * @param component The component of the displacement vector that should be set by this boundary condition. The other
-   * components of displacement are unconstrained.
+   * @param applied_displacement Function specifying the applied displacement vector
+   * @param true_dofs Indices of true degrees of freedom to set the displacement on
    *
-   * The displacement function takes a spatial position as the first argument and current time as the second argument.
-   * It computes the desired displacement scalar for the given component and returns that value.
+   * The @a true_dofs list can be determined using functions from the @a mfem::ParFiniteElementSpace related to the
+   * displacement @a serac::FiniteElementState .
    *
-   * @note This method searches over the entire mesh, not just the boundary nodes.
+   * The signature of the applied_displacement callable must be:
+   * tensor<double, dim> applied_displacement(tensor<double, dim> X, double t)
+   * Parameters:
+   *   X - coordinates of node
+   *   t - time
+   * Returns:
+   *   u, vector of applied displacements
+   *
+   * @note The displacement function is required to be vector-valued. However, only the dofs specified in the @a
+   * true_dofs array will be set. This means that if the @a true_dofs array only contains dofs for a specific vector
+   * component in a vector-valued finite element space, only that component will be set.
    *
    * @note This method must be called prior to completeSetup()
    */
-  void setDisplacementBCs(std::function<bool(const mfem::Vector&)> is_node_constrained,
-                          std::function<double(const mfem::Vector&, double)> disp, int component)
+  template <typename AppliedDisplacementFunction>
+  void setDisplacementBCsByDofList(AppliedDisplacementFunction applied_displacement, const mfem::Array<int> true_dofs)
   {
-    // Get the nodal positions for the displacement vector in grid function form
-    mfem::ParGridFunction coordinates(
-        const_cast<mfem::ParFiniteElementSpace*>(&displacement_.space()));  // mfem const correctness issue
-    mesh_.GetNodes(coordinates);
-
-    mfem::Array<int> ldof_list;
-
-    const int num_nodes = coordinates.FESpace()->GetNDofs();
-    for (int i = 0; i < num_nodes; i++) {
-      mfem::Array<int> dofs;
-      dofs.Append(i);
-      displacement_.space().DofsToVDofs(dofs);
-      mfem::Vector X(dim);
-      for (int j = 0; j < dim; j++) {
-        X(j) = coordinates(dofs[j]);
+    // std::function<void(const mfem::Vector&, double, mfem::Vector&)> disp
+    auto mfem_vector_coefficient_function = [applied_displacement](const mfem::Vector& X_mfem, double t,
+                                                                   mfem::Vector& u_mfem) {
+      auto X = make_tensor<dim>([&X_mfem](int k) { return X_mfem[k]; });
+      auto u = applied_displacement(X, t);
+      for (int i = 0; i < dim; i++) {
+        u_mfem(i) = u[i];
       }
-      if (is_node_constrained(X)) {
-        int ldof = displacement_.space().DofToVDof(i, component);
-        ldof_list.Append(ldof);
-      }
-    }
-
-    component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(disp);
-
-    bcs_.addEssential(ldof_list, component_disp_bdr_coef_, displacement_.space(), component);
+    };
+    disp_bdr_coef_ = std::make_shared<mfem::VectorFunctionCoefficient>(dim, mfem_vector_coefficient_function);
+    bcs_.addEssentialByTrueDofs(true_dofs, disp_bdr_coef_, displacement_.space());
   }
 
   /// @overload
@@ -1352,8 +1344,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   void reverseAdjointTimestep() override
   {
     SERAC_MARK_FUNCTION;
-    auto& lin_solver = nonlin_solver_->linearSolver();
-
     SLIC_ERROR_ROOT_IF(cycle_ <= min_cycle_,
                        "Maximum number of adjoint timesteps exceeded! The number of adjoint timesteps must equal the "
                        "number of forward timesteps");
@@ -1368,29 +1358,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     displacement_ = end_step_solution.at("displacement");
 
     if (is_quasistatic_) {
-      auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
-                                    *parameters_[parameter_indices].state...);
-      J_.reset();
-      J_ = assemble(drdu);
-
-      auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-
-      J_e_.reset();
-      J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_T);
-
-      auto& constrained_dofs = bcs_.allEssentialTrueDofs();
-
-      mfem::EliminateBC(*J_T, *J_e_, constrained_dofs, reactions_adjoint_bcs_, displacement_adjoint_load_);
-      for (int i = 0; i < constrained_dofs.Size(); i++) {
-        int j = constrained_dofs[i];
-        displacement_adjoint_load_[j] = reactions_adjoint_bcs_[j];
-      }
-
-      lin_solver.SetOperator(*J_T);
-      lin_solver.Mult(displacement_adjoint_load_, adjoint_displacement_);
-
-      // Reset the equation solver to use the full nonlinear residual operator.  MRT, is this needed?
-      nonlin_solver_->setOperator(*residual_with_bcs_);
+      quasiStaticAdjointSolve(dt_n_to_np1);
     } else {
       SLIC_ERROR_ROOT_IF(ode2_.GetTimestepper() != TimestepMethod::Newmark,
                          "Only Newmark implemented for transient adjoint solid mechanics.");
@@ -1411,6 +1379,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
                                                    *parameters_[parameter_indices].state...));
       std::unique_ptr<mfem::HypreParMatrix> m_mat(assemble(M));
 
+      auto& lin_solver = nonlin_solver_->linearSolver();
       solid_mechanics::detail::adjoint_integrate(
           dt_n_to_np1, dt_np1_to_np2, m_mat.get(), k_mat.get(), displacement_adjoint_load_, velocity_adjoint_load_,
           acceleration_adjoint_load_, adjoint_displacement_, implicit_sensitivity_displacement_start_of_step_,
@@ -1602,6 +1571,35 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     // this method is essentially equivalent to the 1-liner
     // u += dot(inv(J), dot(J_elim[:, dofs], (U(t + dt) - u)[dofs]));
     nonlin_solver_->solve(displacement_);
+  }
+
+  /// @brief Solve the Quasi-static adjoint linear
+  virtual void quasiStaticAdjointSolve(double /*dt*/)
+  {
+    auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
+                                  *parameters_[parameter_indices].state...);
+    J_.reset();
+    J_ = assemble(drdu);
+
+    auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
+
+    J_e_.reset();
+    J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_T);
+
+    auto& constrained_dofs = bcs_.allEssentialTrueDofs();
+
+    mfem::EliminateBC(*J_T, *J_e_, constrained_dofs, reactions_adjoint_bcs_, displacement_adjoint_load_);
+    for (int i = 0; i < constrained_dofs.Size(); i++) {
+      int j = constrained_dofs[i];
+      displacement_adjoint_load_[j] = reactions_adjoint_bcs_[j];
+    }
+
+    auto& lin_solver = nonlin_solver_->linearSolver();
+    lin_solver.SetOperator(*J_T);
+    lin_solver.Mult(displacement_adjoint_load_, adjoint_displacement_);
+
+    // Reset the equation solver to use the full nonlinear residual operator.  MRT, is this needed?
+    nonlin_solver_->setOperator(*residual_with_bcs_);
   }
 
   /**

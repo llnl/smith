@@ -45,6 +45,15 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
   /// @brief temperature, temperature rate
   static constexpr int NUM_STATE_VARS = 2;
 
+  /// @brief enumeration of the required heat transfer states
+  enum STATE
+  {
+    SHAPE_DISPLACEMENT,
+    TEMPERATURE,
+    TEMPERATURE_RATE,
+    NUM_STATES
+  };
+
   /**
    * @brief Construct a new HeatTransferResidual object
    *
@@ -163,7 +172,7 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
 
       auto [heat_capacity, heat_flux] = material_(x, u, du_dX, params...);
 
-      return serac::tuple{heat_capacity * du_dt, -1.0 * heat_flux};
+      return serac::tuple{-heat_capacity * du_dt, heat_flux};
     }
   };
 };

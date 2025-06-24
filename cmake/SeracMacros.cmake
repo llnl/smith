@@ -4,6 +4,55 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+#------------------------------------------------------------------------------
+# serac_add_example_test(NAME              [name]
+#                        COMMAND           [command]
+#                        NUM_MPI_TASKS     [n]
+#                        NUM_OMP_THREADS   [n]
+#                        CONFIGURATIONS    [config1 [config2...]]
+#                        WORKING_DIRECTORY [dir]
+#                        TIMEOUT           [time_seconds])
+#
+# Wrapper for blt_add_test designed to run lengthier example tests.
+#
+# To run examples, use `make run_examples` custom CMake target.
+#
+# Unlike serac_add_tests, this macro takes in a pre-existing executable.
+#------------------------------------------------------------------------------
+macro(serac_add_example_test)
+
+    set(options)
+    set(singleValueArgs NAME NUM_MPI_TASKS NUM_OMP_THREADS WORKING_DIRECTORY)
+    set(multiValueArgs COMMAND CONFIGURATIONS)
+
+    # Parse the arguments to the macro
+    cmake_parse_arguments(arg
+        "${options}" "${singleValueArgs}" "${multiValueArgs}" ${ARGN} )
+
+    if (NOT DEFINED arg_TIMEOUT)
+        set(_timeout 4800)
+    else()
+        set(_timeout ${arg_TIMEOUT})
+    endif()
+
+    # The 'CONFIGURATIONS Example' line excludes examples
+    # from the general list of tests
+    blt_add_test(NAME              ${arg_NAME}
+                 COMMAND           ${arg_COMMAND}
+                 NUM_MPI_TASKS     ${arg_NUM_MPI_TASKS}
+                 NUM_OMP_THREADS   ${arg_NUM_OMP_THREADS}
+                 CONFIGURATIONS    Example ${arg_CONFIGURATIONS}
+                 WORKING_DIRECTORY ${arg_WORKING_DIRECTORY})
+
+    set_tests_properties(${arg_NAME} PROPERTIES TIMEOUT ${_timeout})
+
+    # The 'LABELS Example' prevents regular tests from
+    # running when running example custom target
+    set_tests_properties(${arg_NAME} PROPERTIES LABELS "Example")
+
+    unset(_timeout)
+
+endmacro(serac_add_example_test)
 
 #------------------------------------------------------------------------------
 # Adds code checks for all cpp/hpp files recursively under the current directory
@@ -318,7 +367,7 @@ endmacro(serac_get_src_subdirectory)
 ##
 ##------------------------------------------------------------------------------
 # List to hold all unified headers to be later used to create a master unified header
-set(_serac_unified_headers "" CACHE STRING "")
+set(_${PROJECT_NAME}_unified_headers "" CACHE STRING "" FORCE)
 macro(serac_write_unified_header)
 
     set(options)
@@ -343,7 +392,7 @@ macro(serac_write_unified_header)
     endif()
 
     file(WRITE ${_tmp_header} "\/\/ Copyright Lawrence Livermore National Security, LLC and
-\/\/ other Serac Project Developers. See the top-level LICENSE file for details.
+\/\/ other ${PROJECT_NAME} Project Developers. See the top-level LICENSE file for details.
 \/\/
 \/\/ SPDX-License-Identifier: (BSD-3-Clause)
 \n
@@ -385,9 +434,9 @@ macro(serac_write_unified_header)
 
     # Add this component's unified header to the list to be added to the project specific unified header
     set(_component_header "${_project_name}/${_unified_header_name}.hpp")
-    if("${_serac_unified_headers}" STREQUAL "")
-        set(_serac_unified_headers "${_component_header}" CACHE STRING "" FORCE)
+    if("${_${PROJECT_NAME}_unified_headers}" STREQUAL "")
+        set(_${PROJECT_NAME}_unified_headers "${_component_header}" CACHE STRING "" FORCE)
     else()
-        set(_serac_unified_headers "${_serac_unified_headers};${_component_header}" CACHE STRING "" FORCE)
+        set(_${PROJECT_NAME}_unified_headers "${_${PROJECT_NAME}_unified_headers};${_component_header}" CACHE STRING "" FORCE)
     endif()
 endmacro(serac_write_unified_header)
