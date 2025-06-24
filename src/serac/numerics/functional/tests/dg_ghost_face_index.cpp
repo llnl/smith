@@ -28,12 +28,12 @@ void L2_index_test(std::string meshfile)
   using test_space = L2<p, dim>;
   using trial_space = L2<p, dim>;
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 0);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 1);
 
-  auto fec = mfem::L2_FECollection(p, dim, mfem::BasisType::GaussLobatto);
-  mfem::ParFiniteElementSpace fespace(mesh.get(), &fec, dim, serac::ordering);
+  auto [test_fespace, test_fec] = serac::generateParFiniteElementSpace<test_space>(mesh.get());
+  auto [trial_fespace, trial_fec] = serac::generateParFiniteElementSpace<trial_space>(mesh.get());
 
-  mfem::ParGridFunction pgf(&fespace);
+  mfem::ParGridFunction U_gf(trial_fespace.get());
   mfem::VectorFunctionCoefficient vcoef(dim, [](const mfem::Vector& X, mfem::Vector& F) {
     int d = X.Size();
     F.SetSize(d);
@@ -41,13 +41,13 @@ void L2_index_test(std::string meshfile)
       F(i) = X(i);
     }
   });
-  pgf.ProjectCoefficient(vcoef);
+  U_gf.ProjectCoefficient(vcoef);
 
-  mfem::Vector U(fespace.TrueVSize());
-  U = pgf;
+  mfem::Vector U(trial_fespace->TrueVSize());
+  U_gf.GetTrueDofs(U);
 
   // Construct the new functional object using the specified test and trial spaces
-  Functional<test_space(trial_space)> residual(&fespace, {&fespace});
+  Functional<test_space(trial_space)> residual(test_fespace.get(), {trial_fespace.get()});
 
   Domain interior_faces = InteriorFaces(*mesh);
 
@@ -62,7 +62,7 @@ void L2_index_test(std::string meshfile)
         // note: the orientation convention is such that the normal
         //       computed as above will point from from side 1->2
         auto [u_1, u_2] = velocity;
-        std::cout << "One side = " << u_1 << " The other side = " << u_2 << " Jump = " << u_1 - u_2 << std::endl;
+        std::cout << "One side = " << u_1 << ", The other side = " << u_2 << ", Jump = " << u_1 - u_2 << std::endl;
 
         auto a = dot(u_2 - u_1, n);
 

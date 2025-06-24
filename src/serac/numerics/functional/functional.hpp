@@ -276,9 +276,9 @@ class Functional<test(trials...), exec> {
 
       P_trial_[i] = trial_space_[i]->GetProlongationMatrix();
 
-      // For L2 spaces, configure a ParGridFunction with external data to exchange face neighbor data
-      // This is for DG method where interior faces on the processor boundary need to access data on the neighrbor
-      // element
+      // For L2 spaces, configure a ParGridFunction with external data to exchange face neighbor data.
+      // This is for DG method where interior faces on the processor boundary need to access data on
+      // the neighrbor element
       if (trial_function_spaces_[i].family == Family::L2) {
         // Set the vector size to store tdof data
         input_ldof_values_[i].SetSize(P_trial_[i]->Height(), mem_type);
@@ -303,7 +303,17 @@ class Functional<test(trials...), exec> {
 
     P_test_ = test_space_->GetProlongationMatrix();
 
-    output_L_.SetSize(P_test_->Height(), mem_type);
+    if (test_function_space_.family == Family::L2) {
+      // We only need these variables to set the output_L_ vector to the right size
+      mfem::ParGridFunction X_pgf;
+      mfem::Vector X_ldof_values;
+      X_ldof_values.SetSize(P_test_->Height(), mem_type);
+
+      updateFaceNbrData(test_space_, X_pgf, X_ldof_values);
+      output_L_.SetSize(X_ldof_values.Size() + X_pgf.FaceNbrData().Size(), mem_type);
+    } else {
+      output_L_.SetSize(P_test_->Height(), mem_type);
+    }
 
     output_T_.SetSize(test_fes->GetTrueVSize(), mem_type);
 
@@ -516,19 +526,19 @@ class Functional<test(trials...), exec> {
         //  ----------- Ghost elem 1 ----------   ----------- Ghost elem 2 ----------
         // {X1 X1 X1 X1 Y1 Y1 Y1 Y1 Z1 Z1 Z1 Z1   X2 X2 X2 X2 Y2 Y2 Y2 Y2 Z2 Z2 Z2 Z2}
         //
-        // This is because 1. mfem prepares face neighbor data element by element to communicate later (standard)
-        // 2. mfem uses GetElementVDofs to gather the data for communication which returns a set of indices ALWAYS
+        // This is because 1) mfem prepares face neighbor data element by element to communicate later (standard).
+        // 2) mfem uses GetElementVDofs to gather the data for communication which returns a set of indices ALWAYS
         // ordered byNODES (???). If the ordering we set for ParFiniteElementSpace is byVDIM, we need the entries to be
         //  ----------- Ghost elem 1 ----------   ----------- Ghost elem 2 ----------
         // {X1 Y1 Z1 X1 Y1 Z1 X1 Y1 Z1 X1 Y1 Z1   X2 Y2 Z2 X2 Y2 Z2 X2 Y2 Z2 X2 Y2 Z2}
-        // so it's consistent with the local data. Therefore, we need to manually change this ordering
+        // so it's consistent with the local data. Therefore, we need to manually change this ordering.
         if (trial_space_[i]->GetVDim() == 1) {
-          // For scalar fields, this weird ordering doesn't cause any problems
+          // For scalar fields, this weird ordering doesn't cause any problems.
           input_L_[i].SetVector(trial_pargrid_functions_[i].FaceNbrData(), input_ldof_values_[i].Size());
         } else {
           if (trial_space_[i]->GetOrdering() == mfem::Ordering::byVDIM) {
             // For vector fields with byVDIM ordering, we manually set the entries in VDIM order. By the way this
-            // is really annoying because we have to get face neighbor vdof indices again in element restriction
+            // is really annoying because we have to get face neighbor vdof indices again in element restriction.
             int num_ghost_elem = trial_space_[i]->GetParMesh()->GetNFaceNeighborElements();
             int components_per_node = trial_space_[i]->GetVDim();
             const mfem::Vector& face_neighbor_data = trial_pargrid_functions_[i].FaceNbrData();
@@ -552,12 +562,12 @@ class Functional<test(trials...), exec> {
             }
           } else {
             // For vector fields with byNODES ordering, we need to prepare the local input vector in the form
-            // { true_comp_X ghost_comp_X true_comp_Y ghost_comp_Y true_comp_Z ghost_comp_Z }
+            // { true_comp_X ghost_comp_X true_comp_Y ghost_comp_Y true_comp_Z ghost_comp_Z }.
             // In this form, to ensure the correct mapping between dof and vdof, we need to change the ndofs in
             // FiniteElementSpace to include ones from ghost element. Additionally, we need to prepare
-            // ghost_comp_X / ghost_comp_Y / ghost_comp_Z from element wise entries in face_nbr_data
-            // eg. ghost_comp_X includes X component entries of all ghost element dofs
-            // This requires significant renumbering of the dofs and therefore is not supported for now
+            // ghost_comp_X / ghost_comp_Y / ghost_comp_Z from element wise entries in face_nbr_data,
+            // eg. ghost_comp_X includes X component entries of all ghost element dofs.
+            // This requires significant renumbering of the dofs and therefore is not supported for now.
             SLIC_ERROR_ROOT("Unsupported: L2 vector field ordered by nodes");
           }
         }
@@ -585,24 +595,28 @@ class Functional<test(trials...), exec> {
         input_E_buffer_[i].SetSize(int(G_trial.ESize()));
         input_E_[i].Update(input_E_buffer_[i], G_trial.bOffsets());
         G_trial.Gather(input_L_[i], input_E_[i]);
-        // // Debug
-        // std::cout << "element size = " << G_trial.ESize() << std::endl;
-        // std::cout << "Element vector" << std::endl;
-        // for (int j = 0; j < input_E_[i].Size(); ++j) {
-        //   std::cout << input_E_[i][j] << " ";
-        // }
-        // std::cout << std::endl;
       }
 
       output_E_buffer_.SetSize(int(G_test.ESize()));
       output_E_.Update(output_E_buffer_, G_test.bOffsets());
       integral.Mult(t, input_E_, output_E_, wrt, update_qdata_);
+      // // Debug
+      // std::cout << "ESize = " << G_test.ESize() << std::endl;
+      // std::cout << "Element output vector" << std::endl;
+      // for (int j = 0; j < output_E_.Size(); ++j) {
+      //   std::cout << output_E_[j] << " ";
+      // }
+      // std::cout << std::endl;
 
       // scatter-add to compute residuals on the local processor
       G_test.ScatterAdd(output_E_, output_L_);
     }
 
     // scatter-add to compute global residuals
+    // TODO: might need to extract a subvector from output_L_ representing local residuals excluding
+    // ghost dofs for L2 spaces. Right now this is not raising any error because P_test_ is not a
+    // ConformingProlongationOperator for L2 spaces, so it does not check if the dimensions of the
+    // vectors matches the height and width of the matrix.
     P_test_->MultTranspose(output_L_, output_T_);
 
     if constexpr (wrt != NO_DIFFERENTIATION) {
