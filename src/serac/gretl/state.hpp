@@ -42,22 +42,23 @@ struct State : public StateBase {
   State<T, D> clone(const std::vector<StateBase>& upstreams) const
   {
     gretl_assert(!upstreams.empty());
-    State<T, D> state(dataStore_, dataStore_->states_.size(), initialize_zero_dual_);
+    auto newVal = std::make_shared<std::any>( *std::any_cast<T>(primal_.get()) );
+    State<T, D> state(dataStore_, dataStore_->states_.size(), newVal, initialize_zero_dual_);
     dataStore_->add_state(std::make_unique<State<T, D>>(state), upstreams);
     return state;
   }
 
   State<T, D> finalize()
   {
-    this->evaluate_and_remove_disposable_checkpoints();
+    this->evaluate_forward();
     return *this;
   }
 
   friend class DataStore;
 
  protected:
-  State(DataStore* store, size_t step, const InitializeZeroDual<T, D>& initialize_zero_dual)
-      : StateBase(store), initialize_zero_dual_(initialize_zero_dual)
+  State(DataStore* store, size_t step, std::shared_ptr<std::any> val, const InitializeZeroDual<T, D>& initialize_zero_dual)
+      : StateBase(store, val), initialize_zero_dual_(initialize_zero_dual)
   {
     step_ = static_cast<Int>(step);
   }

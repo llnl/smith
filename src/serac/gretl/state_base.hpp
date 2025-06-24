@@ -17,7 +17,7 @@
 namespace gretl {
 
 struct StateBase {
-  StateBase(DataStore* store) : dataStore_(store) {}
+  StateBase(DataStore* store, const std::shared_ptr<std::any>& val) : dataStore_(store), primal_(val) {}
   StateBase(const StateBase&) = default;
   StateBase& operator=(const StateBase&) = default;
   virtual ~StateBase() = default;
@@ -62,13 +62,12 @@ struct StateBase {
   friend class DynamicDataStore;
   friend struct StateDataBase;
 
-  void evaluate_and_remove_disposable_checkpoints();
+  void evaluate_forward();
   void evaluate_vjp();
 
   DataStore& data_store() const { return *dataStore_; }
 
- protected:
-  // const StateDataBase* data() const { return dataStore..get(); }
+ //protected:
 
   DataStore* dataStore_;
   std::shared_ptr<std::any> primal_;

@@ -119,8 +119,11 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto h = a + 3 * c;
   auto f = c * g;
 
-  for (int j = 0; j < 7; ++j) {
-    for (int i = 0; i < 13; ++i) {
+  int Nj = 1; //7;
+  int Ni = 1; //13;
+
+  for (int j = 0; j < Nj; ++j) {
+    for (int i = 0; i < Ni; ++i) {
       auto tmp = h + g;
       g = a * tmp;
       h = f + g;
@@ -131,8 +134,12 @@ TEST(Graph, LargeNonlinearGraphGradients)
   }
 
   auto qoi = gretl::inner_product(a, f);
+
+  printf("gone forward\n");
+
   gretl::set_as_objective(qoi);
 
+  dataStore.print();
   print("num active = ", dataStore.num_active_states());
   print("num duals = ", dataStore.num_dual_states());
 

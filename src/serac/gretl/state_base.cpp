@@ -9,10 +9,11 @@
 
 namespace gretl {
 
-void StateBase::evaluate_and_remove_disposable_checkpoints()
+void StateBase::evaluate_forward()
 {
   DownstreamState ds(dataStore_, step_);
   dataStore_->evals_[step_](dataStore_->upstreams_[step_], ds);
+  dataStore_->remove_things(step_);
 }
 
 void StateBase::evaluate_vjp()

@@ -69,4 +69,4 @@ void printtype(T value, Args... args)
   printtype(args...);  // Recurse for remaining arguments
 }
 
-}
+}  // namespace gretl

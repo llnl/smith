@@ -45,9 +45,9 @@ class DataStore {
   template <typename T, typename D = T>
   State<T, D> create_state(const T& t, InitializeZeroDual<T, D> initial_zero_dual = defaultInitializeZeroDual<D>())
   {
-    State<T, D> state(this, states_.size(), initial_zero_dual);
-    add_state(std::make_unique<State<T, D>>(state), {}, std::make_shared<std::any>(t));
-    
+    State<T, D> state(this, states_.size(), std::make_shared<std::any>(t), initial_zero_dual);
+    add_state(std::make_unique<State<T, D>>(state), {});
+
     return state;
   }
 
@@ -60,7 +60,6 @@ class DataStore {
   /// @brief clear all but persistent state, keeping the graph
   void reset();
 
-  Int num_allocated_states() const;
   Int num_active_states() const;
   Int num_dual_states() const;
 
@@ -72,13 +71,16 @@ class DataStore {
   friend struct UpstreamState;
   friend struct DownstreamState;
 
+  virtual void print() const {}
+
  protected:
   // create a new state in the graph, store it, return it
   template <typename T, typename D, typename InitDualFromValue>
   State<T, D> create_empty_state(InitDualFromValue initial_zero_dual, const std::vector<StateBase>& upstreams)
   {
     gretl_assert(!upstreams.empty());
-    State<T, D> state(this, states_.size(), initial_zero_dual);
+    auto t = std::make_shared<std::any>(T{});
+    State<T, D> state(this, states_.size(), t, initial_zero_dual);
     add_state(std::make_unique<State<T, D>>(state), upstreams);
     return state;
   }
@@ -87,16 +89,12 @@ class DataStore {
   void vjp(StateBase& state);
 
   /// @brief function for safely adding new states to graph and checkpoint
-  virtual void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams, const std::shared_ptr<std::any>& value);
-
-  /// @brief function for safely adding new states to graph and checkpoint
   virtual void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams);
-
-  /// @brief method for clearing states in the past that are no longer needed
-  virtual void clear_disposable_state() {}
 
   /// @brief method for fetching states at a particular moment in time
   virtual void fetch_state_data(Int stepIndex);
+
+  virtual void remove_things(Int) {}
 
   using EvalT = std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)>;
   using VjpT = std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)>;
@@ -114,6 +112,7 @@ class DataStore {
   const T& get_primal(Int step)
   {
     if (!any_primal(step)) {
+      std::cout << "not finding primal at " << step << std::endl;
       fetch_state_data(step);
     }
     auto tptr = std::any_cast<T>(any_primal(step).get());
@@ -124,7 +123,9 @@ class DataStore {
   template <typename T>
   void set_primal(Int step, const T& t)
   {
-    any_primal(step) = std::make_shared<std::any>(t);
+    auto tptr = std::any_cast<T>(any_primal(step).get());
+    *tptr = t;
+    // any_primal(step) = std::make_shared<std::any>(t);
   }
 
   template <typename D, typename T = D>
@@ -164,21 +165,30 @@ class DynamicDataStore : public DataStore {
   DynamicDataStore(size_t maxStates);
   virtual ~DynamicDataStore() {}
 
+  /// @overload
+  virtual void print() const override;
+
  protected:
   friend struct StateBase;
   friend struct UpstreamState;
 
   /// @overload
-  // virtual void add_state(StateBase& newState) override;
+  virtual void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams) override;
 
   /// @overload
-  // void clear_disposable_state() override;
+  virtual void fetch_state_data(Int stepIndex) override;
 
   /// @overload
-  // void fetch_state_data(size_t stepIndex) override;
+  virtual void remove_things(Int stepIndex) override;
+
+
+  std::vector<Int> lastStepUsed_;
+  std::vector< std::vector<Int> > passthroughs_;
+
+  mutable std::vector<Int> activeCount_;
 
   /// container which track the states in the graph with allocated data
-  CheckpointManager checkpoints;
+  CheckpointManager checkpointManager;
 };
 
 }  // namespace gretl
