@@ -33,7 +33,20 @@ void DataStore::vjp(StateBase& state) { state.evaluate_vjp(); }
 void DataStore::reverse_state()
 {
   --current_step_;
+  gretl::print("reverse from step", current_step_);
   if (upstreams_[current_step_].size()) {
+    vjp(*states_[current_step_]);
+    duals_[current_step_] = nullptr;
+    states_[current_step_]->primal_ = nullptr;
+  }
+}
+
+void DynamicDataStore::reverse_state()
+{
+  --current_step_;
+  gretl::print("reverse from step", current_step_);
+  if (upstreams_[current_step_].size()) {
+    fetch_state_data(current_step_-1);
     vjp(*states_[current_step_]);
     duals_[current_step_] = nullptr;
     states_[current_step_]->primal_ = nullptr;
@@ -120,7 +133,6 @@ DynamicDataStore::DynamicDataStore(size_t maxStates)
 }
 
 void printv(const std::vector<Int>& v) {
-  
   size_t c=0;
   for (auto s : v) {
     std::cout << c << ":" << s << " ";
@@ -130,7 +142,6 @@ void printv(const std::vector<Int>& v) {
 }
 
 void printv(const std::vector<StateBase>& v) {
-  
   size_t c=0;
   for (auto s : v) {
     std::cout << c << ":" << s.step_ << " ";
@@ -167,21 +178,21 @@ void DynamicDataStore::add_state(std::unique_ptr<StateBase> newState, const std:
 /// @overload
 void DynamicDataStore::fetch_state_data(Int stepIndex) 
 {
-  printf("not here yet\n");
-  exit(1);
-  if (states_[stepIndex]->primal_) {
-    return;
-  }
+  gretl_assert(!goingForward_);
 
-  size_t lastCheckpoint = checkpointManager.last_checkpoint_step();
+  Int lastCheckpoint = static_cast<Int>(checkpointManager.last_checkpoint_step());
+  std::cout << "at step " << current_step_ <<  " last checkpoint = " << lastCheckpoint << " fetching step " << stepIndex << std::endl;
+  
   gretl_assert(states_[lastCheckpoint]->primal_);
 
-  for (size_t i=lastCheckpoint; i < stepIndex; ++i) {
+
+  for (Int i=lastCheckpoint; i < stepIndex; ++i) {
     states_[i+1]->evaluate_forward();
-    size_t stepToErase = checkpointManager.add_checkpoint_and_get_index_to_remove(i+1);
-    if (checkpointManager.valid_checkpoint_index(stepToErase)) {
-      states_[stepToErase]->primal_ = nullptr;
-    }
+    remove_things(i+1);
+    //size_t stepToErase = checkpointManager.add_checkpoint_and_get_index_to_remove(i+1);
+    //if (checkpointManager.valid_checkpoint_index(stepToErase)) {
+    //  states_[stepToErase]->primal_ = nullptr;
+    //}
   }
 }
 

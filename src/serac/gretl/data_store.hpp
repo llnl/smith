@@ -52,7 +52,7 @@ class DataStore {
   }
 
   /// @brief  unwind one step of the graph
-  void reverse_state();
+  virtual void reverse_state();
 
   /// @brief unwind the entire graph
   void back_prop();
@@ -111,10 +111,7 @@ class DataStore {
   template <typename T>
   const T& get_primal(Int step)
   {
-    if (!any_primal(step)) {
-      std::cout << "not finding primal at " << step << std::endl;
-      fetch_state_data(step);
-    }
+    // fetch_state_data(step);
     auto tptr = std::any_cast<T>(any_primal(step).get());
     gretl_assert(tptr);
     return *tptr;
@@ -124,8 +121,8 @@ class DataStore {
   void set_primal(Int step, const T& t)
   {
     auto tptr = std::any_cast<T>(any_primal(step).get());
+    gretl_assert(tptr);
     *tptr = t;
-    // any_primal(step) = std::make_shared<std::any>(t);
   }
 
   template <typename D, typename T = D>
@@ -167,6 +164,8 @@ class DynamicDataStore : public DataStore {
 
   /// @overload
   virtual void print() const override;
+
+  virtual void reverse_state() override;
 
  protected:
   friend struct StateBase;
