@@ -382,7 +382,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
             endif()
         else()
             set(CONTINUATION_SOURCE_DIR "${PROJECT_SOURCE_DIR}/ContinuationSolvers" CACHE PATH "")
-    	if (NOT EXISTS ${CONTINUATION_SOURCE_DIR}/CMakeLists.txt)
+    	    if (NOT EXISTS "${CONTINUATION_SOURCE_DIR}/CMakeLists.txt")
                 message(FATAL_ERROR
                     "The continuationsolver repo is not present. "
                     "Either run the following command in your git repository: \n"
