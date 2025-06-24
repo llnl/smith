@@ -93,8 +93,8 @@ struct NeoHookeanWithFieldWithRateFunctional {
 
 struct NeoHookeanWithFieldWithRateDfem {
   static constexpr int state_size = 0;
-  static constexpr bool has_parameters = true;
-  static constexpr bool has_state = false;
+  static constexpr int num_parameters = 1;
+  static constexpr int num_states = 0;
 
   using param_type = double;
   std::unique_ptr<mfem::FiniteElementCollection> fe_collection = std::make_unique<mfem::L2_FECollection>(0);
