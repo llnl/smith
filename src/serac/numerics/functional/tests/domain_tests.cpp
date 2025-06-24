@@ -32,8 +32,8 @@ mfem::Mesh import_mesh(std::string meshfile)
 TEST(domain, of_edges)
 {
   {
-    // auto mesh = import_mesh("onehex.mesh");
-    auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("onehex.mesh")));
+    auto bmesh = import_mesh("onehex.mesh");
+    auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
     Domain d0 = Domain::ofEdges(*mesh, std::function([](std::vector<vec3> x) {
       return (0.5 * (x[0][0] + x[1][0])) < 0.25;  // x coordinate of edge midpoint
     }));
@@ -60,8 +60,8 @@ TEST(domain, of_edges)
   }
 
   {
-    // auto mesh = import_mesh("onetet.mesh");
-    auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("onetet.mesh")));
+    auto bmesh = import_mesh("onetet.mesh");
+    auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
     Domain d0 = Domain::ofEdges(*mesh, std::function([](std::vector<vec3> x) {
       return (0.5 * (x[0][0] + x[1][0])) < 0.25;  // x coordinate of edge midpoint
     }));
@@ -125,8 +125,8 @@ TEST(domain, of_faces)
 {
   {
     constexpr int dim = 3;
-    // auto mesh = import_mesh("onehex.mesh");
-    auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("onehex.mesh")));
+    auto bmesh = import_mesh("onehex.mesh");
+    auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
     Domain d0 = Domain::ofFaces(*mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
       return average(vertices)[0] < 0.25;  // x coordinate of face center
     }));
@@ -156,8 +156,8 @@ TEST(domain, of_faces)
 
   {
     constexpr int dim = 3;
-    // auto mesh = import_mesh("onetet.mesh");
-    auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("onetet.mesh")));
+    auto bmesh = import_mesh("onetet.mesh");
+    auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
     Domain d0 = Domain::ofFaces(*mesh, std::function([](std::vector<vec3> vertices, int /* bdr_attr */) {
       // accept face if it contains a vertex whose x coordinate is less than 0.1
       for (auto v : vertices) {
@@ -190,8 +190,8 @@ TEST(domain, of_faces)
 
   {
     constexpr int dim = 2;
-    // auto mesh = import_mesh("beam-quad.mesh");
-    auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("beam-quad.mesh")));
+    auto bmesh = import_mesh("beam-quad.mesh");
+    auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
     Domain d0 = Domain::ofFaces(*mesh, std::function([](std::vector<vec2> vertices, int /* attr */) {
       return average(vertices)[0] < 2.25;  // x coordinate of face center
     }));
@@ -221,8 +221,8 @@ TEST(domain, of_elements)
 {
   {
     constexpr int dim = 3;
-    // auto mesh = import_mesh("patch3D_tets_and_hexes.mesh");
-    auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("patch3D_tets_and_hexes.mesh")));
+    auto bmesh = import_mesh("patch3D_tets_and_hexes.mesh");
+    auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
     Domain d0 = Domain::ofElements(*mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
       return average(vertices)[0] < 0.7;  // x coordinate of face center
     }));
@@ -254,8 +254,8 @@ TEST(domain, of_elements)
 
   {
     constexpr int dim = 2;
-    // auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
-    auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("patch2D_tris_and_quads.mesh")));
+    auto bmesh = import_mesh("patch2D_tris_and_quads.mesh");
+    auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
     Domain d0 = Domain::ofElements(
         *mesh, std::function([](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; }));
     EXPECT_EQ(d0.tri_ids_.size(), 1);
@@ -287,8 +287,8 @@ TEST(domain, entireDomain2d)
 {
   constexpr int dim = 2;
   constexpr int p = 1;
-  // auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
-  auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("patch2D_tris_and_quads.mesh")));
+  auto bmesh = import_mesh("patch2D_tris_and_quads.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   Domain d0 = EntireDomain(*mesh);
 
@@ -307,8 +307,8 @@ TEST(domain, entireDomain3d)
 {
   constexpr int dim = 3;
   constexpr int p = 1;
-  // auto mesh = import_mesh("patch3D_tets_and_hexes.mesh");
-  auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("patch3D_tets_and_hexes.mesh")));
+  auto bmesh = import_mesh("patch3D_tets_and_hexes.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   Domain d0 = EntireDomain(*mesh);
 
@@ -327,8 +327,8 @@ TEST(domain, of2dElementsFindsDofs)
 {
   constexpr int dim = 2;
   constexpr int p = 2;
-  // auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
-  auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("patch2D_tris_and_quads.mesh")));
+  auto bmesh = import_mesh("patch2D_tris_and_quads.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   auto fec = mfem::H1_FECollection(p, dim);
   auto fes = mfem::ParFiniteElementSpace(mesh.get(), &fec);
@@ -371,8 +371,8 @@ TEST(domain, of3dElementsFindsDofs)
 {
   constexpr int dim = 3;
   constexpr int p = 2;
-  // auto mesh = import_mesh("patch3D_tets_and_hexes.mesh");
-  auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("patch3D_tets_and_hexes.mesh")));
+  auto bmesh = import_mesh("patch3D_tets_and_hexes.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   auto fec = mfem::H1_FECollection(p, dim);
   auto fes = mfem::ParFiniteElementSpace(mesh.get(), &fec);
@@ -419,8 +419,8 @@ TEST(domain, of2dBoundaryElementsFindsDofs)
 {
   constexpr int dim = 2;
   constexpr int p = 2;
-  // auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
-  auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("patch2D_tris_and_quads.mesh")));
+  auto bmesh = import_mesh("patch2D_tris_and_quads.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   auto find_right_boundary = [](std::vector<vec2> vertices, int /* attr */) {
     return std::all_of(vertices.begin(), vertices.end(), [](vec2 X) { return X[0] > 1.0 - 1e-2; });
@@ -454,8 +454,8 @@ TEST(domain, of3dBoundaryElementsFindsDofs)
 {
   constexpr int dim = 3;
   constexpr int p = 2;
-  // auto mesh = import_mesh("patch3D_tets.mesh");
-  auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("patch3D_tets.mesh")));
+  auto bmesh = import_mesh("patch3D_tets.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   auto find_xmax_boundary = [](std::vector<vec3> vertices, int /* attr */) {
     return std::all_of(vertices.begin(), vertices.end(), [](vec3 X) { return X[0] > 1.0 - 1e-2; });

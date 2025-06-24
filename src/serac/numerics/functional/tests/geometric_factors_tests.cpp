@@ -31,8 +31,8 @@ mfem::Mesh import_mesh(std::string meshfile)
 
 TEST(geometric_factors, with_2D_domains)
 {
-  // auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
-  auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("patch2D_tris_and_quads.mesh")));
+  auto bmesh = import_mesh("patch2D_tris_and_quads.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   // `d` will consist of one tri and one quad
   Domain d = Domain::ofElements(
@@ -61,8 +61,8 @@ TEST(geometric_factors, with_2D_domains)
 
 TEST(geometric_factors, with_3D_domains)
 {
-  // auto mesh = import_mesh("patch3D_tets_and_hexes.mesh");
-  auto mesh = serac::mesh::refineAndDistribute(std::move(import_mesh("patch3D_tets_and_hexes.mesh")));
+  auto bmesh = import_mesh("patch3D_tets_and_hexes.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   // `d` will consist of 6 tets and 1 hex
   Domain d = Domain::ofElements(*mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {

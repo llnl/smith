@@ -8,6 +8,7 @@
 
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
 
 using namespace serac;
@@ -372,4 +373,11 @@ TEST(patch_test_meshes, hexahedron_domains)
     BlockElementRestriction L2_BER(L2_fes.get(), interior);
     EXPECT_EQ(L2_BER.ESize(), 18 * (9 * 2));
   }
+}
+
+int main(int argc, char* argv[])
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }
