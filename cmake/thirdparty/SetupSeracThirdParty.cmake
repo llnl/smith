@@ -510,15 +510,13 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         find_dependency(Enzyme REQUIRED)
 
         serac_assert_find_succeeded(PROJECT_NAME Enzyme
-                                    TARGET       LLDEnzymeFlags
+                                    TARGET       ClangEnzymeFlags
                                     DIR_VARIABLE ENZYME_DIR)
 
         message(STATUS "Enzyme support is ON")
-        set(SERAC_USE_ENZYME ON CACHE BOOL "")
         set(ENZYME_FOUND TRUE)
     else()
         message(STATUS "Enzyme support is OFF")
-        set(SERAC_USE_ENZYME OFF CACHE BOOL "")
         set(ENZYME_FOUND FALSE)
     endif()
 
