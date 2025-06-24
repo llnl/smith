@@ -377,7 +377,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     if(SERAC_ENABLE_CONTINUATION)
         # Allow homotopy solver as a non-submodule
         if (DEFINED CONTINUATION_SOURCE_DIR)
-            if(NOT EXISTS ${CONTINUATION_SOURCE_DIR}/CMakeLists.txt)
+            if(NOT EXISTS "${CONTINUATION_SOURCE_DIR}/CMakeLists.txt")
     		message(FATAL_ERROR "Given CONTINUATION_SOURCE_DIR does not contain CMakeLists.txt")
             endif()
         else()
