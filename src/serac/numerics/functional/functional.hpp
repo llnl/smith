@@ -306,8 +306,7 @@ class Functional<test(trials...), exec> {
     if (test_function_space_.family == Family::L2) {
       // We only need these variables to set the output_L_ vector to the right size
       mfem::ParGridFunction X_pgf;
-      mfem::Vector X_ldof_values;
-      X_ldof_values.SetSize(P_test_->Height(), mem_type);
+      mfem::Vector X_ldof_values(P_test_->Height(), mem_type);
 
       updateFaceNbrData(test_space_, X_pgf, X_ldof_values);
       output_L_.SetSize(X_ldof_values.Size() + X_pgf.FaceNbrData().Size(), mem_type);
@@ -613,11 +612,17 @@ class Functional<test(trials...), exec> {
     }
 
     // scatter-add to compute global residuals
-    // TODO: might need to extract a subvector from output_L_ representing local residuals excluding
-    // ghost dofs for L2 spaces. Right now this is not raising any error because P_test_ is not a
-    // ConformingProlongationOperator for L2 spaces, so it does not check if the dimensions of the
-    // vectors matches the height and width of the matrix.
-    P_test_->MultTranspose(output_L_, output_T_);
+    if (test_function_space_.family == Family::L2) {
+      // Extract a subvector from output_L_ for local residuals excluding ghost dofs for L2 spaces
+      // The output vector is in form [   ---   L    ---   |  ---  FND ---  ]
+      mfem::Vector output_ldof_values(P_test_->Height(), mem_type);
+      for (int j = 0; j < output_ldof_values.Size(); ++j) {
+        output_ldof_values[j] = output_L_[j];
+      }
+      P_test_->MultTranspose(output_ldof_values, output_T_);
+    } else {
+      P_test_->MultTranspose(output_L_, output_T_);
+    }
 
     if constexpr (wrt != NO_DIFFERENTIATION) {
       // if the user has indicated they'd like to evaluate and differentiate w.r.t.
