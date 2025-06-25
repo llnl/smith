@@ -184,6 +184,33 @@ inline void updateFaceNbrData(const mfem::ParFiniteElementSpace* const_trial_spa
   trial_pgf.ExchangeFaceNbrData();
 }
 
+/**
+ * @brief helper functional to rearrange the ordering of FaceNbrData for L2 space to byVDIM
+ */
+inline void reorderFaceNbrData(const mfem::ParFiniteElementSpace* trial_space, const mfem::ParGridFunction& trial_pgf,
+                               const int LSize, mfem::Vector& input_L)
+{
+  int num_ghost_elem = trial_space->GetParMesh()->GetNFaceNeighborElements();
+  int components_per_node = trial_space->GetVDim();
+  const mfem::Vector& face_neighbor_data = trial_pgf.FaceNbrData();
+
+  int offset = 0;
+  for (int n = 0; n < num_ghost_elem; ++n) {
+    mfem::Array<int> old_shared_elem_vdof_ids;
+    trial_space->GetFaceNbrElementVDofs(n, old_shared_elem_vdof_ids);
+    int dofs_per_element = old_shared_elem_vdof_ids.Size() / components_per_node;
+
+    // Put the entries into their new index
+    for (int m = 0; m < old_shared_elem_vdof_ids.Size(); ++m) {
+      //            -------------- dofs before --------------     ---- component -----
+      int new_id = (m % dofs_per_element) * components_per_node + m / dofs_per_element + offset;
+      input_L[LSize + new_id] = face_neighbor_data(old_shared_elem_vdof_ids[m]);
+    }
+    // Increase offset for next ghost element
+    offset += old_shared_elem_vdof_ids.Size();
+  }
+}
+
 /// @cond
 template <typename T, ExecutionSpace exec = serac::default_execution_space>
 class Functional;
@@ -459,7 +486,29 @@ class Functional<test(trials...), exec> {
    */
   void ActionOfGradient(const mfem::Vector& input_T, mfem::Vector& output_T, uint32_t which) const
   {
-    P_trial_[which]->Mult(input_T, input_L_[which]);
+    // Please refer to 'operator()' below for detailed comments of this implementation
+    if (trial_function_spaces_[which].family == Family::L2) {
+      // copy input_L[which] and facenbrdata[which] into a common array like:
+      //          first part        second part
+      //    [   ---   L    ---   |  ---  FND ---  ]
+      P_trial_[which]->Mult(input_T, input_ldof_values_[which]);
+      input_L_[which].SetVector(input_ldof_values_[which], 0);
+      updateFaceNbrData(trial_space_[which], trial_pargrid_functions_[which], input_ldof_values_[which]);
+
+      // Ensure ghost data ordering is consistent with local data
+      if (trial_space_[which]->GetVDim() == 1) {
+        input_L_[which].SetVector(trial_pargrid_functions_[which].FaceNbrData(), input_ldof_values_[which].Size());
+      } else {
+        if (trial_space_[which]->GetOrdering() == mfem::Ordering::byVDIM) {
+          int local_size = input_ldof_values_[which].Size();
+          reorderFaceNbrData(trial_space_[which], trial_pargrid_functions_[which], local_size, input_L_[which]);
+        } else {
+          SLIC_ERROR_ROOT("Unsupported: L2 vector field ordered by nodes");
+        }
+      }
+    } else {
+      P_trial_[which]->Mult(input_T, input_L_[which]);
+    }
 
     output_L_ = 0.0;
 
@@ -484,7 +533,17 @@ class Functional<test(trials...), exec> {
     }
 
     // scatter-add to compute global residuals
-    P_test_->MultTranspose(output_L_, output_T);
+    if (test_function_space_.family == Family::L2) {
+      // Extract a subvector from output_L_ for local residuals excluding ghost dofs for L2 spaces
+      // The output vector is in form [   ---   L    ---   |  ---  FND ---  ]
+      mfem::Vector output_ldof_values(P_test_->Height(), mem_type);
+      for (int j = 0; j < output_ldof_values.Size(); ++j) {
+        output_ldof_values[j] = output_L_[j];
+      }
+      P_test_->MultTranspose(output_ldof_values, output_T);
+    } else {
+      P_test_->MultTranspose(output_L_, output_T);
+    }
   }
 
   /**
@@ -507,7 +566,7 @@ class Functional<test(trials...), exec> {
     // get the values for each local processor
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
       if (trial_function_spaces_[i].family == Family::L2) {
-        // copy input_L[i] and facenbrdata [i] into a common array like:
+        // copy input_L[i] and facenbrdata[i] into a common array like:
         //          first part        second part
         //    [   ---   L    ---   |  ---  FND ---  ]
         P_trial_[i]->Mult(*input_T[i], input_ldof_values_[i]);
@@ -538,27 +597,8 @@ class Functional<test(trials...), exec> {
           if (trial_space_[i]->GetOrdering() == mfem::Ordering::byVDIM) {
             // For vector fields with byVDIM ordering, we manually set the entries in VDIM order. By the way this
             // is really annoying because we have to get face neighbor vdof indices again in element restriction.
-            int num_ghost_elem = trial_space_[i]->GetParMesh()->GetNFaceNeighborElements();
-            int components_per_node = trial_space_[i]->GetVDim();
-            const mfem::Vector& face_neighbor_data = trial_pargrid_functions_[i].FaceNbrData();
-
-            int offset = 0;
             int local_size = input_ldof_values_[i].Size();
-
-            for (int n = 0; n < num_ghost_elem; ++n) {
-              mfem::Array<int> old_shared_elem_vdof_ids;
-              trial_space_[i]->GetFaceNbrElementVDofs(n, old_shared_elem_vdof_ids);
-              int dofs_per_element = old_shared_elem_vdof_ids.Size() / components_per_node;
-
-              // Put the entries into their new index
-              for (int m = 0; m < old_shared_elem_vdof_ids.Size(); ++m) {
-                //            -------------- dofs before --------------     ---- component -----
-                int new_id = (m % dofs_per_element) * components_per_node + m / dofs_per_element + offset;
-                input_L_[i][local_size + new_id] = face_neighbor_data(old_shared_elem_vdof_ids[m]);
-              }
-              // Increase offset for next ghost element
-              offset += old_shared_elem_vdof_ids.Size();
-            }
+            reorderFaceNbrData(trial_space_[i], trial_pargrid_functions_[i], local_size, input_L_[i]);
           } else {
             // For vector fields with byNODES ordering, we need to prepare the local input vector in the form
             // { true_comp_X ghost_comp_X true_comp_Y ghost_comp_Y true_comp_Z ghost_comp_Z }.
@@ -925,10 +965,10 @@ class Functional<test(trials...), exec> {
   FunctionSpace test_function_space_;
 
   /// @brief For access of neighbor element info for processor boundary faces
-  std::array<mfem::ParGridFunction, num_trial_spaces> trial_pargrid_functions_;
+  mutable std::array<mfem::ParGridFunction, num_trial_spaces> trial_pargrid_functions_;
 
   /// @brief Store values on L2 ldofs of the local processor
-  std::array<mfem::Vector, num_trial_spaces> input_ldof_values_;
+  mutable std::array<mfem::Vector, num_trial_spaces> input_ldof_values_;
 
   /**
    * @brief Operator that converts true (global) DOF values to local (current rank) DOF values
