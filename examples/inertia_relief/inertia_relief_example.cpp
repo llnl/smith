@@ -5,11 +5,12 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file smith_example.cpp
+ * @file inertia_relief_example.cpp
  *
- * @brief Basic Smith example
+ * @brief Inertia Relief example
  *
- * Intended to verify that external projects can include Smith
+ * Intended to show how to solve a problem with the HomotopySolver.
+ * The example problem solved is an inertia relief problem.
  */
 
 #include "serac/serac.hpp"
