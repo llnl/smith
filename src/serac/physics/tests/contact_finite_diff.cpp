@@ -47,7 +47,7 @@ TEST_P(ContactFiniteDiff, patch)
 
   double shift = eps * 10;
   // clang-format off
-  auto pmesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
+  auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
     shared::MeshBuilder::CubeMesh(1, 1, 1),
     shared::MeshBuilder::CubeMesh(1, 1, 1)
       // shift up height of element
@@ -61,10 +61,10 @@ TEST_P(ContactFiniteDiff, patch)
   }), "patch_mesh", 0, 0);
   // clang-format on
 
-  pmesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(5));
-  pmesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(2));
-  pmesh->addDomainOfBoundaryElements("z0_face", serac::by_attr<dim>(1));
-  pmesh->addDomainOfBoundaryElements("zmax_face", serac::by_attr<dim>(8));
+  mesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(5));
+  mesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("z0_face", serac::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("zmax_face", serac::by_attr<dim>(8));
 
 #ifdef MFEM_USE_STRUMPACK
   LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
@@ -88,27 +88,27 @@ TEST_P(ContactFiniteDiff, patch)
                                  .jacobian = ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
-                                             solid_mechanics::default_quasistatic_options, name, "patch_mesh", {}, 0,
+                                             solid_mechanics::default_quasistatic_options, name, mesh, {}, 0,
                                              0.0, false, false);
 
   double K = 10.0;
   double G = 0.25;
   solid_mechanics::NeoHookean mat{1.0, K, G};
-  solid_solver.setMaterial(mat, pmesh->entireBody());
+  solid_solver.setMaterial(mat, mesh->entireBody());
 
   auto nonzero_disp_bc = [](vec3, double) { return vec3{{0.0, 0.0, 0.0}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  solid_solver.setFixedBCs(pmesh->domain("x0_faces"), Component::X);
-  solid_solver.setFixedBCs(pmesh->domain("y0_faces"), Component::Y);
-  solid_solver.setFixedBCs(pmesh->domain("z0_face"), Component::Z);
-  solid_solver.setDisplacementBCs(nonzero_disp_bc, pmesh->domain("zmax_face"), Component::Z);
+  solid_solver.setFixedBCs(mesh->domain("x0_faces"), Component::X);
+  solid_solver.setFixedBCs(mesh->domain("y0_faces"), Component::Y);
+  solid_solver.setFixedBCs(mesh->domain("z0_face"), Component::Z);
+  solid_solver.setDisplacementBCs(nonzero_disp_bc, mesh->domain("zmax_face"), Component::Z);
 
   // Create a list of vdofs from Domains
-  auto x0_face_dofs = pmesh->domain("x0_faces").dof_list(&solid_solver.displacement().space());
-  auto y0_face_dofs = pmesh->domain("y0_faces").dof_list(&solid_solver.displacement().space());
-  auto z0_face_dofs = pmesh->domain("z0_face").dof_list(&solid_solver.displacement().space());
-  auto zmax_face_dofs = pmesh->domain("zmax_face").dof_list(&solid_solver.displacement().space());
+  auto x0_face_dofs = mesh->domain("x0_faces").dof_list(&solid_solver.displacement().space());
+  auto y0_face_dofs = mesh->domain("y0_faces").dof_list(&solid_solver.displacement().space());
+  auto z0_face_dofs = mesh->domain("z0_face").dof_list(&solid_solver.displacement().space());
+  auto zmax_face_dofs = mesh->domain("zmax_face").dof_list(&solid_solver.displacement().space());
   mfem::Array<int> bc_vdofs(dim *
                             (x0_face_dofs.Size() + y0_face_dofs.Size() + z0_face_dofs.Size() + zmax_face_dofs.Size()));
   int dof_ct = 0;
