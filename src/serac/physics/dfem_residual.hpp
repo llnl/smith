@@ -26,6 +26,7 @@ namespace serac {
  * stiffness matrices based on body and boundary integrals.
  *
  */
+template <typename InputType, typename OutputType>
 class DfemResidual : public Residual {
  public:
   using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
@@ -37,7 +38,23 @@ class DfemResidual : public Residual {
    * @param mesh The serac mesh
    * @param diff_op A differentiable operator that computes the residual and jacobian
    */
-  DfemResidual(std::string physics_name, std::shared_ptr<Mesh> mesh) : Residual(physics_name), mesh_(mesh) {}
+  DfemResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
+               const mfem::ParFiniteElementSpace& output_mfem_space,
+               const std::vector<const mfem::ParFiniteElementSpace*>& input_mfem_spaces)
+      : Residual(physics_name),
+        mesh_(mesh),
+        differentiable_operators_(input_mfem_spaces.size() + 1),
+        input_mfem_spaces_(input_mfem_spaces)
+  {
+    std::vector<const mfem::ParFiniteElementSpace*> parameter_spaces;
+    parameter_spaces.reserve(input_mfem_spaces.size());
+    for (size_t i = 1; i < input_mfem_spaces.size(); ++i) {
+      parameter_spaces.push_back(input_mfem_spaces[i]);
+    }
+    parameter_spaces.push_back(&output_mfem_space);
+    differentiable_operators_[0] = std::make_unique<mfem::future::DifferentiableOperator>(
+        makeFieldDescriptors({input_mfem_spaces[0]}), makeFieldDescriptors(parameter_spaces, 1), mesh->mfemParMesh());
+  }
 
   /**
    * @brief Add a body integral contribution to the residual
@@ -59,56 +76,30 @@ class DfemResidual : public Residual {
    * 3>`)
    *
    */
-  template <typename QFunctionType, typename InputType, typename OutputType>
-  void addBodyIntegral(QFunctionType qfunction, const std::vector<mfem::future::FieldDescriptor>& solution_fields,
-                       const std::vector<mfem::future::FieldDescriptor>& param_fields, InputType qfunction_inputs,
-                       OutputType qfunction_outputs, const mfem::IntegrationRule& integration_rule,
-                       mfem::Array<int> domain_attributes, std::integer_sequence<size_t, 0> derivative_ids)
+  template <int... active_inputs, typename BodyIntegralType>
+  void addBodyIntegral(DependsOn<active_inputs...>, mfem::Array<int> domain_attributes, BodyIntegralType body_integral,
+                       const mfem::IntegrationRule& integration_rule, std::integer_sequence<size_t, 0> derivative_ids)
   {
-    // get field IDs
-    std::vector<size_t> field_ids;
-    field_ids.reserve(solution_fields.size() + param_fields.size());
-    for (const auto& field : solution_fields) {
-      field_ids.push_back(field.id);
-    }
-    for (const auto& field : param_fields) {
-      field_ids.push_back(field.id);
-    }
-    // just keep the first input field as a solution field, make the rest parameter fields to simplify the Mult() call
-    std::vector<mfem::future::FieldDescriptor> other_fields;
-    other_fields.reserve(param_fields.size() + solution_fields.size() - 1);
-    for (size_t i = 1; i < solution_fields.size(); ++i) {
-      other_fields.push_back(solution_fields[i]);
-    }
-    for (const auto& field : param_fields) {
-      other_fields.push_back(field);
-    }
-    residual_terms_with_field_ids_.emplace_back(
-        std::make_tuple(mfem::future::DifferentiableOperator({solution_fields[0]}, other_fields, mesh_->mfemParMesh()),
-                        std::move(field_ids)));
-    std::get<0>(residual_terms_with_field_ids_.back())
-        .AddDomainIntegrator(qfunction, qfunction_inputs, qfunction_outputs, integration_rule, domain_attributes,
-                             derivative_ids);
+    InputType integral_inputs;
+    OutputType integral_outputs;
+    // ParameterReducer<BodyIntegralType, active_inputs...> reduced_integral(body_integral);
+    differentiable_operators_[0]->AddDomainIntegrator(body_integral, integral_inputs, integral_outputs,
+                                                      integration_rule, domain_attributes, derivative_ids);
   }
 
   /// @overload
   mfem::Vector residual(double, double, const std::vector<ConstFieldPtr>& fields, int block_row = 0) const override
   {
     SLIC_ERROR_ROOT_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for DfemResidual");
-    mfem::Vector resid(fields[0]->space().GetVSize());
+    mfem::Vector resid(fields[0]->space().GetTrueVSize());
     resid = 0.0;
-    for (auto& residual_term_with_field_ids : residual_terms_with_field_ids_) {
-      std::vector<mfem::Vector*> other_fields;
-      auto& field_ids = std::get<1>(residual_term_with_field_ids);
-      other_fields.reserve(field_ids.size() - 1);
-      for (size_t i = 1; i < field_ids.size(); ++i) {
-        other_fields.push_back(&fields[field_ids[i]]->gridFunction());
-      }
-      std::get<0>(residual_term_with_field_ids).SetParameters(other_fields);
-      mfem::Vector term_resid(fields[0]->space().GetTrueVSize());
-      std::get<0>(residual_term_with_field_ids).Mult(*fields[0], term_resid);
-      resid += term_resid;
+    std::vector<mfem::Vector*> other_fields;
+    other_fields.reserve(fields.size() - 1);
+    for (size_t i = 1; i < fields.size(); ++i) {
+      other_fields.push_back(&fields[i]->gridFunction());
     }
+    differentiable_operators_[0]->SetParameters(other_fields);
+    differentiable_operators_[0]->Mult(*fields[0], resid);
     return resid;
   }
 
@@ -128,52 +119,52 @@ class DfemResidual : public Residual {
                        "Invalid number of field sensitivities relative to the number of fields");
     SLIC_ERROR_ROOT_IF(jvp_reactions.size() != 1, "DfemResidual nonlinear systems only supports 1 output residual");
 
-    *jvp_reactions[0] = 0.0;
+    // *jvp_reactions[0] = 0.0;
 
-    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      if (v_fields[input_col] == nullptr) {
-        continue;
-      }
-      for (auto& residual_term_with_field_ids : residual_terms_with_field_ids_) {
-        const auto& field_ids = std::get<1>(residual_term_with_field_ids);
-        auto field_id_it = std::find(field_ids.begin(), field_ids.end(), input_col);
-        // this residual term does not depend on this input field
-        if (field_id_it == field_ids.end()) {
-          continue;
-        }
-        //   if (field_ids[0] != input_col) {
-        //     continue;
-        //   }
-        //   auto& residual_term_ = std::get<0>(residual_term_with_field_ids);
-        //   std::vector<mfem::Vector*> other_fields;
-        //   other_fields.reserve(field_ids.size() - 1);
-        //   for (size_t i = 1; i < field_ids.size(); ++i) {
-        //     other_fields.push_back(&fields[field_ids[i]]->gridFunction());
-        //   }
-        //   residual_term_.SetParameters(other_fields);
-        //   mfem::Vector K(fields[0]->space().GetTrueVSize());
-        //   residual_term_.AddMult(*v_fields[input_col], K);
-        //   (*jvp_reactions[0]) += K;
-        // }
-        // // find the residual term that corresponds to this input field
-        // auto it = std::find_if(residual_terms_with_field_ids_.begin(), residual_terms_with_field_ids_.end(),
-        //                        [&](const auto& term_and_ids) {
-        //                          const auto& field_ids = std::get<1>(term_and_ids);
-        //                          return field_ids[0] == input_col;
-        //                        });
-        // if (it == residual_terms_with_field_ids_.end()) {
-        //   continue;
-        // }
-        // const auto& residual_term_ = std::get<0>(*it);
-        // std::vector<mfem::Vector*> other_fields;
-        // const auto& field_ids = std::get<1>(*it);
-        // other_fields.reserve(field_ids.size() - 1);
-        // for (size_t i = 1; i < field_ids.size(); ++i) {
-        //   other_fields.push_back(&fields[field_ids[i]]->gridFunction());
-        // }
-        // residual_term_.SetParameters(other_fields);
-      }
-    }
+    // for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
+    //   if (v_fields[input_col] == nullptr) {
+    //     continue;
+    //   }
+    //   for (auto& residual_term_with_field_ids : residual_terms_with_field_ids_) {
+    //     const auto& field_ids = std::get<1>(residual_term_with_field_ids);
+    //     auto field_id_it = std::find(field_ids.begin(), field_ids.end(), input_col);
+    //     // this residual term does not depend on this input field
+    //     if (field_id_it == field_ids.end()) {
+    //       continue;
+    //     }
+    //   if (field_ids[0] != input_col) {
+    //     continue;
+    //   }
+    //   auto& residual_term_ = std::get<0>(residual_term_with_field_ids);
+    //   std::vector<mfem::Vector*> other_fields;
+    //   other_fields.reserve(field_ids.size() - 1);
+    //   for (size_t i = 1; i < field_ids.size(); ++i) {
+    //     other_fields.push_back(&fields[field_ids[i]]->gridFunction());
+    //   }
+    //   residual_term_.SetParameters(other_fields);
+    //   mfem::Vector K(fields[0]->space().GetTrueVSize());
+    //   residual_term_.AddMult(*v_fields[input_col], K);
+    //   (*jvp_reactions[0]) += K;
+    // }
+    // // find the residual term that corresponds to this input field
+    // auto it = std::find_if(residual_terms_with_field_ids_.begin(), residual_terms_with_field_ids_.end(),
+    //                        [&](const auto& term_and_ids) {
+    //                          const auto& field_ids = std::get<1>(term_and_ids);
+    //                          return field_ids[0] == input_col;
+    //                        });
+    // if (it == residual_terms_with_field_ids_.end()) {
+    //   continue;
+    // }
+    // const auto& residual_term_ = std::get<0>(*it);
+    // std::vector<mfem::Vector*> other_fields;
+    // const auto& field_ids = std::get<1>(*it);
+    // other_fields.reserve(field_ids.size() - 1);
+    // for (size_t i = 1; i < field_ids.size(); ++i) {
+    //   other_fields.push_back(&fields[field_ids[i]]->gridFunction());
+    // }
+    // residual_term_.SetParameters(other_fields);
+    //   }
+    // }
   }
 
   /// @overload
@@ -184,16 +175,52 @@ class DfemResidual : public Residual {
                        "Invalid number of field sensitivities relative to the number of fields");
     SLIC_ERROR_ROOT_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
-    auto grad_op = residual_term_.GetDerivative(0, {fields[0]}, {mesh_nodes_});
-    grad_op->AddMultTranspose(*v_fields[0], *vjp_sensitivities[0]);
+    // auto grad_op = residual_term_.GetDerivative(0, {fields[0]}, {mesh_nodes_});
+    // grad_op->AddMultTranspose(*v_fields[0], *vjp_sensitivities[0]);
   }
 
  protected:
+  static std::vector<mfem::future::FieldDescriptor> makeFieldDescriptors(
+      const std::vector<const mfem::ParFiniteElementSpace*>& spaces, size_t offset = 0)
+  {
+    std::vector<mfem::future::FieldDescriptor> field_descriptors;
+    field_descriptors.reserve(spaces.size());
+    for (size_t i = 0; i < spaces.size(); ++i) {
+      field_descriptors.emplace_back(i + offset, spaces[i]);
+    }
+    return field_descriptors;
+  }
+
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;
+  std::vector<std::unique_ptr<mfem::future::DifferentiableOperator>> differentiable_operators_;
+  std::vector<const mfem::ParFiniteElementSpace*> input_mfem_spaces_;
 
-  mutable std::vector<std::tuple<mfem::future::DifferentiableOperator, std::vector<size_t>>>
-      residual_terms_with_field_ids_;
+ private:
+  template <typename Integrand, int dim, int... active_inputs>
+  struct ParameterReducer {
+    ParameterReducer(Integrand integrand) : integrand_(integrand) {}
+
+    template <typename... Args>
+    SERAC_HOST_DEVICE inline auto operator()(Args&&... args) const
+    {
+      auto arg_tuple = mfem::future::make_tuple(std::forward<Args>(args)...);
+      return integrand_(std::get<active_inputs>(arg_tuple)...);
+    }
+
+    SERAC_HOST_DEVICE inline auto operator()(const mfem::future::tensor<mfem::real_t, dim, dim>& du_dxi,
+                                             const mfem::future::tensor<mfem::real_t, dim, dim>& dv_dxi,
+                                             const mfem::future::tensor<mfem::real_t, dim, dim>& da_dxi,
+                                             const mfem::future::tensor<mfem::real_t, dim, dim>& dX_dxi,
+                                             mfem::real_t weight, double K) const
+    {
+      auto arg_tuple = mfem::future::make_tuple(du_dxi, dv_dxi, da_dxi, dX_dxi, weight, K);
+      return integrand_(std::get<active_inputs>(arg_tuple)...);
+    }
+
+   private:
+    Integrand integrand_;
+  };
 };
 
 }  // namespace serac
