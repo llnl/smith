@@ -363,16 +363,14 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   y_partition.PartialSum();
 
   {
-    HYPRE_BigInt* dofOffsets = new HYPRE_BigInt[2];
-    HYPRE_BigInt* complementarityOffsets = new HYPRE_BigInt[2];
+    HYPRE_BigInt dofOffsets[2];
+    HYPRE_BigInt complementarityOffsets[2];
     for (int i = 0; i < 2; i++) {
       dofOffsets[i] = uOffsets[i] + cOffsets[i];
     }
     complementarityOffsets[0] = 0;
     complementarityOffsets[1] = 0;
     Init(complementarityOffsets, dofOffsets);
-    delete[] dofOffsets;
-    delete[] complementarityOffsets;
   }
 
   // dF / dx 0 x 0 matrix
