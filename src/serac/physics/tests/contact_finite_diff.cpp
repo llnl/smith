@@ -88,8 +88,8 @@ TEST_P(ContactFiniteDiff, patch)
                                  .jacobian = ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
-                                             solid_mechanics::default_quasistatic_options, name, mesh, {}, 0,
-                                             0.0, false, false);
+                                             solid_mechanics::default_quasistatic_options, name, mesh, {}, 0, 0.0,
+                                             false, false);
 
   double K = 10.0;
   double G = 0.25;
