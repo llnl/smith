@@ -77,11 +77,9 @@ struct ResidualFixture : public testing::Test {
     serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
     serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
     serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
-    serac::FiniteElementState shape_disp =
-        serac::StateManager::newState(VectorSpace{}, "shape_displacement", mesh->tag());
     serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-    states = {shape_disp, disp, velo, accel};
+    states = {disp, velo, accel};
     params = {density};
 
     for (auto s : states) {
@@ -96,9 +94,8 @@ struct ResidualFixture : public testing::Test {
 
     std::string physics_name = "solid";
 
-    auto solid_mechanics_residual =
-        std::make_shared<SolidResidualT>(physics_name, mesh, states[SolidResidualT::SHAPE_DISPLACEMENT].space(),
-                                         states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
+    auto solid_mechanics_residual = std::make_shared<SolidResidualT>(
+        physics_name, mesh, states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
     SolidMaterial mat;
     mat.K = 1.0;
     mat.G = 0.5;
@@ -138,7 +135,6 @@ struct ResidualFixture : public testing::Test {
       auto u = -0.01 * x;
       return u;
     });
-    states[SolidResidualT::SHAPE_DISPLACEMENT] = 0.0;
     params[0] = 1.2;
 
     // residual is abstract Residual class to ensure usage only through BasePhysics interface
@@ -239,12 +235,11 @@ TEST_F(ResidualFixture, JvpConsistency)
 
   // test jacobians in weighted combinations
   {
-    field_tangents[SolidResidualT::SHAPE_DISPLACEMENT] = nullptr;
     field_tangents[SolidResidualT::VELOCITY] = nullptr;
     field_tangents[size_t(SolidResidualT::NUM_STATES) + size_t(DENSITY)] = nullptr;
 
     double acceleration_factor = 0.2;
-    std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, acceleration_factor, 0.0};
+    std::vector<double> jacobian_weights = {1.0, 0.0, acceleration_factor, 0.0};
 
     auto J = residual->jacobian(time, dt, input_fields, jacobian_weights);
     J->Mult(*field_tangents[SolidResidualT::DISPLACEMENT], jvp_slow);

@@ -20,27 +20,27 @@
 
 namespace serac {
 
-template <int spatial_dim, typename ShapeDispSpace, typename parameters = Parameters<>,
+template <int spatial_dim, typename parameters = Parameters<>,
           typename parameter_indices = std::make_integer_sequence<int, parameters::n>>
 class FunctionalObjective;
 
 /**
  * @brief FunctionalObjective object, implements to the ScalarFunctional interface using serac::ShapeAwareFunctional
  */
-template <int spatial_dim, typename ShapeDispSpace, typename... InputSpaces, int... parameter_indices>
-class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...>,
-                          std::integer_sequence<int, parameter_indices...>> : public ScalarObjective {
+template <int spatial_dim, typename... InputSpaces, int... parameter_indices>
+class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_sequence<int, parameter_indices...>>
+    : public ScalarObjective {
  public:
   using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
+
+  using ShapeDispSpace = H1<1, spatial_dim>;  ///< typedef
 
   /** @brief construct a FunctionalObjective
    * @param physics_name name for the physics module instance
    * @param mesh serac mesh
-   * @param shape_disp_space shape displacement space
    * @param input_mfem_spaces vector of finite element spaces which are arguments to the residual
    */
-  FunctionalObjective(const std::string& physics_name, std::shared_ptr<Mesh> mesh,
-                      const mfem::ParFiniteElementSpace& shape_disp_space, const SpacesT& input_mfem_spaces)
+  FunctionalObjective(const std::string& physics_name, std::shared_ptr<Mesh> mesh, const SpacesT& input_mfem_spaces)
       : ScalarObjective(physics_name), mesh_(mesh)
   {
     std::array<const mfem::ParFiniteElementSpace*, sizeof...(InputSpaces)> mfem_spaces;
@@ -53,6 +53,8 @@ class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...
     if constexpr (sizeof...(InputSpaces) > 0) {
       for_constexpr<sizeof...(InputSpaces)>([&](auto i) { mfem_spaces[i] = input_mfem_spaces[i]; });
     }
+
+    auto& shape_disp_space = mesh_->shapeDisplacement().space();
 
     objective_ =
         std::make_unique<ShapeAwareFunctional<ShapeDispSpace, double(InputSpaces...)>>(&shape_disp_space, mfem_spaces);
@@ -77,36 +79,52 @@ class FunctionalObjective<spatial_dim, ShapeDispSpace, Parameters<InputSpaces...
   virtual double evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields) const override
   {
     dt_ = dt;
-    return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);
+    return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time,
+                             &mesh_->shapeDisplacement(), fields);
   }
 
   /// @overload
   virtual mfem::Vector gradient(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                int direction) const override
+                                int field_ordinal) const override
   {
     dt_ = dt;
-    auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices) + 1>{}, time, fields);
-    auto g = serac::get<DERIVATIVE>(grads[static_cast<size_t>(direction)](time, fields));
+    auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time,
+                                    &mesh_->shapeDisplacement(), fields);
+    auto g =
+        serac::get<DERIVATIVE>(grads[static_cast<size_t>(field_ordinal)](time, &mesh_->shapeDisplacement(), fields));
+    return *assemble(g);
+  }
+
+  /// @overload
+  virtual mfem::Vector mesh_coordinate_gradient(double time, double dt,
+                                                const std::vector<ConstFieldPtr>& fields) const override
+  {
+    dt_ = dt;
+    auto g = serac::get<DERIVATIVE>(
+        (*objective_)(DifferentiateWRT<0>{}, time, mesh_->shapeDisplacement(), *fields[parameter_indices]...));
     return *assemble(g);
   }
 
  private:
   /// @brief Utility to evaluate residual using all fields in vector
   template <int... i>
-  auto evaluateObjective(std::integer_sequence<int, i...>, double time, const std::vector<ConstFieldPtr>& fs) const
+  auto evaluateObjective(std::integer_sequence<int, i...>, double time, ConstFieldPtr shape_disp,
+                         const std::vector<ConstFieldPtr>& fs) const
   {
-    return (*objective_)(time, *fs[i]...);
+    return (*objective_)(time, *shape_disp, *fs[i]...);
   };
 
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
   template <int... i>
-  auto gradientEvaluators(std::integer_sequence<int, i...>, double time, const std::vector<ConstFieldPtr>& fs) const
+  auto gradientEvaluators(std::integer_sequence<int, i...>, double time, ConstFieldPtr shape_disp,
+                          const std::vector<ConstFieldPtr>& fs) const
   {
-    using JacFuncType = std::function<decltype((*objective_)(DifferentiateWRT<1>{}, time, *fs[i]...))(
-        double, const std::vector<ConstFieldPtr>&)>;
-    return std::array<JacFuncType, sizeof...(i)>{[=](double _time, const std::vector<ConstFieldPtr>& _fs) {
-      return (*objective_)(DifferentiateWRT<i>{}, _time, *_fs[i]...);
-    }...};
+    using JacFuncType = std::function<decltype((*objective_)(DifferentiateWRT<1>{}, time, *shape_disp, *fs[i]...))(
+        double, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
+    return std::array<JacFuncType, sizeof...(i)>{
+        [=](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
+          return (*objective_)(DifferentiateWRT<i + 1>{}, _time, *_shape_disp, *_fs[i]...);
+        }...};
   };
 
   /// @brief timestep, this needs to be held here and modified for rate dependent applications

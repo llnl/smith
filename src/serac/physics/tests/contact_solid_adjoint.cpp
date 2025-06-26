@@ -54,24 +54,25 @@ void computeStepAdjointLoad(const FiniteElementState& displacement, FiniteElemen
 using SolidMechT = serac::SolidMechanicsContact<p, dim>;
 // using SolidMechT = serac::SolidMechanics<p, dim>;
 
-std::unique_ptr<SolidMechT> createContactSolver(const Mesh& mesh, const NonlinearSolverOptions& nonlinear_opts,
+std::unique_ptr<SolidMechT> createContactSolver(std::shared_ptr<Mesh> mesh,
+                                                const NonlinearSolverOptions& nonlinear_opts,
                                                 const TimesteppingOptions& dyn_opts, const SolidMaterial& mat)
 {
   static int iter = 0;
 
   auto solid = std::make_unique<SolidMechT>(nonlinear_opts, solid_mechanics::direct_linear_options, dyn_opts,
-                                            physics_prefix + std::to_string(iter++), mesh_tag,
-                                            std::vector<std::string>{}, 0, 0.0, false, true);
+                                            physics_prefix + std::to_string(iter++), mesh, std::vector<std::string>{},
+                                            0, 0.0, false, true);
 
-  solid->setMaterial(mat, mesh.entireBody());
-  solid->setFixedBCs(mesh.domain("two"));
+  solid->setMaterial(mat, mesh->entireBody());
+  solid->setFixedBCs(mesh->domain("two"));
   solid->setDisplacementBCs(
       [](tensor<double, dim> x, double) {
         auto r = 0.0 * x;
         r[1] -= 0.1;
         return r;
       },
-      mesh.domain("four"), Component::ALL);
+      mesh->domain("four"), Component::ALL);
 
 #if 1
   auto contact_type = serac::ContactEnforcement::Penalty;
@@ -140,7 +141,7 @@ struct ContactSensitivityFixture : public ::testing::Test {
     StateManager::initialize(dataStore, "contact_solve");
     std::string filename = std::string(SERAC_REPO_DIR) + "/data/meshes/contact_two_blocks.g";
 
-    mesh = std::make_unique<Mesh>(filename, mesh_tag, 0, 0);
+    mesh = std::make_shared<Mesh>(filename, mesh_tag, 0, 0);
     mesh->addDomainOfBoundaryElements("two", by_attr<dim>(2));
     mesh->addDomainOfBoundaryElements("four", by_attr<dim>(4));
 
@@ -160,7 +161,7 @@ struct ContactSensitivityFixture : public ::testing::Test {
   }
 
   axom::sidre::DataStore dataStore;
-  std::unique_ptr<Mesh> mesh;
+  std::shared_ptr<Mesh> mesh;
 
   NonlinearSolverOptions nonlinear_opts{.relative_tol = 1.0e-10, .absolute_tol = 1.0e-12};
 
@@ -179,7 +180,7 @@ struct ContactSensitivityFixture : public ::testing::Test {
 
 TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjectiveAndGradient)
 {
-  auto solid_solver = createContactSolver(*mesh, nonlinear_opts, dyn_opts, mat);
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
   auto [qoi1, shape_sensitivity1] = computeContactQoiSensitivities(*solid_solver, tsInfo);
   auto [qoi2, shape_sensitivity2] = computeContactQoiSensitivities(*solid_solver, tsInfo);
 
@@ -196,7 +197,7 @@ TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjec
 
 TEST_F(ContactSensitivityFixture, QuasiStaticShapeSensitivities)
 {
-  auto solid_solver = createContactSolver(*mesh, nonlinear_opts, dyn_opts, mat);
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
   auto [qoi_base, shape_sensitivity] = computeContactQoiSensitivities(*solid_solver, tsInfo);
 
   solid_solver->resetStates();

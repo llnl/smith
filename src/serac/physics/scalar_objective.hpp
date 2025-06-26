@@ -48,11 +48,21 @@ class ScalarObjective {
    * @param time time
    * @param dt time step
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
-   * @param direction index for which field to take the gradient with respect to
+   * @param field_ordinal index for which field to take the gradient with respect to
    * @return mfem::Vector
    */
   virtual mfem::Vector gradient(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                int direction) const = 0;
+                                int field_ordinal) const = 0;
+
+  /** @brief Virtual interface for computing objective gradient with respect to the mesh coordinates
+   *
+   * @param time time
+   * @param dt time step
+   * @param fields vector of serac::FiniteElementState* as arguments to the residual
+   * @return mfem::Vector
+   */
+  virtual mfem::Vector mesh_coordinate_gradient(double time, double dt,
+                                                const std::vector<ConstFieldPtr>& fields) const = 0;
 
   /// @brief name
   std::string name() const { return name_; }
