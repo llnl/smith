@@ -21,8 +21,6 @@
 using namespace serac;
 using namespace serac::profiling;
 
-int nsamples = 1;  // because mfem doesn't take in unsigned int
-
 using namespace mfem;
 /* convex quadratic-programming problem
  *
