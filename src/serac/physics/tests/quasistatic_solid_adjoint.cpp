@@ -141,19 +141,19 @@ TEST(quasistatic, finiteDifference)
   ::axom::sidre::DataStore datastore;
   ::serac::StateManager::initialize(datastore, "sidreDataStore");
 
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian3D(1, 1, 1, mfem::Element::HEXAHEDRON), mesh_tag, 0, 0);
-  auto meshPtr = &pmesh->mfemParMesh();
+  auto meshPtr = &mesh->mfemParMesh();
   assert(meshPtr->SpaceDimension() == DIM);
 
   std::string xmax_face_domain_name = "xmax_face";
   std::string ymax_face_domain_name = "ymax_face";
   std::string zmin_face_domain_name = "zmin_face";
   std::string zmax_face_domain_name = "zmax_face";
-  pmesh->addDomainOfBoundaryElements(xmax_face_domain_name, by_attr<DIM>(3));
-  pmesh->addDomainOfBoundaryElements(ymax_face_domain_name, by_attr<DIM>(4));
-  pmesh->addDomainOfBoundaryElements(zmin_face_domain_name, by_attr<DIM>(1));
-  pmesh->addDomainOfBoundaryElements(zmax_face_domain_name, by_attr<DIM>(6));
+  mesh->addDomainOfBoundaryElements(xmax_face_domain_name, by_attr<DIM>(3));
+  mesh->addDomainOfBoundaryElements(ymax_face_domain_name, by_attr<DIM>(4));
+  mesh->addDomainOfBoundaryElements(zmin_face_domain_name, by_attr<DIM>(1));
+  mesh->addDomainOfBoundaryElements(zmax_face_domain_name, by_attr<DIM>(6));
 
   // set up solver
   using solidType = serac::SolidMechanics<ORDER, DIM, ::serac::Parameters<paramFES, paramFES>>;
@@ -164,22 +164,22 @@ TEST(quasistatic, finiteDifference)
                                                          .print_level = 1};
   auto seracSolid = ::std::make_unique<solidType>(nonlinear_options, serac::solid_mechanics::direct_linear_options,
                                                   ::serac::solid_mechanics::default_quasistatic_options, physics_prefix,
-                                                  mesh_tag, std::vector<std::string>{"E", "v"});
+                                                  mesh, std::vector<std::string>{"E", "v"});
 
   using materialType = ParameterizedNeoHookeanSolid;
   materialType material;
 
-  seracSolid->setMaterial(::serac::DependsOn<0, 1>{}, material, pmesh->entireBody());
+  seracSolid->setMaterial(::serac::DependsOn<0, 1>{}, material, mesh->entireBody());
 
-  seracSolid->setFixedBCs(pmesh->domain(xmax_face_domain_name), Component::X);
-  seracSolid->setFixedBCs(pmesh->domain(ymax_face_domain_name), Component::Y);
-  seracSolid->setFixedBCs(pmesh->domain(zmin_face_domain_name), Component::Z);
+  seracSolid->setFixedBCs(mesh->domain(xmax_face_domain_name), Component::X);
+  seracSolid->setFixedBCs(mesh->domain(ymax_face_domain_name), Component::Y);
+  seracSolid->setFixedBCs(mesh->domain(zmin_face_domain_name), Component::Z);
 
   seracSolid->setDisplacementBCs(
       [](vec3, double time) {
         return vec3{{0.0, 0.0, time}};
       },
-      pmesh->domain(zmax_face_domain_name), Component::Z);
+      mesh->domain(zmax_face_domain_name), Component::Z);
 
   double E0 = 1.0;
   double v0 = 0.3;
@@ -206,7 +206,7 @@ TEST(quasistatic, finiteDifference)
         auto stress = material(state, du_dx, E, v);
         return stress[2][2] * time;
       },
-      pmesh->entireBody());
+      mesh->entireBody());
 
   int nTimeSteps = 3;
   double timeStep = 0.8;

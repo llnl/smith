@@ -23,6 +23,7 @@
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/domain.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 
@@ -123,7 +124,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    * @param lin_opts The linear solver options for solving the linearized Jacobian equations
    * @param timestepping_opts The timestepping options for the solid mechanics time evolution operator
    * @param physics_name A name for the physics module instance
-   * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param serac_mesh Serac mesh used for physics
    * @param parameter_names A vector of the names of the requested parameter fields
    * @param cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param time The simulation time to initialize the physics module to
@@ -136,11 +137,11 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    */
   SolidMechanics(const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
                  const serac::TimesteppingOptions timestepping_opts, const std::string& physics_name,
-                 std::string mesh_tag, std::vector<std::string> parameter_names = {}, int cycle = 0, double time = 0.0,
-                 bool checkpoint_to_disk = false, bool use_warm_start = true)
-      : SolidMechanics(
-            std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start)
+                 std::shared_ptr<serac::Mesh> serac_mesh, std::vector<std::string> parameter_names = {}, int cycle = 0,
+                 double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
+      : SolidMechanics(std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, serac_mesh->getComm()),
+                       timestepping_opts, physics_name, serac_mesh, parameter_names, cycle, time, checkpoint_to_disk,
+                       use_warm_start)
   {
   }
 
@@ -150,7 +151,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    * @param solver The nonlinear equation solver for the implicit solid mechanics equations
    * @param timestepping_opts The timestepping options for the solid mechanics time evolution operator
    * @param physics_name A name for the physics module instance
-   * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param serac_mesh Serac mesh used for physics
    * @param parameter_names A vector of the names of the requested parameter fields
    * @param cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param time The simulation time to initialize the physics module to
@@ -162,22 +163,23 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    *       writing and reading the needed trainsient states to disk for adjoint solves
    */
   SolidMechanics(std::unique_ptr<serac::EquationSolver> solver, const serac::TimesteppingOptions timestepping_opts,
-                 const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {},
-                 int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
-      : BasePhysics(physics_name, mesh_tag, cycle, time, checkpoint_to_disk),
+                 const std::string& physics_name, std::shared_ptr<serac::Mesh> serac_mesh,
+                 std::vector<std::string> parameter_names = {}, int cycle = 0, double time = 0.0,
+                 bool checkpoint_to_disk = false, bool use_warm_start = true)
+      : BasePhysics(physics_name, serac_mesh, cycle, time, checkpoint_to_disk),
         displacement_(
-            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_tag_)),
-        velocity_(StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "velocity"), mesh_tag_)),
+            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "displacement"), mesh_->tag())),
+        velocity_(StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "velocity"), mesh_->tag())),
         acceleration_(
-            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "acceleration"), mesh_tag_)),
+            StateManager::newState(H1<order, dim>{}, detail::addPrefix(physics_name, "acceleration"), mesh_->tag())),
         adjoint_displacement_(StateManager::newState(
-            H1<order, dim>{}, detail::addPrefix(physics_name, "adjoint_displacement"), mesh_tag_)),
+            H1<order, dim>{}, detail::addPrefix(physics_name, "adjoint_displacement"), mesh_->tag())),
         displacement_adjoint_load_(displacement_.space(), detail::addPrefix(physics_name, "displacement_adjoint_load")),
         velocity_adjoint_load_(displacement_.space(), detail::addPrefix(physics_name, "velocity_adjoint_load")),
         acceleration_adjoint_load_(displacement_.space(), detail::addPrefix(physics_name, "acceleration_adjoint_load")),
         implicit_sensitivity_displacement_start_of_step_(displacement_.space(), "total_deriv_wrt_displacement."),
         implicit_sensitivity_velocity_start_of_step_(displacement_.space(), "total_deriv_wrt_velocity."),
-        reactions_(StateManager::newDual(H1<order, dim>{}, detail::addPrefix(physics_name, "reactions"), mesh_tag_)),
+        reactions_(StateManager::newDual(H1<order, dim>{}, detail::addPrefix(physics_name, "reactions"), mesh_->tag())),
         reactions_adjoint_bcs_(reactions_.space(), "reactions_shape_sensitivity"),
         nonlin_solver_(std::move(solver)),
         ode2_(displacement_.space().TrueVSize(),
@@ -186,9 +188,9 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
         use_warm_start_(use_warm_start)
   {
     SERAC_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(mesh_.Dimension() != dim,
+    SLIC_ERROR_ROOT_IF(mfemParMesh().Dimension() != dim,
                        axom::fmt::format("Compile time dimension, {0}, and runtime mesh dimension, {1}, mismatch", dim,
-                                         mesh_.Dimension()));
+                                         mfemParMesh().Dimension()));
 
     SLIC_ERROR_ROOT_IF(!nonlin_solver_,
                        "EquationSolver argument is nullptr in SolidMechanics constructor. It is possible that it was "
@@ -215,7 +217,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
     // Create a pack of the primal field and parameter finite element spaces
     mfem::ParFiniteElementSpace* test_space = &displacement_.space();
-    mfem::ParFiniteElementSpace* shape_space = &shape_displacement_.space();
+    mfem::ParFiniteElementSpace* shape_space = &mesh_->shapeDisplacement().space();
 
     std::array<const mfem::ParFiniteElementSpace*, NUM_STATE_VARS + sizeof...(parameter_space)> trial_spaces;
     trial_spaces[0] = &displacement_.space();
@@ -229,7 +231,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     if constexpr (sizeof...(parameter_space) > 0) {
       tuple<parameter_space...> types{};
       for_constexpr<sizeof...(parameter_space)>([&](auto i) {
-        parameters_.emplace_back(mesh_, get<i>(types), detail::addPrefix(name_, parameter_names[i]));
+        parameters_.emplace_back(mfemParMesh(), get<i>(types), detail::addPrefix(name_, parameter_names[i]));
 
         trial_spaces[i + NUM_STATE_VARS] = &(parameters_[i].state->space());
       });
@@ -259,101 +261,9 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     du_.SetSize(true_size);
     predicted_displacement_.SetSize(true_size);
 
-    shape_displacement_ = 0.0;
+    mesh_->shapeDisplacement() = 0.0;
     initializeSolidMechanicsStates();
   }
-
-#if 0
-  /**
-   * @brief Construct a new Nonlinear SolidMechanics Solver object
-   *
-   * @param[in] input_options The solver information parsed from the input file
-   * @param[in] physics_name A name for the physics module instance
-   * @param[in] mesh_tag The tag for the mesh in the StateManager to construct the physics module on
-   * @param[in] cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
-   * @param[in] time The simulation time to initialize the physics module to
-   */
-  SolidMechanics(const SolidMechanicsInputOptions& input_options, const std::string& physics_name, std::string mesh_tag,
-                 int cycle = 0, double time = 0.0)
-      : SolidMechanics(input_options.nonlin_solver_options, input_options.lin_solver_options,
-                       input_options.timestepping_options, physics_name, mesh_tag, {}, cycle, time)
-  {
-    for (auto& mat : input_options.materials) {
-      if (std::holds_alternative<serac::solid_mechanics::NeoHookean>(mat)) {
-        setMaterial(std::get<serac::solid_mechanics::NeoHookean>(mat));
-      } else if (std::holds_alternative<serac::solid_mechanics::LinearIsotropic>(mat)) {
-        setMaterial(std::get<serac::solid_mechanics::LinearIsotropic>(mat));
-      } else if (std::holds_alternative<serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::LinearHardening>>(
-                     mat)) {
-        if constexpr (dim == 3) {
-          serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::LinearHardening>::State initial_state{};
-          setMaterial(std::get<serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::LinearHardening>>(mat),
-                      createQuadratureDataBuffer(initial_state));
-        } else {
-          SLIC_ERROR_ROOT("J2 materials only work for 3D simulations");
-        }
-      } else if (std::holds_alternative<
-                     serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::PowerLawHardening>>(mat)) {
-        if constexpr (dim == 3) {
-          serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::PowerLawHardening>::State initial_state{};
-          setMaterial(std::get<serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::PowerLawHardening>>(mat),
-                      createQuadratureDataBuffer(initial_state));
-        } else {
-          SLIC_ERROR_ROOT("J2 materials only work for 3D simulations");
-        }
-      } else if (std::holds_alternative<serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::VoceHardening>>(
-                     mat)) {
-        if constexpr (dim == 3) {
-          serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::VoceHardening>::State initial_state{};
-          setMaterial(std::get<serac::solid_mechanics::J2SmallStrain<serac::solid_mechanics::VoceHardening>>(mat),
-                      createQuadratureDataBuffer(initial_state));
-        } else {
-          SLIC_ERROR_ROOT("J2 materials only work for 3D simulations");
-        }
-      } else {
-        SLIC_ERROR("Invalid material type.");
-      }
-    }
-
-    if (input_options.initial_displacement) {
-      displacement_.project(input_options.initial_displacement->constructVector(dim));
-    }
-
-    if (input_options.initial_velocity) {
-      velocity_.project(input_options.initial_velocity->constructVector(dim));
-    }
-
-    for (const auto& [bc_name, bc] : input_options.boundary_conditions) {
-      // FIXME: Better naming for boundary conditions?
-      if (bc_name.find("displacement") != std::string::npos) {
-        if (bc.coef_opts.isVector()) {
-          std::shared_ptr<mfem::VectorCoefficient> disp_coef(bc.coef_opts.constructVector(dim));
-          bcs_.addEssential(bc.attrs, disp_coef, displacement_.space());
-        } else {
-          SLIC_ERROR_ROOT_IF(
-              !bc.coef_opts.component,
-              "Component not specified with scalar coefficient when setting the displacement condition.");
-          std::shared_ptr<mfem::Coefficient> disp_coef(bc.coef_opts.constructScalar());
-          bcs_.addEssential(bc.attrs, disp_coef, displacement_.space(), *bc.coef_opts.component);
-        }
-      } else if (bc_name.find("traction") != std::string::npos) {
-        // TODO: Not implemented yet in input files
-        SLIC_ERROR("'traction' is not implemented yet in input files.");
-      } else if (bc_name.find("traction_ref") != std::string::npos) {
-        // TODO: Not implemented yet in input files
-        SLIC_ERROR("'traction_ref' is not implemented yet in input files.");
-      } else if (bc_name.find("pressure") != std::string::npos) {
-        // TODO: Not implemented yet in input files
-        SLIC_ERROR("'pressure' is not implemented yet in input files.");
-      } else if (bc_name.find("pressure_ref") != std::string::npos) {
-        // TODO: Not implemented yet in input files
-        SLIC_ERROR("'pressure_ref' is not implemented yet in input files.");
-      } else {
-        SLIC_WARNING_ROOT("Ignoring boundary condition with unknown name: " << bc_name);
-      }
-    }
-  }
-#endif
 
   /// @brief Destroy the SolidMechanics Functional object
   virtual ~SolidMechanics() {}
@@ -418,8 +328,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   template <typename T>
   qdata_type<T> createQuadratureDataBuffer(T initial_state, const std::optional<Domain>& optional_domain = std::nullopt)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mesh_);
-    return StateManager::newQuadratureDataBuffer(mesh_tag_, domain, order, dim, initial_state);
+    Domain domain = (optional_domain) ? *optional_domain : EntireDomain(mfemParMesh());
+    return StateManager::newQuadratureDataBuffer(mesh_->tag(), domain, order, dim, initial_state);
   }
 
   /**
@@ -609,7 +519,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   void addCustomBoundaryIntegral(DependsOn<active_parameters...>, callable qfunction,
                                  const std::optional<Domain>& optional_domain = std::nullopt)
   {
-    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mesh_);
+    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mfemParMesh());
 
     residual_->AddBoundaryIntegral(Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
                                    qfunction, domain);
@@ -666,10 +576,10 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       FiniteElementDual reactions(reactions_.space(), "reactions_tmp");
 
       if (is_quasistatic_) {
-        reactions = (*residual_)(time_, shape_displacement_, checkpointed_sol.at("displacement"), acceleration_,
+        reactions = (*residual_)(time_, shapeDisplacement(), checkpointed_sol.at("displacement"), acceleration_,
                                  *parameters_[parameter_indices].state...);
       } else {
-        reactions = (*residual_)(time_, shape_displacement_, checkpointed_sol.at("displacement"),
+        reactions = (*residual_)(time_, shapeDisplacement(), checkpointed_sol.at("displacement"),
                                  checkpointed_sol.at("acceleration"), *parameters_[parameter_indices].state...);
       }
 
@@ -1106,7 +1016,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
         [this](const mfem::Vector& u, mfem::Vector& r) {
           SERAC_MARK_FUNCTION;
           const mfem::Vector res =
-              (*residual_)(time_, shape_displacement_, u, acceleration_, *parameters_[parameter_indices].state...);
+              (*residual_)(time_, shapeDisplacement(), u, acceleration_, *parameters_[parameter_indices].state...);
 
           // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
           // tracking strategy
@@ -1118,7 +1028,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
         // gradient of residual function
         [this](const mfem::Vector& u) -> mfem::Operator& {
           SERAC_MARK_FUNCTION;
-          auto [r, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(u), acceleration_,
+          auto [r, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(u), acceleration_,
                                         *parameters_[parameter_indices].state...);
           J_.reset();
           J_ = assemble(drdu);
@@ -1160,7 +1070,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
           [this](const mfem::Vector& d2u_dt2, mfem::Vector& r) {
             add(1.0, u_, c0_, d2u_dt2, predicted_displacement_);
-            const mfem::Vector res = (*residual_)(time_, shape_displacement_, predicted_displacement_, d2u_dt2,
+            const mfem::Vector res = (*residual_)(time_, shapeDisplacement(), predicted_displacement_, d2u_dt2,
                                                   *parameters_[parameter_indices].state...);
 
             // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
@@ -1174,13 +1084,13 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
             add(1.0, u_, c0_, d2u_dt2, predicted_displacement_);
 
             // K := dR/du
-            auto K = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_,
+            auto K = serac::get<DERIVATIVE>((*residual_)(time_, shapeDisplacement(),
                                                          differentiate_wrt(predicted_displacement_), d2u_dt2,
                                                          *parameters_[parameter_indices].state...));
             std::unique_ptr<mfem::HypreParMatrix> k_mat(assemble(K));
 
             // M := dR/da
-            auto M = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_, predicted_displacement_,
+            auto M = serac::get<DERIVATIVE>((*residual_)(time_, shapeDisplacement(), predicted_displacement_,
                                                          differentiate_wrt(d2u_dt2),
                                                          *parameters_[parameter_indices].state...));
             std::unique_ptr<mfem::HypreParMatrix> m_mat(assemble(M));
@@ -1269,7 +1179,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       // the material state buffers to be updated
       residual_->updateQdata(true);
 
-      reactions_ = (*residual_)(time_, shape_displacement_, displacement_, acceleration_,
+      reactions_ = (*residual_)(time_, shapeDisplacement(), displacement_, acceleration_,
                                 *parameters_[parameter_indices].state...);
 
       residual_->updateQdata(false);
@@ -1369,12 +1279,12 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       acceleration_ = end_step_solution.at("acceleration");
 
       // K := dR/du
-      auto K = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_),
+      auto K = serac::get<DERIVATIVE>((*residual_)(time_, shapeDisplacement(), differentiate_wrt(displacement_),
                                                    acceleration_, *parameters_[parameter_indices].state...));
       std::unique_ptr<mfem::HypreParMatrix> k_mat(assemble(K));
 
       // M := dR/da
-      auto M = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_, displacement_,
+      auto M = serac::get<DERIVATIVE>((*residual_)(time_, shapeDisplacement(), displacement_,
                                                    differentiate_wrt(acceleration_),
                                                    *parameters_[parameter_indices].state...));
       std::unique_ptr<mfem::HypreParMatrix> m_mat(assemble(M));
@@ -1391,7 +1301,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   }
 
   /// @overload
-  FiniteElementDual& computeTimestepSensitivity(size_t parameter_field) override
+  FiniteElementDual computeTimestepSensitivity(size_t parameter_field) override
   {
     SLIC_ASSERT_MSG(parameter_field < sizeof...(parameter_indices),
                     axom::fmt::format("Invalid parameter index '{}' requested for sensitivity."));
@@ -1405,17 +1315,17 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   }
 
   /// @overload
-  FiniteElementDual& computeTimestepShapeSensitivity() override
+  const FiniteElementDual& computeTimestepShapeSensitivity() override
   {
     auto drdshape =
-        serac::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(shape_displacement_), displacement_,
+        serac::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(shapeDisplacement()), displacement_,
                                             acceleration_, *parameters_[parameter_indices].state...));
 
     auto drdshape_mat = assemble(drdshape);
 
-    drdshape_mat->MultTranspose(adjoint_displacement_, *shape_displacement_sensitivity_);
+    drdshape_mat->MultTranspose(adjoint_displacement_, shapeDisplacementSensitivity());
 
-    return *shape_displacement_sensitivity_;
+    return shapeDisplacementSensitivity();
   }
 
   /// @overload
@@ -1552,11 +1462,11 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// @brief Array functions computing the derivative of the residual with respect to each given parameter
   /// @note This is needed so the user can ask for a specific sensitivity at runtime as opposed to it being a
   /// template parameter.
-  std::array<std::function<decltype((*residual_)(DifferentiateWRT<1>{}, 0.0, shape_displacement_, displacement_,
+  std::array<std::function<decltype((*residual_)(DifferentiateWRT<1>{}, 0.0, mesh_->shapeDisplacement(), displacement_,
                                                  acceleration_, *parameters_[parameter_indices].state...))(double)>,
              sizeof...(parameter_indices)>
       d_residual_d_ = {[&](double _t) {
-        return (*residual_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, _t, shape_displacement_,
+        return (*residual_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, _t, mesh_->shapeDisplacement(),
                             displacement_, acceleration_, *parameters_[parameter_indices].state...);
       }...};
 
@@ -1576,7 +1486,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// @brief Solve the Quasi-static adjoint linear
   virtual void quasiStaticAdjointSolve(double /*dt*/)
   {
-    auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
+    auto [_, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(displacement_), acceleration_,
                                   *parameters_[parameter_indices].state...);
     J_.reset();
     J_ = assemble(drdu);
@@ -1617,7 +1527,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     // Get the nodal positions for the displacement vector in grid function form
     mfem::ParGridFunction nodal_positions(
         const_cast<mfem::ParFiniteElementSpace*>(&displacement_.space()));  // MRT mfem const correctness issue
-    mesh_.GetNodes(nodal_positions);
+    mfemParMesh().GetNodes(nodal_positions);
 
     const int num_nodes = nodal_positions.Size() / dim;
     mfem::Array<int> constrained_dofs;
@@ -1715,11 +1625,11 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
     if (use_warm_start_) {
       // Update external forcing
-      auto r = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
+      auto r = (*residual_)(time_ + dt, shapeDisplacement(), displacement_, acceleration_,
                             *parameters_[parameter_indices].state...);
 
       // use the most recently evaluated Jacobian
-      auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
+      auto [_, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(displacement_), acceleration_,
                                     *parameters_[parameter_indices].previous_state...);
       J_.reset();
       J_ = assemble(drdu);
