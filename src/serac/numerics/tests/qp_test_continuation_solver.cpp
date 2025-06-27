@@ -7,7 +7,6 @@
 #include <fstream>
 #include <iostream>
 
-// #include "axom/slic/core/SimpleLogger.hpp"
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
@@ -16,7 +15,7 @@
 #include "serac/infrastructure/profiling.hpp"
 
 #include "problems/Problems.hpp"
-#include "solvers/IPSolver.hpp"
+#include "solvers/Solvers.hpp"
 #include "utilities.hpp"
 
 using namespace serac;
@@ -56,31 +55,70 @@ class QPTestProblem : public ParOptProblem {
 TEST(InteriorPointMethod, QuadraticProgramming)
 {
   int n = 30;
-  double optTol = 1.e-8;
+  double outerSolveTol = 1.e-8;
+  double linSolveTol = 1.e-10;
   int maxiter = 40;
 
-  QPTestProblem problem(n);
+  QPTestProblem opt_problem(n);
 
-  ParInteriorPointSolver solver(&problem);
+  ParInteriorPointSolver solver(&opt_problem);
   GMRESSolver linSolver(MPI_COMM_WORLD);
-  linSolver.SetRelTol(1.e-10);
+  linSolver.SetRelTol(linSolveTol);
   linSolver.SetMaxIter(1000);
   linSolver.SetPrintLevel(2);
   solver.SetLinearSolver(linSolver);
 
-  int dimx = problem.GetDimU();
+  int dimx = opt_problem.GetDimU();
   Vector x0(dimx);
   x0 = 0.0;
   Vector xf(dimx);
   xf = 0.0;
 
-  solver.SetTol(optTol);
+  solver.SetTol(outerSolveTol);
   solver.SetMaxIter(maxiter);
 
   solver.Mult(x0, xf);
 
   EXPECT_TRUE(solver.GetConverged());
 }
+
+
+TEST(HomotopyMethod, QuadraticProgramming)
+{
+  int n = 30;
+  double outerSolveTol = 1.e-8;
+  double linSolveTol = 1.e-10;
+  int maxiter = 40;
+
+  QPTestProblem opt_problem(n);
+  OptNLMCProblem nlmc_problem(&opt_problem);
+
+  HomotopySolver solver(&nlmc_problem);
+  GMRESSolver linSolver(MPI_COMM_WORLD);
+  linSolver.SetRelTol(linSolveTol);
+  linSolver.SetMaxIter(1000);
+  linSolver.SetPrintLevel(2);
+  solver.SetLinearSolver(linSolver);
+
+  int dimx = nlmc_problem.GetDimx();
+  int dimy = nlmc_problem.GetDimy();
+  Vector x0(dimx); 
+  x0 = 0.0;
+  Vector y0(dimy); 
+  y0 = 0.0;
+  Vector xf(dimx); 
+  xf = 0.0;
+  Vector yf(dimy); 
+  yf = 0.0;
+
+  solver.SetTol(outerSolveTol);
+  solver.SetMaxIter(maxiter);
+
+  solver.Mult(x0, y0, xf, yf);
+
+  EXPECT_TRUE(solver.GetConverged());
+}
+
 
 int main(int argc, char* argv[])
 {
@@ -99,8 +137,8 @@ QPTestProblem::QPTestProblem(int n) : ParOptProblem(), dgdu(nullptr), d2Edu2(nul
   int nprocs = Mpi::WorldSize();
   int myid = Mpi::WorldRank();
 
-  HYPRE_BigInt* dofOffsets = new HYPRE_BigInt[2];
-  HYPRE_BigInt* constraintOffsets = new HYPRE_BigInt[2];
+  HYPRE_BigInt dofOffsets[2];
+  HYPRE_BigInt constraintOffsets[2];
   if (n >= nprocs) {
     dofOffsets[0] = HYPRE_BigInt((myid * n) / nprocs);
     dofOffsets[1] = HYPRE_BigInt(((myid + 1) * n) / nprocs);
@@ -116,8 +154,6 @@ QPTestProblem::QPTestProblem(int n) : ParOptProblem(), dgdu(nullptr), d2Edu2(nul
   constraintOffsets[0] = dofOffsets[0];
   constraintOffsets[1] = dofOffsets[1];
   Init(dofOffsets, constraintOffsets);
-  delete[] dofOffsets;
-  delete[] constraintOffsets;
 
   Vector temp(dimU);
   temp = 1.0;
