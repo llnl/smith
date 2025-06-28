@@ -167,19 +167,18 @@ double solution_error(const ExactSolution& exact_temperature, PatchBoundaryCondi
   std::string filename = std::string(SERAC_REPO_DIR) +  "/data/meshes/patch" + std::to_string(dim) + "D.mesh";
 
   std::string mesh_tag{"mesh"};
-
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
+  auto mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
 
   // Construct a heat transfer mechanics solver
   auto nonlinear_opts = heat_transfer::default_nonlinear_options;
   nonlinear_opts.absolute_tol = 1e-14;
   nonlinear_opts.relative_tol = 1e-14;
-  HeatTransfer<p, dim> thermal(nonlinear_opts, heat_transfer::direct_linear_options, heat_transfer::default_static_options, "thermal", mesh_tag);
+  HeatTransfer<p, dim> thermal(nonlinear_opts, heat_transfer::direct_linear_options, heat_transfer::default_static_options, "thermal", mesh);
 
   heat_transfer::LinearIsotropicConductor mat(1.0,1.0,1.0);
-  thermal.setMaterial(mat, pmesh->entireBody());
+  thermal.setMaterial(mat, mesh->entireBody());
 
-  exact_temperature.applyLoads(mat, thermal, essentialBoundaryAttributes<dim>(bc), pmesh->entireBoundary());
+  exact_temperature.applyLoads(mat, thermal, essentialBoundaryAttributes<dim>(bc), mesh->entireBoundary());
 
   // Finalize the data structures
   thermal.completeSetup();

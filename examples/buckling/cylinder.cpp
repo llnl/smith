@@ -133,23 +133,21 @@ int main(int argc, char* argv[])
 
   // Create and refine mesh
   std::string filename = SERAC_REPO_DIR "/data/meshes/hollow-cylinder.mesh";
-  auto mesh = serac::buildMeshFromFile(filename);
-  auto refined_mesh = mesh::refineAndDistribute(std::move(mesh), serial_refinement, parallel_refinement);
-  auto& pmesh = serac::StateManager::setMesh(std::move(refined_mesh), mesh_tag);
+  auto mesh = std::make_shared<serac::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
 
   // Surfaces for boundary conditions
   constexpr int xneg_attr{2};
   constexpr int xpos_attr{3};
-  auto xneg = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(xneg_attr));
-  auto xpos = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(xpos_attr));
-  auto bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  auto top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(4));
+  mesh->addDomainOfBoundaryElements("xneg", serac::by_attr<dim>(xneg_attr));
+  mesh->addDomainOfBoundaryElements("xpos", serac::by_attr<dim>(xpos_attr));
+  mesh->addDomainOfBoundaryElements("bottom", serac::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("top", serac::by_attr<dim>(4));
 
   // Create solver, either with or without contact
   std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
   if (use_contact) {
     auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim>>(
-        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag);
+        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
 
     // Add the contact interaction
     serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
@@ -161,20 +159,19 @@ int main(int argc, char* argv[])
     solid_solver = std::move(solid_contact_solver);
   } else {
     solid_solver = std::make_unique<serac::SolidMechanics<p, dim>>(
-        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag);
-    solid_solver->setPressure([&](auto&, double t) { return 0.01 * t; }, xpos);
+        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
+    solid_solver->setPressure([&](auto&, double t) { return 0.01 * t; }, mesh->domain("xpos"));
   }
 
   // Define a Neo-Hookean material
   auto lambda = 1.0;
   auto G = 0.1;
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
-  Domain whole_mesh = EntireDomain(pmesh);
-  solid_solver->setMaterial(mat, whole_mesh);
+  solid_solver->setMaterial(mat, mesh->entireBody());
 
   // Set up essential boundary conditions
   // Bottom of cylinder is fixed
-  solid_solver->setFixedBCs(bottom);
+  solid_solver->setFixedBCs(mesh->domain("bottom"));
 
   // Top of cylinder has prescribed displacement of magnitude in x-z direction
   auto compress = [&](const serac::tensor<double, dim>, double t) {
@@ -182,8 +179,8 @@ int main(int argc, char* argv[])
     u[0] = u[2] = -1.5 / std::sqrt(2.0) * t;
     return u;
   };
-  solid_solver->setDisplacementBCs(compress, top, Component::X + Component::Z);
-  solid_solver->setDisplacementBCs(compress, top,
+  solid_solver->setDisplacementBCs(compress, mesh->domain("top"), Component::X + Component::Z);
+  solid_solver->setDisplacementBCs(compress, mesh->domain("top"),
                                    Component::Y);  // BT: Would it be better to leave this component free?
 
   // Finalize the data structures

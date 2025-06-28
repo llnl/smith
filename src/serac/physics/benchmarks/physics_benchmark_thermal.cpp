@@ -35,7 +35,7 @@ void functional_test_static()
   std::string filename =
       (dim == 2) ? SERAC_REPO_DIR "/data/meshes/star.mesh" : SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
-  auto pmesh = std::make_shared<serac::Mesh>(filename, "default_mesh", serial_refinement, parallel_refinement);
+  auto mesh = std::make_shared<serac::Mesh>(filename, "default_mesh", serial_refinement, parallel_refinement);
 
   // Define a boundary attribute set
   std::set<int> ess_bdr = {1};
@@ -48,8 +48,7 @@ void functional_test_static()
 
   // Construct a functional-based heat transfer solver
   serac::HeatTransfer<p, dim> thermal_solver(serac::heat_transfer::default_nonlinear_options, linear_options,
-                                             serac::heat_transfer::default_static_options, "thermal_functional",
-                                             "default_mesh");
+                                             serac::heat_transfer::default_static_options, "thermal_functional", mesh);
 
   serac::tensor<double, dim, dim> cond;
 
@@ -63,7 +62,7 @@ void functional_test_static()
   }
 
   serac::heat_transfer::LinearConductor<dim> mat(1.0, 1.0, cond);
-  thermal_solver.setMaterial(mat, pmesh->entireBody());
+  thermal_solver.setMaterial(mat, mesh->entireBody());
 
   // Define the function for the initial temperature and boundary condition
   auto one = [](const mfem::Vector&, double) -> double { return 1.0; };
@@ -74,7 +73,7 @@ void functional_test_static()
 
   // Define a constant source term
   serac::heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source, pmesh->entireBody());
+  thermal_solver.setSource(source, mesh->entireBody());
 
   // Finalize the data structures
   thermal_solver.completeSetup();
@@ -105,7 +104,7 @@ void functional_test_dynamic()
   std::string filename =
       (dim == 2) ? SERAC_REPO_DIR "/data/meshes/star.mesh" : SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
-  auto pmesh = std::make_shared<serac::Mesh>(filename, "default_mesh", serial_refinement, parallel_refinement);
+  auto mesh = std::make_shared<serac::Mesh>(filename, "default_mesh", serial_refinement, parallel_refinement);
 
   // Define a boundary attribute set
   std::set<int> ess_bdr = {1};
@@ -113,12 +112,12 @@ void functional_test_dynamic()
   // Construct a functional-based heat transfer solver
   serac::HeatTransfer<p, dim> thermal_solver(
       serac::heat_transfer::default_nonlinear_options, serac::heat_transfer::default_linear_options,
-      serac::heat_transfer::default_timestepping_options, "thermal_functional", "default_mesh");
+      serac::heat_transfer::default_timestepping_options, "thermal_functional", mesh);
 
   // Define an isotropic conductor material model
   serac::heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, 1.0);
 
-  thermal_solver.setMaterial(mat, pmesh->entireBody());
+  thermal_solver.setMaterial(mat, mesh->entireBody());
 
   // Define the function for the initial temperature and boundary condition
   auto initial_temp = [](const mfem::Vector& x, double) -> double {
@@ -134,7 +133,7 @@ void functional_test_dynamic()
 
   // Define a constant source term
   serac::heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source, pmesh->entireBody());
+  thermal_solver.setSource(source, mesh->entireBody());
 
   // Finalize the data structures
   thermal_solver.completeSetup();
