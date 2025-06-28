@@ -80,7 +80,6 @@ TEST(InteriorPointMethod, QuadraticProgramming)
   EXPECT_TRUE(solver.GetConverged());
 }
 
-
 TEST(HomotopyMethod, QuadraticProgramming)
 {
   int n = 30;
@@ -100,13 +99,13 @@ TEST(HomotopyMethod, QuadraticProgramming)
 
   int dimx = nlmc_problem.GetDimx();
   int dimy = nlmc_problem.GetDimy();
-  Vector x0(dimx); 
+  Vector x0(dimx);
   x0 = 0.0;
-  Vector y0(dimy); 
+  Vector y0(dimy);
   y0 = 0.0;
-  Vector xf(dimx); 
+  Vector xf(dimx);
   xf = 0.0;
-  Vector yf(dimy); 
+  Vector yf(dimy);
   yf = 0.0;
 
   solver.SetTol(outerSolveTol);
@@ -116,7 +115,6 @@ TEST(HomotopyMethod, QuadraticProgramming)
 
   EXPECT_TRUE(solver.GetConverged());
 }
-
 
 int main(int argc, char* argv[])
 {
