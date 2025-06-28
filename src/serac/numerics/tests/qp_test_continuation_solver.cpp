@@ -31,9 +31,9 @@ using namespace mfem;
  */
 class QPTestProblem : public ParOptProblem {
  protected:
-  Vector ul;
-  HypreParMatrix* dgdu;
-  HypreParMatrix* d2Edu2;
+  Vector ul_;
+  HypreParMatrix* dgdu_;
+  HypreParMatrix* d2Edu2_;
 
  public:
   QPTestProblem(int n);
@@ -125,7 +125,7 @@ int main(int argc, char* argv[])
 }
 
 // Ex1Problem
-QPTestProblem::QPTestProblem(int n) : ParOptProblem(), dgdu(nullptr), d2Edu2(nullptr)
+QPTestProblem::QPTestProblem(int n) : ParOptProblem(), dgdu_(nullptr), d2Edu2_(nullptr)
 {
   MFEM_VERIFY(n >= 1, "QPTestProblem::QPTestProblem -- problem must have nontrivial size");
 
@@ -153,14 +153,14 @@ QPTestProblem::QPTestProblem(int n) : ParOptProblem(), dgdu(nullptr), d2Edu2(nul
 
   Vector temp(dimU);
   temp = 1.0;
-  d2Edu2 = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
-  dgdu = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
+  d2Edu2_ = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
+  dgdu_ = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
 
   // random entries in [-1, 1]
-  ul.SetSize(dimM);
-  ul.Randomize(myid);
-  ul *= 2.0;
-  ul -= 1.0;
+  ul_.SetSize(dimM);
+  ul_.Randomize(myid);
+  ul_ *= 2.0;
+  ul_ -= 1.0;
 }
 
 double QPTestProblem::E(const Vector& u, int& eval_err)
@@ -172,20 +172,20 @@ double QPTestProblem::E(const Vector& u, int& eval_err)
 
 void QPTestProblem::DdE(const Vector& u, Vector& gradE) { gradE.Set(1.0, u); }
 
-HypreParMatrix* QPTestProblem::DddE(const Vector& /*u*/) { return d2Edu2; }
+HypreParMatrix* QPTestProblem::DddE(const Vector& /*u*/) { return d2Edu2_; }
 
 void QPTestProblem::g(const Vector& u, Vector& gu, int& eval_err)
 {
   eval_err = 0;
   gu = 0.0;
   gu.Set(1.0, u);
-  gu.Add(-1.0, ul);
+  gu.Add(-1.0, ul_);
 }
 
-HypreParMatrix* QPTestProblem::Ddg(const Vector& /*u*/) { return dgdu; }
+HypreParMatrix* QPTestProblem::Ddg(const Vector& /*u*/) { return dgdu_; }
 
 QPTestProblem::~QPTestProblem()
 {
-  delete d2Edu2;
-  delete dgdu;
+  delete d2Edu2_;
+  delete dgdu_;
 }
