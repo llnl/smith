@@ -1318,8 +1318,8 @@ SERAC_HOST_DEVICE constexpr auto det(const tensor<T, 3, 3>& A)
  * @param A Input matrix
  * @return det(A + I) - 1, where I is the identity matrix
  */
-template <typename T, template <typename, int, int> class TensorType>
-SERAC_HOST_DEVICE constexpr auto detApIm1(const TensorType<T, 2, 2>& A)
+template <typename T>
+SERAC_HOST_DEVICE constexpr auto detApIm1(const mfem::future::tensor<T, 2, 2>& A)
 {
   // From the Cayley-Hamilton theorem, we get that for any N by N matrix A,
   // det(A - I) - 1 = I1(A) + I2(A) + ... + IN(A),
@@ -1331,8 +1331,50 @@ SERAC_HOST_DEVICE constexpr auto detApIm1(const TensorType<T, 2, 2>& A)
 }
 
 /// @overload
-template <typename T, template <typename, int, int> class TensorType>
-SERAC_HOST_DEVICE constexpr auto detApIm1(const TensorType<T, 3, 3>& A)
+template <typename T>
+SERAC_HOST_DEVICE constexpr auto detApIm1(const mfem::future::tensor<T, 3, 3>& A)
+{
+  // For notes on the implementation, see the 2x2 version.
+
+  // clang-format off
+  // equivalent to tr(A) + I2(A) + det(A)
+  return A(0, 0) + A(1, 1) + A(2, 2) 
+       - A(0, 1) * A(1, 0) * (1 + A(2, 2))
+       + A(0, 0) * A(1, 1) * (1 + A(2, 2))
+       - A(0, 2) * A(2, 0) * (1 + A(1, 1))
+       - A(1, 2) * A(2, 1) * (1 + A(0, 0))
+       + A(0, 0) * A(2, 2)
+       + A(1, 1) * A(2, 2)
+       + A(0, 1) * A(1, 2) * A(2, 0)
+       + A(0, 2) * A(1, 0) * A(2, 1);
+  // clang-format on
+}
+
+/**
+ * @brief computes det(A + I) - 1, where precision is not lost when the entries A_{ij} << 1
+ *
+ * detApIm1(A) = det(A + I) - 1
+ * When the entries of A are small compared to unity, computing
+ * det(A + I) - 1 directly will suffer from catastrophic cancellation.
+ *
+ * @param A Input matrix
+ * @return det(A + I) - 1, where I is the identity matrix
+ */
+template <typename T>
+SERAC_HOST_DEVICE constexpr auto detApIm1(const tensor<T, 2, 2>& A)
+{
+  // From the Cayley-Hamilton theorem, we get that for any N by N matrix A,
+  // det(A - I) - 1 = I1(A) + I2(A) + ... + IN(A),
+  // where the In are the principal invariants of A.
+  // We inline the definitions of the principal invariants to increase computational speed.
+
+  // equivalent to tr(A) + det(A)
+  return A(0, 0) - A(0, 1) * A(1, 0) + A(1, 1) + A(0, 0) * A(1, 1);
+}
+
+/// @overload
+template <typename T>
+SERAC_HOST_DEVICE constexpr auto detApIm1(const tensor<T, 3, 3>& A)
 {
   // For notes on the implementation, see the 2x2 version.
 

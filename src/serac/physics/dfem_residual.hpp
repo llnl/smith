@@ -44,6 +44,7 @@ class DfemResidual : public Residual {
       : Residual(physics_name),
         mesh_(mesh),
         differentiable_operators_(input_mfem_spaces.size() + 1),
+        output_mfem_space_(output_mfem_space),
         input_mfem_spaces_(input_mfem_spaces)
   {
     std::vector<const mfem::ParFiniteElementSpace*> parameter_spaces;
@@ -51,7 +52,8 @@ class DfemResidual : public Residual {
     for (size_t i = 1; i < input_mfem_spaces.size(); ++i) {
       parameter_spaces.push_back(input_mfem_spaces[i]);
     }
-    parameter_spaces.push_back(&output_mfem_space);
+    // TODO: look into different test and trial FE spaces
+    // parameter_spaces.push_back(&output_mfem_space);
     differentiable_operators_[0] = std::make_unique<mfem::future::DifferentiableOperator>(
         makeFieldDescriptors({input_mfem_spaces[0]}), makeFieldDescriptors(parameter_spaces, 1), mesh->mfemParMesh());
   }
@@ -194,6 +196,7 @@ class DfemResidual : public Residual {
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;
   std::vector<std::unique_ptr<mfem::future::DifferentiableOperator>> differentiable_operators_;
+  const mfem::ParFiniteElementSpace& output_mfem_space_;
   std::vector<const mfem::ParFiniteElementSpace*> input_mfem_spaces_;
 
  private:
