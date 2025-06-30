@@ -161,7 +161,8 @@ int main(int argc, char* argv[])
     serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                           .enforcement = contact_type,
                                           .type = serac::ContactType::Frictionless,
-                                          .penalty = penalty};
+                                          .penalty = penalty,
+                                          .jacobian = serac::ContactJacobian::Exact};
     auto contact_interaction_id = 0;
     solid_contact_solver->addContactInteraction(contact_interaction_id, {xpos_attr}, {xneg_attr}, contact_options);
     solid_solver = std::move(solid_contact_solver);
