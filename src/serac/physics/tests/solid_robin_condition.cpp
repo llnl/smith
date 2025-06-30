@@ -44,8 +44,7 @@ void functional_solid_test_robin_condition()
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
   std::string mesh_tag{"mesh"};
-
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
@@ -55,7 +54,7 @@ void functional_solid_test_robin_condition()
                                                   .print_level = 1};
 
   SolidMechanics<p, dim> solid_solver(nonlinear_options, solid_mechanics::default_linear_options,
-                                      solid_mechanics::default_quasistatic_options, "solid_mechanics", mesh_tag);
+                                      solid_mechanics::default_quasistatic_options, "solid_mechanics", mesh);
 
   solid_mechanics::LinearIsotropic mat{
       1.0,  // mass density
@@ -63,12 +62,12 @@ void functional_solid_test_robin_condition()
       1.0   // shear modulus
   };
 
-  solid_solver.setMaterial(mat, pmesh->entireBody());
+  solid_solver.setMaterial(mat, mesh->entireBody());
 
   // prescribe zero displacement in the y- and z-directions
   // at the supported end of the beam,
-  pmesh->addDomainOfBoundaryElements("support", by_attr<dim>(1));
-  solid_solver.setFixedBCs(pmesh->domain("support"), Component::Y + Component::Z);
+  mesh->addDomainOfBoundaryElements("support", by_attr<dim>(1));
+  solid_solver.setFixedBCs(mesh->domain("support"), Component::Y + Component::Z);
 
   // apply an axial displacement at the the tip of the beam
   auto translated_in_x = [](tensor<double, dim>, double t) -> vec3 {
@@ -76,8 +75,8 @@ void functional_solid_test_robin_condition()
     u[0] = t;
     return u;
   };
-  pmesh->addDomainOfBoundaryElements("tip", by_attr<dim>(2));
-  solid_solver.setDisplacementBCs(translated_in_x, pmesh->domain("tip"), Component::X);
+  mesh->addDomainOfBoundaryElements("tip", by_attr<dim>(2));
+  solid_solver.setDisplacementBCs(translated_in_x, mesh->domain("tip"), Component::X);
 
   solid_solver.addCustomBoundaryIntegral(
       DependsOn<>{},
@@ -86,7 +85,7 @@ void functional_solid_test_robin_condition()
         auto f = u * 3.0;
         return f;  // define a displacement-proportional traction at the support
       },
-      pmesh->domain("support"));
+      mesh->domain("support"));
 
   // Finalize the data structures
   solid_solver.completeSetup();

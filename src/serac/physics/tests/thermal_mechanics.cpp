@@ -39,15 +39,14 @@ void functional_test_static_3D(double expected_norm)
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
   std::string mesh_tag{"mesh"};
-
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // Define the boundary subset where essential boundary conditions will be prescribed
   // For simplicity, we apply essential boundary condtions in both the thermal and mechanics
   // on the same boundary subset.
   std::set<int> ess_bdr = {1};
-  pmesh->addDomainOfBoundaryElements("displacement_essential_boundary", by_attr<dim>(ess_bdr));
+  mesh->addDomainOfBoundaryElements("displacement_essential_boundary", by_attr<dim>(ess_bdr));
 
   // define the solid solver configurations
   // no default solver options for solid yet, so make some here
@@ -64,7 +63,7 @@ void functional_test_static_3D(double expected_norm)
   Thermomechanics<p, dim> thermal_solid_solver(
       heat_transfer::default_nonlinear_options, heat_transfer::default_linear_options,
       heat_transfer::default_static_options, default_nonlinear_options, default_linear_options,
-      solid_mechanics::default_quasistatic_options, "thermal_solid_functional", mesh_tag);
+      solid_mechanics::default_quasistatic_options, "thermal_solid_functional", mesh);
 
   double rho = 1.0;
   double E = 1.0;
@@ -78,7 +77,7 @@ void functional_test_static_3D(double expected_norm)
   thermomechanics::GreenSaintVenantThermoelasticMaterial::State initial_state{};
   auto qdata = thermal_solid_solver.createQuadratureDataBuffer(initial_state);
 
-  thermal_solid_solver.setMaterial(material, pmesh->entireBody(), qdata);
+  thermal_solid_solver.setMaterial(material, mesh->entireBody(), qdata);
 
   // Define the function for the initial temperature and boundary condition
   auto one = [](const mfem::Vector&, double) -> double { return 1.0; };
@@ -88,7 +87,7 @@ void functional_test_static_3D(double expected_norm)
   thermal_solid_solver.setTemperature(one);
 
   // Set the boundary condition
-  thermal_solid_solver.setFixedBCs(pmesh->domain("displacement_essential_boundary"));
+  thermal_solid_solver.setFixedBCs(mesh->domain("displacement_essential_boundary"));
 
   // Finalize the data structures
   thermal_solid_solver.completeSetup();
@@ -120,12 +119,11 @@ void functional_test_shrinking_3D(double expected_norm)
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
   std::string mesh_tag{"mesh"};
-
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // Define a boundary partitions where essential boundary conditions will be prescribed
-  pmesh->addDomainOfBoundaryElements("constraint_bdr", by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("constraint_bdr", by_attr<dim>(1));
   std::set<int> temp_bdr = {1, 2, 3};
 
   // define the solid solver configurations
@@ -143,7 +141,7 @@ void functional_test_shrinking_3D(double expected_norm)
   Thermomechanics<p, dim> thermal_solid_solver(
       heat_transfer::default_nonlinear_options, heat_transfer::default_linear_options,
       heat_transfer::default_static_options, default_nonlinear_options, default_linear_options,
-      solid_mechanics::default_quasistatic_options, "thermal_solid_functional", mesh_tag);
+      solid_mechanics::default_quasistatic_options, "thermal_solid_functional", mesh);
 
   double rho = 1.0;
   double E = 1.0;
@@ -156,7 +154,7 @@ void functional_test_shrinking_3D(double expected_norm)
   thermomechanics::GreenSaintVenantThermoelasticMaterial::State initial_state{};
   auto qdata = thermal_solid_solver.createQuadratureDataBuffer(initial_state);
 
-  thermal_solid_solver.setMaterial(material, pmesh->entireBody(), qdata);
+  thermal_solid_solver.setMaterial(material, mesh->entireBody(), qdata);
 
   // Define the function for the initial temperature
   double theta_0 = 1.0;
@@ -170,7 +168,7 @@ void functional_test_shrinking_3D(double expected_norm)
   thermal_solid_solver.setTemperature(initial_temperature_field);
 
   // Set the initial displacement and boundary condition
-  thermal_solid_solver.setFixedBCs(pmesh->domain("constraint_bdr"));
+  thermal_solid_solver.setFixedBCs(mesh->domain("constraint_bdr"));
 
   // Finalize the data structures
   thermal_solid_solver.completeSetup();
@@ -223,8 +221,8 @@ void parameterized()
   // The test should be made stronger by having non-constant
   // Jacobians. For a problem with tractions, the surface
   // facets should be non-affine as well.
-  auto pmesh = std::make_shared<serac::Mesh>(buildCuboidMesh(4, 4, 4, 0.25, 0.25, 0.25), mesh_tag, serial_refinement,
-                                             parallel_refinement);
+  auto mesh = std::make_shared<serac::Mesh>(buildCuboidMesh(4, 4, 4, 0.25, 0.25, 0.25), mesh_tag, serial_refinement,
+                                            parallel_refinement);
 
   // Construct the thermomechanics solver module using the default equation solver parameters for both the heat transfer
   // and solid mechanics solves.
@@ -248,7 +246,7 @@ void parameterized()
   thermal_solid_solver.setMaterial(material, qdata);
 
   // parameterize the coefficient of thermal expansion
-  FiniteElementState thermal_expansion_scaling(pmesh->mfemParMesh(), H1<p>{}, "CTE scale");
+  FiniteElementState thermal_expansion_scaling(mesh->mfemParMesh(), H1<p>{}, "CTE scale");
   thermal_expansion_scaling = 1.5;
 
   std::function<double(const mfem::Vector&, double)> f = [](const mfem::Vector& /*x*/, double /*t*/) {
