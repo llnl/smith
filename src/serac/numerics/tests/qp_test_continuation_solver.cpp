@@ -21,7 +21,6 @@
 using namespace serac;
 using namespace serac::profiling;
 
-using namespace mfem;
 /* convex quadratic-programming problem
  *
  * min_u (u^T u) / 2
@@ -31,21 +30,21 @@ using namespace mfem;
  */
 class QPTestProblem : public ParOptProblem {
  protected:
-  Vector ul_;
-  HypreParMatrix* dgdu_;
-  HypreParMatrix* d2Edu2_;
+  mfem::Vector ul_;
+  mfem::HypreParMatrix* dgdu_;
+  mfem::HypreParMatrix* d2Edu2_;
 
  public:
   QPTestProblem(int n);
-  double E(const Vector& u, int& eval_err);
+  double E(const mfem::Vector& u, int& eval_err);
 
-  void DdE(const Vector& u, Vector& gradE);
+  void DdE(const mfem::Vector& u, mfem::Vector& gradE);
 
-  HypreParMatrix* DddE(const Vector& u);
+  mfem::HypreParMatrix* DddE(const mfem::Vector& u);
 
-  void g(const Vector& u, Vector& gu, int& eval_err);
+  void g(const mfem::Vector& u, mfem::Vector& gu, int& eval_err);
 
-  HypreParMatrix* Ddg(const Vector&);
+  mfem::HypreParMatrix* Ddg(const mfem::Vector&);
 
   virtual ~QPTestProblem();
 };
@@ -60,16 +59,16 @@ TEST(InteriorPointMethod, QuadraticProgramming)
   QPTestProblem opt_problem(n);
 
   ParInteriorPointSolver solver(&opt_problem);
-  GMRESSolver linSolver(MPI_COMM_WORLD);
+  mfem::GMRESSolver linSolver(MPI_COMM_WORLD);
   linSolver.SetRelTol(linSolveTol);
   linSolver.SetMaxIter(1000);
   linSolver.SetPrintLevel(2);
   solver.SetLinearSolver(linSolver);
 
   int dimx = opt_problem.GetDimU();
-  Vector x0(dimx);
+  mfem::Vector x0(dimx);
   x0 = 0.0;
-  Vector xf(dimx);
+  mfem::Vector xf(dimx);
   xf = 0.0;
 
   solver.SetTol(outerSolveTol);
@@ -91,7 +90,7 @@ TEST(HomotopyMethod, QuadraticProgramming)
   OptNLMCProblem nlmc_problem(&opt_problem);
 
   HomotopySolver solver(&nlmc_problem);
-  GMRESSolver linSolver(MPI_COMM_WORLD);
+  mfem::GMRESSolver linSolver(MPI_COMM_WORLD);
   linSolver.SetRelTol(linSolveTol);
   linSolver.SetMaxIter(1000);
   linSolver.SetPrintLevel(2);
@@ -99,13 +98,13 @@ TEST(HomotopyMethod, QuadraticProgramming)
 
   int dimx = nlmc_problem.GetDimx();
   int dimy = nlmc_problem.GetDimy();
-  Vector x0(dimx);
+  mfem::Vector x0(dimx);
   x0 = 0.0;
-  Vector y0(dimy);
+  mfem::Vector y0(dimy);
   y0 = 0.0;
-  Vector xf(dimx);
+  mfem::Vector xf(dimx);
   xf = 0.0;
-  Vector yf(dimy);
+  mfem::Vector yf(dimy);
   yf = 0.0;
 
   solver.SetTol(outerSolveTol);
@@ -130,8 +129,8 @@ QPTestProblem::QPTestProblem(int n) : ParOptProblem(), dgdu_(nullptr), d2Edu2_(n
   MFEM_VERIFY(n >= 1, "QPTestProblem::QPTestProblem -- problem must have nontrivial size");
 
   // generate parallel partition
-  int nprocs = Mpi::WorldSize();
-  int myid = Mpi::WorldRank();
+  int nprocs = mfem::Mpi::WorldSize();
+  int myid = mfem::Mpi::WorldRank();
 
   HYPRE_BigInt dofOffsets[2];
   HYPRE_BigInt constraintOffsets[2];
@@ -151,7 +150,7 @@ QPTestProblem::QPTestProblem(int n) : ParOptProblem(), dgdu_(nullptr), d2Edu2_(n
   constraintOffsets[1] = dofOffsets[1];
   Init(dofOffsets, constraintOffsets);
 
-  Vector temp(dimU);
+  mfem::Vector temp(dimU);
   temp = 1.0;
   d2Edu2_ = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
   dgdu_ = GenerateHypreParMatrixFromDiagonal(dofOffsetsU, temp);
@@ -163,18 +162,18 @@ QPTestProblem::QPTestProblem(int n) : ParOptProblem(), dgdu_(nullptr), d2Edu2_(n
   ul_ -= 1.0;
 }
 
-double QPTestProblem::E(const Vector& u, int& eval_err)
+double QPTestProblem::E(const mfem::Vector& u, int& eval_err)
 {
   eval_err = 0;
-  double Eeval = 0.5 * InnerProduct(MPI_COMM_WORLD, u, u);
+  double Eeval = 0.5 * mfem::InnerProduct(MPI_COMM_WORLD, u, u);
   return Eeval;
 }
 
-void QPTestProblem::DdE(const Vector& u, Vector& gradE) { gradE.Set(1.0, u); }
+void QPTestProblem::DdE(const mfem::Vector& u, mfem::Vector& gradE) { gradE.Set(1.0, u); }
 
-HypreParMatrix* QPTestProblem::DddE(const Vector& /*u*/) { return d2Edu2_; }
+mfem::HypreParMatrix* QPTestProblem::DddE(const mfem::Vector& /*u*/) { return d2Edu2_; }
 
-void QPTestProblem::g(const Vector& u, Vector& gu, int& eval_err)
+void QPTestProblem::g(const mfem::Vector& u, mfem::Vector& gu, int& eval_err)
 {
   eval_err = 0;
   gu = 0.0;
@@ -182,7 +181,7 @@ void QPTestProblem::g(const Vector& u, Vector& gu, int& eval_err)
   gu.Add(-1.0, ul_);
 }
 
-HypreParMatrix* QPTestProblem::Ddg(const Vector& /*u*/) { return dgdu_; }
+mfem::HypreParMatrix* QPTestProblem::Ddg(const mfem::Vector& /*u*/) { return dgdu_; }
 
 QPTestProblem::~QPTestProblem()
 {
