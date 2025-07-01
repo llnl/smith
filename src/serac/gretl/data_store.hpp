@@ -106,6 +106,7 @@ class DataStore {
   std::vector<VjpT> vjps_;
   std::vector<std::unique_ptr<std::any>> duals_;
 
+  mutable std::vector<bool> active_;
   mutable std::vector<Int> activeCount_;
 
   std::shared_ptr<std::any>& any_primal(Int step);
@@ -125,7 +126,6 @@ class DataStore {
     if (!tptr) {
       gretl_assert(!goingForward_);
       gretl_assert(activeCount_[step]==0);
-
       any_primal(step) = std::make_shared<std::any>(t);
       activeCount_[step] = 1;
       return;
@@ -189,10 +189,8 @@ class DynamicDataStore : public DataStore {
   /// @overload
   virtual void remove_things(Int stepIndex) override;
 
-
   std::vector<Int> lastStepUsed_;
   std::vector< std::vector<Int> > passthroughs_;
-
 
   /// container which track the states in the graph with allocated data
   CheckpointManager checkpointManager;
