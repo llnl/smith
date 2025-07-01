@@ -115,14 +115,6 @@ TEST(HomotopyMethod, QuadraticProgramming)
   EXPECT_TRUE(solver.GetConverged());
 }
 
-int main(int argc, char* argv[])
-{
-  ::testing::InitGoogleTest(&argc, argv);
-  serac::ApplicationManager applicationManager(argc, argv);
-
-  return RUN_ALL_TESTS();
-}
-
 // Ex1Problem
 QPTestProblem::QPTestProblem(int n) : ParOptProblem(), dgdu_(nullptr), d2Edu2_(nullptr)
 {
@@ -187,4 +179,12 @@ QPTestProblem::~QPTestProblem()
 {
   delete d2Edu2_;
   delete dgdu_;
+}
+
+int main(int argc, char* argv[])
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv);
+
+  return RUN_ALL_TESTS();
 }
