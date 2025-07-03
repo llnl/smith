@@ -30,3 +30,5 @@ add_subdirectory(buckling)
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
 
+# Add eos_testing for Smith Project
+add_subdirectory(eos_testing)
