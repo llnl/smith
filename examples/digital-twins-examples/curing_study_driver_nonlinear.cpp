@@ -10,6 +10,10 @@
 #include "mfem.hpp"
 #include "serac/serac.hpp"
 
+// Uncomment the following line to use millimeter units
+#define USE_MM_UNITS
+// #undef USE_MM_UNITS
+
 // template <typename lambda>
 // struct ParameterizedBodyForce {
 //   template <int dim, typename T1, typename T2>
@@ -37,7 +41,7 @@ int main(int argc, char *argv[])
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
   // Set problem parameters. Only the input/output paths can be overwritten by the command line parser, below.
-  const int order = 2; // displacement FE space polynomial order
+  const int order = 1; // displacement FE space polynomial order
   const int dim = 3;   // spatial dimension of the problem
   // const int serial_refinement = 0;
   // const int parallel_refinement = 0;
@@ -61,11 +65,23 @@ int main(int argc, char *argv[])
   // Thus, loads in Newtons yields stresses and stiffnesses in units of MPa
   //       mass in kilograms yields densities in Tg/m^3
   //       density of kg/m^3 is equivalent to mg/mm^3
-  const double shear_modulus_value = 43.9; // MPa [between 0.47 and 0.495]
-  const double poisson_ratio_value = 0.48; // MPa [between 0.47 and 0.495]
+#ifdef USE_MM_UNITS
+  const double shear_modulus_value = 43.9; // MPa
+  const double poisson_ratio_value = 0.48; // dimensionless
+  const double mass_density_value = 1.20;  // mg/mm^3
+  const double body_force_value = 5*11.76e-5; // N/mm^3
+  // constexpr double mesh_unit_scale = 1.0;    // mm
+  constexpr char mesh_unit_str[] = "mm";
+#else
+  const double shear_modulus_value = 43.9e6; // Pa (MPa to Pa)
+  const double poisson_ratio_value = 0.48;   // dimensionless
+  const double mass_density_value = 1200.0;  // kg/m^3
+  const double body_force_value = 11.76;     // N/m^3
+  constexpr double mesh_unit_scale = 1.0e-3; // convert mm to m
+  constexpr char mesh_unit_str[] = "m";
+#endif
+
   const double bulk_modulus_value = (2.0*shear_modulus_value*(1.0+poisson_ratio_value)) / (3.0*(1.0 - 2.0*poisson_ratio_value)); // MPa  
-  const double mass_density_value = 1.20; // mg/mm^3; = 1.20 kg/m^3
-  const double body_force_value = 11.76e-9; // N/mm^3; = (1.2 kg/m^3)*(9.8 m/s^2) = 11.76 N/m^3
 
   if (0 == myid) {
     std::cout << "Made it past initialization and CLI" << std::endl;
@@ -87,9 +103,35 @@ int main(int argc, char *argv[])
   MFEM_ASSERT(&fb, "Could not open file '" + mesh_name + "'");
   std::istream is(&fb);
   auto mesh = std::make_unique<mfem::ParMesh>(mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false));
+  
+  mesh->EnsureNodes();
+  mesh->ExchangeFaceNbrData();
+  // mfem::FiniteElementSpace *fespace = mesh->GetNodes()->FESpace();
+  // mesh->SetNodalFESpace(fespace);
+
+  // ----- SCALE MESH COORDINATES TO DESIRED UNITS -----
+#ifndef USE_MM_UNITS
+  // Only scale if not using mm units (i.e., when using SI/meters)
+  mfem::GridFunction *nodes = mesh->GetNodes();
+  if (0 == myid) { std::cout << "... nodes.Norml2() before scaling: " << nodes->Norml2() << std::endl; }
+  if (nodes) {
+      int vdim = nodes->VectorDim();
+      int ndofs = nodes->FESpace()->GetNDofs();
+      for (int i = 0; i < ndofs; ++i) {
+          for (int d = 0; d < vdim; ++d) {
+              (*nodes)(i + d * ndofs) *= mesh_unit_scale;
+          }
+      }
+      mesh->SetNodes(*nodes);
+      if (0 == myid) { std::cout << "... nodes.Norml2() after scaling: " << nodes->Norml2() << std::endl; }
+  }
+#endif
+
   mesh->Finalize(/* refine */ false, /* fix orientation */ true);
+
   serac::StateManager::setMesh(std::move(mesh), mesh_tag);
   fb.close();
+
   auto &pmesh = serac::StateManager::mesh(mesh_tag);
 
   // Create domain of entire mesh
@@ -121,7 +163,7 @@ int main(int argc, char *argv[])
   double xy_cutoff_value = global_xy_min + 0.25 * xy_range;
 
   if (0 == myid) {
-    std::cout << "Mesh vertex bounding box:"<< std::endl;
+    std::cout << "Mesh vertex bounding box (" << mesh_unit_str << "):" << std::endl;
     std::cout << "    [" << global_x_min << ", " << global_x_max << "] x [" << global_y_min << ", " << global_y_max
               << "] x [" << global_z_min << ", " << global_z_max << "]" << std::endl;
     std::cout << "    Z bottom cutoff height: " << z_bottom_cutoff_value << std::endl;
@@ -130,20 +172,24 @@ int main(int argc, char *argv[])
   // Create the solid mechanics solver
   auto linearOptions = serac::LinearSolverOptions {
       .linear_solver = serac::LinearSolver::CG,
-      .preconditioner = serac::Preconditioner::HypreAMG, // HypreJacobi
+      .preconditioner = serac::Preconditioner::HypreAMG,
+      // .preconditioner = serac::Preconditioner::HypreJacobi,
       .relative_tol = 0.7*1.0e-9,
-      .absolute_tol = 0.7*1.0e-9,
-      .max_iterations = 5000,
+      .absolute_tol = 0.7*1.0e-13,
+      .max_iterations = 5*5000,
       .print_level = 1};
   auto nonlinearOptions = serac::NonlinearSolverOptions {
       // .nonlin_solver  = serac::NonlinearSolver::Newton,
       .nonlin_solver  = serac::NonlinearSolver::TrustRegion,
       .relative_tol   = 1.0e-9,
-      .absolute_tol   = 1.0e-9,
+      .absolute_tol   = 1.0e-13,
       .min_iterations = 1, 
       .max_iterations = 75,
       .max_line_search_iterations = 15,
       .print_level    = 1};
+
+if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << std::endl; }
+
   SolidMechanics<order, dim, Parameters<H1<1>, H1<1>>> solid_solver(
       nonlinearOptions, linearOptions, serac::solid_mechanics::default_quasistatic_options,
       // serac::GeometricNonlinearities::Off, // TODO
@@ -151,9 +197,9 @@ int main(int argc, char *argv[])
       0, // initial cycle index
       0.0, // initial time
       false, // checkpoint to disk
-      false); // warmstart
+      true); // warmstart
 
-  if (0 == myid) { std::cout << "Completed creation of SolidMechanics object; moving on to define loads, etc." << std::endl; }
+  if (0 == myid) { std::cout << "..... Completed creation of SolidMechanics object; moving on to define loads, etc." << std::endl; }
 
   // Create user-defied material property fields. We can compute derivatives w.r.t. these terms. TODO add shape
   FiniteElementState user_defined_bulk_modulus(pmesh, H1<1>{}, "parameterized_bulk_modulus"); // TODO could use attribute or field value
@@ -194,7 +240,7 @@ int main(int argc, char *argv[])
   // solid_solver.setDisplacementBCs(is_on_angled_top_or_bottom_patch, zero_vector);
   solid_solver.setFixedBCs(angled_top_or_bottom_bundary_patch);
   MPI_Reduce(&local_bc_count, &global_bc_count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-  if (myid == 0) { std::cout << "Fixed BCs for a total of " << global_bc_count << " nodes across all ranks" << std::endl; }
+  if (myid == 0) { std::cout << "..... Fixed BCs for a total of " << global_bc_count << " nodes across all ranks" << std::endl; }
 
   // Set body force (self weight)
   tensor<double, dim> constant_force;
@@ -215,15 +261,15 @@ int main(int argc, char *argv[])
   // Finalize the data structures
   solid_solver.completeSetup();
 
-  if (0 == myid) { std::cout << "Completed solid_solver setup. Calling solve...." << std::endl; }
+  if (0 == myid) { std::cout << "..... Completed solid_solver setup. Calling solve...." << std::endl; }
 
   // Perform the quasi-static solve
   solid_solver.advanceTimestep(1.0);
 
-  if (0 == myid) { std::cout << "Solve completed. Saving output...." << std::endl; }
+  if (0 == myid) { std::cout << "..... Solve completed. Saving output...." << std::endl; }
 
   // Save problem state for later visualization
-  std::string outname = "paraview_curing_study_driver";
+  std::string outname = "paraview_curing_study_driver_nonlinear";
   solid_solver.outputStateToDisk(outname);
 
   if (0 == myid) { std::cout << "Complete." << std::endl; }
@@ -231,7 +277,7 @@ int main(int argc, char *argv[])
   // TODO compute some QOIs
 
   // Close out problem.
-  MPI_Finalize();
+  // MPI_Finalize();
 
   return 0;
 }

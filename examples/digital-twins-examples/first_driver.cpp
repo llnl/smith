@@ -228,7 +228,7 @@ int main(int argc, char *argv[])
   // TODO compute some QOIs
 
   // Close out problem.
-  MPI_Finalize();
+  // MPI_Finalize();
 
   return 0;
 }

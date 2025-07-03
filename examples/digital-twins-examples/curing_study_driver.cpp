@@ -10,6 +10,10 @@
 #include "mfem.hpp"
 #include "serac/serac.hpp"
 
+ 
+// #define DBG_MESH
+#undef DBG_MESH
+
 // template <typename lambda>
 // struct ParameterizedBodyForce {
 //   template <int dim, typename T1, typename T2>
@@ -37,7 +41,7 @@ int main(int argc, char *argv[])
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
   // Set problem parameters. Only the input/output paths can be overwritten by the command line parser, below.
-  const int order = 2; // displacement FE space polynomial order
+  const int order = 1; // displacement FE space polynomial order
   const int dim = 3;   // spatial dimension of the problem
   // const int serial_refinement = 0;
   // const int parallel_refinement = 0;
@@ -64,7 +68,7 @@ int main(int argc, char *argv[])
   const double shear_modulus_value = 2.69; // MPa
   const double bulk_modulus_value = 43.9; // MPa
   const double mass_density_value = 1.20; // mg/mm^3; = 1.20 kg/m^3
-  const double body_force_value = 11.76e-9; // N/mm^3; = (1.2 kg/m^3)*(9.8 m/s^2) = 11.76 N/m^3
+  const double body_force_value = 11.76e-4; // N/mm^3; = (1.2 kg/m^3)*(9.8 m/s^2) = 11.76 N/m^3
 
   if (0 == myid) {
     std::cout << "Made it past initialization and CLI" << std::endl;
@@ -86,6 +90,8 @@ int main(int argc, char *argv[])
   MFEM_ASSERT(&fb, "Could not open file '" + mesh_name + "'");
   std::istream is(&fb);
   auto mesh = std::make_unique<mfem::ParMesh>(mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false));
+  mesh->EnsureNodes();
+  mesh->ExchangeFaceNbrData();
   mesh->Finalize(/* refine */ false, /* fix orientation */ true);
   serac::StateManager::setMesh(std::move(mesh), mesh_tag);
   fb.close();
@@ -127,27 +133,46 @@ int main(int argc, char *argv[])
   }
 
   // Create the solid mechanics solver
+
+  // auto linearOptions = serac::LinearSolverOptions {
+  //     .linear_solver = serac::LinearSolver::CG,
+  //     .preconditioner = serac::Preconditioner::HypreAMG,
+  //     // .preconditioner = serac::Preconditioner::HypreJacobi,
+  //     .relative_tol = 1.0e-9,
+  //     .absolute_tol = 1.0e-9,
+  //     .max_iterations = 4000,
+  //     .print_level = 1};
+  // auto nonlinearOptions = serac::NonlinearSolverOptions {
+  //     .nonlin_solver  = serac::NonlinearSolver::Newton,
+  //     .relative_tol   = 1.0e-9,
+  //     .absolute_tol   = 1.0e-9,
+  //     .max_iterations = 3,
+  //     .print_level    = 1};
+
   auto linearOptions = serac::LinearSolverOptions {
       .linear_solver = serac::LinearSolver::CG,
-      .preconditioner = serac::Preconditioner::HypreAMG, // HypreJacobi
-      .relative_tol = 1.0e-9,
-      .absolute_tol = 1.0e-9,
-      .max_iterations = 4000,
+      .preconditioner = serac::Preconditioner::HypreAMG,
+      // .preconditioner = serac::Preconditioner::HypreJacobi,
+      .relative_tol = 0.7*1.0e-9,
+      .absolute_tol = 0.7*1.0e-13,
+      .max_iterations = 5*5000,
       .print_level = 1};
   auto nonlinearOptions = serac::NonlinearSolverOptions {
-      .nonlin_solver  = serac::NonlinearSolver::Newton,
+      // .nonlin_solver  = serac::NonlinearSolver::Newton,
+      .nonlin_solver  = serac::NonlinearSolver::TrustRegion,
       .relative_tol   = 1.0e-9,
-      .absolute_tol   = 1.0e-9,
-      .max_iterations = 3,
+      .absolute_tol   = 1.0e-13,
+      .min_iterations = 1, 
+      .max_iterations = 75,
+      .max_line_search_iterations = 15,
       .print_level    = 1};
+
+  if (0 == myid) { std::cout<<"... before creating solid mechanics object ...."<<std::endl;}
   SolidMechanics<order, dim, Parameters<H1<1>, H1<1>>> solid_solver(
       nonlinearOptions, linearOptions, serac::solid_mechanics::default_quasistatic_options,
       // serac::GeometricNonlinearities::Off, // TODO
-      "curing_study_solid", mesh_tag, {"shear", "bulk"},
-      0, // initial cycle index
-      0.0, // initial time
-      false, // checkpoint to disk
-      false); // warmstart
+      "curing_study_solid", mesh_tag, {"shear", "bulk"}); // warmstart
+  if (0 == myid) { std::cout<<"... after creating solid mechanics object ...."<<std::endl; }
 
   if (0 == myid) { std::cout << "Completed creation of SolidMechanics object; moving on to define loads, etc." << std::endl; }
 
@@ -219,7 +244,7 @@ int main(int argc, char *argv[])
   if (0 == myid) { std::cout << "Solve completed. Saving output...." << std::endl; }
 
   // Save problem state for later visualization
-  std::string outname = "paraview_curing_study_driver";
+  std::string outname = "paraview_curing_study_driver_linear";
   solid_solver.outputStateToDisk(outname);
 
   if (0 == myid) { std::cout << "Complete." << std::endl; }
