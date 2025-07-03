@@ -72,8 +72,8 @@ class DataStore {
   friend struct DownstreamState;
 
   virtual void print() const {}
+  virtual bool check_validity() const { return true; }
 
- protected:
   // create a new state in the graph, store it, return it
   template <typename T, typename D, typename InitDualFromValue>
   State<T, D> create_empty_state(InitDualFromValue initial_zero_dual, const std::vector<StateBase>& upstreams)
@@ -100,12 +100,10 @@ class DataStore {
   using VjpT = std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)>;
 
   std::vector<std::unique_ptr<StateBase>> states_;
-
+  std::vector<std::unique_ptr<std::any>> duals_;
   std::vector<UpstreamStates> upstreams_;
   std::vector<EvalT> evals_;
   std::vector<VjpT> vjps_;
-  std::vector<std::unique_ptr<std::any>> duals_;
-
   mutable std::vector<bool> active_;
   mutable std::vector<Int> activeCount_;
 
@@ -124,7 +122,7 @@ class DataStore {
   {
     auto tptr = std::any_cast<T>(any_primal(step).get());
     if (!tptr) {
-      gretl_assert(!goingForward_);
+      gretl_assert(!isGoingForward);
       gretl_assert(activeCount_[step]==0);
       any_primal(step) = std::make_shared<std::any>(t);
       activeCount_[step] = 1;
@@ -159,11 +157,13 @@ class DataStore {
     *dualData = d;
   }
 
+  bool is_persistent(Int step) const;
+
   /// step counter
   Int current_step_;
 
-  // is going forward
-  bool goingForward_ = true;
+  /// is going forward
+  bool isGoingForward = true;
 };
 
 class DynamicDataStore : public DataStore {
@@ -174,9 +174,11 @@ class DynamicDataStore : public DataStore {
   /// @overload
   virtual void print() const override;
 
+  /// @overload 
+  virtual bool check_validity() const override;
+
   virtual void reverse_state() override;
 
- protected:
   friend struct StateBase;
   friend struct UpstreamState;
 
