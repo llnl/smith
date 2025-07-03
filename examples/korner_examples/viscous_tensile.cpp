@@ -1,0 +1,175 @@
+// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+#include <string>
+#include <fstream>
+
+#include "axom/inlet.hpp"
+#include "axom/slic/core/SimpleLogger.hpp"
+#include "mfem.hpp"
+#include "serac/physics/solid_mechanics_contact.hpp"
+#include "serac/infrastructure/terminator.hpp"
+#include "serac/mesh/mesh_utils.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
+#include "serac/physics/materials/solid_material.hpp"
+#include "serac/physics/solid_mechanics.hpp"
+#include "serac/physics/state/state_manager.hpp"
+#include "serac/serac_config.hpp"
+
+constexpr int dim = 3;
+constexpr int p = 1;
+std::function<std::string(const std::string&)> petscPCTypeValidator = [](const std::string& in) -> std::string {
+  return std::to_string(static_cast<int>(serac::mfem_ext::stringToPetscPCType(in)));
+};
+
+struct solve_options {
+  std::string simulation_tag = "ring_pull";
+  std::string mesh_location = "none";
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
+  double max_time = 1.0;
+  int N_Steps = 100;
+  double ground_stiffness = 1.0e-3;
+  double strain_rate = 1.0e-0;
+  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-10,
+                                                  .absolute_tol = 1.0e-12,
+                                                  .max_iterations = 200,
+                                                  .print_level = 1};
+  serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
+                                        .enforcement = serac::ContactEnforcement::Penalty,
+                                        .type = serac::ContactType::Frictionless,
+                                        .penalty = 1.0e1};
+};
+
+void ring_pull(const solve_options& so)
+{
+  // Creating DataStore
+  const std::string& simulation_tag = so.simulation_tag;
+  const std::string mesh_tag = simulation_tag + "mesh";
+  axom::sidre::DataStore datastore;
+  serac::StateManager::initialize(datastore, simulation_tag + "_data");
+
+  // Loading Mesh
+  auto mesh = serac::buildMeshFromFile(so.mesh_location);
+  auto refined_mesh = serac::mesh::refineAndDistribute(std::move(mesh), so.serial_refinement, so.parallel_refinement);
+  auto& pmesh = serac::StateManager::setMesh(std::move(refined_mesh), mesh_tag);
+  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
+
+  // Extracting boundary domains for boundary conditions
+  auto fix_bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
+  auto fix_top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
+  // constexpr int bottom_contact1{3};
+  // constexpr int bottom_contact2{4};
+  // constexpr int top_contact1{5};
+  // constexpr int top_contact2{6};
+  //
+  // Setting up Solid Mechanics Problem
+
+  std::vector<std::string> fieldnames{"disp_old"};
+  serac::FiniteElementState disp_old(serac::StateManager::mesh(mesh_tag), serac::H1<p, dim>{}, "previous_displacement");
+  disp_old = 0.0;
+
+  using ParamT = serac::Parameters<serac::H1<p, dim>>;
+
+    std::unique_ptr<serac::SolidMechanics<p, dim, ParamT>> solid_solver =
+        std::make_unique<serac::SolidMechanics<p, dim, ParamT>>(so.nonlinear_options, so.linear_options,
+                                                                serac::solid_mechanics::default_quasistatic_options,
+                                                                so.simulation_tag, mesh_tag, fieldnames);
+  // std::unique_ptr<serac::SolidMechanicsContact<p, dim, ParamT>> solid_solver =
+  //     std::make_unique<serac::SolidMechanicsContact<p, dim, ParamT>>(
+  //         so.nonlinear_options, so.linear_options, serac::solid_mechanics::default_quasistatic_options,
+  //         so.simulation_tag, mesh_tag, fieldnames);
+
+  // Setting Ground Stiffness
+  double ground_stiffness = so.ground_stiffness;
+  auto ground_force = [ground_stiffness](double /*t*/, auto /*position*/, [[maybe_unused]] auto displacement,
+                                         auto /*acceleration*/, [[maybe_unused]] auto displacement_old) {
+    return ground_stiffness * (displacement - displacement_old);
+  };
+  solid_solver->addCustomDomainIntegral(serac::DependsOn<0>{}, ground_force, whole_mesh);
+
+  //   solid_solver->addCustomBoundaryIntegral(serac::DependsOn<0>{}, ground_force);
+
+  // Defining Material Properties
+  auto lambda = 1.0;
+  auto G = 0.1;
+  serac::solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3.0 * lambda + 2.0 * G) / 3.0, .G = G};
+
+  // Defining Boundary Conditions
+
+  solid_solver->setMaterial(mat, whole_mesh);
+  solid_solver->setFixedBCs(fix_bottom, serac::Component::Y);
+  auto strain_rate = so.strain_rate;
+  auto applied_displacement = [strain_rate](serac::vec3, double t) {
+    return serac::vec3{0.0, strain_rate * t, 0.0};
+  };
+
+  solid_solver->setDisplacementBCs(applied_displacement, fix_top, serac::Component::Y);
+
+  // Adding Contact Interactions
+  // auto contact_interaction_id_bottom = 0;
+  // solid_solver->addContactInteraction(contact_interaction_id_bottom, {bottom_contact1}, {bottom_contact2},
+  //                                     so.contact_options);
+  // auto contact_interaction_id_top = 1;
+  // solid_solver->addContactInteraction(contact_interaction_id_top, {top_contact1}, {top_contact2}, so.contact_options);
+
+  // Completing Setup
+  solid_solver->completeSetup();
+
+  // Running Quasistatics
+  double dt = so.max_time / (static_cast<double>(so.N_Steps - 1));
+
+  // Save Initial State
+  std::string paraview_tag = simulation_tag + "_paraview";
+  solid_solver->outputStateToDisk(paraview_tag);
+
+  for (int i = 1; i < so.N_Steps; ++i) {
+    SLIC_INFO_ROOT("------------------------------------------");
+    SLIC_INFO_ROOT(axom::fmt::format("TIME STEP {}", i));
+    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of {})", solid_solver->time() + dt, so.max_time));
+    serac::logger::flush();
+    disp_old = solid_solver->state("displacement");
+    solid_solver->setParameter(0, disp_old);
+    solid_solver->advanceTimestep(dt);
+    solid_solver->outputStateToDisk(paraview_tag);
+  }
+}
+
+int main(int argc, char* argv[])
+{
+  serac::initialize(argc, argv);
+
+  solve_options so;
+  so.simulation_tag = "tensile_test";
+  so.parallel_refinement = 2;
+  so.N_Steps = 300;
+  so.linear_options = serac::LinearSolverOptions{//.linear_solver  = serac::LinearSolver::Strumpack,
+                                                 .linear_solver = serac::LinearSolver::CG,
+                                                 // .linear_solver  = serac::LinearSolver::SuperLU,
+                                                 // .linear_solver  = serac::LinearSolver::GMRES,
+                                                 //.preconditioner = serac::Preconditioner::HypreJacobi,
+                                                 .preconditioner = serac::Preconditioner::HypreAMG,
+                                                 .relative_tol = 0.7 * 1.0e-8,
+                                                 .absolute_tol = 0.7 * 1.0e-10,
+                                                 .max_iterations = 5000,  // 3*(numElements),
+                                                 .print_level = 0};
+  so.nonlinear_options = serac::NonlinearSolverOptions{//.nonlin_solver  = serac::NonlinearSolver::Newton,
+                                                       // .nonlin_solver  = serac::NonlinearSolver::NewtonLineSearch,
+                                                       .nonlin_solver = serac::NonlinearSolver::TrustRegion,
+                                                       .relative_tol = 1.0e-8,
+                                                       .absolute_tol = 1.0e-9,
+                                                       .min_iterations = 1,  // for trust region
+                                                       .max_iterations = 75,
+                                                       .max_line_search_iterations = 15,  // for trust region: 15,
+                                                       .print_level = 1};
+  so.mesh_location = SERAC_REPO_DIR "/data/meshes/multi_tensile.g";
+  ring_pull(so);
+  serac::exitGracefully();
+
+  return 0;
+}

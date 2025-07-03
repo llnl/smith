@@ -11,7 +11,7 @@
 # Do not bump this over 3.14 due to it changing CMake policies and breaking
 # the CUDA build. We check the required version specifically for this below
 cmake_minimum_required(VERSION 3.14) 
-
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Check for minimum CMake version required w/o changing policies like cmake_minimum_required
 if(ENABLE_CUDA AND ${CMAKE_VERSION} VERSION_LESS 3.18.0)
     message(FATAL_ERROR "Serac requires CMake version 3.18.0+ when CUDA is enabled.")

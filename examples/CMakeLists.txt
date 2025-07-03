@@ -31,3 +31,9 @@ add_subdirectory(buckling)
 
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
+<<<<<<< HEAD
+=======
+
+add_subdirectory(korner_examples)
+
+>>>>>>> f6aeb1083 (adding differentiable contact examples)
