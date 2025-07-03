@@ -244,7 +244,7 @@ double first_order_ode_test(int nsteps, ode_type type, constraint_type constrain
   double ode_residual_eval_time = 0.0;
   double dt = 1.0 / nsteps;
   double previous_dt = -1.0;
-  double c0;
+  double c0 = 0.0;
 
   mfem::Vector x(3);
   mfem::Vector previous(3);

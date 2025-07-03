@@ -170,10 +170,8 @@ static PetscErrorCode solverWrapperDestroy(PC pc)
  */
 static PetscErrorCode wrapSolverInShellPC(PC pc, mfem::Solver& solver, bool owns_op = false)
 {
-  SolverWrapperCtx* ctx;
-
   PetscFunctionBeginUser;
-  ctx = new SolverWrapperCtx{&solver, owns_op};
+  SolverWrapperCtx* ctx = new SolverWrapperCtx{&solver, owns_op};
 
   // In case the PC was already of type SHELL, this will destroy any
   // previous user-defined data structure
