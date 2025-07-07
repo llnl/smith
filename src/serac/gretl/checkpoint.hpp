@@ -146,7 +146,6 @@ struct CheckpointManager {
   /// @brief erase all non persistent checkpoints
   void reset()
   {
-    std::cout << std::endl;
     for (auto cp_it = cps.begin(); cp_it != cps.end(); ++cp_it) {
       if (cp_it->level == Checkpoint::infinity()) {
         cps.erase(cps.begin(), cp_it);
