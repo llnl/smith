@@ -40,9 +40,6 @@ inline bool operator<(const Checkpoint& a, const Checkpoint& b)
 
 inline std::ostream& operator<<(std::ostream& stream, const Checkpoint& p);
 
-struct CheckpointManager;
-
-inline std::ostream& operator<<(std::ostream& stream, const CheckpointManager& set);
 
 struct CheckpointManager {
   static constexpr size_t invalidCheckpointIndex = std::numeric_limits<size_t>::max();
@@ -91,15 +88,7 @@ struct CheckpointManager {
         cps.insert(nextStep);
       } else {
         nextEraseStep = cps.begin()->step;
-
-        // if (nextEraseStep%2 == 0) {
-        //   std::cout << "prev level = " << cps.begin()->level << std::endl;
-        // }
-
-        // std::cout << "stuff = " << cps.begin()->step << " " << levelupAmount << " " << cps.begin()->level <<
-        // std::endl;
         nextStep.level = cps.begin()->level + levelupAmount;
-        // nextStep.level = cps.begin()->level + 1;
 
         cps.erase(cps.begin());
         cps.insert(nextStep);
@@ -154,9 +143,22 @@ struct CheckpointManager {
     cps.insert(cp);
   }
 
+  /// @brief erase all non persistent checkpoints
+  void reset()
+  {
+    std::cout << std::endl;
+    for (auto cp_it = cps.begin(); cp_it != cps.end(); ++cp_it) {
+      if (cp_it->level == Checkpoint::infinity()) {
+        cps.erase(cps.begin(), cp_it);
+        break;
+      }
+    }
+  }
+
   size_t maxNumStates = 20;
   std::set<Checkpoint> cps;
 };
+
 
 template <typename T>
 T advance_and_reverse_steps(size_t numSteps, size_t storageSize, T x, std::function<T(size_t n, const T&)> update_func,

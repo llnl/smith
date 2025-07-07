@@ -63,14 +63,6 @@ class DataStore {
   Int num_active_states() const;
   Int num_dual_states() const;
 
-  friend struct StateBase;
-
-  template <typename T, typename D>
-  friend struct State;
-
-  friend struct UpstreamState;
-  friend struct DownstreamState;
-
   void print() const;
   bool check_validity() const;
 
@@ -106,7 +98,7 @@ class DataStore {
   template <typename T>
   const T& get_primal(Int step)
   {
-    auto tptr = std::any_cast<T>(any_primal(step).get());
+    T* tptr = std::any_cast<T>(any_primal(step).get());
     if (stillConstructingGraph) {
       gretl_assert_msg(tptr, "bad step " + std::to_string(step));
     } else {
@@ -123,7 +115,7 @@ class DataStore {
   template <typename T>
   void set_primal(Int step, const T& t)
   {
-    auto tptr = std::any_cast<T>(any_primal(step).get());
+    T* tptr = std::any_cast<T>(any_primal(step).get());
     if (!tptr) {
       gretl_assert(!stillConstructingGraph);
       gretl_assert(usageCount_[step] == 1);
@@ -179,40 +171,16 @@ class DataStore {
   /// step counter
   Int current_step_;
 
-  /// is going forward
+  /// @brief specifies if graph is in construction or back-prop mode.  This is used for internal asserts.
   bool stillConstructingGraph = true;
-};
-
-/*
-class DynamicDataStore : public DataStore {
- public:
-  DynamicDataStore(size_t maxStates);
-  ~DynamicDataStore() {}
-
-  void print() const override;
-
-  /// @overload
-  bool check_validity() const override;
-
-  void reverse_state() override;
 
   friend struct StateBase;
+
+  template <typename T, typename D>
+  friend struct State;
+
   friend struct UpstreamState;
-
-  /// @overload
-  void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams) override;
-
-  /// @overload
-  void fetch_state_data(Int stepIndex) override;
-
-  /// @overload
-  void remove_things(Int stepIndex) override;
-
-  /// @overload
-  void clear_usage(Int step) override;
-
-  bool state_in_use(Int step);
+  friend struct DownstreamState;
 };
-*/
 
 }  // namespace gretl

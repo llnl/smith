@@ -57,6 +57,8 @@ void DataStore::reset()
     }
   }
 
+  checkpointManager.reset();
+
   current_step_ = 0;
 }
 
@@ -124,7 +126,6 @@ void printv(const std::vector<StateBase>& v)
   std::cout << std::endl;
 }
 
-/// @overload
 void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams)
 {
   Int step = newState->step_;
@@ -206,7 +207,6 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
   gretl_assert(current_step_ == lastStepUsed_.size());
 }
 
-/// @overload
 void DataStore::fetch_state_data(Int stepIndex)
 {
   gretl_assert(!stillConstructingGraph);
