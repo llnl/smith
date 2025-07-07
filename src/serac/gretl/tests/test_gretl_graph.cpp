@@ -33,7 +33,7 @@ TEST(Graph, NonlinearGraphGradients)
   std::vector<double> dataB = {1.7, 1.1};
   std::vector<double> dataZ = {-0.7, 3.1};
 
-  gretl::DynamicDataStore dataStore(3);
+  gretl::DataStore dataStore(3);
 
   auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);
@@ -83,7 +83,7 @@ TEST(Graph, LinearGraphGradients)
 {
   std::vector<double> dataA = {1.2, 3.2};
 
-  gretl::DynamicDataStore dataStore(6);
+  gretl::DataStore dataStore(6);
 
   auto initial = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto a = gretl::copy(initial);
@@ -112,7 +112,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
   std::vector<double> dataB = {0.6, 0.87};
   std::vector<double> dataC = {-0.8, 0.32};
 
-  gretl::DynamicDataStore dataStore(3);
+  gretl::DataStore dataStore(3);
 
   auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);

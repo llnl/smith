@@ -5,7 +5,11 @@
 
 namespace gretl {
 
-DataStore::DataStore(size_t /*maxStates*/) { current_step_ = 0; }
+DataStore::DataStore(size_t maxStates) :
+checkpointManager{.maxNumStates = maxStates, .cps{}}
+{ 
+  current_step_ = 0; 
+}
 
 void DataStore::back_prop()
 {
@@ -16,9 +20,7 @@ void DataStore::back_prop()
 }
 
 template <typename Func>
-void for_each_active_upstream(const DataStore* ds, size_t step, const Func& func) {
-  auto dataStore = dynamic_cast<const DynamicDataStore*>(ds);
-  if (!dataStore) { return; }
+void for_each_active_upstream(const DataStore* dataStore, size_t step, const Func& func) {
   for (Int upstream : dataStore->upstreams_[step].steps_) {
     if (!dataStore->is_persistent(upstream)) {
       func(upstream);
@@ -30,7 +32,7 @@ void for_each_active_upstream(const DataStore* ds, size_t step, const Func& func
 }
 
 // MRT, but as a member function
-void DynamicDataStore::clear_usage(Int step) {
+void DataStore::clear_usage(Int step) {
   gretl::print("clearing usage for step", step);
   duals_[step] = nullptr;
   states_[step]->primal_ = nullptr;
@@ -45,7 +47,7 @@ void DynamicDataStore::clear_usage(Int step) {
 }
 
 
-bool DynamicDataStore::state_in_use(Int step) {
+bool DataStore::state_in_use(Int step) const {
   return states_[step]->primal_ && usageCount_[step];
 }
 
@@ -58,11 +60,6 @@ void DataStore::reset()
     } else {
       duals_[n-1] = nullptr;
     }
-    // clear_usage(n-1);
-    //if (upstreams_[n - 1].size()) {
-    //  states_[n - 1]->primal_ = nullptr;
-    //}
-    //duals_[n - 1] = nullptr;
   }
   
   current_step_ = 0;
@@ -70,21 +67,11 @@ void DataStore::reset()
 
 void DataStore::vjp(StateBase& state) { state.evaluate_vjp(); }
 
-void DataStore::reverse_state()
-{
-  --current_step_;
-  gretl::print("reverse from step", current_step_);
-  if (!is_persistent(current_step_)) {
-    vjp(*states_[current_step_]);
-    clear_usage(current_step_);
-  }
-}
-
 bool DataStore::is_persistent(Int step) const {
   return !upstreams_[step].size();
 }
 
-void DynamicDataStore::reverse_state()
+void DataStore::reverse_state()
 {
   // must erase the final step in the cp manager before we get started
   if (current_step_ == states_.size()) {
@@ -100,62 +87,7 @@ void DynamicDataStore::reverse_state()
   }
 }
 
-void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams)
-{
-  /*
-  states_.emplace_back(std::move(newState));
-  duals_.emplace_back(nullptr);
-  usageCount_.push_back(1);
-  active_.push_back(true);
-
-  std::vector<Int> upstreamSteps;
-  upstreamSteps.reserve(upstreams.size());
-  for (auto& u : upstreams) {
-    Int upstreamStep = u.step_;
-    upstreamSteps.push_back(upstreamStep);
-    // repopulate the upstreams data, in case the checkpointer has decided to remove it.
-    if (!is_persistent(upstreamStep)) {
-      if (!states_[upstreamStep]->primal_) {
-        gretl::print("at step ", current_step_, "resetting ", upstreamStep);
-        usageCount_[upstreamStep]++;
-        states_[upstreamStep]->primal_ = u.primal_;
-      } else {
-        gretl_assert(states_[upstreamStep]->primal_ == u.primal_);
-      }
-    }
-  }
-  upstreams_.emplace_back(*this, upstreamSteps);
-
-  evals_.emplace_back([=](const UpstreamStates&, DownstreamState&) {
-    std::cout << "eval not implemented for step " << current_step_ << std::endl;
-    gretl_assert(false);
-  });
-
-  vjps_.emplace_back([=](UpstreamStates&, const DownstreamState&) {
-    std::cout << "vjp not implemented for step " << current_step_ << std::endl;
-    gretl_assert(false);
-  });
-
-  print();
-
-  ++current_step_;
-  assert(current_step_ == states_.size());
-  assert(current_step_ == duals_.size());
-  assert(current_step_ == upstreams_.size());
-  assert(current_step_ == vjps_.size());
-  */
-}
-
 std::shared_ptr<std::any>& DataStore::any_primal(Int step) { return states_[step]->primal_; }
-
-void DataStore::fetch_state_data(Int stepIndex)
-{
-  if (states_[stepIndex]->primal_) {
-    return;
-  }
-  current_step_ = stepIndex;
-  states_[stepIndex]->evaluate_forward();
-}
 
 Int DataStore::num_active_states() const
 {
@@ -179,10 +111,6 @@ Int DataStore::num_dual_states() const
   return numActive;
 }
 
-DynamicDataStore::DynamicDataStore(size_t maxStates)
-    : DataStore(maxStates), checkpointManager{.maxNumStates = maxStates, .cps{}}
-{
-}
 
 void printv(const std::vector<Int>& v) {
   size_t c=0;
@@ -203,7 +131,7 @@ void printv(const std::vector<StateBase>& v) {
 }
 
 /// @overload
-void DynamicDataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams) 
+void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams) 
 {
   Int step = newState->step_;
 
@@ -284,7 +212,7 @@ void DynamicDataStore::add_state(std::unique_ptr<StateBase> newState, const std:
 }
 
 /// @overload
-void DynamicDataStore::fetch_state_data(Int stepIndex) 
+void DataStore::fetch_state_data(Int stepIndex) 
 {
   gretl_assert(!stillConstructingGraph);
 
@@ -323,10 +251,8 @@ void DynamicDataStore::fetch_state_data(Int stepIndex)
 }
 
 
-/// @overload
-void DynamicDataStore::remove_things(Int step) 
+void DataStore::remove_things(Int step) 
 {
-  if (step==13) gretl::print("13 usage r1 = ", usageCount_[step]);
   if (!is_persistent(step)) {
     size_t stepToErase = checkpointManager.add_checkpoint_and_get_index_to_remove(step);
     if (checkpointManager.valid_checkpoint_index(stepToErase)) {
@@ -354,7 +280,7 @@ void DynamicDataStore::remove_things(Int step)
 }
 
 
-bool DynamicDataStore::check_validity() const {
+bool DataStore::check_validity() const {
 
   bool valid = true;
   // first check that our version of the saved states matches the cp manager
@@ -402,8 +328,7 @@ bool DynamicDataStore::check_validity() const {
   return valid;
 } 
 
-/// @overload
-void DynamicDataStore::print() const {
+void DataStore::print() const {
   for (Int i=0; i < states_.size(); ++i) {
     std::cout << i << ", act: " << active_[i] << ":" << usageCount_[i] << ":" << (states_[i]->primal_!=nullptr) << ", ups: ";
     for (auto& v : upstreams_[i].steps_) {

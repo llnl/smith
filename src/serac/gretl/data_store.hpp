@@ -58,7 +58,7 @@ class DataStore {
   void back_prop();
 
   /// @brief clear all but persistent state, keeping the graph
-  virtual void reset();
+  void reset();
 
   Int num_active_states() const;
   Int num_dual_states() const;
@@ -71,8 +71,8 @@ class DataStore {
   friend struct UpstreamState;
   friend struct DownstreamState;
 
-  virtual void print() const {}
-  virtual bool check_validity() const { return true; }
+  void print() const;
+  bool check_validity() const;
 
   // create a new state in the graph, store it, return it
   template <typename T, typename D, typename InitDualFromValue>
@@ -89,23 +89,17 @@ class DataStore {
   void vjp(StateBase& state);
 
   /// @brief function for safely adding new states to graph and checkpoint
-  virtual void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams);
+  void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams);
 
   /// @brief method for fetching states at a particular moment in time
-  virtual void fetch_state_data(Int stepIndex);
+  void fetch_state_data(Int stepIndex);
 
-  virtual void remove_things(Int) {}
+  void remove_things(Int);
+
+  void clear_usage(Int step);
 
   using EvalT = std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)>;
   using VjpT = std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)>;
-
-  std::vector<std::unique_ptr<StateBase>> states_;
-  std::vector<std::unique_ptr<std::any>> duals_;
-  std::vector<UpstreamStates> upstreams_;
-  std::vector<EvalT> evals_;
-  std::vector<VjpT> vjps_;
-  mutable std::vector<bool> active_;
-  mutable std::vector<Int> usageCount_;
 
   std::shared_ptr<std::any>& any_primal(Int step);
 
@@ -165,9 +159,22 @@ class DataStore {
     *dualData = d;
   }
 
+  bool state_in_use(Int step) const;
+
   bool is_persistent(Int step) const;
 
-  virtual void clear_usage(Int step) {}
+  std::vector<std::unique_ptr<StateBase>> states_;
+  std::vector<std::unique_ptr<std::any>> duals_;
+  std::vector<UpstreamStates> upstreams_;
+  std::vector<EvalT> evals_;
+  std::vector<VjpT> vjps_;
+  std::vector<bool> active_;
+  std::vector<Int> usageCount_;
+  std::vector<Int> lastStepUsed_;
+  std::vector< std::vector<Int> > passthroughs_;
+
+  /// container which track the states in the graph with allocated data
+  CheckpointManager checkpointManager;
 
   /// step counter
   Int current_step_;
@@ -176,41 +183,36 @@ class DataStore {
   bool stillConstructingGraph = true;
 };
 
+/*
 class DynamicDataStore : public DataStore {
  public:
   DynamicDataStore(size_t maxStates);
-  virtual ~DynamicDataStore() {}
+  ~DynamicDataStore() {}
 
-  /// @overload
-  virtual void print() const override;
+  void print() const override;
 
   /// @overload 
-  virtual bool check_validity() const override;
+  bool check_validity() const override;
 
-  virtual void reverse_state() override;
+  void reverse_state() override;
 
   friend struct StateBase;
   friend struct UpstreamState;
 
   /// @overload
-  virtual void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams) override;
+  void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams) override;
 
   /// @overload
-  virtual void fetch_state_data(Int stepIndex) override;
+  void fetch_state_data(Int stepIndex) override;
 
   /// @overload
-  virtual void remove_things(Int stepIndex) override;
+  void remove_things(Int stepIndex) override;
 
   /// @overload
-  virtual void clear_usage(Int step) override;
+  void clear_usage(Int step) override;
 
   bool state_in_use(Int step);
-
-  std::vector<Int> lastStepUsed_;
-  std::vector< std::vector<Int> > passthroughs_;
-
-  /// container which track the states in the graph with allocated data
-  CheckpointManager checkpointManager;
 };
+*/
 
 }  // namespace gretl
