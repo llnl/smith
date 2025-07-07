@@ -26,7 +26,6 @@
 
 enum FIELD
 {
-  SHAPE_DISP,
   DISP,
   VELO,
   ACCEL,
@@ -145,7 +144,7 @@ class InertialReliefProblem : public GeneralNLMCProblem {
   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints;
   double time = 0.0;
   double dt = 0.0;
-  std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, 0.0, 0.0};
+  std::vector<double> jacobian_weights = {1.0, 0.0, 0.0, 0.0};
 
  public:
   InertialReliefProblem(std::vector<serac::FieldPtr> obj_states_, std::vector<serac::FieldPtr> all_states_,
@@ -188,19 +187,21 @@ int main(int argc, char* argv[])
       mfem::Mesh::MakeCartesian3D(nx, ny, nz, element_shape, xlength, ylength, zlength), "this_mesh_name", 0, 0);
 
   serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
-  serac::FiniteElementState shape_disp = serac::StateManager::newState(VectorSpace{}, "shape_disp", mesh->tag());
   serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
   serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
   serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-  states = {shape_disp, disp, velo, accel};
+  velo = 0.0;
+  accel = 0.0;
+
+  states = {disp, velo, accel};
   params = {density};
 
   std::string physics_name = "solid";
 
   // construct residual
-  auto solid_mechanics_residual = std::make_shared<SolidResidualT>(physics_name, mesh, states[SHAPE_DISP].space(),
-                                                                   states[DISP].space(), getSpaces(params));
+  auto solid_mechanics_residual = std::make_shared<SolidResidualT>(physics_name, mesh, states[DISP].space(),
+                                                                   getSpaces(params));
 
   SolidMaterial mat;
   mat.K = 1.0;
@@ -210,11 +211,11 @@ int main(int argc, char* argv[])
   // apply some traction boundary conditions
   std::string surface_name = "side";
   mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
-  solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return -1.0 * n; });
+  solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
 
   serac::tensor<double, dim> constant_force{};
   for (int i = 0; i < dim; i++) {
-    constant_force[i] = 1.e0;
+    constant_force[i] = -1.e0;
   }
 
   solid_mechanics_residual->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
@@ -226,16 +227,16 @@ int main(int argc, char* argv[])
   params[0] = 1.0;
 
   using ObjectiveT = serac::FunctionalObjective<
-      dim, VectorSpace, serac::Parameters<VectorSpace, DensitySpace>>;  // functional objective on displacement/density
+      dim, serac::Parameters<VectorSpace, DensitySpace>>;  // functional objective on displacement/density
 
   double time = 0.0;
   double dt = 1.0;
   auto all_states = getConstFieldPointers(states, params);
-  auto objective_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[DENSITY]};
+  auto objective_states = {all_states[DISP], all_states[DENSITY]};
 
   ObjectiveT::SpacesT param_space_ptrs{&all_states[DISP]->space(), &all_states[DENSITY]->space()};
 
-  ObjectiveT mass_objective("mass constraining", mesh, all_states[SHAPE_DISP]->space(), param_space_ptrs);
+  ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
 
   mass_objective.addBodyIntegral(serac::DependsOn<1>{}, mesh->entireBodyName(),
                                  [](double /*t*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
@@ -245,7 +246,7 @@ int main(int argc, char* argv[])
 
   for (int i = 0; i < dim; ++i) {
     auto cg_objective = std::make_shared<ObjectiveT>("translation " + std::to_string(i), mesh,
-                                                     all_states[SHAPE_DISP]->space(), param_space_ptrs);
+                                                     param_space_ptrs);
     cg_objective->addBodyIntegral(serac::DependsOn<0, 1>{}, mesh->entireBodyName(),
                                   [i](double
                                       /*time*/,
@@ -253,12 +254,14 @@ int main(int argc, char* argv[])
                                     return (get<serac::VALUE>(X)[i] + get<serac::VALUE>(U)[i]) * get<serac::VALUE>(RHO);
                                   });
     initial_cg[i] = cg_objective->evaluate(time, dt, objective_states) / mass;
+
     constraints.push_back(cg_objective);
   }
 
   for (int i = 0; i < dim; ++i) {
+    std::cout << "initial cg = " << i << " " << initial_cg[i] << std::endl;
     auto center_rotation_objective = std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh,
-                                                                  all_states[SHAPE_DISP]->space(), param_space_ptrs);
+                                                                  param_space_ptrs);
     center_rotation_objective->addBodyIntegral(serac::DependsOn<0, 1>{}, mesh->entireBodyName(),
                                                [i, initial_cg](double /*time*/, auto X, auto U, auto RHO) {
                                                  auto u = get<serac::VALUE>(U);
@@ -270,22 +273,16 @@ int main(int argc, char* argv[])
     constraints.push_back(center_rotation_objective);
   }
 
-  serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = residual->residual(time, dt, all_states);
-
-  std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, 0.0, 0.0};
-  auto drdu_unique = residual->jacobian(time, dt, all_states, jacobian_weights);
-
   // initialize displacement
   states[FIELD::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
-    auto u = 0.1 * x;
+    auto u = 0.0 * x;
     return u;
   });
 
   auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "");
   writer.write(0, 0.0, objective_states);
   auto non_const_states = getFieldPointers(states, params);
-  InertialReliefProblem problem({non_const_states[SHAPE_DISP], non_const_states[DISP], non_const_states[DENSITY]},
+  InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]},
                                 non_const_states, solid_mechanics_residual, constraints);
   int dimx = problem.GetDimx();
   int dimy = problem.GetDimy();
@@ -421,11 +418,14 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   mfem::BlockVector qblock(y_partition);
   qblock = 0.0;
 
+  // std::cout << "norms = " << x.Sum() << " " << y.Sum() << " " << qeval.Sum() << std::endl;
+
   obj_states[DISP]->Set(1.0, yblock.GetBlock(0));
 
   serac::FiniteElementDual res_vector(all_states[DISP]->space(), "tempresidual");
   res_vector = residual->residual(time, dt, serac::getConstFieldPointers(all_states));
-  qblock.GetBlock(0).Set(1.0, res_vector);
+  // std::cout << "ir resid eval = " << res_vector.Sum() << std::endl;
+  qblock.GetBlock(0).Set(-1.0, res_vector);
 
   mfem::Vector gradc(dimu);
   gradc = 0.0;
@@ -435,13 +435,25 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
     SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
     gradc = 0.0;
     gradc.Set(1.0, constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
+    // std::cout << "constraint gradient " << i << " = " << gradc.Sum() << std::endl;
+    // std::cout << "mult = " << yblock.GetBlock(1).Sum() << std::endl;
     qblock.GetBlock(0).Add(yblock.GetBlock(1)(idx), gradc);
-    qblock.GetBlock(1)(idx) = -1.0 * constraints[i]->evaluate(time, dt, serac::getConstFieldPointers(obj_states));
+    // std::cout << "after = " << qblock.GetBlock(0).Sum() << std::endl;
+
+    double constraint_i = constraints[i]->evaluate(time, dt, serac::getConstFieldPointers(obj_states));
+    // std::cout << "constraint eval " << i << " = " << constraint_i << std::endl;
+
+    qblock.GetBlock(1)(idx) = -1.0 * constraint_i;
+    // std::cout << "after2 = " << qblock.GetBlock(1).Sum() << std::endl;
   }
+  // std::cout << "qblock norm = " << qblock.Sum() << std::endl;
+
   qeval.Set(1.0, qblock);
+
   Qeval_err = 0;
   for (int i = 0; i < qeval.Size(); i++) {
     if (std::isnan(qeval(i))) {
+      // std::cout << "nan index = " << i << " " << res_vector.Size() << std::endl;
       Qeval_err = 1;
       break;
     }
@@ -477,6 +489,7 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
     MFEM_VERIFY(drdu_unique->Height() == dimu, "size error");
 
     drdu = drdu_unique.release();
+    *drdu *= -1.0;
 
     mfem::HypreParMatrix* dcdu = nullptr;
     mfem::SparseMatrix* dcdumat = nullptr;
