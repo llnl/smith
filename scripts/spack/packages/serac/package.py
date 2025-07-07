@@ -60,6 +60,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     variant("profiling", default=False, 
             description="Build with hooks for Adiak/Caliper performance analysis")
 
+    variant("enzyme", default=True, description="Enable Enzyme Automatic Differentiation Framework") 
     variant("petsc", default=True,
             description="Enable PETSc support")
     variant("slepc", default=True, description="Enable SLEPc integration") 
@@ -84,10 +85,12 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("lua")
 
+    depends_on('enzyme@0.0.180', when="+enzyme")
+
     # Devtool dependencies these need to match serac_devtools/package.py
     depends_on("cppcheck", when="+devtools")
     depends_on("doxygen", when="+devtools")
-    depends_on("llvm+clang@14", when="+devtools")
+    depends_on("llvm@19+clang", when="+devtools")
     depends_on("python", when="+devtools")
     depends_on("py-sphinx", when="+devtools")
     depends_on("py-ats", when="+devtools")
@@ -505,8 +508,8 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
             entries.append(cmake_cache_path("ARPACK_DIR", dep_dir))
 
         # optional tpls
-        for dep in ("adiak", "amgx", "caliper", "petsc", "raja", "slepc", "strumpack", "sundials", "umpire",
-                    "tribol"):
+        for dep in ("adiak", "amgx", "caliper", "enzyme", "petsc", "raja", "slepc",
+                    "strumpack", "sundials", "umpire", "tribol"):
             if spec.satisfies("^{0}".format(dep)):
                 dep_dir = get_spec_path(spec, dep, path_replacements)
                 entries.append(cmake_cache_path("%s_DIR" % dep.upper(),

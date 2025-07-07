@@ -12,8 +12,7 @@ class SeracDevtools(BundlePackage):
 
     variant('compiler_only', default=False, description="Build only required compiler with Enzyme")
 
-    depends_on('enzyme@0.0.180')
-    depends_on("llvm@19+clang") # +mlir? LLVM_ENABLE_PLUGINS?
+    depends_on("llvm@19+clang")
     depends_on("llvm+python", when="~compiler_only")
 
     depends_on('cmake', when="~compiler_only")
