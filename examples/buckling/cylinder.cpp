@@ -55,7 +55,6 @@ int main(int argc, char* argv[])
 
   // Solver options
   NonlinearSolverOptions nonlinear_options = solid_mechanics::default_nonlinear_options;
-  LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
   nonlinear_options.nonlin_solver = serac::NonlinearSolver::TrustRegion;
   nonlinear_options.relative_tol = 1e-6;
   nonlinear_options.absolute_tol = 1e-10;
@@ -63,13 +62,13 @@ int main(int argc, char* argv[])
   nonlinear_options.max_iterations = 500;
   nonlinear_options.max_line_search_iterations = 20;
   nonlinear_options.print_level = 1;
-#ifdef SERAC_USE_PETSC
+
+  LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
   linear_options.linear_solver = serac::LinearSolver::GMRES;
   linear_options.preconditioner = serac::Preconditioner::HypreAMG;
   linear_options.relative_tol = 1e-8;
   linear_options.absolute_tol = 1e-16;
   linear_options.max_iterations = 2000;
-#endif
 
   // Contact specific options
   double penalty = 1e3;
