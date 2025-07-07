@@ -122,8 +122,8 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto h = a + 3 * c;
   auto f = c * g;
 
-  int Nj = 1; //7;
-  int Ni = 2; //13;
+  int Nj = 1;  // 7;
+  int Ni = 2;  // 13;
 
   for (int j = 0; j < Nj; ++j) {
     for (int i = 0; i < Ni; ++i) {

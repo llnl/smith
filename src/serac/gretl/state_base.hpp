@@ -67,7 +67,7 @@ struct StateBase {
 
   DataStore& data_store() const { return *dataStore_; }
 
- //protected:
+  // protected:
 
   DataStore* dataStore_;
   std::shared_ptr<std::any> primal_;

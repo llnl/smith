@@ -126,7 +126,7 @@ class DataStore {
     auto tptr = std::any_cast<T>(any_primal(step).get());
     if (!tptr) {
       gretl_assert(!stillConstructingGraph);
-      gretl_assert(usageCount_[step]==1);
+      gretl_assert(usageCount_[step] == 1);
       any_primal(step) = std::make_shared<std::any>(t);
       return;
     }
@@ -171,7 +171,7 @@ class DataStore {
   std::vector<bool> active_;
   std::vector<Int> usageCount_;
   std::vector<Int> lastStepUsed_;
-  std::vector< std::vector<Int> > passthroughs_;
+  std::vector<std::vector<Int>> passthroughs_;
 
   /// container which track the states in the graph with allocated data
   CheckpointManager checkpointManager;
@@ -191,7 +191,7 @@ class DynamicDataStore : public DataStore {
 
   void print() const override;
 
-  /// @overload 
+  /// @overload
   bool check_validity() const override;
 
   void reverse_state() override;

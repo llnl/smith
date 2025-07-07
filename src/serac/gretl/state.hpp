@@ -42,7 +42,7 @@ struct State : public StateBase {
   State<T, D> clone(const std::vector<StateBase>& upstreams) const
   {
     gretl_assert(!upstreams.empty());
-    auto newVal = std::make_shared<std::any>( *std::any_cast<T>(primal_.get()) );
+    auto newVal = std::make_shared<std::any>(*std::any_cast<T>(primal_.get()));
     State<T, D> state(dataStore_, dataStore_->states_.size(), newVal, initialize_zero_dual_);
     dataStore_->add_state(std::make_unique<State<T, D>>(state), upstreams);
     return state;
@@ -57,7 +57,8 @@ struct State : public StateBase {
   friend class DataStore;
 
  protected:
-  State(DataStore* store, size_t step, std::shared_ptr<std::any> val, const InitializeZeroDual<T, D>& initialize_zero_dual)
+  State(DataStore* store, size_t step, std::shared_ptr<std::any> val,
+        const InitializeZeroDual<T, D>& initialize_zero_dual)
       : StateBase(store, val), initialize_zero_dual_(initialize_zero_dual)
   {
     step_ = static_cast<Int>(step);
