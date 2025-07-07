@@ -274,7 +274,7 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetElementRestriction(cons
   } else {
     uint64_t dofs_per_elem = elem_dofs.size() / n;
     axom::Array<DoF, 2, serac::detail::host_memory_space> output(n, dofs_per_elem);
-    std::memcpy(output.data(), elem_dofs.data(), sizeof(DoF) * n * dofs_per_elem);
+    std::memcpy(static_cast<void*>(output.data()), elem_dofs.data(), sizeof(DoF) * n * dofs_per_elem);
     return output;
   }
 }
@@ -340,7 +340,7 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetElementDofs(const serac
   } else {
     uint64_t dofs_per_elem = elem_dofs.size() / n;
     axom::Array<DoF, 2, serac::detail::host_memory_space> output(n, dofs_per_elem);
-    std::memcpy(output.data(), elem_dofs.data(), sizeof(DoF) * n * dofs_per_elem);
+    std::memcpy(static_cast<void*>(output.data()), elem_dofs.data(), sizeof(DoF) * n * dofs_per_elem);
     return output;
   }
 }
@@ -455,7 +455,7 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
   } else {
     uint64_t dofs_per_face = face_dofs.size() / n;
     axom::Array<DoF, 2, serac::detail::host_memory_space> output(n, dofs_per_face);
-    std::memcpy(output.data(), face_dofs.data(), sizeof(DoF) * n * dofs_per_face);
+    std::memcpy(static_cast<void*>(output.data()), face_dofs.data(), sizeof(DoF) * n * dofs_per_face);
     return output;
   }
 }
@@ -623,7 +623,7 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
   } else {
     uint64_t dofs_per_face = face_dofs.size() / n;
     axom::Array<DoF, 2, serac::detail::host_memory_space> output(n, dofs_per_face);
-    std::memcpy(output.data(), face_dofs.data(), sizeof(DoF) * n * dofs_per_face);
+    std::memcpy(static_cast<void*>(output.data()), face_dofs.data(), sizeof(DoF) * n * dofs_per_face);
     return output;
   }
 }

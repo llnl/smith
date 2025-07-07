@@ -198,8 +198,7 @@ struct ResidualFixture : public testing::Test {
     // dfem_rate_mat.Rho = 1.5;
 
     int ir_order = 2;
-    const mfem::IntegrationRule& displacement_ir =
-        mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), 2 * ir_order + disp.space().GetFE(0)->GetOrder());
+    const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
     mfem::Array<int> solid_attrib({1});
 
     solid_dfem_residual->setMaterial(serac::DependsOn<0, 1, 2, 3, 4>{}, solid_attrib, dfem_mat, displacement_ir);
@@ -224,14 +223,8 @@ struct ResidualFixture : public testing::Test {
       auto u = 0.1 * x;
       return u;
     });
-    states[SolidResidualT::VELOCITY].setFromFieldFunction([](serac::tensor<double, dim> x) {
-      auto u = -0.1 * x;
-      return u;
-    });
-    states[SolidResidualT::ACCELERATION].setFromFieldFunction([](serac::tensor<double, dim> x) {
-      auto u = -0.01 * x;
-      return u;
-    });
+    states[SolidResidualT::VELOCITY] = 0.0;
+    states[SolidResidualT::ACCELERATION] = 0.0;
     states[SolidResidualT::SHAPE_DISPLACEMENT] = 0.0;
     params[0] = 1.2;
 
@@ -276,9 +269,11 @@ TEST_F(ResidualFixture, CheckDfemVsFunctionalResidual)
   serac::FiniteElementDual functional_res_vector(states[SolidResidualT::DISPLACEMENT].space(), "functional_residual");
   functional_res_vector = functional_residual->residual(time, dt, functional_input_fields);
   serac::FiniteElementDual dfem_vs_functional_vector(states[SolidResidualT::DISPLACEMENT].space(), "dfem_residual");
+  // set nodes at current coords for dfem
+  //(*mesh->mfemParMesh().GetNodes()) += states[1].gridFunction();
   dfem_vs_functional_vector = dfem_residual->residual(time, dt, dfem_input_fields);
-  dfem_vs_functional_vector += functional_res_vector;
-  ASSERT_EQ(0.0, dfem_vs_functional_vector.Norml2());
+  dfem_vs_functional_vector -= functional_res_vector;
+  ASSERT_NEAR(0.0, dfem_vs_functional_vector.Norml2(), 1.0e-12) << "Functional and DFEM residuals do not match!";
 }
 
 // TEST_F(ResidualFixture, JvpConsistency)

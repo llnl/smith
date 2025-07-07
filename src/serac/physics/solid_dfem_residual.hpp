@@ -33,7 +33,7 @@ struct StressDivQFunction {
     double dt = 1.0;  // TODO: figure out how to pass this in to the qfunction
     auto P = mfem::future::get<0>(material.pkStress(dt, du_dX, dv_dX, params...));
     auto JxW = mfem::future::det(dX_dxi) * weight * mfem::future::transpose(dxi_dX);
-    return mfem::future::tuple{P * JxW};
+    return mfem::future::tuple{-P * JxW};
   }
 
   Material material;  ///< the material model to use for computing the stress
