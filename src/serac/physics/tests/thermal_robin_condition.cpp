@@ -41,8 +41,7 @@ void functional_thermal_test_robin_condition()
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
   std::string mesh_tag{"mesh"};
-
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
@@ -52,7 +51,7 @@ void functional_thermal_test_robin_condition()
                                                   .print_level = 1};
 
   HeatTransfer<p, dim> thermal_solver(nonlinear_options, heat_transfer::default_linear_options,
-                                      heat_transfer::default_static_options, "heat_transfer", mesh_tag);
+                                      heat_transfer::default_static_options, "heat_transfer", mesh);
 
   heat_transfer::LinearIsotropicConductor mat{
       1.0,  // mass density
@@ -60,10 +59,10 @@ void functional_thermal_test_robin_condition()
       1.0   // isotropic thermal conductivity
   };
 
-  thermal_solver.setMaterial(mat, pmesh->entireBody());
+  thermal_solver.setMaterial(mat, mesh->entireBody());
 
   // set heat source
-  thermal_solver.setSource([](auto, auto, auto, auto) { return 2.0; }, pmesh->entireBody());
+  thermal_solver.setSource([](auto, auto, auto, auto) { return 2.0; }, mesh->entireBody());
 
   // clang-format off
   thermal_solver.addCustomBoundaryIntegral(DependsOn<>{}, 
@@ -72,7 +71,7 @@ void functional_thermal_test_robin_condition()
       auto q           = 5.0*(T-25.0);
       return q;  // define a convective (temperature-proportional) heat flux
     },
-    pmesh->entireBoundary()
+    mesh->entireBoundary()
   );
   // clang-format on
 
