@@ -409,17 +409,16 @@ void PetscGAMGSolver::SetupNearNullSpace()
     return;
   }
 
-  PetscInt sdim = fespace_->GetParMesh()->SpaceDimension();
-  int vdim = fespace_->GetVDim();
-
   // coordinates
   const mfem::FiniteElementCollection* fec = fespace_->FEColl();
   bool h1space = dynamic_cast<const mfem::H1_FECollection*>(fec);
   if (h1space) {
+    PetscInt sdim = fespace_->GetParMesh()->SpaceDimension();
+    int vdim = fespace_->GetVDim();
+
     SLIC_DEBUG_ROOT("PetscGAMGSolver::SetupNearNullSpace(...) - Setting up near null space");
     mfem::ParFiniteElementSpace* fespace_coords = fespace_;
 
-    sdim = fespace_->GetParMesh()->SpaceDimension();
     if (vdim != sdim || fespace_->GetOrdering() != mfem::Ordering::byVDIM) {
       SLIC_WARNING_ROOT(
           "PetscGAMGSolver::SetupNearNullSpace(...) - Wrong displacement finite element space ordering - should be "
