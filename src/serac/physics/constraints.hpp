@@ -7,7 +7,7 @@
 /**
  * @file constraints.hpp
  *
- * @brief Specifies interface for evaluating vector of constriants from fields and their field gradients
+ * @brief Specifies interface for evaluating distributed constriants from fields and their field gradients
  */
 
 #pragma once
@@ -24,7 +24,6 @@ class HypreParMatrix;
 namespace serac {
 
 class FiniteElementState;
-class FiniteElementDual;
 
 /// @brief Abstract constraint class
 class Constraint {
