@@ -58,7 +58,7 @@ class DataStore {
   void back_prop();
 
   /// @brief clear all but persistent state, keeping the graph
-  void reset();
+  virtual void reset();
 
   Int num_active_states() const;
   Int num_dual_states() const;
@@ -105,7 +105,7 @@ class DataStore {
   std::vector<EvalT> evals_;
   std::vector<VjpT> vjps_;
   mutable std::vector<bool> active_;
-  mutable std::vector<Int> activeCount_;
+  mutable std::vector<Int> usageCount_;
 
   std::shared_ptr<std::any>& any_primal(Int step);
 
@@ -113,7 +113,16 @@ class DataStore {
   const T& get_primal(Int step)
   {
     auto tptr = std::any_cast<T>(any_primal(step).get());
-    gretl_assert(tptr);
+    if (stillConstructingGraph) {
+      gretl_assert_msg(tptr, "bad step " + std::to_string(step));
+    } else {
+      if (!tptr) {
+        gretl::print("get primal at", step);
+        fetch_state_data(step);
+      }
+      tptr = std::any_cast<T>(any_primal(step).get());
+      gretl_assert_msg(tptr, "bad step " + std::to_string(step));
+    }
     return *tptr;
   }
 
@@ -122,10 +131,9 @@ class DataStore {
   {
     auto tptr = std::any_cast<T>(any_primal(step).get());
     if (!tptr) {
-      gretl_assert(!isGoingForward);
-      gretl_assert(activeCount_[step]==0);
+      gretl_assert(!stillConstructingGraph);
+      gretl_assert(usageCount_[step]==1);
       any_primal(step) = std::make_shared<std::any>(t);
-      activeCount_[step] = 1;
       return;
     }
     gretl_assert(tptr);
@@ -159,11 +167,13 @@ class DataStore {
 
   bool is_persistent(Int step) const;
 
+  virtual void clear_usage(Int step) {}
+
   /// step counter
   Int current_step_;
 
   /// is going forward
-  bool isGoingForward = true;
+  bool stillConstructingGraph = true;
 };
 
 class DynamicDataStore : public DataStore {
@@ -190,6 +200,11 @@ class DynamicDataStore : public DataStore {
 
   /// @overload
   virtual void remove_things(Int stepIndex) override;
+
+  /// @overload
+  virtual void clear_usage(Int step) override;
+
+  bool state_in_use(Int step);
 
   std::vector<Int> lastStepUsed_;
   std::vector< std::vector<Int> > passthroughs_;

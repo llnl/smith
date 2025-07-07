@@ -33,7 +33,7 @@ TEST(Graph, NonlinearGraphGradients)
   std::vector<double> dataB = {1.7, 1.1};
   std::vector<double> dataZ = {-0.7, 3.1};
 
-  gretl::DataStore dataStore(3);
+  gretl::DynamicDataStore dataStore(3);
 
   auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);
@@ -83,15 +83,18 @@ TEST(Graph, LinearGraphGradients)
 {
   std::vector<double> dataA = {1.2, 3.2};
 
-  gretl::DataStore dataStore(6);
+  gretl::DynamicDataStore dataStore(6);
 
   auto initial = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto a = gretl::copy(initial);
-
+  printf("a\n");
   int N = 3;
   for (int i = 0; i < N; ++i) {
+    printf("b\n");
     a = gretl::testing_update(a);
   }
+
+  printf("a\n");
 
   a.set_dual(std::vector<double>{1.0, 0.0});
   // set_as_objective(a);
@@ -140,13 +143,10 @@ TEST(Graph, LargeNonlinearGraphGradients)
   gretl::set_as_objective(qoi);
 
   dataStore.print();
-  print("num active = ", dataStore.num_active_states());
-  print("num duals = ", dataStore.num_dual_states());
 
   dataStore.back_prop();
 
-  print("num active = ", dataStore.num_active_states());
-  print("num duals = ", dataStore.num_dual_states());
+  dataStore.print();
 
   double constexpr eps = 1e-7;
   gretl::check_array_gradients(qoi, {a, b, c}, {eps, eps, eps}, {800 * eps, 100 * eps, 100 * eps});
@@ -159,24 +159,4 @@ auto compute_f(const gretl::State<std::vector<double>>& c, const gretl::State<st
   d = d + b;
   d = d + b;
   return d + b;
-}
-
-TEST(Graph, Explore)
-{
-  std::vector<double> dataA = {1.3, 3.5};
-  std::vector<double> dataB = {1.7, 1.1};
-
-  gretl::DynamicDataStore dataStore(2);
-
-  auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
-  auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);
-  auto c = a + b;
-  auto f = compute_f(c, a);
-  f = compute_f(f, a);
-  auto g = c + f;
-
-  auto h = gretl::inner_product(g, g);
-  gretl::set_as_objective(h);
-
-  dataStore.back_prop();
 }

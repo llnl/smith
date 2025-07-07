@@ -9,11 +9,10 @@ DataStore::DataStore(size_t /*maxStates*/) { current_step_ = 0; }
 
 void DataStore::back_prop()
 {
-  isGoingForward = false;
+  stillConstructingGraph = false;
   for (size_t n = states_.size(); n > 0; --n) {
     reverse_state();
   }
-  isGoingForward = true;
 }
 
 template <typename Func>
@@ -28,17 +27,44 @@ void for_each_active_upstream(const DataStore* ds, size_t step, const Func& func
   for (Int upstreamStepPassingThrough : dataStore->passthroughs_[step]) {
     func(upstreamStepPassingThrough);
   }
-} 
+}
+
+// MRT, but as a member function
+void DynamicDataStore::clear_usage(Int step) {
+  gretl::print("clearing usage for step", step);
+  duals_[step] = nullptr;
+  states_[step]->primal_ = nullptr;
+  active_[step] = false;
+  usageCount_[step] = 0;
+  for_each_active_upstream(this, step, [&](Int u) {
+    usageCount_[u]--;
+    if (usageCount_[u]==0) {
+      states_[u]->primal_ = nullptr;
+    }
+  });
+}
+
+
+bool DynamicDataStore::state_in_use(Int step) {
+  return states_[step]->primal_ && usageCount_[step];
+}
 
 void DataStore::reset()
 {
   // MRT, will need a virtual to clear out the activeCount
   for (size_t n = states_.size(); n > 0; --n) {
-    if (upstreams_[n - 1].size()) {
-      states_[n - 1]->primal_ = nullptr;
+    if (!is_persistent(n-1)) {
+      clear_usage(n-1);
+    } else {
+      duals_[n-1] = nullptr;
     }
-    duals_[n - 1] = nullptr;
+    // clear_usage(n-1);
+    //if (upstreams_[n - 1].size()) {
+    //  states_[n - 1]->primal_ = nullptr;
+    //}
+    //duals_[n - 1] = nullptr;
   }
+  
   current_step_ = 0;
 }
 
@@ -48,10 +74,9 @@ void DataStore::reverse_state()
 {
   --current_step_;
   gretl::print("reverse from step", current_step_);
-  if (upstreams_[current_step_].size()) {
+  if (!is_persistent(current_step_)) {
     vjp(*states_[current_step_]);
-    duals_[current_step_] = nullptr;
-    states_[current_step_]->primal_ = nullptr;
+    clear_usage(current_step_);
   }
 }
 
@@ -70,15 +95,7 @@ void DynamicDataStore::reverse_state()
   if (upstreams_[current_step_].size()) {
     fetch_state_data(current_step_-1);
     vjp(*states_[current_step_]);
-    duals_[current_step_] = nullptr;
-    states_[current_step_]->primal_ = nullptr;
-    activeCount_[current_step_] = 0;
-    for (auto pass : passthroughs_[current_step_]) {
-      activeCount_[pass]--;
-      if (activeCount_[pass]==0) {
-        states_[pass]->primal_ = nullptr;
-      }
-    }
+    clear_usage(current_step_);
     checkpointManager.erase_step(current_step_-1);
   }
 }
@@ -88,7 +105,7 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
   /*
   states_.emplace_back(std::move(newState));
   duals_.emplace_back(nullptr);
-  activeCount_.push_back(1);
+  usageCount_.push_back(1);
   active_.push_back(true);
 
   std::vector<Int> upstreamSteps;
@@ -100,7 +117,7 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
     if (!is_persistent(upstreamStep)) {
       if (!states_[upstreamStep]->primal_) {
         gretl::print("at step ", current_step_, "resetting ", upstreamStep);
-        activeCount_[upstreamStep]++;
+        usageCount_[upstreamStep]++;
         states_[upstreamStep]->primal_ = u.primal_;
       } else {
         gretl_assert(states_[upstreamStep]->primal_ == u.primal_);
@@ -192,7 +209,7 @@ void DynamicDataStore::add_state(std::unique_ptr<StateBase> newState, const std:
 
   states_.emplace_back(std::move(newState));
   duals_.emplace_back(nullptr);
-  activeCount_.push_back(1);
+  usageCount_.push_back(1);
   active_.push_back(true);
   lastStepUsed_.push_back(step);
   passthroughs_.push_back({});
@@ -209,18 +226,20 @@ void DynamicDataStore::add_state(std::unique_ptr<StateBase> newState, const std:
   for (auto& u : upstreams) {
     Int upstreamStep = u.step_;
     upstreamSteps.push_back(upstreamStep);
-    if (!is_persistent(upstreamStep)) {
+  }
+  upstreams_.emplace_back(*this, upstreamSteps);
 
+  for (auto& u : upstreams) {
+    Int upstreamStep = u.step_;
+    if (!is_persistent(upstreamStep)) {
       // we are know using this upstream again, add to count of uses
-      activeCount_[upstreamStep]++;
+      usageCount_[upstreamStep]++;
 
       // check if step fully deleted, 
       if (!states_[upstreamStep]->primal_) {
-        gretl_assert(activeCount_[upstreamStep]==1);
+        gretl_assert(usageCount_[upstreamStep]==1);
         gretl::print("at step ", current_step_, "resetting ", upstreamStep);
         resetting = true;
-        //print();
-        // gretl_assert(check_validity());
         states_[upstreamStep]->primal_ = u.primal_;
       } else {
         gretl_assert(states_[upstreamStep]->primal_ == u.primal_);
@@ -230,16 +249,15 @@ void DynamicDataStore::add_state(std::unique_ptr<StateBase> newState, const std:
       Int lastLastStepUsed = std::max(lastStepUsed_[u.step_], u.step_+1);
       Int upstreamStepPassingThrough = u.step_;
       for (Int stepBeingPassedThrough = lastLastStepUsed; stepBeingPassedThrough < step; ++stepBeingPassedThrough) {
+        gretl::print("passing", upstreamStepPassingThrough, "through", stepBeingPassedThrough);
         passthroughs_[stepBeingPassedThrough].push_back(upstreamStepPassingThrough);
-        if (active_[upstreamStepPassingThrough]) {
-          activeCount_[upstreamStepPassingThrough]++;
+        if (active_[stepBeingPassedThrough]) {
+          usageCount_[upstreamStepPassingThrough]++;
         }
       }
       lastStepUsed_[upstreamStepPassingThrough] = step;
     }
   }
-
-  upstreams_.emplace_back(*this, upstreamSteps);
 
   evals_.emplace_back([=](const UpstreamStates&, DownstreamState&) {
     std::cout << "eval not implemented for step " << current_step_ << std::endl;
@@ -251,10 +269,7 @@ void DynamicDataStore::add_state(std::unique_ptr<StateBase> newState, const std:
     gretl_assert(false);
   });
   
-  //if (resetting) {
-  print();
   gretl_assert(check_validity());
-  //}
 
   ++current_step_;
   gretl_assert(current_step_ == states_.size());
@@ -263,7 +278,7 @@ void DynamicDataStore::add_state(std::unique_ptr<StateBase> newState, const std:
   gretl_assert(current_step_ == passthroughs_.size());
 
   gretl_assert(current_step_ == active_.size());
-  gretl_assert(current_step_ == activeCount_.size());
+  gretl_assert(current_step_ == usageCount_.size());
   gretl_assert(current_step_ == vjps_.size());
   gretl_assert(current_step_ == lastStepUsed_.size());
 }
@@ -271,55 +286,66 @@ void DynamicDataStore::add_state(std::unique_ptr<StateBase> newState, const std:
 /// @overload
 void DynamicDataStore::fetch_state_data(Int stepIndex) 
 {
-  gretl_assert(!isGoingForward);
-
-  printf("fetching, deal with later\n");
-  exit(1);
+  gretl_assert(!stillConstructingGraph);
 
   Int lastCheckpoint = static_cast<Int>(checkpointManager.last_checkpoint_step());
-
   gretl_assert(lastCheckpoint <= stepIndex);
 
-  gretl_assert(states_[lastCheckpoint]->primal_);
+  std::cout << "last cp = " << lastCheckpoint << std::endl;
+  gretl_assert(state_in_use(lastCheckpoint));
   for (auto& passThroughState : passthroughs_[lastCheckpoint]) {
-    gretl_assert(activeCount_[passThroughState]);
+    gretl_assert(state_in_use(passThroughState));
   }
 
   for (Int i=lastCheckpoint; i < stepIndex; ++i) {
-    gretl::print("at step", current_step_, ", trying to eval", i+1);
-    print();
-    for (auto& passThroughState : passthroughs_[i+1]) {
-      gretl_assert(activeCount_[passThroughState]);
-      activeCount_[passThroughState]++;
+    Int iEval = i+1;
+    for_each_active_upstream(this, iEval, [&](Int u) {
+      gretl_assert(state_in_use(u));
+      usageCount_[u]++;
+    });
+
+    gretl::print("about to reeval", iEval);
+    gretl_assert(!active_[iEval]);
+    active_[iEval] = true;
+    usageCount_[iEval]++;
+
+    Int lastStepToUpdate = std::min(lastStepUsed_[iEval], stepIndex);
+    for (Int j=i+2; j <= lastStepToUpdate; ++j) {
+      if (active_[j]) {
+        usageCount_[iEval]++;
+      }
     }
-    states_[i+1]->evaluate_forward();
+    // MRT, future optimization... don't reeval if value, upstreams, etcs. are still allocated.
+    states_[iEval]->evaluate_forward();
+    
+    gretl_assert(check_validity());
   }
 }
 
 
 /// @overload
-void DynamicDataStore::remove_things(Int step) {
+void DynamicDataStore::remove_things(Int step) 
+{
+  if (step==13) gretl::print("13 usage r1 = ", usageCount_[step]);
   if (!is_persistent(step)) {
     size_t stepToErase = checkpointManager.add_checkpoint_and_get_index_to_remove(step);
     if (checkpointManager.valid_checkpoint_index(stepToErase)) {
       gretl::print("removing step", stepToErase, "at step", step);
-      gretl_assert(activeCount_[stepToErase]);
-      activeCount_[stepToErase]--;
+      gretl_assert(usageCount_[stepToErase]);
+      usageCount_[stepToErase]--;
       active_[stepToErase] = false;
-      if (activeCount_[stepToErase]==0) {
+      if (usageCount_[stepToErase]==0) {
         states_[stepToErase]->primal_ = nullptr;
       }
       for_each_active_upstream(this, stepToErase,[&](Int upstream) {
-        gretl_assert(activeCount_[upstream]);
-        activeCount_[upstream]--;
-        if (activeCount_[upstream]==0) {
+        gretl_assert(usageCount_[upstream]);
+        usageCount_[upstream]--;
+        if (usageCount_[upstream]==0) {
           states_[upstream]->primal_ = nullptr;
         }
       });
     }
   }
-  gretl::print("in remove");
-  print();
   if (!check_validity()) {
     gretl::print("issue in the remove");
     gretl_assert(check_validity());
@@ -333,7 +359,7 @@ bool DynamicDataStore::check_validity() const {
   bool valid = true;
   // first check that our version of the saved states matches the cp manager
   // we are allowed to be saving an extra step here at the end
-  for (size_t i=0; i < states_.size()-1; ++i) {
+  for (size_t i=0; i < current_step_; ++i) {
     if (active_[i]) {
       bool cp_has_i = false;
       for (auto& cp : checkpointManager.cps) {
@@ -363,8 +389,12 @@ bool DynamicDataStore::check_validity() const {
       gretl::print("step", i, "has an active count, but is deallocated");
       valid = false;
     }
-    if (my_active_count[i] != activeCount_[i]) {
-      gretl::print("step", i, "active count =", activeCount_[i], " my c=", my_active_count[i]);
+    if (my_active_count[i] == 0 && states_[i]->primal_) {
+      gretl::print("step", i, "has a no active count, but is still allocated");
+      valid = false;
+    }
+    if (my_active_count[i] != usageCount_[i]) {
+      gretl::print("step", i, "active count =", usageCount_[i], " my c=", my_active_count[i]);
       valid = false;
     }
   }
@@ -375,7 +405,7 @@ bool DynamicDataStore::check_validity() const {
 /// @overload
 void DynamicDataStore::print() const {
   for (Int i=0; i < states_.size(); ++i) {
-    std::cout << i << ", act: " << active_[i] << ":" << activeCount_[i] << ":" << (states_[i]->primal_!=nullptr) << ", ups: ";
+    std::cout << i << ", act: " << active_[i] << ":" << usageCount_[i] << ":" << (states_[i]->primal_!=nullptr) << ", ups: ";
     for (auto& v : upstreams_[i].steps_) {
       std::cout << v << " ";
     }

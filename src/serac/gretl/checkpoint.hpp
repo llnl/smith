@@ -8,8 +8,13 @@
 #include <limits>
 
 #define gretl_assert(x) \
-  assert(x);            \
-  if (!(x)) throw std::runtime_error{"Error on line " + std::to_string(__LINE__) + " in file " + std::string(__FILE__)};
+  if (!(x)) throw std::runtime_error{"Error on line " + std::to_string(__LINE__) + " in file " + std::string(__FILE__)}; \
+  assert(x);
+
+
+#define gretl_assert_msg(x,msg_name_) \
+  if (!(x)) throw std::runtime_error{"Error on line " + std::to_string(__LINE__) + " in file " + std::string(__FILE__) + std::string(", ") + std::string(msg_name_)}; \
+  assert(x);
 
 namespace gretl {
 
