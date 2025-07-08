@@ -116,6 +116,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto g = a * b;
   auto h = a + 3 * c;
   auto f = c * g;
+  auto end = f + g;
 
   int Nj = 11;  // 7;
   int Ni = 30;  // 13;
@@ -131,7 +132,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
     f = f + g;
   }
 
-  auto qoi = gretl::inner_product(a, f);
+  auto qoi = gretl::inner_product(end, f);
 
   gretl::set_as_objective(qoi);
 

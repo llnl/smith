@@ -219,32 +219,21 @@ void DataStore::fetch_state_data(Int stepIndex)
     active_[iEval] = true;
     usageCount_[iEval]++;
 
-    // MRT, how do I know this is correct?  Think this through before commit.  Even when I change these numbers... it
+    // MRT, how do I know this is correct?  Think this through before commit.  Even when I change these numbers... its
     // hard to get tests to fail.
     Int lastStepToUpdate = std::min(lastStepUsed_[iEval], stepIndex);
 
     std::set<size_t> activeCps = checkpointManager.active_steps();
 
     auto nextActiveStepIter = activeCps.lower_bound(iEval + 1);
-    while (nextActiveStepIter != activeCps.end() && *nextActiveStepIter <= lastStepToUpdate) {
+    while (nextActiveStepIter != activeCps.end()) {//} && *nextActiveStepIter <= lastStepToUpdate) {
       usageCount_[*nextActiveStepIter]++;
       ++nextActiveStepIter;
     }
 
-    // std::cout << "first checkpoint greter than or equal to 2 = " << *nextActiveStepIter << *(--nextActiveStepIter) <<
-    // std::endl; exit(1);
-    // Checkpoint lowerCheckpoint{.level=0, .step=};
-    // auto nextActiveStepIter = checkpointManager.cps.lower_bound(Checkpoint({.iEval + 1);
-
-    // for (Int j = i + 2; j <= lastStepToUpdate; ++j) {
-    //   if (active_[j]) {
-    //     usageCount_[iEval]++;
-    //   }
-    // }
-
-    // MRT, future optimization... don't reeval if value, upstreams, etcs. are still allocated.
+    // MRT, future optimization... 
     // things to do:
-    // do not save passthroughts, just loop active passthroughts using graph
+    // do not save passthroughts, just loop active passthroughts using graph? 
     // abstract checkpoint manager to also have a checkpoint everything version
     // tests that we can call multiple backprops back to back (or at least with a perturbed forward in between)
     if (states_[iEval]->primal_) {
