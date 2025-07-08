@@ -32,3 +32,6 @@ add_subdirectory(uniaxial)
 
 # Add eos_testing for Smith Project
 add_subdirectory(eos_testing)
+
+# Add eos_testing for Smith Project
+add_subdirectory(thermoMechEx)
