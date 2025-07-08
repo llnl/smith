@@ -87,17 +87,12 @@ TEST(Graph, LinearGraphGradients)
 
   auto initial = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto a = gretl::copy(initial);
-  printf("a\n");
   int N = 3;
   for (int i = 0; i < N; ++i) {
-    printf("b\n");
     a = gretl::testing_update(a);
   }
 
-  printf("a\n");
-
   a.set_dual(std::vector<double>{1.0, 0.0});
-  // set_as_objective(a);
   dataStore.back_prop();
 
   EXPECT_EQ(initial.get()[0], dataA[0]);
@@ -112,7 +107,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
   std::vector<double> dataB = {0.6, 0.87};
   std::vector<double> dataC = {-0.8, 0.32};
 
-  gretl::DataStore dataStore(4);
+  gretl::DataStore dataStore(11);
 
   auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);
@@ -122,8 +117,8 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto h = a + 3 * c;
   auto f = c * g;
 
-  int Nj = 3;  // 7;
-  int Ni = 4;  // 13;
+  int Nj = 11;  // 7;
+  int Ni = 30;  // 13;
 
   for (int j = 0; j < Nj; ++j) {
     for (int i = 0; i < Ni; ++i) {

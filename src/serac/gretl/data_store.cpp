@@ -192,7 +192,6 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
   gretl_assert(current_step_ == duals_.size());
   gretl_assert(current_step_ == upstreams_.size());
   gretl_assert(current_step_ == passthroughs_.size());
-
   gretl_assert(current_step_ == active_.size());
   gretl_assert(current_step_ == usageCount_.size());
   gretl_assert(current_step_ == vjps_.size());
@@ -204,12 +203,10 @@ void DataStore::fetch_state_data(Int stepIndex)
   gretl_assert(!stillConstructingGraph);
 
   Int lastCheckpoint = static_cast<Int>(checkpointManager.last_checkpoint_step());
-  gretl_assert(lastCheckpoint <= stepIndex);
 
+  gretl_assert(lastCheckpoint <= stepIndex);
   gretl_assert(state_in_use(lastCheckpoint));
-  for (auto& passThroughState : passthroughs_[lastCheckpoint]) {
-    gretl_assert(state_in_use(passThroughState));
-  }
+  for_each_active_upstream(this, lastCheckpoint, [&](Int upstream) { gretl_assert(state_in_use(upstream)); });
 
   for (Int i = lastCheckpoint; i < stepIndex; ++i) {
     Int iEval = i + 1;
@@ -222,23 +219,44 @@ void DataStore::fetch_state_data(Int stepIndex)
     active_[iEval] = true;
     usageCount_[iEval]++;
 
+    // MRT, how do I know this is correct?  Think this through before commit.  Even when I change these numbers... it
+    // hard to get tests to fail.
     Int lastStepToUpdate = std::min(lastStepUsed_[iEval], stepIndex);
-    for (Int j = i + 2; j <= lastStepToUpdate; ++j) {
-      if (active_[j]) {
-        usageCount_[iEval]++;
-      }
+
+    std::set<size_t> activeCps = checkpointManager.active_steps();
+
+    auto nextActiveStepIter = activeCps.lower_bound(iEval + 1);
+    while (nextActiveStepIter != activeCps.end() && *nextActiveStepIter <= lastStepToUpdate) {
+      usageCount_[*nextActiveStepIter]++;
+      ++nextActiveStepIter;
     }
+
+    // std::cout << "first checkpoint greter than or equal to 2 = " << *nextActiveStepIter << *(--nextActiveStepIter) <<
+    // std::endl; exit(1);
+    // Checkpoint lowerCheckpoint{.level=0, .step=};
+    // auto nextActiveStepIter = checkpointManager.cps.lower_bound(Checkpoint({.iEval + 1);
+
+    // for (Int j = i + 2; j <= lastStepToUpdate; ++j) {
+    //   if (active_[j]) {
+    //     usageCount_[iEval]++;
+    //   }
+    // }
+
     // MRT, future optimization... don't reeval if value, upstreams, etcs. are still allocated.
     // things to do:
     // do not save passthroughts, just loop active passthroughts using graph
     // abstract checkpoint manager to also have a checkpoint everything version
     // tests that we can call multiple backprops back to back (or at least with a perturbed forward in between)
-    states_[iEval]->evaluate_forward();
+    if (states_[iEval]->primal_) {
+      for_each_active_upstream(this, iEval, [&](Int upstream) { gretl_assert(state_in_use(upstream)); });
+      remove_things(iEval);
+    } else {
+      states_[iEval]->evaluate_forward();
+    }
 
     gretl_assert(check_validity());
   }
 }
-
 void DataStore::remove_things(Int step)
 {
   if (!is_persistent(step)) {

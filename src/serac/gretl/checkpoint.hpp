@@ -153,6 +153,17 @@ struct CheckpointManager {
     }
   }
 
+  std::set<size_t> active_steps() const
+  {
+    std::set<size_t> steps;
+    for (const auto& cp : cps) {
+      if (cp.level < cp.infinity()) {
+        steps.insert(cp.step);
+      }
+    }
+    return steps;
+  }
+
   size_t maxNumStates = 20;
   std::set<Checkpoint> cps;
 };
