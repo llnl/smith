@@ -24,9 +24,7 @@ inline double rand_in_range(double x0, double xf)
 void check_array_gradients(gretl::State<double>& objectiveState, std::vector<gretl::VectorState> inputStates,
                            std::vector<double> eps, std::vector<double> tol)
 {
-  print("refetching");
   double objectiveBase = objectiveState.get();
-  print("refetched");
   srand(5);
 
   size_t num_inputs = inputStates.size();
@@ -63,9 +61,7 @@ void check_array_gradients(gretl::State<double>& objectiveState, std::vector<gre
     auto s0 = inputState.get();
     objectiveState.data_store().reset();
     inputState.set(perturbedInput);
-    print("about to get for input", iInput);
     double objectivePlus = objectiveState.get();
-    print("gotten for input", iInput);
     EXPECT_NEAR(directionalDerivs[iInput], (objectivePlus - objectiveBase) / eps[iInput], tol[iInput]);
     inputState.set(s0);
   }

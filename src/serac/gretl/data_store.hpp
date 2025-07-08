@@ -103,7 +103,6 @@ class DataStore {
       gretl_assert_msg(tptr, "bad step " + std::to_string(step));
     } else {
       if (!tptr) {
-        gretl::print("get primal at", step);
         fetch_state_data(step);
       }
       tptr = std::any_cast<T>(any_primal(step).get());

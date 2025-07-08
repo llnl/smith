@@ -28,10 +28,8 @@ void for_each_active_upstream(const DataStore* dataStore, size_t step, const Fun
   }
 }
 
-// MRT, but as a member function
 void DataStore::clear_usage(Int step)
 {
-  gretl::print("clearing usage for step", step);
   duals_[step] = nullptr;
   states_[step]->primal_ = nullptr;
   active_[step] = false;
@@ -48,12 +46,12 @@ bool DataStore::state_in_use(Int step) const { return states_[step]->primal_ && 
 
 void DataStore::reset()
 {
-  // MRT, will need a virtual to clear out the activeCount
   for (size_t n = states_.size(); n > 0; --n) {
-    if (!is_persistent(n - 1)) {
-      clear_usage(n - 1);
+    Int stepToClear = static_cast<Int>(n - 1);
+    if (!is_persistent(stepToClear)) {
+      clear_usage(stepToClear);
     } else {
-      duals_[n - 1] = nullptr;
+      duals_[stepToClear] = nullptr;
     }
   }
 
@@ -73,7 +71,6 @@ void DataStore::reverse_state()
     checkpointManager.erase_step(current_step_ - 1);
   }
   --current_step_;
-  gretl::print("reverse from step", current_step_);
   if (upstreams_[current_step_].size()) {
     fetch_state_data(current_step_ - 1);
     vjp(*states_[current_step_]);
@@ -142,8 +139,6 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
     checkpointManager.add_checkpoint_and_get_index_to_remove(step, persistent);
   }
 
-  bool resetting = false;
-
   std::vector<Int> upstreamSteps;
   upstreamSteps.reserve(upstreams.size());
   for (auto& u : upstreams) {
@@ -161,8 +156,6 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
       // check if step fully deleted,
       if (!states_[upstreamStep]->primal_) {
         gretl_assert(usageCount_[upstreamStep] == 1);
-        gretl::print("at step ", current_step_, "resetting ", upstreamStep);
-        resetting = true;
         states_[upstreamStep]->primal_ = u.primal_;
       } else {
         gretl_assert(states_[upstreamStep]->primal_ == u.primal_);
@@ -173,7 +166,6 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
       Int lastLastStepUsed = std::max(lastStepUsed_[u.step_], u.step_ + 1);
       Int upstreamStepPassingThrough = u.step_;
       for (Int stepBeingPassedThrough = lastLastStepUsed; stepBeingPassedThrough < step; ++stepBeingPassedThrough) {
-        gretl::print("passing", upstreamStepPassingThrough, "through", stepBeingPassedThrough);
         passthroughs_[stepBeingPassedThrough].push_back(upstreamStepPassingThrough);
         if (active_[stepBeingPassedThrough]) {
           usageCount_[upstreamStepPassingThrough]++;
@@ -214,7 +206,6 @@ void DataStore::fetch_state_data(Int stepIndex)
   Int lastCheckpoint = static_cast<Int>(checkpointManager.last_checkpoint_step());
   gretl_assert(lastCheckpoint <= stepIndex);
 
-  std::cout << "last cp = " << lastCheckpoint << std::endl;
   gretl_assert(state_in_use(lastCheckpoint));
   for (auto& passThroughState : passthroughs_[lastCheckpoint]) {
     gretl_assert(state_in_use(passThroughState));
@@ -227,7 +218,6 @@ void DataStore::fetch_state_data(Int stepIndex)
       usageCount_[u]++;
     });
 
-    gretl::print("about to reeval", iEval);
     gretl_assert(!active_[iEval]);
     active_[iEval] = true;
     usageCount_[iEval]++;
@@ -239,6 +229,10 @@ void DataStore::fetch_state_data(Int stepIndex)
       }
     }
     // MRT, future optimization... don't reeval if value, upstreams, etcs. are still allocated.
+    // things to do:
+    // do not save passthroughts, just loop active passthroughts using graph
+    // abstract checkpoint manager to also have a checkpoint everything version
+    // tests that we can call multiple backprops back to back (or at least with a perturbed forward in between)
     states_[iEval]->evaluate_forward();
 
     gretl_assert(check_validity());
@@ -250,7 +244,6 @@ void DataStore::remove_things(Int step)
   if (!is_persistent(step)) {
     size_t stepToErase = checkpointManager.add_checkpoint_and_get_index_to_remove(step);
     if (checkpointManager.valid_checkpoint_index(stepToErase)) {
-      gretl::print("removing step", stepToErase, "at step", step);
       gretl_assert(usageCount_[stepToErase]);
       usageCount_[stepToErase]--;
       active_[stepToErase] = false;
@@ -267,7 +260,6 @@ void DataStore::remove_things(Int step)
     }
   }
   if (!check_validity()) {
-    gretl::print("issue in the remove");
     gretl_assert(check_validity());
   }
 }
@@ -293,7 +285,7 @@ bool DataStore::check_validity() const
     }
   }
 
-  std::vector<int> my_active_count(states_.size());
+  std::vector<Int> my_active_count(states_.size());
   for (size_t i = 0; i < states_.size(); ++i) {
     if (active_[i]) {
       my_active_count[i]++;

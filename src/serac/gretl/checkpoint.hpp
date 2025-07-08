@@ -40,7 +40,6 @@ inline bool operator<(const Checkpoint& a, const Checkpoint& b)
 
 inline std::ostream& operator<<(std::ostream& stream, const Checkpoint& p);
 
-
 struct CheckpointManager {
   static constexpr size_t invalidCheckpointIndex = std::numeric_limits<size_t>::max();
 
@@ -157,7 +156,6 @@ struct CheckpointManager {
   size_t maxNumStates = 20;
   std::set<Checkpoint> cps;
 };
-
 
 template <typename T>
 T advance_and_reverse_steps(size_t numSteps, size_t storageSize, T x, std::function<T(size_t n, const T&)> update_func,

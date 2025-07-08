@@ -112,7 +112,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
   std::vector<double> dataB = {0.6, 0.87};
   std::vector<double> dataC = {-0.8, 0.32};
 
-  gretl::DataStore dataStore(3);
+  gretl::DataStore dataStore(4);
 
   auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);
@@ -122,8 +122,8 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto h = a + 3 * c;
   auto f = c * g;
 
-  int Nj = 1;  // 7;
-  int Ni = 2;  // 13;
+  int Nj = 3;  // 7;
+  int Ni = 4;  // 13;
 
   for (int j = 0; j < Nj; ++j) {
     for (int i = 0; i < Ni; ++i) {
@@ -138,15 +138,11 @@ TEST(Graph, LargeNonlinearGraphGradients)
 
   auto qoi = gretl::inner_product(a, f);
 
-  printf("gone forward\n");
-
   gretl::set_as_objective(qoi);
 
   dataStore.print();
 
   dataStore.back_prop();
-
-  dataStore.print();
 
   double constexpr eps = 1e-7;
   gretl::check_array_gradients(qoi, {a, b, c}, {eps, eps, eps}, {800 * eps, 100 * eps, 100 * eps});
