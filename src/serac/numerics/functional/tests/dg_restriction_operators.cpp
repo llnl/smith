@@ -353,11 +353,6 @@ void parametrized_test(int permutation)
 
   using space = L2<polynomial_order>;
 
-  // auto pmesh = mesh::refineAndDistribute(std::move(mesh), 0);
-  // Domain pinterior_faces = InteriorFaces(*pmesh);
-
-  // auto L2_pfes = mfem::ParFiniteElementSpace(pmesh.get(), L2_fec.get());
-
   Functional<double(space)> r({L2_fes.get()});
 
   r.AddInteriorFaceIntegral(

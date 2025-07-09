@@ -77,7 +77,7 @@ void L2_index_test(std::string meshfile)
   auto value = residual(t, U);
   EXPECT_NEAR(0., value.Norml2(), 1.e-12);
 }
-// TEST(index, L2_two_quad) { L2_index_test<2, 1>("./TwoQuad.mesh"); }
+
 TEST(index, L2_test_tris_and_quads_linear)
 {
   L2_index_test<2, 1>(SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh");

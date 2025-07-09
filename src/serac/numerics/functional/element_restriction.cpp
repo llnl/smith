@@ -519,11 +519,6 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
         // 3. get the dofs for the entire element
         mfem::Array<int> elem_dof_ids;
         fes->GetElementDofs(elem, elem_dof_ids);
-        // // Debug hanyu
-        // mpi::out << " Shared face = " << info.IsShared() << " Face id = " << f << " Elem id = " << elem << std::endl
-        //          << i << " " << info.element[0].local_face_id << " " << info.element[1].local_face_id << std::endl
-        //          << orientations[i] << " " << info.element[0].orientation << " " << info.element[1].orientation <<
-        //          std::endl;
 
         mfem::Geometry::Type elem_geom = mesh->GetElementGeometry(elem);
 
@@ -711,9 +706,6 @@ void ElementRestriction::ScatterAdd(const mfem::Vector& E_vector, mfem::Vector& 
       for (uint64_t j = 0; j < nodes_per_elem; j++) {
         uint64_t E_id = (i * components + c) * nodes_per_elem + j;
         uint64_t L_id = GetVDof(dof_info(i, j), c).index();
-        // // debug
-        // mpi::out << "elem #" << i << " " << "E_id = " << E_id << " " << dof_info(i, j).index()
-        //          << " " << "L_id = " << L_id << std::endl;
         L_vector[int(L_id)] += E_vector[int(E_id)];
       }
     }
