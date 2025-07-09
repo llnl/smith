@@ -54,7 +54,7 @@ struct NeoHookeanWithFieldDensityDfem {
   template <typename Density>
   SERAC_HOST_DEVICE auto density(const Density& density) const
   {
-    return get<VALUE>(density);
+    return density;
   }
 
   double K;  ///< bulk modulus
@@ -141,9 +141,11 @@ struct ResidualFixture : public testing::Test {
     MPI_Barrier(MPI_COMM_WORLD);
     serac::StateManager::initialize(datastore, "solid_dynamics");
 
-    double length = 1.0;
-    double width = 1.0;
-    mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(1, 1, element_shape, true, length, width),
+    constexpr double length = 1.0;
+    constexpr double width = 1.0;
+    constexpr int nel_x = 2;
+    constexpr int nel_y = 1;
+    mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(nel_x, nel_y, element_shape, true, length, width),
                                          "this_mesh_name", 0, 0);
     // shift one of the x coordinates so the mesh is not affine
     auto& coords = *mesh->mfemParMesh().GetNodes();
@@ -187,7 +189,7 @@ struct ResidualFixture : public testing::Test {
     solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
     // solid_mechanics_residual->setRateMaterial(serac::DependsOn<>{}, mesh->entireBodyName(), rate_mat);
 
-    auto solid_dfem_residual = std::make_shared<serac::SolidDfemResidual<dim, mfem::future::Value<4>>>(
+    auto solid_dfem_residual = std::make_shared<serac::SolidDfemResidual<false, false>>(
         physics_name, mesh, states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
     SolidMaterialDfem dfem_mat;
     dfem_mat.K = mat.K;
@@ -201,7 +203,8 @@ struct ResidualFixture : public testing::Test {
     const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
     mfem::Array<int> solid_attrib({1});
 
-    solid_dfem_residual->setMaterial(serac::DependsOn<0, 1, 2, 3, 4>{}, solid_attrib, dfem_mat, displacement_ir);
+    solid_dfem_residual->setMaterial<SolidMaterialDfem, mfem::future::Value<4>>(solid_attrib, dfem_mat,
+                                                                                displacement_ir);
 
     // // apply traction boundary conditions
     // std::string surface_name = "side";
@@ -219,12 +222,17 @@ struct ResidualFixture : public testing::Test {
 
     state_duals[0] = 1.0;  // used to test that vjp acts via +=, add initial value to shape displacement dual
 
+    // states[SolidResidualT::DISPLACEMENT] = 0.0;
     states[SolidResidualT::DISPLACEMENT].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = 0.1 * x;
       return u;
     });
     states[SolidResidualT::VELOCITY] = 0.0;
     states[SolidResidualT::ACCELERATION] = 0.0;
+    // states[SolidResidualT::ACCELERATION].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    //   auto u = -0.01 * x;
+    //   return u;
+    // });
     states[SolidResidualT::SHAPE_DISPLACEMENT] = 0.0;
     params[0] = 1.2;
 

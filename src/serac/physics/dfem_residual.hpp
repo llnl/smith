@@ -26,7 +26,6 @@ namespace serac {
  * stiffness matrices based on body and boundary integrals.
  *
  */
-template <typename InputType, typename OutputType>
 class DfemResidual : public Residual {
  public:
   using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
@@ -78,12 +77,11 @@ class DfemResidual : public Residual {
    * 3>`)
    *
    */
-  template <int... active_inputs, typename BodyIntegralType>
-  void addBodyIntegral(DependsOn<active_inputs...>, mfem::Array<int> domain_attributes, BodyIntegralType body_integral,
-                       const mfem::IntegrationRule& integration_rule, std::integer_sequence<size_t, 0> derivative_ids)
+  template <typename BodyIntegralType, typename InputType, typename OutputType>
+  void addBodyIntegral(mfem::Array<int> domain_attributes, BodyIntegralType body_integral, InputType integral_inputs,
+                       OutputType integral_outputs, const mfem::IntegrationRule& integration_rule,
+                       std::integer_sequence<size_t, 0> derivative_ids)
   {
-    InputType integral_inputs;
-    OutputType integral_outputs;
     // ParameterReducer<BodyIntegralType, active_inputs...> reduced_integral(body_integral);
     differentiable_operators_[0]->AddDomainIntegrator(body_integral, integral_inputs, integral_outputs,
                                                       integration_rule, domain_attributes, derivative_ids);

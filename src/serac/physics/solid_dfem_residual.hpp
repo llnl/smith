@@ -39,6 +39,24 @@ struct StressDivQFunction {
   Material material;  ///< the material model to use for computing the stress
 };
 
+template <typename Material, typename... Parameters>
+struct AccelerationQFunction {
+  SERAC_HOST_DEVICE inline auto operator()(
+      // mfem::real_t dt, // TODO: figure out how to pass this in
+      const mfem::future::tensor<mfem::real_t, Material::dim>&,
+      const mfem::future::tensor<mfem::real_t, Material::dim>&,
+      const mfem::future::tensor<mfem::real_t, Material::dim>& a,
+      const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dX_dxi, mfem::real_t weight,
+      Parameters... params) const
+  {
+    auto rho = material.density(params...);
+    auto J = mfem::future::det(dX_dxi) * weight;
+    return mfem::future::tuple{-rho * a * J};
+  }
+
+  Material material;  ///< the material model to use for computing the density
+};
+
 /**
  * @brief The nonlinear residual class
  *
@@ -48,14 +66,10 @@ struct StressDivQFunction {
  * @tparam order The order of the discretization of the displacement and velocity fields
  * @tparam dim The spatial dimension of the mesh
  */
-template <int dim, typename... ParameterTypes>
-class SolidDfemResidual
-    : public DfemResidual<
-          mfem::future::tuple<mfem::future::Gradient<0>, mfem::future::Gradient<1>, mfem::future::Gradient<2>,
-                              mfem::future::Gradient<3>, mfem::future::Weight, ParameterTypes...>,
-          mfem::future::tuple<mfem::future::Gradient<0>>> {
+template <bool IsQuasiStatic = false, bool UseLumpedMass = false>
+class SolidDfemResidual : public DfemResidual {
  public:
-  /// @brief disp, velo, accel
+  /// @brief disp, velo, accel, coord
   static constexpr int NUM_STATE_VARS = 4;
 
   enum FieldIDs
@@ -66,11 +80,6 @@ class SolidDfemResidual
     COORD   ///< coordinates
   };
 
-  using BaseClassT = DfemResidual<
-      mfem::future::tuple<mfem::future::Gradient<DISP>, mfem::future::Gradient<VELO>, mfem::future::Gradient<ACCEL>,
-                          mfem::future::Gradient<COORD>, mfem::future::Weight, ParameterTypes...>,
-      mfem::future::tuple<mfem::future::Gradient<DISP>>>;
-
   /**
    * @brief Construct a new SolidResidual object
    *
@@ -79,7 +88,7 @@ class SolidDfemResidual
    */
   SolidDfemResidual(std::string physics_name, std::shared_ptr<Mesh> mesh, const mfem::ParFiniteElementSpace& test_space,
                     const std::vector<const mfem::ParFiniteElementSpace*>& parameter_fe_spaces = {})
-      : BaseClassT(physics_name, mesh, test_space, makeInputSpaces(test_space, mesh, parameter_fe_spaces))
+      : DfemResidual(physics_name, mesh, test_space, makeInputSpaces(test_space, mesh, parameter_fe_spaces))
   {
   }
 
@@ -107,24 +116,68 @@ class SolidDfemResidual
    * @pre MaterialType must have a public method 'pkStress' which returns the first Piola-Kirchhoff stress
    *
    */
-  template <int... active_inputs, typename MaterialType>
-  void setMaterial(DependsOn<active_inputs...>, const mfem::Array<int>& domain_attributes, const MaterialType& material,
-                   const mfem::IntegrationRule& displacement_ir)
-  {
-    auto stress_div_integral = StressDivQFunction<MaterialType, double>{.material = material};
-    BaseClassT::addBodyIntegral(DependsOn<active_inputs...>{}, domain_attributes, stress_div_integral, displacement_ir,
-                                std::integer_sequence<size_t, 0>{});
-  }
-
-  /// @overload
-  template <typename MaterialType, typename... MaterialParameters>
+  template <typename MaterialType, typename... ParameterTypes>
   void setMaterial(const mfem::Array<int>& domain_attributes, const MaterialType& material,
                    const mfem::IntegrationRule& displacement_ir)
   {
-    setMaterial(DependsOn<>{}, domain_attributes, material, displacement_ir);
+    auto stress_div_integral = StressDivQFunction<MaterialType, double>{.material = material};
+    mfem::future::tuple<mfem::future::Gradient<DISP>, mfem::future::Gradient<VELO>, mfem::future::Gradient<ACCEL>,
+                        mfem::future::Gradient<COORD>, mfem::future::Weight, ParameterTypes...>
+        stress_div_integral_inputs{};
+    mfem::future::tuple<mfem::future::Gradient<DISP>> stress_div_integral_outputs{};
+    DfemResidual::addBodyIntegral(domain_attributes, stress_div_integral, stress_div_integral_inputs,
+                                  stress_div_integral_outputs, displacement_ir, std::index_sequence<DISP>{});
+
+    if constexpr (!IsQuasiStatic) {
+      auto acceleration_integral = AccelerationQFunction<MaterialType, double>{.material = material};
+      mfem::future::tuple<mfem::future::Value<DISP>, mfem::future::Value<VELO>, mfem::future::Value<ACCEL>,
+                          mfem::future::Gradient<COORD>, mfem::future::Weight, ParameterTypes...>
+          acceleration_integral_inputs{};
+      mfem::future::tuple<mfem::future::Value<ACCEL>> acceleration_integral_outputs{};
+      if constexpr (UseLumpedMass) {
+        SLIC_ERROR_IF(DfemResidual::input_mfem_spaces_[DISP]->IsVariableOrder(),
+                      "Lumped mass matrix is not supported for variable order finite element spaces.");
+        auto& mesh = DfemResidual::mesh_->mfemParMesh();
+        SLIC_ERROR_IF(mesh.GetNumGeometries(mesh.Dimension()) != 1 ||
+                          !(mesh.HasGeometry(mfem::Geometry::SQUARE) || mesh.HasGeometry(mfem::Geometry::CUBE)),
+                      "Lumped mass matrix is only supported for 2D and 3D meshes with square or cubic elements.");
+        // use lumped mass matrix via integration rule at nodes
+        auto& fe_coll = *DfemResidual::input_mfem_spaces_[DISP]->FEColl();
+        mfem::IntegrationRule rule_1d;
+        mfem::QuadratureFunctions1D::GaussLobatto(fe_coll->GetOrder() + 1, &rule_1d);
+        auto spatial_dim = DfemResidual::input_mfem_spaces_[DISP]->GetVDim();
+        switch (spatial_dim) {
+          case 1:
+            nodal_ir_ = std::make_unique<mfem::IntegrationRule>(rule_1d);
+            break;
+          case 2:
+            nodal_ir_ = std::make_unique<mfem::IntegrationRule>(rule_1d, rule_1d);
+            break;
+          case 3:
+            nodal_ir_ = std::make_unique<mfem::IntegrationRule>(rule_1d, rule_1d, rule_1d);
+            break;
+          default:
+            SLIC_ERROR_ROOT("Unsupported number of dimensions for nodal integration rule.");
+        }
+        DfemResidual::addBodyIntegral(domain_attributes, acceleration_integral, acceleration_integral_inputs,
+                                      acceleration_integral_outputs, nodal_ir_, std::index_sequence<ACCEL>{});
+      } else {
+        // use consistent mass matrix
+        DfemResidual::addBodyIntegral(domain_attributes, acceleration_integral, acceleration_integral_inputs,
+                                      acceleration_integral_outputs, displacement_ir, std::index_sequence<ACCEL>{});
+      }
+    }
+  }
+
+  void massMatrix() const
+  {
+    static_assert(!IsQuasiStatic, "Mass matrix is not defined for quasi-static solid mechanics problems.");
+    DfemResidual::differentiable_operators_[0]->GetDerivative(ACCEL, )
   }
 
  protected:
+  std::unique_ptr<mfem::IntegrationRule> nodal_ir_;
+
  private:
   std::vector<const mfem::ParFiniteElementSpace*> makeInputSpaces(
       const mfem::ParFiniteElementSpace& test_space, const std::shared_ptr<Mesh>& mesh,
