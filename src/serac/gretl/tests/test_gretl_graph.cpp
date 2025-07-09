@@ -107,7 +107,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
   std::vector<double> dataB = {0.6, 0.87};
   std::vector<double> dataC = {-0.8, 0.32};
 
-  gretl::DataStore dataStore(11);
+  gretl::DataStore dataStore(3);
 
   auto a = dataStore.create_state(dataA, gretl::vec::initialize_zero_dual);
   auto b = dataStore.create_state(dataB, gretl::vec::initialize_zero_dual);
@@ -118,8 +118,8 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto f = c * g;
   auto end = f + g;
 
-  int Nj = 11;  // 7;
-  int Ni = 30;  // 13;
+  int Nj = 5;  // 7;
+  int Ni = 32;  // 13;
 
   for (int j = 0; j < Nj; ++j) {
     for (int i = 0; i < Ni; ++i) {

@@ -221,21 +221,22 @@ void DataStore::fetch_state_data(Int stepIndex)
 
     // MRT, how do I know this is correct?  Think this through before commit.  Even when I change these numbers... its
     // hard to get tests to fail.
-    Int lastStepToUpdate = std::min(lastStepUsed_[iEval], stepIndex);
+    //Int lastStepToUpdate = std::min(lastStepUsed_[iEval], stepIndex);
 
-    std::set<size_t> activeCps = checkpointManager.active_steps();
+    //std::set<size_t> activeCps = checkpointManager.active_steps();
 
-    auto nextActiveStepIter = activeCps.lower_bound(iEval + 1);
-    while (nextActiveStepIter != activeCps.end()) {//} && *nextActiveStepIter <= lastStepToUpdate) {
-      usageCount_[*nextActiveStepIter]++;
-      ++nextActiveStepIter;
-    }
+    //auto nextActiveStepIter = activeCps.lower_bound(iEval + 1);
+    //while (nextActiveStepIter != activeCps.end()) {
+    //  usageCount_[*nextActiveStepIter]++;
+    //  ++nextActiveStepIter;
+    //}
 
     // MRT, future optimization... 
     // things to do:
     // do not save passthroughts, just loop active passthroughts using graph? 
     // abstract checkpoint manager to also have a checkpoint everything version
     // tests that we can call multiple backprops back to back (or at least with a perturbed forward in between)
+    
     if (states_[iEval]->primal_) {
       for_each_active_upstream(this, iEval, [&](Int upstream) { gretl_assert(state_in_use(upstream)); });
       remove_things(iEval);

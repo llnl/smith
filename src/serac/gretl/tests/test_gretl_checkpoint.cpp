@@ -125,17 +125,17 @@ gretl::State<double> advance_solution(const gretl::State<double>& a)
   });
 
   b.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    auto& a_ = upstreams[0];
-    const auto& b_ = downstream;
+    auto a_ = upstreams[0];
+    const auto b_ = downstream;
     auto bBar = b_.get_dual<double>();
-    if (!a_.dual_valid()) {
+    //if (!a_.dual_valid()) {
       // this case is really only for performance optimization
       // get dual will sometimes have to re-evaluate primal
       // for linear operators, this is unneeded, we just tell the dual its data and size
-      a_.set_dual(bBar / 3.0);
-    } else {
-      a_.get_dual<double>() += bBar / 3.0;
-    }
+    //  a_.set_dual(bBar / 3.0);
+    //} else {
+    a_.get_dual<double>() += bBar / 3.0;
+    //}
   });
 
   return b.finalize();
@@ -150,7 +150,7 @@ TEST_F(CheckpointFixture, Automated)
   std::vector<double> advanceStates(N + 1);
 
   gretl::DataStore dataStore(S);
-  gretl::State<double> X = dataStore.create_state(x, gretl::defaultInitializeZeroDual<double>());
+  gretl::State<double> X = dataStore.create_state(x);
 
   advanceStates[0] = X.get();
   for (size_t n = 0; n < N; ++n) {
@@ -159,14 +159,17 @@ TEST_F(CheckpointFixture, Automated)
   }
 
   X = set_as_objective(X);
+  dataStore.stillConstructingGraph=false;
   // dataStore.back_prop();
 
   reverseStates[N] = X.get();
   EXPECT_EQ(X.get_dual(), 1.0);
   for (size_t n = N; n > 0; --n) {
-    auto rev = dataStore.reverse_state();
-    reverseStates[n - 1] = rev.get<double>();
-    ASSERT_NEAR(rev.get_dual<double>(), std::pow(1. / 3., (N - n + 1)), 1e-14);
+    //auto rev = dataStore.reverse_state();
+    dataStore.reverse_state();
+    auto restoredState = static_cast<gretl::Int>(n-1);
+    reverseStates[n - 1] = dataStore.get_primal<double>(restoredState);
+    ASSERT_NEAR(dataStore.get_dual<double>(restoredState), std::pow(1. / 3., (N - n + 1)), 1e-14);
   }
 
   for (size_t n = 0; n < N + 1; ++n) {
