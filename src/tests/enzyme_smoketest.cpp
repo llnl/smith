@@ -20,10 +20,10 @@ void LinearQuadBasis( const double* xi, double* phi )
 void LinearQuadBasisDeriv( const double* xi, double* phi, double* dphi_dxi, double* dphi_deta )
 {
   double xi_dot[2] = { 1.0, 0.0 };
-  __enzyme_fwddiff<void>( (void*)LinearQuadBasis, xi, xi_dot, phi, dphi_dxi );
+  __enzyme_fwddiff<void>( reinterpret_cast<void*>(LinearQuadBasis), xi, xi_dot, phi, dphi_dxi );
   xi_dot[0] = 0.0;
   xi_dot[1] = 1.0;
-  __enzyme_fwddiff<void>( (void*)LinearQuadBasis, xi, xi_dot, phi, dphi_deta );
+  __enzyme_fwddiff<void>( reinterpret_cast<void*>(LinearQuadBasis), xi, xi_dot, phi, dphi_deta );
 }
 
 TEST( enzyme_smoke, basic_use )
