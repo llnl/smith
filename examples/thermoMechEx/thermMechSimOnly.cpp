@@ -8,49 +8,17 @@
 // of LLNL.  See license for disclaimers, notice of U.S. Government
 // Rights and license terms and conditions.
 
-#include "Lido.hpp"
 #include "mfem.hpp"
-#include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/infrastructure/input.hpp"
-#include "meshes/lido_meshes.hpp"
-#include "serac/physics/heat_transfer.hpp"
-#include "serac/physics/materials/thermal_material.hpp"
-#include "serac/mesh/mesh_utils.hpp"
-#include "serac/numerics/stdfunction_operator.hpp"
-#include "serac/numerics/functional/functional.hpp"
-#include "serac/numerics/functional/tensor.hpp"
-#include "serac/physics/materials/parameterized_thermal_material.hpp"
-#include "serac/physics/materials/parameterized_thermoelastic_material.hpp"
-
-#include "serac/numerics/functional/tensor.hpp"
-#include "serac/physics/thermomechanics_monolithic.hpp"
-#include "serac/physics/materials/thermal_material.hpp"
-#include "serac/physics/materials/solid_material.hpp"
-//#include "serac/physics/materials/green_saint_venant_thermoelastic.hpp"
+#include "serac/serac.hpp"
 
 #include <fstream>
-
-
-#include "mfem.hpp"
-
-#include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/mesh.hpp"
-#include "serac/infrastructure/application_manager.hpp"
-
 #include <cfenv>
 #include <cmath>
 
 int main(int argc, char *argv[])
 {
-  feenableexcept(FE_INVALID | FE_DIVBYZERO);
-  
-  // Get MPI info. Initialize MPI, SLIC logging to standard out and Caliper profiling
-  int numProcs, managerRank = 0, myRank;
-  MPI_Comm comm = MPI_COMM_WORLD;
-  ::std::shared_ptr<lido::LidoFinalize> lidoFinalize;
-  ::std::tie(lidoFinalize, myRank, numProcs) = lido::initialize(argc, argv, comm);
+  int myRank, managerRank=0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
 
   double Lx = 1.0; // mesh dimension in the x direction
   double Ly = 1.0; // mesh dimension in the y direction
@@ -103,16 +71,20 @@ int main(int argc, char *argv[])
 
   // build mesh and refine
   // ++ ::mfem::Mesh mesh(meshFileName.c_str());
-  assert(mesh.SpaceDimension() == DIM);
-  for (int i = 0; i < numSerRef; i++) {
-    mesh.UniformRefinement();
-  }
-  auto pmesh = ::std::make_unique<::mfem::ParMesh>(MPI_COMM_WORLD, mesh);
-  pmesh->EnsureNodes();
-  pmesh->ExchangeFaceNbrData();
-  for (int i = 0; i < numParRef; i++) {
-    pmesh->UniformRefinement();
-  }
+  // assert(mesh.SpaceDimension() == DIM);
+  // for (int i = 0; i < numSerRef; i++) {
+  //   mesh.UniformRefinement();
+  // }
+  // auto pmesh = ::std::make_unique<::mfem::ParMesh>(MPI_COMM_WORLD, mesh);
+  // pmesh->EnsureNodes();
+  // pmesh->ExchangeFaceNbrData();
+  // for (int i = 0; i < numParRef; i++) {
+  //   pmesh->UniformRefinement();
+  // }
+
+  // Load the mesh from file, apply refinements, and distribute it across MPI processes.
+  auto pmesh = ::serac::mesh::refineAndDistribute(std::move(mesh), numSerRef, numParRef);
+
   if (myRank == managerRank) {
     ::std::cout << "Successfully loaded and refined mesh." << ::std::endl;
   }
@@ -122,10 +94,6 @@ int main(int argc, char *argv[])
 
   // register mesh with serac and lido
   ::mfem::ParMesh *meshPtr = &::serac::StateManager::setMesh(::std::move(pmesh), meshTag);
-  lido::DataManager::getInstance().addMesh(meshTag, meshPtr);
-  
-  const ::std::string densFecTag("dens_fec");
-  const ::std::string densFesTag("dens_fes");
 
   // define the boundary conditions attributes
   ::serac::Domain bottomBoundary = ::serac::Domain::ofBoundaryElements(*meshPtr, serac::by_attr<DIM>(1));
