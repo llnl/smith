@@ -14,9 +14,7 @@
     "__comment__":"##############################################################################",
 
     "toss_4_x86_64_ib":
-    [ "gcc@10.3.1+devtools+profiling",
-      "clang@14.0.6+devtools+profiling",
-      "clang@16.0.6+devtools+profiling~openmp" ],
+    [ "clang@19.1.3+devtools+profiling+enzyme" ],
 
     "toss_4_x86_64_ib_cray":
     [ "rocmcc@6.2.1~openmp+profiling+rocm+raja+umpire+strumpack~petsc amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion"],
