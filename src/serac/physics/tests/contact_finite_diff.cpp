@@ -16,12 +16,17 @@
 #include "mfem.hpp"
 #include "shared/mesh/MeshBuilder.hpp"
 
+#include "serac/serac_config.hpp"
+
+#ifndef SERAC_USE_ENZYME
+#error "This file requires Enzyme to be enabled
+#endif
+
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
-#include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {

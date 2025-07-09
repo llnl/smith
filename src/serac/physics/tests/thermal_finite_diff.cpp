@@ -11,6 +11,11 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
+
+#ifndef SERAC_USE_ENZYME
+#error "This file requires Enzyme to be enabled
+#endif
+
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/heat_transfer.hpp"
 #include "serac/physics/mesh.hpp"
