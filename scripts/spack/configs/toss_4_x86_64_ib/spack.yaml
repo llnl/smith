@@ -21,8 +21,6 @@ spack:
       environment: {}
       extra_rpaths: []
       flags:
-        cflags: -fPIC
-        cxxflags: -fPIC
         fflags: -fPIC
       modules:
       - clang/19.1.3
