@@ -40,7 +40,7 @@ class Constraint {
    *
    * @param time time
    * @param dt time step
-   * @param vector of serac::FiniteElementState*
+   * @param fields vector of serac::FiniteElementState*
    * @return mfem::Vector which is the constraint evaluation
    */
   virtual mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields) const = 0;
@@ -49,7 +49,7 @@ class Constraint {
    *
    * @param time time
    * @param dt time step
-   * @param vector of serac::FiniteElementState*
+   * @param fields vector of serac::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
@@ -61,7 +61,7 @@ class Constraint {
    *
    * @param time time
    * @param dt time step
-   * @param vector of serac::FiniteElementState*
+   * @param fields vector of serac::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
@@ -76,8 +76,8 @@ class Constraint {
    *
    * @param time time
    * @param dt time step
-   * @param vector of serac::FiniteElementState*
-   * @param mfem::Vector of Lagrange multipliers
+   * @param fields vector of serac::FiniteElementState*
+   * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
    * @return std::Vector
    */
@@ -97,8 +97,8 @@ class Constraint {
    *
    * @param time time
    * @param dt time step
-   * @param vector of serac::FiniteElementState*
-   * @param mfem::Vector of multipliers
+   * @param fields vector of serac::FiniteElementState*
+   * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
@@ -112,8 +112,8 @@ class Constraint {
    *
    * @param time time
    * @param dt time step
-   * @param vector of serac::FiniteElementState*
-   * @param mfem::Vector of multipliers
+   * @param fields vector of serac::FiniteElementState*
+   * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
