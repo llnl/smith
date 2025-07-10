@@ -56,7 +56,7 @@ class Constraint {
   virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt,
                                                          const std::vector<ConstFieldPtr>& fields,
                                                          int direction) const = 0;
-  
+
   /** @brief Virtual interface for computing constraint Jacobian_tilde from a vector of serac::FiniteElementState*
    *
    * @param time time
@@ -65,14 +65,14 @@ class Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt,
-                                                         const std::vector<ConstFieldPtr>& fields,
-                                                         int direction)
+  std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                                       int direction)
   {
     return jacobian(time, dt, fields, direction);
   };
-  
-  /** @brief Virtual interface for computing residual contribution Jacobian_tilde^T multiplier from a vector of serac::FiniteElementState*
+
+  /** @brief Virtual interface for computing residual contribution Jacobian_tilde^T multiplier from a vector of
+   * serac::FiniteElementState*
    *
    * @param time time
    * @param dt time step
@@ -81,19 +81,17 @@ class Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::Vector
    */
-  mfem::Vector residual_contribution(double time, double dt,
-                                                         const std::vector<ConstFieldPtr>& fields,
-							 const mfem::Vector & multipliers,
-                                                         int direction)
+  mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                     const mfem::Vector& multipliers, int direction)
   {
     std::unique_ptr<mfem::HypreParMatrix> jac = jacobian_tilde(time, dt, fields, direction);
-    mfem::Vector y(jac->Width()); y = 0.0;
-    SLIC_ERROR_ROOT_IF(jac->Height() != multipliers.Size(), 
-		       "Incompatible matrix and vector sizes.");
+    mfem::Vector y(jac->Width());
+    y = 0.0;
+    SLIC_ERROR_ROOT_IF(jac->Height() != multipliers.Size(), "Incompatible matrix and vector sizes.");
     jac->MultTranspose(multipliers, y);
     return y;
   };
-  
+
   /** @brief Virtual interface for computing Jacobians of the residual contribution from a vector of
    * serac::FiniteElementState*
    *
@@ -104,10 +102,10 @@ class Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  virtual std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt, 
-                                                    const std::vector<ConstFieldPtr>& fields,
-						    const mfem::Vector &multipliers,
-                                                    int direction);
+  virtual std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
+                                                                               const std::vector<ConstFieldPtr>& fields,
+                                                                               const mfem::Vector& multipliers,
+                                                                               int direction);
 
   /** @brief Virtual interface for computing constraint Hessian-vector product from a vector of
    * serac::FiniteElementState*
@@ -119,16 +117,14 @@ class Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  virtual std::unique_ptr<mfem::HypreParMatrix> hvp(double time, double dt, 
-                                                    const std::vector<ConstFieldPtr>& fields,
-						    const mfem::Vector& multipliers,
-                                                    int direction);
-  
+  virtual std::unique_ptr<mfem::HypreParMatrix> hvp(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                                    const mfem::Vector& multipliers, int direction);
+
   /// @brief name
   std::string name() const { return name_; }
 
  private:
-  /// @brief name provided to objective
+  /// @brief name provided to constraint
   std::string name_;
 };
 
