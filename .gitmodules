@@ -19,3 +19,6 @@
 [submodule "tribol"]
 	path = tribol
 	url = https://github.com/LLNL/Tribol.git
+[submodule "ContinuationSolvers"]
+	path = ContinuationSolvers
+	url = https://github.com/LLNL/ContinuationSolvers
