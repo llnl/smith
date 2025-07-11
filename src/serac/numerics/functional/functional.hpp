@@ -29,9 +29,6 @@
 #include <array>
 #include <vector>
 
-// TODO REMOVE AFTER DEBUGGING
-#include "serac/infrastructure/mpi_fstream.hpp"
-
 namespace serac {
 
 /// @cond
@@ -105,25 +102,6 @@ inline void check_for_unsupported_elements(const mfem::Mesh& mesh)
     auto type = mesh.GetElementType(e);
     if (type == mfem::Element::POINT || type == mfem::Element::WEDGE || type == mfem::Element::PYRAMID) {
       SLIC_ERROR_ROOT("Mesh contains unsupported element type");
-    }
-  }
-}
-
-/**
- * @brief function for verifying that DG spaces aren't used on interior face integrals over meshes that contain "shared"
- * faces
- *
- * sam: I would like to support these "shared" faces, but apparently mfem handles them in a fundamentally different way
- * than the "finite element operator decomposition" pattern used by everything else (see: "ExchangeFaceNbrData")
- */
-inline void check_interior_face_compatibility(const mfem::Mesh& mesh, const FunctionSpace space)
-{
-  if (space.family == Family::L2) {
-    const mfem::ParMesh* pmesh = dynamic_cast<const mfem::ParMesh*>(&mesh);
-    if (pmesh) {
-      SLIC_ERROR_IF(
-          pmesh->GetNSharedFaces() > 0,
-          "interior face integrals involving DG function spaces don't currently support meshes with shared faces");
     }
   }
 }
@@ -468,10 +446,8 @@ class Functional<test(trials...), exec> {
     std::vector<uint32_t> arg_vec = {args...};
     for (uint32_t i : arg_vec) {
       domain.insert_restriction(trial_space_[i], trial_function_spaces_[i]);
-      // check_interior_face_compatibility(domain.mesh_, trial_function_spaces_[i]);
     }
     domain.insert_restriction(test_space_, test_function_space_);
-    // check_interior_face_compatibility(domain.mesh_, test_function_space_);
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
     integrals_.push_back(
@@ -874,14 +850,6 @@ class Functional<test(trials...), exec> {
       if (row_ptr.empty()) {
         initialize_sparsity_pattern();
       }
-      // // Debug
-      // mpi::out << "row offsets: " << (test_space_->GetDofOffsets())[0] << " "
-      //          << (test_space_->GetDofOffsets())[1] << std::endl
-      //          << "col offsets: " << (trial_space_->GetDofOffsets())[0] << " "
-      //          << (trial_space_->GetDofOffsets())[1] << std::endl;
-      // HYPRE_BigInt row_offset = test_space_->GetMyDofOffset();
-      // HYPRE_BigInt col_offset = trial_space_->GetMyDofOffset();
-      // //
 
       // since we own the storage for row_ptr, col_ind, values,
       // we ask mfem to not deallocate those pointers in the SparseMatrix dtor
@@ -942,29 +910,6 @@ class Functional<test(trials...), exec> {
                   A_local.SearchRow(row, col) += K_e(e, i, j);
                 }
               }
-              // // Debug
-              // for (uint32_t i = 0; i < rows_per_elem; i++) {
-              //   int row = int(test_vdofs[i].index());
-              //   for (uint32_t j = 0; j < cols_per_elem; j++) {
-              //     int col = int(trial_vdofs[j].index());
-              //     if (row < test_space_->GetVSize()) {
-              //       mpi::out << "row = " << row + row_offset << " ";
-              //     } else {
-              //       mpi::out << "row = " << form_.face_nbr_glob_vdof_maps_[which_argument][row -
-              //       test_space_->GetVSize()] << " ";
-              //     }
-
-              //     if (col < trial_space_->GetVSize()) {
-              //       mpi::out << "col = " << col + col_offset << " ";
-              //     } else {
-              //       mpi::out << "col = " << form_.face_nbr_glob_vdof_maps_[which_argument][col -
-              //       trial_space_->GetVSize()] << " ";
-              //     }
-
-              //     mpi::out << "A_ij = " << A_local.SearchRow(row, col) << std::endl;
-              //   }
-              // }
-              // //
             }
           }
         }

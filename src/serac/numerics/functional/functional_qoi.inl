@@ -88,21 +88,34 @@ class Functional<double(trials...), exec> {
   {
     SERAC_MARK_FUNCTION;
 
+    std::array<Family, num_trial_spaces> trial_families = {trials::family...};
+    std::array<int, num_trial_spaces> trial_orders = {trials::order...};
+    std::array<int, num_trial_spaces> trial_components = {trials::components...};
+
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
+      trial_function_spaces_[i] = {trial_families[i], trial_orders[i], trial_components[i]};
+
       P_trial_[i] = trial_space_[i]->GetProlongationMatrix();
 
-      input_L_[i].SetSize(P_trial_[i]->Height(), mfem::Device::GetMemoryType());
+      // For L2 spaces, configure a ParGridFunction with external data to exchange face neighbor data.
+      // This is for DG method where interior faces on the processor boundary need to access data on
+      // the neighrbor element
+      if (trial_function_spaces_[i].family == Family::L2) {
+        // Set the vector size to store tdof data
+        input_ldof_values_[i].SetSize(P_trial_[i]->Height(), mem_type);
+
+        // Initialize face neighbor data vector
+        updateFaceNbrData(trial_space_[i], trial_pargrid_functions_[i], input_ldof_values_[i]);
+
+        // Set the local input vector size to store local + ghost data
+        input_L_[i].SetSize(input_ldof_values_[i].Size() + trial_pargrid_functions_[i].FaceNbrData().Size(), mem_type);
+      } else {
+        input_L_[i].SetSize(P_trial_[i]->Height(), mem_type);
+      }
 
       // create the necessary number of empty mfem::Vectors, to be resized later
       input_E_.push_back({});
       input_E_buffer_.push_back({});
-    }
-
-    std::array<Family, num_trial_spaces> trial_families = {trials::family...};
-    std::array<int, num_trial_spaces> trial_orders = {trials::order...};
-    std::array<int, num_trial_spaces> trial_components = {trials::components...};
-    for (uint32_t i = 0; i < num_trial_spaces; i++) {
-      trial_function_spaces_[i] = {trial_families[i], trial_orders[i], trial_components[i]};
     }
 
     G_test_ = QoIElementRestriction();
@@ -110,7 +123,7 @@ class Functional<double(trials...), exec> {
 
     output_L_.SetSize(1, mem_type);
 
-    output_T_.SetSize(1, mfem::Device::GetMemoryType());
+    output_T_.SetSize(1, mem_type);
 
     // gradient objects depend on some member variables in
     // Functional, so we initialize the gradient objects last
@@ -202,8 +215,9 @@ class Functional<double(trials...), exec> {
     std::vector<uint32_t> arg_vec = {args...};
     for (uint32_t i : arg_vec) {
       domain.insert_restriction(trial_space_[i], trial_function_spaces_[i]);
-      check_interior_face_compatibility(domain.mesh_, trial_function_spaces_[i]);
     }
+
+    domain.compute_interior_face_qoi_weights();
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
     integrals_.push_back(MakeInteriorFaceIntegral<signature, Q, dim>(domain, integrand, arg_vec));
@@ -262,7 +276,25 @@ class Functional<double(trials...), exec> {
    */
   double ActionOfGradient(const mfem::Vector& input_T, uint32_t which) const
   {
-    P_trial_[which]->Mult(input_T, input_L_[which]);
+    // Please refer to 'ActionOfGradient' in 'functional.hpp' for detailed comments of this implementation
+    if (trial_function_spaces_[which].family == Family::L2) {
+      P_trial_[which]->Mult(input_T, input_ldof_values_[which]);
+      input_L_[which].SetVector(input_ldof_values_[which], 0);
+      updateFaceNbrData(trial_space_[which], trial_pargrid_functions_[which], input_ldof_values_[which]);
+
+      if (trial_space_[which]->GetVDim() == 1) {
+        input_L_[which].SetVector(trial_pargrid_functions_[which].FaceNbrData(), input_ldof_values_[which].Size());
+      } else {
+        if (trial_space_[which]->GetOrdering() == mfem::Ordering::byVDIM) {
+          int local_size = input_ldof_values_[which].Size();
+          appendFaceNbrData(trial_space_[which], trial_pargrid_functions_[which], local_size, input_L_[which]);
+        } else {
+          SLIC_ERROR_ROOT("Unsupported: L2 vector field ordered by nodes");
+        }
+      }
+    } else {
+      P_trial_[which]->Mult(input_T, input_L_[which]);
+    }
 
     output_L_ = 0.0;
 
@@ -279,6 +311,11 @@ class Functional<double(trials...), exec> {
         output_E_.Update(output_E_buffer_, dom.bOffsets());
 
         integral.GradientMult(input_E_[which], output_E_, which);
+
+        // make sure shared interior faces are integrated only once
+        if (dom.type_ == Domain::Type::InteriorFaces) {
+          output_E_ *= dom.interior_face_qoi_weights;
+        }
 
         // scatter-add to compute QoI value for the local processor
         G_test_.ScatterAdd(output_E_, output_L_);
@@ -306,9 +343,27 @@ class Functional<double(trials...), exec> {
   {
     const mfem::Vector* input_T[] = {&static_cast<const mfem::Vector&>(args)...};
 
+    // Please refer to 'operator()' in 'functional.hpp' for detailed comments of this implementation
     // get the values for each local processor
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
-      P_trial_[i]->Mult(*input_T[i], input_L_[i]);
+      if (trial_function_spaces_[i].family == Family::L2) {
+        P_trial_[i]->Mult(*input_T[i], input_ldof_values_[i]);
+        input_L_[i].SetVector(input_ldof_values_[i], 0);
+        updateFaceNbrData(trial_space_[i], trial_pargrid_functions_[i], input_ldof_values_[i]);
+
+        if (trial_space_[i]->GetVDim() == 1) {
+          input_L_[i].SetVector(trial_pargrid_functions_[i].FaceNbrData(), input_ldof_values_[i].Size());
+        } else {
+          if (trial_space_[i]->GetOrdering() == mfem::Ordering::byVDIM) {
+            int local_size = input_ldof_values_[i].Size();
+            appendFaceNbrData(trial_space_[i], trial_pargrid_functions_[i], local_size, input_L_[i]);
+          } else {
+            SLIC_ERROR_ROOT("Unsupported: L2 vector field ordered by nodes");
+          }
+        }
+      } else {
+        P_trial_[i]->Mult(*input_T[i], input_L_[i]);
+      }
     }
 
     output_L_ = 0.0;
@@ -328,6 +383,11 @@ class Functional<double(trials...), exec> {
 
       const bool update_qdata = false;
       integral.Mult(t, input_E_, output_E_, wrt, update_qdata);
+
+      // make sure shared interior faces are integrated only once
+      if (dom.type_ == Domain::Type::InteriorFaces) {
+        output_E_ *= dom.interior_face_qoi_weights;
+      }
 
       // scatter-add to compute QoI value for the local processor
       G_test_.ScatterAdd(output_E_, output_L_);
@@ -427,6 +487,8 @@ class Functional<double(trials...), exec> {
 
       std::map<mfem::Geometry::Type, ExecArray<double, 3, exec>> element_gradients[Domain::num_types];
 
+      int lcols = form_.trial_space_[which_argument]->GetVSize();
+
       ////////////////////////////////////////////////////////////////////////////////
 
       for (auto& integral : form_.integrals_) {
@@ -456,7 +518,11 @@ class Functional<double(trials...), exec> {
 
               for (uint32_t i = 0; i < cols_per_elem; i++) {
                 int col = int(trial_vdofs[i].index());
-                gradient_L_[col] += K_e(e, 0, i);
+
+                // only add local DG dof gradients (other FE spaces satisfy col < lcols inherently)
+                if (col < lcols) {
+                  gradient_L_[col] += K_e(e, 0, i);
+                }
               }
             }
           }
@@ -491,6 +557,12 @@ class Functional<double(trials...), exec> {
   std::array<const mfem::ParFiniteElementSpace*, num_trial_spaces> trial_space_;
 
   std::array<FunctionSpace, num_trial_spaces> trial_function_spaces_;
+
+  /// @brief Cache for access of neighbor element info for processor boundary faces
+  mutable std::array<mfem::ParGridFunction, num_trial_spaces> trial_pargrid_functions_;
+
+  /// @brief Cache to store values of L2 ldofs on the local processor
+  mutable std::array<mfem::Vector, num_trial_spaces> input_ldof_values_;
 
   /**
    * @brief Operator that converts true (global) DOF values to local (current rank) DOF values

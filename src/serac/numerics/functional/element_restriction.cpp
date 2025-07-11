@@ -4,9 +4,6 @@
 
 #include "serac/numerics/functional/geometry.hpp"
 
-// TODO REMOVE AFTER DEBUGGING
-#include "serac/infrastructure/mpi_fstream.hpp"
-
 std::vector<std::vector<int> > lexicographic_permutations(int p)
 {
   // p == 0 is admissible for L2 spaces, but lexicographic permutations
@@ -531,12 +528,9 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
         int orientation = (mesh->Dimension() == 2 && info.IsBoundary()) ? 0 : orientations[i];
 
         // 4. extract only the dofs that correspond to side `i`
-        // mpi::out << "face local dofs: ";
         for (auto k : face_perm(orientation)) {
           face_dofs.push_back(uint64_t(elem_dof_ids[local_face_dofs[uint32_t(elem_geom)](i, k)]));
-          // mpi::out << face_dofs.back().index() << " ";
         }
-        // mpi::out << std::endl;
 
         // 5. add remaining dofs that were omitted on shared faces
         // FaceNbrData includes all dofs in the "volumetric" element adjacent to the shared faces
@@ -575,7 +569,6 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
 
           // Find the dofs on the shared face on the ghost element side
           // Neighbor element local_face_index and orientation is already available from GetFaceInformation
-          // mpi::out << " this face is also shared so it has additional dofs: ";
           mfem::Geometry::Type ghost_geom = fes->GetParMesh()->face_nbr_elements[other_element_id]->GetGeometryType();
           int j = info.element[1].local_face_id;
           int ghost_orientation;
@@ -596,9 +589,7 @@ axom::Array<DoF, 2, serac::detail::host_memory_space> GetFaceDofs(const serac::f
           for (auto k : face_perm(ghost_orientation)) {
             face_dofs.push_back(uint64_t(shared_elem_dof_ids[local_face_dofs[uint32_t(ghost_geom)](j, k)] +
                                          LSize / components_per_node));
-            // mpi::out << face_dofs.back().index() << " ";
           }
-          // mpi::out << std::endl;
         }
       }
 

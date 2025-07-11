@@ -244,6 +244,15 @@ struct Domain {
   /// thereby populate the element lists.
   void addElements(const std::vector<int>& geom_id, const std::vector<int>& elem_id,
                    mfem::Geometry::Type element_geometry);
+
+  /**
+   * @brief Compute face qoi weights so that interior faces shared by two processors
+   *        are only integrated once.
+   */
+  void compute_interior_face_qoi_weights();
+
+  /// @brief Interior face qoi weight vector
+  mfem::Vector interior_face_qoi_weights;
 };
 
 /// @brief constructs a domain from all the elements in a mesh
