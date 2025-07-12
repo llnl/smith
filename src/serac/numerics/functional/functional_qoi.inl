@@ -217,7 +217,7 @@ class Functional<double(trials...), exec> {
       domain.insert_restriction(trial_space_[i], trial_function_spaces_[i]);
     }
 
-    domain.compute_interior_face_qoi_weights();
+    domain.insert_shared_interior_face_list();
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
     integrals_.push_back(MakeInteriorFaceIntegral<signature, Q, dim>(domain, integrand, arg_vec));
@@ -314,7 +314,9 @@ class Functional<double(trials...), exec> {
 
         // make sure shared interior faces are integrated only once
         if (dom.type_ == Domain::Type::InteriorFaces) {
-          output_E_ *= dom.interior_face_qoi_weights;
+          for (int shared_id : dom.shared_interior_face_ids_) {
+            output_E_[shared_id] *= 0.5;
+          }
         }
 
         // scatter-add to compute QoI value for the local processor
@@ -386,7 +388,9 @@ class Functional<double(trials...), exec> {
 
       // make sure shared interior faces are integrated only once
       if (dom.type_ == Domain::Type::InteriorFaces) {
-        output_E_ *= dom.interior_face_qoi_weights;
+        for (int shared_id : dom.shared_interior_face_ids_) {
+          output_E_[shared_id] *= 0.5;
+        }
       }
 
       // scatter-add to compute QoI value for the local processor

@@ -96,6 +96,9 @@ struct Domain {
    */
   std::map<FunctionSpace, BlockElementRestriction> restriction_operators;
 
+  /// @brief Shared interior face list
+  std::vector<int> shared_interior_face_ids_;
+
   /**
    * @brief empty Domain constructor, with connectivity info to be populated later
    */
@@ -246,13 +249,10 @@ struct Domain {
                    mfem::Geometry::Type element_geometry);
 
   /**
-   * @brief Compute face qoi weights so that interior faces shared by two processors
-   *        are only integrated once.
+   * @brief Find the list of interior faces shared by two processors to make sure
+   *        these faces are only integrated once.
    */
-  void compute_interior_face_qoi_weights();
-
-  /// @brief Interior face qoi weight vector
-  mfem::Vector interior_face_qoi_weights;
+  void insert_shared_interior_face_list();
 };
 
 /// @brief constructs a domain from all the elements in a mesh
