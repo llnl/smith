@@ -22,6 +22,7 @@ set(physics_headers
     base_physics.hpp
     mesh.hpp
     common.hpp
+    field_types.hpp
     fit.hpp
     heat_transfer.hpp
     heat_transfer_input.hpp

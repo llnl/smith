@@ -40,6 +40,15 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
   }
 }
 
+void ContactData::reset()
+{
+  for (auto& interaction : interactions_) {
+    FiniteElementState zero = interaction.pressure();
+    zero = 0.0;
+    interaction.setPressure(zero);
+  }
+}
+
 void ContactData::update(int cycle, double time, double& dt)
 {
   cycle_ = cycle;
@@ -231,7 +240,7 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
   return block_J;
 }
 
-void ContactData::residualFunction(const mfem::Vector& u, mfem::Vector& r)
+void ContactData::residualFunction(const mfem::Vector& u_shape, const mfem::Vector& u, mfem::Vector& r)
 {
   const int disp_size = reference_nodes_->ParFESpace()->GetTrueVSize();
 
@@ -244,7 +253,8 @@ void ContactData::residualFunction(const mfem::Vector& u, mfem::Vector& r)
   mfem::Vector r_blk(r, 0, disp_size);
   mfem::Vector g_blk(r, disp_size, numPressureDofs());
 
-  setDisplacements(u_blk);
+  setDisplacements(u_shape, u_blk);
+
   // we need to call update first to update gaps
   for (auto& interaction : interactions_) {
     interaction.evalJacobian(false);
@@ -300,10 +310,14 @@ void ContactData::setPressures(const mfem::Vector& merged_pressures) const
   }
 }
 
-void ContactData::setDisplacements(const mfem::Vector& u)
+void ContactData::setDisplacements(const mfem::Vector& shape_u, const mfem::Vector& u)
 {
+  mfem::ParGridFunction prolonged_shape_disp{current_coords_};
   reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(u, current_coords_);
+  reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(shape_u, prolonged_shape_disp);
+
   current_coords_ += *reference_nodes_;
+  current_coords_ += prolonged_shape_disp;
 }
 
 void ContactData::updateDofOffsets() const
@@ -384,7 +398,10 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
   return std::make_unique<mfem::BlockOperator>(jacobian_offsets_);
 }
 
-void ContactData::residualFunction([[maybe_unused]] const mfem::Vector& u, [[maybe_unused]] mfem::Vector& r) {}
+void ContactData::residualFunction([[maybe_unused]] const mfem::Vector& u_shape, [[maybe_unused]] const mfem::Vector& u,
+                                   [[maybe_unused]] mfem::Vector& r)
+{
+}
 
 std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(mfem::HypreParMatrix* orig_J) const
 {
@@ -401,7 +418,10 @@ std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(mfem::HyprePa
 
 void ContactData::setPressures([[maybe_unused]] const mfem::Vector& true_pressures) const {}
 
-void ContactData::setDisplacements([[maybe_unused]] const mfem::Vector& true_displacement) {}
+void ContactData::setDisplacements([[maybe_unused]] const mfem::Vector& u_shape,
+                                   [[maybe_unused]] const mfem::Vector& true_displacement)
+{
+}
 
 #endif
 

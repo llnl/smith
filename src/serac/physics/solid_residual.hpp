@@ -31,11 +31,11 @@ class SolidResidual;
  */
 template <int order, int dim, typename... InputSpaces>
 class SolidResidual<order, dim, Parameters<InputSpaces...>>
-    : public FunctionalResidual<dim, H1<order, dim>, H1<order, dim>,
+    : public FunctionalResidual<dim, H1<order, dim>,
                                 Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>> {
  public:
   /// @brief typedef for underlying functional type with templates
-  using BaseResidualT = FunctionalResidual<dim, H1<order, dim>, H1<order, dim>,
+  using BaseResidualT = FunctionalResidual<dim, H1<order, dim>,
                                            Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>>;
 
   /// @brief a container holding quadrature point data of the specified type
@@ -46,20 +46,26 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
   /// @brief disp, velo, accel
   static constexpr int NUM_STATE_VARS = 3;
 
+  /// @brief enumeration of the required states
+  enum STATE
+  {
+    DISPLACEMENT,
+    VELOCITY,
+    ACCELERATION,
+    NUM_STATES
+  };
+
   /**
    * @brief Construct a new SolidResidual object
    *
    * @param physics_name A name for the physics module instance
    * @param mesh The serac Mesh
-   * @param shape_disp_space Shape displacement space
    * @param test_space Test space
    * @param parameter_fe_spaces Vector of parameters spaces
    */
-  SolidResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
-                const mfem::ParFiniteElementSpace& shape_disp_space, const mfem::ParFiniteElementSpace& test_space,
+  SolidResidual(std::string physics_name, std::shared_ptr<Mesh> mesh, const mfem::ParFiniteElementSpace& test_space,
                 std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
-      : BaseResidualT(physics_name, mesh, shape_disp_space, test_space,
-                      constructAllSpaces(test_space, parameter_fe_spaces))
+      : BaseResidualT(physics_name, mesh, test_space, constructAllSpaces(test_space, parameter_fe_spaces))
   {
   }
 
@@ -212,7 +218,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
           // = pressure * (normal_new / norm(normal_old)) * w_old
 
           // We always query the pressure function in the undeformed configuration
-          return pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
+          return -pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
         },
         BaseResidualT::mesh_->domain(boundary_name));
 
@@ -222,7 +228,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
           auto x = X + displacement;
           auto n = cross(get<DERIVATIVE>(x));
           auto pressure = pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
-          return inner(get<VALUE>(V), pressure);
+          return -inner(get<VALUE>(V), pressure);
         },
         BaseResidualT::mesh_->domain(boundary_name));
   }
@@ -286,7 +292,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
 
       auto stress = material_.pkStress(state, du_dX, params...);
 
-      return serac::tuple{material_.density(params...) * d2u_dt2, stress};
+      return serac::tuple{-material_.density(params...) * d2u_dt2, -stress};
     }
   };
 
@@ -333,7 +339,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
 
       auto stress = material_.pkStress(*dt_, state, du_dX, dv_dX, params...);
 
-      return serac::tuple{material_.density(params...) * d2u_dt2, stress};
+      return serac::tuple{-material_.density(params...) * d2u_dt2, -stress};
     }
   };
 };
@@ -343,13 +349,12 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
  */
 template <int order, int dim, typename... ParameterSpaces>
 auto create_solid_residual(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
-                           const std::vector<serac::FiniteElementState*>& states,  // shape, u, v, a, e
+                           const std::vector<serac::FiniteElementState*>& states,  // u, v, a, e
                            const std::vector<serac::FiniteElementState*>& params)
 {
   /// Local enum to better document the expected indexing order to states
   enum FieldNumbering
   {
-    SHAPE,
     DISP,
     VELO,
     ACCEL,
@@ -363,8 +368,7 @@ auto create_solid_residual(const std::string& physics_name, std::shared_ptr<sera
 
   using ResidualT = SolidResidual<order, dim, Parameters<ParameterSpaces...>>;
 
-  return std::make_shared<ResidualT>(physics_name, mesh, states[SHAPE]->space(), states[DISP]->space(),
-                                     parameter_fe_spaces);
+  return std::make_shared<ResidualT>(physics_name, mesh, states[DISP]->space(), parameter_fe_spaces);
 }
 
 }  // namespace serac

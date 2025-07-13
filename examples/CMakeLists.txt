@@ -4,10 +4,12 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+add_custom_target(run_examples
+                  COMMAND ctest -C Example -L Example -VV)
+
 configure_file(
     using-with-cmake/host-config.cmake.in
     ${CMAKE_BINARY_DIR}/examples/using-with-cmake/host-config.cmake)
-
 
 install(
     FILES
@@ -29,4 +31,3 @@ add_subdirectory(buckling)
 
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
-

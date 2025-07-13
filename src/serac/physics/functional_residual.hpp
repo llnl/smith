@@ -21,7 +21,7 @@
 
 namespace serac {
 
-template <int spatial_dim, typename ShapeDispSpace, typename OutputSpace, typename inputs = Parameters<>,
+template <int spatial_dim, typename OutputSpace, typename inputs = Parameters<>,
           typename input_indices = std::make_integer_sequence<int, inputs::n>>
 class FunctionalResidual;
 
@@ -32,23 +32,23 @@ class FunctionalResidual;
  * stiffness matrices based on body and boundary integrals.
  *
  */
-template <int spatial_dim, typename ShapeDispSpace, typename OutputSpace, typename... InputSpaces, int... input_indices>
-class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<InputSpaces...>,
+template <int spatial_dim, typename OutputSpace, typename... InputSpaces, int... input_indices>
+class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
                          std::integer_sequence<int, input_indices...>> : public Residual {
  public:
   using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
+
+  using ShapeDispSpace = H1<1, spatial_dim>;  ///< typedef
 
   /**
    * @brief Construct a new FunctionalResidual object
    *
    * @param physics_name A name for the physics module instance
    * @param mesh The serac mesh
-   * @param shape_disp_space Shape displacement space
    * @param output_mfem_space Test space
    * @param input_mfem_spaces Vector of finite element spaces which are arguments to the residual
    */
   FunctionalResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
-                     const mfem::ParFiniteElementSpace& shape_disp_space,
                      const mfem::ParFiniteElementSpace& output_mfem_space, const SpacesT& input_mfem_spaces)
       : Residual(physics_name), mesh_(mesh)
   {
@@ -66,6 +66,8 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
       for_constexpr<sizeof...(InputSpaces)>(
           [&](auto i) { vector_residual_trial_spaces[i + 1] = input_mfem_spaces[i]; });
     }
+
+    auto& shape_disp_space = mesh_->shapeDisplacement().space();
 
     residual_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>>(
         &shape_disp_space, &output_mfem_space, trial_spaces);
@@ -167,16 +169,17 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   }
 
   /// @overload
-  mfem::Vector residual(double time, double dt, const std::vector<FieldPtr>& fields, int block_row = 0) const override
+  mfem::Vector residual(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                        int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
     dt_ = dt;
-    auto ret = (*residual_)(time, *fields[0], *fields[input_indices + 1]...);
+    auto ret = (*residual_)(time, mesh_->shapeDisplacement(), *fields[input_indices]...);
     return ret;
   }
 
   /// @overload
-  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<FieldPtr>& fields,
+  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                                  const std::vector<double>& jacobian_weights,
                                                  int block_row = 0) const override
   {
@@ -199,11 +202,12 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
       }
     };
 
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, fields);
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
+                                  &mesh_->shapeDisplacement(), fields);
 
     for (size_t input_col = 0; input_col < jacobian_weights.size(); ++input_col) {
       if (jacobian_weights[input_col] != 0.0) {
-        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, fields));
+        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, &mesh_->shapeDisplacement(), fields));
         addToJ(jacobian_weights[input_col], assemble(K));
       }
     }
@@ -212,7 +216,7 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
   }
 
   /// @overload
-  void jvp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
+  void jvp(double time, double dt, const std::vector<ConstFieldPtr>& fields, const std::vector<ConstFieldPtr>& v_fields,
            const std::vector<DualFieldPtr>& jvp_reactions) const override
   {
     SLIC_ERROR_IF(v_fields.size() != fields.size(),
@@ -220,20 +224,21 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
     SLIC_ERROR_IF(jvp_reactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time, fields);
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
+                                  &mesh_->shapeDisplacement(), fields);
 
     *jvp_reactions[0] = 0.0;
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (v_fields[input_col] != nullptr) {
-        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, fields));
+        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, &mesh_->shapeDisplacement(), fields));
         K.AddMult(*v_fields[input_col], *jvp_reactions[0]);
       }
     }
   }
 
   /// @overload
-  void vjp(double time, double dt, const std::vector<FieldPtr>& fields, const std::vector<FieldPtr>& v_fields,
+  void vjp(double time, double dt, const std::vector<ConstFieldPtr>& fields, const std::vector<ConstFieldPtr>& v_fields,
            const std::vector<DualFieldPtr>& vjp_sensitivities) const override
   {
     SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
@@ -241,12 +246,19 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
     SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
-    auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices) + 1>{}, time,
-                                           v_fields[0], fields);
+    auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
+                                           &mesh_->shapeDisplacement(), v_fields[0], fields);
+    {
+      auto shape_vjp = serac::get<DERIVATIVE>((*v_residual_)(DifferentiateWRT<0>{}, time, mesh_->shapeDisplacement(),
+                                                             *v_fields[0], *fields[input_indices]...));
+      auto shape_vjp_vector = assemble(shape_vjp);
+      mesh_->shapeDisplacementDual() += *shape_vjp_vector;
+    }
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-        auto vecJac = serac::get<DERIVATIVE>(vecJacs[input_col](time, v_fields[0], fields));
+        auto vecJac =
+            serac::get<DERIVATIVE>(vecJacs[input_col](time, &mesh_->shapeDisplacement(), v_fields[0], fields));
         auto vecJacMfemVector = assemble(vecJac);
         *vjp_sensitivities[input_col] += *vecJacMfemVector;
       }
@@ -268,29 +280,29 @@ class FunctionalResidual<spatial_dim, ShapeDispSpace, OutputSpace, Parameters<In
  protected:
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
   template <int... i>
-  auto jacobianFunctions(std::integer_sequence<int, i...>, double time, const std::vector<FieldPtr>& fs) const
+  auto jacobianFunctions(std::integer_sequence<int, i...>, double time, ConstFieldPtr shape_disp,
+                         const std::vector<ConstFieldPtr>& fs) const
   {
-    using JacFuncType = std::function<decltype((*residual_)(DifferentiateWRT<1>{}, time, *fs[i]...))(
-        double, const std::vector<FieldPtr>&)>;
-    return std::array<JacFuncType, sizeof...(i)>{[=](double _time, const std::vector<FieldPtr>& _fs) {
-      return (*residual_)(DifferentiateWRT<i>{}, _time, *_fs[i]...);
-    }...};
+    using JacFuncType = std::function<decltype((*residual_)(DifferentiateWRT<1>{}, time, *shape_disp, *fs[i]...))(
+        double, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
+    return std::array<JacFuncType, sizeof...(i)>{
+        [=](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
+          return (*residual_)(DifferentiateWRT<i + 1>{}, _time, *_shape_disp, *_fs[i]...);
+        }...};
   };
 
   /// @brief Utility to get array of jvp functions, one for each input field in fs
   template <int... i>
-  auto vectorJacobianFunctions(std::integer_sequence<int, i...>, double time, FieldPtr v,
-                               const std::vector<FieldPtr>& fs) const
+  auto vectorJacobianFunctions(std::integer_sequence<int, i...>, double time, ConstFieldPtr shape_disp, ConstFieldPtr v,
+                               const std::vector<ConstFieldPtr>& fs) const
   {
-    using GradFuncType = std::function<decltype((*v_residual_)(DifferentiateWRT<1>{}, time, *v, *fs[i]...))(
-        double, FieldPtr, const std::vector<FieldPtr>&)>;
-    return std::array<GradFuncType, sizeof...(i)>{[=](double _time, FieldPtr _v, const std::vector<FieldPtr>& _fs) {
-      std::vector<mfem::Vector*> _vfs{_v};
-      _vfs.insert(_vfs.end(), _fs.begin() + 1, _fs.end());
-      constexpr bool is_shape_disp = i == 0;
-      constexpr int diff_index = is_shape_disp ? 0 : i + 1;
-      return (*v_residual_)(DifferentiateWRT<diff_index>{}, _time, *_fs[0], *_vfs[i]...);
-    }...};
+    using GradFuncType =
+        std::function<decltype((*v_residual_)(DifferentiateWRT<1>{}, time, *shape_disp, *v, *fs[i]...))(
+            double, ConstFieldPtr, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
+    return std::array<GradFuncType, sizeof...(i)>{
+        [=](double _time, ConstFieldPtr _shape_disp, ConstFieldPtr _v, const std::vector<ConstFieldPtr>& _fs) {
+          return (*v_residual_)(DifferentiateWRT<i + 2>{}, _time, *_shape_disp, *_v, *_fs[i]...);
+        }...};
   };
 
   /// @brief timestep, this needs to be held here and modified for rate dependent applications

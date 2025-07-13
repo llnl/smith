@@ -42,12 +42,12 @@ TEST_P(ContactTest, patch)
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), "patch_mesh", 2, 0);
+  auto mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), "patch_mesh", 2, 0);
 
-  pmesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(1));
-  pmesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(2));
-  pmesh->addDomainOfBoundaryElements("z0_face", serac::by_attr<dim>(3));
-  pmesh->addDomainOfBoundaryElements("zmax_face", serac::by_attr<dim>(6));
+  mesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("z0_face", serac::by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("zmax_face", serac::by_attr<dim>(6));
 
   // TODO: investigate performance with Petsc
   // #ifdef SERAC_USE_PETSC
@@ -80,21 +80,21 @@ TEST_P(ContactTest, patch)
                                  .jacobian = std::get<1>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
-                                             solid_mechanics::default_quasistatic_options, name, "patch_mesh");
+                                             solid_mechanics::default_quasistatic_options, name, mesh);
 
   double K = 10.0;
   double G = 0.25;
   solid_mechanics::NeoHookean mat{1.0, K, G};
-  solid_solver.setMaterial(mat, pmesh->entireBody());
+  solid_solver.setMaterial(mat, mesh->entireBody());
 
   // Define the function for the initial displacement and boundary condition
   auto applied_disp_function = [](tensor<double, dim>, auto) { return tensor<double, dim>{{0, 0, -0.01}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  solid_solver.setFixedBCs(pmesh->domain("x0_faces"), Component::X);
-  solid_solver.setFixedBCs(pmesh->domain("y0_faces"), Component::Y);
-  solid_solver.setFixedBCs(pmesh->domain("z0_face"), Component::Z);
-  solid_solver.setDisplacementBCs(applied_disp_function, pmesh->domain("zmax_face"), Component::Z);
+  solid_solver.setFixedBCs(mesh->domain("x0_faces"), Component::X);
+  solid_solver.setFixedBCs(mesh->domain("y0_faces"), Component::Y);
+  solid_solver.setFixedBCs(mesh->domain("z0_face"), Component::Z);
+  solid_solver.setDisplacementBCs(applied_disp_function, mesh->domain("zmax_face"), Component::Z);
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {4}, {5}, contact_options);
