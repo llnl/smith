@@ -298,6 +298,13 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     v_ = 0.0;
     du_ = 0.0;
     predicted_displacement_ = 0.0;
+  }
+
+  /// @overload
+  void resetStates(int cycle = 0, double time = 0.0) override
+  {
+    BasePhysics::initializeBasePhysicsStates(cycle, time);
+    initializeSolidMechanicsStates();
 
     if (checkpoint_to_disk_) {
       outputStateToDisk();
@@ -308,13 +315,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
         checkpoint_states_[state_name].push_back(state(state_name));
       }
     }
-  }
-
-  /// @overload
-  void resetStates(int cycle = 0, double time = 0.0) override
-  {
-    BasePhysics::initializeBasePhysicsStates(cycle, time);
-    initializeSolidMechanicsStates();
   }
 
   /**
