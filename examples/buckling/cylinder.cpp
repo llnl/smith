@@ -11,12 +11,12 @@
  *
  * @note Run with mortar contact and PETSc preconditioners:
  * @code{.sh}
- * ./build/examples/buckling_cylinder --contact-type 1 --preconditioner 6 \
- *     -options_file examples/buckling/cylinder_petsc_options.yml
+ * ./build/examples/buckling_cylinder --contact --contact-type 1 --preconditioner 6 \
+ *    -options_file examples/buckling/cylinder_petsc_options.yml
  * @endcode
  * @note Run with penalty contact and HYPRE BoomerAMG preconditioner
  * @code{.sh}
- * ./build/examples/buckling_cylinder --penalty 1e3
+ * ./build/examples/buckling_cylinder
  * @endcode
  * @note Run without contact:
  * @code{.sh}
@@ -36,10 +36,6 @@
 #include "serac/serac.hpp"
 
 using namespace serac;
-
-std::function<std::string(const std::string&)> petscPCTypeValidator = [](const std::string& in) -> std::string {
-  return std::to_string(static_cast<int>(mfem_ext::stringToPetscPCType(in)));
-};
 
 /**
  * @brief Run buckling cylinder example
@@ -80,60 +76,54 @@ int main(int argc, char* argv[])
   bool use_contact = true;
   auto contact_type = serac::ContactEnforcement::Penalty;
 
+  // Option for testing purposes only, to reduce runtime
+  bool use_fast_options = false;
+
   // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
 
   // Handle command line arguments
   axom::CLI::App app{"Hollow cylinder buckling example"};
   // Mesh options
-  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")
-      ->default_val("0")  // Matches value set above
-      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")->check(axom::CLI::PositiveNumber);
   app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps")
-      ->default_val("0")  // Matches value set above
       ->check(axom::CLI::PositiveNumber);
   // Solver options
   app.add_option("--nonlinear-solver", nonlinear_options.nonlin_solver,
                  "Nonlinear solver (Index of enum serac::NonlinearSolver)")
-      ->default_val("3")  // Matches index of value set above
       ->expected(0, 10);
   app.add_option("--linear-solver", linear_options.linear_solver, "Linear solver (Index of enum serac::LinearSolver)")
-      ->default_val("1")  // Matches index of value set above
       ->expected(0, 5);
   app.add_option("--preconditioner", linear_options.preconditioner,
                  "Preconditioner (Index of enum serac::NonlinearSolver)")
-      ->default_val("3")  // Matches index of value set above
       ->expected(0, 7);
   app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
                  "Petsc preconditioner (Index of enum serac::PetscPCType)")
-      ->transform(
-          [](const std::string& in) -> std::string {
-            return std::to_string(static_cast<int>(mfem_ext::stringToPetscPCType(in)));
-          },
-          "Convert string to PetscPCType", "PetscPCTypeTransform")
-      ->default_val("0")  // Matches index of value set by class
       ->expected(0, 14);
-  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")
-      ->default_val("0.1")  // Matches value set above
-      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")->check(axom::CLI::PositiveNumber);
   // Contact options
-  app.add_flag("--contact,!--no-contact", use_contact, "Use contact for the inner faces of the cylinder");
+  auto opt_contact =
+      app.add_flag("--contact,!--no-contact", use_contact, "Use contact for the inner faces of the cylinder");
   app.add_option("--contact-type", contact_type,
                  "Type of contact enforcement, 0 for penalty or 1 for Lagrange multipliers (Index of enum "
                  "serac::ContactEnforcement)")
-      ->needs("--contact")
-      ->default_val("0")  // Matches index of value set above
+      ->needs(opt_contact)
       ->expected(0, 1);
-  app.add_option("--penalty", penalty, "Penalty for contact")
-      ->needs("--contact")
-      ->default_val("1e3")  // Matches value set above
-      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--penalty", penalty, "Penalty for contact")->needs(opt_contact)->check(axom::CLI::PositiveNumber);
+  // Misc options
+  app.add_flag("--fast", use_fast_options, "Reduce max iterations and delta-time for testing purposes.");
 
   // Need to allow extra arguments for PETSc support
   app.set_help_flag("--help");
   app.allow_extras()->parse(argc, argv);
 
   nonlinear_options.force_monolithic = linear_options.preconditioner != Preconditioner::Petsc;
+
+  if (use_fast_options) {
+    dt = 1;
+    nonlinear_options.max_iterations = 5;
+    linear_options.max_iterations = 5;
+  }
 
   // Create DataStore
   std::string name = use_contact ? "buckling_cylinder_contact" : "buckling_cylinder";
@@ -143,23 +133,21 @@ int main(int argc, char* argv[])
 
   // Create and refine mesh
   std::string filename = SERAC_REPO_DIR "/data/meshes/hollow-cylinder.mesh";
-  auto mesh = serac::buildMeshFromFile(filename);
-  auto refined_mesh = mesh::refineAndDistribute(std::move(mesh), serial_refinement, parallel_refinement);
-  auto& pmesh = serac::StateManager::setMesh(std::move(refined_mesh), mesh_tag);
+  auto mesh = std::make_shared<serac::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
 
   // Surfaces for boundary conditions
   constexpr int xneg_attr{2};
   constexpr int xpos_attr{3};
-  auto xneg = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(xneg_attr));
-  auto xpos = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(xpos_attr));
-  auto bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  auto top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(4));
+  mesh->addDomainOfBoundaryElements("xneg", serac::by_attr<dim>(xneg_attr));
+  mesh->addDomainOfBoundaryElements("xpos", serac::by_attr<dim>(xpos_attr));
+  mesh->addDomainOfBoundaryElements("bottom", serac::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("top", serac::by_attr<dim>(4));
 
   // Create solver, either with or without contact
   std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
   if (use_contact) {
     auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim>>(
-        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag);
+        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
 
     // Add the contact interaction
     serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
@@ -171,20 +159,19 @@ int main(int argc, char* argv[])
     solid_solver = std::move(solid_contact_solver);
   } else {
     solid_solver = std::make_unique<serac::SolidMechanics<p, dim>>(
-        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag);
-    solid_solver->setPressure([&](auto&, double t) { return 0.01 * t; }, xpos);
+        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
+    solid_solver->setPressure([&](auto&, double t) { return 0.01 * t; }, mesh->domain("xpos"));
   }
 
   // Define a Neo-Hookean material
   auto lambda = 1.0;
   auto G = 0.1;
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
-  Domain whole_mesh = EntireDomain(pmesh);
-  solid_solver->setMaterial(mat, whole_mesh);
+  solid_solver->setMaterial(mat, mesh->entireBody());
 
   // Set up essential boundary conditions
   // Bottom of cylinder is fixed
-  solid_solver->setFixedBCs(bottom);
+  solid_solver->setFixedBCs(mesh->domain("bottom"));
 
   // Top of cylinder has prescribed displacement of magnitude in x-z direction
   auto compress = [&](const serac::tensor<double, dim>, double t) {
@@ -192,8 +179,8 @@ int main(int argc, char* argv[])
     u[0] = u[2] = -1.5 / std::sqrt(2.0) * t;
     return u;
   };
-  solid_solver->setDisplacementBCs(compress, top, Component::X + Component::Z);
-  solid_solver->setDisplacementBCs(compress, top,
+  solid_solver->setDisplacementBCs(compress, mesh->domain("top"), Component::X + Component::Z);
+  solid_solver->setDisplacementBCs(compress, mesh->domain("top"),
                                    Component::Y);  // BT: Would it be better to leave this component free?
 
   // Finalize the data structures

@@ -14,10 +14,11 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
@@ -78,19 +79,18 @@ class AffineSolution {
    * @param essential_boundaries Boundary attributes on which essential boundary conditions are desired
    */
   template <int p, typename Material>
-  void applyLoads(const Material& material, SolidMechanics<p, dim>& sf, Domain essential_boundary) const
+  void applyLoads(const Material& material, SolidMechanics<p, dim>& solid, Domain essential_boundary) const
   {
     // essential BCs
     auto ebc_func = [*this](tensor<double, dim> X, double) { return this->eval(X); };
 
-    sf.setDisplacementBCs(ebc_func, essential_boundary);
+    solid.setDisplacementBCs(ebc_func, essential_boundary);
 
     // natural BCs
     typename Material::State state;
     tensor<double, dim, dim> P = material(state, A);
     auto traction = [P](auto, auto n0, auto) { return dot(P, n0); };
-    Domain entire_boundary = EntireBoundary(sf.mesh());
-    sf.setTraction(traction, entire_boundary);
+    solid.setTraction(traction, solid.mesh().entireBoundary());
   }
 
   const tensor<double, dim, dim> A;  /// Linear part of solution. Equivalently, the displacement gradient
@@ -193,11 +193,10 @@ double solution_error(PatchBoundaryCondition bc)
       SLIC_ERROR_ROOT("unsupported element type for patch test");
       break;
   }
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename));
 
   std::string mesh_tag{"mesh_tag"};
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
 
   // Construct a solid mechanics solver
   serac::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::Newton,
@@ -207,20 +206,18 @@ double solution_error(PatchBoundaryCondition bc)
                                                       .print_level = 1};
 
   auto equation_solver = std::make_unique<EquationSolver>(
-      nonlin_solver_options, serac::solid_mechanics::default_linear_options, pmesh.GetComm());
+      nonlin_solver_options, serac::solid_mechanics::default_linear_options, mesh->getComm());
 
-  SolidMechanics<p, dim> solid(std::move(equation_solver), solid_mechanics::default_quasistatic_options, "solid",
-                               mesh_tag);
+  SolidMechanics<p, dim> solid(std::move(equation_solver), solid_mechanics::default_quasistatic_options, "solid", mesh);
 
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = 1.0, .G = 1.0};
-  Domain domain = EntireDomain(pmesh);
 
-  solid.setMaterial(mat, domain);
+  solid.setMaterial(mat, mesh->entireBody());
 
   constexpr double dt = 1.0;
 
-  Domain essential_boundary = Domain::ofBoundaryElements(pmesh, by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
-  exact_displacement.applyLoads(mat, solid, essential_boundary);
+  mesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
+  exact_displacement.applyLoads(mat, solid, mesh->domain("essential_boundary"));
 
   // Finalize the data structures
   solid.completeSetup();
@@ -298,17 +295,13 @@ double pressure_error()
       SLIC_ERROR_ROOT("unsupported element type for patch test");
       break;
   }
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename));
 
   std::string mesh_tag{"mesh"};
+  auto mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
-
-  Domain driven = Domain::ofBoundaryElements(pmesh, by_attr<dim>(driven_attr));
-  Domain fixed_y = Domain::ofBoundaryElements(pmesh, by_attr<dim>(fixed_y_attrs));
-  Domain fixed_z = Domain::ofBoundaryElements(pmesh, by_attr<dim>(fixed_z_attrs));
-  Domain material_block = EntireDomain(pmesh);
-  Domain boundary = EntireBoundary(pmesh);
+  mesh->addDomainOfBoundaryElements("driven", by_attr<dim>(driven_attr));
+  mesh->addDomainOfBoundaryElements("fixed_y", by_attr<dim>(fixed_y_attrs));
+  mesh->addDomainOfBoundaryElements("fixed_z", by_attr<dim>(fixed_z_attrs));
 
 // Construct a solid mechanics solver
 #ifdef SERAC_USE_SUNDIALS
@@ -322,14 +315,13 @@ double pressure_error()
 #endif
 
   auto equation_solver = std::make_unique<EquationSolver>(
-      nonlin_solver_options, serac::solid_mechanics::default_linear_options, pmesh.GetComm());
+      nonlin_solver_options, serac::solid_mechanics::default_linear_options, mesh->getComm());
 
-  SolidMechanics<p, dim> solid(std::move(equation_solver), solid_mechanics::default_quasistatic_options, "solid",
-                               mesh_tag);
+  SolidMechanics<p, dim> solid(std::move(equation_solver), solid_mechanics::default_quasistatic_options, "solid", mesh);
 
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = 1.0, .G = 1.0};
 
-  solid.setMaterial(mat, material_block);
+  solid.setMaterial(mat, mesh->entireBody());
 
   typename solid_mechanics::NeoHookean::State state;
   // clang-format off
@@ -347,14 +339,14 @@ double pressure_error()
   double pressure = -sigma[0][0];
 
   // Set the pressure corresponding to 10% uniaxial strain
-  solid.setPressure([pressure](auto&, double) { return pressure; }, boundary);
+  solid.setPressure([pressure](auto&, double) { return pressure; }, mesh->entireBoundary());
 
   // Define the essential boundary conditions corresponding to 10% uniaxial strain everywhere
   // except the pressure loaded surface
-  solid.setDisplacementBCs(exact_uniaxial_strain, driven);
-  solid.setFixedBCs(fixed_y, Component::Y);
+  solid.setDisplacementBCs(exact_uniaxial_strain, mesh->domain("driven"));
+  solid.setFixedBCs(mesh->domain("fixed_y"), Component::Y);
   if constexpr (dim == 3) {
-    solid.setFixedBCs(fixed_z, Component::Z);
+    solid.setFixedBCs(mesh->domain("fixed_z"), Component::Z);
   }
 
   // Finalize the data structures

@@ -8,8 +8,9 @@
 
 #include <gtest/gtest.h>
 
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 
@@ -43,17 +44,15 @@ TEST(Solid, MultiMaterial)
   constexpr double H = 1.0;
   constexpr double VOLUME = L * W * H;
 
-  auto mesh = mesh::refineAndDistribute(buildCuboidMesh(8, 1, 1, L, W, H), serial_refinement, parallel_refinement);
-
   const std::string mesh_tag{"mesh"};
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto mesh = std::make_shared<serac::Mesh>(buildCuboidMesh(8, 1, 1, L, W, H), mesh_tag, serial_refinement,
+                                            parallel_refinement);
 
   // identify the relevant boundary domains on this mesh
-  Domain x_min = Domain::ofBoundaryElements(pmesh, by_attr<dim>(5));
-  Domain y_min = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
-  Domain z_min = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
-  Domain end_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("x_min", by_attr<dim>(5));
+  mesh->addDomainOfBoundaryElements("y_min", by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("z_min", by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("end_face", by_attr<dim>(3));
 
   // _solver_params_start
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
@@ -65,7 +64,7 @@ TEST(Solid, MultiMaterial)
                                                   .print_level = 1};
 
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                               "solid_mechanics", mesh_tag);
+                               "solid_mechanics", mesh);
   // _solver_params_end
 
   using Material = solid_mechanics::LinearIsotropic;
@@ -81,19 +80,23 @@ TEST(Solid, MultiMaterial)
   auto is_in_left = [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
     return average(coords)[0] < 0.5 * L;
   };
-  Domain left = Domain::ofElements(pmesh, is_in_left);
-  Domain right = EntireDomain(pmesh) - left;
+  auto is_in_right = [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
+    return average(coords)[0] >= 0.5 * L;
+  };
 
-  solid.setMaterial(mat_left, left);
-  solid.setMaterial(mat_right, right);
+  mesh->addDomainOfBodyElements("left", is_in_left);
+  mesh->addDomainOfBodyElements("right", is_in_right);
+
+  solid.setMaterial(mat_left, mesh->domain("left"));
+  solid.setMaterial(mat_right, mesh->domain("right"));
 
   constexpr double stress = 1.0;
   solid.setTraction(
-      DependsOn<>{}, [stress](auto, auto n, auto) { return stress * n; }, end_face);
+      DependsOn<>{}, [stress](auto, auto n, auto) { return stress * n; }, mesh->domain("end_face"));
 
-  solid.setFixedBCs(x_min, Component::X);
-  solid.setFixedBCs(y_min, Component::Y);
-  solid.setFixedBCs(z_min, Component::Z);
+  solid.setFixedBCs(mesh->domain("x_min"), Component::X);
+  solid.setFixedBCs(mesh->domain("y_min"), Component::Y);
+  solid.setFixedBCs(mesh->domain("z_min"), Component::Z);
 
   solid.completeSetup();
 
@@ -111,10 +114,12 @@ TEST(Solid, MultiMaterial)
   };
 
   Functional<double(H1<p, dim>)> average_strain_left({&solid.displacement().space()});
-  average_strain_left.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, average_strain_integrand, left);
+  average_strain_left.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, average_strain_integrand,
+                                        mesh->domain("left"));
 
   Functional<double(H1<p, dim>)> average_strain_right({&solid.displacement().space()});
-  average_strain_right.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, average_strain_integrand, right);
+  average_strain_right.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, average_strain_integrand,
+                                         mesh->domain("right"));
 
   EXPECT_NEAR(average_strain_left(solid.time(), solid.displacement()), stress / E_left, 1e-10);
   EXPECT_NEAR(average_strain_right(solid.time(), solid.displacement()), stress / E_right, 1e-10);
@@ -162,15 +167,13 @@ TEST(Solid, MultiMaterialWithState)
 
   constexpr double applied_stress = 1.0;
 
-  auto mesh = mesh::refineAndDistribute(buildCuboidMesh(8, 1, 1, L, W, H), serial_refinement, parallel_refinement);
-
   const std::string mesh_tag{"mesh"};
+  auto mesh = std::make_shared<serac::Mesh>(buildCuboidMesh(8, 1, 1, L, W, H), mesh_tag, serial_refinement,
+                                            parallel_refinement);
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
-
-  Domain x_min_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(5));
-  Domain y_min_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
-  Domain z_min_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("x_min_face", by_attr<dim>(5));
+  mesh->addDomainOfBoundaryElements("y_min_face", by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("z_min_face", by_attr<dim>(1));
 
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
@@ -181,13 +184,17 @@ TEST(Solid, MultiMaterialWithState)
                                                   .print_level = 1};
 
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                               "solid_mechanics", mesh_tag);
+                               "solid_mechanics", mesh);
 
   auto is_in_left = [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
     return average(coords)[0] < 0.5 * L;
   };
-  Domain left = Domain::ofElements(pmesh, is_in_left);
-  Domain right = EntireDomain(pmesh) - left;
+  auto is_in_right = [](std::vector<tensor<double, dim>> coords, int /* attribute */) {
+    return average(coords)[0] >= 0.5 * L;
+  };
+
+  mesh->addDomainOfBodyElements("left", is_in_left);
+  mesh->addDomainOfBodyElements("right", is_in_right);
 
   using Hardening = solid_mechanics::LinearHardening;
   using MaterialRight = solid_mechanics::J2SmallStrain<Hardening>;
@@ -213,18 +220,18 @@ TEST(Solid, MultiMaterialWithState)
   MaterialLeft mat_left{.density = 1.0, .K = E_left / 3.0 / (1 - 2 * nu_left), .G = 0.5 * E_left / (1 + nu_left)};
 
   MaterialRight::State initial_state{};
-  auto qdata = solid.createQuadratureDataBuffer(initial_state, right);
+  auto qdata = solid.createQuadratureDataBuffer(initial_state, mesh->domain("right"));
 
-  solid.setMaterial(mat_left, left);
-  solid.setRateDependentMaterial(mat_right, right, qdata);
+  solid.setMaterial(mat_left, mesh->domain("left"));
+  solid.setRateDependentMaterial(mat_right, mesh->domain("right"), qdata);
 
-  Domain end_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("end_face", by_attr<dim>(3));
   solid.setTraction(
-      DependsOn<>{}, [applied_stress](auto, auto n, auto) { return applied_stress * n; }, end_face);
+      DependsOn<>{}, [applied_stress](auto, auto n, auto) { return applied_stress * n; }, mesh->domain("end_face"));
 
-  solid.setFixedBCs(x_min_face, Component::X);
-  solid.setFixedBCs(y_min_face, Component::Y);
-  solid.setFixedBCs(z_min_face, Component::Z);
+  solid.setFixedBCs(mesh->domain("x_min_face"), Component::X);
+  solid.setFixedBCs(mesh->domain("y_min_face"), Component::Y);
+  solid.setFixedBCs(mesh->domain("z_min_face"), Component::Z);
 
   solid.completeSetup();
 
@@ -244,10 +251,12 @@ TEST(Solid, MultiMaterialWithState)
   };
 
   Functional<double(H1<p, dim>)> average_strain_left({&solid.displacement().space()});
-  average_strain_left.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, average_strain_integrand, left);
+  average_strain_left.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, average_strain_integrand,
+                                        mesh->domain("left"));
 
   Functional<double(H1<p, dim>)> average_strain_right({&solid.displacement().space()});
-  average_strain_right.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, average_strain_integrand, right);
+  average_strain_right.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, average_strain_integrand,
+                                         mesh->domain("right"));
 
   EXPECT_NEAR(average_strain_left(solid.time(), solid.displacement()), applied_stress / E_left, 1e-10);
 

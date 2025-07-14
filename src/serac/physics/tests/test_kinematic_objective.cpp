@@ -10,7 +10,7 @@
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/common.hpp"
@@ -27,20 +27,20 @@ struct ConstrainedResidualFixture : public testing::Test {
   using DensitySpace = serac::L2<disp_order - 1>;
   using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 
+  using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
+
   enum FIELD
   {
-    SHAPE_DISP,
-    DISP,
-    VELO,
-    ACCEL,
-    DENSITY
+    DISP = SolidResidualT::DISPLACEMENT,
+    VELO = SolidResidualT::VELOCITY,
+    ACCEL = SolidResidualT::ACCELERATION,
+    DENSITY = SolidResidualT::NUM_STATES
   };
 
   auto constructResidual(const std::string& physics_name)
   {
-    using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
-    auto solid_mechanics_residual = std::make_shared<SolidResidualT>(physics_name, mesh, states[SHAPE_DISP].space(),
-                                                                     states[DISP].space(), getSpaces(params));
+    auto solid_mechanics_residual =
+        std::make_shared<SolidResidualT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
     // setup material model
     SolidMaterial mat;
     mat.K = 1.0;
@@ -60,16 +60,16 @@ struct ConstrainedResidualFixture : public testing::Test {
   {
     std::vector<std::shared_ptr<serac::ScalarObjective>> constraint_evaluators;
 
-    using ObjectiveT = serac::FunctionalObjective<dim, VectorSpace, serac::Parameters<VectorSpace, DensitySpace>>;
+    using ObjectiveT = serac::FunctionalObjective<dim, serac::Parameters<VectorSpace, DensitySpace>>;
 
     double time = 0.0;
     double dt = 0.0;
-    auto all_states = getPointers(states, params);
-    auto objective_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[DENSITY]};
+    auto input_fields = getConstFieldPointers(states, params);
+    auto objective_states = {input_fields[DISP], input_fields[DENSITY]};
 
-    ObjectiveT::SpacesT param_space_ptrs{&all_states[DISP]->space(), &all_states[DENSITY]->space()};
+    ObjectiveT::SpacesT param_space_ptrs{&input_fields[DISP]->space(), &input_fields[DENSITY]->space()};
 
-    ObjectiveT mass_objective("mass constraining", mesh, all_states[SHAPE_DISP]->space(), param_space_ptrs);
+    ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
     mass_objective.addBodyIntegral(serac::DependsOn<1>{}, mesh->entireBodyName(),
                                    [](double /*time*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
 
@@ -78,8 +78,7 @@ struct ConstrainedResidualFixture : public testing::Test {
     serac::tensor<double, dim> initial_cg;
 
     for (int i = 0; i < dim; ++i) {
-      auto cg_objective = std::make_shared<ObjectiveT>("translation" + std::to_string(i), mesh,
-                                                       all_states[SHAPE_DISP]->space(), param_space_ptrs);
+      auto cg_objective = std::make_shared<ObjectiveT>("translation" + std::to_string(i), mesh, param_space_ptrs);
       cg_objective->addBodyIntegral(
           serac::DependsOn<0, 1>{}, mesh->entireBodyName(),
           [i](double
@@ -91,8 +90,8 @@ struct ConstrainedResidualFixture : public testing::Test {
     }
 
     for (int i = 0; i < dim; ++i) {
-      auto center_rotation_objective = std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh,
-                                                                    all_states[SHAPE_DISP]->space(), param_space_ptrs);
+      auto center_rotation_objective =
+          std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh, param_space_ptrs);
       center_rotation_objective->addBodyIntegral(serac::DependsOn<0, 1>{}, mesh->entireBodyName(),
                                                  [i, initial_cg](double /*time*/, auto X, auto U, auto RHO) {
                                                    auto u = get<serac::VALUE>(U);
@@ -121,10 +120,9 @@ struct ConstrainedResidualFixture : public testing::Test {
     serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
     serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
     serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
-    serac::FiniteElementState shape_disp = serac::StateManager::newState(VectorSpace{}, "shape_disp", mesh->tag());
     serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-    states = {shape_disp, disp, velo, accel};
+    states = {disp, velo, accel};
     params = {density};
 
     std::string physics_name = "solid";
@@ -153,18 +151,19 @@ TEST_F(ConstrainedResidualFixture, CanComputeResidualObjectivesAndTheirGradients
 {
   double time = 0.0;
   double dt = 1.0;
-  auto all_states = getPointers(states, params);
+  auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = residual->residual(time, dt, all_states);
+  res_vector = residual->residual(time, dt, input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
-  auto objective_states = {all_states[SHAPE_DISP], all_states[DISP], all_states[DENSITY]};
+  auto objective_states = {input_fields[DISP], input_fields[DENSITY]};
   for (const auto& c : constraints) {
     ASSERT_NE(0.0, c->evaluate(time, dt, objective_states));
-    for (int i = 0; i < dim; ++i) {
-      ASSERT_NE(0.0, c->gradient(time, dt, objective_states, i).Norml2());
+    for (size_t f_ordinal = 0; f_ordinal < objective_states.size(); ++f_ordinal) {
+      ASSERT_NE(0.0, c->gradient(time, dt, objective_states, int(f_ordinal)).Norml2());
     }
+    ASSERT_NE(0.0, c->mesh_coordinate_gradient(time, dt, objective_states).Norml2());
   }
 }
 

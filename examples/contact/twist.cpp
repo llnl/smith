@@ -32,12 +32,10 @@ int main(int argc, char* argv[])
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
+  auto mesh = std::make_shared<serac::Mesh>(serac::buildMeshFromFile(filename), "twist_mesh", 3, 0);
 
-  auto mesh = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 3, 0);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "twist_mesh");
-
-  auto fixed_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
-  auto driven_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
+  mesh->addDomainOfBoundaryElements("fixed_surface", serac::by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("driven_surface", serac::by_attr<dim>(6));
 
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 #ifndef MFEM_USE_STRUMPACK
@@ -57,15 +55,14 @@ int main(int argc, char* argv[])
                                         .penalty = 1.0e4,
                                         .jacobian = serac::ContactJacobian::Exact};
 
-  serac::SolidMechanicsContact<p, dim> solid_solver(
-      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "twist_mesh");
+  serac::SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
+                                                    serac::solid_mechanics::default_quasistatic_options, name, mesh);
 
   serac::solid_mechanics::NeoHookean mat{1.0, 10.0, 10.0};
-  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
-  solid_solver.setMaterial(mat, whole_mesh);
+  solid_solver.setMaterial(mat, mesh->entireBody());
 
   // Pass the BC information to the solver object
-  solid_solver.setFixedBCs(fixed_surface);
+  solid_solver.setFixedBCs(mesh->domain("fixed_surface"));
 
   auto applied_displacement = [](serac::tensor<double, dim> x, double t) {
     serac::tensor<double, dim> u{};
@@ -81,7 +78,7 @@ int main(int argc, char* argv[])
     return u;
   };
 
-  solid_solver.setDisplacementBCs(applied_displacement, driven_surface);
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("driven_surface"));
 
   // Add the contact interaction
   auto contact_interaction_id = 0;

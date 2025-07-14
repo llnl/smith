@@ -14,6 +14,7 @@
 
 #include <vector>
 #include "serac/physics/common.hpp"
+#include "serac/physics/field_types.hpp"
 
 namespace mfem {
 class Vector;
@@ -32,9 +33,6 @@ class ScalarObjective {
   /// @brief destructor
   virtual ~ScalarObjective() {}
 
-  /// @brief using
-  using FieldPtr = FiniteElementState*;
-
   /** @brief Virtual interface for computing the scale value for the objective/constrant, given a vector of
    * serac::FiniteElementState*
    *
@@ -43,17 +41,28 @@ class ScalarObjective {
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
    * @return double which is the scalar objective value
    */
-  virtual double evaluate(double time, double dt, const std::vector<FieldPtr>& fields) const = 0;
+  virtual double evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields) const = 0;
 
   /** @brief Virtual interface for computing objective gradient from a vector of serac::FiniteElementState*
    *
    * @param time time
    * @param dt time step
    * @param fields vector of serac::FiniteElementState* as arguments to the residual
-   * @param direction index for which field to take the gradient with respect to
+   * @param field_ordinal index for which field to take the gradient with respect to
    * @return mfem::Vector
    */
-  virtual mfem::Vector gradient(double time, double dt, const std::vector<FieldPtr>& fields, int direction) const = 0;
+  virtual mfem::Vector gradient(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                int field_ordinal) const = 0;
+
+  /** @brief Virtual interface for computing objective gradient with respect to the mesh coordinates
+   *
+   * @param time time
+   * @param dt time step
+   * @param fields vector of serac::FiniteElementState* as arguments to the residual
+   * @return mfem::Vector
+   */
+  virtual mfem::Vector mesh_coordinate_gradient(double time, double dt,
+                                                const std::vector<ConstFieldPtr>& fields) const = 0;
 
   /// @brief name
   std::string name() const { return name_; }

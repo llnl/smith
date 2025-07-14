@@ -31,12 +31,11 @@ int main(int argc, char* argv[])
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex-with-contact-block.mesh";
 
-  auto mesh = serac::mesh::refineAndDistribute(serac::buildMeshFromFile(filename), 2, 0);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), "beam_mesh");
+  auto mesh = std::make_shared<serac::Mesh>(serac::buildMeshFromFile(filename), "beam_mesh", 2, 0);
 
   // create boundary domains for boundary conditions
-  auto support = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  auto applied_displacement_surface = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(6));
+  mesh->addDomainOfBoundaryElements("support", serac::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("applied_displacement_surface", serac::by_attr<dim>(6));
 
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 #ifndef MFEM_USE_STRUMPACK
@@ -57,7 +56,7 @@ int main(int argc, char* argv[])
                                         .jacobian = serac::ContactJacobian::Exact};
 
   serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
-      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "beam_mesh",
+      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh,
       {"bulk_mod", "shear_mod"});
 
   serac::FiniteElementState K_field(serac::StateManager::newState(serac::L2<0>{}, "bulk_mod", "beam_mesh"));
@@ -79,11 +78,10 @@ int main(int argc, char* argv[])
   solid_solver.setParameter(1, G_field);
 
   serac::solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
-  solid_solver.setMaterial(serac::DependsOn<0, 1>{}, mat, whole_mesh);
+  solid_solver.setMaterial(serac::DependsOn<0, 1>{}, mat, mesh->entireBody());
 
   // Pass the BC information to the solver object
-  solid_solver.setFixedBCs(support);
+  solid_solver.setFixedBCs(mesh->domain("support"));
 
   auto applied_displacement = [](serac::tensor<double, dim>, double t) {
     serac::tensor<double, dim> u{};
@@ -91,7 +89,7 @@ int main(int argc, char* argv[])
     return u;
   };
 
-  solid_solver.setDisplacementBCs(applied_displacement, applied_displacement_surface);
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("applied_displacement_surface"));
 
   // Add the contact interaction
   auto contact_interaction_id = 0;

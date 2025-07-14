@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if(TRIBOL_FOUND)
+if(TRIBOL_FOUND AND STRUMPACK_DIR)
     set(CONTACT_EXAMPLES_SOURCES
         beam_bending.cpp
         ironing.cpp
@@ -18,7 +18,11 @@ if(TRIBOL_FOUND)
         blt_add_executable(NAME        contact_${example_name}
                            SOURCES     ${filename}
                            OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
-                           DEPENDS_ON  serac_physics serac_mesh)
+                           DEPENDS_ON  serac_physics serac_mesh_utils)
+
+        serac_add_example_test(NAME           contact_${example_name}
+                               COMMAND        contact_${example_name}
+                               NUM_MPI_TASKS  4)
 
         if(SERAC_ENABLE_HIP)
             blt_add_target_compile_flags(TO contact_${example_name} FLAGS "-fgpu-rdc")

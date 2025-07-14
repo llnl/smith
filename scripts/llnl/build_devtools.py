@@ -32,7 +32,7 @@ def parse_args():
                       dest="short_path",
                       default=False,
                       help="Does not add sys_type or timestamp to tpl directory (useful for CI and debugging).")
-    parser.add_option("-v", "--verbose",
+    parser.add_argument("-v", "--verbose",
                       action="store_true",
                       dest="verbose",
                       default=False,

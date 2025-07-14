@@ -83,17 +83,15 @@ int main(int argc, char* argv[])
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, simulation_tag + "_data");
 
-  auto mesh = serac::mesh::refineAndDistribute(
-      serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length),
+  auto mesh = std::make_shared<serac::Mesh>(
+      serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length), mesh_tag,
       serial_refinement, parallel_refinement);
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // create boundary domains for boundary conditions
-  auto fix_x = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(5));
-  auto fix_y = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
-  auto fix_z = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  auto apply_displacement = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(3));
-  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
+  mesh->addDomainOfBoundaryElements("fix_x", serac::by_attr<dim>(5));
+  mesh->addDomainOfBoundaryElements("fix_y", serac::by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("fix_z", serac::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("apply_displacement", serac::by_attr<dim>(3));
 
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 
@@ -103,8 +101,8 @@ int main(int argc, char* argv[])
                                                   .max_iterations = 200,
                                                   .print_level = 1};
 
-  serac::SolidMechanics<p, dim> solid_solver(
-      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, simulation_tag, mesh_tag);
+  serac::SolidMechanics<p, dim> solid_solver(nonlinear_options, linear_options,
+                                             serac::solid_mechanics::default_quasistatic_options, simulation_tag, mesh);
 
   using Hardening = serac::solid_mechanics::VoceHardening;
   using Material = serac::solid_mechanics::J2<Hardening>;
@@ -112,24 +110,24 @@ int main(int argc, char* argv[])
   Hardening hardening{sigma_y, sigma_sat, strain_constant, eta};
   Material material{E, nu, hardening, density};
 
-  auto internal_states = solid_solver.createQuadratureDataBuffer(Material::State{}, whole_mesh);
+  auto internal_states = solid_solver.createQuadratureDataBuffer(Material::State{}, mesh->entireBody());
 
-  solid_solver.setRateDependentMaterial(material, whole_mesh, internal_states);
+  solid_solver.setRateDependentMaterial(material, mesh->entireBody(), internal_states);
 
-  solid_solver.setFixedBCs(fix_x, serac::Component::X);
-  solid_solver.setFixedBCs(fix_y, serac::Component::Y);
-  solid_solver.setFixedBCs(fix_z, serac::Component::Z);
+  solid_solver.setFixedBCs(mesh->domain("fix_x"), serac::Component::X);
+  solid_solver.setFixedBCs(mesh->domain("fix_y"), serac::Component::Y);
+  solid_solver.setFixedBCs(mesh->domain("fix_z"), serac::Component::Z);
   auto applied_displacement = [strain_rate](serac::vec3, double t) {
     return serac::vec3{strain_rate * x_length * t, 0., 0.};
   };
-  solid_solver.setDisplacementBCs(applied_displacement, apply_displacement, serac::Component::X);
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("apply_displacement"), serac::Component::X);
 
   solid_solver.completeSetup();
 
   double dt = max_time / (time_steps - 1);
 
   // get nodes and dofs to compute total force
-  mfem::Array<int> dof_list = apply_displacement.dof_list(&solid_solver.displacement().space());
+  mfem::Array<int> dof_list = mesh->domain("apply_displacement").dof_list(&solid_solver.displacement().space());
   solid_solver.displacement().space().DofsToVDofs(0, dof_list);
 
   auto compute_net_force = [&dof_list](const serac::FiniteElementDual& reaction) -> double {

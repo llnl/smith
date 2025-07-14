@@ -11,8 +11,9 @@
 
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/thermomechanics.hpp"
 
@@ -77,13 +78,11 @@ TEST(Thermomechanics, ParameterizedMaterial)
   double outer_radius = 1.25;
   double height = 2.0;
 
-  auto mesh =
-      mesh::refineAndDistribute(build_hollow_quarter_cylinder(radial_divisions, angular_divisions, vertical_divisions,
-                                                              inner_radius, outer_radius, height),
-                                serial_refinement, parallel_refinement);
-
   std::string mesh_tag{"mesh"};
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto mesh = std::make_shared<serac::Mesh>(
+      build_hollow_quarter_cylinder(radial_divisions, angular_divisions, vertical_divisions, inner_radius, outer_radius,
+                                    height),
+      mesh_tag, serial_refinement, parallel_refinement);
 
   NonlinearSolverOptions nonlinear_opts = solid_mechanics::default_nonlinear_options;
   LinearSolverOptions linear_opts = solid_mechanics::default_linear_options;
@@ -98,9 +97,9 @@ TEST(Thermomechanics, ParameterizedMaterial)
   linear_opts.petsc_preconditioner = PetscPCType::HMG;
 #endif
 
-  SolidMechanics<p, dim, Parameters<H1<p>, H1<p>>> simulation(
-      nonlinear_opts, linear_opts, solid_mechanics::default_quasistatic_options, "thermomechanics_simulation", mesh_tag,
-      {"theta", "alpha"});
+  SolidMechanics<p, dim, Parameters<H1<p>, H1<p>>> simulation(nonlinear_opts, linear_opts,
+                                                              solid_mechanics::default_quasistatic_options,
+                                                              "thermomechanics_simulation", mesh, {"theta", "alpha"});
 
   double density = 1.0;    ///< density
   double E = 1000.0;       ///< Young's modulus
@@ -108,30 +107,29 @@ TEST(Thermomechanics, ParameterizedMaterial)
   double theta_ref = 0.0;  ///< datum temperature for thermal expansion
 
   ParameterizedThermoelasticMaterial material{density, E, nu, theta_ref};
-  Domain material_block = EntireDomain(pmesh);
-  simulation.setMaterial(DependsOn<0, 1>{}, material, material_block);
+  simulation.setMaterial(DependsOn<0, 1>{}, material, mesh->entireBody());
 
   double deltaT = 1.0;
-  FiniteElementState temperature(pmesh, H1<p>{}, "theta");
+  FiniteElementState temperature(mesh->mfemParMesh(), H1<p>{}, "theta");
 
   temperature = theta_ref;
   simulation.setParameter(0, temperature);
 
   double alpha0 = 1.0e-3;
   auto alpha_fec = std::unique_ptr<mfem::FiniteElementCollection>(new mfem::H1_FECollection(p, dim));
-  FiniteElementState alpha(pmesh, H1<p>{}, "alpha");
+  FiniteElementState alpha(mesh->mfemParMesh(), H1<p>{}, "alpha");
 
   alpha = alpha0;
   simulation.setParameter(1, alpha);
 
   // set up essential boundary conditions
-  Domain x_equals_0 = Domain::ofBoundaryElements(pmesh, by_attr<dim>(4));
-  Domain y_equals_0 = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
-  Domain z_equals_0 = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("x_equals_0", by_attr<dim>(4));
+  mesh->addDomainOfBoundaryElements("y_equals_0", by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("z_equals_0", by_attr<dim>(1));
 
-  simulation.setFixedBCs(x_equals_0, Component::X);
-  simulation.setFixedBCs(y_equals_0, Component::Y);
-  simulation.setFixedBCs(z_equals_0, Component::Z);
+  simulation.setFixedBCs(mesh->domain("x_equals_0"), Component::X);
+  simulation.setFixedBCs(mesh->domain("y_equals_0"), Component::Y);
+  simulation.setFixedBCs(mesh->domain("z_equals_0"), Component::Z);
 
   // Finalize the data structures
   simulation.completeSetup();
@@ -146,7 +144,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
   simulation.outputStateToDisk("paraview");
 
   // create Domains to integrate over
-  Domain top_surface = Domain::ofBoundaryElements(pmesh, [=](std::vector<vec3> vertices, int /* attr */) {
+  mesh->addDomainOfBoundaryElements("top_surface", [=](std::vector<vec3> vertices, int /* attr */) {
     // select the faces whose "average" z coordinate is close to the top of the mesh
     return average(vertices)[2] > 0.99 * height;
   });
@@ -161,7 +159,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
         auto n = normalize(cross(dX_dxi));
         return dot(u, n);
       },
-      top_surface);
+      mesh->domain("top_surface"));
 
   double initial_qoi = qoi(time, simulation.displacement());
   SLIC_INFO_ROOT(axom::fmt::format("vertical displacement integrated over the top surface: {}", initial_qoi));
@@ -169,7 +167,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
 
   Functional<double(H1<p, dim>)> area({&simulation.displacement().space()});
   area.AddSurfaceIntegral(
-      DependsOn<>{}, [=](double /*t*/, auto /*position*/) { return 1.0; }, top_surface);
+      DependsOn<>{}, [=](double /*t*/, auto /*position*/) { return 1.0; }, mesh->domain("top_surface"));
 
   double top_area = area(time, simulation.displacement());
 
@@ -199,7 +197,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
 
   simulation.reverseAdjointTimestep();
 
-  auto& dqoi_dalpha = simulation.computeTimestepSensitivity(1);
+  auto dqoi_dalpha = simulation.computeTimestepSensitivity(1);
 
   double epsilon = 1.0e-5;
   auto dalpha = alpha.CreateCompatibleVector();
@@ -216,6 +214,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
   double final_qoi = qoi(time, simulation.displacement());
 
   double adjoint_qoi_derivative = mfem::InnerProduct(dqoi_dalpha, dalpha);
+
   double fd_qoi_derivative = (final_qoi - initial_qoi) / epsilon;
 
   // compare the expected change in the QoI to the actual change:
@@ -223,7 +222,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
       axom::fmt::format("directional derivative of QoI by adjoint-state method: {}", adjoint_qoi_derivative));
   SLIC_INFO_ROOT(axom::fmt::format("directional derivative of QoI by finite-difference:    {}", fd_qoi_derivative));
 
-  EXPECT_NEAR(0.0, (fd_qoi_derivative - adjoint_qoi_derivative) / fd_qoi_derivative, 3.0e-5);
+  EXPECT_NEAR(fd_qoi_derivative, adjoint_qoi_derivative, fd_qoi_derivative * 3.0e-5);
 }
 
 // output:

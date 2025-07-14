@@ -14,8 +14,9 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/mesh/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
@@ -37,11 +38,9 @@ TEST(HeatTransfer, MoveShape)
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "thermal_shape_solve");
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
   std::string mesh_tag{"mesh"};
-
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  auto mesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   mfem::Vector shape_temperature;
   mfem::Vector pure_temperature;
@@ -84,20 +83,19 @@ TEST(HeatTransfer, MoveShape)
   {
     // Construct a functional-based thermal solver including references to the shape displacement field.
     HeatTransfer<p, dim> thermal_solver(nonlinear_options, linear_options, time_integration_options, "thermal_shape",
-                                        mesh_tag);
+                                        mesh);
 
     // Set the initial temperature and boundary condition
     thermal_solver.setTemperatureBCs(ess_bdr, zero);
     thermal_solver.setTemperature(zero);
 
-    FiniteElementState shape_displacement(pmesh, H1<SHAPE_ORDER, dim>{});
+    FiniteElementState shape_displacement(mesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{});
 
     shape_displacement.project(shape_coef);
     thermal_solver.setShapeDisplacement(shape_displacement);
 
-    Domain whole_domain = EntireDomain(pmesh);
-    thermal_solver.setMaterial(mat, whole_domain);
-    thermal_solver.setSource(source, whole_domain);
+    thermal_solver.setMaterial(mat, mesh->entireBody());
+    thermal_solver.setSource(source, mesh->entireBody());
 
     // Finalize the data structures
     thermal_solver.completeSetup();
@@ -114,34 +112,31 @@ TEST(HeatTransfer, MoveShape)
   StateManager::reset();
   serac::StateManager::initialize(new_datastore, "thermal_pure_solve");
 
-  auto new_mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-
   std::string pure_mesh_tag{"pure_mesh"};
-
-  auto& new_pmesh = serac::StateManager::setMesh(std::move(new_mesh), pure_mesh_tag);
+  auto pure_mesh =
+      std::make_shared<serac::Mesh>(buildMeshFromFile(filename), pure_mesh_tag, serial_refinement, parallel_refinement);
 
   {
     // Construct and initialized the user-defined shape displacement to offset the computational mesh
-    FiniteElementState user_defined_shape_displacement(new_pmesh, H1<SHAPE_ORDER, dim>{});
+    FiniteElementState user_defined_shape_displacement(pure_mesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{});
 
     user_defined_shape_displacement.project(shape_coef);
 
     // Delete the pre-computed geometry factors as we are mutating the mesh
-    new_pmesh.DeleteGeometricFactors();
-    auto* mesh_nodes = new_pmesh.GetNodes();
+    pure_mesh->mfemParMesh().DeleteGeometricFactors();
+    auto* mesh_nodes = pure_mesh->mfemParMesh().GetNodes();
     *mesh_nodes += user_defined_shape_displacement.gridFunction();
 
     // Construct a functional-based thermal solver including references to the shape displacement field.
     HeatTransfer<p, dim> thermal_solver_no_shape(nonlinear_options, linear_options, time_integration_options,
-                                                 "thermal_pure", pure_mesh_tag);
+                                                 "thermal_pure", pure_mesh);
 
     // Set the initial temperature and boundary condition
     thermal_solver_no_shape.setTemperatureBCs(ess_bdr, zero);
     thermal_solver_no_shape.setTemperature(zero);
 
-    Domain whole_domain = EntireDomain(new_pmesh);
-    thermal_solver_no_shape.setMaterial(mat, whole_domain);
-    thermal_solver_no_shape.setSource(source, whole_domain);
+    thermal_solver_no_shape.setMaterial(mat, pure_mesh->entireBody());
+    thermal_solver_no_shape.setSource(source, pure_mesh->entireBody());
 
     // Finalize the data structures
     thermal_solver_no_shape.completeSetup();

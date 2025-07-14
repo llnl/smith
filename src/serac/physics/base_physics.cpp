@@ -14,32 +14,19 @@
 #include "serac/infrastructure/logger.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 
 namespace serac {
 
-BasePhysics::BasePhysics(std::string physics_name, std::string mesh_tag, int cycle, double time,
+BasePhysics::BasePhysics(std::string physics_name, std::shared_ptr<serac::Mesh> mesh, int cycle, double time,
                          bool checkpoint_to_disk)
     : name_(physics_name),
-      mesh_tag_(mesh_tag),
-      mesh_(StateManager::mesh(mesh_tag_)),
-      comm_(mesh_.GetComm()),
-      shape_displacement_(StateManager::shapeDisplacement(mesh_tag_)),
-      bcs_(mesh_),
+      mesh_(mesh),
+      comm_(mesh_->getComm()),
+      bcs_(mesh_->mfemParMesh()),
       checkpoint_to_disk_(checkpoint_to_disk)
 {
   std::tie(mpi_size_, mpi_rank_) = getMPIInfo(comm_);
-
-  if (mesh_.Dimension() == 2) {
-    shape_displacement_sensitivity_ =
-        std::make_unique<FiniteElementDual>(mesh_, H1<SHAPE_ORDER, 2>{}, name_ + "_shape_displacement_sensitivity");
-  } else if (mesh_.Dimension() == 3) {
-    shape_displacement_sensitivity_ =
-        std::make_unique<FiniteElementDual>(mesh_, H1<SHAPE_ORDER, 3>{}, name_ + "_shape_displacement_sensitivity");
-  } else {
-    SLIC_ERROR_ROOT(axom::fmt::format("Mesh of dimension {} given, only dimensions 2 or 3 are available in Serac.",
-                                      mesh_.Dimension()));
-  }
-  StateManager::storeDual(*shape_displacement_sensitivity_);
 
   initializeBasePhysicsStates(cycle, time);
 }
@@ -58,6 +45,12 @@ int BasePhysics::minCycle() const { return min_cycle_; }
 
 const std::vector<double>& BasePhysics::timesteps() const { return timesteps_; }
 
+const serac::Mesh& BasePhysics::mesh() const { return *mesh_; }
+
+const mfem::ParMesh& BasePhysics::mfemParMesh() const { return mesh_->mfemParMesh(); }
+
+mfem::ParMesh& BasePhysics::mfemParMesh() { return mesh_->mfemParMesh(); }
+
 void BasePhysics::initializeBasePhysicsStates(int cycle, double time)
 {
   timesteps_.clear();
@@ -71,7 +64,7 @@ void BasePhysics::initializeBasePhysicsStates(int cycle, double time)
   min_cycle_ = cycle;
   ode_time_point_ = time;
 
-  *shape_displacement_sensitivity_ = 0.0;
+  mesh_->shapeDisplacementDual() = 0.0;
 
   for (auto& p : parameters_) {
     *p.sensitivity = 0.0;
@@ -85,7 +78,7 @@ void BasePhysics::setParameter(const size_t parameter_index, const FiniteElement
       axom::fmt::format("Parameter '{}' requested when only '{}' parameters exist in physics module '{}'",
                         parameter_index, parameters_.size(), name_));
 
-  SLIC_ERROR_ROOT_IF(&parameter_state.mesh() != &mesh_,
+  SLIC_ERROR_ROOT_IF(&parameter_state.mesh() != &mfemParMesh(),
                      axom::fmt::format("Mesh of parameter '{}' is not the same as the physics mesh", parameter_index));
 
   SLIC_ERROR_ROOT_IF(
@@ -98,29 +91,37 @@ void BasePhysics::setParameter(const size_t parameter_index, const FiniteElement
   *parameters_[parameter_index].state = parameter_state;
 }
 
+const FiniteElementState& BasePhysics::shapeDisplacement() const { return mesh_->shapeDisplacement(); }
+
 void BasePhysics::setShapeDisplacement(const FiniteElementState& shape_displacement)
 {
-  SLIC_ERROR_ROOT_IF(&shape_displacement.mesh() != &mesh_,
-                     axom::fmt::format("Mesh of shape displacement is not the same as the physics mesh"));
+  mesh_->shapeDisplacement() = shape_displacement;
+}
 
-  SLIC_ERROR_ROOT_IF(
-      shape_displacement.space().GetTrueVSize() != shape_displacement_.space().GetTrueVSize(),
-      axom::fmt::format(
-          "Physics module shape displacement has size '{}' while given state has size '{}'. The finite element "
-          "spaces are inconsistent.",
-          shape_displacement_.space().GetTrueVSize(), shape_displacement.space().GetTrueVSize()));
-  shape_displacement_ = shape_displacement;
+FiniteElementDual& BasePhysics::shapeDisplacementSensitivity() const { return mesh_->shapeDisplacementDual(); }
+
+FiniteElementDual BasePhysics::computeTimestepSensitivity(size_t parameter_index)
+{
+  SLIC_ERROR_ROOT(axom::fmt::format("Parameter sensitivities not enabled in physics module {}", name_));
+  return *parameters_[parameter_index].sensitivity;
+}
+
+const FiniteElementDual& BasePhysics::computeTimestepShapeSensitivity()
+{
+  SLIC_ERROR_ROOT(axom::fmt::format("Shape sensitivities not enabled in physics module {}", name_));
+  return shapeDisplacementSensitivity();
 }
 
 void BasePhysics::CreateParaviewDataCollection() const
 {
   std::string output_name = name_.empty() ? "default" : name_;
 
-  paraview_dc_ = std::make_unique<mfem::ParaViewDataCollection>(output_name, const_cast<mfem::ParMesh*>(&mesh_));
+  paraview_dc_ =
+      std::make_unique<mfem::ParaViewDataCollection>(output_name, const_cast<mfem::ParMesh*>(&mfemParMesh()));
 
   // Register finite element fields
 
-  paraview_dc_->RegisterField(shape_displacement_.name(), &shape_displacement_.gridFunction());
+  paraview_dc_->RegisterField(shapeDisplacement().name(), &shapeDisplacement().gridFunction());
 
   for (const FiniteElementState* state : states_) {
     paraview_dc_->RegisterField(state->name(), &state->gridFunction());
@@ -132,8 +133,8 @@ void BasePhysics::CreateParaviewDataCollection() const
 
   // Register dual fields. These don't have gridfunction views already, so create them
 
-  shape_sensitivity_grid_function_ = std::make_unique<mfem::ParGridFunction>(&shape_displacement_sensitivity_->space());
-  paraview_dc_->RegisterField(shape_displacement_sensitivity_->name(), shape_sensitivity_grid_function_.get());
+  shape_sensitivity_grid_function_ = std::make_unique<mfem::ParGridFunction>(&(shapeDisplacementSensitivity().space()));
+  paraview_dc_->RegisterField(shapeDisplacementSensitivity().name(), shape_sensitivity_grid_function_.get());
 
   for (const FiniteElementDual* dual : duals_) {
     paraview_dual_grid_functions_[dual->name()] =
@@ -143,7 +144,7 @@ void BasePhysics::CreateParaviewDataCollection() const
 
   // Identify maximum polynomial order in output fields in order to set detail level
 
-  int max_order_in_fields = mesh_.GetNodalFESpace()->GetMaxElementOrder();
+  int max_order_in_fields = mfemParMesh().GetNodalFESpace()->GetMaxElementOrder();
 
   for (const auto& [_, field] : paraview_dc_->GetFieldMap()) {
     max_order_in_fields = std::max(field->FESpace()->GetMaxElementOrder(), max_order_in_fields);
@@ -169,8 +170,8 @@ void BasePhysics::UpdateParaviewDataCollection(const std::string& paraview_outpu
   for (auto& parameter : parameters_) {
     parameter.state->gridFunction();
   }
-  shape_displacement_.gridFunction();
-  shape_displacement_sensitivity_->linearForm().ParallelAssemble(shape_sensitivity_grid_function_->GetTrueVector());
+  shapeDisplacement().gridFunction();
+  shapeDisplacementSensitivity().linearForm().ParallelAssemble(shape_sensitivity_grid_function_->GetTrueVector());
   shape_sensitivity_grid_function_->SetFromTrueVector();
 
   // Set the current time, cycle, and requested paraview directory
@@ -195,11 +196,11 @@ void BasePhysics::outputStateToDisk(std::optional<std::string> paraview_output_d
     StateManager::updateDual(*parameter.sensitivity);
   }
 
-  StateManager::updateState(shape_displacement_);
-  StateManager::updateDual(*shape_displacement_sensitivity_);
+  StateManager::updateState(shapeDisplacement());
+  StateManager::updateDual(shapeDisplacementSensitivity());
 
   // Save the restart/Sidre file
-  StateManager::save(time_, cycle_, mesh_tag_);
+  StateManager::save(time_, cycle_, mesh_->tag());
 
   // Optionally output a paraview datacollection for visualization
   if (paraview_output_dir) {

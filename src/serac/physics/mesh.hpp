@@ -12,6 +12,8 @@
  */
 #pragma once
 
+#include <memory>
+#include <string>
 #include "mfem.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 
@@ -19,6 +21,8 @@ namespace serac {
 
 // Forward declare
 struct Domain;
+class FiniteElementState;
+class FiniteElementDual;
 
 /**
  * @brief Helper class for constructing a mesh consistent with serac
@@ -35,7 +39,7 @@ class Mesh {
   /// @brief Construct from existing parallel mfem mesh
   /// @param mesh parallel mfem mesh
   /// @param meshtag string tag name for mesh
-  Mesh(mfem::ParMesh& mesh, const std::string& meshtag);
+  Mesh(mfem::ParMesh&& mesh, const std::string& meshtag);
 
   /// @brief Construct from path to mesh (typically .g or .mesh)
   /// @param meshfile path and name of mesh to read in
@@ -101,19 +105,37 @@ class Mesh {
   serac::Domain& addDomainOfBodyElements(const std::string& domain_name,
                                          std::function<bool(std::vector<vec2>, int)> func);
 
+  /// @brief get non-const shape displacement
+  serac::FiniteElementState& shapeDisplacement();
+
+  /// @brief get const shape displacement
+  const serac::FiniteElementState& shapeDisplacement() const;
+
+  /// @brief get non-const shape displacement dual
+  serac::FiniteElementDual& shapeDisplacementDual();
+
+  /// @brief get const shape displacement dual
+  const serac::FiniteElementDual& shapeDisplacementDual() const;
+
  private:
   /// @brief Sets up some initial domains, for now just the 'entire_domain', but eventually we can read of
-  /// names/blocks/attributes from the mesh and create default domains
+  /// names/blocks/attributes from the mesh and create default domains.
   void createDomains();
 
-  /// @brief String identifying mesh in the state manager
+  /// @brief string identifying mesh in the state manager
   std::string mesh_tag_;
 
-  /// @brief Parallel mfem mesh
+  /// @brief parallel mfem mesh
   mfem::ParMesh* mfem_mesh_;
 
-  /// @brief Map from registered domain name to the domain instance
+  /// @brief map from registered domain name to the domain instance
   mutable std::map<std::string, serac::Domain> domains_;
+
+  /// @brief shape_displacement
+  std::shared_ptr<serac::FiniteElementState> shape_displacement_;
+
+  /// @brief shape_displacement dual
+  std::shared_ptr<serac::FiniteElementDual> shape_displacement_dual_;
 };
 
 }  // namespace serac
