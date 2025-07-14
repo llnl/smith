@@ -168,7 +168,7 @@ int main(int argc, char* argv[])
   int myid;
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
+  SLIC_ERROR_ROOT_IF(nprocs > 1, "serial example (for now)");
 
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "solid_dynamics");
