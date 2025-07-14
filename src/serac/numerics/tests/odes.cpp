@@ -207,7 +207,7 @@ int order_of_convergence(serac::TimestepMethod m)
   if (m == serac::TimestepMethod::CentralDifference) return 2;
   if (m == serac::TimestepMethod::FoxGoodwin) return 2;
 
-  SLIC_ERROR(axom::fmt::format("Unsupported serac::TimestepMethod {0}", m));
+  SLIC_ERROR(axom::fmt::format("Unsupported serac::TimestepMethod {0}", static_cast<int>(m)));
   return 0;
 }
 
@@ -235,7 +235,7 @@ int which_kind_of_ode(serac::TimestepMethod m)
   if (m == serac::TimestepMethod::CentralDifference) return 2;
   if (m == serac::TimestepMethod::FoxGoodwin) return 2;
 
-  SLIC_ERROR(axom::fmt::format("Unsupported serac::TimestepMethod {0}", m));
+  SLIC_ERROR(axom::fmt::format("Unsupported serac::TimestepMethod {0}", static_cast<int>(m)));
   return 0;
 }
 
