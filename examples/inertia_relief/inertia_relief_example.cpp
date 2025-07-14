@@ -200,8 +200,8 @@ int main(int argc, char* argv[])
   std::string physics_name = "solid";
 
   // construct residual
-  auto solid_mechanics_residual = std::make_shared<SolidResidualT>(physics_name, mesh, states[DISP].space(),
-                                                                   getSpaces(params));
+  auto solid_mechanics_residual =
+      std::make_shared<SolidResidualT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
 
   SolidMaterial mat;
   mat.K = 1.0;
@@ -226,8 +226,9 @@ int main(int argc, char* argv[])
   // construct constraints
   params[0] = 1.0;
 
-  using ObjectiveT = serac::FunctionalObjective<
-      dim, serac::Parameters<VectorSpace, DensitySpace>>;  // functional objective on displacement/density
+  using ObjectiveT =
+      serac::FunctionalObjective<dim, serac::Parameters<VectorSpace, DensitySpace>>;  // functional objective on
+                                                                                      // displacement/density
 
   double time = 0.0;
   double dt = 1.0;
@@ -245,8 +246,7 @@ int main(int argc, char* argv[])
   serac::tensor<double, dim> initial_cg;
 
   for (int i = 0; i < dim; ++i) {
-    auto cg_objective = std::make_shared<ObjectiveT>("translation " + std::to_string(i), mesh,
-                                                     param_space_ptrs);
+    auto cg_objective = std::make_shared<ObjectiveT>("translation " + std::to_string(i), mesh, param_space_ptrs);
     cg_objective->addBodyIntegral(serac::DependsOn<0, 1>{}, mesh->entireBodyName(),
                                   [i](double
                                       /*time*/,
@@ -260,8 +260,8 @@ int main(int argc, char* argv[])
 
   for (int i = 0; i < dim; ++i) {
     std::cout << "initial cg = " << i << " " << initial_cg[i] << std::endl;
-    auto center_rotation_objective = std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh,
-                                                                  param_space_ptrs);
+    auto center_rotation_objective =
+        std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh, param_space_ptrs);
     center_rotation_objective->addBodyIntegral(serac::DependsOn<0, 1>{}, mesh->entireBodyName(),
                                                [i, initial_cg](double /*time*/, auto X, auto U, auto RHO) {
                                                  auto u = get<serac::VALUE>(U);
@@ -282,8 +282,8 @@ int main(int argc, char* argv[])
   auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "");
   writer.write(0, 0.0, objective_states);
   auto non_const_states = getFieldPointers(states, params);
-  InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]},
-                                non_const_states, solid_mechanics_residual, constraints);
+  InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]}, non_const_states,
+                                solid_mechanics_residual, constraints);
   int dimx = problem.GetDimx();
   int dimy = problem.GetDimy();
 
