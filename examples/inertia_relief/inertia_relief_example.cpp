@@ -163,9 +163,10 @@ int main(int argc, char* argv[])
 {
   serac::ApplicationManager applicationManager(argc, argv);
 
-  int myid = mfem::Mpi::WorldRank();
-
   MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+  MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+
 
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "solid_dynamics");
@@ -259,7 +260,6 @@ int main(int argc, char* argv[])
   }
 
   for (int i = 0; i < dim; ++i) {
-    std::cout << "initial cg = " << i << " " << initial_cg[i] << std::endl;
     auto center_rotation_objective =
         std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh, param_space_ptrs);
     center_rotation_objective->addBodyIntegral(serac::DependsOn<0, 1>{}, mesh->entireBodyName(),
