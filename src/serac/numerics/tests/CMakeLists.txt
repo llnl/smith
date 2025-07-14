@@ -36,3 +36,12 @@ if(PETSC_FOUND)
 
 endif()
 
+if(CONTINUATION_FOUND)
+    set(continuation_solver_qp_test_sources
+        qp_test_continuation_solver.cpp
+        )
+    
+    serac_add_tests(SOURCES       ${continuation_solver_qp_test_sources}
+                    DEPENDS_ON    ${numerics_test_dependencies} continuation_solver
+                    NUM_MPI_TASKS 4 )
+endif()

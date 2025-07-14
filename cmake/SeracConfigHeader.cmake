@@ -36,7 +36,7 @@ message(STATUS "Configuring Serac version ${SERAC_VERSION_FULL}")
 #------------------------------------------------------------------------------
 # Create variable for every TPL
 #------------------------------------------------------------------------------
-set(TPL_DEPS ADIAK AXOM CALIPER CAMP CONDUIT CUDA FMT HDF5 HIP LUA MFEM MPI PETSC RAJA SLEPC STRUMPACK SUNDIALS TRIBOL UMPIRE)
+set(TPL_DEPS ADIAK AXOM CALIPER CAMP CONDUIT CONTINUATION CUDA FMT HDF5 HIP LUA MFEM MPI PETSC RAJA SLEPC STRUMPACK SUNDIALS TRIBOL UMPIRE)
 foreach(dep ${TPL_DEPS})
     if( ${dep}_FOUND OR ENABLE_${dep} )
         set(SERAC_USE_${dep} TRUE)
