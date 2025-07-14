@@ -207,7 +207,8 @@ int order_of_convergence(serac::TimestepMethod m)
   if (m == serac::TimestepMethod::CentralDifference) return 2;
   if (m == serac::TimestepMethod::FoxGoodwin) return 2;
 
-  return -1;
+  SLIC_ERROR(axom::fmt::format("Unsupported serac::TimestepMethod {0}", m));
+  return 0;
 }
 
 // does this method apply to a first- or second-order ode?
@@ -234,7 +235,8 @@ int which_kind_of_ode(serac::TimestepMethod m)
   if (m == serac::TimestepMethod::CentralDifference) return 2;
   if (m == serac::TimestepMethod::FoxGoodwin) return 2;
 
-  return -1;
+  SLIC_ERROR(axom::fmt::format("Unsupported serac::TimestepMethod {0}", m));
+  return 0;
 }
 
 double first_order_ode_test(int nsteps, ode_type type, constraint_type constraint, TimestepMethod timestepper,
