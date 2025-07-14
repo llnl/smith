@@ -734,6 +734,16 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
 
           return *block_nonlinear_oper_;
         });
+
+    if (checkpoint_to_disk_) {
+      outputStateToDisk();
+    } else {
+      checkpoint_states_.clear();
+      auto state_names = stateNames();
+      for (const auto& state_name : state_names) {
+        checkpoint_states_[state_name].push_back(state(state_name));
+      }
+    }
   }
 
   /// @overload
