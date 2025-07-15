@@ -42,14 +42,14 @@ endfunction(create_symlinks)
 
 if(TRIBOL_FOUND)
                     set(SourceFiles
-                    # Rate_Dependent_Viscous_Lattice
-                    double_ring_tensile
-                    logpile_lattice
-		    small_lattice
-		    2x2lattice
+		    # # Rate_Dependent_Viscous_Lattice
+		    # double_ring_tensile
+		    # logpile_lattice
+		    # small_lattice
+		    # 2x2lattice
                     # multi_tensile
-                    hole
-		    # viscous_tensile
+		    # hole
+		    # # viscous_tensile
                     )
                     foreach (source IN LISTS SourceFiles)
 
