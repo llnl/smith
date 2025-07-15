@@ -11,9 +11,9 @@ if (STRUMPACK_DIR)
                         DEPENDS_ON  serac_physics
                         )
 
-    blt_add_test(NAME            uniaxial_tension
-                COMMAND         uniaxial_tension
-                NUM_MPI_TASKS   4)
+    serac_add_example_test(NAME            uniaxial_tension
+                           COMMAND         uniaxial_tension
+                           NUM_MPI_TASKS   4)
 
     install(
         FILES

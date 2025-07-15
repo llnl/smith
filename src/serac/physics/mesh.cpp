@@ -8,8 +8,18 @@
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/numerics/functional/domain.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
 
 namespace serac {
+
+Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_serial, int refine_parallel)
+    : mesh_tag_(meshtag)
+{
+  auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel);
+  mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
+  createDomains();
+}
 
 Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int refine_parallel) : mesh_tag_(meshtag)
 {
@@ -18,16 +28,11 @@ Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int
   createDomains();
 }
 
-Mesh::Mesh(mfem::ParMesh& mesh, const std::string& meshtag) : mesh_tag_(meshtag)
+Mesh::Mesh(mfem::ParMesh&& mesh, const std::string& meshtag) : mesh_tag_(meshtag)
 {
-  mfem_mesh_ = &mesh;
-  createDomains();
-}
-
-Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_serial, int refine_parallel)
-    : mesh_tag_(meshtag)
-{
-  auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel);
+  auto meshtmp = std::make_unique<mfem::ParMesh>(std::move(mesh));
+  meshtmp->EnsureNodes();
+  meshtmp->ExchangeFaceNbrData();
   mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
   createDomains();
 }
@@ -39,6 +44,33 @@ void Mesh::createDomains()
   domains_.insert({entireBodyName(), serac::EntireDomain(*mfem_mesh_)});
   domains_.insert({entireBoundaryName(), serac::EntireBoundary(*mfem_mesh_)});
   domains_.insert({internalBoundaryName(), serac::InteriorFaces(*mfem_mesh_)});
+
+  int dim = mfem_mesh_->Dimension();
+
+  auto addPrefix = [](const std::string& prefix, const std::string& target) {
+    if (prefix.empty()) {
+      return target;
+    }
+    return prefix + "_" + target;
+  };
+
+  auto shape_disp_name = addPrefix(mesh_tag_, "shape_displacement");
+  if (dim == 2) {
+    shape_displacement_ =
+        std::shared_ptr<FiniteElementState>(&StateManager::shapeDisplacement(mesh_tag_), [](FiniteElementState*) {});
+  } else if (dim == 3) {
+    shape_displacement_ =
+        std::shared_ptr<FiniteElementState>(&StateManager::shapeDisplacement(mesh_tag_), [](FiniteElementState*) {});
+  }
+
+  auto shape_disp_dual_name = addPrefix(mesh_tag_, "shape_displacement_dual");
+  if (dim == 2) {
+    shape_displacement_dual_ =
+        std::make_shared<FiniteElementDual>(StateManager::newDual(H1<1, 2>{}, shape_disp_dual_name, mesh_tag_));
+  } else if (dim == 3) {
+    shape_displacement_dual_ =
+        std::make_shared<FiniteElementDual>(StateManager::newDual(H1<1, 3>{}, shape_disp_dual_name, mesh_tag_));
+  }
 }
 
 serac::Domain& Mesh::entireBody() const { return domain(entireBodyName()); }
@@ -89,5 +121,13 @@ serac::Domain& Mesh::addDomainOfBodyElements(const std::string& domain_name,
   domains_.emplace(domain_name, Domain::ofElements(*mfem_mesh_, func));
   return domain(domain_name);
 }
+
+serac::FiniteElementState& Mesh::shapeDisplacement() { return *shape_displacement_; }
+
+const serac::FiniteElementState& Mesh::shapeDisplacement() const { return *shape_displacement_; }
+
+serac::FiniteElementDual& Mesh::shapeDisplacementDual() { return *shape_displacement_dual_; }
+
+const serac::FiniteElementDual& Mesh::shapeDisplacementDual() const { return *shape_displacement_dual_; }
 
 }  // namespace serac

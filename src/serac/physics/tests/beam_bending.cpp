@@ -40,7 +40,7 @@ TEST(BeamBending, TwoDimensional)
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-quad.mesh";
 
   std::string mesh_tag{"mesh"};
-  auto pmesh = std::make_shared<serac::Mesh>(filename, mesh_tag, 0, 0);
+  auto mesh = std::make_shared<serac::Mesh>(filename, mesh_tag, 0, 0);
 
   serac::LinearSolverOptions linear_options{.linear_solver = LinearSolver::GMRES,
                                             .preconditioner = Preconditioner::HypreAMG,
@@ -64,23 +64,23 @@ TEST(BeamBending, TwoDimensional)
 #endif
 
   SolidMechanics<p, dim> solid_solver(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                                      "solid_mechanics", mesh_tag);
+                                      "solid_mechanics", mesh);
 
   double K = 1.91666666666667;
   double G = 1.0;
   solid_mechanics::StVenantKirchhoff mat{1.0, K, G};
-  solid_solver.setMaterial(mat, pmesh->entireBody());
+  solid_solver.setMaterial(mat, mesh->entireBody());
 
   std::string support_domain_name = "support";
-  pmesh->addDomainOfBoundaryElements(support_domain_name, by_attr<dim>(1));
-  solid_solver.setFixedBCs(pmesh->domain(support_domain_name));
+  mesh->addDomainOfBoundaryElements(support_domain_name, by_attr<dim>(1));
+  solid_solver.setFixedBCs(mesh->domain(support_domain_name));
 
   std::string top_face_domain_name = "top_face";
-  pmesh->addDomainOfBoundaryElements(
+  mesh->addDomainOfBoundaryElements(
       top_face_domain_name, [](std::vector<vec2> vertices, int /*attr*/) { return (average(vertices)[1] > 0.99); });
 
   solid_solver.setTraction([](auto /*x*/, auto n, auto /*t*/) { return -0.01 * n; },
-                           pmesh->domain(top_face_domain_name));
+                           mesh->domain(top_face_domain_name));
 
   // Finalize the data structures
   solid_solver.completeSetup();

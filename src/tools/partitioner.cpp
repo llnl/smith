@@ -58,14 +58,17 @@ int main(int argc, char* argv[])
   // this is disabled temporarily, as it seems mfem's implementation is not thread safe
   // app.add_option("-j, --num_threads", num_threads, "number of partitions to generate");
 
+  // std::cout<< " ... input_mesh = "<<input_mesh<<std::endl;
+
   CLI11_PARSE(app, argc, argv);
 
   timer stopwatch;
 
-  std::cout << "reading in mesh file ... ";
   stopwatch.start();
+
   std::ifstream infile(input_mesh);
   mfem::Mesh mesh(infile);
+
   stopwatch.stop();
   std::cout << "completed after " << stopwatch.elapsed() * 1000.0 << "ms" << std::endl;
 

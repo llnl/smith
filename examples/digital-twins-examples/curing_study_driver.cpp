@@ -85,26 +85,26 @@ int main(int argc, char *argv[])
   std::stringstream mesh_name_stream;
   mesh_name_stream << mesh_prefix << "." << std::setfill('0') << std::setw(6) << myid;
   std::string mesh_name = mesh_name_stream.str();
-  std::filebuf fb;
-  fb.open(mesh_name.c_str(), std::ios::in);
-  MFEM_ASSERT(&fb, "Could not open file '" + mesh_name + "'");
-  std::istream is(&fb);
-  auto mesh = std::make_unique<mfem::ParMesh>(mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false));
-  mesh->EnsureNodes();
-  mesh->ExchangeFaceNbrData();
-  mesh->Finalize(/* refine */ false, /* fix orientation */ true);
-  serac::StateManager::setMesh(std::move(mesh), mesh_tag);
-  fb.close();
-  auto &pmesh = serac::StateManager::mesh(mesh_tag);
+  // std::filebuf fb;
+  // fb.open(mesh_name.c_str(), std::ios::in);
+  // MFEM_ASSERT(&fb, "Could not open file '" + mesh_name + "'");
+  // std::istream is(&fb);
+  // auto mesh = std::make_unique<mfem::ParMesh>(mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false));
+  // mesh->EnsureNodes();
+  // mesh->ExchangeFaceNbrData();
+  // mesh->Finalize(/* refine */ false, /* fix orientation */ true);
+  // serac::StateManager::setMesh(std::move(mesh), mesh_tag);
+  // fb.close();
+  // auto &mesh->mfemParMesh() = serac::StateManager::mesh(mesh_tag);
 
-  // Create domain of entire mesh
-  ::serac::Domain entireDomain = ::serac::EntireDomain(pmesh);
+  // auto meshSharedPtr = std::make_shared<serac::Mesh>(mesh->mfemParMesh().get(), mesh_tag, 0, 0);
+  auto mesh = std::make_shared<serac::Mesh>(mesh_name, mesh_tag, 0, 0);
 
   if (0 == myid) { std::cout << "ParMesh formed and passed to serac::StateManager." << std::endl; }
 
   double x_min(1e6), x_max(-1e6), y_min(1e6), y_max(-1e6), z_min(1e6), z_max(-1e6), xy_min(1e6), xy_max(-1e6);
-  for (int i = 0; i < pmesh.GetNV(); ++i) {
-    mfem::Vertex vertex(pmesh.GetVertex(i), dim);
+  for (int i = 0; i < mesh->mfemParMesh().GetNV(); ++i) {
+    mfem::Vertex vertex(mesh->mfemParMesh().GetVertex(i), dim);
     x_min  = std::min(x_min, vertex(0));            x_max  = std::max(x_max, vertex(0));
     y_min  = std::min(y_min, vertex(1));            y_max  = std::max(y_max, vertex(1));
     z_min  = std::min(z_min, vertex(2));            z_max  = std::max(z_max, vertex(2));
@@ -171,17 +171,17 @@ int main(int argc, char *argv[])
   SolidMechanics<order, dim, Parameters<H1<1>, H1<1>>> solid_solver(
       nonlinearOptions, linearOptions, serac::solid_mechanics::default_quasistatic_options,
       // serac::GeometricNonlinearities::Off, // TODO
-      "curing_study_solid", mesh_tag, {"shear", "bulk"}); // warmstart
+      "curing_study_solid", mesh, {"shear", "bulk"}); // warmstart
   if (0 == myid) { std::cout<<"... after creating solid mechanics object ...."<<std::endl; }
 
   if (0 == myid) { std::cout << "Completed creation of SolidMechanics object; moving on to define loads, etc." << std::endl; }
 
   // Create user-defied material property fields. We can compute derivatives w.r.t. these terms. TODO add shape
-  FiniteElementState user_defined_shear_modulus(pmesh, H1<1>{}, "parameterized_shear"); // TODO could project coefficient
+  FiniteElementState user_defined_shear_modulus(mesh->mfemParMesh(), H1<1>{}, "parameterized_shear"); // TODO could project coefficient
   user_defined_shear_modulus = shear_modulus_value;
-  FiniteElementState user_defined_bulk_modulus(pmesh, H1<1>{}, "parameterized_bulk"); // TODO could use attribute or field value
+  FiniteElementState user_defined_bulk_modulus(mesh->mfemParMesh(), H1<1>{}, "parameterized_bulk"); // TODO could use attribute or field value
   user_defined_bulk_modulus = bulk_modulus_value;
-  FiniteElementState user_defined_mass_density(pmesh, H1<1>{}, "parameterized_density"); // TODO could use attribute or coeff
+  FiniteElementState user_defined_mass_density(mesh->mfemParMesh(), H1<1>{}, "parameterized_density"); // TODO could use attribute or coeff
   user_defined_mass_density = mass_density_value;
 
   // Define the material property fields as parameters for the solver.
@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
 
   // Create a material model for the solver. Material property fields override the values defined at initialization
   solid_mechanics::ParameterizedLinearIsotropicSolid mat{mass_density_value, 0.0, 0.0}; // density, delta bulk, delta shear
-  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, entireDomain);
+  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, mesh->entireBody());
 
   // Set essential BCs
   int local_bc_count(0), global_bc_count;
@@ -210,10 +210,11 @@ int main(int argc, char *argv[])
      });
   };
 
-  Domain angled_top_or_bottom_bundary_patch = Domain::ofBoundaryElements(pmesh, is_on_angled_top_or_bottom_patch);
+  // Domain angled_top_or_bottom_bundary_patch = Domain::ofBoundaryElements(mesh->mfemParMesh(), is_on_angled_top_or_bottom_patch);
+  mesh->addDomainOfBoundaryElements("angled_top_or_bottom_bundary_patch", is_on_angled_top_or_bottom_patch);
 
   // solid_solver.setDisplacementBCs(is_on_angled_top_or_bottom_patch, zero_vector);
-  solid_solver.setFixedBCs(angled_top_or_bottom_bundary_patch);
+  solid_solver.setFixedBCs(mesh->domain("angled_top_or_bottom_bundary_patch"));
   MPI_Reduce(&local_bc_count, &global_bc_count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
   if (myid == 0) { std::cout << "Fixed BCs for a total of " << global_bc_count << " nodes across all ranks" << std::endl; }
 
@@ -223,13 +224,13 @@ int main(int argc, char *argv[])
   constant_force[1] = 0.0;
   constant_force[2] = -body_force_value;
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-  solid_solver.addBodyForce(force, entireDomain);
+  solid_solver.addBodyForce(force, mesh->entireBody());
 
   // TODO
   //solid_solver.addBodyForce(DependsOn<1>{}, ParameterizedBodyForce{[](const auto& x) { return 0.0 * x; }});
 
   // Set a zero initial guess for the displacement solution
-  FiniteElementState zero_state = solid_solver.displacement(); // (pmesh, H1<1>{}, "zero");
+  FiniteElementState zero_state = solid_solver.displacement(); // (mesh->mfemParMesh(), H1<1>{}, "zero");
   zero_state = 0.0;
   solid_solver.setDisplacement(zero_state);
 
