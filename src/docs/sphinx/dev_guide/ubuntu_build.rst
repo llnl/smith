@@ -20,11 +20,11 @@ Install clang version 14 and make it the default compiler:
 
 .. code-block:: bash
 
-    sudo apt install -y --no-install-recommends clang-14 clang-format-14 llvm-14 libomp-14-dev gfortran-13
+    sudo apt install -y --no-install-recommends clang-19 clang-format-19 llvm-19 libomp-19-dev gfortran-13
     # Set clang-14 as the default clang
-    sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 100 \
-    && sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 100 \
-    && sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-14 100
+    sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-19 101 \
+    && sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 101 \
+    && sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-19 101
 
 Install required build packages to minimize what Spack will build:
 
