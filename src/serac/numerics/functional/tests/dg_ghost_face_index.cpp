@@ -11,7 +11,6 @@
 
 #include <gtest/gtest.h>
 
-#include "axom/slic/core/SimpleLogger.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/mesh_utils/mesh_utils_base.hpp"
@@ -62,7 +61,8 @@ void L2_index_test(std::string meshfile)
         // note: the orientation convention is such that the normal
         //       computed as above will point from from side 1->2
         auto [u_1, u_2] = velocity;
-        std::cout << "One side = " << u_1 << ", The other side = " << u_2 << ", Jump = " << u_1 - u_2 << std::endl;
+        SLIC_INFO(axom::fmt::format("One size = {}, The other side = {}, Jump = {}", axom::fmt::streamed(u_1),
+                                    axom::fmt::streamed(u_2), axom::fmt::streamed(u_1 - u_2)));
 
         auto a = dot(u_2 - u_1, n);
 

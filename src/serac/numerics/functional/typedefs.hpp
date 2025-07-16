@@ -12,7 +12,6 @@ namespace serac {
 //      mfem::ParMesh / mfeme::ParFiniteElementSpace, but I'm not ready to pull the trigger on a big
 //      interface change like that, so these typedefs mark the parts that would need to eventually change
 
-// hanyu: I'm pulling the trigger for sam and the bullet might hit myself
 /// @cond
 using mesh_t = mfem::ParMesh;
 using fes_t = mfem::ParFiniteElementSpace;
