@@ -144,7 +144,7 @@ class SolidDfemResidual : public DfemResidual {
         // use lumped mass matrix via integration rule at nodes
         auto& fe_coll = *DfemResidual::input_mfem_spaces_[DISP]->FEColl();
         mfem::IntegrationRule rule_1d;
-        mfem::QuadratureFunctions1D::GaussLobatto(fe_coll->GetOrder() + 1, &rule_1d);
+        mfem::QuadratureFunctions1D::GaussLobatto(fe_coll.GetOrder() + 1, &rule_1d);
         auto spatial_dim = DfemResidual::input_mfem_spaces_[DISP]->GetVDim();
         switch (spatial_dim) {
           case 1:
@@ -160,7 +160,7 @@ class SolidDfemResidual : public DfemResidual {
             SLIC_ERROR_ROOT("Unsupported number of dimensions for nodal integration rule.");
         }
         DfemResidual::addBodyIntegral(domain_attributes, acceleration_integral, acceleration_integral_inputs,
-                                      acceleration_integral_outputs, nodal_ir_, std::index_sequence<ACCEL>{});
+                                      acceleration_integral_outputs, *nodal_ir_, std::index_sequence<ACCEL>{});
       } else {
         // use consistent mass matrix
         DfemResidual::addBodyIntegral(domain_attributes, acceleration_integral, acceleration_integral_inputs,
@@ -169,10 +169,18 @@ class SolidDfemResidual : public DfemResidual {
     }
   }
 
-  void massMatrix() const
+  void massMatrix(const std::vector<ConstFieldPtr>& fields, const mfem::Vector& direction_t,
+                  mfem::Vector& result_t) const
   {
     static_assert(!IsQuasiStatic, "Mass matrix is not defined for quasi-static solid mechanics problems.");
-    DfemResidual::differentiable_operators_[0]->GetDerivative(ACCEL, )
+    std::vector<mfem::Vector*> sol_fields({&fields[0]->gridFunction()});
+    std::vector<mfem::Vector*> other_fields;
+    other_fields.reserve(fields.size() - 1);
+    for (size_t i = 1; i < fields.size(); ++i) {
+      other_fields.push_back(&fields[i]->gridFunction());
+    }
+    auto deriv_op = DfemResidual::differentiable_operators_[0]->GetDerivative(ACCEL, sol_fields, other_fields);
+    deriv_op->Mult(direction_t, result_t);
   }
 
  protected:
