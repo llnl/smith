@@ -108,8 +108,8 @@ class Constraint {
                                                                                int direction) const
   {
     SLIC_ERROR_ROOT(axom::fmt::format("Base class must override residual_contribution_jacobian before usage"));
-    std::unique_ptr<HypreParMatrix> jacobian = std::make_unique<HypreParMatrix>;
-    return jacobian;
+    std::unique_ptr<HypreParMatrix> res_contr_jacobian = std::make_unique<HypreParMatrix>;
+    return res_contr_jacobian;
   };
 
   /// @brief name
