@@ -65,8 +65,8 @@ class Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                       int direction)
+  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                                       int direction) const
   {
     return jacobian(time, dt, fields, direction);
   };
@@ -81,8 +81,8 @@ class Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::Vector
    */
-  mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                     const mfem::Vector& multipliers, int direction)
+  virtual mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                     const mfem::Vector& multipliers, int direction) const
   {
     std::unique_ptr<mfem::HypreParMatrix> jac = jacobian_tilde(time, dt, fields, direction);
     mfem::Vector y(jac->Width());
@@ -105,7 +105,12 @@ class Constraint {
   virtual std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
                                                                                const std::vector<ConstFieldPtr>& fields,
                                                                                const mfem::Vector& multipliers,
-                                                                               int direction);
+                                                                               int direction) const
+  {
+    SLIC_ERROR_ROOT(axom::fmt::format("Base class must override residual_contribution_jacobian before usage"));
+    std::unique_ptr<HypreParMatrix> jacobian = std::make_unique<HypreParMatrix>;
+    return jacobian;
+  };
 
   /// @brief name
   std::string name() const { return name_; }
