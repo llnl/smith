@@ -107,19 +107,6 @@ class Constraint {
                                                                                const mfem::Vector& multipliers,
                                                                                int direction);
 
-  /** @brief Virtual interface for computing constraint Hessian-vector product from a vector of
-   * serac::FiniteElementState*
-   *
-   * @param time time
-   * @param dt time step
-   * @param fields vector of serac::FiniteElementState*
-   * @param multipliers mfem::Vector of Lagrange multipliers
-   * @param direction index for which field to take the gradient with respect to
-   * @return std::unique_ptr<mfem::HypreParMatrix>
-   */
-  virtual std::unique_ptr<mfem::HypreParMatrix> hvp(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                    const mfem::Vector& multipliers, int direction);
-
   /// @brief name
   std::string name() const { return name_; }
 
