@@ -65,8 +65,9 @@ class Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                       int direction) const
+  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt,
+                                                               const std::vector<ConstFieldPtr>& fields,
+                                                               int direction) const
   {
     return jacobian(time, dt, fields, direction);
   };
@@ -82,7 +83,7 @@ class Constraint {
    * @return std::Vector
    */
   virtual mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                     const mfem::Vector& multipliers, int direction) const
+                                             const mfem::Vector& multipliers, int direction) const
   {
     std::unique_ptr<mfem::HypreParMatrix> jac = jacobian_tilde(time, dt, fields, direction);
     mfem::Vector y(jac->Width());
@@ -102,13 +103,13 @@ class Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  virtual std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
-                                                                               const std::vector<ConstFieldPtr>& fields,
-                                                                               const mfem::Vector& multipliers,
-                                                                               int direction) const
+  virtual std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(
+      [[maybe_unused]] double time, [[maybe_unused]] double dt,
+      [[maybe_unused]] const std::vector<ConstFieldPtr>& fields, [[maybe_unused]] const mfem::Vector& multipliers,
+      [[maybe_unused]] int direction) const
   {
     SLIC_ERROR_ROOT(axom::fmt::format("Base class must override residual_contribution_jacobian before usage"));
-    std::unique_ptr<HypreParMatrix> res_contr_jacobian = std::make_unique<HypreParMatrix>;
+    std::unique_ptr<mfem::HypreParMatrix> res_contr_jacobian = nullptr;
     return res_contr_jacobian;
   };
 
