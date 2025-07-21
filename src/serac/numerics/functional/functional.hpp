@@ -155,9 +155,7 @@ generateParFiniteElementSpace(mfem::ParMesh* mesh)
       fec = std::make_unique<mfem::L2_FECollection>(function_space::order, dim, mfem::BasisType::GaussLobatto);
       break;
     default:
-      return std::pair<std::unique_ptr<mfem::ParFiniteElementSpace>, std::unique_ptr<mfem::FiniteElementCollection>>(
-          nullptr, nullptr);
-      break;
+      return {nullptr, nullptr};
   }
 
   auto fes =
