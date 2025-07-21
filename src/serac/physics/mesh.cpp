@@ -13,10 +13,11 @@
 
 namespace serac {
 
-Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_serial, int refine_parallel)
+Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_serial, int refine_parallel,
+           MPI_Comm comm)
     : mesh_tag_(meshtag)
 {
-  auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel);
+  auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel, comm);
   mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
   createDomains();
 }
