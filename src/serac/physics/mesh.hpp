@@ -34,7 +34,9 @@ class Mesh {
   /// @param meshtag string tag name for mesh
   /// @param serial_refine number of serial refinements
   /// @param parallel_refine number of parallel refinements
-  Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0);
+  /// @param comm the communicator that the parallel form of @p mesh should be made with
+  Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0,
+       MPI_Comm comm = MPI_COMM_WORLD);
 
   /// @brief Construct from existing parallel mfem mesh
   /// @param mesh parallel mfem mesh
@@ -46,7 +48,9 @@ class Mesh {
   /// @param meshtag string tag name for mesh
   /// @param serial_refine number of serial refinements
   /// @param parallel_refine number of parallel refinements
-  Mesh(const std::string& meshfile, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0);
+  /// @param comm the communicator that the parallel form of @p mesh should be made with
+  Mesh(const std::string& meshfile, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0,
+       MPI_Comm comm = MPI_COMM_WORLD);
 
   /// @brief Returns string tag for mesh
   const std::string& tag() const { return mesh_tag_; }
