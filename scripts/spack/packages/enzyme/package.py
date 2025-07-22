@@ -43,7 +43,7 @@ class Enzyme(CMakePackage):
     depends_on("cxx", type="build")  # generated
     depends_on("fortran", type="build")  # generated
 
-    depends_on("llvm@7:12", when="@0.0.13:0.0.15") # NOTE: how do i get this to enforce compiling with clang
+    depends_on("llvm@7:12", when="@0.0.13:0.0.15")
     depends_on("llvm@7:14", when="@0.0.32:0.0.47")
     depends_on("llvm@7:14", when="@0.0.48:0.0.68")
     depends_on("llvm@9:16", when="@0.0.69:0.0.79")
@@ -52,9 +52,19 @@ class Enzyme(CMakePackage):
     depends_on("llvm@15:19", when="@0.0.149:")
     depends_on("cmake@3.13:", type="build")
 
+    # TODO: push to Spack's builtin repo, this may not be enough
+    # You can end up compiling with gcc but linking to llvm in certain cases
+    conflicts("%cxx=gcc")
+
     def cmake_args(self):
         spec = self.spec
-        args = ["-DLLVM_DIR=" + spec["llvm"].prefix.lib + "/cmake/llvm"]
+        # TODO: push to Spack's builtin repo
+        # On Ubuntu 24, with apt installed packages this dir doesn't exist. Error:
+        #   Looking for LLVM_DIR at /usr/lib/cmake/llvm
+        #   CMake Error at CMakeLists.txt:60 (message):
+        #     The given LLVM_DIR does not exist.  Typo?
+        #args = ["-DLLVM_DIR=" + spec["llvm"].prefix.lib + "/cmake/llvm"]
+        args = ["-DLLVM_DIR=" + spec["llvm"].prefix]
         return args
 
     @property
