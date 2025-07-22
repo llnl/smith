@@ -524,6 +524,8 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
             else()
                 message(FATAL_ERROR "'ClangEnzymeFlags' plugin target '${_enzyme_target}' referenced in INTERFACE_COMPILE_OPTIONS does not exist.")
             endif()
+        else()
+            message(STATUS "Skipped check. `ClangEnzymeFlags` target does not reference another target")
         endif()
 
         message(STATUS "Enzyme support is ON")
