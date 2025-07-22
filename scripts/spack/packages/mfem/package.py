@@ -12,6 +12,9 @@ class Mfem(BuiltinMfem):
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
     version("4.8.0.1", commit="d9c1c34fdfaf3f7a9f56dfc82f7c083082a36fca")
+    version("4.8.0.1_lido", commit="d6cb23ab2f93b6f1d787fac823e80ead30e964d4") # branch: grad-eval-device
+
+    # patch("specify-return-type-2.patch", when="@4.8.0.1_lido")
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 

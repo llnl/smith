@@ -1,0 +1,17 @@
+diff --git a/src/axom/inlet/CMakeLists.txt b/src/axom/inlet/CMakeLists.txt
+index a1068ba12..0cfc1f004 100644
+--- a/src/axom/inlet/CMakeLists.txt
++++ b/src/axom/inlet/CMakeLists.txt
+@@ -64,9 +64,9 @@ axom_add_library(NAME        inlet
+                  FOLDER      axom/inlet )
+ 
+ # Set file back to C++ due to nvcc compiler error
+-if(NOT AXOM_ENABLE_HIP)
+-  set_source_files_properties(LuaReader.cpp PROPERTIES LANGUAGE CXX)
+-endif()
++# if(NOT AXOM_ENABLE_HIP)
++#   set_source_files_properties(LuaReader.cpp PROPERTIES LANGUAGE CXX)
++# endif()
+ 
+ axom_write_unified_header(NAME    inlet
+                           HEADERS ${inlet_headers} )
