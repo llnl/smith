@@ -502,7 +502,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
     #------------------------------------------------------------------------------
-    # Enzyme (used by Tribol)
+    # Enzyme
     #------------------------------------------------------------------------------
     if (ENZYME_DIR)
         serac_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
@@ -512,6 +512,19 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         serac_assert_find_succeeded(PROJECT_NAME Enzyme
                                     TARGET       ClangEnzymeFlags
                                     DIR_VARIABLE ENZYME_DIR)
+
+        message(STATUS "Checking for Target 'ClangEnzymeFlags' plugin target exists..")
+        get_target_property(_clangenzyme_opts ClangEnzymeFlags INTERFACE_COMPILE_OPTIONS)
+        if("${_clangenzyme_opts}" MATCHES "\\$<TARGET_FILE:([^>]+)>")
+            set(_enzyme_target "${CMAKE_MATCH_1}")
+
+            # Check if the extracted target exists
+            if(TARGET "${_enzyme_target}")
+                message(STATUS "Found 'ClangEnzymeFlags' plugin target: ${_enzyme_target}")
+            else()
+                message(FATAL_ERROR "'ClangEnzymeFlags' plugin target '${_enzyme_target}' referenced in INTERFACE_COMPILE_OPTIONS does not exist.")
+            endif()
+        endif()
 
         message(STATUS "Enzyme support is ON")
         set(ENZYME_FOUND TRUE)
