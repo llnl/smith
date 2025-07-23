@@ -30,9 +30,8 @@ class FiniteElementState;
 class ContactConstraint : public Constraint {
  public:
   /// @brief base constructor takes the name of the physics
-  ContactConstraint(const mfem::ParMesh& mesh, const std::string& name) : Constraint(name), mesh_{mesh}
+  ContactConstraint(const mfem::ParMesh& mesh, const std::string& name) : Constraint(name), contact_(mesh), mesh_{mesh}
   {
-    contact_(mesh_);
   }
 
   /// @brief destructor
@@ -46,7 +45,8 @@ class ContactConstraint : public Constraint {
    * @param fields vector of serac::FiniteElementState*
    * @return mfem::Vector which is the constraint evaluation
    */
-  mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields)
+  mfem::Vector evaluate([[maybe_unused]] double time, [[maybe_unused]] double dt,
+                        [[maybe_unused]] const std::vector<ConstFieldPtr>& fields)
   {
     // TODO: complete me
     mfem::Vector temp(1);
@@ -61,8 +61,9 @@ class ContactConstraint : public Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                 int direction) const
+  std::unique_ptr<mfem::HypreParMatrix> jacobian([[maybe_unused]] double time, [[maybe_unused]] double dt,
+                                                 [[maybe_unused]] const std::vector<ConstFieldPtr>& fields,
+                                                 [[maybe_unused]] int direction) const
   {
     // TODO: complete me
     std::unique_ptr<mfem::HypreParMatrix> temp = nullptr;
