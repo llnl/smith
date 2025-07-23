@@ -51,7 +51,7 @@ The following page provides basic guidance on the following platforms:
 
    Serac uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
    automatic differentiation. Due to this you have to compile with an LLVM-based compiler.
-   We recommend `clang`.
+   We recommend ``clang``.
 
 Ubuntu 24 LTS
 ^^^^^^^^^^^^^
@@ -61,7 +61,7 @@ Install clang version 19 and make it the default compiler:
 .. code-block:: bash
 
     sudo apt install -y --no-install-recommends clang-19 libclang-19-dev clang-format-19 llvm-19 llvm-19-dev libzstd-dev libomp-19-dev gfortran-13
-    # Set clang-14 as the default clang
+    # Set clang-19 as the default clang
     sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-19 101 \
     && sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 101 \
     && sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-19 101
@@ -86,7 +86,7 @@ Optionally you can install packages to generate documentation:
 .. note::
 
     We provide a basic Ubuntu 24 Spack environment file in ``scripts/spack/configs/linux_ubuntu_24`` that
-    may work for most people. If you want to try using that, skip to :ref:`Building Serac's Third-party Libraries <_building_tpls-label>`
+    may work for most people. If you want to try using that, skip to :ref:`_building_tpls-label`
     below and use this command line option instead ``--spack-env-file=scripts/spack/configs/linux_ubuntu_24/spack.yaml``
 
 macOS
@@ -125,12 +125,12 @@ This is also useful for a few additional packages:
 
 .. code-block:: bash
 
-   $ export PATH="/opt/homebrew/opt/llvm@14/bin:/opt/homebrew/opt/m4/bin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:$PATH"
+   $ export PATH="/opt/homebrew/opt/llvm@19/bin:/opt/homebrew/opt/m4/bin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:$PATH"
 
 .. note::
 
     We provide a basic Ubuntu 24 Spack environment file in ``scripts/spack/configs/linux_ubuntu_24`` that
-    may work for most people. If you want to try using that, skip to :ref:`Building Serac's Third-party Libraries <_building_tpls-label>`
+    may work for most people. If you want to try using that, skip to :ref:`_building_tpls-label`
     below and use this command line option instead ``--spack-env-file=scripts/spack/configs/macos_sonoma_aarch64/spack.yaml``. You will likely
     need to update the versions of packages to match the versions installed by Homebrew. The versions for all installed packages can be listed via
     the command ``brew list --versions``.
@@ -138,8 +138,8 @@ This is also useful for a few additional packages:
 .. note::
     The invocation of ``uberenv.py`` is slightly modified from the standard instructions below
     in order to force the use of the Homebrew-installed MPI and compilers. The spec command line option
-    should be ``--spec="^openmpi@5 %clang@14"`` and to build with devtools and profiling enabled,
-    change the spec to ``"+devtools+profiling ^openmpi@5 %clang@14"``
+    should be ``--spec="^openmpi@5 %clang@19"`` and to build with devtools and profiling enabled,
+    change the spec to ``"+devtools+profiling ^openmpi@5 %clang@19"``
 
 Optionally, you can install the developer tools via ```pip``. This step is only required if you wish to use Serac's developer tools.
 In order to use Python devtools, you will need to create a Python venv. This is much more reliable than having Spack install 20+ Python packages.
@@ -179,7 +179,7 @@ Versions and prefixes may vary.
       buildable: false
       externals:
       - spec: llvm+clang@19.1.1
-        prefix: /opt/homebrew/opt/llvm@14
+        prefix: /opt/homebrew/opt/llvm@19
     py-sphinx:
       buildable: false
       externals:
@@ -200,7 +200,7 @@ Unless otherwise specified, Spack will default to a compiler.  This is generally
 developing large codes. To specify which compiler to use add the compiler specification to the ``--spec`` Uberenv
 command line option. We provide recommended Spack specs for LC in `scripts/spack/specs.json`.
 
-You can use these directly in the `uberenv.py` command in the :ref:`Building Serac's Third-party Libraries <_building_tpls-label>`
+You can use these directly in the `uberenv.py` command in the :ref:`_building_tpls-label`
 section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang@=19.1.1"``.
 
 .. note::
@@ -339,7 +339,7 @@ Some helpful uberenv options include :
 * ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
 * ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Serac repository
 
-The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang@14.0.6'``.
+The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang@19.1.1'``.
 
 
 If successful, you will see two things. The first is what we call a host-config. It is all the CMake
@@ -366,7 +366,7 @@ command:
     make -j
     make -j8 test
 
-For more detail instructions on how to build Serac, see :ref:`quickstart guide <build-label>`.
+For more detail instructions on how to build Serac, see :ref:`build-label`.
 
 
 
