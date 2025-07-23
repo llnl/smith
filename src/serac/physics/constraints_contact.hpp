@@ -30,7 +30,7 @@ class FiniteElementState;
 class ContactConstraint : public Constraint {
  public:
   /// @brief base constructor takes the name of the physics
-  ContactConstraint(const mfem::ParMesh & mesh, const std::string& name) : Constraint(name), mesh_{mesh} 
+  ContactConstraint(const mfem::ParMesh& mesh, const std::string& name) : Constraint(name), mesh_{mesh}
   {
     contact_(mesh_);
   }
@@ -38,34 +38,37 @@ class ContactConstraint : public Constraint {
   /// @brief destructor
   virtual ~ContactConstraint() {}
 
-  ///** @brief Interface for computing the gap contact constraint, given a vector of
-  // * serac::FiniteElementState*
-  // *
-  // * @param time time
-  // * @param dt time step
-  // * @param fields vector of serac::FiniteElementState*
-  // * @return mfem::Vector which is the constraint evaluation
-  // */
-  //mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields) 
-  //{
-  //   //TODO: complete me 
-  //};
+  /** @brief Interface for computing the gap contact constraint, given a vector of
+   * serac::FiniteElementState*
+   *
+   * @param time time
+   * @param dt time step
+   * @param fields vector of serac::FiniteElementState*
+   * @return mfem::Vector which is the constraint evaluation
+   */
+  mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields)
+  {
+    // TODO: complete me
+    mfem::Vector temp(1);
+    return temp;
+  };
 
-  ///** @brief Interface for computing contact gap constraint Jacobian from a vector of serac::FiniteElementState*
-  // *
-  // * @param time time
-  // * @param dt time step
-  // * @param fields vector of serac::FiniteElementState*
-  // * @param direction index for which field to take the gradient with respect to
-  // * @return std::unique_ptr<mfem::HypreParMatrix>
-  // */
-  //std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt,
-  //                                                       const std::vector<ConstFieldPtr>& fields,
-  //                                                       int direction) const
-  //{
-  //   // TODO: complete me
-  //};
-  
+  /** @brief Interface for computing contact gap constraint Jacobian from a vector of serac::FiniteElementState*
+   *
+   * @param time time
+   * @param dt time step
+   * @param fields vector of serac::FiniteElementState*
+   * @param direction index for which field to take the gradient with respect to
+   * @return std::unique_ptr<mfem::HypreParMatrix>
+   */
+  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                                 int direction) const
+  {
+    // TODO: complete me
+    std::unique_ptr<mfem::HypreParMatrix> temp = nullptr;
+    return temp;
+  };
+
   /**
    * @brief Add a mortar contact boundary condition
    *
@@ -77,17 +80,17 @@ class ContactConstraint : public Constraint {
   void addContactInteraction(int interaction_id, const std::set<int>& bdry_attr_surf1,
                              const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts)
   {
-    //SLIC_ERROR_ROOT_IF(!is_quasistatic_, "Contact can only be applied to quasistatic problems.");
-    //SLIC_ERROR_ROOT_IF(order > 1, "Contact can only be applied to linear (order = 1) meshes.");
+    // SLIC_ERROR_ROOT_IF(!is_quasistatic_, "Contact can only be applied to quasistatic problems.");
+    // SLIC_ERROR_ROOT_IF(order > 1, "Contact can only be applied to linear (order = 1) meshes.");
     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts);
   }
-
 
  protected:
   /// @brief Class holding contact constraint data
   ContactData contact_;
+
  private:
-  const mfem::ParMesh & mesh_;
+  const mfem::ParMesh& mesh_;
 };
 
 }  // namespace serac
