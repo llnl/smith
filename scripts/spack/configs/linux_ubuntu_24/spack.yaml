@@ -1,0 +1,232 @@
+spack:
+  compilers::
+  - compiler:
+      spec: clang@=19.1.1
+      paths:
+        cc: /usr/bin/clang
+        cxx: /usr/bin/clang++
+        f77: /usr/bin/gfortran
+        fc: /usr/bin/gfortran
+      flags:
+        cflags: -fPIC
+        cxxflags: -fPIC
+        fflags: -fPIC
+      operating_system: ubuntu24.04
+      target: x86_64
+      modules: []
+      environment: {}
+      extra_rpaths: []
+
+  # Regular TPLs do not need views
+  view: false
+
+  packages:
+    awk:
+      buildable: false
+    fortran:
+      buildable: false
+    cxx:
+      buildable: false
+    libllvm:
+      buildable: false
+    mpi:
+      buildable: false
+    D:
+      buildable: false
+    golang:
+      buildable: false
+    fuse:
+      buildable: false
+    c:
+      buildable: false
+    go-or-gccgo-bootstrap:
+      buildable: false
+    grep:
+      externals:
+      - spec: grep@3.11
+        prefix: /usr
+      buildable: false
+    openssh:
+      externals:
+      - spec: openssh@9.6p1
+        prefix: /usr
+      buildable: false
+    hwloc:
+      externals:
+      - spec: hwloc@2.10.0
+        prefix: /usr
+      buildable: false
+    groff:
+      externals:
+      - spec: groff@1.23.0
+        prefix: /usr
+      buildable: false
+    file:
+      externals:
+      - spec: file@5.45
+        prefix: /usr
+      buildable: false
+    lua:
+      externals:
+      - spec: lua@5.2
+        prefix: /usr
+      buildable: false
+    unzip:
+      externals:
+      - spec: unzip@6.0
+        prefix: /usr
+      buildable: false
+    ncurses:
+      externals:
+      - spec: ncurses@6.4.20240113+termlib abi=6
+        prefix: /usr
+      buildable: false
+    openssl:
+      externals:
+      - spec: openssl@3.0.13
+        prefix: /usr
+      buildable: false
+    binutils:
+      externals:
+      - spec: binutils@2.42+gold~headers
+        prefix: /usr
+      buildable: false
+    git:
+      externals:
+      - spec: git@2.43.0~tcltk
+        prefix: /usr
+      buildable: false
+    bash:
+      externals:
+      - spec: bash@5.2.21
+        prefix: /usr
+      buildable: false
+    coreutils:
+      externals:
+      - spec: coreutils@9.4
+        prefix: /usr
+      buildable: false
+    gnupg:
+      externals:
+      - spec: gnupg@2.4.4
+        prefix: /usr
+      buildable: false
+    diffutils:
+      externals:
+      - spec: diffutils@3.10
+        prefix: /usr
+      buildable: false
+    hip:
+      externals:
+      - spec: hip@3.19.21
+        prefix: /usr
+      buildable: false
+    rsync:
+      externals:
+      - spec: rsync@3.2.7
+        prefix: /usr
+      buildable: false
+    gmake:
+      externals:
+      - spec: gmake@4.3
+        prefix: /usr
+      buildable: false
+    cmake:
+      externals:
+      - spec: cmake@3.28.3
+        prefix: /usr
+      buildable: false
+    libfuse:
+      externals:
+      - spec: libfuse@3.14.0
+        prefix: /usr
+      buildable: false
+    python:
+      externals:
+      - spec: python@3.12.3+bz2+crypt+ctypes+dbm+lzma+pyexpat~pythoncmd+readline+sqlite3+ssl~tkinter+uuid+zlib
+        prefix: /usr
+      buildable: false
+    llvm:
+      externals:
+      - spec: llvm@19.1.1+clang~lld~lldb
+        prefix: /usr
+      buildable: false
+    bzip2:
+      externals:
+      - spec: bzip2@1.0.8
+        prefix: /usr
+      buildable: false
+    xz:
+      externals:
+      - spec: xz@5.4.5
+        prefix: /usr
+      buildable: false
+    llvm-doe:
+      externals:
+      - spec: llvm-doe@19.1.1+clang~lld~lldb
+        prefix: /usr
+        extra_attributes:
+          compilers:
+            c: /usr/bin/clang
+            cxx: /usr/bin/clang++
+      buildable: false
+    tar:
+      externals:
+      - spec: tar@1.35
+        prefix: /usr
+      buildable: false
+    gettext:
+      externals:
+      - spec: gettext@0.21
+        prefix: /usr
+      buildable: false
+    openmpi:
+      externals:
+      - spec: openmpi@4.1.6~cuda+cxx~cxx_exceptions+java~memchecker+pmi~static~wrapper-rpath fabrics=ofi,psm,psm2,ucx schedulers=slurm
+        prefix: /usr
+      buildable: false
+    curl:
+      externals:
+      - spec: curl@8.5.0+gssapi+ldap+nghttp2
+        prefix: /usr
+      buildable: false
+    perl:
+      externals:
+      - spec: perl@5.38.2~cpanm+opcode+open+shared+threads
+        prefix: /usr
+      buildable: false
+    gcc:
+      externals:
+      - spec: gcc@13.3.0 languages='c,c++,fortran'
+        prefix: /usr
+        extra_attributes:
+          compilers:
+            c: /usr/bin/gcc
+            cxx: /usr/bin/g++
+            fortran: /usr/bin/gfortran
+      buildable: false
+    rdma-core:
+      externals:
+      - spec: rdma-core@50.0
+        prefix: /usr
+      buildable: false
+    sed:
+      externals:
+      - spec: sed@4.9
+        prefix: /usr
+      buildable: false
+    win-file:
+      externals:
+      - spec: win-file@5.45
+        prefix: /usr
+      buildable: false
+    findutils:
+      externals:
+      - spec: findutils@4.9.0
+        prefix: /usr
+      buildable: false
+    gawk:
+      externals:
+      - spec: gawk@5.2.1
+        prefix: /usr
+      buildable: false
