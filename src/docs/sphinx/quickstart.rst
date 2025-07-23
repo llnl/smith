@@ -79,7 +79,7 @@ build with that compiler.
 Building Serac's Dependencies via Spack/uberenv
 -----------------------------------------------
 
-For detailed instructions see :ref:`Serac Third-party Library Build <_tpl_builds-label>`.
+For detailed instructions see :ref:`tpl_builds-label`.
 
 .. note::
   This is optional if you are on an LC machine and are in the ``smithdev`` group as we have

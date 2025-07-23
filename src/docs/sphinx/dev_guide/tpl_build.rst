@@ -5,9 +5,9 @@
 
 .. _tpl_builds-label:
 
-=====================================
-Serac Third-party Library (TPL) Build
-=====================================
+===============================
+Third-party Library (TPL) Build
+===============================
 
 -----------------
 Spack and Uberenv
@@ -86,7 +86,7 @@ Optionally you can install packages to generate documentation:
 .. note::
 
     We provide a basic Ubuntu 24 Spack environment file in ``scripts/spack/configs/linux_ubuntu_24`` that
-    may work for most people. If you want to try using that, skip to :ref:`_building_tpls-label`
+    may work for most people. If you want to try using that, skip to :ref:`building_tpls-label`
     below and use this command line option instead ``--spack-env-file=scripts/spack/configs/linux_ubuntu_24/spack.yaml``
 
 macOS
@@ -130,7 +130,7 @@ This is also useful for a few additional packages:
 .. note::
 
     We provide a basic Ubuntu 24 Spack environment file in ``scripts/spack/configs/linux_ubuntu_24`` that
-    may work for most people. If you want to try using that, skip to :ref:`_building_tpls-label`
+    may work for most people. If you want to try using that, skip to :ref:`building_tpls-label`
     below and use this command line option instead ``--spack-env-file=scripts/spack/configs/macos_sonoma_aarch64/spack.yaml``. You will likely
     need to update the versions of packages to match the versions installed by Homebrew. The versions for all installed packages can be listed via
     the command ``brew list --versions``.
@@ -200,7 +200,7 @@ Unless otherwise specified, Spack will default to a compiler.  This is generally
 developing large codes. To specify which compiler to use add the compiler specification to the ``--spec`` Uberenv
 command line option. We provide recommended Spack specs for LC in `scripts/spack/specs.json`.
 
-You can use these directly in the `uberenv.py` command in the :ref:`_building_tpls-label`
+You can use these directly in the `uberenv.py` command in the :ref:`building_tpls-label`
 section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang@=19.1.1"``.
 
 .. note::
