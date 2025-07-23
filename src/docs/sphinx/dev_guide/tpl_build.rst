@@ -3,11 +3,36 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
-.. _ubuntu_build-label:
+.. _tpl_builds-label:
 
-=====================
-Serac Ubuntu 24 Build
-=====================
+=====================================
+Serac Third-party Library (TPL) Build
+=====================================
+
+-----------------
+Spack and Uberenv
+-----------------
+
+Serac uses `Spack <https://github.com/spack/spack>`_ to build it's TPLs.
+This has been encapsulated using `Uberenv <https://github.com/LLNL/uberenv>`_.
+Uberenv helps by doing the following:
+
+* Pulls a blessed version of Spack locally
+* If you are on a known operating system (like TOSS4), we have defined Spack configuration files
+  to keep Spack from building the world
+* Installs our Spack packages into the local Spack
+* Simplifies whole dependency build into one command
+
+Uberenv will create a directory containing a Spack instance with the required Serac
+TPLs installed.
+
+.. note::
+   This directory **must not** be within the Serac repo - the example below
+   controls this with the ``--prefix`` command line argument which is required.
+
+It also generates a host-config file (``<config_dependent_name>.cmake``)
+at the root of Serac repository. This host-config defines all the required information for building
+Serac.
 
 ------------------
 Basic System Setup
@@ -16,7 +41,22 @@ Basic System Setup
 We recommend installing some basic system-level development packages to minimize the
 amount of packages that Spack will build.
 
-Install clang version 14 and make it the default compiler:
+The following page provides basic guidance on the following platforms:
+
+ * Ubuntu 24 LTS
+ * macOS
+ * Livermore Computing (LC)
+
+.. note::
+
+   Serac uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
+   automatic differentiation. Due to this you have to compile with an LLVM-based compiler.
+   We recommend `clang`.
+
+Ubuntu 24 LTS
+^^^^^^^^^^^^^
+
+Install clang version 19 and make it the default compiler:
 
 .. code-block:: bash
 
@@ -43,20 +83,142 @@ Optionally you can install packages to generate documentation:
 
     The documentation packages require a lot of disk space.
 
--------------------------------
-Generate Spack Environment File
--------------------------------
+.. note::
 
-Spack uses an environment file to describe where system level packages are to minimize what it builds.
-The following command will download the specific Spack version we use and run a minimal set of commands to
-generate an environment file for you. This should be a good starting point and should be used in following
-Spack builds.
+    We provide a basic Ubuntu 24 Spack environment file in ``scripts/spack/configs/linux_ubuntu_24`` that
+    may work for most people. If you want to try using that, skip to :ref:`Building Serac's Third-party Libraries <_building_tpls-label>`
+    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/linux_ubuntu_24/spack.yaml``
+
+macOS
+^^^^^
+
+.. warning::
+   These instructions are in development, but have been tested for M2 MacBooks. They also need to be tested with Enzyme.
+
+.. note::
+   View an example host-config for MacOS in ``host-configs/other/firion-darwin-sequoia-m2-clang@14.0.6.cmake``.
+
+Homebrew is recommended to install base dependencies due to it's stability. Relying on pure Spack historically leads to more failed builds.
+
+To start, install the following packages using Homebrew.
+
+.. code-block:: bash
+
+   $ brew install autoconf automake bzip2 clingo cmake diffutils fmt gcc gettext gnu-sed graphviz hwloc lapack libx11 llvm@19 m4 make ninja open-mpi openblas pkg-config readline zlib
+
+If you plan to install the developer tools, you should also run:
+
+.. code-block:: bash
+
+   $ brew install cppcheck doxygen
+   $ ln -s /opt/homebrew/opt/llvm@19/bin/clang-format /opt/homebrew/bin/clang-format
+
+If you have installed Homebrew using the default installation prefix, most packages will be accessible through the prefix ``/opt/homebrew``.
+Note for Intel-based Macs, the installation prefix is ``/usr/local``. If you set a custom prefix or aren't sure what the prefix is, run ``brew --prefix``.
+For the rest of this section, we will assume the prefix is ``/opt/homebrew``.
+Some packages are not linked into this prefix to prevent conflicts with MacOS-provided versions.
+These will only be accessible via the prefix ``/opt/homebrew/opt/[package-name]``.
+Homebrew will warn about such packages after installing them.
+
+In order for the correct compilers to be used for the installation, you should also add the bin directory for LLVM clang to your path in your ``.bash_profile``, ``.bashrc``, or ``.zshrc``, etc.
+This is also useful for a few additional packages:
+
+.. code-block:: bash
+
+   $ export PATH="/opt/homebrew/opt/llvm@14/bin:/opt/homebrew/opt/m4/bin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:$PATH"
 
 .. note::
 
     We provide a basic Ubuntu 24 Spack environment file in ``scripts/spack/configs/linux_ubuntu_24`` that
-    may work for most people. If you want to try using that, skip to :ref:`Build Serac's Third-party Libraries <ubuntu_tpl_build-label>`
-    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/linux_ubuntu_24/ubuntu24.yaml``
+    may work for most people. If you want to try using that, skip to :ref:`Building Serac's Third-party Libraries <_building_tpls-label>`
+    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/macos_sonoma_aarch64/spack.yaml``. You will likely
+    need to update the versions of packages to match the versions installed by Homebrew. The versions for all installed packages can be listed via
+    the command ``brew list --versions``.
+
+.. note::
+    The invocation of ``uberenv.py`` is slightly modified from the standard instructions below
+    in order to force the use of the Homebrew-installed MPI and compilers. The spec command line option
+    should be ``--spec="^openmpi@5 %clang@14"`` and to build with devtools and profiling enabled,
+    change the spec to ``"+devtools+profiling ^openmpi@5 %clang@14"``
+
+Optionally, you can install the developer tools via ```pip``. This step is only required if you wish to use Serac's developer tools.
+In order to use Python devtools, you will need to create a Python venv. This is much more reliable than having Spack install 20+ Python packages.
+In this example, we are using the builtin Python in ``/usr/bin``, but it is possible to use a version installed from Homebrew or elsewhere.
+
+Next, you will need to install wheel and Sphinx:
+
+.. code-block:: bash
+
+   python3 -m venv --system-site-packages venv
+   source venv/bin/activate
+   pip install wheel
+   pip install sphinx
+
+Keep track of the Sphinx version while installing, since you'll need it for the next step.
+
+To have Spack recognize your pre-installed Developer Tools, you should add the following under ``packages`` in the ``spack.yaml`` files.
+Versions and prefixes may vary.
+
+.. code-block:: yaml
+
+    # Devtools (optional)
+    cppcheck:
+      version: [2.15.0]
+      buildable: false
+      externals:
+      - spec: cppcheck@2.15.0
+        prefix: /opt/homebrew
+    doxygen:
+      version: [1.12.0]
+      buildable: false
+      externals:
+      - spec: doxygen@1.12.0
+        prefix: /opt/homebrew
+    llvm:
+      version: [19.1.1]
+      buildable: false
+      externals:
+      - spec: llvm+clang@19.1.1
+        prefix: /opt/homebrew/opt/llvm@14
+    py-sphinx:
+      buildable: false
+      externals:
+      - spec: py-sphinx@7.4.7
+        prefix: /path/to/venv
+
+
+Livermore Computing (LC)
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+We provide Spack Environment files for each of LC's systems:
+
+ * TOSS4: ``scripts/spack/configs/toss_4_x86_64_ib/spack.yaml``
+ * BlueOS: ``scripts/spack/configs/blueos_3_ppc64le_p9/spack.yaml``
+ * TOSS4 Cray: ``scripts/spack/configs/toss_4_x86_64_ib_cray/spack.yaml``
+
+Unless otherwise specified, Spack will default to a compiler.  This is generally not a good idea when
+developing large codes. To specify which compiler to use add the compiler specification to the ``--spec`` Uberenv
+command line option. We provide recommended Spack specs for LC in `scripts/spack/specs.json`.
+
+You can use these directly in the `uberenv.py` command in the :ref:`Building Serac's Third-party Libraries <_building_tpls-label>`
+section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang@=19.1.1"``.
+
+.. note::
+  On LC machines, it is good practice to do the build step in parallel on a compute node.
+  You should add the following to the start of your commands: ``salloc -ppdebug -N1 --exclusive python3 scripts/uberenv/uberenv.py``
+
+-------------------------------
+Generate Spack Environment File
+-------------------------------
+
+Spack uses an environment file, or ``spack.yaml``, to describe where system level packages are to minimize what it builds.
+This file describes the compilers and associated flags required for the platform as well as the low-level libraries
+on the system to prevent Spack from building the world. Documentation on these environment files is located
+in the `Spack docs <https://spack.readthedocs.io/en/latest/environments.html>`_.
+
+The following command will download the specific Spack version we use and run a minimal set of commands to
+generate an environment file for you. This should be a good starting point and should be used in following
+Spack builds.
 
 .. code-block:: bash
 
@@ -69,7 +231,7 @@ If you want to use Clang as your compiler. Alter the following section in that f
 .. code-block:: yaml
 
     - compiler:
-        spec: clang@=14.0.6
+        spec: clang@=19.1.1
         paths:
             cc: /usr/bin/clang
             cxx: /usr/bin/clang++
@@ -82,8 +244,6 @@ If you want to use Clang as your compiler. Alter the following section in that f
         environment: {}
         extra_rpaths: []
 
-
-If you are using the GNU compiler, you can ignore the above step.
 
 To speed up the build, you can add packages that exist on your system to the same Spack environment file. For example,
 we installed lua in the above ``apt`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
@@ -101,42 +261,41 @@ The above spack command will output a concretization that looks like the followi
 .. code-block:: shell
 
     ==> Concretized 1 spec:
-    -   56woyw5  serac@develop%gcc@13.3.0~asan~cuda~devtools~ipo+openmp+petsc~profiling+raja~rocm~shared+slepc+strumpack+sundials+tribol+umpire build_system=cmake build_type=Release dev_path=/home/white238/projects/serac/repo generator=make arch=linux-ubuntu24.04-skylake
-    -   nrxx23t      ^axom@0.10.1.1%gcc@13.3.0+cpp14~cuda~devtools~examples~fortran+hdf5~ipo+lua+mfem+mpi~opencascade+openmp~python+raja~rocm~scr~shared~tools+umpire build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake
-    -   nqkgp22          ^blt@0.6.2%gcc@13.3.0 build_system=generic arch=linux-ubuntu24.04-skylake
-    -   rj42gk3      ^camp@2024.07.0%gcc@13.3.0~cuda~ipo~omptarget+openmp~rocm~sycl~tests build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake
-    [e]  zw5kcoy         ^cmake@3.28.3%gcc@13.3.0~doc+ncurses+ownlibs~qtgui build_system=generic build_type=Release patches=dbc3892 arch=linux-ubuntu24.04-skylake
-    -   syv5u67      ^conduit@0.9.2%gcc@13.3.0~adios+blt_find_mpi~caliper~doc~doxygen+examples~fortran+hdf5+hdf5_compat~ipo+mpi+parmetis~python+shared~silo~test+utilities~zfp build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake
-    -   oaqv5fr      ^gcc-runtime@13.3.0%gcc@13.3.0 build_system=generic arch=linux-ubuntu24.04-skylake
-    [e]  jozorw3         ^glibc@2.39%gcc@13.3.0 build_system=autotools arch=linux-ubuntu24.04-skylake
-    [e]  xulikhw         ^gmake@4.3%gcc@13.3.0~guile build_system=generic patches=599f134 arch=linux-ubuntu24.04-skylake
-    -   ywot3zz      ^hdf5@1.8.23%gcc@13.3.0~cxx~fortran+hl~ipo~mpi~shared~szip~threadsafe+tools api=default build_system=cmake build_type=Release generator=make patches=f42732a arch=linux-ubuntu24.04-skylake
-    -   orkrbck          ^pkgconf@2.3.0%gcc@13.3.0 build_system=autotools arch=linux-ubuntu24.04-skylake
-    -   sjsn4ra          ^zlib-ng@2.2.3%gcc@13.3.0+compat~new_strategies+opt+pic+shared build_system=autotools arch=linux-ubuntu24.04-skylake
-    -   ojsmmb5      ^hypre@2.32.0%gcc@13.3.0~caliper~complex~cublas~cuda~debug+fortran~gptune~gpu-aware-mpi~int64~internal-superlu+lapack~magma~mixedint+mpi~openmp~rocblas~rocm~shared~superlu-dist~sycl~umpire~unified-memory build_system=autotools precision=double arch=linux-ubuntu24.04-skylake
-    -   qwjnrd5          ^openblas@0.3.29%gcc@13.3.0~bignuma~consistent_fpcsr+dynamic_dispatch+fortran~ilp64+locking+pic+shared build_system=makefile symbol_suffix=none threads=openmp arch=linux-ubuntu24.04-skylake
-    -   rndoezc      ^lua@5.4.6%gcc@13.3.0+shared build_system=makefile fetcher=curl arch=linux-ubuntu24.04-skylake
-    [e]  x2me7ec          ^curl@8.5.0%gcc@13.3.0+gssapi+ldap~libidn2~librtmp~libssh~libssh2+nghttp2 build_system=autotools libs=shared,static tls=openssl arch=linux-ubuntu24.04-skylake
-    [e]  arxo7wy          ^ncurses@6.4.20240113%gcc@13.3.0~symlinks+termlib abi=6 build_system=autotools patches=7a351bc arch=linux-ubuntu24.04-skylake
-    -   vg2hsrt           ^readline@8.2%gcc@13.3.0 build_system=autotools patches=1ea4349,24f587b,3d9885e,5911a5b,622ba38,6c8adf8,758e2ec,79572ee,a177edc,bbf97f1,c7b45ff,e0013d9,e065038 arch=linux-ubuntu24.04-skylake
-    -   4s5yarf           ^unzip@6.0%gcc@13.3.0 build_system=makefile patches=881d2ed,f6f6236 arch=linux-ubuntu24.04-skylake
-    -   o5f4jyb      ^metis@5.1.0%gcc@13.3.0~gdb~int64~ipo~no_warning~real64~shared build_system=cmake build_type=Release generator=make patches=4991da9,93a7903,b1225da arch=linux-ubuntu24.04-skylake
-    -   qlkm3gq      ^mfem@4.8.0.1%gcc@13.3.0~amgx~asan~conduit~cuda~debug~examples~exceptions~fms~ginkgo~gnutls~gslib~hiop+lapack~libceed~libunwind+metis~miniapps~mpfr+mpi~mumps+netcdf~occa+openmp+petsc~pumi~raja~rocm~shared+slepc+static+strumpack~suite-sparse+sundials+superlu-dist~threadsafe~umpire+zlib build_system=generic cxxstd=auto precision=double timer=auto arch=linux-ubuntu24.04-skylake
-    [e]  saipzs5          ^openmpi@4.1.6%gcc@13.3.0+atomics~cuda+cxx~cxx_exceptions~debug~gpfs~internal-hwloc~internal-libevent~internal-pmix+java~legacylaunchers~lustre~memchecker~openshmem~orterunprefix+pmi+romio+rsh~singularity~static~two_level_namespace+vt~wrapper-rpath build_system=autotools fabrics=ofi,psm,psm2,ucx romio-filesystem=none schedulers=slurm arch=linux-ubuntu24.04-skylake    -   pp3ewgz      ^netcdf-c@4.7.4%gcc@13.3.0~blosc~byterange~dap~fsync~hdf4~jna~logging~mpi~nczarr_zip+optimize~parallel-netcdf+pic~shared~szip~zstd build_system=autotools arch=linux-ubuntu24.04-skylake
-    -   d4dxhlq      ^parmetis@4.0.3%gcc@13.3.0~gdb~int64~ipo~shared build_system=cmake build_type=Release generator=make patches=4f89253,50ed208,704b84f arch=linux-ubuntu24.04-skylake
-    -   7jbj4ll      ^petsc@3.22.3%gcc@13.3.0~X~batch~cgns~complex~cuda~debug+double~exodusii~fftw+fortran~giflib~hdf5~hpddm~hwloc+hypre~int64~jpeg~knl~kokkos~libpng~libyaml~memkind+metis~mkl-pardiso~mmg~moab~mpfr+mpi~mumps+openmp~p4est~parmmg~ptscotch~random123~rocm~saws~scalapack~shared+strumpack~suite-sparse+superlu-dist~sycl~tetgen~trilinos~valgrind~zoltan build_system=generic clanguage=C memalign=none arch=linux-ubuntu24.04-skylake
-    [e]  hx35vpd          ^diffutils@3.10%gcc@13.3.0 build_system=autotools arch=linux-ubuntu24.04-skylake
-    -   v3wd4md           ^netlib-scalapack@2.2.2%gcc@13.3.0~ipo~pic+shared build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake
-    [e]  ebf563j          ^python@3.12.3%gcc@13.3.0+bz2+crypt+ctypes+dbm~debug+libxml2+lzma~optimizations+pic+pyexpat~pythoncmd+readline+shared+sqlite3+ssl~tkinter+uuid+zlib build_system=generic arch=linux-ubuntu24.04-skylake
-    -   i3mwd3s      ^raja@2024.07.0%gcc@13.3.0~cuda~desul~examples~exercises~ipo~lowopttest~omptarget~omptask+openmp~plugins~rocm~run-all-tests~shared~sycl~tests+vectorization build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake
-    -   ku2ueig      ^slepc@3.22.2%gcc@13.3.0+arpack~blopex~cuda~hpddm~rocm build_system=generic arch=linux-ubuntu24.04-skylake
-    -   ch6sfkd           ^arpack-ng@3.9.1%gcc@13.3.0~icb~ipo+mpi+shared build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake
-    -   c6negoy      ^strumpack@8.0.0%gcc@13.3.0~butterflypack+c_interface~count_flops~cuda~ipo~magma+mpi+openmp+parmetis~rocm~scotch~shared~slate~task_timers~zfp build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake
-    -   bg2x2yp      ^sundials@7.2.1%gcc@13.3.0+ARKODE+CVODE+CVODES+IDA+IDAS+KINSOL~asan~cuda~examples~examples-install~f2003~fcmix~ginkgo+hypre~int64~ipo~klu~kokkos~kokkos-kernels~lapack~magma~monitoring+mpi~openmp~petsc~profiling~pthread~raja~rocm~shared+static~superlu-dist~superlu-mt~sycl~trilinos build_system=cmake build_type=Release cstd=99 cxxstd=14 generator=make logging-level=2 precision=double arch=linux-ubuntu24.04-skylake
-    -   5jrfz2j      ^superlu-dist@8.1.2%gcc@13.3.0~cuda~int64~ipo~openmp+parmetis~rocm~shared build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake
-    -   fz6b2hd      ^tribol@0.1.0.18%gcc@13.3.0~asan~cuda~devtools~examples~fortran~ipo+openmp+raja+redecomp~rocm~tests+umpire build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake
-    -   mqmexdv      ^umpire@2024.07.0%gcc@13.3.0~asan~backtrace+c~cuda~dev_benchmarks~device_alloc~deviceconst~examples+fmt_header_only~fortran~ipc_shmem~ipo~mpi~numa~omptarget+openmp~rocm~sanitizer_tests~shared~sqlite_experimental~tools+werror build_system=cmake build_type=Release generator=make tests=none arch=linux-ubuntu24.04-skylake
-    -   vjmiu7m           ^fmt@11.0.2%gcc@13.3.0~ipo+pic~shared build_system=cmake build_type=Release cxxstd=11 generator=make arch=linux-ubuntu24.04-skylake
+     -   uu3sgzv  serac@develop cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~asan~cuda~devtools+enzyme~ipo+openmp+petsc~profiling+raja~rocm~shared+slepc+strumpack+sundials+tribol+umpire build_system=cmake build_type=Release dev_path=/home/white238/projects/serac/repo generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   x77izrn      ^axom@0.10.1.1 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC +cpp14~cuda~devtools~examples~fortran+hdf5~ipo+lua+mfem+mpi~opencascade+openmp~python+raja~rocm~scr~shared~tools+umpire build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   prysqkw          ^blt@0.6.2 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC  build_system=generic arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   6vi46wm      ^camp@2024.07.0 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~cuda~ipo~omptarget+openmp~rocm~sycl~tests build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+    [e]  fbcccfh      ^cmake@3.28.3 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~doc+ncurses+ownlibs~qtgui build_system=generic build_type=Release patches=dbc3892 arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   zqg3svf      ^conduit@0.9.3 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~adios+blt_find_mpi~caliper~doc~doxygen+examples~fortran+hdf5+hdf5_compat~ipo+mpi+parmetis~python+shared~silo~test+utilities~zfp build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   lbmoj2n      ^enzyme@0.0.180 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~ipo build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+    [e]  6bbmbqw          ^llvm@19.1.1 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC +clang~cuda~flang+gold+libomptarget~libomptarget_debug~link_llvm_dylib~lld~lldb+llvm_dylib+lua~mlir+offload+polly~python~split_dwarf~z3~zstd build_system=cmake build_type=Release compiler-rt=runtime generator=ninja libcxx=runtime libunwind=runtime openmp=runtime shlib_symbol_version=none targets=all version_suffix=none arch=linux-ubuntu24.04-skylake %clang@19.1.1
+    [e]  wyizjq2      ^glibc@2.39 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC  build_system=autotools arch=linux-ubuntu24.04-skylake %clang@19.1.1
+    [e]  74zxzg7      ^gmake@4.3 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~guile build_system=generic patches=599f134 arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   32xbf3o      ^hdf5@1.8.23 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~cxx~fortran+hl~ipo~mpi~shared~szip~threadsafe+tools api=default build_system=cmake build_type=Release generator=make patches=f42732a arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   hlqkvfc          ^pkgconf@2.3.0 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC  build_system=autotools arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   dlqs5c6          ^zlib-ng@2.2.3 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC +compat~new_strategies+opt+pic+shared build_system=autotools arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   iwu2tah      ^hypre@2.32.0 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~caliper~complex~cublas~cuda~debug+fortran~gptune~gpu-aware-mpi~int64~internal-superlu+lapack~magma~mixedint+mpi~openmp~rocblas~rocm~shared~superlu-dist~sycl~umpire~unified-memory build_system=autotools precision=double arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   g6pkuqj          ^openblas@0.3.29 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~bignuma~consistent_fpcsr+dynamic_dispatch+fortran~ilp64+locking+pic+shared build_system=makefile patches=9968625 symbol_suffix=none threads=openmp arch=linux-ubuntu24.04-skylake %clang@19.1.1
+    [e]  naati2q      ^lua@5.2 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC +shared build_system=makefile fetcher=curl arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   5u3dj5i      ^metis@5.1.0 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~gdb~int64~ipo~no_warning~real64~shared build_system=cmake build_type=Release generator=make patches=4991da9,93a7903 arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   ae2mqqr      ^mfem@4.8.0.1 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~amgx~asan~conduit~cuda~debug~examples~exceptions~fms~ginkgo~gnutls~gslib~hiop+lapack~libceed~libunwind+metis~miniapps~mpfr+mpi~mumps+netcdf~occa+openmp+petsc~pumi~raja~rocm~shared+slepc+static+strumpack~suite-sparse+sundials+superlu-dist~threadsafe~umpire+zlib build_system=generic cxxstd=auto precision=double timer=auto arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   ohbx2dl      ^netcdf-c@4.7.4 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~blosc~byterange~dap~fsync~hdf4~jna~logging~mpi~nczarr_zip+optimize~parallel-netcdf+pic~shared~szip~zstd build_system=autotools arch=linux-ubuntu24.04-skylake %clang@19.1.1
+    [e]  yr5mrlv      ^openmpi@4.1.6 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC +atomics~cuda+cxx~cxx_exceptions~debug~gpfs~internal-hwloc~internal-libevent~internal-pmix+java~legacylaunchers~lustre~memchecker~openshmem~orterunprefix+pmi+romio+rsh~singularity~static~two_level_namespace+vt~wrapper-rpath build_system=autotools fabrics=ofi,psm,psm2,ucx romio-filesystem=none schedulers=slurm arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   2zrmzi6      ^parmetis@4.0.3 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~gdb~int64~ipo~shared build_system=cmake build_type=Release generator=make patches=4f89253,50ed208,704b84f arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   sxzqrlk      ^petsc@3.22.4 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~X~batch~cgns~complex~cuda~debug+double~exodusii~fftw+fortran~giflib~hdf5~hpddm~hwloc+hypre~int64~jpeg~knl~kokkos~libpng~libyaml~memkind+metis~mkl-pardiso~mmg~moab~mpfr+mpi~mumps+openmp~p4est~parmmg~ptscotch~random123~rocm~saws~scalapack~shared+strumpack~suite-sparse+superlu-dist~sycl~tetgen~trilinos~valgrind~zoltan build_system=generic clanguage=C memalign=none arch=linux-ubuntu24.04-skylake %clang@19.1.1
+    [e]  baweecy          ^diffutils@3.10 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC  build_system=autotools arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   evwepln          ^netlib-scalapack@2.2.2 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~ipo~pic+shared build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+    [e]  timms67          ^python@3.12.3 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC +bz2+crypt+ctypes+dbm~debug+libxml2+lzma~optimizations+pic+pyexpat~pythoncmd+readline+shared+sqlite3+ssl~tkinter+uuid+zlib build_system=generic arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   cc22mbv      ^raja@2024.07.0 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~cuda~desul~examples~exercises~ipo~lowopttest~omptarget~omptask+openmp~plugins~rocm~run-all-tests~shared~sycl~tests+vectorization build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   zmiasfe      ^slepc@3.22.2 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC +arpack~blopex~cuda~hpddm~rocm build_system=generic arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   fvqm3cm          ^arpack-ng@3.9.1 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~icb~ipo+mpi+shared build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   3ka3cml      ^strumpack@8.0.0 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~butterflypack+c_interface~count_flops~cuda~ipo~magma+mpi+openmp+parmetis~rocm~scotch~shared~slate~task_timers~zfp build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   mkzronq      ^sundials@6.7.0 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC +ARKODE+CVODE+CVODES+IDA+IDAS+KINSOL~asan~cuda~examples~examples-install~f2003~fcmix+generic-math~ginkgo+hypre~int64~ipo~klu~kokkos~kokkos-kernels~lapack~magma~monitoring+mpi~openmp~petsc~profiling~pthread~raja~rocm~shared+static~superlu-dist~superlu-mt~sycl~trilinos build_system=cmake build_type=Release cstd=99 cxxstd=14 generator=make logging-level=2 logging-mpi=OFF precision=double arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   vqgxdhb      ^superlu-dist@8.1.2 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~cuda~int64~ipo~openmp+parmetis~rocm~shared build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   ldxkes6      ^tribol@0.1.0.18 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~asan~cuda~devtools~examples~fortran~ipo+openmp+raja+redecomp~rocm~tests+umpire build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   3ftpxxz      ^umpire@2024.07.0 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~asan~backtrace+c~cuda~dev_benchmarks~device_alloc~deviceconst~examples+fmt_header_only~fortran~ipc_shmem~ipo~mpi~numa~omptarget+openmp~rocm~sanitizer_tests~shared~sqlite_experimental~tools+werror build_system=cmake build_type=Release generator=make tests=none arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   xts3eqq          ^fmt@11.0.2 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~ipo+pic~shared build_system=cmake build_type=Release cxxstd=11 generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+
 
 Lines starting with ``[e]`` are external packages that Spack recognizes are on the system and will not rebuild them.
 By adding Lua to the Spack environment file, Spack will no longer build Lua and any of its dependencies that are
@@ -157,25 +316,35 @@ by another package, so you can also add it with this yaml section:
     you should rename or move the file so they are not lost. For the rest of instruction, we will assume you renamed the file to
     ``ubuntu24.yaml``.
 
-.. _ubuntu_tpl_build-label:
 
------------------------------------
-Build Serac's Third-party Libraries
------------------------------------
+.. _building_tpls-label:
+
+--------------------------------------
+Building Serac's Third-party Libraries
+--------------------------------------
 
 It is now time to build Serac's Third-party Libraries (TPLs). Run the command with the compiler
 that you want to develop with:
 
 .. code-block:: bash
 
-    # clang
-    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=ubuntu24.yaml --spec="%clang@=14.0.6"
-    # gcc
-    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=ubuntu24.yaml --spec="%gcc@=13.3.0"
+    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=<path/to/spack.yaml> --spec="%clang@=19.1.1"
+
+Some helpful uberenv options include :
+
+* ``--spec=" build_type=Debug"`` (build the MFEM and Hypre libraries with debug symbols)
+* ``--spec=+profiling`` (build the Adiak and Caliper libraries)
+* ``--spec=+devtools`` (also build the devtools with one command)
+* ``--spec=%clang@19.1.1`` (build with a specific compiler as defined in the ``spack.yaml`` file)
+* ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
+* ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Serac repository
+
+The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang@14.0.6'``.
+
 
 If successful, you will see two things. The first is what we call a host-config. It is all the CMake
 inputs you need to build Serac. This file will be a new CMake file in the current directory with your machine
-name, system type, and compiler, for example ``mycomputerlinux-ubuntu24.04-skylake-clang@14.0.6.cmake``.
+name, system type, and compiler, for example ``mycomputerlinux-ubuntu24.04-skylake-clang@19.1.1.cmake``.
 The second will be output from Spack that ends in this:
 
 .. code-block:: bash
