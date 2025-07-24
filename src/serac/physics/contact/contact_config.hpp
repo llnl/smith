@@ -19,8 +19,13 @@ namespace serac {
  */
 enum class ContactMethod
 {
-  SingleMortar /**< Puso and Laursen 2004 */
+  SingleMortar, /**< Puso and Laursen 2004 */
+  SmoothMortar  /**< Pointwise gap enforced smoothed contact method */
 };
+
+
+
+
 
 /**
  * @brief Describes how to enforce the contact constraint equations
@@ -28,7 +33,8 @@ enum class ContactMethod
 enum class ContactEnforcement
 {
   Penalty,           /**< Equal penalty applied to all constrained dofs */
-  LagrangeMultiplier /**< Solve for exact pressures to satisfy constraints */
+  LagrangeMultiplier, /**< Solve for exact pressures to satisfy constraints */
+  NotRequired       
 };
 
 /**
@@ -64,6 +70,8 @@ struct ContactOptions {
 
   /// Penalty parameter (only used when enforcement == ContactEnforcement::Penalty)
   double penalty = 1.0e3;
+
+  double penalty2 = 0.0;
 
   /// The method to use for Jacobian calculations
   ContactJacobian jacobian = ContactJacobian::Approximate;

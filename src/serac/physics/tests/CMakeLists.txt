@@ -78,6 +78,7 @@ set(physics_parallel_test_sources
     )
 set(physics_parallel_tribol_test_sources
     contact_patch.cpp
+    contact_patch_2D.cpp
     contact_patch_tied.cpp
     contact_beam.cpp
     )

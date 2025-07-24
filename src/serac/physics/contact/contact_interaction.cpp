@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/physics/contact/contact_interaction.hpp"
+#include "tribol/common/Parameters.hpp"
+// #include "gtest/gtest.h"
 
 #ifdef SERAC_USE_TRIBOL
 
@@ -61,6 +63,13 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
     mfem::Array<int> tdof_markers(pressure_space.GetTrueVSize());
     pressure_space.GetRestrictionMatrix()->BooleanMult(dof_markers, tdof_markers);
     mfem::FiniteElementSpace::MarkerToList(tdof_markers, inactive_tdofs_);
+  }
+
+  if(getContactOptions().method == ContactMethod::SmoothMortar) 
+  {
+    contact_opts_.enforcement = ContactEnforcement::NotRequired;
+    tribol::setMfemKinematicConstantPenalty(interaction_id, contact_opts_.penalty, contact_opts_.penalty2);
+    contact_opts_.type = ContactType::TiedNormal;
   }
 
   // set up Tribol to compute exact Jacobian if requested
@@ -155,7 +164,8 @@ tribol::ContactMethod ContactInteraction::getMethod() const
   switch (contact_opts_.method) {
     case ContactMethod::SingleMortar:
       return tribol::SINGLE_MORTAR;
-      break;
+    case ContactMethod::SmoothMortar:
+      return tribol::SMOOTH_MORTAR;
     default:
       SLIC_ERROR_ROOT("Unsupported contact method.");
       // return something so we don't get an error
