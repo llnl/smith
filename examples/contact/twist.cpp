@@ -9,11 +9,11 @@
 #include <set>
 #include <string>
 
-#include "axom/slic.hpp"
+#include "axom/slic.hpp" // IWYU pragma: keep
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
-#include "serac/serac.hpp"
+#include "serac/serac.hpp" // IWYU pragma: keep
 
 int main(int argc, char* argv[])
 {

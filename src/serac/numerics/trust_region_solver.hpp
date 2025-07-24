@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 
 #ifdef SERAC_USE_SLEPC
 

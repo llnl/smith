@@ -8,13 +8,13 @@
 #include <iostream>
 #include <stdlib.h>
 
-#include "axom/core.hpp"
+#include "axom/core.hpp" // IWYU pragma: keep
 #include "axom/slic/core/SimpleLogger.hpp"
 
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 #include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/infrastructure/input.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 

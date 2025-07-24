@@ -14,7 +14,7 @@
 
 #include <memory>
 #include <string>
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 #include "serac/numerics/functional/tensor.hpp"
 
 namespace serac {

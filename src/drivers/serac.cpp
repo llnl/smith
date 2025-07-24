@@ -17,8 +17,8 @@
 #include <memory>
 #include <string>
 
-#include "axom/core.hpp"
-#include "mfem.hpp"
+#include "axom/core.hpp" // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/about.hpp"
 #include "serac/infrastructure/cli.hpp"
@@ -31,7 +31,7 @@
 #include "serac/physics/heat_transfer.hpp"
 #include "serac/numerics/equation_solver.hpp"
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 
 namespace serac {
 

@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/logger.hpp"
 

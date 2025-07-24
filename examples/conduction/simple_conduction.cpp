@@ -12,7 +12,7 @@
  */
 
 // _serac_include_header_start
-#include "serac/serac.hpp"
+#include "serac/serac.hpp" // IWYU pragma: keep
 // _serac_include_header_end
 
 // _main_init_start

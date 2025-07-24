@@ -14,7 +14,7 @@
 
 #include <string>
 
-#include "axom/sidre.hpp"
+#include "axom/sidre.hpp" // IWYU pragma: keep
 
 /**
  * @brief The output related helper functions and objects

@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"

@@ -13,8 +13,8 @@
 #include <string>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
@@ -22,7 +22,7 @@
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;

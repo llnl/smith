@@ -7,13 +7,13 @@
 #include <thread>
 #include <fstream>
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
-#include "axom/CLI11.hpp"
+#include "axom/CLI11.hpp" // IWYU pragma: keep
 #include "axom/core/utilities/Timer.hpp"
 
 #include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 
 using timer = axom::utilities::Timer;
 

@@ -9,7 +9,7 @@
 #include <exception>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/infrastructure/cli.hpp"

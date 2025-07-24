@@ -7,12 +7,12 @@
 #include <fstream>
 #include <iostream>
 
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "serac/infrastructure/input.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/numerics/expr_template_ops.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"

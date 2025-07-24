@@ -8,7 +8,7 @@
 
 #include <fstream>
 
-#include "axom/fmt.hpp"
+#include "axom/fmt.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/about.hpp"
 #include "serac/infrastructure/logger.hpp"

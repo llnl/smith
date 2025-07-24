@@ -6,11 +6,11 @@
 
 #include "serac/infrastructure/about.hpp"
 
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 
-#include "axom/config.hpp"
-#include "axom/core.hpp"
-#include "axom/fmt.hpp"
+#include "axom/config.hpp" // IWYU pragma: keep
+#include "axom/core.hpp" // IWYU pragma: keep
+#include "axom/fmt.hpp" // IWYU pragma: keep
 
 #include "camp/config.hpp"
 
@@ -23,14 +23,14 @@
 #endif
 
 #ifdef SERAC_USE_HDF5
-#include "hdf5.h"
+#include "hdf5.h" // IWYU pragma: keep
 #endif
 
 #ifdef SERAC_USE_LUA
 #include "lua.h"
 #endif
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #ifdef SERAC_USE_RAJA
 #include "RAJA/config.hpp"

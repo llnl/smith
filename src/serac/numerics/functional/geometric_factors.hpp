@@ -10,7 +10,7 @@
 #include "serac/numerics/functional/finite_element.hpp"       // for Geometry
 #include "serac/numerics/functional/domain.hpp"
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 namespace serac {
 

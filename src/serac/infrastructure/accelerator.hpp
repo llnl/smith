@@ -52,7 +52,7 @@
 
 #include <memory>
 
-#include "axom/core.hpp"
+#include "axom/core.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/memory.hpp"

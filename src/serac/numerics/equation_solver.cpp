@@ -12,7 +12,7 @@
 #include <iostream>
 
 #include "serac/infrastructure/logger.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/numerics/trust_region_solver.hpp"
 

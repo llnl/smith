@@ -13,7 +13,7 @@
 #include <iostream>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/tuple.hpp"

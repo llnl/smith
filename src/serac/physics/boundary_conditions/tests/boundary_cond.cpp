@@ -7,8 +7,8 @@
 #include <memory>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "serac/physics/boundary_conditions/boundary_condition_helper.hpp"

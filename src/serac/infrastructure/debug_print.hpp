@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include "mfem.hpp"
-#include "axom/core.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
+#include "axom/core.hpp" // IWYU pragma: keep
 
 #include <fstream>
 #include <iomanip>

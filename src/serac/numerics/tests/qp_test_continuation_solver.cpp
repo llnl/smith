@@ -7,11 +7,11 @@
 #include <fstream>
 #include <iostream>
 
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/infrastructure/profiling.hpp"
 
 #include "problems/Problems.hpp"

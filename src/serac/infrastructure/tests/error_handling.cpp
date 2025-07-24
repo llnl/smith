@@ -7,14 +7,14 @@
 #include <exception>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 #include "serac/infrastructure/cli.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/boundary_condition.hpp"
 #include "serac/numerics/equation_solver.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 
 class SlicErrorException : public std::exception {};
 

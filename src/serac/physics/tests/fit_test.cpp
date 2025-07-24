@@ -13,7 +13,7 @@
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 using namespace serac;
 using namespace serac::profiling;

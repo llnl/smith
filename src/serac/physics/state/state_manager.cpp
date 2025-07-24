@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 
-#include "axom/core.hpp"
+#include "axom/core.hpp" // IWYU pragma: keep
 
 namespace serac {
 

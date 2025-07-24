@@ -7,10 +7,10 @@
 
 #include <iostream>
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/accelerator.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/numerics/functional/functional.hpp"
 
 template <typename T>

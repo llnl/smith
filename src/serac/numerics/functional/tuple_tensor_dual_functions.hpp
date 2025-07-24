@@ -10,7 +10,7 @@
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/dual.hpp"
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 namespace serac {
 

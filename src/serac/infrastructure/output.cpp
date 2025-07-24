@@ -9,8 +9,8 @@
 #include "serac/infrastructure/about.hpp"
 #include "serac/infrastructure/logger.hpp"
 
-#include "axom/core.hpp"
-#include "axom/sidre.hpp"
+#include "axom/core.hpp" // IWYU pragma: keep
+#include "axom/sidre.hpp" // IWYU pragma: keep
 
 #include "mpi.h"
 

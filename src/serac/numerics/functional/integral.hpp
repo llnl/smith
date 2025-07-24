@@ -9,7 +9,7 @@
 #include <array>
 #include <memory>
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/accelerator.hpp"
 #include "serac/numerics/functional/geometric_factors.hpp"

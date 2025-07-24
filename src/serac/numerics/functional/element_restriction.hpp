@@ -8,8 +8,8 @@
 
 #include <vector>
 
-#include "mfem.hpp"
-#include "axom/core.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
+#include "axom/core.hpp" // IWYU pragma: keep
 #include "geometry.hpp"
 #include "domain.hpp"
 

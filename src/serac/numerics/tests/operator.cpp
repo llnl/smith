@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/infrastructure/application_manager.hpp"

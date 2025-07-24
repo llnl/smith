@@ -16,7 +16,7 @@
 #include <optional>
 #include <variant>
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/input.hpp"
 #include "serac/numerics/solver_config.hpp"

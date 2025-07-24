@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 #pragma once
 
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/infrastructure/accelerator.hpp"
 #include "serac/numerics/functional/quadrature_data.hpp"
 #include "serac/numerics/functional/function_signature.hpp"

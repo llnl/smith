@@ -8,10 +8,10 @@
 #include <iostream>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"

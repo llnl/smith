@@ -6,7 +6,7 @@
 
 #include "serac/physics/contact/contact_data.hpp"
 
-#include "axom/slic.hpp"
+#include "axom/slic.hpp" // IWYU pragma: keep
 
 #ifdef SERAC_USE_TRIBOL
 #include "tribol/interface/tribol.hpp"

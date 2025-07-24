@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 namespace serac::mfem_ext {
 

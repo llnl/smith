@@ -36,7 +36,7 @@ THE SOFTWARE.
 #include <stdlib.h>
 #include <iostream>
 #include "hip/hip_runtime.h"
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 
 #ifdef NDEBUG

@@ -2,10 +2,10 @@
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
-// SPDX-License-Identifier: (BSD-3-Clause)#include <gtest/gtest.h>
+// SPDX-License-Identifier: (BSD-3-Clause)#include <gtest/gtest.h> // IWYU pragma: keep
 
-#include "mfem.hpp"
-#include <gtest/gtest.h>
+#include "mfem.hpp" // IWYU pragma: keep
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 #include "axom/slic/core/SimpleLogger.hpp"
 

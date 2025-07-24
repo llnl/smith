@@ -7,7 +7,7 @@
 #include <exception>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 #include "serac/numerics/functional/tuple_tensor_dual_functions.hpp"
 #include "serac/infrastructure/application_manager.hpp"

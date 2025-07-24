@@ -6,10 +6,10 @@
 
 #include <fstream>
 
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"

@@ -15,7 +15,7 @@
 
 #include <memory>
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/physics/state/finite_element_vector.hpp"
 

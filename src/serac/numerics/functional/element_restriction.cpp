@@ -1,6 +1,6 @@
 #include "serac/numerics/functional/element_restriction.hpp"
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/numerics/functional/geometry.hpp"
 

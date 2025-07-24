@@ -15,7 +15,7 @@
 #include <string>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/physics/materials/liquid_crystal_elastomer.hpp"
 
@@ -23,7 +23,7 @@
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/infrastructure/application_manager.hpp"
 
 using namespace serac;

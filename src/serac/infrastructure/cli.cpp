@@ -6,7 +6,7 @@
 
 #include "serac/infrastructure/cli.hpp"
 
-#include "axom/CLI11.hpp"
+#include "axom/CLI11.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/input.hpp"
 #include "serac/infrastructure/logger.hpp"

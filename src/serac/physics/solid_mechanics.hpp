@@ -12,9 +12,9 @@
 
 #pragma once
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/physics/common.hpp"
 #include "serac/physics/solid_mechanics_input.hpp"
 #include "serac/physics/base_physics.hpp"

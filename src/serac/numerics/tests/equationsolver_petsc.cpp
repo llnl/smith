@@ -9,8 +9,8 @@
 #include <ostream>
 #include <functional>
 
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/numerics/equation_solver.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"

@@ -16,9 +16,9 @@
 #include <variant>
 #include <optional>
 
-#include "mfem.hpp"
-#include "axom/inlet.hpp"
-#include "axom/sidre.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
+#include "axom/inlet.hpp" // IWYU pragma: keep
+#include "axom/sidre.hpp" // IWYU pragma: keep
 
 /**
  * @brief The input related helper functions and objects

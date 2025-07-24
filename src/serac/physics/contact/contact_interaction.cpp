@@ -8,7 +8,7 @@
 
 #ifdef SERAC_USE_TRIBOL
 
-#include "axom/slic.hpp"
+#include "axom/slic.hpp" // IWYU pragma: keep
 
 #include "serac/physics/contact/contact_config.hpp"
 

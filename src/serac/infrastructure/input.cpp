@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <algorithm>
 
-#include "axom/core.hpp"
+#include "axom/core.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/logger.hpp"
 #include "serac/numerics/solver_config.hpp"

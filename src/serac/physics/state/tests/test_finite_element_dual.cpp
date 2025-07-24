@@ -11,8 +11,8 @@
 #include "serac/physics/state/finite_element_dual.hpp"
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/tensor.hpp"

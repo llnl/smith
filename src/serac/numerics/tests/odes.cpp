@@ -8,8 +8,8 @@
 #include <fstream>
 #include <functional>
 
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/numerics/odes.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"

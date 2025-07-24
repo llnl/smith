@@ -12,11 +12,11 @@
 
 #pragma once
 
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 
 #ifdef SERAC_USE_TRIBOL
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/physics/contact/contact_config.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"

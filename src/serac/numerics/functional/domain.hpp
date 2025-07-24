@@ -8,7 +8,7 @@
 
 #include <vector>
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/finite_element.hpp"

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 #include "serac/numerics/functional/detail/metaprogramming.hpp"
 #include "serac/numerics/functional/tensor.hpp"

@@ -15,8 +15,8 @@
 #include <functional>
 #include <memory>
 
-#include "mfem.hpp"
-#include "axom/sidre.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
+#include "axom/sidre.hpp" // IWYU pragma: keep
 
 #include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "serac/numerics/equation_solver.hpp"

@@ -11,7 +11,7 @@
 #include "serac/physics/materials/solid_material.hpp"
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/physics/materials/material_verification_tools.hpp"

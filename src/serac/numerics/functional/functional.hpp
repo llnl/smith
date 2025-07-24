@@ -12,9 +12,9 @@
 
 #pragma once
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/infrastructure/logger.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/quadrature.hpp"

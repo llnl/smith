@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h>
+#include <gtest/gtest.h> // IWYU pragma: keep
 #include "serac/physics/solid_residual.hpp"
 #include "serac/physics/functional_objective.hpp"
 
@@ -14,7 +14,7 @@
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/common.hpp"
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 #include "serac/physics/tests/physics_test_utils.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;

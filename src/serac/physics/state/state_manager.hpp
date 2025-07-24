@@ -15,7 +15,7 @@
 #include <optional>
 #include <unordered_map>
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 #include "axom/sidre/core/MFEMSidreDataCollection.hpp"
 
 #include "serac/infrastructure/logger.hpp"

@@ -12,9 +12,9 @@
 
 #pragma once
 
-#include "axom/core.hpp"
+#include "axom/core.hpp" // IWYU pragma: keep
 
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 
 namespace serac {
 

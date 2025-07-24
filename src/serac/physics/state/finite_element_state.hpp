@@ -18,7 +18,7 @@
 #include <optional>
 #include <type_traits>
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/variant.hpp"
 #include "serac/physics/state/finite_element_vector.hpp"

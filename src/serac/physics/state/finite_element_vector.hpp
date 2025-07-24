@@ -15,9 +15,9 @@
 
 #include <optional>
 
-#include "mfem.hpp"
+#include "mfem.hpp" // IWYU pragma: keep
 
-#include "serac/serac_config.hpp"
+#include "serac/serac_config.hpp" // IWYU pragma: keep
 #include "serac/infrastructure/variant.hpp"
 #include "serac/numerics/functional/functional.hpp"
 

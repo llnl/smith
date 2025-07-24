@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/infrastructure/application_manager.hpp"
-#include <gtest/gtest.h>
-#include "mfem.hpp"
+#include <gtest/gtest.h> // IWYU pragma: keep
+#include "mfem.hpp" // IWYU pragma: keep
 
 #include "serac/infrastructure/input.hpp"
 
