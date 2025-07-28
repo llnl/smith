@@ -7,11 +7,10 @@
 #include <string>
 #include <fstream>
 
-#include "axom/inlet.hpp" // IWYU pragma: keep
-#include "axom/slic.hpp" // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
-
-#include "serac/serac.hpp" // IWYU pragma: keep
+#include "axom/inlet.hpp"
+#include "axom/slic.hpp"
+#include "mfem.hpp"
+#include "serac/serac.hpp"
 
 template <class Physics>
 void output(double u, double f, const Physics& solid, const std::string& paraview_tag, std::ofstream& file)

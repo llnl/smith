@@ -11,8 +11,12 @@
  * the C++ API to configure the simulation
  */
 
+#include <memory>
+#include <set>
+#include <string>
+
 // _serac_include_header_start
-#include "serac/serac.hpp" // IWYU pragma: keep
+#include "serac/serac.hpp"
 // _serac_include_header_end
 
 // _main_init_start

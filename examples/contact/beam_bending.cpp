@@ -6,12 +6,11 @@
 
 #include <set>
 #include <string>
+#include <memory>
 
-#include "axom/slic.hpp" // IWYU pragma: keep
-
-#include "mfem.hpp" // IWYU pragma: keep
-
-#include "serac/serac.hpp" // IWYU pragma: keep
+#include "axom/slic.hpp"
+#include "mfem.hpp"
+#include "serac/serac.hpp"
 
 int main(int argc, char* argv[])
 {
