@@ -4,10 +4,15 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/infrastructure/application_manager.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
+#include <gtest/gtest.h>
+#include <exception>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
 
+#include "serac/infrastructure/application_manager.hpp"
+#include "mfem.hpp"
 #include "serac/infrastructure/input.hpp"
 
 class SlicErrorException : public std::exception {};

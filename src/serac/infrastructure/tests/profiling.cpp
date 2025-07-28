@@ -4,17 +4,21 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <gtest/gtest.h>
+#include <mpi.h>
 #include <array>
 #include <cstring>
 #include <exception>
-
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <stdexcept>
+#include <string>
 
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/infrastructure/cli.hpp"
 #include "serac/infrastructure/profiling.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/mesh_utils/mesh_utils_base.hpp"
+#include "serac/serac_config.hpp"
 
 namespace serac {
 

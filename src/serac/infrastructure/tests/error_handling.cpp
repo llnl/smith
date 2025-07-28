@@ -4,17 +4,18 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <gtest/gtest.h>
+#include <mpi.h>
 #include <exception>
-
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
+#include <memory>
+#include <set>
+#include <string>
 
 #include "serac/infrastructure/cli.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/boundary_condition.hpp"
 #include "serac/numerics/equation_solver.hpp"
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 
 class SlicErrorException : public std::exception {};
 

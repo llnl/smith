@@ -4,12 +4,12 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
+#include <gtest/gtest.h>
+#include <string>
 
 #include "serac/infrastructure/debug_print.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 
 namespace serac {
 
