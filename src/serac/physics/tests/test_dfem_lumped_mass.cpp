@@ -7,14 +7,13 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
 #include "serac/physics/tests/physics_test_utils.hpp"
 #include "serac/physics/solid_residual.hpp"
 #include "serac/physics/solid_dfem_residual.hpp"
+#include "serac/physics/dfem_mass_residual.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
@@ -61,75 +60,16 @@ struct NeoHookeanWithFieldDensityDfem {
   double G;  ///< shear modulus
 };
 
-template <template <typename, int, int> class TensorT>
-struct NeoHookeanWithFieldWithRateFunctional {
-  using State = Empty;  ///< this material has no internal variables
-
-  template <typename T1, typename T2, int dim>
-  SERAC_HOST_DEVICE auto pkStress(double /*dt*/, State& /* state */, const TensorT<T1, dim, dim>& du_dX,
-                                  const TensorT<T2, dim, dim>& /*dv_dX*/) const
-  {
-    using std::log1p;
-    constexpr auto I = Identity<dim>();
-    auto lambda = K - (2.0 / 3.0) * G;
-    auto B_minus_I = dot(du_dX, transpose(du_dX)) + transpose(du_dX) + du_dX;
-
-    auto logJ = log1p(detApIm1(du_dX));
-    // Kirchoff stress, in form that avoids cancellation error when F is near I
-    auto TK = lambda * logJ * I + G * B_minus_I;
-
-    // Pull back to Piola
-    auto F = du_dX + I;
-    return dot(TK, inv(transpose(F)));
-  }
-
-  SERAC_HOST_DEVICE auto density() const { return Rho; }
-
-  double K;    ///< bulk modulus
-  double G;    ///< shear modulus
-  double Rho;  ///< density
-};
-
-template <template <typename, int, int> class TensorT>
-struct NeoHookeanWithFieldWithRateDfem {
-  template <typename T1, typename T2, int dim>
-  SERAC_HOST_DEVICE auto pkStress(double /*dt*/, const TensorT<T1, dim, dim>& du_dX,
-                                  const TensorT<T2, dim, dim>& /*dv_dX*/) const
-  {
-    using std::log1p;
-    constexpr auto I = mfem::future::IdentityMatrix<dim>();
-    auto lambda = K - (2.0 / 3.0) * G;
-    auto B_minus_I = mfem::future::dot(du_dX, mfem::future::transpose(du_dX)) + mfem::future::transpose(du_dX) + du_dX;
-
-    auto logJ = log1p(detApIm1(du_dX));
-    // Kirchoff stress, in form that avoids cancellation error when F is near I
-    auto TK = lambda * logJ * I + G * B_minus_I;
-
-    // Pull back to Piola
-    auto F = du_dX + I;
-    return mfem::future::dot(TK, mfem::future::inv(mfem::future::transpose(F)));
-  }
-
-  SERAC_HOST_DEVICE auto density() const { return Rho; }
-
-  double K;    ///< bulk modulus
-  double G;    ///< shear modulus
-  double Rho;  ///< density
-};
-
 }  // namespace serac
 
-struct ResidualFixture : public testing::Test {
+struct LumpedMassFixture : public testing::Test {
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
 
   using VectorSpace = serac::H1<disp_order, dim>;
   using DensitySpace = serac::L2<disp_order - 1>;
 
-  using SolidMaterialFunctional = serac::solid_mechanics::NeoHookeanWithFieldDensity;
   using SolidMaterialDfem = serac::NeoHookeanWithFieldDensityDfem<mfem::future::tensor>;
-  using SolidRateMaterialFunctional = serac::NeoHookeanWithFieldWithRateFunctional<serac::tensor>;
-  using SolidRateMaterialDfem = serac::NeoHookeanWithFieldWithRateDfem<mfem::future::tensor>;
 
   enum PARAMS
   {
@@ -172,45 +112,39 @@ struct ResidualFixture : public testing::Test {
     param_tangents = params;
 
     std::string physics_name = "solid";
-
-    auto solid_mechanics_residual =
-        std::make_shared<SolidResidualT>(physics_name, mesh, states[SolidResidualT::SHAPE_DISPLACEMENT].space(),
-                                         states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
-    SolidMaterialFunctional mat;
     double E = 1.0e3;
     double nu = 0.3;
-    mat.K = E / (3.0 * (1.0 - 2.0 * nu));  // bulk modulus
-    mat.G = E / (2.0 * (1.0 + nu));        // shear modulus
-    // SolidRateMaterialFunctional rate_mat;
-    // rate_mat.K = 1.0;
-    // rate_mat.G = 0.5;
-    // rate_mat.Rho = 1.5;
 
-    solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
-    // solid_mechanics_residual->setRateMaterial(serac::DependsOn<>{}, mesh->entireBodyName(), rate_mat);
-
-    auto solid_dfem_residual = std::make_shared<SolidDfemT>(
-        physics_name, mesh, states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
+    using SolidT = serac::SolidDfemResidual<quasi_static, lumped_mass>;
+    auto solid_dfem_residual =
+        std::make_shared<SolidT>(physics_name, mesh, states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
     SolidMaterialDfem dfem_mat;
-    dfem_mat.K = mat.K;
-    dfem_mat.G = mat.G;
-    // SolidRateMaterialDfem dfem_rate_mat;
-    // dfem_rate_mat.K = 1.0;
-    // dfem_rate_mat.G = 0.5;
-    // dfem_rate_mat.Rho = 1.5;
+    dfem_mat.K = E / (3.0 * (1.0 - 2.0 * nu));  // bulk modulus
+    dfem_mat.G = E / (2.0 * (1.0 + nu));        // shear modulus
 
-    int ir_order = 2;
+    int ir_order = 3;
     const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
     mfem::Array<int> solid_attrib({1});
 
     solid_dfem_residual->setMaterial<SolidMaterialDfem, serac::ScalarParameter<0>>(solid_attrib, dfem_mat,
                                                                                    displacement_ir);
 
-    // // apply traction boundary conditions
-    // std::string surface_name = "side";
-    // mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
-    // solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*t*/, auto /*x*/, auto n) { return 1.0 * n;
-    // }); solid_mechanics_residual->addPressure(surface_name, [](auto /*t*/, auto /*x*/) { return 0.6; });
+    mfem::future::tensor<mfem::real_t, dim> g({0.0, -9.81});  // gravity vector
+    mfem::future::tuple<mfem::future::Value<SolidT::DISP>, mfem::future::Value<SolidT::VELO>,
+                        mfem::future::Value<SolidT::ACCEL>, mfem::future::Gradient<SolidT::COORD>, mfem::future::Weight,
+                        mfem::future::Value<SolidT::NUM_STATE_VARS>>
+        g_inputs{};
+    mfem::future::tuple<mfem::future::Value<SolidT::NUM_STATE_VARS + 1>> g_outputs{};
+    solid_dfem_residual->addBodyIntegral(
+        solid_attrib,
+        [=] SERAC_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim>&,
+                              const mfem::future::tensor<mfem::real_t, dim>&,
+                              const mfem::future::tensor<mfem::real_t, dim>&,
+                              const mfem::future::tensor<mfem::real_t, dim, dim>& dX_dxi, mfem::real_t weight, double) {
+          auto J = mfem::future::det(dX_dxi) * weight;
+          return mfem::future::tuple{g * J};
+        },
+        g_inputs, g_outputs, displacement_ir, std::index_sequence<>{});
 
     // initialize fields for testing
     for (auto& s : state_tangents) {
@@ -234,15 +168,21 @@ struct ResidualFixture : public testing::Test {
       return u;
     });
     states[SolidResidualT::SHAPE_DISPLACEMENT] = 0.0;
-    params[0] = 1.2;
+    params[0] = 1.0;
 
-    // residual is abstract Residual class to ensure usage only through BasePhysics interface
-    functional_residual = solid_mechanics_residual;
     dfem_residual = solid_dfem_residual;
+    // lobatto rule at nodes
+    // mfem::IntegrationRule rule_1d;
+    // mfem::QuadratureFunctions1D::GaussLobatto(2, &rule_1d);
+    // nodal_ir_2d = mfem::IntegrationRule(rule_1d, rule_1d);
+    auto mass_dfem_residual = serac::create_solid_mass_residual<2, 2>(
+        physics_name, mesh, states[SolidResidualT::DISPLACEMENT], params[0], displacement_ir);  // nodal_ir_2d);
+    mass_residual = mass_dfem_residual;
   }
 
   using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
-  using SolidDfemT = serac::SolidDfemResidual<false, false>;
+  static constexpr bool quasi_static = false;
+  static constexpr bool lumped_mass = false;
 
   const double time = 0.0;
   const double dt = 1.0;
@@ -251,8 +191,9 @@ struct ResidualFixture : public testing::Test {
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<serac::Residual> functional_residual;
-  std::shared_ptr<serac::Residual> dfem_residual;
+  std::shared_ptr<serac::SolidDfemResidual<quasi_static, lumped_mass>> dfem_residual;
+
+  std::shared_ptr<serac::DfemResidual> mass_residual;
 
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
@@ -262,9 +203,11 @@ struct ResidualFixture : public testing::Test {
 
   std::vector<serac::FiniteElementState> state_tangents;
   std::vector<serac::FiniteElementState> param_tangents;
+
+  mfem::IntegrationRule nodal_ir_2d;
 };
 
-TEST_F(ResidualFixture, CheckDfemVsFunctionalResidual)
+TEST_F(LumpedMassFixture, CheckDfemVsFunctionalResidual)
 {
   // initialize the displacement and acceleration to a non-trivial field
   auto functional_input_fields = getConstFieldPointers(states, params);
@@ -275,14 +218,31 @@ TEST_F(ResidualFixture, CheckDfemVsFunctionalResidual)
       {functional_input_fields[1], functional_input_fields[2], functional_input_fields[3], &coords,
        functional_input_fields[4]});
 
-  serac::FiniteElementDual functional_res_vector(states[SolidResidualT::DISPLACEMENT].space(), "functional_residual");
-  functional_res_vector = functional_residual->residual(time, dt, functional_input_fields);
-  serac::FiniteElementDual dfem_vs_functional_vector(states[SolidResidualT::DISPLACEMENT].space(), "dfem_residual");
-  // set nodes at current coords for dfem
-  //(*mesh->mfemParMesh().GetNodes()) += states[1].gridFunction();
-  dfem_vs_functional_vector = dfem_residual->residual(time, dt, dfem_input_fields);
-  dfem_vs_functional_vector -= functional_res_vector;
-  ASSERT_NEAR(0.0, dfem_vs_functional_vector.Norml2(), 1.0e-12) << "Functional and DFEM residuals do not match!";
+  std::vector<const serac::FiniteElementState*> mass_input_fields = {&coords, &params[0]};
+  auto lumped_mass_vector = mass_residual->residual(time, dt, mass_input_fields);
+  // std::cout << "lumped mass vector = " << std::endl;
+  // lumped_mass_vector.Print();
+
+  serac::FiniteElementDual ones_vector(states[SolidResidualT::DISPLACEMENT].space(), "ones_vector");
+  ones_vector = 1.0;
+  serac::FiniteElementDual full_mass_vector(states[SolidResidualT::DISPLACEMENT].space(), "full_mass_vector");
+  full_mass_vector = 0.0;
+  dfem_residual->massMatrix(dfem_input_fields, ones_vector, full_mass_vector);
+  for (int i = 0; i < lumped_mass_vector.Size(); ++i) {
+    EXPECT_NEAR(lumped_mass_vector[i], -full_mass_vector[i], 1.0e-14);
+  }
+  // std::cout << "full mass vector = " << std::endl;
+  // full_mass_vector.Print();
+  // ones_vector = 0.0;
+  // for (int i = 0; i < ones_vector.Size(); ++i) {
+  //   ones_vector[i] = 1.0;
+  //   serac::FiniteElementDual mass_row(states[SolidResidualT::DISPLACEMENT].space(), "mass_row");
+  //   mass_row = 0.0;
+  //   dfem_residual->massMatrix(dfem_input_fields, ones_vector, mass_row);
+  //   std::cout << "lumped mass vector = " << std::endl;
+  //   mass_row.Print();
+  //   ones_vector[i] = 0.0;
+  // }
 }
 
 // TEST_F(ResidualFixture, JvpConsistency)

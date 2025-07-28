@@ -17,6 +17,14 @@
 
 namespace serac {
 
+template <int Idx>
+struct ScalarParameter {
+  static constexpr int index = Idx;
+  using QFunctionInput = double;
+  template <int FieldId>
+  using QFunctionFieldOp = mfem::future::Value<FieldId>;
+};
+
 template <typename Material, typename... Parameters>
 struct StressDivQFunction {
   SERAC_HOST_DEVICE inline auto operator()(
@@ -25,7 +33,7 @@ struct StressDivQFunction {
       const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dv_dxi,
       const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>&,
       const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dX_dxi, mfem::real_t weight,
-      Parameters... params) const
+      Parameters::QFunctionInput... params) const
   {
     auto dxi_dX = mfem::future::inv(dX_dxi);
     auto du_dX = mfem::future::dot(du_dxi, dxi_dX);
@@ -47,7 +55,7 @@ struct AccelerationQFunction {
       const mfem::future::tensor<mfem::real_t, Material::dim>&,
       const mfem::future::tensor<mfem::real_t, Material::dim>& a,
       const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dX_dxi, mfem::real_t weight,
-      Parameters... params) const
+      Parameters::QFunctionInput... params) const
   {
     auto rho = material.density(params...);
     auto J = mfem::future::det(dX_dxi) * weight;
@@ -69,15 +77,13 @@ struct AccelerationQFunction {
 template <bool IsQuasiStatic = false, bool UseLumpedMass = false>
 class SolidDfemResidual : public DfemResidual {
  public:
-  /// @brief disp, velo, accel, coord
-  static constexpr int NUM_STATE_VARS = 4;
-
   enum FieldIDs
   {
     DISP,   ///< displacement
     VELO,   ///< velocity
     ACCEL,  ///< acceleration
-    COORD   ///< coordinates
+    COORD,  ///< coordinates
+    NUM_STATE_VARS
   };
 
   /**
@@ -120,20 +126,24 @@ class SolidDfemResidual : public DfemResidual {
   void setMaterial(const mfem::Array<int>& domain_attributes, const MaterialType& material,
                    const mfem::IntegrationRule& displacement_ir)
   {
-    auto stress_div_integral = StressDivQFunction<MaterialType, double>{.material = material};
+    auto stress_div_integral = StressDivQFunction<MaterialType, ParameterTypes...>{.material = material};
     mfem::future::tuple<mfem::future::Gradient<DISP>, mfem::future::Gradient<VELO>, mfem::future::Gradient<ACCEL>,
-                        mfem::future::Gradient<COORD>, mfem::future::Weight, ParameterTypes...>
+                        mfem::future::Gradient<COORD>, mfem::future::Weight,
+                        typename ParameterTypes::template QFunctionFieldOp<NUM_STATE_VARS + ParameterTypes::index>...>
         stress_div_integral_inputs{};
-    mfem::future::tuple<mfem::future::Gradient<DISP>> stress_div_integral_outputs{};
+    mfem::future::tuple<mfem::future::Gradient<NUM_STATE_VARS + sizeof...(ParameterTypes)>>
+        stress_div_integral_outputs{};
     DfemResidual::addBodyIntegral(domain_attributes, stress_div_integral, stress_div_integral_inputs,
                                   stress_div_integral_outputs, displacement_ir, std::index_sequence<DISP>{});
 
     if constexpr (!IsQuasiStatic) {
-      auto acceleration_integral = AccelerationQFunction<MaterialType, double>{.material = material};
+      auto acceleration_integral = AccelerationQFunction<MaterialType, ParameterTypes...>{.material = material};
       mfem::future::tuple<mfem::future::Value<DISP>, mfem::future::Value<VELO>, mfem::future::Value<ACCEL>,
-                          mfem::future::Gradient<COORD>, mfem::future::Weight, ParameterTypes...>
+                          mfem::future::Gradient<COORD>, mfem::future::Weight,
+                          typename ParameterTypes::template QFunctionFieldOp<NUM_STATE_VARS + ParameterTypes::index>...>
           acceleration_integral_inputs{};
-      mfem::future::tuple<mfem::future::Value<ACCEL>> acceleration_integral_outputs{};
+      mfem::future::tuple<mfem::future::Value<NUM_STATE_VARS + sizeof...(ParameterTypes)>>
+          acceleration_integral_outputs{};
       if constexpr (UseLumpedMass) {
         SLIC_ERROR_IF(DfemResidual::input_mfem_spaces_[DISP]->IsVariableOrder(),
                       "Lumped mass matrix is not supported for variable order finite element spaces.");
@@ -173,13 +183,8 @@ class SolidDfemResidual : public DfemResidual {
                   mfem::Vector& result_t) const
   {
     static_assert(!IsQuasiStatic, "Mass matrix is not defined for quasi-static solid mechanics problems.");
-    std::vector<mfem::Vector*> sol_fields({&fields[0]->gridFunction()});
-    std::vector<mfem::Vector*> other_fields;
-    other_fields.reserve(fields.size() - 1);
-    for (size_t i = 1; i < fields.size(); ++i) {
-      other_fields.push_back(&fields[i]->gridFunction());
-    }
-    auto deriv_op = DfemResidual::differentiable_operators_[0]->GetDerivative(ACCEL, sol_fields, other_fields);
+    auto deriv_op =
+        DfemResidual::residual_.GetDerivative(ACCEL, {&fields[0]->gridFunction()}, DfemResidual::getLVectors(fields));
     deriv_op->Mult(direction_t, result_t);
   }
 
