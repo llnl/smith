@@ -6,10 +6,17 @@
 
 #include "serac/mesh_utils/mesh_utils.hpp"
 
+#include <cmath>
 #include <fstream>
+#include <algorithm>
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
-#include "axom/core.hpp" // IWYU pragma: keep
-#include "axom/fmt.hpp" // IWYU pragma: keep
+#include "axom/core.hpp"
+#include "axom/fmt.hpp"
 
 #include "serac/infrastructure/logger.hpp"
 
