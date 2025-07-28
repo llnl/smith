@@ -6,6 +6,7 @@
 
 #include <string>
 #include <fstream>
+#include <memory>
 
 #include "axom/inlet.hpp"
 #include "axom/slic.hpp"
