@@ -13,8 +13,8 @@
 
 #pragma once
 
-#include "axom/slic.hpp" // IWYU pragma: keep
-#include "axom/fmt.hpp" // IWYU pragma: keep
+#include "axom/slic.hpp"
+#include "axom/fmt.hpp"
 #include "mpi.h"
 
 // Logger functionality

@@ -6,8 +6,11 @@
 
 #include "serac/infrastructure/cli.hpp"
 
-#include "axom/CLI11.hpp" // IWYU pragma: keep
+#include <stdlib.h>
+#include <utility>
+#include <vector>
 
+#include "axom/CLI11.hpp"
 #include "serac/infrastructure/input.hpp"
 #include "serac/infrastructure/logger.hpp"
 

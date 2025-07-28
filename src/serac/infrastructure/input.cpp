@@ -7,9 +7,11 @@
 #include "serac/infrastructure/input.hpp"
 
 #include <stdlib.h>
+#include <limits.h>
 #include <algorithm>
-
-#include "axom/core.hpp" // IWYU pragma: keep
+#include "axom/core.hpp"
+#include <cstddef>
+#include <utility>
 
 #include "serac/infrastructure/logger.hpp"
 #include "serac/numerics/solver_config.hpp"

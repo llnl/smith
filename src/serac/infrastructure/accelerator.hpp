@@ -51,12 +51,14 @@
 #endif
 
 #include <memory>
+#include <cstring>
+#include <tuple>
 
-#include "axom/core.hpp" // IWYU pragma: keep
-
+#include "axom/core.hpp"
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/memory.hpp"
 #include "serac/infrastructure/profiling.hpp"
+#include "serac/serac_config.hpp"
 
 /**
  * @brief Accelerator functionality

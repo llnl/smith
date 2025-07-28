@@ -5,12 +5,15 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/infrastructure/about.hpp"
+#include "serac/serac_config.hpp"
 
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include <mpi.h>
+#include <string_view>
+#include <vector>
 
-#include "axom/config.hpp" // IWYU pragma: keep
-#include "axom/core.hpp" // IWYU pragma: keep
-#include "axom/fmt.hpp" // IWYU pragma: keep
+#include "axom/config.hpp"
+#include "axom/core.hpp"
+#include "axom/fmt.hpp"
 
 #include "camp/config.hpp"
 
@@ -23,14 +26,14 @@
 #endif
 
 #ifdef SERAC_USE_HDF5
-#include "hdf5.h" // IWYU pragma: keep
+#include "hdf5.h"
 #endif
 
 #ifdef SERAC_USE_LUA
 #include "lua.h"
 #endif
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 #ifdef SERAC_USE_RAJA
 #include "RAJA/config.hpp"
@@ -44,6 +47,7 @@
 #include "tribol/config.hpp"
 #endif
 
+#include "serac/serac_config.hpp"
 #include "serac/infrastructure/git_sha.hpp"
 #include "serac/infrastructure/logger.hpp"
 

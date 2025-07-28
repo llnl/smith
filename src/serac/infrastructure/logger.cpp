@@ -5,6 +5,11 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/infrastructure/logger.hpp"
+
+#include <mpi.h>
+#include <iostream>
+#include <string>
+
 #include "serac/infrastructure/about.hpp"
 
 namespace serac::logger {

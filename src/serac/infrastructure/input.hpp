@@ -15,10 +15,14 @@
 #include <string>
 #include <variant>
 #include <optional>
+#include <functional>
+#include <memory>
+#include <set>
+#include <unordered_map>
 
-#include "mfem.hpp" // IWYU pragma: keep
-#include "axom/inlet.hpp" // IWYU pragma: keep
-#include "axom/sidre.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
+#include "axom/inlet.hpp"
+#include "axom/sidre.hpp"
 
 /**
  * @brief The input related helper functions and objects

@@ -6,11 +6,8 @@
 
 #include "serac/infrastructure/accelerator.hpp"
 
+#include "mfem.hpp"
 #include <memory>
-
-#include "mfem.hpp" // IWYU pragma: keep
-
-#include "serac/infrastructure/logger.hpp"
 
 namespace serac {
 

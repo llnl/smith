@@ -20,12 +20,12 @@
 #include "serac/infrastructure/accelerator.hpp"
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/profiling.hpp"
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 #ifdef SERAC_USE_PETSC
-#include "petsc.h"
+#include "petsc.h" // for PetscPopSignalHandler
 #endif
 
 namespace serac {
