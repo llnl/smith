@@ -12,12 +12,16 @@
 
 #pragma once
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include <stddef.h>
+#include <array>
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <string_view>
 
-#include "axom/core.hpp" // IWYU pragma: keep
-
-#include "serac/serac_config.hpp" // IWYU pragma: keep
-
+#include "mfem.hpp"
+#include "axom/core.hpp"
+#include "serac/serac_config.hpp"
 #include "serac/infrastructure/accelerator.hpp"
 
 namespace serac {

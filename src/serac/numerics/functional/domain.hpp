@@ -6,9 +6,15 @@
 
 #pragma once
 
+#include <cstdlib>
 #include <vector>
+#include <array>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <set>
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/finite_element.hpp"

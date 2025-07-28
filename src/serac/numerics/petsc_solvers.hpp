@@ -5,8 +5,12 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 #pragma once
 
-#include "mfem.hpp" // IWYU pragma: keep
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include <mpi.h>
+#include <memory>
+#include <string>
+
+#include "mfem.hpp"
+#include "serac/serac_config.hpp"
 #include "serac/numerics/solver_config.hpp"
 
 #ifdef SERAC_USE_PETSC

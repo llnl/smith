@@ -5,6 +5,10 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/numerics/functional/geometric_factors.hpp"
+
+#include <iostream>
+#include <vector>
+
 #include "serac/numerics/functional/finite_element.hpp"
 
 namespace serac {

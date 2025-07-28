@@ -27,6 +27,14 @@
 
 #include "serac/numerics/functional/domain.hpp"
 
+#include <cassert>
+#include <cstdint>
+#include <cstdlib>
+#include <iterator>
+#include <tuple>
+
+#include "serac/numerics/functional/element_restriction.hpp"
+
 namespace serac {
 
 /**

@@ -6,10 +6,12 @@
 
 #pragma once
 
+#include <cstdint>
 #include <vector>
+#include <map>
 
-#include "mfem.hpp" // IWYU pragma: keep
-#include "axom/core.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
+#include "axom/core.hpp"
 #include "geometry.hpp"
 #include "domain.hpp"
 

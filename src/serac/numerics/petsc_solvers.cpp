@@ -5,6 +5,10 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/numerics/petsc_solvers.hpp"
+
+#include <stddef.h> // for NULL
+#include <unordered_map>
+
 #include "serac/infrastructure/logger.hpp"
 
 #ifdef SERAC_USE_PETSC

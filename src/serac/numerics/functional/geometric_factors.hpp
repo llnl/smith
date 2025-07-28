@@ -6,11 +6,12 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include "serac/numerics/functional/element_restriction.hpp"  // for FaceType
 #include "serac/numerics/functional/finite_element.hpp"       // for Geometry
 #include "serac/numerics/functional/domain.hpp"
-
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 namespace serac {
 

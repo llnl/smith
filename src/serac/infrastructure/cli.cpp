@@ -6,7 +6,7 @@
 
 #include "serac/infrastructure/cli.hpp"
 
-#include <stdlib.h>
+#include <cstdlib>
 #include <utility>
 #include <vector>
 

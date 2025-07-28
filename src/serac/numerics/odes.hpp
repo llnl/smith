@@ -13,11 +13,13 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 #include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "serac/numerics/equation_solver.hpp"
+#include "serac/numerics/solver_config.hpp"
 
 namespace serac::mfem_ext {
 

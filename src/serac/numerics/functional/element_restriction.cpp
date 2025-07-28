@@ -1,11 +1,11 @@
 #include "serac/numerics/functional/element_restriction.hpp"
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
 
 #include "serac/numerics/functional/geometry.hpp"
-
-// TODO REMOVE AFTER DEBUGGING
-#include "serac/infrastructure/mpi_fstream.hpp"
+#include "serac/numerics/functional/domain.hpp"
 
 std::vector<std::vector<int> > lexicographic_permutations(int p)
 {

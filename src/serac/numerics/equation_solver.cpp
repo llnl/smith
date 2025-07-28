@@ -6,13 +6,17 @@
 
 #include "serac/numerics/equation_solver.hpp"
 
+#include <cstdlib>
 #include <iomanip>
-#include <sstream>
-#include <ios>
 #include <iostream>
+#include <algorithm>
+#include <cmath>
+#include <exception>
+#include <limits>
+#include <string>
+#include <tuple>
 
-#include "serac/infrastructure/logger.hpp"
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/numerics/trust_region_solver.hpp"
 
