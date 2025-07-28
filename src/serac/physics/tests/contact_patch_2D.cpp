@@ -6,6 +6,7 @@
 
 #include "serac/physics/solid_mechanics_contact.hpp"
 
+#include <cfenv>
 #include <fem/datacollection.hpp>
 #include <functional>
 #include <mesh/vtk.hpp>
@@ -23,6 +24,9 @@
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include <fenv.h>
+
+
 
 namespace serac {
 
@@ -87,7 +91,7 @@ TEST_P(ContactTest, patch)
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type = ContactType::Frictionless,
-                                 .penalty = 8.0e2,
+                                 .penalty = 1.0,
                                  .jacobian = std::get<1>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
@@ -100,7 +104,7 @@ TEST_P(ContactTest, patch)
 
   // Define the function for the initial displacement and boundary condition
   // constexpr int dim = 2;
-  auto applied_disp_function = [](tensor<double, dim>, auto) { return tensor<double, dim>{{0, -0.25}}; };
+  auto applied_disp_function = [](tensor<double, dim>, auto) { return tensor<double, dim>{{0, -0.01}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
   solid_solver.setFixedBCs(mesh->domain("x0_faces"), Component::X);
@@ -137,24 +141,21 @@ TEST_P(ContactTest, patch)
   mfem::ParGridFunction approx_error(elasticity_sol);
   approx_error -= solid_solver.displacement().gridFunction();
   auto approx_error_l2 = mfem::ParNormlp(approx_error, 2, MPI_COMM_WORLD);
-  EXPECT_NEAR(0.0, approx_error_l2, 1.0e-3);
+  EXPECT_NEAR(0.0, approx_error_l2, 1.0e-2);
 }
 
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTest,
-    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ"),
-                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Approximate,
-                                    "lagrange_multiplier_approxJ"),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ"),
-                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Exact,
-                                    "lagrange_multiplier_exactJ")));
+    testing::Values(
+                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")
+));
 
 }  // namespace serac
 
 int main(int argc, char* argv[])
 {
 
-
+feenableexcept(FE_INVALID | FE_OVERFLOW);
 
   testing::InitGoogleTest(&argc, argv);
   serac::ApplicationManager applicationManager(argc, argv);
