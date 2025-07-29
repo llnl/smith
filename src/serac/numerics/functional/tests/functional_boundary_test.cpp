@@ -6,17 +6,18 @@
 
 #include <fstream>
 #include <iostream>
+#include <cmath>
+#include <string>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
+#include <gtest/gtest.h>
+#include "mfem.hpp"
 
-#include "serac/serac_config.hpp" // IWYU pragma: keep
-#include "serac/numerics/stdfunction_operator.hpp"
+#include "serac/serac_config.hpp"
+#include "serac/numerics/functional/domain.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-#include "serac/mesh_utils/mesh_utils_base.hpp"
-
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/tests/check_gradient.hpp"
 
 #include "serac/infrastructure/mpi_fstream.hpp"
