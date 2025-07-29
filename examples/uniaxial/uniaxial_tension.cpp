@@ -34,10 +34,10 @@ int main(int argc, char* argv[])
   constexpr int elements_in_y = 1;
   constexpr int elements_in_z = 1;
 
-  int serial_refinement = 0;
-  int parallel_refinement = 0;
+  int serial_refinement = 1;
+  int parallel_refinement = 2;
   int time_steps = 100;
-  double strain_rate = 1e-3;
+  double strain_rate = 1e-1;
 
   constexpr double E = 1.0;
   constexpr double nu = 0.25;

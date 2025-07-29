@@ -46,9 +46,11 @@ if(TRIBOL_FOUND)
 		    # double_ring_tensile
 		    # logpile_lattice
 		    # small_lattice
-		    # 2x2lattice
+		    2x2lattice
+            5x5lattice
+            gyroid
                     # multi_tensile
-		    # hole
+		    hole
 		    # # viscous_tensile
                     )
                     foreach (source IN LISTS SourceFiles)
@@ -56,7 +58,7 @@ if(TRIBOL_FOUND)
                         blt_add_executable( NAME       ${source} 
                                             SOURCES    ${source}.cpp
                                             OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                                            DEPENDS_ON  serac_physics serac_mesh
+                                            DEPENDS_ON  serac_physics serac_mesh_utils
                                             )
 endforeach()
     # blt_add_executable( NAME       active_cantilever_metrics 
