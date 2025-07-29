@@ -4,10 +4,15 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h> // IWYU pragma: keep
+#include <gtest/gtest.h>
+#include <memory>
+#include <ostream>
+#include <vector>
 
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"
+#include "serac/infrastructure/memory.hpp"
+#include "serac/serac_config.hpp"
 
 using namespace serac;
 

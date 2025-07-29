@@ -7,7 +7,7 @@
 #include "serac/infrastructure/input.hpp"
 
 #include <cstdlib>
-#include <limits.h>
+#include <climits>
 #include <algorithm>
 #include "axom/core.hpp"
 #include <cstddef>

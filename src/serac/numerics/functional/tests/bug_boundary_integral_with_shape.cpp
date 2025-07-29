@@ -8,11 +8,11 @@
 #include <iostream>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
+#include <gtest/gtest.h>
+#include "mfem.hpp"
 
-#include "serac/serac_config.hpp" // IWYU pragma: keep
-#include "serac/mesh_utils/mesh_utils_base.hpp"
+#include "serac/serac_config.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"

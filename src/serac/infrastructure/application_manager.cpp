@@ -11,7 +11,7 @@
 #include <tchar.h>
 #else
 #include <unistd.h>
-#include <limits.h>
+#include <climits>
 #endif
 #include <string.h>
 #include <csignal>

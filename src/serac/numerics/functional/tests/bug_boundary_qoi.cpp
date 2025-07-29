@@ -4,15 +4,12 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <fstream>
-#include <iostream>
+#include <gtest/gtest.h>
+#include <mpi.h>
+#include <algorithm>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
-
-#include "serac/serac_config.hpp" // IWYU pragma: keep
-#include "serac/mesh_utils/mesh_utils_base.hpp"
+#include "mfem.hpp"
+#include "serac/serac_config.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
