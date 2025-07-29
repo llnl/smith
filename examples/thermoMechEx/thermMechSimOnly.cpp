@@ -8,6 +8,7 @@
 // of LLNL.  See license for disclaimers, notice of U.S. Government
 // Rights and license terms and conditions.
 
+#include <mpi.h>
 #include "mfem.hpp"
 #include "serac/serac.hpp"
 
@@ -17,9 +18,8 @@
 
 int main(int argc, char *argv[])
 {
-  int myRank, managerRank=0;
-  MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
 
+  serac::ApplicationManager applicationManager(argc, argv);
   double Lx = 1.0; // mesh dimension in the x direction
   double Ly = 1.0; // mesh dimension in the y direction
   int Nx = 200; // number of elements in the x direction
@@ -52,6 +52,10 @@ int main(int argc, char *argv[])
   app.add_option("--p-ref", numParRef, "Number of (parallel) mesh refinements");
   app.allow_extras();
   CLI11_PARSE(app, argc, argv);
+
+  int myRank, managerRank=0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+
   if (myRank == managerRank) {
     ::std::cout << "Finished parsing inputs." << ::std::endl;
   }
@@ -61,12 +65,15 @@ int main(int argc, char *argv[])
     std::cout << app.config_to_str(true, true);
   }
 
+  // Initialize MPI and other libraries 
+
   // initialize serac
   ::axom::sidre::DataStore datastore;
   ::serac::StateManager::initialize(datastore, "sidreDataStore");
   
   //s::mfem::Mesh mesh = ::mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, ::mfem::Element::HEXAHEDRON, Lx, Ly, Lz);
-  ::mfem::Mesh mesh = ::mfem::Mesh::MakeCartesian2D(Nx, Ny, mfem::Element::QUADRILATERAL, Lx, Ly);
+  // ::mfem::Mesh mesh = ::mfem::Mesh::MakeCartesian2D(Nx, Ny, mfem::Element::QUADRILATERAL, Lx, Ly);
+  ::mfem::Mesh mesh = ::mfem::Mesh::MakeCartesian2D(Nx, Ny, mfem::Element::QUADRILATERAL, 0, Lx, Ly);
   ::std::cout << "Successfully loaded mesh" << ::std::endl;
 
   // build mesh and refine
