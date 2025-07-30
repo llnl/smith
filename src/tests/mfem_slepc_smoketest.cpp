@@ -34,15 +34,14 @@
 //
 //               We recommend viewing Example 1 before viewing this example.
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 #include <fstream>
 #include <iostream>
 
 // SERAC_EDIT_START
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/infrastructure/application_manager.hpp"
-#include "serac/serac_config.hpp" // IWYU pragma: keep
-#include <gtest/gtest.h> // IWYU pragma: keep
+#include "serac/serac_config.hpp"
+#include "gtest/gtest.h"
 // SERAC_EDIT_END
 
 #ifndef MFEM_USE_SLEPC

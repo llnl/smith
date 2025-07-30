@@ -33,10 +33,10 @@ THE SOFTWARE.
 #include <assert.h>
 #include <stdio.h>
 #include <algorithm>
-#include <stdlib.h>
+#include <cstdlib>
 #include <iostream>
 #include "hip/hip_runtime.h"
-#include <gtest/gtest.h> // IWYU pragma: keep
+#include <gtest/gtest.h>
 
 
 #ifdef NDEBUG

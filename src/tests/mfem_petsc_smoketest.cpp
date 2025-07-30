@@ -37,14 +37,14 @@
 //               provide an example on how to visualize the iterative solution
 //               inside a PETSc solver.
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 #include <fstream>
 #include <iostream>
 
 // SERAC_EDIT_START
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/serac_config.hpp" // IWYU pragma: keep
-#include <gtest/gtest.h> // IWYU pragma: keep
+#include "serac/serac_config.hpp"
+#include <gtest/gtest.h>
 // SERAC_EDIT_END
 
 

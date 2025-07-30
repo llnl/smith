@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <numeric>
 
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
+#include <gtest/gtest.h>
+#include "mfem.hpp"
 
 // In these tests std::algorithms should only be used once -
 // naive for-loops should be used everywhere else in a given
