@@ -75,6 +75,7 @@ class NewtonSolver : public mfem::NewtonSolver {
   {
     SERAC_MARK_FUNCTION;
     prec->Mult(r_, c_);  // c = [DF(x_i)]^{-1} [F(x_i)-b]
+    std::cout << "[DEBUG] norm c: " << c_.Norml2() << " [DEBUG] norm r: " << r_.Norml2() << std::endl;
   }
 
   /// @overload

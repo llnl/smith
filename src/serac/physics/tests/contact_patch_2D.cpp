@@ -48,7 +48,7 @@ TEST_P(ContactTest, patch)
   // Construct the appropriate dimension mesh and give it to the data store
 
   auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(1 , 1).translate({0.0, 0.95}).bdrAttribInfo()
+    shared::MeshBuilder::SquareMesh(1 , 1).translate({0.5, 1.0}).bdrAttribInfo()
     .updateBdrAttrib(4, 7).updateBdrAttrib(3, 9).updateBdrAttrib(1, 6),
     shared::MeshBuilder::SquareMesh(1, 1).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
 
@@ -91,7 +91,8 @@ TEST_P(ContactTest, patch)
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type = ContactType::Frictionless,
-                                 .penalty = 1.0,
+                                 .penalty = 1e-2,
+                                 .penalty2 = 1e-2,
                                  .jacobian = std::get<1>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
@@ -104,7 +105,7 @@ TEST_P(ContactTest, patch)
 
   // Define the function for the initial displacement and boundary condition
   // constexpr int dim = 2;
-  auto applied_disp_function = [](tensor<double, dim>, auto) { return tensor<double, dim>{{0, -0.01}}; };
+  auto applied_disp_function = [](tensor<double, dim>, auto) { return tensor<double, dim>{{0, -0.1}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
   solid_solver.setFixedBCs(mesh->domain("x0_faces"), Component::X);
@@ -123,19 +124,24 @@ TEST_P(ContactTest, patch)
   // Perform the quasi-static solve
   double dt = 1.0;
   solid_solver.advanceTimestep(dt);
+  solid_solver.advanceTimestep(dt);
+  // solid_solver.advanceTimestep(dt);
   // solid_solver.advanceTimestep(dt);
 
   // Output the sidre-based plot files
   solid_solver.outputStateToDisk(paraview_name);
 
   // Check the l2 norm of the displacement dofs
+  // auto c = 1.0;
   auto c = (3.0 * K - 2.0 * G) / (3.0 * K + G);
   mfem::VectorFunctionCoefficient elasticity_sol_coeff(2, [c](const mfem::Vector& x, mfem::Vector& u) {
-    u[0] = 0.25 * 0.01 * c * x[0];
-    u[1] = 0.25 * 0.01 * c * x[1];
+    // u[0] = 0.0;
+    // u[1] = -0.01 * c * x[1];
+    u[0] = c * 0.1 * x[0];
+    u[1] = -0.05 * x[1];
     // u[2] = -0.5 * 0.01 * x[2];
   });
-  mfem::ParFiniteElementSpace elasticity_fes(solid_solver.reactions().space());
+  mfem::ParFiniteElementSpace elasticity_fes(solid_solver.displacement().space());
   mfem::ParGridFunction elasticity_sol(&elasticity_fes);
   elasticity_sol.ProjectCoefficient(elasticity_sol_coeff);
   mfem::ParGridFunction approx_error(elasticity_sol);
