@@ -19,6 +19,37 @@
 
 namespace serac {
 
+// NOTE: Args needs to be on the functor struct instead of the operator() so that operator() isn't overloaded and dfem
+// can deduce the type
+template <typename Primal, typename OrigQFn, typename... Args>
+struct InnerQFunction {
+  InnerQFunction(OrigQFn orig_qfn) : orig_qfn_(orig_qfn) {}
+
+  SERAC_HOST_DEVICE inline auto operator()(Primal V, Args... args) const
+  {
+    auto orig_residual = mfem::future::get<0>(orig_qfn_(std::forward<Args>(args)...));
+    return mfem::future::tuple{mfem::future::inner(V, orig_residual)};
+  }
+
+  OrigQFn orig_qfn_;
+};
+
+// Step 2: deduce the type of the parameters and the first tuple element of the return type of the operator()
+// Step 3: create the InnerQFunction with the deduced types
+template <typename OrigQFn, typename R, typename... Args>
+auto makeInnerQFunction(OrigQFn orig_qfn, R (OrigQFn::*)(Args...) const)
+{
+  // TODO: is there a better way to get the type of the first tuple element?
+  return InnerQFunction<decltype(mfem::future::type<0>(R{})), OrigQFn, Args...>{orig_qfn};
+}
+
+// Step 1: get function pointer to operator()
+template <typename OrigQFn>
+auto makeInnerQFunction(OrigQFn orig_qfn)
+{
+  return makeInnerQFunction(orig_qfn, &OrigQFn::operator());
+}
+
 /**
  * @brief The nonlinear residual class
  *
@@ -46,6 +77,7 @@ class DfemResidual : public Residual {
         input_mfem_spaces_(input_mfem_spaces),
         residual_(makeFieldDescriptors({&output_mfem_space}, input_mfem_spaces.size()),
                   makeFieldDescriptors(input_mfem_spaces), mesh->mfemParMesh()),
+        // TODO: add space for residual.  do we need a space for the output (virtual work)?
         virtual_work_(makeFieldDescriptors({&output_mfem_space}, input_mfem_spaces.size()),
                       makeFieldDescriptors(input_mfem_spaces), mesh->mfemParMesh())
   {
@@ -78,11 +110,8 @@ class DfemResidual : public Residual {
   {
     residual_.AddDomainIntegrator(body_integral, integral_inputs, integral_outputs, integration_rule, domain_attributes,
                                   derivative_ids);
-    auto scalar_body_integral = [body_integral] SERAC_HOST_DEVICE(mfem::future::tensor<mfem::real_t, 3> V,
-                                                                  auto... inputs) {
-      auto orig_residual = body_integral(inputs...);
-      return mfem::future::inner(V, orig_residual);
-    };
+    auto scalar_body_integral = makeInnerQFunction(body_integral);
+    // TODO: updated integral_inputs and integral_outputs for scalar_body_integral
     virtual_work_.AddDomainIntegrator(scalar_body_integral, integral_inputs,
                                       mfem::future::tuple<mfem::future::Sum<0>>{}, integration_rule, domain_attributes,
                                       derivative_ids);
@@ -135,13 +164,11 @@ class DfemResidual : public Residual {
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-        auto grad_op = residual_.GetDerivative(input_col, {&fields[0]->gridFunction()}, getLVectors(fields));
-        grad_op->AddMultTranspose(*v_fields[0], *vjp_sensitivities[input_col]);
+        // TODO: update to use the virtual_work_ operator once it's working right
+        // auto grad_op = residual_.GetDerivative(input_col, {&fields[0]->gridFunction()}, getLVectors(fields));
+        // grad_op->AddMultTranspose(*v_fields[0], *vjp_sensitivities[input_col]);
       }
     }
-
-    // auto grad_op = residual_term_.GetDerivative(0, {fields[0]}, {mesh_nodes_});
-    // grad_op->AddMultTranspose(*v_fields[0], *vjp_sensitivities[0]);
   }
 
  protected:
