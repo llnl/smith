@@ -10,14 +10,14 @@
  * @brief unit tests for a thermoelastic material model
  */
 
-#include <iostream>
+#include <complex>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
+#include <gtest/gtest.h>
 
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/tuple.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/dual.hpp"
 
 namespace serac {
 

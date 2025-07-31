@@ -8,17 +8,20 @@
  * @file nonlinear_J2_material.cpp
  */
 
+#include <cstddef>
+#include <algorithm>
+#include <cmath>
+#include <complex>
+
+#include <gtest/gtest.h>
+
 #include "serac/physics/materials/solid_material.hpp"
-
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
-
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/physics/materials/material_verification_tools.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/dual.hpp"
+#include "serac/numerics/functional/tuple.hpp"
 
-#include <fstream>
-#include <string>
 
 namespace serac {
 
