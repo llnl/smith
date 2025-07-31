@@ -7,7 +7,7 @@
 
 #include <array>
 
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 #include "serac/numerics/functional/quadrature_data.hpp"
 #include "serac/numerics/functional/differentiate_wrt.hpp"
 

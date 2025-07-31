@@ -179,11 +179,13 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
   accelerator::displayLastCUDAMessage();
 
   // Compute the gradient using functional
-  mfem::Operator& grad2 = SERAC_PROFILE_EXPR(profiling::concat("functional_GetGradient", postfix), residual.GetGradient(U));
+  mfem::Operator& grad2 =
+      SERAC_PROFILE_EXPR(profiling::concat("functional_GetGradient", postfix), residual.GetGradient(U));
 
   // Compute the gradient action using standard MFEM and functional
   mfem::Vector g1 = SERAC_PROFILE_EXPR_LOOP(profiling::concat("mfem_ApplyGradient", postfix), (*J) * U, nsamples);
-  mfem::Vector g2 = SERAC_PROFILE_EXPR_LOOP(profiling::concat("functional_ApplyGradient", postfix), grad2 * U, nsamples);
+  mfem::Vector g2 =
+      SERAC_PROFILE_EXPR_LOOP(profiling::concat("functional_ApplyGradient", postfix), grad2 * U, nsamples);
 
   if (verbose) {
     std::cout << "||g1||: " << g1.Norml2() << std::endl;
@@ -277,7 +279,8 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
   }
   EXPECT_NEAR(0., mfem::Vector(r1 - r2).Norml2() / r1.Norml2(), 1.e-14);
 
-  mfem::Operator& grad = SERAC_PROFILE_EXPR(profiling::concat("functional_GetGradient", postfix), residual.GetGradient(U));
+  mfem::Operator& grad =
+      SERAC_PROFILE_EXPR(profiling::concat("functional_GetGradient", postfix), residual.GetGradient(U));
 
   mfem::Vector g1 = SERAC_PROFILE_EXPR(profiling::concat("mfem_ApplyGradient", postfix), (*J) * U);
   mfem::Vector g2 = SERAC_PROFILE_EXPR(profiling::concat("functional_ApplyGradient", postfix), grad * U);
@@ -377,7 +380,8 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
   }
   EXPECT_NEAR(0., mfem::Vector(r1 - r2).Norml2() / r1.Norml2(), 1.e-13);
 
-  mfem::Operator& grad = SERAC_PROFILE_EXPR(profiling::concat("functional_GetGradient", postfix), residual.GetGradient(U));
+  mfem::Operator& grad =
+      SERAC_PROFILE_EXPR(profiling::concat("functional_GetGradient", postfix), residual.GetGradient(U));
 
   mfem::Vector g1 = SERAC_PROFILE_EXPR(profiling::concat("mfem_ApplyGradient", postfix), (*J) * U);
   mfem::Vector g2 = SERAC_PROFILE_EXPR(profiling::concat("functional_ApplyGradient", postfix), grad * U);

@@ -7,7 +7,7 @@
 #include <algorithm>
 
 #include <cuda_runtime.h>
-#include <gtest/gtest.h> // IWYU pragma: keep
+#include <gtest/gtest.h>
 
 void vector_add(float* out, float* a, float* b, int n);
 

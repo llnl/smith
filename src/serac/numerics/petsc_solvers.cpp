@@ -6,7 +6,7 @@
 
 #include "serac/numerics/petsc_solvers.hpp"
 
-#include <stddef.h> // for NULL
+#include <stddef.h>  // for NULL
 #include <unordered_map>
 
 #include "serac/infrastructure/logger.hpp"

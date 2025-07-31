@@ -15,7 +15,7 @@
 #include <string>
 #include <sstream>
 
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 
 #ifdef SERAC_USE_ADIAK
 #include "adiak.hpp"

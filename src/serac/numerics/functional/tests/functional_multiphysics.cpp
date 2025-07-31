@@ -21,7 +21,6 @@
 #include "serac/numerics/functional/finite_element.hpp"
 #include "serac/numerics/functional/tuple.hpp"
 
-
 using namespace serac;
 
 TEST(FunctionalMultiphysics, NonlinearThermalTest3D)

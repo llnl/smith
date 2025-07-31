@@ -14,8 +14,8 @@
 
 #include <variant>
 
-#include "mfem.hpp" // IWYU pragma: keep
-#include "axom/fmt.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
+#include "axom/fmt.hpp"
 
 namespace serac {
 

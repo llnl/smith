@@ -57,7 +57,7 @@
 #cmakedefine SERAC_USE_VDIM_ORDERING
 
 #ifdef SERAC_USE_MFEM
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 namespace serac {
 /// The mfem ordering / memory layout used for finite element vectors throughout serac

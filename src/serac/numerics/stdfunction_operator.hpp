@@ -14,7 +14,7 @@
 
 #include <functional>
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 namespace serac::mfem_ext {
 

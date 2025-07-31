@@ -25,7 +25,7 @@
 #include "mfem.hpp"
 
 #ifdef SERAC_USE_PETSC
-#include "petsc.h" // for PetscPopSignalHandler
+#include "petsc.h"  // for PetscPopSignalHandler
 #endif
 
 namespace serac {

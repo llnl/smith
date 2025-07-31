@@ -29,7 +29,6 @@
 #include "serac/numerics/functional/geometry.hpp"
 #include "serac/numerics/functional/tuple.hpp"
 
-
 using namespace serac;
 
 int nsamples = 1;  // because mfem doesn't take in unsigned int

@@ -26,7 +26,6 @@ TEST(Mesh, LoadExodus)
 
 }  // namespace serac
 
-
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
