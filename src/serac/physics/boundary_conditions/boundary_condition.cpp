@@ -5,8 +5,11 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <algorithm>
+#include <memory>
 
 #include "serac/physics/boundary_conditions/boundary_condition.hpp"
+#include "serac/infrastructure/variant.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 namespace serac {
 
