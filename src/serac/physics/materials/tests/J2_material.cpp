@@ -22,7 +22,6 @@
 #include "serac/numerics/functional/dual.hpp"
 #include "serac/numerics/functional/tuple.hpp"
 
-
 namespace serac {
 
 /**
