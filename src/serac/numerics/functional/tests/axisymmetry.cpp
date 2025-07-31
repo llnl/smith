@@ -21,7 +21,6 @@
 #include "serac/numerics/functional/tests/check_gradient.hpp"
 
 using namespace serac;
-using namespace serac::profiling;
 
 double t = 0.0;
 

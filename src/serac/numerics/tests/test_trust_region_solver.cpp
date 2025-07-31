@@ -10,7 +10,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/infrastructure/application_manager.hpp"
@@ -20,6 +20,7 @@
 #include "serac/numerics/functional/finite_element.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/finite_element_vector.hpp"
+#include "serac/numerics/petsc_solvers.hpp"
 
 const std::string MESHTAG = "mesh";
 

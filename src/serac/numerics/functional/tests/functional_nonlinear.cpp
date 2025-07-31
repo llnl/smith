@@ -13,6 +13,7 @@
 #include "mfem.hpp"
 
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/infrastructure/profiling.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/functional.hpp"
@@ -23,7 +24,6 @@
 #include "serac/numerics/functional/finite_element.hpp"
 #include "serac/numerics/functional/geometry.hpp"
 #include "serac/numerics/functional/tuple.hpp"
-
 
 using namespace serac;
 
@@ -52,7 +52,7 @@ struct hcurl_qfunction {
 template <int p, int dim>
 void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim>)
 {
-  std::string postfix = concat("_H1<", p, ">");
+  std::string postfix = profiling::concat("_H1<", p, ">");
   serac::profiling::initialize();
 
   // Define the types for the test and trial spaces using the function arguments
@@ -107,7 +107,7 @@ void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim
 template <int p, int dim>
 void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
 {
-  std::string postfix = concat("_H1<", p, ",", dim, ">");
+  std::string postfix = profiling::concat("_H1<", p, ",", dim, ">");
   serac::profiling::initialize();
 
   // Define the types for the test and trial spaces using the function arguments

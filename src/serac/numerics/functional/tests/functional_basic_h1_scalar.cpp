@@ -18,7 +18,6 @@
 #include "serac/numerics/functional/tuple.hpp"
 
 using namespace serac;
-using namespace serac::profiling;
 
 #ifdef SERAC_USE_CUDA_KERNEL_EVALUATION
 constexpr auto exec_space = serac::ExecutionSpace::GPU;

@@ -17,7 +17,6 @@
 #include "serac/physics/state/finite_element_state.hpp"
 
 using namespace serac;
-using namespace serac::profiling;
 
 double t = 0.0;
 

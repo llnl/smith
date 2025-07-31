@@ -18,7 +18,6 @@
 #include "serac/numerics/functional/tuple.hpp"
 
 using namespace serac;
-using namespace serac::profiling;
 
 template <int dim, int p>
 void L2_test(std::string meshfile)
