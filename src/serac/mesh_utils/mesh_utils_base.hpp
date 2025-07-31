@@ -15,7 +15,7 @@
 
 #include <memory>
 #include <variant>
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 #include "serac/infrastructure/input.hpp"
 

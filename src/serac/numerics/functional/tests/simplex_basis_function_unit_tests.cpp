@@ -4,15 +4,16 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)#include <gtest/gtest.h> // IWYU pragma: keep
 
-#include "mfem.hpp" // IWYU pragma: keep
-#include <gtest/gtest.h> // IWYU pragma: keep
+#include <cmath>
+#include <vector>
 
-#include "axom/slic/core/SimpleLogger.hpp"
+#include "mfem.hpp"
+#include <gtest/gtest.h>
 
-#include "serac/numerics/functional/detail/metaprogramming.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/finite_element.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/polynomials.hpp"
 
 using namespace serac;
 

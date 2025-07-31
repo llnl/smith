@@ -4,18 +4,28 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <array>
-#include <fstream>
-#include <ostream>
-#include <functional>
+#include <cmath>
+#include <memory>
+#include <string>
+#include <tuple>
 
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mpi.h"
+#include <gtest/gtest.h>
+#include "mfem.hpp"
 
 #include "serac/numerics/equation_solver.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/differentiate_wrt.hpp"
+#include "serac/numerics/functional/domain.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/functional/geometry.hpp"
+#include "serac/numerics/functional/tuple.hpp"
+
+#include "serac/numerics/petsc_solvers.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/serac_config.hpp"
 
 using namespace serac;
 using namespace serac::mfem_ext;

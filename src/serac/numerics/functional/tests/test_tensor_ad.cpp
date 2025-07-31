@@ -4,10 +4,15 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
+#include <cmath>
+#include <limits>
+
+#include <gtest/gtest.h>
+#include "mfem.hpp"
 
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/dual.hpp"
+#include "serac/numerics/functional/tuple.hpp"
 
 using namespace mfem;
 using namespace serac;
