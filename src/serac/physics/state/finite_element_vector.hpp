@@ -13,11 +13,15 @@
 
 #pragma once
 
-#include <optional>
+#include <functional>
+#include <memory>
+#include <string>
+#include <tuple>
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include <mpi.h>
+#include "mfem.hpp"
 
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 #include "serac/infrastructure/variant.hpp"
 #include "serac/numerics/functional/functional.hpp"
 

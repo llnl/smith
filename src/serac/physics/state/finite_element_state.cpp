@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/physics/state/finite_element_state.hpp"
-#include "serac/infrastructure/logger.hpp"
+
+#include "serac/numerics/functional/domain.hpp"
 
 namespace serac {
 

@@ -17,12 +17,13 @@
 #include <memory>
 #include <optional>
 #include <type_traits>
+#include <utility>
 
-#include "mfem.hpp" // IWYU pragma: keep
-
+#include "mfem.hpp"
 #include "serac/infrastructure/variant.hpp"
 #include "serac/physics/state/finite_element_vector.hpp"
 #include "serac/numerics/functional/domain.hpp"
+#include "serac/numerics/functional/tensor.hpp"
 
 namespace serac {
 
