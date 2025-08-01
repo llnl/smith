@@ -4,18 +4,31 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <array>
+#include <complex>
+#include <memory>
+#include <set>
+#include <string>
+#include <tuple>
+
+#include <gtest/gtest.h>
+#include <mpi.h>
+#include "mfem.hpp"
+
 #include "serac/physics/thermomechanics_monolithic.hpp"
 #include "serac/physics/materials/green_saint_venant_thermoelastic.hpp"
-#include <fstream>
-
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
-
-#include "serac/serac_config.hpp" // IWYU pragma: keep
-#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/serac_config.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/domain.hpp"
+#include "serac/numerics/functional/dual.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/functional/geometry.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/tuple.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 
 namespace serac {
 

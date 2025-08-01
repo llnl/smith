@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include <stddef.h>
+#include <cstddef>
 #include <array>
 #include <cstdint>
 #include <map>

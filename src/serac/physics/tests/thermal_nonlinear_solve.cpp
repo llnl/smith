@@ -4,23 +4,23 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/heat_transfer.hpp"
-
-#include <functional>
-#include <fstream>
 #include <set>
 #include <string>
+#include <complex>
+#include <memory>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
+#include <gtest/gtest.h>
+#include <mpi.h>
+#include "mfem.hpp"
 
-#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/physics/heat_transfer.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/solver_config.hpp"
 
 using namespace serac;
 
