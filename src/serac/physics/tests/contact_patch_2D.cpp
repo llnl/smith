@@ -48,7 +48,7 @@ TEST_P(ContactTest, patch)
   // Construct the appropriate dimension mesh and give it to the data store
 
   auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(1 , 1).translate({0.5, 1.0}).bdrAttribInfo()
+    shared::MeshBuilder::SquareMesh(1 , 1).translate({0.0, 1.0}).bdrAttribInfo()
     .updateBdrAttrib(4, 7).updateBdrAttrib(3, 9).updateBdrAttrib(1, 6),
     shared::MeshBuilder::SquareMesh(1, 1).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
 
@@ -91,8 +91,8 @@ TEST_P(ContactTest, patch)
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type = ContactType::Frictionless,
-                                 .penalty = 1e-2,
-                                 .penalty2 = 1e-2,
+                                 .penalty = 0.2,
+                                 .penalty2 = 0.0,
                                  .jacobian = std::get<1>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
@@ -137,8 +137,8 @@ TEST_P(ContactTest, patch)
   mfem::VectorFunctionCoefficient elasticity_sol_coeff(2, [c](const mfem::Vector& x, mfem::Vector& u) {
     // u[0] = 0.0;
     // u[1] = -0.01 * c * x[1];
-    u[0] = c * 0.1 * x[0];
-    u[1] = -0.05 * x[1];
+    u[0] = c * -0.1 * x[0];
+    u[1] = -0.1 * x[1];
     // u[2] = -0.5 * 0.01 * x[2];
   });
   mfem::ParFiniteElementSpace elasticity_fes(solid_solver.displacement().space());

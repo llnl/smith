@@ -193,6 +193,10 @@ class NewtonSolver : public mfem::NewtonSolver {
     final_iter = it;
     final_norm = norm;
 
+    // for(int i = 0; i < 16; ++i) {
+    //   std::cout << "X:[" << i + 1 << "] = " << x[i] << std::endl;
+    // }
+
     if (print_options.summary || (!converged && print_options.warnings) || print_options.first_and_last) {
       mfem::out << "Newton: Number of iterations: " << final_iter << '\n' << "   ||r|| = " << final_norm << '\n';
     }
