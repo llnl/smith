@@ -9,7 +9,7 @@
 #include <string>
 #include <tuple>
 
-#include <mpi.h>
+#include "mpi.h"
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 #include "serac/numerics/equation_solver.hpp"

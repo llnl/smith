@@ -7,7 +7,7 @@
 #include <memory>
 #include <set>
 
-#include <mpi.h>
+#include "mpi.h"
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 

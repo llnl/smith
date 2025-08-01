@@ -8,7 +8,7 @@
 #include <string>
 
 #include <gtest/gtest.h>
-#include <mpi.h>
+#include "mpi.h"
 #include "mfem.hpp"
 
 #include "serac/physics/solid_mechanics.hpp"

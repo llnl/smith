@@ -9,7 +9,7 @@
 #include <cstddef>
 
 #include "axom/slic.hpp"
-#include <mpi.h>
+#include "mpi.h"
 
 #include "serac/physics/state/finite_element_state.hpp"
 

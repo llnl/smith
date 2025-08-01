@@ -8,7 +8,7 @@
 #include <memory>
 #include <tuple>
 
-#include <mpi.h>
+#include "mpi.h"
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 

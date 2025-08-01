@@ -10,7 +10,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include <mpi.h>
+#include "mpi.h"
 
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/state/state_manager.hpp"

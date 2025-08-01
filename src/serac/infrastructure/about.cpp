@@ -7,7 +7,7 @@
 #include "serac/infrastructure/about.hpp"
 #include "serac/serac_config.hpp"
 
-#include <mpi.h>
+#include "mpi.h"
 #include <string_view>
 #include <vector>
 

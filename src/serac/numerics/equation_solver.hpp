@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include <mpi.h>
+#include "mpi.h"
 #include <memory>
 #include <optional>
 #include <variant>

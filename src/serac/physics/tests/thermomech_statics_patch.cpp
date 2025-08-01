@@ -12,7 +12,7 @@
 #include <tuple>
 
 #include <gtest/gtest.h>
-#include <mpi.h>
+#include "mpi.h"
 #include "mfem.hpp"
 
 #include "serac/physics/thermomechanics_monolithic.hpp"

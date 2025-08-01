@@ -9,7 +9,7 @@
 #include <tuple>
 #include <utility>
 
-#include <mpi.h>
+#include "mpi.h"
 #include "axom/core.hpp"
 
 #include "serac/serac_config.hpp"

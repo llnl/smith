@@ -6,7 +6,7 @@
 
 #include "serac/infrastructure/logger.hpp"
 
-#include <mpi.h>
+#include "mpi.h"
 #include <iostream>
 #include <string>
 
