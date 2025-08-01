@@ -12,8 +12,8 @@
 #include <string>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
+#include <gtest/gtest.h>
+#include "mfem.hpp"
 #include "shared/mesh/MeshBuilder.hpp"
 
 #include "serac/numerics/functional/domain.hpp"
@@ -21,7 +21,7 @@
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 
 namespace serac {
