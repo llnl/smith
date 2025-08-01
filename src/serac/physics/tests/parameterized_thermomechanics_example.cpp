@@ -4,20 +4,30 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <fstream>
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <vector>
 
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
+#include <gtest/gtest.h>
+#include "mfem.hpp"
 
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/thermomechanics.hpp"
-
 #include "serac/numerics/functional/tests/check_gradient.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/differentiate_wrt.hpp"
+#include "serac/numerics/functional/finite_element.hpp"  // for H1
+#include "serac/numerics/functional/functional.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/common.hpp"
+#include "serac/physics/solid_mechanics.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 using namespace serac;
 

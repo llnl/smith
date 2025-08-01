@@ -3,23 +3,35 @@
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
-#include <functional>
-#include <set>
+
+#include <cassert>
 #include <string>
+#include <array>
+#include <cmath>
+#include <memory>
+#include <vector>
+
+#include <gtest/gtest.h>
+#include "mfem.hpp"
 
 #include "serac/physics/solid_mechanics.hpp"
-#include "serac/physics/materials/solid_material.hpp"
-
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
-
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/serac_config.hpp" // IWYU pragma: keep
+#include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/infrastructure/accelerator.hpp"
+#include "serac/numerics/functional/differentiate_wrt.hpp"
+#include "serac/numerics/functional/finite_element.hpp"  // for H1
+#include "serac/numerics/functional/functional.hpp"
+#include "serac/numerics/functional/geometry.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/tuple.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/base_physics.hpp"
+#include "serac/physics/common.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 struct ParameterizedLinearIsotropicSolid {
   using State = ::serac::Empty;  ///< this material has no internal variables

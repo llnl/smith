@@ -4,14 +4,15 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <fstream>
+#include <memory>
+#include <string>
+#include <vector>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h> // IWYU pragma: keep
-#include "mfem.hpp" // IWYU pragma: keep
+#include <gtest/gtest.h>
+#include <mpi.h>
+#include "mfem.hpp"
 
-#include "serac/serac_config.hpp" // IWYU pragma: keep
-#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/serac_config.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/mesh.hpp"
@@ -19,6 +20,10 @@
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/finite_element.hpp"  // for L2
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/physics/common.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 namespace serac {
 
