@@ -22,7 +22,6 @@
 #include "serac/numerics/functional/finite_element.hpp"
 #include "serac/numerics/functional/geometry.hpp"
 #include "serac/numerics/functional/tuple.hpp"
-
 #include "serac/numerics/petsc_solvers.hpp"
 #include "serac/numerics/solver_config.hpp"
 #include "serac/serac_config.hpp"

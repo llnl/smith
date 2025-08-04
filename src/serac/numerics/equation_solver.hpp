@@ -12,13 +12,14 @@
 
 #pragma once
 
-#include "mpi.h"
 #include <memory>
 #include <optional>
 #include <variant>
 #include <utility>
 
+#include "mpi.h"
 #include "mfem.hpp"
+
 #include "serac/infrastructure/input.hpp"
 #include "serac/numerics/solver_config.hpp"
 #include "serac/numerics/petsc_solvers.hpp"

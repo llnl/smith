@@ -12,7 +12,6 @@
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-
 #include "problems/Problems.hpp"
 #include "solvers/Solvers.hpp"
 #include "utilities.hpp"

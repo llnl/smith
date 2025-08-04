@@ -7,6 +7,7 @@
 #include "serac/infrastructure/accelerator.hpp"
 
 #include "mfem.hpp"
+
 #include <memory>
 
 namespace serac {

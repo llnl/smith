@@ -4,9 +4,6 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/solid_mechanics.hpp"
-#include "serac/physics/solid_mechanics_contact.hpp"
-
 #include <algorithm>
 #include <fstream>
 #include <functional>
@@ -17,8 +14,9 @@
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "mfem.hpp"
 
+#include "serac/physics/solid_mechanics.hpp"
+#include "serac/physics/solid_mechanics_contact.hpp"
 #include "serac/physics/materials/liquid_crystal_elastomer.hpp"
-
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"

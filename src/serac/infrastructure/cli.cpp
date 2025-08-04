@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "axom/CLI11.hpp"
+
 #include "serac/infrastructure/input.hpp"
 #include "serac/infrastructure/logger.hpp"
 

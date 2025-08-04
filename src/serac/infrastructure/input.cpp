@@ -9,9 +9,10 @@
 #include <cstdlib>
 #include <climits>
 #include <algorithm>
-#include "axom/core.hpp"
 #include <cstddef>
 #include <utility>
+
+#include "axom/core.hpp"
 
 #include "serac/infrastructure/logger.hpp"
 #include "serac/numerics/solver_config.hpp"

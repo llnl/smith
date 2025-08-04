@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "gtest/gtest.h"
 #include <cstdint>
 #include <algorithm>
 #include <array>
@@ -13,6 +12,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "gtest/gtest.h"
 
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/domain.hpp"

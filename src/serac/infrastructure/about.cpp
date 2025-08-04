@@ -7,10 +7,10 @@
 #include "serac/infrastructure/about.hpp"
 #include "serac/serac_config.hpp"
 
-#include "mpi.h"
 #include <string_view>
 #include <vector>
 
+#include "mpi.h"
 #include "axom/config.hpp"
 #include "axom/core.hpp"
 #include "axom/fmt.hpp"

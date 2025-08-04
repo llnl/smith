@@ -20,12 +20,11 @@
 #include <set>
 
 #include "mfem.hpp"
+#include "tribol/common/Parameters.hpp"
 
 #include "serac/physics/contact/contact_config.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
-
-#include "tribol/common/Parameters.hpp"
 
 namespace serac {
 

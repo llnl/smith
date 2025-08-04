@@ -8,7 +8,6 @@
 #include <iostream>
 
 #include "mfem.hpp"
-
 #include "gtest/gtest.h"
 
 #include "axom/slic/core/SimpleLogger.hpp"
@@ -18,7 +17,6 @@
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-
 #include "serac/numerics/functional/tests/check_gradient.hpp"
 
 using namespace serac;

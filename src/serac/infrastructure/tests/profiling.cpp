@@ -4,8 +4,6 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "gtest/gtest.h"
-#include "mpi.h"
 #include <array>
 #include <cstring>
 #include <exception>
@@ -14,6 +12,9 @@
 #include <iterator>
 #include <stdexcept>
 #include <string>
+
+#include "gtest/gtest.h"
+#include "mpi.h"
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/infrastructure/profiling.hpp"

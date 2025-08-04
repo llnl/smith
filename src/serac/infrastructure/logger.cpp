@@ -6,9 +6,10 @@
 
 #include "serac/infrastructure/logger.hpp"
 
-#include "mpi.h"
 #include <iostream>
 #include <string>
+
+#include "mpi.h"
 
 #include "serac/infrastructure/about.hpp"
 

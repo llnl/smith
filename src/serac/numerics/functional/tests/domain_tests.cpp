@@ -4,10 +4,11 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "gtest/gtest.h"
 #include <algorithm>
 #include <string>
 #include <vector>
+
+#include "gtest/gtest.h"
 
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/infrastructure/application_manager.hpp"

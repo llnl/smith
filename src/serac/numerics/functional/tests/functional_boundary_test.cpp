@@ -19,7 +19,6 @@
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/tests/check_gradient.hpp"
-
 #include "serac/infrastructure/mpi_fstream.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 

@@ -14,6 +14,7 @@
 
 #include "axom/core.hpp"
 #include "gtest/gtest.h"
+
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"

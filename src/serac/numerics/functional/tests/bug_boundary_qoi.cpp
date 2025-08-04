@@ -4,9 +4,10 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <algorithm>
+
 #include "gtest/gtest.h"
 #include "mpi.h"
-#include <algorithm>
 
 #include "mfem.hpp"
 #include "serac/serac_config.hpp"

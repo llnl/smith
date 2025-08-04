@@ -4,8 +4,9 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "gtest/gtest.h"
 #include <string>
+
+#include "gtest/gtest.h"
 
 #include "serac/infrastructure/debug_print.hpp"
 #include "serac/infrastructure/application_manager.hpp"

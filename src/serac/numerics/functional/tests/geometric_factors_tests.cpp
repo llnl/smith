@@ -15,7 +15,6 @@
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/infrastructure/logger.hpp"
 #include "serac/numerics/functional/domain.hpp"
-
 #include "serac/serac_config.hpp"
 
 using namespace serac;

@@ -6,9 +6,10 @@
 
 #pragma once
 
-#include "mpi.h"    // for MPI_Comm_rank, MPI_Comm_size, MPI_COMM_WORLD
-#include <fstream>  // for char_traits, ofstream, ios
-#include <string>   // for allocator, operator+, to_string
+#include "mpi.h"
+
+#include <fstream>
+#include <string>
 
 namespace mpi {
 
