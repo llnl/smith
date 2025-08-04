@@ -28,18 +28,18 @@ struct UpstreamStates;
 
 struct DownstreamState;
 
-template <typename T, typename D=T>
+template <typename T, typename D = T>
 using InitializeZeroDual = std::function<D(const T&)>;
 
-template <typename T, typename D=T>
+template <typename T, typename D = T>
 struct defaultInitializeZeroDual {
   D operator()(const T&) { return D{}; }
 };
 
-//template <typename T>
-//static gretl::InitializeZeroDual<T, T> defaultInitializeZeroDual = [](const T& from) {
-//  return T{};
-//};
+// template <typename T>
+// static gretl::InitializeZeroDual<T, T> defaultInitializeZeroDual = [](const T& from) {
+//   return T{};
+// };
 
 class DataStore {
  public:
@@ -48,7 +48,8 @@ class DataStore {
 
   /// @brief create a new state in the graph, store it, return it
   template <typename T, typename D = T>
-  State<T, D> create_state(const T& t, InitializeZeroDual<T, D> initial_zero_dual = [](const T&) { return D{}; })
+  State<T, D> create_state(
+      const T& t, InitializeZeroDual<T, D> initial_zero_dual = [](const T&) { return D{}; })
   {
     State<T, D> state(this, states_.size(), std::make_shared<std::any>(t), initial_zero_dual);
     add_state(std::make_unique<State<T, D>>(state), {});

@@ -219,9 +219,9 @@ void DataStore::fetch_state_data(Int stepIndex)
     active_[iEval] = true;
     usageCount_[iEval]++;
 
-    // MRT, future optimization... 
+    // MRT, future optimization...
     // things to do:
-    // do not save passthroughts, just loop active passthroughts using graph? 
+    // do not save passthroughts, just loop active passthroughts using graph?
     // abstract checkpoint manager to also have a checkpoint everything version
     // tests that we can call multiple backprops back to back (or at least with a perturbed forward in between)
 
