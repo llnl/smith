@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 #include "serac/physics/common.hpp"
 #include "serac/physics/heat_transfer_input.hpp"

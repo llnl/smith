@@ -14,9 +14,17 @@
 
 #include <functional>
 #include <memory>
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-#include "mfem.hpp" // IWYU pragma: keep
-#include "axom/sidre.hpp" // IWYU pragma: keep
+#include "mpi.h"
+#include "mfem.hpp"
+#include "axom/sidre.hpp"
+#include "axom/fmt.hpp"
+#include "axom/slic.hpp"
 
 #include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "serac/numerics/equation_solver.hpp"

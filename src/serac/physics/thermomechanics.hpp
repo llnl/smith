@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include "mfem.hpp" // IWYU pragma: keep
+#include "mfem.hpp"
 
 #include "serac/physics/base_physics.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"

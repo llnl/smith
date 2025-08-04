@@ -6,15 +6,17 @@
 
 #include "serac/physics/base_physics.hpp"
 
-#include <fstream>
+#include <cmath>
+#include <algorithm>
+#include <tuple>
 
-#include "axom/fmt.hpp" // IWYU pragma: keep
+#include "axom/fmt.hpp"
 
 #include "serac/infrastructure/about.hpp"
-#include "serac/infrastructure/logger.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
+#include "serac/physics/state/finite_element_vector.hpp"
 
 namespace serac {
 
