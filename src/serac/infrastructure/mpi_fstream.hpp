@@ -6,10 +6,10 @@
 
 #pragma once
 
-#include "mpi.h"
-
 #include <fstream>
 #include <string>
+
+#include "mpi.h"
 
 namespace mpi {
 

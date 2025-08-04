@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <cstdint>
 #include <algorithm>
 #include <array>
 #include <memory>

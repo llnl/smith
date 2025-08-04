@@ -11,22 +11,24 @@
 #include <tchar.h>
 #else
 #include <unistd.h>
-#include <climits>
+#include <limits.h>
 #endif
+
 #include <string.h>
 #include <csignal>
 #include <cstdlib>
 
 #include "mfem.hpp"
 
-#include "serac/infrastructure/accelerator.hpp"
-#include "serac/infrastructure/logger.hpp"
-#include "serac/infrastructure/profiling.hpp"
 #include "serac/serac_config.hpp"
 
 #ifdef SERAC_USE_PETSC
 #include "petsc.h"  // for PetscPopSignalHandler
 #endif
+
+#include "serac/infrastructure/accelerator.hpp"
+#include "serac/infrastructure/logger.hpp"
+#include "serac/infrastructure/profiling.hpp"
 
 namespace serac {
 /**
