@@ -217,8 +217,6 @@ class Functional<double(trials...), exec> {
       domain.insert_restriction(trial_space_[i], trial_function_spaces_[i]);
     }
 
-    domain.insert_shared_interior_face_list();
-
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
     integrals_.push_back(MakeInteriorFaceIntegral<signature, Q, dim>(domain, integrand, arg_vec));
   }

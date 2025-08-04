@@ -148,9 +148,10 @@ generateParFiniteElementSpace(mfem::ParMesh* mesh)
 }
 
 /**
- * @brief helper function to locally cast away const on FE space to update face neighbor data.
- *  this is ok because the original FE space is declared without const and we constrained
- *  the non-constness locally
+ * @brief helper function to locally cast away const on FE space so we can update face neighbor
+ * data with ExchangeFaceNbrData. This is ok because : 1) the original trial FE space is declared
+ * without const; 2) we constrained the non-constness locally; 3) the locally owned data associated
+ * with the trial function space is NOT altered and ONLY ghost data is updated.
  */
 inline void updateFaceNbrData(const mfem::ParFiniteElementSpace* const_trial_space, mfem::ParGridFunction& trial_pgf,
                               mfem::Vector& trial_tdof_vals)

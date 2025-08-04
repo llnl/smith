@@ -96,7 +96,7 @@ struct Domain {
    */
   std::map<FunctionSpace, BlockElementRestriction> restriction_operators;
 
-  /// @brief Shared interior face list
+  /// @brief Ids of interior faces that lie on the boundary shared by two processors
   std::vector<int> shared_interior_face_ids_;
 
   /**

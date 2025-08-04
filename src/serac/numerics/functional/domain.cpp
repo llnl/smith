@@ -538,10 +538,10 @@ const BlockElementRestriction& Domain::get_restriction(FunctionSpace space) { re
 void Domain::insert_shared_interior_face_list()
 {
   // Weights only need to be computed for Domain of InteriorFaces type
-  SLIC_ERROR_IF(type_ != Domain::Type::InteriorFaces, "This method is only for interior face domains");
+  SLIC_ERROR_ROOT_IF(type_ != Domain::Type::InteriorFaces, "This method is only for interior face domains");
 
   // make a list if we don't already have one
-  if (shared_interior_face_ids_.size() == 0) {
+  if (shared_interior_face_ids_.empty()) {
     if (dim_ == 1) {
       int i = 0;
       for (int f : mfem_edge_ids_) {
@@ -646,6 +646,8 @@ Domain InteriorFaces(const mesh_t& mesh)
         break;
     }
   }
+
+  output.insert_shared_interior_face_list();
 
   return output;
 }

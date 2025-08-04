@@ -21,6 +21,18 @@
 using namespace serac;
 using namespace serac::profiling;
 
+// This test initializes a DG field with nodal coordinates of the dofs, so that the
+// discontinuous dof pairs across the interior faces have the value. For example
+// on the interior face with the following dofs
+//        {1, 2} | {5, 6}
+//               |
+//               |
+//        {3, 4} | {7, 8}
+// we have {1, 2} = {5, 6} and {3, 4} = {7, 8}.
+// It then integrates the jump of dof values over all interior faces.
+// If the ghost dof data is constructed correctly to align with locally owned data,
+// then every entry in the residual vector should equal to zero. This is tested
+// by the L2 norm of the residual equal to zero.
 template <int dim, int p>
 void L2_index_test(std::string meshfile)
 {
@@ -32,6 +44,7 @@ void L2_index_test(std::string meshfile)
   auto [test_fespace, test_fec] = serac::generateParFiniteElementSpace<test_space>(mesh.get());
   auto [trial_fespace, trial_fec] = serac::generateParFiniteElementSpace<trial_space>(mesh.get());
 
+  // Initialize the ParGridFunction by dof coordinates
   mfem::ParGridFunction U_gf(trial_fespace.get());
   mfem::VectorFunctionCoefficient vcoef(dim, [](const mfem::Vector& X, mfem::Vector& F) {
     int d = X.Size();
@@ -50,6 +63,7 @@ void L2_index_test(std::string meshfile)
 
   Domain interior_faces = InteriorFaces(*mesh);
 
+  // Define the integral of jumps over all interior faces
   residual.AddInteriorFaceIntegral(
       Dimension<dim - 1>{}, DependsOn<0>{},
       [=](double /*t*/, auto X, auto velocity) {
