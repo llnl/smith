@@ -10,6 +10,11 @@
 #include "mfem.hpp"
 #include "serac/serac.hpp"
 
+
+#define USE_TET_MESH
+// #undef USE_TET_MESH
+
+
 // Uncomment the following line to use millimeter units
 #define USE_MM_UNITS
 // #undef USE_MM_UNITS
@@ -50,12 +55,12 @@ int main(int argc, char *argv[])
   axom::CLI::App app{"A driver for curing study analyses"};
 
   std::string mesh_prefix;
-  app.add_option("-m, --mesh-prefix", mesh_prefix, "name prefix for input mesh files")->required();
+  app.add_option("-m, --mesh-prefix", mesh_prefix, "name prefix for input mesh files");
 
   uint32_t num_parts = 4;
-  app.add_option("-n, --num-parts", num_parts, "number of partitions on which to solve")->required();
+  app.add_option("-n, --num-parts", num_parts, "number of partitions on which to solve");
 
-  std::string output_directory = "./";
+  std::string output_directory = "/g/g90/barrera/runs/digitalTwins/results/indentationWithContact/";
   app.add_option("-o, --output-directory", output_directory, "directory for writing any output files");
 
   app.parse(argc, argv);
@@ -83,21 +88,25 @@ int main(int argc, char *argv[])
 
   const double bulk_modulus_value = (2.0*shear_modulus_value*(1.0+poisson_ratio_value)) / (3.0*(1.0 - 2.0*poisson_ratio_value)); // MPa  
 
-  if (0 == myid) {
-    std::cout << "Made it past initialization and CLI" << std::endl;
-    std::cout << "    Mesh file prefix is '" << mesh_prefix << "'" << std::endl;
-    std::cout << "    Expecting mesh to be split over " << num_parts << " partitions " << std::endl;
-    std::cout << "    Output files will be written to '" << output_directory << "'" << std::endl;
-    std::cout << "    Spatial dimension " << dim << " polynomial order " << order << std::endl;
-  }
-  MFEM_ASSERT(num_parts == comm_size, "Driver must be run with one rank per mesh part");
+  // if (0 == myid) {
+  //   std::cout << "Made it past initialization and CLI" << std::endl;
+  //   std::cout << "    Mesh file prefix is '" << mesh_prefix << "'" << std::endl;
+  //   std::cout << "    Expecting mesh to be split over " << num_parts << " partitions " << std::endl;
+  //   std::cout << "    Output files will be written to '" << output_directory << "'" << std::endl;
+  //   std::cout << "    Spatial dimension " << dim << " polynomial order " << order << std::endl;
+  // }
+  // MFEM_ASSERT(num_parts == comm_size, "Driver must be run with one rank per mesh part");
 
   // Load mesh from generated file; give it a name; pass to StateManager
   serac::StateManager::initialize(datastore, output_directory);
   const std::string mesh_tag = "mesh";
-  std::stringstream mesh_name_stream;
-  mesh_name_stream << mesh_prefix << "." << std::setfill('0') << std::setw(6) << myid;
-  std::string mesh_name = mesh_name_stream.str();
+  // std::stringstream mesh_name_stream;
+  // mesh_name_stream << mesh_prefix << "." << std::setfill('0') << std::setw(6) << myid;
+#ifdef USE_TET_MESH
+  std::string mesh_name = "/g/g90/barrera/codes/serac-digital-twins/serac/data/meshes/tetWithIndenter_tets.g"; // mesh_name_stream.str();
+#else
+  std::string mesh_name = "/g/g90/barrera/codes/serac-digital-twins/serac/data/meshes/tetWithIndenter.g"; // mesh_name_stream.str();
+#endif
   // std::filebuf fb;
   // fb.open(mesh_name.c_str(), std::ios::in);
   // MFEM_ASSERT(&fb, "Could not open file '" + mesh_name + "'");
@@ -189,9 +198,16 @@ int main(int argc, char *argv[])
       .max_line_search_iterations = 15,
       .print_level    = 1};
 
+  serac::ContactOptions contact_options{
+      .method = serac::ContactMethod::SingleMortar,
+      .enforcement = serac::ContactEnforcement::Penalty,
+      .type = serac::ContactType::Frictionless,
+      .penalty = 8.0e2,
+      .jacobian = serac::ContactJacobian::Exact};
+
 if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << std::endl; }
 
-  SolidMechanics<order, dim, Parameters<H1<1>, H1<1>>> solid_solver(
+  SolidMechanicsContact<order, dim, Parameters<H1<1>, H1<1>>> solid_solver(
       nonlinearOptions, linearOptions, serac::solid_mechanics::default_quasistatic_options,
       // serac::GeometricNonlinearities::Off, // TODO
       "curing_study_solid_neoHookean", mesh, {"bulk_mod", "shear_mod"},
@@ -221,12 +237,7 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   // Set essential BCs
   int local_bc_count(0), global_bc_count;
   // auto zero_vector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
-  auto is_on_angled_top_or_bottom_patch = [&](std::vector<vec3> vertices, int /* attr */) {
-    // if ((x(0) + x(1)) <= xy_cutoff_value && (x(2) <= z_bottom_cutoff_value || x(2) >= z_top_cutoff_value)) {
-    //   ++local_bc_count;
-    //   return true;
-    // }
-    // return false;
+  auto is_on_angled_bottom_patch = [&](std::vector<vec3> vertices, int /* attr */) {
     return std::all_of(vertices.begin(), vertices.end(), [&](vec3 x) { 
       if ((x(0) + x(1)) <= xy_cutoff_value && (x(2) <= z_bottom_cutoff_value || x(2) >= z_top_cutoff_value)) {
         ++local_bc_count;
@@ -236,12 +247,21 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
      });
   };
 
-  // Domain angled_top_or_bottom_bundary_patch = Domain::ofBoundaryElements(mesh->mfemParMesh(), is_on_angled_top_or_bottom_patch);
-  mesh->addDomainOfBoundaryElements("angled_top_or_bottom_bundary_patch", is_on_angled_top_or_bottom_patch);
+  // Domain angled_top_or_bottom_bundary_patch = Domain::ofBoundaryElements(mesh->mfemParMesh(), is_on_angled_bottom_patch);
+  mesh->addDomainOfBoundaryElements("angled_top_or_bottom_bundary_patch", is_on_angled_bottom_patch);
+  mesh->addDomainOfBoundaryElements("applied_displacement_surface", serac::by_attr<dim>(3));
 
-  // solid_solver.setDisplacementBCs(is_on_angled_top_or_bottom_patch, zero_vector);
+  // solid_solver.setDisplacementBCs(is_on_angled_bottom_patch, zero_vector);
   solid_solver.setFixedBCs(mesh->domain("angled_top_or_bottom_bundary_patch"));
   MPI_Reduce(&local_bc_count, &global_bc_count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+  auto applied_displacement = [](serac::tensor<double, dim>, double t) {
+    serac::tensor<double, dim> u{};
+    u[1] = -0.05 * t;
+    return u;
+  };
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("applied_displacement_surface"));
+
   if (myid == 0) { std::cout << "..... Fixed BCs for a total of " << global_bc_count << " nodes across all ranks" << std::endl; }
 
   // Set body force (self weight)
@@ -260,6 +280,13 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   zero_state = 0.0;
   solid_solver.setDisplacement(zero_state);
 
+  // Add the contact interaction
+  auto contact_interaction_id = 0;
+  std::set<int> surface_1_boundary_attributes({1, 2});
+  std::set<int> surface_2_boundary_attributes({2});
+  solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,
+                                     surface_2_boundary_attributes, contact_options);
+                                     
   // Finalize the data structures
   solid_solver.completeSetup();
 
@@ -271,8 +298,16 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   if (0 == myid) { std::cout << "..... Solve completed. Saving output...." << std::endl; }
 
   // Save problem state for later visualization
-  std::string outname = "paraview_curing_study_driver_nonlinear";
+  std::string outname = "paraview_curing_study_driver_nonlinear_contact";
   solid_solver.outputStateToDisk(outname);
+
+  double dt = 1.0;
+  for (int i{0}; i < 20; ++i) {
+    solid_solver.advanceTimestep(dt);
+
+    // Output the sidre-based plot files
+    solid_solver.outputStateToDisk(outname);
+  }
 
   if (0 == myid) { std::cout << "Complete." << std::endl; }
 

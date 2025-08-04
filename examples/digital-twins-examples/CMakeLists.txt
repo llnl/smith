@@ -22,6 +22,12 @@ blt_add_executable( NAME        curing_study_driver_nonlinear
                     DEPENDS_ON  serac_physics
                     )
  
+blt_add_executable( NAME        indentation_with_contact
+                    SOURCES     indentation_with_contact.cpp
+                    OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                    DEPENDS_ON  serac_physics
+                    )
+
 blt_add_executable( NAME        indentation_with_contact_nonlinear
                     SOURCES     indentation_with_contact_nonlinear.cpp
                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
