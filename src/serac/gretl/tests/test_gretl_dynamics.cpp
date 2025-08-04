@@ -54,8 +54,8 @@ State state_rate_equation(const State& state, const Param& params, [[maybe_unuse
   });
 
   newState.set_vjp([](gretl::UpstreamStates& inputs, const gretl::DownstreamState& output) {
-    auto& state_ = inputs[0];
-    auto& params_ = inputs[1];
+    auto state_ = inputs[0];
+    auto params_ = inputs[1];
 
     const State::type& s = state_.get<State::type>();
     const Param::type& p = params_.get<Param::type>();
@@ -95,8 +95,8 @@ class MeshFixture : public ::testing::Test {
 
 TEST_F(MeshFixture, NonlinearGraphGradients)
 {
-  Param params = dataStore->create_state(params_data, gretl::vec::initialize_zero_dual());
-  State state0 = dataStore->create_state(state0_data, gretl::vec::initialize_zero_dual());
+  Param params = dataStore->create_state(params_data, gretl::vec::initialize_zero_dual);
+  State state0 = dataStore->create_state(state0_data, gretl::vec::initialize_zero_dual);
 
   State stateRate = state_rate_equation(state0, params, 0.0);
   gretl::State<double> rateNorm = set_as_objective(gretl::inner_product(stateRate, stateRate));
@@ -109,8 +109,8 @@ TEST_F(MeshFixture, NonlinearGraphGradients)
 
 TEST_F(MeshFixture, Dynamics)
 {
-  Param params = dataStore->create_state(params_data, gretl::vec::initialize_zero_dual());
-  State state0 = dataStore->create_state(state0_data, gretl::vec::initialize_zero_dual());
+  Param params = dataStore->create_state(params_data, gretl::vec::initialize_zero_dual);
+  State state0 = dataStore->create_state(state0_data, gretl::vec::initialize_zero_dual);
 
   State state = copy(state0);
   for (size_t i = 0; i < N; ++i) {
@@ -122,10 +122,10 @@ TEST_F(MeshFixture, Dynamics)
   gretl::State<double> stateNorm = set_as_objective(gretl::inner_product(state, state));
   dataStore->back_prop();
 
-  double constexpr eps = 1e-7;
-  check_array_gradients(stateNorm, {state0, params}, {eps, eps}, {40 * eps, 40 * eps});
-
   for (size_t i = 0; i < numParams; ++i) {
     std::cout << "param sensitivity = " << params.get_dual()[i] << std::endl;
   }
+
+  double constexpr eps = 1e-7;
+  check_array_gradients(stateNorm, {state0, params}, {eps, eps}, {40 * eps, 40 * eps});
 }
