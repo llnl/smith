@@ -8,7 +8,7 @@
 #include <set>
 #include <string>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mpi.h"
 #include "axom/sidre.hpp"
 #include "mfem.hpp"

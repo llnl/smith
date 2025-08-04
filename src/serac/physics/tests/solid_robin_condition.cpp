@@ -7,7 +7,7 @@
 #include <string>
 #include <memory>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mpi.h"
 #include "mfem.hpp"
 

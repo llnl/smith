@@ -7,7 +7,7 @@
 #include <cmath>
 #include <limits>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "serac/numerics/functional/tensor.hpp"

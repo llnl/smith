@@ -12,7 +12,7 @@
 
 #include <complex>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/tuple.hpp"

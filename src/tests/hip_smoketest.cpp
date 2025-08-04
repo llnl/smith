@@ -36,7 +36,7 @@ THE SOFTWARE.
 #include <cstdlib>
 #include <iostream>
 #include "hip/hip_runtime.h"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 
 #ifdef NDEBUG

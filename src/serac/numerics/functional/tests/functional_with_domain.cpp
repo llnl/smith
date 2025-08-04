@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "mfem.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"

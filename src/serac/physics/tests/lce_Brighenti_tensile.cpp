@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "axom/fmt.hpp"
 #include "mpi.h"
 #include "mfem.hpp"

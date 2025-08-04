@@ -10,7 +10,7 @@
 #include <tuple>
 
 #include "mpi.h"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 #include "serac/numerics/equation_solver.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"

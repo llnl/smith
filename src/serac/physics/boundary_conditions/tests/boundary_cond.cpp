@@ -8,7 +8,7 @@
 #include <set>
 
 #include "mpi.h"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"

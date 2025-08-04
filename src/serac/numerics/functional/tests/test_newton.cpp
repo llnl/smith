@@ -7,7 +7,7 @@
 #include <exception>
 #include <cmath>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/numerics/functional/dual.hpp"

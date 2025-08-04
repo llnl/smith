@@ -4,13 +4,13 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include <cmath>
 #include <vector>
 
 #include "mfem.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/finite_element.hpp"

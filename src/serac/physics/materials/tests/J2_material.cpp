@@ -13,7 +13,7 @@
 #include <cmath>
 #include <complex>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/numerics/functional/tensor.hpp"

@@ -11,7 +11,7 @@
 #include <set>
 #include <string>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mpi.h"
 #include "mfem.hpp"
 

@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/physics/solid_mechanics.hpp"

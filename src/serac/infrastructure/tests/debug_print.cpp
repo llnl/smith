@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include <string>
 
 #include "serac/infrastructure/debug_print.hpp"

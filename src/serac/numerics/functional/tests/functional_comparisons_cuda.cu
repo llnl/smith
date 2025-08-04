@@ -7,7 +7,7 @@
 #include <fstream>
 #include <iostream>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "axom/slic/core/SimpleLogger.hpp"

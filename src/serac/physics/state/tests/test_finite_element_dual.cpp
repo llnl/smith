@@ -12,7 +12,7 @@
 #include <string>
 #include <utility>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "serac/physics/state/finite_element_dual.hpp"

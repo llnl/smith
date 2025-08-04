@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mpi.h"
 #include "mfem.hpp"
 #include "serac/serac_config.hpp"

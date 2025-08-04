@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "serac/physics/solid_mechanics.hpp"

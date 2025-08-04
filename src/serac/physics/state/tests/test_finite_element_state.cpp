@@ -8,7 +8,7 @@
  * @file test_finite_element_state.cpp
  */
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include <memory>
 #include <string>
 

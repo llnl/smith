@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mpi.h"
 #include "axom/fmt.hpp"
 #include "mfem.hpp"

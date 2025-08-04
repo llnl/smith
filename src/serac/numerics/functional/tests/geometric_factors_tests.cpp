@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "serac/numerics/functional/geometric_factors.hpp"
 #include "serac/infrastructure/application_manager.hpp"

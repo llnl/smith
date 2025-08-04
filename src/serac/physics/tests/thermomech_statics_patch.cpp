@@ -11,7 +11,7 @@
 #include <string>
 #include <tuple>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mpi.h"
 #include "mfem.hpp"
 

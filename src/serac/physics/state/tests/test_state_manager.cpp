@@ -16,7 +16,7 @@
 #include <utility>
 
 #include "mpi.h"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "serac/physics/state/state_manager.hpp"

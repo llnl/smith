@@ -8,7 +8,7 @@
  * @file nonlinear_J2_material.cpp
  */
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/numerics/functional/tensor.hpp"

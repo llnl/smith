@@ -9,7 +9,7 @@
 
 #include "mfem.hpp"
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "serac/infrastructure/application_manager.hpp"

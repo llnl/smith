@@ -7,7 +7,7 @@
 #include "mpi.h"
 #include <string>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
