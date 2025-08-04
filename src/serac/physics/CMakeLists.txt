@@ -39,6 +39,7 @@ set(physics_headers
     scalar_objective.hpp
     functional_objective.hpp
     constraints.hpp
+    constraints_contact.hpp
     )
 
 set(physics_depends
