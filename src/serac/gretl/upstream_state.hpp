@@ -51,13 +51,13 @@ struct UpstreamStates {
 
   /// @brief Accessor for individual upstream states
   /// @param index index
-  UpstreamState operator[](Int index) const { return states_[index]; }
+  const UpstreamState& operator[](Int index) const { return states_[index]; }
 
   /// @brief Number of upstream states
   Int size() const { return static_cast<Int>(states_.size()); }
 
   /// @brief Vector of upstream step indices
-  std::vector<UpstreamState> states() const { return states_; }
+  const std::vector<UpstreamState>& states() const { return states_; }
 
  private:
   std::vector<UpstreamState> states_;  ///< states
