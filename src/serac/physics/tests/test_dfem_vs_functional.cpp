@@ -20,7 +20,7 @@ auto element_shape = mfem::Element::QUADRILATERAL;
 
 namespace serac {
 
-template <template <typename, int, int> class TensorT>
+template <template <typename, int...> class TensorT>
 struct NeoHookeanWithFieldDensityDfem {
   static constexpr int dim = 2;
   /**
@@ -61,7 +61,7 @@ struct NeoHookeanWithFieldDensityDfem {
   double G;  ///< shear modulus
 };
 
-template <template <typename, int, int> class TensorT>
+template <template <typename, int...> class TensorT>
 struct NeoHookeanWithFieldWithRateFunctional {
   using State = Empty;  ///< this material has no internal variables
 
@@ -90,7 +90,7 @@ struct NeoHookeanWithFieldWithRateFunctional {
   double Rho;  ///< density
 };
 
-template <template <typename, int, int> class TensorT>
+template <template <typename, int...> class TensorT>
 struct NeoHookeanWithFieldWithRateDfem {
   template <typename T1, typename T2, int dim>
   SERAC_HOST_DEVICE auto pkStress(double /*dt*/, const TensorT<T1, dim, dim>& du_dX,
