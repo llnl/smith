@@ -55,7 +55,10 @@ struct State : public StateBase {
     gretl_assert(!upstreams.empty());
     auto primal_ptr = primal_.get();
     gretl_assert(primal_ptr);
-    auto newVal = std::make_shared<std::any>(*std::any_cast<T>(primal_ptr));
+    std::shared_ptr<std::any> newVal;
+    if (primal_ptr) {
+      newVal = std::make_shared<std::any>(*std::any_cast<T>(primal_ptr));
+    }
     State<T, D> state(dataStore_, dataStore_->states_.size(), newVal, initialize_zero_dual_);
     dataStore_->add_state(std::make_unique<State<T, D>>(state), upstreams);
     return state;
