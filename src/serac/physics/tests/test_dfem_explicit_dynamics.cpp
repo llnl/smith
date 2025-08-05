@@ -31,7 +31,7 @@ serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::
 
 namespace serac {
 
-template <template <typename, int, int> class TensorT>
+template <template <typename, int...> class TensorT>
 struct NeoHookeanWithFieldDensityDfem {
   static constexpr int dim = 2;
   /**
