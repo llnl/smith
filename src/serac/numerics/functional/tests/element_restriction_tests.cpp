@@ -8,6 +8,8 @@
 
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"
+#include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 
 using namespace serac;
 
@@ -26,18 +28,19 @@ TEST(patch_test_meshes, triangle_domains)
 {
   int p = 2;
   int dim = 2;
-  mfem::Mesh mesh(SERAC_REPO_DIR "/data/meshes/patch2D_tris.mesh");
+  mfem::Mesh bmesh(SERAC_REPO_DIR "/data/meshes/patch2D_tris.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   auto H1_fec = std::make_unique<mfem::H1_FECollection>(p, dim);
-  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
+  auto H1_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), H1_fec.get());
 
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(p, dim);
-  auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
+  auto Hcurl_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), Hcurl_fec.get());
 
   auto L2_fec = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
-  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto L2_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), L2_fec.get());
 
-  Domain whole = EntireDomain(mesh);
+  Domain whole = EntireDomain(*mesh);
   EXPECT_EQ(whole.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(whole.mfem_tri_ids_.size(), 4);
   EXPECT_EQ(whole.mfem_quad_ids_.size(), 0);
@@ -55,7 +58,7 @@ TEST(patch_test_meshes, triangle_domains)
     EXPECT_EQ(L2_BER.ESize(), 4 * 6);
   }
 
-  Domain boundary = EntireBoundary(mesh);
+  Domain boundary = EntireBoundary(*mesh);
   EXPECT_EQ(boundary.mfem_edge_ids_.size(), 4);
   EXPECT_EQ(boundary.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(boundary.mfem_quad_ids_.size(), 0);
@@ -73,7 +76,7 @@ TEST(patch_test_meshes, triangle_domains)
     EXPECT_EQ(L2_BER.ESize(), 4 * 3);
   }
 
-  Domain interior = InteriorFaces(mesh);
+  Domain interior = InteriorFaces(*mesh);
   EXPECT_EQ(interior.mfem_edge_ids_.size(), 4);
   EXPECT_EQ(interior.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_quad_ids_.size(), 0);
@@ -96,17 +99,18 @@ TEST(patch_test_meshes, quadrilateral_domains)
 {
   int p = 2;
   int dim = 2;
-  mfem::Mesh mesh(SERAC_REPO_DIR "/data/meshes/patch2D_quads.mesh");
+  mfem::Mesh bmesh(SERAC_REPO_DIR "/data/meshes/patch2D_quads.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   auto H1_fec = std::make_unique<mfem::H1_FECollection>(p, dim);
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(p, dim);
   auto L2_fec = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
 
-  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
-  auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
-  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto H1_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), H1_fec.get());
+  auto Hcurl_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), Hcurl_fec.get());
+  auto L2_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), L2_fec.get());
 
-  Domain whole = EntireDomain(mesh);
+  Domain whole = EntireDomain(*mesh);
   EXPECT_EQ(whole.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(whole.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(whole.mfem_quad_ids_.size(), 5);
@@ -124,7 +128,7 @@ TEST(patch_test_meshes, quadrilateral_domains)
     EXPECT_EQ(L2_BER.ESize(), 5 * 9);
   }
 
-  Domain boundary = EntireBoundary(mesh);
+  Domain boundary = EntireBoundary(*mesh);
   EXPECT_EQ(boundary.mfem_edge_ids_.size(), 4);
   EXPECT_EQ(boundary.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(boundary.mfem_quad_ids_.size(), 0);
@@ -142,7 +146,7 @@ TEST(patch_test_meshes, quadrilateral_domains)
     EXPECT_EQ(L2_BER.ESize(), 4 * 3);
   }
 
-  Domain interior = InteriorFaces(mesh);
+  Domain interior = InteriorFaces(*mesh);
   EXPECT_EQ(interior.mfem_edge_ids_.size(), 8);
   EXPECT_EQ(interior.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_quad_ids_.size(), 0);
@@ -165,17 +169,18 @@ TEST(patch_test_meshes, triangle_and_quadrilateral_domains)
 {
   int p = 2;
   int dim = 2;
-  mfem::Mesh mesh(SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh");
+  mfem::Mesh bmesh(SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   auto H1_fec = std::make_unique<mfem::H1_FECollection>(p, dim);
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(p, dim);
   auto L2_fec = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
 
-  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
-  auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
-  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto H1_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), H1_fec.get());
+  auto Hcurl_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), Hcurl_fec.get());
+  auto L2_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), L2_fec.get());
 
-  Domain whole = EntireDomain(mesh);
+  Domain whole = EntireDomain(*mesh);
   EXPECT_EQ(whole.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(whole.mfem_tri_ids_.size(), 2);
   EXPECT_EQ(whole.mfem_quad_ids_.size(), 4);
@@ -193,7 +198,7 @@ TEST(patch_test_meshes, triangle_and_quadrilateral_domains)
     EXPECT_EQ(L2_BER.ESize(), 2 * 6 + 4 * 9);
   }
 
-  Domain boundary = EntireBoundary(mesh);
+  Domain boundary = EntireBoundary(*mesh);
   EXPECT_EQ(boundary.mfem_edge_ids_.size(), 4);
   EXPECT_EQ(boundary.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(boundary.mfem_quad_ids_.size(), 0);
@@ -211,7 +216,7 @@ TEST(patch_test_meshes, triangle_and_quadrilateral_domains)
     EXPECT_EQ(L2_BER.ESize(), 4 * 3);
   }
 
-  Domain interior = InteriorFaces(mesh);
+  Domain interior = InteriorFaces(*mesh);
   EXPECT_EQ(interior.mfem_edge_ids_.size(), 9);
   EXPECT_EQ(interior.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_quad_ids_.size(), 0);
@@ -234,17 +239,18 @@ TEST(patch_test_meshes, tetrahedron_domains)
 {
   int p = 2;
   int dim = 3;
-  mfem::Mesh mesh(SERAC_REPO_DIR "/data/meshes/patch3D_tets.mesh");
+  mfem::Mesh bmesh(SERAC_REPO_DIR "/data/meshes/patch3D_tets.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   auto H1_fec = std::make_unique<mfem::H1_FECollection>(p, dim);
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(p, dim);
   auto L2_fec = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
 
-  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
-  auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
-  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto H1_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), H1_fec.get());
+  auto Hcurl_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), Hcurl_fec.get());
+  auto L2_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), L2_fec.get());
 
-  Domain whole = EntireDomain(mesh);
+  Domain whole = EntireDomain(*mesh);
   EXPECT_EQ(whole.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(whole.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(whole.mfem_quad_ids_.size(), 0);
@@ -262,7 +268,7 @@ TEST(patch_test_meshes, tetrahedron_domains)
     EXPECT_EQ(L2_BER.ESize(), 12 * 10);
   }
 
-  Domain boundary = EntireBoundary(mesh);
+  Domain boundary = EntireBoundary(*mesh);
   EXPECT_EQ(boundary.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(boundary.mfem_tri_ids_.size(), 12);
   EXPECT_EQ(boundary.mfem_quad_ids_.size(), 0);
@@ -280,7 +286,7 @@ TEST(patch_test_meshes, tetrahedron_domains)
     EXPECT_EQ(L2_BER.ESize(), 12 * 6);
   }
 
-  Domain interior = InteriorFaces(mesh);
+  Domain interior = InteriorFaces(*mesh);
   EXPECT_EQ(interior.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_tri_ids_.size(), 18);
   EXPECT_EQ(interior.mfem_quad_ids_.size(), 0);
@@ -303,17 +309,18 @@ TEST(patch_test_meshes, hexahedron_domains)
 {
   int p = 2;
   int dim = 3;
-  mfem::Mesh mesh(SERAC_REPO_DIR "/data/meshes/patch3D_hexes.mesh");
+  mfem::Mesh bmesh(SERAC_REPO_DIR "/data/meshes/patch3D_hexes.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   auto H1_fec = std::make_unique<mfem::H1_FECollection>(p, dim);
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(p, dim);
   auto L2_fec = std::make_unique<mfem::L2_FECollection>(p, dim, mfem::BasisType::GaussLobatto);
 
-  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
-  auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
-  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto H1_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), H1_fec.get());
+  auto Hcurl_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), Hcurl_fec.get());
+  auto L2_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), L2_fec.get());
 
-  Domain whole = EntireDomain(mesh);
+  Domain whole = EntireDomain(*mesh);
   EXPECT_EQ(whole.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(whole.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(whole.mfem_quad_ids_.size(), 0);
@@ -331,7 +338,7 @@ TEST(patch_test_meshes, hexahedron_domains)
     EXPECT_EQ(L2_BER.ESize(), 7 * 27);
   }
 
-  Domain boundary = EntireBoundary(mesh);
+  Domain boundary = EntireBoundary(*mesh);
   EXPECT_EQ(boundary.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(boundary.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(boundary.mfem_quad_ids_.size(), 6);
@@ -349,7 +356,7 @@ TEST(patch_test_meshes, hexahedron_domains)
     EXPECT_EQ(L2_BER.ESize(), 6 * 9);
   }
 
-  Domain interior = InteriorFaces(mesh);
+  Domain interior = InteriorFaces(*mesh);
   EXPECT_EQ(interior.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_quad_ids_.size(), 18);
@@ -366,4 +373,11 @@ TEST(patch_test_meshes, hexahedron_domains)
     BlockElementRestriction L2_BER(L2_fes.get(), interior);
     EXPECT_EQ(L2_BER.ESize(), 18 * (9 * 2));
   }
+}
+
+int main(int argc, char* argv[])
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }
