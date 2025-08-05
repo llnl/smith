@@ -18,7 +18,7 @@ void DataStore::back_prop()
 template <typename Func>
 void for_each_active_upstream(const DataStore* dataStore, size_t step, const Func& func)
 {
-  for (Int upstream : dataStore->upstreams_[step].steps_) {
+  for (Int upstream : dataStore->upstreams_[step].steps()) {
     if (!dataStore->is_persistent(upstream)) {
       func(upstream);
     }
@@ -81,28 +81,6 @@ void DataStore::reverse_state()
 
 std::shared_ptr<std::any>& DataStore::any_primal(Int step) { return states_[step]->primal_; }
 
-Int DataStore::num_active_states() const
-{
-  Int numActive = 0;
-  for (const auto& s : states_) {
-    if (states_[s->step_]->primal_) {
-      ++numActive;
-    }
-  }
-  return numActive;
-}
-
-Int DataStore::num_dual_states() const
-{
-  Int numActive = 0;
-  for (const auto& s : states_) {
-    if (duals_[s->step_]) {
-      ++numActive;
-    }
-  }
-  return numActive;
-}
-
 void printv(const std::vector<Int>& v)
 {
   size_t c = 0;
@@ -117,7 +95,7 @@ void printv(const std::vector<StateBase>& v)
 {
   size_t c = 0;
   for (auto s : v) {
-    std::cout << c << ":" << s.step_ << " ";
+    std::cout << c << ":" << s.step() << " ";
     ++c;
   }
   std::cout << std::endl;
@@ -125,7 +103,7 @@ void printv(const std::vector<StateBase>& v)
 
 void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams)
 {
-  Int step = newState->step_;
+  Int step = newState->step();
 
   states_.emplace_back(std::move(newState));
   duals_.emplace_back(nullptr);
@@ -219,15 +197,9 @@ void DataStore::fetch_state_data(Int stepIndex)
     active_[iEval] = true;
     usageCount_[iEval]++;
 
-    // MRT, future optimization...
-    // things to do:
-    // do not save passthroughts, just loop active passthroughts using graph?
-    // abstract checkpoint manager to also have a checkpoint everything version
-    // tests that we can call multiple backprops back to back (or at least with a perturbed forward in between)
-
     if (states_[iEval]->primal_) {
       for_each_active_upstream(this, iEval, [&](Int upstream) { gretl_assert(state_in_use(upstream)); });
-      remove_things(iEval);
+      erase_step_state_data(iEval);
     } else {
       states_[iEval]->evaluate_forward();
     }
@@ -235,7 +207,7 @@ void DataStore::fetch_state_data(Int stepIndex)
     gretl_assert(check_validity());
   }
 }
-void DataStore::remove_things(Int step)
+void DataStore::erase_step_state_data(Int step)
 {
   if (!is_persistent(step)) {
     size_t stepToErase = checkpointManager.add_checkpoint_and_get_index_to_remove(step);
@@ -311,7 +283,7 @@ void DataStore::print() const
   for (Int i = 0; i < states_.size(); ++i) {
     std::cout << i << ", act: " << active_[i] << ":" << usageCount_[i] << ":" << (states_[i]->primal_ != nullptr)
               << ", ups: ";
-    for (auto& v : upstreams_[i].steps_) {
+    for (auto& v : upstreams_[i].steps()) {
       std::cout << v << " ";
     }
     std::cout << ", pass: ";

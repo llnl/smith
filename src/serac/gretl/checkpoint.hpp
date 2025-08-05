@@ -22,12 +22,19 @@ namespace gretl {
 
 struct Unit {};
 
+/// @brief checkpoint struct which tracks level and step per "Minimal Repetition Dynamic Checkpointing Algorithm for
+/// Unsteady Adjoint Calculation", Wang, et al. , 2009.
 struct Checkpoint {
-  size_t level;
-  size_t step;
-  static constexpr size_t infinity() { return std::numeric_limits<size_t>::max(); }
+  size_t level;  //< level
+  size_t step;   //< step
+  static constexpr size_t infinity()
+  {
+    return std::numeric_limits<size_t>::max();
+  }  //< The largest possible step and level value
 };
 
+/// @brief comparison operator between two checkpoints to determine which is most disposable per the dynamic
+/// checkpointing algorithm
 inline bool operator<(const Checkpoint& a, const Checkpoint& b)
 {
   if (a.level == Checkpoint::infinity() && b.level == Checkpoint::infinity()) {
@@ -38,13 +45,20 @@ inline bool operator<(const Checkpoint& a, const Checkpoint& b)
   return a.step > b.step;
 }
 
+/// @brief output stream for a single checkpoint
 inline std::ostream& operator<<(std::ostream& stream, const Checkpoint& p);
 
+/// @brief CheckpointManager class which encapsulates the logic of when and which steps should be dynamically saved a
+/// fetched
 struct CheckpointManager {
-  static constexpr size_t invalidCheckpointIndex = std::numeric_limits<size_t>::max();
+  static constexpr size_t invalidCheckpointIndex =
+      std::numeric_limits<size_t>::max();  ///< magic number of invalid checkpoint
 
+  /// @brief utilty for checking if an index is valid.  There is a magic number, invalidCheckpointIndex, which
+  /// represents an invalid checkpoint
   static bool valid_checkpoint_index(size_t i) { return i != invalidCheckpointIndex; }
 
+  /// @brief returns const_iterator to currently most dispensable checkpoint step
   std::set<gretl::Checkpoint>::const_iterator most_dispensable() const
   {
     size_t maxHigherTimeLevel = 0;
@@ -57,11 +71,11 @@ struct CheckpointManager {
     return cps.end();
   }
 
-  // this does multiple things
-  // 1. it adds checkpoints into the database, and updates internal data structures
-  // 2. it determines if a checkpoint needs to be removed
-  // 3. if a checkpoint needs to be removed, it returns the index for that checkpoint
-  // 4. otherwise, it returns zero
+  /// @brief this does multiple things
+  /// 1. it adds checkpoints into the database, and updates internal data structures
+  /// 2. it determines if a checkpoint needs to be removed
+  /// 3. if a checkpoint needs to be removed, it returns the index for that checkpoint
+  /// 4. otherwise, it returns zero
   size_t add_checkpoint_and_get_index_to_remove(size_t step, bool persistent = false)
   {
     size_t levelupAmount = 1;  //= relativeCost >= 2.0 ? 3 : 1;
@@ -99,6 +113,7 @@ struct CheckpointManager {
 
   size_t last_checkpoint_step() const { return cps.begin()->step; }
 
+  /// @brief erase
   bool erase_step(size_t stepIndex)
   {
     for (std::set<Checkpoint>::iterator it = cps.begin(); it != cps.end(); ++it) {
@@ -122,26 +137,6 @@ struct CheckpointManager {
     return false;
   }
 
-  Checkpoint remove_checkpoint(size_t stepIndex)
-  {
-    maxNumStates--;
-    for (std::set<Checkpoint>::iterator it = cps.begin(); it != cps.end(); ++it) {
-      if (it->step == stepIndex) {
-        auto cp = *it;
-        cps.erase(it);
-        return cp;
-      }
-    }
-    gretl_assert(false);
-    return *cps.begin();
-  }
-
-  void insert_checkpoint(const Checkpoint& cp)
-  {
-    maxNumStates++;
-    cps.insert(cp);
-  }
-
   /// @brief erase all non persistent checkpoints
   void reset()
   {
@@ -153,21 +148,22 @@ struct CheckpointManager {
     }
   }
 
-  std::set<size_t> active_steps() const
-  {
-    std::set<size_t> steps;
-    for (const auto& cp : cps) {
-      if (cp.level < cp.infinity()) {
-        steps.insert(cp.step);
-      }
-    }
-    return steps;
-  }
-
-  size_t maxNumStates = 20;
-  std::set<Checkpoint> cps;
+  size_t maxNumStates =
+      20;  ///< The maximum number of non-persistent, not-in-scope states stored by the CheckpointManager
+  std::set<Checkpoint> cps;  ///< Vector of checkpoints
 };
 
+///
+
+/// @brief interface to run forward with a linear graph, checkpoint, then automatically backpropagate the sensitivities
+/// given the reverse_callback jvp.
+/// @tparam T type of each state's data
+/// @param numSteps number of forward iterations
+/// @param storageSize maximum states to save in memory at a time
+/// @param x initial condition
+/// @param update_func function which evaluates the forward response
+/// @param reverse_callback vjp function (action of Jacobian-transposed) to back propagate sensitivities
+/// @return
 template <typename T>
 T advance_and_reverse_steps(size_t numSteps, size_t storageSize, T x, std::function<T(size_t n, const T&)> update_func,
                             std::function<void(size_t n, const T&)> reverse_callback)
@@ -208,11 +204,14 @@ T advance_and_reverse_steps(size_t numSteps, size_t storageSize, T x, std::funct
   return xf;
 }
 
+/// @brief ostream operator for writing out checkpoint information
 inline std::ostream& operator<<(std::ostream& stream, const Checkpoint& p)
 {
   return stream << "   lvl=" << p.level << ", step=" << p.step;
 }
 
+/// @brief ostream operator for writing out information about the entire checkpoint manager to see the set of currently
+/// checkpointed states
 inline std::ostream& operator<<(std::ostream& stream, const CheckpointManager& set)
 {
   stream << "CHECKPOINTS: capacity = " << set.maxNumStates << std::endl;

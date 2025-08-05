@@ -31,18 +31,19 @@ struct DownstreamState;
 template <typename T, typename D = T>
 using InitializeZeroDual = std::function<D(const T&)>;
 
+/// @brief Default zero initializer,
 template <typename T, typename D = T>
 struct defaultInitializeZeroDual {
   D operator()(const T&) { return D{}; }
 };
 
-// template <typename T>
-// static gretl::InitializeZeroDual<T, T> defaultInitializeZeroDual = [](const T& from) {
-//   return T{};
-// };
-
+/// @brief DataStore class hold onto states, duals and additional information to represent a computational graph, its
+/// checkpointing state information, and its backpropagated sensitivities
 class DataStore {
  public:
+  /// @brief Constructor
+  /// @param maxStates maximum number of states the users is allowing to be allocated for the dynamic checkpointing.
+  /// This does not include persistent states, nor states held in scope by the user.
   DataStore(size_t maxStates);
   virtual ~DataStore() {}
 
@@ -66,10 +67,10 @@ class DataStore {
   /// @brief clear all but persistent state, keeping the graph
   void reset();
 
-  Int num_active_states() const;
-  Int num_dual_states() const;
-
+  /// @brief print all checkpoint data in data store
   void print() const;
+
+  /// @brief do internal checks of consistency with respect to checkpoints and
   bool check_validity() const;
 
   // create a new state in the graph, store it, return it
@@ -89,18 +90,27 @@ class DataStore {
   /// @brief function for safely adding new states to graph and checkpoint
   void add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams);
 
-  /// @brief method for fetching states at a particular moment in time
-  void fetch_state_data(Int stepIndex);
+  /// @brief method for fetching states at a particular step
+  void fetch_state_data(Int);
 
-  void remove_things(Int);
+  /// @brief erase the data for a particular step
+  void erase_step_state_data(Int);
 
+  /// @brief clear usage at a particular step
   void clear_usage(Int step);
 
+  /// @brief std::function for evaluating downstream from upstreams
   using EvalT = std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)>;
+
+  /// @brief std::function for computing vector-jacobian product from downstream dual to upstream duals
   using VjpT = std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)>;
 
+  /// @brief Get the primal data as a shared_ptr to std::any (type-erased)
+  /// @param step
   std::shared_ptr<std::any>& any_primal(Int step);
 
+  /// @brief Get primal value
+  /// @param step
   template <typename T>
   const T& get_primal(Int step)
   {
@@ -117,6 +127,9 @@ class DataStore {
     return *tptr;
   }
 
+  /// @brief Set primal value
+  /// @param step step
+  /// @param t value of type T to set primal to
   template <typename T>
   void set_primal(Int step, const T& t)
   {
@@ -131,6 +144,8 @@ class DataStore {
     *tptr = t;
   }
 
+  /// @brief Get dual value
+  /// @param step
   template <typename D, typename T = D>
   D& get_dual(Int step)
   {
@@ -145,6 +160,9 @@ class DataStore {
     return *dualData;
   }
 
+  /// @brief Set dual value
+  /// @param step step
+  /// @param d value of type D to set dual to
   template <typename D>
   void set_dual(Int step, const D& d)
   {
@@ -156,19 +174,28 @@ class DataStore {
     *dualData = d;
   }
 
+  /// @brief Check if state in use
+  /// @param step step
+  /// @return bool
   bool state_in_use(Int step) const;
 
+  /// @brief Check if state is persistent
+  /// @param step step
+  /// @return bool
   bool is_persistent(Int step) const;
 
-  std::vector<std::unique_ptr<StateBase>> states_;
-  std::vector<std::unique_ptr<std::any>> duals_;
-  std::vector<UpstreamStates> upstreams_;
-  std::vector<EvalT> evals_;
-  std::vector<VjpT> vjps_;
-  std::vector<bool> active_;
-  std::vector<Int> usageCount_;
-  std::vector<Int> lastStepUsed_;
-  std::vector<std::vector<Int>> passthroughs_;
+  std::vector<std::unique_ptr<StateBase>> states_;  ///< states for steps
+  std::vector<std::unique_ptr<std::any>> duals_;    ///< duals for steps
+  std::vector<UpstreamStates> upstreams_;           ///< upstreams dependencies for steps
+  std::vector<EvalT> evals_;                        ///< forward evaluation functions for steps
+  std::vector<VjpT> vjps_;                          ///< vector-jacobian product functions for steps
+  std::vector<bool> active_;                        ///< active status for steps
+  std::vector<Int> usageCount_;  ///< count how many times a step is used in some downstream still is the scope of the
+                                 ///< checkpoint algorithm
+  std::vector<Int>
+      lastStepUsed_;  ///< for a given step, records the last known future-step where its used as an upstream
+  std::vector<std::vector<Int>> passthroughs_;  ///< at a given step, the list of all the previous steps which are
+                                                ///< eventually used in some future step as an upstream
 
   /// container which track the states in the graph with allocated data
   CheckpointManager checkpointManager;

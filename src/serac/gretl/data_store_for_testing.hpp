@@ -16,11 +16,20 @@
 
 namespace gretl {
 
+/// @brief Computes a randon number in a specified range
+/// @param x0 The lower bound of the range
+/// @param xf The upper bound of the range
+/// @return A random double
 inline double rand_in_range(double x0, double xf)
 {
   return x0 + static_cast<double>(rand()) / static_cast<double>(RAND_MAX) * (xf - x0);
 }
 
+/// @brief Performs a gradient check
+/// @param objectiveState The double state corresponding to the objective
+/// @param inputStates The persistent states in the graph which can be perturbed for finite differencing
+/// @param eps Vector of finite difference pertubations (one per input state)
+/// @param tol Vector of tolerances for finite difference check (one per input state)
 void check_array_gradients(gretl::State<double>& objectiveState, std::vector<gretl::VectorState> inputStates,
                            std::vector<double> eps, std::vector<double> tol)
 {

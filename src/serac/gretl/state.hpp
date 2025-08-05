@@ -18,27 +18,38 @@ namespace gretl {
 
 using Int = unsigned int;
 
+/// @brief Templated State
+/// @tparam T Primal type
+/// @tparam D Dual type
 template <typename T, typename D>
 struct State : public StateBase {
-  using type = T;
-  using dual_type = D;
+  using type = T;       ///< type
+  using dual_type = D;  ///< dual_type
 
+  /// @brief Set primal value of correct type
   inline void set(const T& t) { dataStore_->set_primal(step_, t); }
 
+  /// @brief Get primal value of correct type
   inline const T& get() const { return dataStore_->get_primal<T>(step_); }
 
+  /// @brief Get dual value of correct type
   inline const D& get_dual() const { return dataStore_->get_dual<D>(step_); }
 
+  /// @brief Set the std::functions which evaluates downstream primals given upstream primals
   void set_eval(const std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)>& e)
   {
     dataStore_->evals_[step_] = e;
   }
 
+  /// @brief Set the std::functions which computes the action of the jacobian transpose on the downstream dual, and
+  /// plus-equals into the upstream duals.
   void set_vjp(const std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)>& v)
   {
     dataStore_->vjps_[step_] = v;
   }
 
+  /// @brief Helper function to clone an existing state (keeping its type)
+  /// @param upstreams The upstream dependencies for this new state
   State<T, D> clone(const std::vector<StateBase>& upstreams) const
   {
     gretl_assert(!upstreams.empty());
@@ -48,6 +59,8 @@ struct State : public StateBase {
     return state;
   }
 
+  /// @brief After calling set_eval and set_vjp, this actually computes the set_eval.  Typically this is required when
+  /// constructing a new state.
   State<T, D> finalize()
   {
     this->evaluate_forward();
@@ -57,6 +70,13 @@ struct State : public StateBase {
   friend class DataStore;
 
  protected:
+  /// @brief Protected constructor for states.  This is called by the DataStore when registering a new state on the
+  /// graph.
+  /// @param store datastore
+  /// @param step step
+  /// @param val type-erased value which is the data for the state
+  /// @param initialize_zero_dual std::function which takes a primal value type T, and returns a zeroed out, but memory
+  /// allocated dual type D
   State(DataStore* store, size_t step, std::shared_ptr<std::any> val,
         const InitializeZeroDual<T, D>& initialize_zero_dual)
       : StateBase(store, val), initialize_zero_dual_(initialize_zero_dual)
@@ -64,9 +84,13 @@ struct State : public StateBase {
     step_ = static_cast<Int>(step);
   }
 
-  InitializeZeroDual<T, D> initialize_zero_dual_;
+  InitializeZeroDual<T, D> initialize_zero_dual_;  ///< std::function which initializes and zeros a dual value of type
+                                                   ///< D, given a primal value of type T.
 };
 
+/// @brief Sets the dual value for a 'double' state to 1.  This is equivalent to saying this state appears additively in
+/// the objective or constraint of an optimization problem
+/// @param o state to be made into an objective
 inline State<double> set_as_objective(State<double> o)
 {
   o.set_dual(1.0);

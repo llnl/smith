@@ -17,6 +17,20 @@ namespace gretl {
 
 // clang-format off
 
+/// @brief 
+/// @tparam T 
+/// @tparam D 
+/// @tparam ZeroFunc 
+/// @tparam State0 
+/// @tparam ...StatesN 
+/// @tparam ...state_indices 
+/// @param zeroFunc 
+/// @param eval 
+/// @param vjp 
+/// @param  
+/// @param state0 
+/// @param ...statesN 
+/// @return 
 template <typename T, typename D, typename ZeroFunc, typename State0, typename... StatesN, int... state_indices>
 gretl::State<T,D> create_state_impl(const ZeroFunc& zeroFunc,
                                     const std::function<T(const typename State0::type&, const typename StatesN::type&...)>& eval,

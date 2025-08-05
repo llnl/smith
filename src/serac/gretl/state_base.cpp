@@ -13,7 +13,7 @@ void StateBase::evaluate_forward()
 {
   DownstreamState ds(dataStore_, step_);
   dataStore_->evals_[step_](dataStore_->upstreams_[step_], ds);
-  dataStore_->remove_things(step_);
+  dataStore_->erase_step_state_data(step_);
 }
 
 void StateBase::evaluate_vjp()
