@@ -82,7 +82,7 @@ inline State<double> operator*(const State<double>& x, double a) { return axpb(a
 /// @brief divide a double state by a double
 inline State<double> operator/(const State<double>& x, double a) { return axpb(1.0 / a, x, 0.0); }
 
-/// @brief divide a double by a double double state
+/// @brief divide a double by a double state
 inline State<double> operator/(double a, const State<double>& x)
 {
   auto z = x.clone({x});
