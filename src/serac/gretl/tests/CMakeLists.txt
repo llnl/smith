@@ -1,4 +1,4 @@
-set(gretl_test_depends smith_gretl gtest)
+set(gretl_test_depends serac_gretl gtest)
 
 set(gretl_tests
     test_gretl_checkpoint.cpp

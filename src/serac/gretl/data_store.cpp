@@ -24,9 +24,9 @@ void DataStore::back_prop()
 template <typename Func>
 void for_each_active_upstream(const DataStore* dataStore, size_t step, const Func& func)
 {
-  for (Int upstream : dataStore->upstreams_[step].steps()) {
-    if (!dataStore->is_persistent(upstream)) {
-      func(upstream);
+  for (const auto& upstream : dataStore->upstreams_[step].states()) {
+    if (!dataStore->is_persistent(upstream.step_)) {
+      func(upstream.step_);
     }
   }
   for (Int upstreamStepPassingThrough : dataStore->passthroughs_[step]) {
@@ -289,8 +289,8 @@ void DataStore::print() const
   for (Int i = 0; i < states_.size(); ++i) {
     std::cout << i << ", act: " << active_[i] << ":" << usageCount_[i] << ":" << (states_[i]->primal_ != nullptr)
               << ", ups: ";
-    for (auto& v : upstreams_[i].steps()) {
-      std::cout << v << " ";
+    for (auto& v : upstreams_[i].states()) {
+      std::cout << v.step_ << " ";
     }
     std::cout << ", pass: ";
     for (auto& v : passthroughs_[i]) {

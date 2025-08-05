@@ -1,11 +1,11 @@
 
-set(smith_gretl_sources
+set(serac_gretl_sources
       data_store.cpp
       state_base.cpp
       vector_state.cpp
     )
 
-set(smith_gretl_headers
+set(serac_gretl_headers
       checkpoint.hpp
       data_store.hpp
       test_utils.hpp
@@ -19,19 +19,19 @@ set(smith_gretl_headers
     )
 
 blt_add_library(
-    NAME        smith_gretl
-    SOURCES     ${smith_gretl_sources}
-    HEADERS     ${smith_gretl_headers}
+    NAME        serac_gretl
+    SOURCES     ${serac_gretl_sources}
+    HEADERS     ${serac_gretl_headers}
     )
 
-target_include_directories(smith_gretl PUBLIC 
+target_include_directories(serac_gretl PUBLIC 
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
     $<INSTALL_INTERFACE:include>
     )
 
-install(FILES ${smith_gretl_headers} DESTINATION include/serac/gretl )
+install(FILES ${serac_gretl_headers} DESTINATION include/serac/gretl )
 
-install(TARGETS              smith_gretl
+install(TARGETS              serac_gretl
         EXPORT               serac-targets
         DESTINATION          lib
         )

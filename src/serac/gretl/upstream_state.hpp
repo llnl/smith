@@ -18,8 +18,8 @@ namespace gretl {
 /// @brief UpstreamState is a wrapper for a states.  Its used in external-facing interfaces to ensure const correctness
 /// for users to encourage correct usage.
 struct UpstreamState {
-  DataStore* dataStore_;  ///< datastore
   Int step_;              ///< step
+  DataStore* dataStore_;  ///< datastore
 
   /// @brief get underlying value
   template <typename T>
@@ -40,23 +40,27 @@ struct UpstreamState {
 /// correctness for users to encourage correct usage.
 struct UpstreamStates {
   /// @brief Constructor for upstream states
-  /// @param s datastore
+  /// @param store datastore
   /// @param steps vector of upstream steps
-  UpstreamStates(DataStore& s, std::vector<Int> steps) : dataStore_(&s), steps_(steps) {}
+  UpstreamStates(DataStore& store, std::vector<Int> steps)
+  {
+    for (Int s : steps) {
+      states_.push_back({s, &store});
+    }
+  }
 
   /// @brief Accessor for individual upstream states
   /// @param index index
-  UpstreamState operator[](Int index) const { return UpstreamState{.dataStore_ = dataStore_, .step_ = steps_[index]}; }
+  UpstreamState operator[](Int index) const { return states_[index]; }
 
   /// @brief Number of upstream states
-  Int size() const { return static_cast<Int>(steps_.size()); }
+  Int size() const { return static_cast<Int>(states_.size()); }
 
   /// @brief Vector of upstream step indices
-  std::vector<Int> steps() const { return steps_; }
+  std::vector<UpstreamState> states() const { return states_; }
 
  private:
-  DataStore* dataStore_;    ///< datastore
-  std::vector<Int> steps_;  ///< steps
+  std::vector<UpstreamState> states_;  ///< states
 };
 
 /// @brief DownstreamState is a wrapper for a state.  Its used in external-facing interfaces to ensure const correctness
