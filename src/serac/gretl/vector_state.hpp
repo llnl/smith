@@ -1,11 +1,11 @@
-// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file upstream_state.hpp
+ * @file vector_state.hpp
  */
 
 #pragma once
@@ -15,23 +15,24 @@
 
 namespace gretl {
 
-using Vector = std::vector<double>;
-using VectorState = State<Vector>;
+using Vector = std::vector<double>;  ///< using for gretl::Vector
+using VectorState = State<Vector>;   ///< using for gretl::VectorState
 
-VectorState testing_update(const VectorState& a);
+VectorState testing_update(const VectorState& a);  ///< an arbitrary evaluation function which takes a VectorState and
+                                                   ///< nonlinearly returns another VectorState
 
-VectorState copy(const VectorState& a);
+VectorState copy(const VectorState& a);  ///< copies an existing VectorState
 
-VectorState operator+(const VectorState& a, const VectorState& b);
-VectorState operator*(const VectorState& a, double b);
-VectorState operator*(double b, const VectorState& a);
-VectorState operator*(const VectorState& a, const VectorState& b);
-// VectorState operator/(const VectorState& a, const VectorState& b);
+VectorState operator+(const VectorState& a, const VectorState& b);  ///< addition operator
+VectorState operator*(const VectorState& a, double b);              ///< multiplication operator
+VectorState operator*(double b, const VectorState& a);              ///< multiplication operator
+VectorState operator*(const VectorState& a, const VectorState& b);  ///< compinent-wise multiplication operator
 
-State<double> inner_product(const VectorState& a, const VectorState& b);
+State<double> inner_product(const VectorState& a, const VectorState& b);  ///< inner product between VectorStates
 
 namespace vec {
 
+/// @brief default InitializeZeroDual for VectorState
 static gretl::InitializeZeroDual<Vector, Vector> initialize_zero_dual = [](const Vector& from) {
   Vector to(from.size(), 0.0);
   return to;
@@ -39,6 +40,7 @@ static gretl::InitializeZeroDual<Vector, Vector> initialize_zero_dual = [](const
 
 }  // namespace vec
 
+/// @brief gets size of the first vector in a vector of vectors and checks that all inner vectors have the same size
 template <typename T>
 size_t get_same_size(const std::vector<const std::vector<T>*>& vs)
 {

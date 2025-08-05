@@ -8,7 +8,7 @@ set(smith_gretl_sources
 set(smith_gretl_headers
       checkpoint.hpp
       data_store.hpp
-      data_store_for_testing.hpp
+      test_utils.hpp
       state_base.hpp
       state.hpp
       create_state.hpp

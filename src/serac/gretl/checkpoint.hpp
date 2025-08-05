@@ -1,3 +1,13 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+/**
+ * @file checkpoint.hpp
+ */
+
 #pragma once
 
 #include <set>
@@ -7,11 +17,13 @@
 #include <cassert>
 #include <limits>
 
+/// @brief gretl_assert that prints line and file info before throwing in release and halting in debug
 #define gretl_assert(x)                                                                                          \
   if (!(x))                                                                                                      \
     throw std::runtime_error{"Error on line " + std::to_string(__LINE__) + " in file " + std::string(__FILE__)}; \
   assert(x);
 
+/// @brief gretl_assert_msg that prints message, line and file info before throwing in release and halting in debug
 #define gretl_assert_msg(x, msg_name_)                                                                           \
   if (!(x))                                                                                                      \
     throw std::runtime_error{"Error on line " + std::to_string(__LINE__) + " in file " + std::string(__FILE__) + \

@@ -1,3 +1,12 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+/**
+ * @file data_store.hpp
+ */
 
 #pragma once
 
@@ -17,7 +26,7 @@
 
 namespace gretl {
 
-using Int = unsigned int;
+using Int = unsigned int;  ///< gretl Int type
 
 struct StateBase;
 
@@ -28,6 +37,7 @@ struct UpstreamStates;
 
 struct DownstreamState;
 
+/// @brief ZeroDual function type
 template <typename T, typename D = T>
 using InitializeZeroDual = std::function<D(const T&)>;
 

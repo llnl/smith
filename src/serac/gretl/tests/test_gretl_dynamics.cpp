@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -13,7 +13,7 @@
 #include "gtest/gtest.h"
 #include "serac/gretl/checkpoint.hpp"
 #include "serac/gretl/state.hpp"
-#include "serac/gretl/data_store_for_testing.hpp"
+#include "serac/gretl/test_utils.hpp"
 #include "serac/gretl/vector_state.hpp"
 
 static constexpr size_t numParams = 4;

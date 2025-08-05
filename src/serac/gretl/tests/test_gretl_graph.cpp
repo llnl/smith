@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -10,7 +10,7 @@
 #include <iostream>
 #include "serac/gretl/vector_state.hpp"
 #include "serac/gretl/data_store.hpp"
-#include "serac/gretl/data_store_for_testing.hpp"
+#include "serac/gretl/test_utils.hpp"
 #include "gtest/gtest.h"
 
 using gretl::print;

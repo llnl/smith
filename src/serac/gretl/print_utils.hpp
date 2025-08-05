@@ -1,3 +1,13 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+/**
+ * @file print_utils.hpp
+ */
+
 #include <string>
 #include <fstream>
 #ifdef __GNUG__
@@ -33,22 +43,22 @@ std::string typeString(T& var)
 #endif
 }
 
-// Base case for the recursive variadic macro
+/// @brief tail case for the recursive variadic macro
 inline void print() { std::cout << std::endl; }
 
-// Recursive case for the variadic macro
+/// @brief recursive case for the variadic macro
 template <typename T, typename... Args>
 void print(T value, Args... args)
 {
-  // Find the current variable name in the comma-separated string
+  // find the current variable name in the comma-separated string
   std::cout << value << " ";
   print(args...);  // Recurse for remaining arguments
 }
 
-// Base case for the recursive variadic macro
+/// @brief tail case for the recursive variadic macro
 inline void printt() { std::cout << std::endl; }
 
-// Recursive case for the variadic macro
+/// @brief recursive case for the variadic macro
 template <typename T, typename... Args>
 void printt(T value, Args... args)
 {
@@ -57,10 +67,10 @@ void printt(T value, Args... args)
   printt(args...);  // Recurse for remaining arguments
 }
 
-// Base case for the recursive variadic macro
+/// @brief tail case for the recursive variadic macro
 inline void printtype() { std::cout << std::endl; }
 
-// Recursive case for the variadic macro
+/// @brief recursive case for the variadic macro
 template <typename T, typename... Args>
 void printtype(T value, Args... args)
 {
