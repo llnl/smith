@@ -25,12 +25,12 @@ struct Unit {};
 /// @brief checkpoint struct which tracks level and step per "Minimal Repetition Dynamic Checkpointing Algorithm for
 /// Unsteady Adjoint Calculation", Wang, et al. , 2009.
 struct Checkpoint {
-  size_t level;  //< level
-  size_t step;   //< step
+  size_t level;  ///< level
+  size_t step;   ///< step
   static constexpr size_t infinity()
   {
     return std::numeric_limits<size_t>::max();
-  }  //< The largest possible step and level value
+  }  ///< The largest possible step and level value
 };
 
 /// @brief comparison operator between two checkpoints to determine which is most disposable per the dynamic
@@ -111,6 +111,7 @@ struct CheckpointManager {
     return nextEraseStep;
   }
 
+  /// @brief return largest currently checkpointed step
   size_t last_checkpoint_step() const { return cps.begin()->step; }
 
   /// @brief erase
@@ -127,6 +128,8 @@ struct CheckpointManager {
     return false;
   }
 
+  /// @brief check if this step is currently checkpointed. This could potentially use performance optimization down the
+  /// way.
   bool contains_step(size_t stepIndex) const
   {
     for (auto& c : cps) {
@@ -152,8 +155,6 @@ struct CheckpointManager {
       20;  ///< The maximum number of non-persistent, not-in-scope states stored by the CheckpointManager
   std::set<Checkpoint> cps;  ///< Vector of checkpoints
 };
-
-///
 
 /// @brief interface to run forward with a linear graph, checkpoint, then automatically backpropagate the sensitivities
 /// given the reverse_callback jvp.

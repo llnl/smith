@@ -34,6 +34,7 @@ using InitializeZeroDual = std::function<D(const T&)>;
 /// @brief Default zero initializer,
 template <typename T, typename D = T>
 struct defaultInitializeZeroDual {
+  /// @brief functor operator
   D operator()(const T&) { return D{}; }
 };
 
@@ -45,6 +46,8 @@ class DataStore {
   /// @param maxStates maximum number of states the users is allowing to be allocated for the dynamic checkpointing.
   /// This does not include persistent states, nor states held in scope by the user.
   DataStore(size_t maxStates);
+
+  /// @brief virtual destructor
   virtual ~DataStore() {}
 
   /// @brief create a new state in the graph, store it, return it
@@ -73,9 +76,9 @@ class DataStore {
   /// @brief do internal checks of consistency with respect to checkpoints and
   bool check_validity() const;
 
-  // create a new state in the graph, store it, return it
-  template <typename T, typename D, typename InitDualFromValue>
-  State<T, D> create_empty_state(InitDualFromValue initial_zero_dual, const std::vector<StateBase>& upstreams)
+  /// @brief create a new state in the graph, store it, return it
+  template <typename T, typename D>
+  State<T, D> create_empty_state(InitializeZeroDual<T, D> initial_zero_dual, const std::vector<StateBase>& upstreams)
   {
     gretl_assert(!upstreams.empty());
     auto t = std::make_shared<std::any>(T{});
