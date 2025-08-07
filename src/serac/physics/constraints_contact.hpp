@@ -16,6 +16,7 @@
 #include <vector>
 #include "serac/physics/common.hpp"
 #include "serac/physics/field_types.hpp"
+#include "tribol/interface/tribol.hpp"
 
 namespace mfem {
 class Vector;
@@ -30,8 +31,12 @@ class FiniteElementState;
 class ContactConstraint : public Constraint {
  public:
   /// @brief base constructor takes the name of the physics
-  ContactConstraint(const mfem::ParMesh& mesh, const std::string& name) : Constraint(name), contact_(mesh), mesh_{mesh}
+  ContactConstraint(const mfem::ParMesh& mesh, const std::string& name, int interaction_id, 
+		  const std::set<int>& bdry_attr_surf1, const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts) : Constraint(name), contact_(mesh), mesh_{mesh}
   {
+     contact_opts.enforcement = ContactEnforcement::LagrangeMultiplier;
+     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts);
+     interaction_id_ = interaction_id;
   }
 
   /// @brief destructor
@@ -48,9 +53,17 @@ class ContactConstraint : public Constraint {
   mfem::Vector evaluate([[maybe_unused]] double time, [[maybe_unused]] double dt,
                         [[maybe_unused]] const std::vector<ConstFieldPtr>& fields)
   {
-    // TODO: complete me
-    mfem::Vector temp(1);
-    return temp;
+    // todo: use enum?
+    //       will all contact simulations involve the same fields?
+    int SHAPE = 0;
+    int DISP = 1;
+    contact_.setDisplacements(*fields[SHAPE], *fields[DISP]);
+    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
+    
+    // TODO: how to specify the right cycle?
+    int cycle = 0;
+    contact_.update(cycle, time, dt);
+    return contact_.mergedGaps(true);
   };
 
   /** @brief Interface for computing contact gap constraint Jacobian from a vector of serac::FiniteElementState*
@@ -65,30 +78,31 @@ class ContactConstraint : public Constraint {
                                                  [[maybe_unused]] const std::vector<ConstFieldPtr>& fields,
                                                  [[maybe_unused]] int direction) const
   {
-    // TODO: complete me
-    std::unique_ptr<mfem::HypreParMatrix> temp = nullptr;
-    return temp;
+    // todo: use enum?
+    //       will all contact simulations involve the same fields?
+    int SHAPE = 0;
+    int DISP = 1;
+    contact_.setDisplacements(*fields[SHAPE], *fields[DISP]);
+    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
+    
+    // TODO: how to specify the right cycle?
+    int cycle = 0;
+    contact_.update(cycle, time, dt);
+    auto J_contact = contact_.mergedJacobian();
+    J_contact->owns_blocks = false;
+    delete &J_contact->GetBlock(0, 0);
+    delete &J_contact->GetBlock(1, 0);
+    delete &J_contact->GetBlock(1, 1);
+    
+    auto dgdu = dynamic_cast<mfem::HypreParMatrix *>(&J_contact->GetBlock(0, 1));
+    std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
+    return dgdu_unique;
   };
-
-  /**
-   * @brief Add a mortar contact boundary condition
-   *
-   * @param interaction_id Unique identifier for the ContactInteraction
-   * @param bdry_attr_surf1 MFEM boundary attributes for the first surface
-   * @param bdry_attr_surf2 MFEM boundary attributes for the second surface
-   * @param contact_opts Defines contact method, enforcement, type, and penalty
-   */
-  void addContactInteraction(int interaction_id, const std::set<int>& bdry_attr_surf1,
-                             const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts)
-  {
-    // SLIC_ERROR_ROOT_IF(!is_quasistatic_, "Contact can only be applied to quasistatic problems.");
-    // SLIC_ERROR_ROOT_IF(order > 1, "Contact can only be applied to linear (order = 1) meshes.");
-    contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts);
-  }
 
  protected:
   /// @brief Class holding contact constraint data
-  ContactData contact_;
+  mutable ContactData contact_;
+  int interaction_id_;
 
  private:
   const mfem::ParMesh& mesh_;
