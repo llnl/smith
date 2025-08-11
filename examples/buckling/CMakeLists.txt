@@ -35,9 +35,8 @@ if(TRIBOL_FOUND AND ENZYME_FOUND AND PETSC_FOUND)
                     COPYONLY)
 
     serac_add_example_test(NAME            buckling_cylinder_mortar_contact
-                           COMMAND         buckling_cylinder --contact --contact-type 1 --preconditioner 6 -options_file examples/buckling/cylinder_petsc_options.yml
-                           NUM_MPI_TASKS   4
-                           WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
+                           COMMAND         buckling_cylinder --contact --contact-type 1 --preconditioner 6 -options_file ${PROJECT_BINARY_DIR}/examples/buckling/cylinder_petsc_options.yml
+                           NUM_MPI_TASKS   4)
 endif()
 
 install(
