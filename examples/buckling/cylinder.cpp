@@ -66,7 +66,7 @@ int main(int argc, char* argv[])
   LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
   linear_options.linear_solver = serac::LinearSolver::CG;
   linear_options.preconditioner = serac::Preconditioner::HypreAMG;
-  //linear_options.preconditioner = serac::Preconditioner::HypreJacobi;
+  // linear_options.preconditioner = serac::Preconditioner::HypreJacobi;
   linear_options.relative_tol = 1e-8;
   linear_options.absolute_tol = 1e-16;
   linear_options.max_iterations = 2000;
