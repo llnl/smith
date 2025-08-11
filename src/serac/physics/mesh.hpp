@@ -122,7 +122,8 @@ class Mesh {
   const serac::FiniteElementDual& shapeDisplacementDual() const;
 
  private:
-  /// @brief Sets up some initial domains: entire domain, entire boundary, and interior faces
+  /// @brief Sets up some initial domains: entire domain, entire boundary, and interior faces. Eventually we can read of
+  /// names/blocks/attributes from the mesh and create default domains.
   void createDomains();
 
   /// @brief string identifying mesh in the state manager
