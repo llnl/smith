@@ -63,8 +63,6 @@ class ContactConstraint : public Constraint {
   mfem::Vector evaluate([[maybe_unused]] double time, [[maybe_unused]] double dt,
                         [[maybe_unused]] const std::vector<ConstFieldPtr>& fields)
   {
-    // todo: use enum?
-    //       will all contact simulations involve the same fields?
     contact_.setDisplacements(*fields[Fields::SHAPE], *fields[Fields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
     
@@ -86,8 +84,6 @@ class ContactConstraint : public Constraint {
                                                  [[maybe_unused]] const std::vector<ConstFieldPtr>& fields,
                                                  [[maybe_unused]] int direction) const
   {
-    // todo: use enum?
-    //       will all contact simulations involve the same fields?
     contact_.setDisplacements(*fields[Fields::SHAPE], *fields[Fields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
     
