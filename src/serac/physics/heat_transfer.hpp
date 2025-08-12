@@ -186,7 +186,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
 
     // Create a pack of the primal field and parameter finite element spaces
     const mfem::ParFiniteElementSpace* test_space = &temperature_.space();
-    const mfem::ParFiniteElementSpace* shape_space = &shapeDisplacement().space();
+    const mfem::ParFiniteElementSpace* shape_space = &mesh_->shapeDisplacementSpace();
 
     std::array<const mfem::ParFiniteElementSpace*, sizeof...(parameter_space) + NUM_STATE_VARS> trial_spaces;
     trial_spaces[0] = &temperature_.space();

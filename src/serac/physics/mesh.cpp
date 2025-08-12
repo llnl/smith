@@ -104,21 +104,6 @@ const mfem::ParFiniteElementSpace& Mesh::shapeDisplacementSpace()
 
 serac::FiniteElementState Mesh::newShapeDisplacement() { return StateManager::shapeDisplacement(tag()); }
 
-serac::FiniteElementDual Mesh::newShapeDisplacementDual()
-{
-  int dim = mfem_mesh_->Dimension();
-  auto addPrefix = [](const std::string& prefix, const std::string& target) {
-    if (prefix.empty()) {
-      return target;
-    }
-    return prefix + "_" + target;
-  };
-  auto shape_disp_dual_name = addPrefix(tag(), "shape_displacement_dual");
-  if (dim == 2) {
-    return StateManager::newDual(H1<1, 2>{}, shape_disp_dual_name, tag());
-  } else {
-    return StateManager::newDual(H1<1, 3>{}, shape_disp_dual_name, tag());
-  }
-}
+serac::FiniteElementDual Mesh::newShapeDisplacementDual() { return StateManager::shapeDisplacementDual(tag()); }
 
 }  // namespace serac

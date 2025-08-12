@@ -349,6 +349,7 @@ class StateManager {
     named_states_.clear();
     named_duals_.clear();
     shape_displacements_.clear();
+    shape_displacement_duals_.clear();
     datacolls_.clear();
     output_dir_.clear();
     is_restart_ = false;
@@ -387,6 +388,17 @@ class StateManager {
    * @return The linear nodal shape displacement field
    */
   static FiniteElementState& shapeDisplacement(const std::string& mesh_tag);
+
+  /**
+   * @brief Get the shape displacement finite element dual
+   *
+   * This is the linear form which is dual to a vector-valued H1 field of order 1 (linear nodal displacements)
+   * representing sensitivities to perturbations of the underlying mesh. This is used for shape optimization problems.
+   *
+   * @param mesh_tag A string that uniquely identifies the mesh
+   * @return The linear nodal shape displacement dual
+   */
+  static FiniteElementDual& shapeDisplacementDual(const std::string& mesh_tag);
 
   /**
    * @brief loads the finite element states from a previously checkpointed cycle
@@ -471,6 +483,8 @@ class StateManager {
 
   /// @brief A map of the shape displacement fields for each stored mesh ID
   static std::unordered_map<std::string, std::unique_ptr<FiniteElementState>> shape_displacements_;
+  /// @brief A map of the shape displacement duals for each stored mesh ID
+  static std::unordered_map<std::string, std::unique_ptr<FiniteElementDual>> shape_displacement_duals_;
 
   /**
    * @brief Whether this simulation has been restarted from another simulation
