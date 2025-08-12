@@ -67,7 +67,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
           [&](auto i) { vector_residual_trial_spaces[i + 1] = input_mfem_spaces[i]; });
     }
 
-    const auto& shape_disp_space = mesh->newShapeDisplacement().space();
+    const auto& shape_disp_space = mesh->shapeDisplacementSpace();
 
     residual_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>>(
         &shape_disp_space, &output_mfem_space, trial_spaces);
