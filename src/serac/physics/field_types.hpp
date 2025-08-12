@@ -32,7 +32,7 @@ using ConstDualFieldPtr = FiniteElementDual const*;
 /// @brief Get a vector of FieldPtr or DualFieldPtr from a vector of shared_pointers to FiniteElementState or
 /// FiniteElementDual
 template <typename T>
-auto getFieldPointers(const std::vector<std::shared_ptr<T>>& states, const std::vector<std::shared_ptr<T>>& params)
+auto getFieldPointers(std::vector<std::shared_ptr<T>>& states, std::vector<std::shared_ptr<T>>& params)
 {
   static_assert(std::is_same_v<T, FiniteElementState> || std::is_same_v<T, FiniteElementDual>,
                 "Type must be either FiniteElementState or FiniteElementDual");
@@ -41,6 +41,20 @@ auto getFieldPointers(const std::vector<std::shared_ptr<T>>& states, const std::
     pointers.push_back(t.get());
   }
   for (auto& t : params) {
+    pointers.push_back(t.get());
+  }
+  return pointers;
+}
+
+/// @brief Get a vector of FieldPtr or DualFieldPtr from a vector of shared_pointers to FiniteElementState or
+/// FiniteElementDual
+template <typename T>
+auto getFieldPointers(std::vector<std::shared_ptr<T>>& states)
+{
+  static_assert(std::is_same_v<T, FiniteElementState> || std::is_same_v<T, FiniteElementDual>,
+                "Type must be either FiniteElementState or FiniteElementDual");
+  std::vector<T*> pointers;
+  for (auto& t : states) {
     pointers.push_back(t.get());
   }
   return pointers;
@@ -62,6 +76,29 @@ auto getFieldPointers(std::vector<T>& states, std::vector<T>& params)
   return pointers;
 }
 
+/// @brief Get a vector of FieldPtr or DualFieldPtr from a vector of FiniteElementState or FiniteElementDual
+template <typename T>
+auto getFieldPointers(std::vector<T>& states)
+{
+  static_assert(std::is_same_v<T, FiniteElementState> || std::is_same_v<T, FiniteElementDual>,
+                "Type must be either FiniteElementState or FiniteElementDual");
+  std::vector<T*> pointers;
+  for (auto& t : states) {
+    pointers.push_back(&t);
+  }
+  return pointers;
+}
+
+/// @brief Get a vector of FieldPtr or DualFieldPtr from a single shared_ptr<FiniteElementState> or
+/// shared_ptr<FiniteElementDual>
+template <typename T>
+auto getFieldPointers(std::shared_ptr<T>& state)
+{
+  static_assert(std::is_same_v<T, FiniteElementState> || std::is_same_v<T, FiniteElementDual>,
+                "Type must be either FiniteElementState or FiniteElementDual");
+  return std::vector<T*>{state.get()};
+}
+
 /// @brief Get a vector of FieldPtr or DualFieldPtr from a single FiniteElementState or FiniteElementDual
 template <typename T>
 auto getFieldPointers(T& state)
@@ -74,7 +111,8 @@ auto getFieldPointers(T& state)
 /// @brief Get a vector of ConstFieldPtr or ConstDualFieldPtr from a vector of shared_pointers to FiniteElementState or
 /// FiniteElementDual
 template <typename T>
-auto getConstFieldPointers(const std::vector<std::shared_ptr<T>>& states, const std::vector<std::shared_ptr<T>>& params)
+auto getConstFieldPointers(const std::vector<std::shared_ptr<T>>& states,
+                           const std::vector<std::shared_ptr<T>>& params = {})
 {
   static_assert(std::is_same_v<T, FiniteElementState> || std::is_same_v<T, FiniteElementDual>,
                 "Type must be either FiniteElementState or FiniteElementDual");
@@ -102,6 +140,16 @@ auto getConstFieldPointers(const std::vector<T>& states, const std::vector<T>& p
     pointers.push_back(&t);
   }
   return pointers;
+}
+
+/// @brief Get a vector of ConstFieldPtr or ConstDualFieldPtr from a single shared_ptr<FiniteElementState> or
+/// shared_ptr<FiniteElementDual>
+template <typename T>
+auto getConstFieldPointers(const std::shared_ptr<T>& state)
+{
+  static_assert(std::is_same_v<T, FiniteElementState> || std::is_same_v<T, FiniteElementDual>,
+                "Type must be either FiniteElementState or FiniteElementDual");
+  return std::vector<T const*>{state.get()};
 }
 
 /// @brief Get a vector of ConstFieldPtr or ConstDualFieldPtr from a single FiniteElementState or FiniteElementDual

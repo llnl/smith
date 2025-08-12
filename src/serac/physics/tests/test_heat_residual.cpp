@@ -40,6 +40,9 @@ struct ResidualFixture : public testing::Test {
     serac::FiniteElementState conductivity_offset =
         serac::StateManager::newState(ParamSpace{}, "conductivity_offset", mesh->tag());
 
+    shape_disp = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
+    shape_disp_vjp = std::make_unique<serac::FiniteElementDual>(mesh->newShapeDisplacementDual());
+
     states = {temperature, temperature_rate};
     params = {conductivity_offset};
 
@@ -47,7 +50,7 @@ struct ResidualFixture : public testing::Test {
       state_duals.push_back(serac::FiniteElementDual(s.space(), s.name() + "_dual"));
     }
     for (auto p : params) {
-      state_params.push_back(serac::FiniteElementDual(p.space(), p.name() + "_dual"));
+      param_duals.push_back(serac::FiniteElementDual(p.space(), p.name() + "_dual"));
     }
 
     state_tangents = states;
@@ -96,11 +99,14 @@ struct ResidualFixture : public testing::Test {
   std::shared_ptr<serac::Mesh> mesh;
   std::shared_ptr<serac::Residual> residual;
 
+  std::unique_ptr<serac::FiniteElementState> shape_disp;
+  std::unique_ptr<serac::FiniteElementDual> shape_disp_vjp;
+
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
 
   std::vector<serac::FiniteElementDual> state_duals;
-  std::vector<serac::FiniteElementDual> state_params;
+  std::vector<serac::FiniteElementDual> param_duals;
 
   std::vector<serac::FiniteElementState> state_tangents;
   std::vector<serac::FiniteElementState> param_tangents;
@@ -111,7 +117,7 @@ TEST_F(ResidualFixture, VjpConsistency)
   auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[HeatResidualT::TEMPERATURE].space(), "residual");
-  res_vector = residual->residual(time, dt, input_fields);
+  res_vector = residual->residual(time, dt, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {
@@ -123,14 +129,15 @@ TEST_F(ResidualFixture, VjpConsistency)
   // test vjp
   serac::FiniteElementState v(res_vector.space(), "v");
   pseudoRand(v);
-  auto field_vjps = getFieldPointers(state_duals, state_params);
+  auto field_vjps = getFieldPointers(state_duals, param_duals);
 
-  residual->vjp(time, dt, input_fields, getConstFieldPointers(v), field_vjps);
+  residual->vjp(time, dt, shape_disp.get(), input_fields, {}, getConstFieldPointers(v), shape_disp_vjp.get(),
+                field_vjps, {});
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
     serac::FiniteElementState vjp = *input_fields[i];
     vjp = 0.0;
-    auto J = residual->jacobian(time, dt, input_fields, jacobian_weights(i));
+    auto J = residual->jacobian(time, dt, shape_disp.get(), input_fields, jacobian_weights(i));
     J->MultTranspose(v, vjp);
     if (i == HeatResidualT::TEMPERATURE) vjp += 1.0;  // make sure vjp uses +=
     EXPECT_NEAR(vjp.Norml2(), field_vjps[i]->Norml2(), 1e-12);
@@ -142,7 +149,7 @@ TEST_F(ResidualFixture, JvpConsistency)
   auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[HeatResidualT::TEMPERATURE].space(), "residual");
-  res_vector = residual->residual(time, dt, input_fields);
+  res_vector = residual->residual(time, dt, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {
@@ -169,9 +176,9 @@ TEST_F(ResidualFixture, JvpConsistency)
   auto field_tangents = getFieldPointers(state_tangents, param_tangents);
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
-    auto J = residual->jacobian(time, dt, input_fields, jacobian_weights(i));
+    auto J = residual->jacobian(time, dt, shape_disp.get(), input_fields, jacobian_weights(i));
     J->Mult(*field_tangents[i], jvp_slow);
-    residual->jvp(time, dt, input_fields, selectStates(i), jvps);
+    residual->jvp(time, dt, shape_disp.get(), input_fields, {}, nullptr, selectStates(i), {}, jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 }

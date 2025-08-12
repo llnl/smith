@@ -67,7 +67,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
           [&](auto i) { vector_residual_trial_spaces[i + 1] = input_mfem_spaces[i]; });
     }
 
-    auto& shape_disp_space = mesh_->shapeDisplacement().space();
+    const auto& shape_disp_space = mesh->newShapeDisplacement().space();
 
     residual_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>>(
         &shape_disp_space, &output_mfem_space, trial_spaces);
@@ -169,19 +169,21 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /// @overload
-  mfem::Vector residual(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+  mfem::Vector residual(double time, double dt, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+                        [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {},
                         int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
     dt_ = dt;
-    auto ret = (*residual_)(time, mesh_->shapeDisplacement(), *fields[input_indices]...);
+    auto ret = (*residual_)(time, *shape_disp, *fields[input_indices]...);
     return ret;
   }
 
   /// @overload
-  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                 const std::vector<double>& jacobian_weights,
-                                                 int block_row = 0) const override
+  std::unique_ptr<mfem::HypreParMatrix> jacobian(
+      double time, double dt, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+      const std::vector<double>& jacobian_weights,
+      [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}, int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
 
@@ -202,12 +204,12 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       }
     };
 
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
-                                  &mesh_->shapeDisplacement(), fields);
+    auto jacs =
+        jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time, shape_disp, fields);
 
     for (size_t input_col = 0; input_col < jacobian_weights.size(); ++input_col) {
       if (jacobian_weights[input_col] != 0.0) {
-        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, &mesh_->shapeDisplacement(), fields));
+        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, shape_disp, fields));
         addToJ(jacobian_weights[input_col], assemble(K));
       }
     }
@@ -216,7 +218,10 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /// @overload
-  void jvp(double time, double dt, const std::vector<ConstFieldPtr>& fields, const std::vector<ConstFieldPtr>& v_fields,
+  void jvp(double time, double dt, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+           [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
+           [[maybe_unused]] ConstFieldPtr v_shape_disp, const std::vector<ConstFieldPtr>& v_fields,
+           [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& v_quad_fields,
            const std::vector<DualFieldPtr>& jvp_reactions) const override
   {
     SLIC_ERROR_IF(v_fields.size() != fields.size(),
@@ -224,22 +229,25 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     SLIC_ERROR_IF(jvp_reactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
-                                  &mesh_->shapeDisplacement(), fields);
+    auto jacs =
+        jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time, shape_disp, fields);
 
     *jvp_reactions[0] = 0.0;
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (v_fields[input_col] != nullptr) {
-        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, &mesh_->shapeDisplacement(), fields));
+        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, shape_disp, fields));
         K.AddMult(*v_fields[input_col], *jvp_reactions[0]);
       }
     }
   }
 
   /// @overload
-  void vjp(double time, double dt, const std::vector<ConstFieldPtr>& fields, const std::vector<ConstFieldPtr>& v_fields,
-           const std::vector<DualFieldPtr>& vjp_sensitivities) const override
+  void vjp(double time, double dt, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+           [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
+           const std::vector<ConstFieldPtr>& v_fields, DualFieldPtr vjp_shape_disp_sensitivity,
+           const std::vector<DualFieldPtr>& vjp_sensitivities,
+           [[maybe_unused]] const std::vector<QuadratureFieldPtr>& vjp_quad_field_sensitivities) const override
   {
     SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
@@ -247,18 +255,18 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
     dt_ = dt;
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
-                                           &mesh_->shapeDisplacement(), v_fields[0], fields);
+                                           shape_disp, v_fields[0], fields);
     {
-      auto shape_vjp = serac::get<DERIVATIVE>((*v_residual_)(DifferentiateWRT<0>{}, time, mesh_->shapeDisplacement(),
-                                                             *v_fields[0], *fields[input_indices]...));
+      auto shape_vjp = serac::get<DERIVATIVE>(
+          (*v_residual_)(DifferentiateWRT<0>{}, time, *shape_disp, *v_fields[0], *fields[input_indices]...));
       auto shape_vjp_vector = assemble(shape_vjp);
-      mesh_->shapeDisplacementDual() += *shape_vjp_vector;
+      //*shape_disp_sensitivity += *shape_vjp_vector;
+      *vjp_shape_disp_sensitivity += 0.0;  // MRT test *shape_vjp_vector;
     }
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-        auto vecJac =
-            serac::get<DERIVATIVE>(vecJacs[input_col](time, &mesh_->shapeDisplacement(), v_fields[0], fields));
+        auto vecJac = serac::get<DERIVATIVE>(vecJacs[input_col](time, shape_disp, v_fields[0], fields));
         auto vecJacMfemVector = assemble(vecJac);
         *vjp_sensitivities[input_col] += *vecJacMfemVector;
       }

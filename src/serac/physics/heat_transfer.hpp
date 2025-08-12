@@ -185,8 +185,8 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
     adjoints_.push_back(&adjoint_temperature_);
 
     // Create a pack of the primal field and parameter finite element spaces
-    mfem::ParFiniteElementSpace* test_space = &temperature_.space();
-    mfem::ParFiniteElementSpace* shape_space = &mesh_->shapeDisplacement().space();
+    const mfem::ParFiniteElementSpace* test_space = &temperature_.space();
+    const mfem::ParFiniteElementSpace* shape_space = &shapeDisplacement().space();
 
     std::array<const mfem::ParFiniteElementSpace*, sizeof...(parameter_space) + NUM_STATE_VARS> trial_spaces;
     trial_spaces[0] = &temperature_.space();
@@ -216,7 +216,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
     u_.SetSize(true_size);
     u_predicted_.SetSize(true_size);
 
-    mesh_->shapeDisplacement() = 0.0;
+    shape_displacement_ = 0.0;
     initializeThermalStates();
   }
 
@@ -930,7 +930,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
 
     auto drdshape_mat = assemble(drdshape);
 
-    drdshape_mat->MultTranspose(adjoint_temperature_, shapeDisplacementSensitivity());
+    drdshape_mat->MultTranspose(adjoint_temperature_, shape_displacement_dual_);
 
     return shapeDisplacementSensitivity();
   }
@@ -1030,13 +1030,12 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
   /// @brief Array functions computing the derivative of the residual with respect to each given parameter
   /// @note This is needed so the user can ask for a specific sensitivity at runtime as opposed to it being a
   /// template parameter.
-  std::array<std::function<decltype((*residual_)(DifferentiateWRT<1>{}, 0.0, mesh_->shapeDisplacement(), temperature_,
+  std::array<std::function<decltype((*residual_)(DifferentiateWRT<1>{}, 0.0, shape_displacement_, temperature_,
                                                  temperature_rate_, *parameters_[parameter_indices].state...))(double)>,
              sizeof...(parameter_indices)>
       d_residual_d_ = {[&](double TIME) {
-        return (*residual_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, TIME,
-                            mesh_->shapeDisplacement(), temperature_, temperature_rate_,
-                            *parameters_[parameter_indices].state...);
+        return (*residual_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, TIME, shape_displacement_,
+                            temperature_, temperature_rate_, *parameters_[parameter_indices].state...);
       }...};
 };
 

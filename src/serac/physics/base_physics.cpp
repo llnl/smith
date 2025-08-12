@@ -23,6 +23,8 @@ BasePhysics::BasePhysics(std::string physics_name, std::shared_ptr<serac::Mesh> 
     : name_(physics_name),
       mesh_(mesh),
       comm_(mesh_->getComm()),
+      shape_displacement_(mesh_->newShapeDisplacement()),
+      shape_displacement_dual_(mesh_->newShapeDisplacementDual()),
       bcs_(mesh_->mfemParMesh()),
       checkpoint_to_disk_(checkpoint_to_disk)
 {
@@ -64,7 +66,7 @@ void BasePhysics::initializeBasePhysicsStates(int cycle, double time)
   min_cycle_ = cycle;
   ode_time_point_ = time;
 
-  mesh_->shapeDisplacementDual() = 0.0;
+  shape_displacement_dual_ = 0.0;
 
   for (auto& p : parameters_) {
     *p.sensitivity = 0.0;
@@ -91,14 +93,14 @@ void BasePhysics::setParameter(const size_t parameter_index, const FiniteElement
   *parameters_[parameter_index].state = parameter_state;
 }
 
-const FiniteElementState& BasePhysics::shapeDisplacement() const { return mesh_->shapeDisplacement(); }
+const FiniteElementState& BasePhysics::shapeDisplacement() const { return shape_displacement_; }
 
 void BasePhysics::setShapeDisplacement(const FiniteElementState& shape_displacement)
 {
-  mesh_->shapeDisplacement() = shape_displacement;
+  shape_displacement_ = shape_displacement;
 }
 
-FiniteElementDual& BasePhysics::shapeDisplacementSensitivity() const { return mesh_->shapeDisplacementDual(); }
+const FiniteElementDual& BasePhysics::shapeDisplacementSensitivity() const { return shape_displacement_dual_; }
 
 FiniteElementDual BasePhysics::computeTimestepSensitivity(size_t parameter_index)
 {
@@ -133,7 +135,9 @@ void BasePhysics::CreateParaviewDataCollection() const
 
   // Register dual fields. These don't have gridfunction views already, so create them
 
-  shape_sensitivity_grid_function_ = std::make_unique<mfem::ParGridFunction>(&(shapeDisplacementSensitivity().space()));
+  const mfem::ParFiniteElementSpace& shape_sensitivity_space = shapeDisplacementSensitivity().space();
+  shape_sensitivity_grid_function_ =
+      std::make_unique<mfem::ParGridFunction>(&const_cast<mfem::ParFiniteElementSpace&>(shape_sensitivity_space));
   paraview_dc_->RegisterField(shapeDisplacementSensitivity().name(), shape_sensitivity_grid_function_.get());
 
   for (const FiniteElementDual* dual : duals_) {

@@ -38,30 +38,34 @@ class ScalarObjective {
    *
    * @param time time
    * @param dt  time step
-   * @param fields vector of serac::FiniteElementState* as arguments to the residual
+   * @param shape_disp shape displacement const serac::FiniteElementState*
+   * @param fields vector of serac::FiniteElementState*
    * @return double which is the scalar objective value
    */
-  virtual double evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields) const = 0;
+  virtual double evaluate(double time, double dt, ConstFieldPtr shape_disp,
+                          const std::vector<ConstFieldPtr>& fields) const = 0;
 
   /** @brief Virtual interface for computing objective gradient from a vector of serac::FiniteElementState*
    *
    * @param time time
    * @param dt time step
-   * @param fields vector of serac::FiniteElementState* as arguments to the residual
+   * @param shape_disp shape displacement const serac::FiniteElementState*
+   * @param fields vector of serac::FiniteElementState*
    * @param field_ordinal index for which field to take the gradient with respect to
    * @return mfem::Vector
    */
-  virtual mfem::Vector gradient(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                int field_ordinal) const = 0;
+  virtual mfem::Vector gradient(double time, double dt, ConstFieldPtr shape_disp,
+                                const std::vector<ConstFieldPtr>& fields, int field_ordinal) const = 0;
 
   /** @brief Virtual interface for computing objective gradient with respect to the mesh coordinates
    *
    * @param time time
    * @param dt time step
-   * @param fields vector of serac::FiniteElementState* as arguments to the residual
+   * @param shape_disp shape displacement const serac::FiniteElementState*
+   * @param fields vector of const serac::FiniteElementState*
    * @return mfem::Vector
    */
-  virtual mfem::Vector mesh_coordinate_gradient(double time, double dt,
+  virtual mfem::Vector mesh_coordinate_gradient(double time, double dt, ConstFieldPtr shape_disp,
                                                 const std::vector<ConstFieldPtr>& fields) const = 0;
 
   /// @brief name

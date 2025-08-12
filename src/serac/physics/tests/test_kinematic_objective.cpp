@@ -73,7 +73,7 @@ struct ConstrainedResidualFixture : public testing::Test {
     mass_objective.addBodyIntegral(serac::DependsOn<1>{}, mesh->entireBodyName(),
                                    [](double /*time*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
 
-    double mass = mass_objective.evaluate(time, dt, objective_states);
+    double mass = mass_objective.evaluate(time, dt, shape_disp.get(), objective_states);
 
     serac::tensor<double, dim> initial_cg;
 
@@ -85,7 +85,7 @@ struct ConstrainedResidualFixture : public testing::Test {
               /*time*/,
               auto X, auto U,
               auto RHO) { return (get<serac::VALUE>(X)[i] + get<serac::VALUE>(U)[i]) * get<serac::VALUE>(RHO); });
-      initial_cg[i] = cg_objective->evaluate(time, dt, objective_states) / mass;
+      initial_cg[i] = cg_objective->evaluate(time, dt, shape_disp.get(), objective_states) / mass;
       constraint_evaluators.push_back(cg_objective);
     }
 
@@ -117,6 +117,7 @@ struct ConstrainedResidualFixture : public testing::Test {
     mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian3D(6, 4, 4, element_shape, xlength, ylength, zlength),
                                          "this_mesh_name", 0, 0);
 
+    shape_disp = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
     serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
     serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
     serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
@@ -138,6 +139,7 @@ struct ConstrainedResidualFixture : public testing::Test {
     });
   }
 
+  std::unique_ptr<serac::FiniteElementState> shape_disp;
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
 
@@ -154,16 +156,16 @@ TEST_F(ConstrainedResidualFixture, CanComputeResidualObjectivesAndTheirGradients
   auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = residual->residual(time, dt, input_fields);
+  res_vector = residual->residual(time, dt, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto objective_states = {input_fields[DISP], input_fields[DENSITY]};
   for (const auto& c : constraints) {
-    ASSERT_NE(0.0, c->evaluate(time, dt, objective_states));
+    ASSERT_NE(0.0, c->evaluate(time, dt, shape_disp.get(), objective_states));
     for (size_t f_ordinal = 0; f_ordinal < objective_states.size(); ++f_ordinal) {
-      ASSERT_NE(0.0, c->gradient(time, dt, objective_states, int(f_ordinal)).Norml2());
+      ASSERT_NE(0.0, c->gradient(time, dt, shape_disp.get(), objective_states, int(f_ordinal)).Norml2());
     }
-    ASSERT_NE(0.0, c->mesh_coordinate_gradient(time, dt, objective_states).Norml2());
+    ASSERT_NE(0.0, c->mesh_coordinate_gradient(time, dt, shape_disp.get(), objective_states).Norml2());
   }
 }
 
