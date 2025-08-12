@@ -20,7 +20,7 @@ Uberenv helps by doing the following:
 * Pulls a blessed version of Spack locally
 * If you are on a known operating system (like TOSS4), we have defined Spack configuration files
   to keep Spack from building the world
-* Installs our Spack packages into the local Spack
+* Installs our Spack packages into the local Spack Environment
 * Simplifies whole dependency build into one command
 
 Uberenv will create a directory containing a Spack instance with the required Serac
