@@ -48,7 +48,7 @@ class Residual {
    * @param dt time step
    * @param shape_disp serac::FiniteElementState*, change in model coordinates relative to the initially read in mesh
    * @param fields vector of serac::FiniteElementState*
-   * @param quad_fields vector of QuadratureField
+   * @param quad_fields vector of ConstQuadratureFieldPtr
    * @param block_row integer which specifies which row of a block system to get the residual for, defaults to 0
    * @return mfem::Vector
    */
@@ -64,6 +64,7 @@ class Residual {
    * @param shape_disp serac::FiniteElementState*, change in model coordinates relative to the initially read in mesh
    * @param fields vector of serac::FiniteElementState*
    * @param field_argument_tangents specifies the weighting of the residual derivative with respect to each field
+   * @param quad_fields vector of ConstQuadratureFieldPtr
    * @param block_row specifies which block row of the residual to compute the jacobian for
    * the call will error if a non-zero argument_tangent weight is provided for two input fields with different sizes
    * @return std::unique_ptr<mfem::HypreParMatrix> returns sum_j d{r}_i/d{fields}_j * argument_tangents[j], where
@@ -81,6 +82,7 @@ class Residual {
    * @param dt time step
    * @param shape_disp serac::FiniteElementState*, change in model coordinates relative to the initially read in mesh
    * @param fields vector of serac::FiniteElementState*
+   * @param quad_fields vector of ConstQuadratureFieldPtr
    * @param v_shape_disp shape_displacement tangent
    * @param v_fields field tangents, right hand side 'v' fields
    * @param v_quad_fields quadrature_field_tangents
@@ -99,6 +101,7 @@ class Residual {
    * @param dt time step
    * @param shape_disp serac::FiniteElementState*, change in model coordinates relative to the initially read in mesh
    * @param fields vector of serac::FiniteElementState*
+   * @param quad_fields vector of ConstQuadratureFieldPtr
    * @param v_fields left hand side 'v' fields
    * @param vjp_shape_disp_sensitivity jvp for shape_displacement: v_fields[i] * d{r}_i / d{shape_disp}
    * @param vjp_sensitivities output jvps, 1 per input field: v_fields[i] * d{r}_i / d{fields}_j
