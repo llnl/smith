@@ -225,7 +225,7 @@ Spack builds.
     ./scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --setup-and-env-only
 
 This command will create a Spack environment file, ``spack.yaml``, where you ran the above command.
-If you want to use Clang as your compiler. Alter the following section in that file, by changing
+If you want to use Clang as your compiler, alter the following section in that file by changing
 ``null`` in the ``f77`` and ``fc`` lines to ``/usr/bin/gfortran``:
 
 .. code-block:: yaml
