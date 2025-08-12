@@ -141,7 +141,7 @@ This is also useful for a few additional packages:
     should be ``--spec="^openmpi@5 %clang@19"`` and to build with devtools and profiling enabled,
     change the spec to ``"+devtools+profiling ^openmpi@5 %clang@19"``
 
-Optionally, you can install the developer tools via ```pip``. This step is only required if you wish to use Serac's developer tools.
+Optionally, you can install the developer tools via ``pip``. This step is only required if you wish to use Serac's developer tools.
 In order to use Python devtools, you will need to create a Python venv. This is much more reliable than having Spack install 20+ Python packages.
 In this example, we are using the builtin Python in ``/usr/bin``, but it is possible to use a version installed from Homebrew or elsewhere.
 
