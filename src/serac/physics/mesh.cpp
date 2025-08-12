@@ -15,7 +15,7 @@ namespace serac {
 
 Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_serial, int refine_parallel,
            MPI_Comm comm)
-    : mesh_tag_(meshtag), shape_disp_space_(newShapeDisplacement().space())
+    : mesh_tag_(meshtag)
 {
   auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel, comm);
   mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
@@ -23,15 +23,14 @@ Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_s
 }
 
 Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int refine_parallel, MPI_Comm comm)
-    : mesh_tag_(meshtag), shape_disp_space_(newShapeDisplacement().space())
+    : mesh_tag_(meshtag)
 {
   auto meshtmp = serac::mesh::refineAndDistribute(std::move(mesh), refine_serial, refine_parallel, comm);
   mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
   createDomains();
 }
 
-Mesh::Mesh(mfem::ParMesh&& mesh, const std::string& meshtag)
-    : mesh_tag_(meshtag), shape_disp_space_(newShapeDisplacement().space())
+Mesh::Mesh(mfem::ParMesh&& mesh, const std::string& meshtag) : mesh_tag_(meshtag)
 {
   auto meshtmp = std::make_unique<mfem::ParMesh>(std::move(mesh));
   meshtmp->EnsureNodes();
@@ -96,6 +95,11 @@ serac::Domain& Mesh::addDomainOfBodyElements(const std::string& domain_name,
                 axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
   domains_.emplace(domain_name, Domain::ofElements(*mfem_mesh_, func));
   return domain(domain_name);
+}
+
+const mfem::ParFiniteElementSpace& Mesh::shapeDisplacementSpace()
+{
+  return serac::StateManager::shapeDisplacement(tag()).space();
 }
 
 serac::FiniteElementState Mesh::newShapeDisplacement() { return StateManager::shapeDisplacement(tag()); }

@@ -109,6 +109,7 @@ void StateManager::initialize(axom::sidre::DataStore& ds, const std::string& out
 
 FiniteElementState& StateManager::shapeDisplacement(const std::string& mesh_tag)
 {
+  printf("try go get\n");
   return *shape_displacements_[mesh_tag];
 }
 

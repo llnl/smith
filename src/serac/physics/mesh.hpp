@@ -110,7 +110,7 @@ class Mesh {
                                          std::function<bool(std::vector<vec2>, int)> func);
 
   /// @brief get space associated with shape displacement
-  const mfem::ParFiniteElementSpace& shapeDisplacementSpace() { return shape_disp_space_; }
+  const mfem::ParFiniteElementSpace& shapeDisplacementSpace();
 
   /// @brief create new shape displacement
   serac::FiniteElementState newShapeDisplacement();
@@ -128,9 +128,6 @@ class Mesh {
 
   /// @brief parallel mfem mesh
   mfem::ParMesh* mfem_mesh_;
-
-  /// @brief parallel mfem mesh
-  mfem::ParFiniteElementSpace shape_disp_space_;
 
   /// @brief map from registered domain name to the domain instance
   mutable std::map<std::string, serac::Domain> domains_;
