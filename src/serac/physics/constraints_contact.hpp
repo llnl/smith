@@ -23,6 +23,16 @@ class Vector;
 class HypreParMatrix;
 }  // namespace mfem
 
+enum Fields
+{
+   SHAPE,
+   DISP,
+   VELO,
+   ACCEL
+};
+
+
+
 namespace serac {
 
 class FiniteElementState;
@@ -55,9 +65,7 @@ class ContactConstraint : public Constraint {
   {
     // todo: use enum?
     //       will all contact simulations involve the same fields?
-    int SHAPE = 0;
-    int DISP = 1;
-    contact_.setDisplacements(*fields[SHAPE], *fields[DISP]);
+    contact_.setDisplacements(*fields[Fields::SHAPE], *fields[Fields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
     
     // TODO: how to specify the right cycle?
@@ -80,9 +88,7 @@ class ContactConstraint : public Constraint {
   {
     // todo: use enum?
     //       will all contact simulations involve the same fields?
-    int SHAPE = 0;
-    int DISP = 1;
-    contact_.setDisplacements(*fields[SHAPE], *fields[DISP]);
+    contact_.setDisplacements(*fields[Fields::SHAPE], *fields[Fields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
     
     // TODO: how to specify the right cycle?
@@ -105,7 +111,7 @@ class ContactConstraint : public Constraint {
   int interaction_id_;
 
  private:
-  const mfem::ParMesh& mesh_;
+  [[maybe_unused]] const mfem::ParMesh& mesh_;
 };
 
 }  // namespace serac
