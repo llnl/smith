@@ -14,6 +14,7 @@
 
 #include <vector>
 #include <string>
+#include <memory>
 #include "serac/physics/common.hpp"
 #include "serac/physics/field_types.hpp"
 

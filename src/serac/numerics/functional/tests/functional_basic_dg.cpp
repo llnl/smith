@@ -33,7 +33,7 @@ void L2_test(std::string meshfile)
   // int k = 0;
   // while (k == 0);
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 0);
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 1);
 
   auto fec = mfem::L2_FECollection(p, dim, mfem::BasisType::GaussLobatto);
   mfem::ParFiniteElementSpace fespace(mesh.get(), &fec, dim, serac::ordering);
@@ -69,8 +69,8 @@ void L2_test(std::string meshfile)
 
   double t = 0.0;
 
-  auto value = residual(t, U);
-  // check_gradient(residual, t, U);
+  // auto value = residual(t, U);
+  check_gradient(residual, t, U);
 }
 
 TEST(basic, L2_test_tris_and_quads_linear) { L2_test<2, 1>(SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh"); }
@@ -195,9 +195,19 @@ TEST(basic, L2_mixed_scalar_test_tris_and_quads_linear)
   L2_scalar_valued_test<2, 1>(SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh");
 }
 
+TEST(basic, L2_mixed_scalar_test_tris_and_quads_quadratic)
+{
+  L2_scalar_valued_test<2, 2>(SERAC_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh");
+}
+
 TEST(basic, L2_mixed_scalar_test_tets_and_hexes_linear)
 {
   L2_scalar_valued_test<3, 1>(SERAC_REPO_DIR "/data/meshes/patch3D_tets_and_hexes.mesh");
+}
+
+TEST(basic, L2_mixed_scalar_test_tets_and_hexes_quadratic)
+{
+  L2_scalar_valued_test<3, 2>(SERAC_REPO_DIR "/data/meshes/patch3D_tets_and_hexes.mesh");
 }
 
 int main(int argc, char* argv[])

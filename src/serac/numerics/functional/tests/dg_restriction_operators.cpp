@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include "serac/mesh_utils/mesh_utils_base.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"
 #include "serac/numerics/functional/functional.hpp"
@@ -286,13 +287,14 @@ void parametrized_test(int permutation)
   constexpr mfem::Geometry::Type face_geom = face_type(geom);
   constexpr int dim = dimension_of(geom);
 
-  mfem::Mesh mesh = generate_permuted_mesh(geom, permutation);
+  mfem::Mesh bmesh = generate_permuted_mesh(geom, permutation);
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
-  Domain interior_faces = InteriorFaces(mesh);
+  Domain interior_faces = InteriorFaces(*mesh);
 
   // each one of these meshes should have two elements
   // and a single "face" that separates them
-  EXPECT_EQ(mesh.GetNE(), 2);
+  EXPECT_EQ(mesh->GetNE(), 2);
 
   std::vector<int> face_ids;
 
@@ -318,13 +320,13 @@ void parametrized_test(int permutation)
   auto Hcurl_fec = std::make_unique<mfem::ND_FECollection>(polynomial_order, dim);
   auto L2_fec = std::make_unique<mfem::L2_FECollection>(polynomial_order, dim, mfem::BasisType::GaussLobatto);
 
-  auto H1_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, H1_fec.get());
-  auto Hcurl_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, Hcurl_fec.get());
-  auto L2_fes = std::make_unique<mfem::FiniteElementSpace>(&mesh, L2_fec.get());
+  auto H1_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), H1_fec.get());
+  auto Hcurl_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), Hcurl_fec.get());
+  auto L2_fes = std::make_unique<mfem::ParFiniteElementSpace>(mesh.get(), L2_fec.get());
 
-  mfem::GridFunction H1_gf(H1_fes.get());
-  mfem::GridFunction Hcurl_gf(Hcurl_fes.get());
-  mfem::GridFunction L2_gf(L2_fes.get());
+  mfem::ParGridFunction H1_gf(H1_fes.get());
+  mfem::ParGridFunction Hcurl_gf(Hcurl_fes.get());
+  mfem::ParGridFunction L2_gf(L2_fes.get());
 
   mfem::FunctionCoefficient sfunc(scalar_func_mfem<dim>);
   mfem::VectorFunctionCoefficient vfunc(dim, vector_func_mfem<dim>);
@@ -351,12 +353,7 @@ void parametrized_test(int permutation)
 
   using space = L2<polynomial_order>;
 
-  auto pmesh = mesh::refineAndDistribute(std::move(mesh), 0);
-  Domain pinterior_faces = InteriorFaces(*pmesh);
-
-  auto L2_pfes = mfem::ParFiniteElementSpace(pmesh.get(), L2_fec.get());
-
-  Functional<double(space)> r({&L2_pfes});
+  Functional<double(space)> r({L2_fes.get()});
 
   r.AddInteriorFaceIntegral(
       Dimension<dim - 1>{}, DependsOn<0>{},
@@ -369,10 +366,10 @@ void parametrized_test(int permutation)
         auto difference = rho1 - rho2;
         return difference * difference;
       },
-      pinterior_faces);
+      interior_faces);
 
-  mfem::Vector U(L2_pfes.TrueVSize());
-  mfem::ParGridFunction U_pgf(&L2_pfes);
+  mfem::Vector U(L2_fes->TrueVSize());
+  mfem::ParGridFunction U_pgf(L2_fes.get());
   U_pgf.ProjectCoefficient(sfunc);
   U_pgf.GetTrueDofs(U);
 
