@@ -7,6 +7,7 @@
 #include "serac/physics/state/finite_element_state.hpp"
 
 #include "serac/numerics/functional/domain.hpp"
+#include "serac/infrastructure/logger.hpp"
 
 namespace serac {
 

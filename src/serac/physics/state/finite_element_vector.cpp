@@ -10,9 +10,8 @@
 #include <ostream>
 #include <utility>
 
-#include "axom/fmt.hpp"
-
 #include "serac/serac_config.hpp"
+#include "serac/infrastructure/logger.hpp"
 
 namespace serac {
 

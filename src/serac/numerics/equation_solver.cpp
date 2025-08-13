@@ -19,6 +19,7 @@
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/numerics/trust_region_solver.hpp"
+#include "serac/infrastructure/logger.hpp"
 
 namespace serac {
 

@@ -8,10 +8,10 @@
 
 #ifdef SERAC_USE_CALIPER
 #include <optional>
-#include "axom/slic.hpp"
 #endif
 
 #include "serac/infrastructure/about.hpp"
+#include "serac/infrastructure/logger.hpp"
 
 namespace serac::profiling {
 

@@ -6,7 +6,6 @@
 
 #include "serac/numerics/petsc_solvers.hpp"
 
-#include <cstddef>  // for NULL
 #include <unordered_map>
 
 #include "serac/infrastructure/logger.hpp"
@@ -208,7 +207,7 @@ PetscErrorCode convertPCPreSolve(PC pc, [[maybe_unused]] KSP ksp)
   // If this function is called, we have a PETSc preconditioner
   // That means we have to ensure the matrix is MATAIJ
   if (!solver->checked_for_convert_ || solver->converted_matrix_) {
-    PetscCall(PCGetOperators(pc, NULL, &A));
+    PetscCall(PCGetOperators(pc, nullptr, &A));
     char* found;
     MatType mat_type;
     PetscCall(MatGetType(A, &mat_type));
@@ -306,7 +305,7 @@ void PetscPCSolver::SetOperator(const mfem::Operator& op)
   PetscCallAbort(GetComm(), MatNestGetSubMat(*pA, 1, 1, &A22));
   // Make sure all diagonal elements are set
   PetscCallAbort(GetComm(), MatSetOption(A22, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE));
-  PetscCallAbort(GetComm(), MatCreateVecs(A22, &zero, NULL));
+  PetscCallAbort(GetComm(), MatCreateVecs(A22, &zero, nullptr));
   PetscCallAbort(GetComm(), VecSet(zero, 0));
   PetscCallAbort(GetComm(), MatDiagonalSet(A22, zero, ADD_VALUES));
   if (delete_pA) {
@@ -344,13 +343,13 @@ void PetscPreconditionerSpaceDependent::SetOperator(const Operator& op)
       "Finite element space not set with SetFESpace() method, expect performance and/or convergence issues.");
   if (fespace_) {
     Mat pA, ppA;
-    PetscCallAbort(GetComm(), PCGetOperators(*this, NULL, &ppA));
+    PetscCallAbort(GetComm(), PCGetOperators(*this, nullptr, &ppA));
     int vdim = fespace_->GetVDim();
 
     // Ideally, the block size should be set at matrix creation
     // but the MFEM assembly does not allow us to do so
     PetscCallAbort(GetComm(), MatSetBlockSize(ppA, vdim));
-    PetscCallAbort(GetComm(), PCGetOperators(*this, &pA, NULL));
+    PetscCallAbort(GetComm(), PCGetOperators(*this, &pA, nullptr));
     if (ppA != pA) {
       PetscCallAbort(GetComm(), MatSetBlockSize(pA, vdim));
     }
@@ -399,7 +398,7 @@ static void func_coords(const mfem::Vector& x, mfem::Vector& y) { y = x; }
 void PetscGAMGSolver::SetupNearNullSpace()
 {
   Mat pA;
-  PetscCallAbort(GetComm(), PCGetOperators(*this, NULL, &pA));
+  PetscCallAbort(GetComm(), PCGetOperators(*this, nullptr, &pA));
   MatNullSpace nnsp;
   PetscCallAbort(GetComm(), MatGetNearNullSpace(pA, &nnsp));
   if (!fespace_ || nnsp) {
@@ -579,7 +578,7 @@ PetscErrorCode convertKSPPreSolve(KSP ksp, [[maybe_unused]] Vec rhs, [[maybe_unu
   solver = static_cast<PetscKSPSolver*>(ctx);
   auto* prec = solver->prec;
   PetscPCSolver* petsc_pc = dynamic_cast<PetscPCSolver*>(prec);
-  PetscCall(KSPGetOperators(ksp, NULL, &A));
+  PetscCall(KSPGetOperators(ksp, nullptr, &A));
   if (petsc_pc) {
     PetscCall(PetscObjectTypeCompare(reinterpret_cast<PetscObject>(A), MATNEST, &is_nest));
     PC pc_orig;
@@ -731,7 +730,7 @@ void PetscKSPSolver::SetOperator(const mfem::Operator& op)
     Mat C;
     PetscInt nheight, nwidth, oheight, owidth;
 
-    PetscCallAbort(GetComm(), KSPGetOperators(ksp, &C, NULL));
+    PetscCallAbort(GetComm(), KSPGetOperators(ksp, &C, nullptr));
     PetscCallAbort(GetComm(), MatGetSize(A, &nheight, &nwidth));
     PetscCallAbort(GetComm(), MatGetSize(C, &oheight, &owidth));
     if (nheight != oheight || nwidth != owidth) {
@@ -741,7 +740,7 @@ void PetscKSPSolver::SetOperator(const mfem::Operator& op)
       PetscCallAbort(GetComm(), KSPReset(ksp));
       delete X;
       delete B;
-      X = B = NULL;
+      X = B = nullptr;
     }
   }
   PetscBool is_nest;
@@ -809,11 +808,11 @@ PetscErrorCode linesearchPreCheckBackoffOnNan(SNESLineSearch linesearch, Vec X, 
 
   PetscFunctionBeginUser;
   PetscCall(SNESLineSearchGetSNES(linesearch, &snes));
-  PetscCall(SNESLineSearchGetVecs(linesearch, NULL, NULL, NULL, &W, &Ftemp));
+  PetscCall(SNESLineSearchGetVecs(linesearch, nullptr, nullptr, nullptr, &W, &Ftemp));
   PetscCall(SNESLineSearchGetLambda(linesearch, &lambda_orig));
   lambda = lambda_orig;
   PetscCall(SNESGetMaxNonlinearStepFailures(snes, &max_failures));
-  PetscCall(SNESLineSearchGetTolerances(linesearch, &min_lambda, NULL, NULL, NULL, NULL, NULL));
+  PetscCall(SNESLineSearchGetTolerances(linesearch, &min_lambda, nullptr, nullptr, nullptr, nullptr, nullptr));
   PetscCall(SNESLineSearchGetDefaultMonitor(linesearch, &monitor));
   // If -snes_max_fail 0, don't check at all
   // This is faster, but will fail if the step leads to a nan or inf value
@@ -917,7 +916,7 @@ void PetscNewtonSolver::SetTolerances()
     PetscCallAbort(GetComm(), SNESLineSearchSetTolerances(linesearch, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT,
                                                           abs_ls_tol, PETSC_DEFAULT, max_ls_iters));
     // ensure we don't fail immediately if a nan occurs
-    PetscCallAbort(GetComm(), SNESLineSearchSetPreCheck(linesearch, linesearchPreCheckBackoffOnNan, NULL));
+    PetscCallAbort(GetComm(), SNESLineSearchSetPreCheck(linesearch, linesearchPreCheckBackoffOnNan, nullptr));
   }
 }
 
@@ -1012,13 +1011,13 @@ void PetscNewtonSolver::Mult(const mfem::Vector& b, mfem::Vector& x) const
   KSP ksp;
   PetscCallAbort(GetComm(), SNESGetKSP(*this, &ksp));
   PetscBool is_set;
-  PetscCallAbort(GetComm(), KSPGetOperatorsSet(ksp, &is_set, NULL));
+  PetscCallAbort(GetComm(), KSPGetOperatorsSet(ksp, &is_set, nullptr));
   if (is_set) {
     Mat A;
     PetscInt nheight, nwidth;
     int oheight = B->GlobalSize();
     int owidth = X->GlobalSize();
-    PetscCallAbort(GetComm(), KSPGetOperators(ksp, &A, NULL));
+    PetscCallAbort(GetComm(), KSPGetOperators(ksp, &A, nullptr));
     PetscCallAbort(GetComm(), MatGetSize(A, &nheight, &nwidth));
     if (nheight != oheight || nwidth != owidth) {
       // reinit without destroying the KSP

@@ -10,6 +10,8 @@
 
 #include <memory>
 
+#include "serac/infrastructure/logger.hpp"
+
 namespace serac {
 
 namespace accelerator {

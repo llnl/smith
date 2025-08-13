@@ -15,6 +15,9 @@
 #include "axom/CLI11.hpp"
 #include "axom/core/utilities/Timer.hpp"
 
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/serac_config.hpp"
+
 using timer = axom::utilities::Timer;
 
 // partition the range {0, 1, 2, ... , n - 1} into
