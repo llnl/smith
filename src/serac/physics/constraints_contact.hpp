@@ -42,10 +42,10 @@ class ContactConstraint : public Constraint {
  public:
   /// @brief base constructor takes the name of the physics
   ContactConstraint(const mfem::ParMesh& mesh, const std::string& name, int interaction_id, 
-		  const std::set<int>& bdry_attr_surf1, const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts) : Constraint(name), contact_(mesh), mesh_{mesh}
+		  const std::set<int>& bdry_attr_surf1, const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts) : Constraint(name), contact_(mesh), contact_opts_{contact_opts}, mesh_{mesh} 
   {
-     contact_opts.enforcement = ContactEnforcement::LagrangeMultiplier;
-     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts);
+     contact_opts_.enforcement = ContactEnforcement::LagrangeMultiplier;
+     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts_);
      interaction_id_ = interaction_id;
   }
 
@@ -61,7 +61,7 @@ class ContactConstraint : public Constraint {
    * @return mfem::Vector which is the constraint evaluation
    */
   mfem::Vector evaluate([[maybe_unused]] double time, [[maybe_unused]] double dt,
-                        [[maybe_unused]] const std::vector<ConstFieldPtr>& fields)
+                        [[maybe_unused]] const std::vector<ConstFieldPtr>& fields) const
   {
     contact_.setDisplacements(*fields[Fields::SHAPE], *fields[Fields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
@@ -104,6 +104,7 @@ class ContactConstraint : public Constraint {
  protected:
   /// @brief Class holding contact constraint data
   mutable ContactData contact_;
+  ContactOptions contact_opts_;
   int interaction_id_;
 
  private:
