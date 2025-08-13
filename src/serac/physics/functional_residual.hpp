@@ -83,9 +83,9 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
    * @param body_name The name of the registered domain over which the body force is applied. If nothing is supplied
    * the entire domain is
-   * @param body_integral A function describing the body force applied.  Our convension for the sign of the residual
-   * vector is to negative the body force internally so the resulting residual is a 'negative force'.  This is to ensure
-   * that the Jacobian of the residual is positive definite for most physics. used.
+   * @param body_integral A function describing the body force applied.  Our convention for the sign of the residual
+   * vector is to negate the body force internally so the resulting residual is a 'negative force'.  This is to ensure
+   * that the Jacobian of the residual is positive definite for most physics.
    * @pre body_integral must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    2. `tensor<T,dim> x` the spatial coordinates for the quadrature point
@@ -109,8 +109,8 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
         [body_integral](double t, auto X, auto V, auto... inputs) {
           auto orig_tuple = body_integral(t, X, inputs...);
-          return -serac::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
-                 -serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
+          return -serac::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) -
+                 serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
         },
         mesh_->domain(body_name));
   }
@@ -130,7 +130,9 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * @param boundary_name The name of the registered domain over which the traction is applied. If nothing is supplied
    * the entire boundary is
    * @param surface_function A function describing the traction applied to a boundary
-   * used.
+   * used. Our convention for the sign of the residual
+   * vector is to negate the applied forces internally so the resulting residual is a 'negative force'.  This is to
+   * ensure that the Jacobian of the residual is positive definite for most physics.
    * @pre NeumannType must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
