@@ -64,8 +64,9 @@ int main(int argc, char* argv[])
   nonlinear_options.print_level = 1;
 
   LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
-  linear_options.linear_solver = serac::LinearSolver::GMRES;
+  linear_options.linear_solver = serac::LinearSolver::CG;
   linear_options.preconditioner = serac::Preconditioner::HypreAMG;
+  // linear_options.preconditioner = serac::Preconditioner::HypreJacobi;
   linear_options.relative_tol = 1e-8;
   linear_options.absolute_tol = 1e-16;
   linear_options.max_iterations = 2000;
@@ -121,7 +122,7 @@ int main(int argc, char* argv[])
   app.set_help_flag("--help");
   app.allow_extras()->parse(argc, argv);
 
-  nonlinear_options.force_monolithic = linear_options.preconditioner != Preconditioner::Petsc;
+  // nonlinear_options.force_monolithic = linear_options.preconditioner != Preconditioner::Petsc;
 
   if (use_fast_options) {
     dt = 1;
@@ -185,7 +186,7 @@ int main(int argc, char* argv[])
   // Top of cylinder has prescribed displacement of magnitude in x-z direction
   auto compress = [&](const serac::tensor<double, dim>, double t) {
     serac::tensor<double, dim> u{};
-    u[0] = u[2] = -1.5 / std::sqrt(2.0) * t;
+    u[0] = u[2] = -1.35 / std::sqrt(2.0) * t;
     return u;
   };
   solid_solver->setDisplacementBCs(compress, mesh->domain("top"), Component::X + Component::Z);
