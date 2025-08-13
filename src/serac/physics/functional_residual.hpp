@@ -38,7 +38,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
  public:
   using SpacesT = std::vector<const mfem::ParFiniteElementSpace*>;  ///< typedef
 
-  using ShapeDispSpace = H1<1, spatial_dim>;  ///< typedef
+  using ShapeDispSpace = H1<SHAPE_ORDER, spatial_dim>;  ///< typedef
 
   /**
    * @brief Construct a new FunctionalResidual object

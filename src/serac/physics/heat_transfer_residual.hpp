@@ -167,7 +167,7 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
 
       auto [heat_capacity, heat_flux] = material_(x, u, du_dX, params...);
 
-      return serac::tuple{-heat_capacity * du_dt, heat_flux};
+      return serac::tuple{heat_capacity * du_dt, -heat_flux};
     }
   };
 };

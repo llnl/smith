@@ -21,18 +21,10 @@
 #include "serac/infrastructure/logger.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/field_types.hpp"
 #include "serac/numerics/functional/quadrature_data.hpp"
 
 namespace serac {
-
-/// Polynomial order used to discretize the shape displacement field
-constexpr int SHAPE_ORDER = 1;
-
-/// Function space for shape displacement on dimension 2 meshes
-constexpr H1<SHAPE_ORDER, 2> SHAPE_DIM_2;
-
-/// Function space for shape displacement on dimension 2 meshes
-constexpr H1<SHAPE_ORDER, 3> SHAPE_DIM_3;
 
 /**
  * @brief Manages the lifetimes of FEState objects such that restarts are abstracted
