@@ -41,7 +41,7 @@ struct ResidualFixture : public testing::Test {
         serac::StateManager::newState(ParamSpace{}, "conductivity_offset", mesh->tag());
 
     shape_disp = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
-    shape_disp_vjp = std::make_unique<serac::FiniteElementDual>(mesh->newShapeDisplacementDual());
+    shape_disp_dual = std::make_unique<serac::FiniteElementDual>(mesh->newShapeDisplacementDual());
 
     states = {temperature, temperature_rate};
     params = {conductivity_offset};
@@ -100,7 +100,7 @@ struct ResidualFixture : public testing::Test {
   std::shared_ptr<serac::Residual> residual;
 
   std::unique_ptr<serac::FiniteElementState> shape_disp;
-  std::unique_ptr<serac::FiniteElementDual> shape_disp_vjp;
+  std::unique_ptr<serac::FiniteElementDual> shape_disp_dual;
 
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
@@ -131,7 +131,7 @@ TEST_F(ResidualFixture, VjpConsistency)
   pseudoRand(v);
   auto field_vjps = getFieldPointers(state_duals, param_duals);
 
-  residual->vjp(time, dt, shape_disp.get(), input_fields, {}, getConstFieldPointers(v), shape_disp_vjp.get(),
+  residual->vjp(time, dt, shape_disp.get(), input_fields, {}, getConstFieldPointers(v), shape_disp_dual.get(),
                 field_vjps, {});
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
