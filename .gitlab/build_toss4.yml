@@ -6,7 +6,7 @@
     ALLOC_DEADLINE: "180"
   tags:
     - batch
-    - ruby
+    - dane
   rules:
     - if: '$CI_COMMIT_BRANCH =~ /_qnone/ || $ON_TOSS4 == "OFF"' #run except if ...
       when: never
