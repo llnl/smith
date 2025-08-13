@@ -217,7 +217,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
     // Create a pack of the primal field and parameter finite element spaces
     const mfem::ParFiniteElementSpace* test_space = &displacement_.space();
-    const mfem::ParFiniteElementSpace* shape_space = &shapeDisplacement().space();
+    const mfem::ParFiniteElementSpace* shape_space = &mesh_->shapeDisplacementSpace();
 
     std::array<const mfem::ParFiniteElementSpace*, NUM_STATE_VARS + sizeof...(parameter_space)> trial_spaces;
     trial_spaces[0] = &displacement_.space();

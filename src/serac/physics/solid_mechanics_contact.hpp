@@ -433,7 +433,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     block_J->owns_blocks = false;
     drdshape_mat = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 
-    drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_);
+    drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_dual_);
 
     return BasePhysics::shapeDisplacementSensitivity();
   }
@@ -459,7 +459,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   using SolidMechanicsBase::nonlin_solver_;
   using SolidMechanicsBase::residual_;
   using SolidMechanicsBase::residual_with_bcs_;
-  using SolidMechanicsBase::shape_displacement_;
+  using SolidMechanicsBase::shape_displacement_dual_;
   using SolidMechanicsBase::time_end_step_;
   using SolidMechanicsBase::use_warm_start_;
   using SolidMechanicsBase::warmStartDisplacement;
