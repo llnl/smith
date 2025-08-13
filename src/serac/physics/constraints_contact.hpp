@@ -23,29 +23,45 @@ class Vector;
 class HypreParMatrix;
 }  // namespace mfem
 
-
 enum ContactFields
 {
-   SHAPE,
-   DISP,
+  SHAPE,
+  DISP,
 };
-
-
 
 namespace serac {
 
 class FiniteElementState;
 
-/// @brief Abstract constraint class
+/**
+ * @brief A ContactConstraint defines a gap constraint associated to contact problem
+ *
+ * This class stores the details of a single contact interaction between two surfaces. It also interfaces provides a
+ * description of a contact constraint given by a single contact interaction. A ContactConstraint can have a single
+ * ContactInteraction and will default to LagrangeMultiplier as it will be up to the solver that takes this
+ * ContactConstraint to determine how it will enforce the constraint.
+ */
 class ContactConstraint : public Constraint {
  public:
-  /// @brief base constructor takes the name of the physics
-  ContactConstraint(const mfem::ParMesh& mesh, int interaction_id, 
-		  const std::set<int>& bdry_attr_surf1, const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts, const std::string& name = "contact_constraint") : Constraint(name), contact_(mesh), contact_opts_{contact_opts}, mesh_{mesh} 
+  /**
+   * @brief The constructor
+   *
+   * @param interaction_id Unique identifier for the ContactInteraction (used in Tribol)
+   * @param mesh Mesh of the entire domain
+   * @param bdry_attr_surf1 MFEM boundary attributes for the first (mortar) surface
+   * @param bdry_attr_surf2 MFEM boundary attributes for the second (nonmortar) surface
+   * @param current_coords Reference to the grid function holding current mesh
+   * @param contact_opts Defines contact method
+   * @param name provides a name to associate to the contact constraint
+   */
+  ContactConstraint(int interaction_id, const mfem::ParMesh& mesh, const std::set<int>& bdry_attr_surf1,
+                    const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts,
+                    const std::string& name = "contact_constraint")
+      : Constraint(name), contact_(mesh), contact_opts_{contact_opts}, mesh_{mesh}
   {
-     contact_opts_.enforcement = ContactEnforcement::LagrangeMultiplier;
-     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts_);
-     interaction_id_ = interaction_id;
+    contact_opts_.enforcement = ContactEnforcement::LagrangeMultiplier;
+    contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts_);
+    interaction_id_ = interaction_id;
   }
 
   /// @brief destructor
@@ -64,7 +80,7 @@ class ContactConstraint : public Constraint {
   {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
-    
+
     // TODO: how to specify the right cycle?
     int cycle = 0;
     contact_.update(cycle, time, dt);
@@ -85,7 +101,7 @@ class ContactConstraint : public Constraint {
   {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
-    
+
     // TODO: how to specify the right cycle?
     int cycle = 0;
     contact_.update(cycle, time, dt);
@@ -94,8 +110,8 @@ class ContactConstraint : public Constraint {
     delete &J_contact->GetBlock(0, 0);
     delete &J_contact->GetBlock(1, 0);
     delete &J_contact->GetBlock(1, 1);
-    
-    auto dgdu = dynamic_cast<mfem::HypreParMatrix *>(&J_contact->GetBlock(0, 1));
+
+    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(0, 1));
     std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
     return dgdu_unique;
   };
