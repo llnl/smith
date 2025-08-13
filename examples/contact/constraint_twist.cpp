@@ -24,6 +24,9 @@ int main(int argc, char* argv[])
   //constexpr int p = 1;
   // NOTE: dim must be equal to 3
   constexpr int dim = 3;
+  constexpr int p = 1;
+  using VectorSpace = serac::H1<p, dim>;
+
 
   // Create DataStore
   std::string name = "contact_twist_example";
@@ -49,6 +52,25 @@ int main(int argc, char* argv[])
   std::set<int> surface_1_boundary_attributes({4});
   std::set<int> surface_2_boundary_attributes({5});
   serac::ContactConstraint contact_constraint(mesh->mfemParMesh(), contact_interaction_id, surface_1_boundary_attributes, surface_2_boundary_attributes, contact_options, contact_constraint_name);
+  
+  serac::FiniteElementState shape = serac::StateManager::newState(VectorSpace{}, "shape", mesh->tag());
+  serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
+  
+  std::vector<serac::FiniteElementState> contact_states;
+  contact_states = {shape, disp};
+  // initialize displacement
+  contact_states[ContactFields::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    auto u = 0.1 * x;
+    return u;
+  });
+
+  contact_states[ContactFields::SHAPE] = 0.0;
+
+  double time = 0., dt = 1.0;
+  int direction = 0;
+  auto input_states = getConstFieldPointers(contact_states);
+  auto gap = contact_constraint.evaluate(time, dt, input_states);
+  auto gap_Jacobian = contact_constraint.jacobian(time, dt, input_states, direction);
 
   return 0;
 }
