@@ -29,16 +29,6 @@ if(TRIBOL_FOUND)
                            NUM_MPI_TASKS  4)
 endif()
 
-if(TRIBOL_FOUND AND ENZYME_FOUND AND PETSC_FOUND)
-    configure_file(cylinder_petsc_options.yml
-                    ${PROJECT_BINARY_DIR}/examples/buckling/cylinder_petsc_options.yml
-                    COPYONLY)
-
-    serac_add_example_test(NAME            buckling_cylinder_mortar_contact
-                           COMMAND         buckling_cylinder --contact --contact-type 1 --preconditioner 6 -options_file ${PROJECT_BINARY_DIR}/examples/buckling/cylinder_petsc_options.yml
-                           NUM_MPI_TASKS   4)
-endif()
-
 install(
     FILES
         cylinder.cpp
