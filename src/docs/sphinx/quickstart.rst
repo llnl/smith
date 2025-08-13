@@ -198,8 +198,8 @@ one of the following commands:
    # If you are on an LC machine and want to use our public pre-built dependencies
    $ python3 ./config-build.py -hc host-configs/<machine name>-<SYS_TYPE>-<compiler>.cmake
 
-   # If you'd like to configure specific build options, e.g., a release build
-   $ python3 ./config-build.py -hc /path/to/host-config.cmake -DCMAKE_BUILD_TYPE=Release <more CMake build options...>
+   # If you'd like to configure specific build options, e.g., a debug build
+   $ python3 ./config-build.py -hc /path/to/host-config.cmake -DCMAKE_BUILD_TYPE=Debug <more CMake build options...>
 
 If you built the dependencies using Spack/uberenv, the host-config file is output at the
 project root. To use the pre-built dependencies on LC, you must be in the appropriate
