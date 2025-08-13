@@ -543,6 +543,49 @@ void Domain::insert_restriction(const serac::fes_t* fes, FunctionSpace space)
 
 const BlockElementRestriction& Domain::get_restriction(FunctionSpace space) { return restriction_operators.at(space); };
 
+void Domain::insert_shared_interior_face_list()
+{
+  // Weights only need to be computed for Domain of InteriorFaces type
+  SLIC_ERROR_ROOT_IF(type_ != Domain::Type::InteriorFaces, "This method is only for interior face domains");
+
+  // make a list if we don't already have one
+  if (shared_interior_face_ids_.empty()) {
+    if (dim_ == 1) {
+      int i = 0;
+      for (int f : mfem_edge_ids_) {
+        mfem::Mesh::FaceInformation info = mesh_.GetFaceInformation(f);
+
+        if (info.IsShared()) {
+          shared_interior_face_ids_.push_back(i);
+        }
+
+        ++i;
+      }
+    } else if (dim_ == 2) {
+      int i = 0;
+      for (int f : mfem_tri_ids_) {
+        mfem::Mesh::FaceInformation info = mesh_.GetFaceInformation(f);
+
+        if (info.IsShared()) {
+          shared_interior_face_ids_.push_back(i);
+        }
+
+        ++i;
+      }
+
+      for (int f : mfem_quad_ids_) {
+        mfem::Mesh::FaceInformation info = mesh_.GetFaceInformation(f);
+
+        if (info.IsShared()) {
+          shared_interior_face_ids_.push_back(i);
+        }
+
+        ++i;
+      }
+    }
+  }
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -611,6 +654,8 @@ Domain InteriorFaces(const mesh_t& mesh)
         break;
     }
   }
+
+  output.insert_shared_interior_face_list();
 
   return output;
 }
