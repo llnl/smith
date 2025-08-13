@@ -121,7 +121,6 @@ int main(int argc, char* argv[])
   app.set_help_flag("--help");
   app.allow_extras()->parse(argc, argv);
 
-  // nonlinear_options.force_monolithic = linear_options.preconditioner != Preconditioner::Petsc;
 
   if (use_fast_options) {
     dt = 1;
