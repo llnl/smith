@@ -195,10 +195,8 @@ void finite_difference_shape_test(LoadingType load)
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/patch2D_tris.mesh";
-  printf("a1\n");
   std::string mesh_tag{"mesh"};
   auto mesh = std::make_shared<serac::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
-  printf("a2\n");
 
   constexpr int p = 1;
   constexpr int dim = 2;
@@ -211,11 +209,9 @@ void finite_difference_shape_test(LoadingType load)
   // The nonlinear solver must have tight tolerances to ensure at least one Newton step occurs
   serac::NonlinearSolverOptions nonlin_options{
       .relative_tol = 1.0e-8, .absolute_tol = 1.0e-14, .max_iterations = 10, .print_level = 1};
-  printf("a\n");
   // Construct a functional-based solid solver
   SolidMechanics<p, dim> solid_solver(nonlin_options, solid_mechanics::direct_linear_options,
                                       solid_mechanics::default_quasistatic_options, "solid_functional", mesh);
-  printf("b\n");
   solid_mechanics::NeoHookean mat{1.0, 1.0, 1.0};
   solid_solver.setMaterial(mat, mesh->entireBody());
 
@@ -223,8 +219,6 @@ void finite_difference_shape_test(LoadingType load)
 
   shape_displacement = shape_displacement_value;
   solid_solver.setShapeDisplacement(shape_displacement);
-
-  printf("c\n");
 
   // Set the initial displacement and boundary condition
   solid_solver.setFixedBCs(mesh->domain("essential_boundary"));

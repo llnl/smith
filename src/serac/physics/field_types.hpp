@@ -71,7 +71,7 @@ auto getFieldPointers(std::vector<std::shared_ptr<T>>& states)
 
 /// @brief Get a vector of FieldPtr or DualFieldPtr from a vector of FiniteElementState or FiniteElementDual
 template <typename T>
-auto getFieldPointers(std::vector<T>& states, std::vector<T>& params = {})
+auto getFieldPointers(std::vector<T>& states, std::vector<T>& params)
 {
   static_assert(std::is_same_v<T, FiniteElementState> || std::is_same_v<T, FiniteElementDual>,
                 "Type must be either FiniteElementState or FiniteElementDual");

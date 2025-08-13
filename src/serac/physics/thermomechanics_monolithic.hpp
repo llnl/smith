@@ -190,7 +190,6 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     block_nonlinear_oper_ = std::make_unique<mfem::BlockOperator>(block_thermomech_offsets_);
     block_nonlinear_oper_transpose_ = std::make_unique<mfem::BlockOperator>(block_thermomech_offsets_);
 
-    shape_displacement_ = 0.0;
     initializeThermoMechanicsStates();
   }
 

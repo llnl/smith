@@ -261,7 +261,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     du_.SetSize(true_size);
     predicted_displacement_.SetSize(true_size);
 
-    shape_displacement_ = 0.0;
     initializeSolidMechanicsStates();
   }
 

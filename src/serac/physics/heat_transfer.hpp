@@ -216,7 +216,6 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
     u_.SetSize(true_size);
     u_predicted_.SetSize(true_size);
 
-    shape_displacement_ = 0.0;
     initializeThermalStates();
   }
 
