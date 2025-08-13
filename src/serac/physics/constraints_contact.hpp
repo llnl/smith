@@ -23,12 +23,11 @@ class Vector;
 class HypreParMatrix;
 }  // namespace mfem
 
-enum Fields
+
+enum ContactFields
 {
    SHAPE,
    DISP,
-   VELO,
-   ACCEL
 };
 
 
@@ -41,8 +40,8 @@ class FiniteElementState;
 class ContactConstraint : public Constraint {
  public:
   /// @brief base constructor takes the name of the physics
-  ContactConstraint(const mfem::ParMesh& mesh, const std::string& name, int interaction_id, 
-		  const std::set<int>& bdry_attr_surf1, const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts) : Constraint(name), contact_(mesh), contact_opts_{contact_opts}, mesh_{mesh} 
+  ContactConstraint(const mfem::ParMesh& mesh, int interaction_id, 
+		  const std::set<int>& bdry_attr_surf1, const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts, const std::string& name = "contact_constraint") : Constraint(name), contact_(mesh), contact_opts_{contact_opts}, mesh_{mesh} 
   {
      contact_opts_.enforcement = ContactEnforcement::LagrangeMultiplier;
      contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts_);
@@ -63,7 +62,7 @@ class ContactConstraint : public Constraint {
   mfem::Vector evaluate([[maybe_unused]] double time, [[maybe_unused]] double dt,
                         [[maybe_unused]] const std::vector<ConstFieldPtr>& fields) const
   {
-    contact_.setDisplacements(*fields[Fields::SHAPE], *fields[Fields::DISP]);
+    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
     
     // TODO: how to specify the right cycle?
@@ -84,7 +83,7 @@ class ContactConstraint : public Constraint {
                                                  [[maybe_unused]] const std::vector<ConstFieldPtr>& fields,
                                                  [[maybe_unused]] int direction) const
   {
-    contact_.setDisplacements(*fields[Fields::SHAPE], *fields[Fields::DISP]);
+    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
     
     // TODO: how to specify the right cycle?

@@ -30,7 +30,7 @@ class FiniteElementState;
 class Constraint {
  public:
   /// @brief base constructor takes the name of the physics
-  Constraint(const std::string& name) : name_(name) {}
+  Constraint(const std::string& name = "constraint") : name_(name) {}
 
   /// @brief destructor
   virtual ~Constraint() {}
