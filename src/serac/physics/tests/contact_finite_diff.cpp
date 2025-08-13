@@ -34,7 +34,7 @@ TEST_P(ContactFiniteDiff, patch)
   constexpr int p = 1;
   constexpr int dim = 2;
 
-  constexpr double eps = 1.0e-7;
+  constexpr double eps = 1.0e-4;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -48,7 +48,7 @@ TEST_P(ContactFiniteDiff, patch)
   double shift = eps * 10;
   // clang-format off
   auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(1, 1).translate({0.0, 0.999}).translate({shift, 0.0}).bdrAttribInfo()
+    shared::MeshBuilder::SquareMesh(1, 1).translate({0.0, 0.9}).translate({shift, 0.0}).bdrAttribInfo()
     .updateBdrAttrib(4, 7).updateBdrAttrib(3, 9).updateBdrAttrib(1, 6),
     shared::MeshBuilder::SquareMesh(1, 1).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)
       // shift up height of element

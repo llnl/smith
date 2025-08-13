@@ -42,10 +42,10 @@ TEST_P(TribolFiniteDiff, patch)
   // Construct the appropriate dimension mesh and give it to the data store
 
 
-  double shift = eps * 10;
+  // double shift = eps * 10;
   // clang-format off
   auto pmesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(1, 1).translate({0.0, 0.999}).translate({shift, 0.0}).bdrAttribInfo()
+    shared::MeshBuilder::SquareMesh(1, 1).translate({0.0, 0.999}).translate({0.0, 0.0}).bdrAttribInfo()
     .updateBdrAttrib(4, 7).updateBdrAttrib(3, 9).updateBdrAttrib(1, 6),
     shared::MeshBuilder::SquareMesh(1, 1).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)
       // shift up height of element

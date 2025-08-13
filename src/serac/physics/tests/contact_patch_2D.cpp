@@ -6,7 +6,6 @@
 
 #include "serac/physics/solid_mechanics_contact.hpp"
 
-#include <cfenv>
 #include <fem/datacollection.hpp>
 #include <functional>
 #include <mesh/vtk.hpp>
@@ -24,9 +23,6 @@
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include <fenv.h>
-
-
 
 namespace serac {
 
@@ -48,9 +44,9 @@ TEST_P(ContactTest, patch)
   // Construct the appropriate dimension mesh and give it to the data store
 
   auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(1 , 1).translate({0.0, 1.0}).bdrAttribInfo()
+    shared::MeshBuilder::SquareMesh(64 , 64).translate({0.0,  1.0}).bdrAttribInfo()
     .updateBdrAttrib(4, 7).updateBdrAttrib(3, 9).updateBdrAttrib(1, 6),
-    shared::MeshBuilder::SquareMesh(1, 1).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
+    shared::MeshBuilder::SquareMesh(64, 64).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
 
   mfem::VisItDataCollection visit_dc("contact_patch_visit", &mesh->mfemParMesh());
 
@@ -91,21 +87,21 @@ TEST_P(ContactTest, patch)
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type = ContactType::Frictionless,
-                                 .penalty = 0.2,
-                                 .penalty2 = 0.0,
+                                 .penalty = 25000,
+                                 .penalty2 = 25000,
                                  .jacobian = std::get<1>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, mesh);
 
-  double K = 10.0;
-  double G = 0.25;
+  double K = 1000.0;
+  double G = 1200;
   solid_mechanics::NeoHookean mat{1.0, K, G};
   solid_solver.setMaterial(mat, mesh->entireBody());
 
   // Define the function for the initial displacement and boundary condition
   // constexpr int dim = 2;
-  auto applied_disp_function = [](tensor<double, dim>, auto) { return tensor<double, dim>{{0, -0.1}}; };
+  auto applied_disp_function = [](tensor<double, dim>, auto) { return tensor<double, dim>{{0, -0.01}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
   solid_solver.setFixedBCs(mesh->domain("x0_faces"), Component::X);
@@ -124,44 +120,38 @@ TEST_P(ContactTest, patch)
   // Perform the quasi-static solve
   double dt = 1.0;
   solid_solver.advanceTimestep(dt);
-  solid_solver.advanceTimestep(dt);
-  // solid_solver.advanceTimestep(dt);
   // solid_solver.advanceTimestep(dt);
 
   // Output the sidre-based plot files
   solid_solver.outputStateToDisk(paraview_name);
 
   // Check the l2 norm of the displacement dofs
-  // auto c = 1.0;
   auto c = (3.0 * K - 2.0 * G) / (3.0 * K + G);
   mfem::VectorFunctionCoefficient elasticity_sol_coeff(2, [c](const mfem::Vector& x, mfem::Vector& u) {
-    // u[0] = 0.0;
-    // u[1] = -0.01 * c * x[1];
-    u[0] = c * -0.1 * x[0];
-    u[1] = -0.1 * x[1];
+    u[0] = 0.005 * c * x[0];
+    u[1] = -0.005 * x[1];
     // u[2] = -0.5 * 0.01 * x[2];
   });
-  mfem::ParFiniteElementSpace elasticity_fes(solid_solver.displacement().space());
+  mfem::ParFiniteElementSpace elasticity_fes(solid_solver.reactions().space());
   mfem::ParGridFunction elasticity_sol(&elasticity_fes);
   elasticity_sol.ProjectCoefficient(elasticity_sol_coeff);
   mfem::ParGridFunction approx_error(elasticity_sol);
   approx_error -= solid_solver.displacement().gridFunction();
   auto approx_error_l2 = mfem::ParNormlp(approx_error, 2, MPI_COMM_WORLD);
-  EXPECT_NEAR(0.0, approx_error_l2, 1.0e-2);
+  EXPECT_NEAR(0.0, approx_error_l2, 1.0e-3);
 }
 
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTest,
     testing::Values(
-                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")
-));
+                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")));
 
 }  // namespace serac
 
 int main(int argc, char* argv[])
 {
 
-feenableexcept(FE_INVALID | FE_OVERFLOW);
+
 
   testing::InitGoogleTest(&argc, argv);
   serac::ApplicationManager applicationManager(argc, argv);
