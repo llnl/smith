@@ -9,7 +9,7 @@
  *
  * @brief A buckling cylinder under compression, run with or without contact
  *
- * @note Run with mortar contact and PETSc preconditioners (enabling enzyme is required):
+ * @note Run with mortar contact and PETSc preconditioners:
  * @code{.sh}
  * ./build/examples/buckling_cylinder --contact --contact-type 1 --preconditioner 6 \
  *    -options_file examples/buckling/cylinder_petsc_options.yml
@@ -66,7 +66,6 @@ int main(int argc, char* argv[])
   LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
   linear_options.linear_solver = serac::LinearSolver::CG;
   linear_options.preconditioner = serac::Preconditioner::HypreAMG;
-  // linear_options.preconditioner = serac::Preconditioner::HypreJacobi;
   linear_options.relative_tol = 1e-8;
   linear_options.absolute_tol = 1e-16;
   linear_options.max_iterations = 2000;
