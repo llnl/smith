@@ -83,8 +83,9 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
    * @param body_name The name of the registered domain over which the body force is applied. If nothing is supplied
    * the entire domain is
-   * @param body_integral A function describing the body force applied
-   * used.
+   * @param body_integral A function describing the body force applied.  Our convension for the sign of the residual
+   * vector is to negative the body force internally so the resulting residual is a 'negative force'.  This is to ensure
+   * that the Jacobian of the residual is positive definite for most physics. used.
    * @pre body_integral must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    2. `tensor<T,dim> x` the spatial coordinates for the quadrature point
@@ -99,14 +100,17 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BodyIntegralType>
   void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType body_integral)
   {
-    residual_->AddDomainIntegral(Dimension<spatial_dim>{}, DependsOn<active_parameters...>{}, body_integral,
-                                 mesh_->domain(body_name));
+    residual_->AddDomainIntegral(
+        Dimension<spatial_dim>{}, DependsOn<active_parameters...>{},
+        [body_integral](double t, auto X, auto... inputs) { return -body_integral(t, X, inputs...); },
+        mesh_->domain(body_name));
+
     v_residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
         [body_integral](double t, auto X, auto V, auto... inputs) {
           auto orig_tuple = body_integral(t, X, inputs...);
-          return serac::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
-                 serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
+          return -serac::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
+                 -serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
         },
         mesh_->domain(body_name));
   }
@@ -147,7 +151,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
         [surface_function](double t, auto X, auto... params) {
           auto n = cross(get<DERIVATIVE>(X));
-          return surface_function(t, get<VALUE>(X), normalize(n), params...);
+          return -surface_function(t, get<VALUE>(X), normalize(n), params...);
         },
         mesh_->domain(boundary_name));
 
@@ -156,7 +160,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         [surface_function](double t, auto X, auto V, auto... params) {
           auto n = cross(get<DERIVATIVE>(X));
           auto orig_surface_flux = surface_function(t, get<VALUE>(X), normalize(n), params...);
-          return serac::inner(get<VALUE>(V), orig_surface_flux);
+          return -serac::inner(get<VALUE>(V), orig_surface_flux);
         },
         mesh_->domain(boundary_name));
   }
