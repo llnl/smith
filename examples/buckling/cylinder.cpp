@@ -121,7 +121,6 @@ int main(int argc, char* argv[])
   app.set_help_flag("--help");
   app.allow_extras()->parse(argc, argv);
 
-
   if (use_fast_options) {
     dt = 1;
     nonlinear_options.max_iterations = 5;
