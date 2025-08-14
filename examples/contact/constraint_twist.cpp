@@ -21,12 +21,11 @@ int main(int argc, char* argv[])
   serac::ApplicationManager applicationManager(argc, argv);
 
   // NOTE: p must be equal to 1 to work with Tribol's mortar method
-  //constexpr int p = 1;
+  constexpr int p = 1;
   // NOTE: dim must be equal to 3
   constexpr int dim = 3;
-  constexpr int p = 1;
+  
   using VectorSpace = serac::H1<p, dim>;
-
 
   // Create DataStore
   std::string name = "contact_twist_example";
@@ -46,16 +45,18 @@ int main(int argc, char* argv[])
                                         .jacobian = serac::ContactJacobian::Exact};
 
   std::string contact_constraint_name = "default_contact";
-  
+
   // Specify the contact interaction
   auto contact_interaction_id = 0;
   std::set<int> surface_1_boundary_attributes({4});
   std::set<int> surface_2_boundary_attributes({5});
-  serac::ContactConstraint contact_constraint(contact_interaction_id, mesh->mfemParMesh(), surface_1_boundary_attributes, surface_2_boundary_attributes, contact_options, contact_constraint_name);
-  
+  serac::ContactConstraint contact_constraint(contact_interaction_id, mesh->mfemParMesh(),
+                                              surface_1_boundary_attributes, surface_2_boundary_attributes,
+                                              contact_options, contact_constraint_name);
+
   serac::FiniteElementState shape = serac::StateManager::newState(VectorSpace{}, "shape", mesh->tag());
   serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
-  
+
   std::vector<serac::FiniteElementState> contact_states;
   contact_states = {shape, disp};
   // initialize displacement
