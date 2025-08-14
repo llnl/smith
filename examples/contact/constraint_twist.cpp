@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
   auto contact_interaction_id = 0;
   std::set<int> surface_1_boundary_attributes({4});
   std::set<int> surface_2_boundary_attributes({5});
-  serac::ContactConstraint contact_constraint(mesh->mfemParMesh(), contact_interaction_id, surface_1_boundary_attributes, surface_2_boundary_attributes, contact_options, contact_constraint_name);
+  serac::ContactConstraint contact_constraint(contact_interaction_id, mesh->mfemParMesh(), surface_1_boundary_attributes, surface_2_boundary_attributes, contact_options, contact_constraint_name);
   
   serac::FiniteElementState shape = serac::StateManager::newState(VectorSpace{}, "shape", mesh->tag());
   serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
