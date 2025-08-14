@@ -4,15 +4,26 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "gtest/gtest.h"
+#include "mpi.h"
+
 #include "serac/physics/solid_mechanics.hpp"
-
-#include <gtest/gtest.h>
-
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/functional/functional.hpp"
+#include "serac/numerics/functional/geometry.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
 
 namespace serac {
 

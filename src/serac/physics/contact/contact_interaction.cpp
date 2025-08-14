@@ -8,12 +8,15 @@
 
 #ifdef SERAC_USE_TRIBOL
 
+#include <cstddef>
+#include <algorithm>
+#include <vector>
+
 #include "axom/slic.hpp"
-
-#include "serac/physics/contact/contact_config.hpp"
-
 #include "tribol/interface/tribol.hpp"
 #include "tribol/interface/mfem_tribol.hpp"
+
+#include "serac/physics/contact/contact_config.hpp"
 
 namespace serac {
 

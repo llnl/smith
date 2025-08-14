@@ -5,9 +5,12 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <exception>
+#include <memory>
+#include <set>
+#include <string>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "mpi.h"
 
 #include "serac/infrastructure/cli.hpp"
 #include "serac/infrastructure/application_manager.hpp"

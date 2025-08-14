@@ -13,8 +13,12 @@
 
 #pragma once
 
-#include <optional>
+#include <functional>
+#include <memory>
+#include <string>
+#include <tuple>
 
+#include "mpi.h"
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"

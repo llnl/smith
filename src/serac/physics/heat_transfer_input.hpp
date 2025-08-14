@@ -13,8 +13,15 @@
 
 #pragma once
 
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "serac/physics/materials/thermal_material_input.hpp"
 #include "serac/numerics/odes.hpp"
+#include "serac/infrastructure/input.hpp"
+#include "serac/numerics/solver_config.hpp"
 
 namespace serac {
 

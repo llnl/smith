@@ -5,12 +5,13 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <exception>
+#include <cmath>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
-#include "serac/numerics/functional/tuple_tensor_dual_functions.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/dual.hpp"
+#include "serac/numerics/functional/tensor.hpp"
 
 class SlicErrorException : public std::exception {};
 

@@ -12,6 +12,16 @@
 
 #pragma once
 
+#include <cstddef>
+#include <array>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
@@ -26,6 +36,21 @@
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
+#include "serac/infrastructure/accelerator.hpp"
+#include "serac/infrastructure/profiling.hpp"
+#include "serac/numerics/equation_solver.hpp"
+#include "serac/numerics/functional/differentiate_wrt.hpp"
+#include "serac/numerics/functional/functional.hpp"
+#include "serac/numerics/functional/geometry.hpp"
+#include "serac/numerics/functional/quadrature_data.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/tuple.hpp"
+#include "serac/numerics/petsc_solvers.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
+#include "serac/physics/state/finite_element_vector.hpp"
 
 namespace serac {
 namespace solid_mechanics {

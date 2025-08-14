@@ -7,19 +7,16 @@
 #include <fstream>
 #include <iostream>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/profiling.hpp"
-
 #include "problems/Problems.hpp"
 #include "solvers/Solvers.hpp"
 #include "utilities.hpp"
 
 using namespace serac;
-using namespace serac::profiling;
 
 /* convex quadratic-programming problem
  *

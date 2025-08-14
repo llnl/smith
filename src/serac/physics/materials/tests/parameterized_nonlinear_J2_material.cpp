@@ -8,16 +8,12 @@
  * @file nonlinear_J2_material.cpp
  */
 
+#include "gtest/gtest.h"
+
 #include "serac/physics/materials/parameterized_solid_material.hpp"
-
-#include <iostream>
-#include <fstream>
-
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
-
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/dual.hpp"
 
 namespace serac {
 
