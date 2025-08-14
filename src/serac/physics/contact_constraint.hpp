@@ -23,13 +23,16 @@ class Vector;
 class HypreParMatrix;
 }  // namespace mfem
 
+namespace serac {
+
+/**
+ * @brief Enumerates ContactFields for ContactConstraint class
+ */
 enum ContactFields
 {
   SHAPE,
   DISP,
 };
-
-namespace serac {
 
 class FiniteElementState;
 

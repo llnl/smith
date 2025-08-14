@@ -60,12 +60,12 @@ int main(int argc, char* argv[])
   std::vector<serac::FiniteElementState> contact_states;
   contact_states = {shape, disp};
   // initialize displacement
-  contact_states[ContactFields::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
+  contact_states[serac::ContactFields::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
     auto u = 0.1 * x;
     return u;
   });
 
-  contact_states[ContactFields::SHAPE] = 0.0;
+  contact_states[serac::ContactFields::SHAPE] = 0.0;
 
   double time = 0., dt = 1.0;
   int direction = 0;
