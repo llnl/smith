@@ -4,10 +4,11 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
-#include "serac/infrastructure/application_manager.hpp"
 #include "petsc.h"
+
+#include "serac/infrastructure/application_manager.hpp"
 
 #ifndef MFEM_USE_SLEPC
 #error This examples requires that MFEM is build with MFEM_USE_SLEPC=YES

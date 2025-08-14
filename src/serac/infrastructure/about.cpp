@@ -5,9 +5,12 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/infrastructure/about.hpp"
-
 #include "serac/serac_config.hpp"
 
+#include <string_view>
+#include <vector>
+
+#include "mpi.h"
 #include "axom/config.hpp"
 #include "axom/core.hpp"
 #include "axom/fmt.hpp"
@@ -44,6 +47,7 @@
 #include "tribol/config.hpp"
 #endif
 
+#include "serac/serac_config.hpp"
 #include "serac/infrastructure/git_sha.hpp"
 #include "serac/infrastructure/logger.hpp"
 

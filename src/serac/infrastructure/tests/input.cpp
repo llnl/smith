@@ -4,10 +4,16 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/infrastructure/application_manager.hpp"
-#include <gtest/gtest.h>
+#include <exception>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
+#include "serac/infrastructure/application_manager.hpp"
 #include "serac/infrastructure/input.hpp"
 
 class SlicErrorException : public std::exception {};

@@ -14,6 +14,8 @@
 
 #include <memory>
 #include <set>
+#include <optional>
+#include <vector>
 
 #include "serac/physics/boundary_conditions/boundary_condition.hpp"
 #include "serac/physics/state/finite_element_state.hpp"

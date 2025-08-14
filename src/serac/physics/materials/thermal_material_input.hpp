@@ -13,6 +13,9 @@
 #pragma once
 
 #include <string>
+#include <variant>
+#include <vector>
+
 #include "serac/infrastructure/input.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 

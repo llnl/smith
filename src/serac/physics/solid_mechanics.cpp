@@ -6,6 +6,8 @@
 
 #include "serac/physics/solid_mechanics.hpp"
 
+#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
+
 namespace serac {
 
 namespace solid_mechanics {

@@ -14,15 +14,23 @@
 
 #include <optional>
 #include <unordered_map>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include "mfem.hpp"
 #include "axom/sidre/core/MFEMSidreDataCollection.hpp"
-
 #include "serac/infrastructure/logger.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
 #include "serac/physics/field_types.hpp"
 #include "serac/numerics/functional/quadrature_data.hpp"
+#include "serac/numerics/functional/domain.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/functional/geometry.hpp"
 
 namespace serac {
 

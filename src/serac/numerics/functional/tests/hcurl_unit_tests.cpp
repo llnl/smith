@@ -4,10 +4,8 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
-#include "serac/numerics/functional/detail/metaprogramming.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/finite_element.hpp"
 #include "serac/infrastructure/application_manager.hpp"

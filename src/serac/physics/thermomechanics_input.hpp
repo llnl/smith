@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "serac/infrastructure/input.hpp"
 #include "serac/physics/common.hpp"
 #include "serac/physics/solid_mechanics_input.hpp"

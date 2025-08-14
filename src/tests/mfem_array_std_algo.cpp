@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <numeric>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 // In these tests std::algorithms should only be used once -
