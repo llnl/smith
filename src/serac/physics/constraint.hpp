@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file constraints.hpp
+ * @file constraint.hpp
  *
  * @brief Specifies interface for evaluating distributed constriants from fields as well as
  * their Jacobians and Hessian-vector products
