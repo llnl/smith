@@ -117,12 +117,25 @@ class ContactConstraint : public Constraint {
   };
 
  protected:
-  /// @brief Class holding contact constraint data
+  /**
+   * @brief ContactData which has various contact calls
+   */
   mutable ContactData contact_;
+
+  /**
+   * @brief contact_opts Defines contact method, enforcement, type, and penalty
+   */
   ContactOptions contact_opts_;
+
+  /**
+   * @brief interaction_id Unique identifier for the ContactInteraction (used in Tribol)
+   */
   int interaction_id_;
 
  private:
+  /**
+   * @brief The volume mesh for the problem
+   */
   [[maybe_unused]] const mfem::ParMesh& mesh_;
 };
 
