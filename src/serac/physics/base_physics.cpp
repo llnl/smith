@@ -65,8 +65,8 @@ void BasePhysics::initializeBasePhysicsStates(int cycle, double time)
   max_cycle_ = cycle;
   min_cycle_ = cycle;
   ode_time_point_ = time;
-  shape_displacement_ = 0.0;
 
+  shape_displacement_dual_ = 0.0;
   for (auto& p : parameters_) {
     *p.sensitivity = 0.0;
   }
