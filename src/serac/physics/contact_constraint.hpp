@@ -53,7 +53,6 @@ class ContactConstraint : public Constraint {
    * @param mesh Mesh of the entire domain
    * @param bdry_attr_surf1 MFEM boundary attributes for the first (mortar) surface
    * @param bdry_attr_surf2 MFEM boundary attributes for the second (nonmortar) surface
-   * @param current_coords Reference to the grid function holding current mesh
    * @param contact_opts Defines contact method
    * @param name provides a name to associate to the contact constraint
    */
