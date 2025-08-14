@@ -55,7 +55,6 @@ int main(int argc, char* argv[])
 
   // Solver options
   NonlinearSolverOptions nonlinear_options = solid_mechanics::default_nonlinear_options;
-  LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
   nonlinear_options.nonlin_solver = serac::NonlinearSolver::TrustRegion;
   nonlinear_options.relative_tol = 1e-6;
   nonlinear_options.absolute_tol = 1e-10;
@@ -63,17 +62,22 @@ int main(int argc, char* argv[])
   nonlinear_options.max_iterations = 500;
   nonlinear_options.max_line_search_iterations = 20;
   nonlinear_options.print_level = 1;
-#ifdef SERAC_USE_PETSC
-  linear_options.linear_solver = serac::LinearSolver::GMRES;
+
+  LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
+  linear_options.linear_solver = serac::LinearSolver::CG;
   linear_options.preconditioner = serac::Preconditioner::HypreAMG;
   linear_options.relative_tol = 1e-8;
   linear_options.absolute_tol = 1e-16;
   linear_options.max_iterations = 2000;
-#endif
 
   // Contact specific options
   double penalty = 1e3;
+#ifdef SERAC_USE_TRIBOL
   bool use_contact = true;
+#else
+  bool use_contact = false;
+#endif
+
   auto contact_type = serac::ContactEnforcement::Penalty;
 
   // Option for testing purposes only, to reduce runtime
@@ -117,8 +121,6 @@ int main(int argc, char* argv[])
   app.set_help_flag("--help");
   app.allow_extras()->parse(argc, argv);
 
-  nonlinear_options.force_monolithic = linear_options.preconditioner != Preconditioner::Petsc;
-
   if (use_fast_options) {
     dt = 1;
     nonlinear_options.max_iterations = 5;
@@ -146,6 +148,7 @@ int main(int argc, char* argv[])
   // Create solver, either with or without contact
   std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
   if (use_contact) {
+#ifdef SERAC_USE_TRIBOL
     auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim>>(
         nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
 
@@ -153,10 +156,14 @@ int main(int argc, char* argv[])
     serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                           .enforcement = contact_type,
                                           .type = serac::ContactType::Frictionless,
-                                          .penalty = penalty};
+                                          .penalty = penalty,
+                                          .jacobian = serac::ContactJacobian::Exact};
     auto contact_interaction_id = 0;
     solid_contact_solver->addContactInteraction(contact_interaction_id, {xpos_attr}, {xneg_attr}, contact_options);
     solid_solver = std::move(solid_contact_solver);
+#else
+    SLIC_ERROR("serac built without tribol enabled!");
+#endif
   } else {
     solid_solver = std::make_unique<serac::SolidMechanics<p, dim>>(
         nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
@@ -176,7 +183,7 @@ int main(int argc, char* argv[])
   // Top of cylinder has prescribed displacement of magnitude in x-z direction
   auto compress = [&](const serac::tensor<double, dim>, double t) {
     serac::tensor<double, dim> u{};
-    u[0] = u[2] = -1.5 / std::sqrt(2.0) * t;
+    u[0] = u[2] = -1.35 / std::sqrt(2.0) * t;
     return u;
   };
   solid_solver->setDisplacementBCs(compress, mesh->domain("top"), Component::X + Component::Z);
