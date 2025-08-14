@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
   constexpr int p = 1;
   // NOTE: dim must be equal to 3
   constexpr int dim = 3;
-  
+
   using VectorSpace = serac::H1<p, dim>;
 
   // Create DataStore
