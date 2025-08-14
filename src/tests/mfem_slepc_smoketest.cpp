@@ -40,9 +40,8 @@
 
 // SERAC_EDIT_START
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 // SERAC_EDIT_END
 
 #ifndef MFEM_USE_SLEPC

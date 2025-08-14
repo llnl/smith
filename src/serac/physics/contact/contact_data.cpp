@@ -6,7 +6,12 @@
 
 #include "serac/physics/contact/contact_data.hpp"
 
+#include <cstddef>
+
 #include "axom/slic.hpp"
+#include "mpi.h"
+
+#include "serac/physics/state/finite_element_state.hpp"
 
 #ifdef SERAC_USE_TRIBOL
 #include "tribol/interface/tribol.hpp"

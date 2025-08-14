@@ -14,8 +14,15 @@
 
 #include <memory>
 #include <string>
+#include <functional>
+#include <map>
+#include <vector>
+
+#include "mpi.h"
+
 #include "mfem.hpp"
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/domain.hpp"
 
 namespace serac {
 

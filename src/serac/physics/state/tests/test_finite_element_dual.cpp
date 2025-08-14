@@ -8,15 +8,18 @@
  * @file test_finite_element_staet.cpp
  */
 
-#include "serac/physics/state/finite_element_dual.hpp"
+#include <memory>
+#include <string>
+#include <utility>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
-#include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/numerics/functional/tensor.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/serac_config.hpp"
 
 namespace serac {
 
