@@ -13,6 +13,8 @@
 
 #pragma once
 
+#ifdef SERAC_USE_TRIBOL
+
 #include <vector>
 #include "serac/physics/common.hpp"
 #include "serac/physics/field_types.hpp"
@@ -142,3 +144,5 @@ class ContactConstraint : public Constraint {
 };
 
 }  // namespace serac
+
+#endif
