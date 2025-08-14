@@ -155,11 +155,11 @@ def setup_build_dir(args, platform_info):
     buildpath = os.path.abspath(buildpath)
 
     if os.path.exists(buildpath):
-        print("Build directory '%s' already exists.  Deleting..." % buildpath)
-        shutil.rmtree(buildpath)
+        print("WARNING: Build directory '%s' already exists. Consider clearing out the directory before proceeding." % buildpath)
+    else:
+        print("Creating build directory '%s'..." % buildpath)
+        os.makedirs(buildpath)
 
-    print("Creating build directory '%s'..." % buildpath)
-    os.makedirs(buildpath)
     return buildpath
 
 
@@ -179,13 +179,11 @@ def setup_install_dir(args, platform_info):
     installpath = os.path.abspath(installpath)
 
     if os.path.exists(installpath):
-        print(
-            "Install directory '%s' already exists, deleting..." % installpath
-        )
-        shutil.rmtree(installpath)
+        print("WARNING: Install directory '%s' already exists. Consider clearing out the directory before proceeding." % installpath)
+    else:
+        print("Creating install directory '%s'..." % installpath)
+        os.makedirs(installpath)
 
-    print("Creating install path '%s'..." % installpath)
-    os.makedirs(installpath)
     return installpath
 
 
@@ -294,10 +292,10 @@ def main():
        else:
           return False
 
-    # CMake build type is Release by default, but if CMAKE_BUILD_TYPE is an unknown argument (i.e. a CMake argument), then
-    # use that option instead.
     if args.buildtype == None:
+        # Set default CMake build type
         args.buildtype = "Release"
+        # If CMAKE_BUILD_TYPE was passed in as an argument, use that option instead
         for unknown_arg in unknown_args:
             if "-DCMAKE_BUILD_TYPE" in unknown_arg:
                 args.buildtype = unknown_arg.split("=")[1]
