@@ -266,15 +266,14 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       auto shape_vjp = serac::get<DERIVATIVE>(
           (*v_residual_)(DifferentiateWRT<0>{}, time, *shape_disp, *v_fields[0], *fields[input_indices]...));
       auto shape_vjp_vector = assemble(shape_vjp);
-      //*shape_disp_sensitivity += *shape_vjp_vector;
-      *vjp_shape_disp_sensitivity += 0.0;  // MRT test *shape_vjp_vector;
+      *vjp_shape_disp_sensitivity += *shape_vjp_vector;
     }
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-        auto vecJac = serac::get<DERIVATIVE>(vecJacs[input_col](time, shape_disp, v_fields[0], fields));
-        auto vecJacMfemVector = assemble(vecJac);
-        *vjp_sensitivities[input_col] += *vecJacMfemVector;
+        auto vec_jac = serac::get<DERIVATIVE>(vecJacs[input_col](time, shape_disp, v_fields[0], fields));
+        auto vec_jac_mfem_vector = assemble(vec_jac);
+        *vjp_sensitivities[input_col] += *vec_jac_mfem_vector;
       }
     }
   }
