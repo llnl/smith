@@ -164,9 +164,7 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
       // Get the value and the gradient from the input tuple
       auto [u, du_dX] = temperature;
       auto du_dt = get<VALUE>(dtemp_dt);
-
       auto [heat_capacity, heat_flux] = material_(x, u, du_dX, params...);
-
       return serac::tuple{heat_capacity * du_dt, -heat_flux};
     }
   };

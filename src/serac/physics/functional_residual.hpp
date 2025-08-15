@@ -102,14 +102,14 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   {
     residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<active_parameters...>{},
-        [body_integral](double t, auto X, auto... inputs) { return -body_integral(t, X, inputs...); },
+        [body_integral](double t, auto X, auto... inputs) { return body_integral(t, X, inputs...); },
         mesh_->domain(body_name));
 
     v_residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
         [body_integral](double t, auto X, auto V, auto... inputs) {
           auto orig_tuple = body_integral(t, X, inputs...);
-          return -serac::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) -
+          return serac::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
                  serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
         },
         mesh_->domain(body_name));
@@ -153,7 +153,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
         [surface_function](double t, auto X, auto... params) {
           auto n = cross(get<DERIVATIVE>(X));
-          return -surface_function(t, get<VALUE>(X), normalize(n), params...);
+          return surface_function(t, get<VALUE>(X), normalize(n), params...);
         },
         mesh_->domain(boundary_name));
 
@@ -162,7 +162,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         [surface_function](double t, auto X, auto V, auto... params) {
           auto n = cross(get<DERIVATIVE>(X));
           auto orig_surface_flux = surface_function(t, get<VALUE>(X), normalize(n), params...);
-          return -serac::inner(get<VALUE>(V), orig_surface_flux);
+          return serac::inner(get<VALUE>(V), orig_surface_flux);
         },
         mesh_->domain(boundary_name));
   }

@@ -257,7 +257,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       tuple<parameter_space...> types{};
       for_constexpr<sizeof...(parameter_space)>([&](auto i) {
         parameters_.emplace_back(mfemParMesh(), get<i>(types), detail::addPrefix(name_, parameter_names[i]));
-
         trial_spaces[i + NUM_STATE_VARS] = &(parameters_[i].state->space());
       });
     }
