@@ -6,13 +6,12 @@
 
 #include "serac/infrastructure/output.hpp"
 
-#include "serac/infrastructure/about.hpp"
-#include "serac/infrastructure/logger.hpp"
-
 #include "axom/core.hpp"
 #include "axom/sidre.hpp"
-
 #include "mpi.h"
+
+#include "serac/infrastructure/about.hpp"
+#include "serac/infrastructure/logger.hpp"
 
 namespace serac::output {
 

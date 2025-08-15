@@ -4,14 +4,22 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h>
+#include <algorithm>
+#include <array>
+#include <memory>
+#include <ostream>
+#include <string>
+#include <utility>
+#include <vector>
 
-#include "serac/mesh_utils/mesh_utils_base.hpp"
+#include "gtest/gtest.h"
+
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/numerics/functional/element_restriction.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/serac_config.hpp"
 
 using namespace serac;
 
