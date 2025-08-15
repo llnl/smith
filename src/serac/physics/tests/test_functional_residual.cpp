@@ -100,7 +100,6 @@ struct ResidualFixture : public testing::Test {
     f_residual->addBodyIntegral(serac::DependsOn<0>{}, mesh->entireBodyName(), [](double /*t*/, auto /*x*/, auto u) {
       return serac::tuple{serac::get<serac::VALUE>(u), 0.0 * serac::get<serac::DERIVATIVE>(u)};
     });
-
     f_residual->addBodyIntegral(mesh->entireBodyName(), [](double /*t*/, auto x) {
       return serac::tuple{0.5 * serac::get<serac::VALUE>(x), 0.0 * serac::get<serac::DERIVATIVE>(x)};
     });

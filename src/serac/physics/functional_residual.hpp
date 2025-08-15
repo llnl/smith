@@ -82,15 +82,16 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
    * @tparam BodyIntegralType The type of the body integral
    * @param body_name The name of the registered domain over which the body integrals are evaluated.
-   * @param body_integrand A function describing the body force applied.  Our convention for the sign of the residual
+   * @param integrand A function describing the body force applied.  Our convention for the sign of the residual
    * vector is that it is expected to be a 'negative force', so the mass terms show up with a positive sign in the
    * residual.  This also ensures that the Jacobian of the residual is positive definite for most physics.  A body
    * integrand involving 'right hand side' contributions like a body load, should be supplied by the user with a
    * negative sign.
-   * @pre body_integrand must be a object that can be called with the following arguments:
+   * @pre integrand must be a object that can be called with the following arguments:
    *    1. `double t` the time
-   *    2. `tensor<T,dim> x` the spatial coordinates for the quadrature point
-   *    3. `tuple{value, derivative}`, a variadic list of tuples (each with a values and derivative),
+   *    2. `tuple{tensor<T,dim>, isoparametric derivative} X` the spatial coordinates for the quadrature point and the
+   * coordinate's isoparametric derivative.
+   *    3. `tuple{value, derivative}`, a variadic list of tuples (each with a values and spatial derivative),
    *            one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
@@ -99,17 +100,16 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    */
   template <int... active_parameters, typename BodyIntegralType>
-  void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType body_integrand)
+  void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType integrand)
   {
     residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<active_parameters...>{},
-        [body_integrand](double t, auto X, auto... inputs) { return body_integrand(t, X, inputs...); },
-        mesh_->domain(body_name));
+        [integrand](double t, auto X, auto... inputs) { return integrand(t, X, inputs...); }, mesh_->domain(body_name));
 
     v_residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
-        [body_integrand](double t, auto X, auto V, auto... inputs) {
-          auto orig_tuple = body_integrand(t, X, inputs...);
+        [integrand](double t, auto X, auto V, auto... inputs) {
+          auto orig_tuple = integrand(t, X, inputs...);
           return serac::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
                  serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
         },
@@ -129,7 +129,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
    * @tparam NeumannType The type of the traction load
    * @param boundary_name The name of the registered domain over which the traction is applied.
-   * @param surface_integrand A function describing the traction applied to a boundary
+   * @param integrand A function describing the traction applied to a boundary
    * used.  Our convention for the sign of the residual
    * vector is that it is expected to be a 'negative force', so the mass terms show up with a positive sign in the
    * residual.  This also ensures that the Jacobian of the residual is positive definite for most physics.  A body
@@ -137,7 +137,7 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * negative sign.
    * @pre NeumannType must be a object that can be called with the following arguments:
    *    1. `double t` the time
-   *    1. `tensor<T,dim> x` the spatial coordinates for the quadrature point
+   *    1. `tensor<T,dim> X` the spatial coordinates for the quadrature point
    *    3. `tensor<T,dim> n` the outward-facing unit normal for the quadrature point
    *    4. `tuple{value, derivative}`, a variadic list of tuples (each with a values and derivative),
    *            one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
@@ -148,21 +148,21 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    */
   template <int... active_parameters, typename NeumannType>
-  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, NeumannType surface_integrand)
+  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, NeumannType integrand)
   {
     residual_->AddBoundaryIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
-        [surface_integrand](double t, auto X, auto... params) {
+        [integrand](double t, auto X, auto... params) {
           auto n = cross(get<DERIVATIVE>(X));
-          return surface_integrand(t, get<VALUE>(X), normalize(n), params...);
+          return integrand(t, get<VALUE>(X), normalize(n), params...);
         },
         mesh_->domain(boundary_name));
 
     v_residual_->AddBoundaryIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
-        [surface_integrand](double t, auto X, auto V, auto... params) {
+        [integrand](double t, auto X, auto V, auto... params) {
           auto n = cross(get<DERIVATIVE>(X));
-          auto orig_surface_flux = surface_integrand(t, get<VALUE>(X), normalize(n), params...);
+          auto orig_surface_flux = integrand(t, get<VALUE>(X), normalize(n), params...);
           return serac::inner(get<VALUE>(V), orig_surface_flux);
         },
         mesh_->domain(boundary_name));
@@ -170,9 +170,9 @@ class FunctionalResidual<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
   /// @overload
   template <typename NeumannType>
-  void addBoundaryIntegral(std::string boundary_name, NeumannType surface_integrand)
+  void addBoundaryIntegral(std::string boundary_name, NeumannType integrand)
   {
-    addBoundaryIntegral(DependsOn<>{}, boundary_name, surface_integrand);
+    addBoundaryIntegral(DependsOn<>{}, boundary_name, integrand);
   }
 
   /// @overload
