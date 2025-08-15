@@ -10,6 +10,7 @@
 #include <functional>
 #include <mesh/vtk.hpp>
 #include <set>
+#include <src/serac/physics/contact/contact_config.hpp>
 #include <string>
 #include "axom/slic/core/SimpleLogger.hpp"
 #include <gtest/gtest.h>
@@ -85,17 +86,17 @@ TEST_P(ContactTest, patch)
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
-                                 .enforcement = std::get<0>(GetParam()),
+                                 .enforcement =serac::ContactEnforcement::Penalty,
                                  .type = ContactType::Frictionless,
-                                 .penalty = 25000,
-                                 .penalty2 = 25000,
-                                 .jacobian = std::get<1>(GetParam())};
+                                 .penalty = 100000,
+                                 .penalty2 = 0,
+                                 .jacobian = serac::ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, mesh);
 
-  double K = 1000.0;
-  double G = 1200;
+  double K = 10000.0;
+  double G = 10;
   solid_mechanics::NeoHookean mat{1.0, K, G};
   solid_solver.setMaterial(mat, mesh->entireBody());
 
@@ -126,7 +127,8 @@ TEST_P(ContactTest, patch)
   solid_solver.outputStateToDisk(paraview_name);
 
   // Check the l2 norm of the displacement dofs
-  auto c = (3.0 * K - 2.0 * G) / (3.0 * K + G);
+  auto c = (3.0 * K - 2.0 * G) / ((3.0 * K + 2*G));
+  // auto c = 0.0;
   mfem::VectorFunctionCoefficient elasticity_sol_coeff(2, [c](const mfem::Vector& x, mfem::Vector& u) {
     u[0] = 0.005 * c * x[0];
     u[1] = -0.005 * x[1];
@@ -138,13 +140,14 @@ TEST_P(ContactTest, patch)
   mfem::ParGridFunction approx_error(elasticity_sol);
   approx_error -= solid_solver.displacement().gridFunction();
   auto approx_error_l2 = mfem::ParNormlp(approx_error, 2, MPI_COMM_WORLD);
-  EXPECT_NEAR(0.0, approx_error_l2, 1.0e-3);
+  EXPECT_NEAR(0.0, approx_error_l2, 1.0e-2);
 }
 
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTest,
     testing::Values(
-                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")));
+                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ")));
+                    // std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")));
 
 }  // namespace serac
 

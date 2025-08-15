@@ -64,8 +64,8 @@ int main(int argc, char* argv[])
     // std::shared_ptr<serac::Mesh> mesh = std::make_shared<serac::Mesh>(filename, "ironing_2D_mesh", 2, 0);
 
     auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-        shared::MeshBuilder::SquareMesh(32, 32).updateBdrAttrib(1, 6).updateBdrAttrib(3, 9).bdrAttribInfo().scale({1.0, 1.0}), 
-        shared::MeshBuilder::SquareMesh(32, 32).scale({0.25, 0.25}).translate({0.0, 1.0}).updateBdrAttrib(3, 5).updateBdrAttrib(1,8).updateAttrib(1, 2)}), "iroing_2D_mesh", 0, 0);
+        shared::MeshBuilder::SquareMesh(32, 32).updateBdrAttrib(1, 6).updateBdrAttrib(3, 9).bdrAttribInfo().scale({1.0, 0.5}), 
+        shared::MeshBuilder::SquareMesh(8, 8).scale({0.25, 0.25}).translate({0.0, 0.5}).updateBdrAttrib(3, 5).updateBdrAttrib(1,8).updateAttrib(1, 2)}), "iroing_2D_mesh", 0, 0);
 
     serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level=0};
 
@@ -79,7 +79,7 @@ int main(int argc, char* argv[])
         return 1;
     #endif
 
-        serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
+        serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::TrustRegion,
                                                         .relative_tol = 1.0e-8, 
                                                         .absolute_tol = 1.0e-10,
                                                         .max_iterations = 50,
@@ -106,7 +106,7 @@ int main(int argc, char* argv[])
 
         serac::FiniteElementState G_field(serac::StateManager::newState(serac::L2<0>{}, "shear_mod", mesh->tag()));
 
-        mfem::Vector G_values({0.25, 2.5});
+        mfem::Vector G_values({0.1, 2.5});
         mfem::PWConstCoefficient G_coeff(G_values);
         G_field.project(G_coeff);
         solid_solver.setParameter(1, G_field);
@@ -124,12 +124,12 @@ int main(int argc, char* argv[])
             serac::tensor<double, dim> u{};
             // std::cout << "T ========= " << t << std::endl;
             if (t <= init_steps + 1.0e-12) {
-                u[1] = -t * 0.2 / init_steps;
+                u[1] = -t * 0.05 / init_steps;
                 // std::cout << "In IF statement. u[1] = " << u[1] << " and t = " << t << std::endl;
             }
             else {
-                u[0] = (t - init_steps) * 0.0005;
-                u[1] = -0.2;
+                u[0] = (t - init_steps) * 0.01;
+                u[1] = -0.05;
                 // std::cout << "in ELSE statement. u[1] = " << u[1] << " and u[0] = " << u[0] << " and t = " << t << std::endl;
             }
             return u;
@@ -156,11 +156,14 @@ int main(int argc, char* argv[])
         //Perform the quasi-static solve
         double dt = 1.0;
 
-        for (int i{0}; i < 100; ++i) {
+        for (int i{0}; i < 150; ++i) {
             solid_solver.advanceTimestep(dt);
             visit_dc.SetCycle(i);
             visit_dc.SetTime((i+1)*dt);
             visit_dc.Save();
+            if (i == 88) {
+                std::cout << i << std::endl;
+            }
 
             //Output the sidre-based plot files
             solid_solver.outputStateToDisk(visit_name);

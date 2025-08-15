@@ -34,7 +34,7 @@ TEST_P(ContactFiniteDiff, patch)
   constexpr int p = 1;
   constexpr int dim = 2;
 
-  constexpr double eps = 1.0e-4;
+  constexpr double eps = 0.7;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -45,7 +45,7 @@ TEST_P(ContactFiniteDiff, patch)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  double shift = eps * 10;
+  double shift = 0.0;
   // clang-format off
   auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
     shared::MeshBuilder::SquareMesh(1, 1).translate({0.0, 0.9}).translate({shift, 0.0}).bdrAttribInfo()
