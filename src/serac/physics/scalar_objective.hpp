@@ -38,8 +38,8 @@ class ScalarObjective {
    *
    * @param time time
    * @param dt  time step
-   * @param shape_disp shape displacement const serac::FiniteElementState*
-   * @param fields vector of serac::FiniteElementState*
+   * @param shape_disp shape displacement
+   * @param fields inputs to residual operator
    * @return double which is the scalar objective value
    */
   virtual double evaluate(double time, double dt, ConstFieldPtr shape_disp,
@@ -49,8 +49,8 @@ class ScalarObjective {
    *
    * @param time time
    * @param dt time step
-   * @param shape_disp shape displacement const serac::FiniteElementState*
-   * @param fields vector of serac::FiniteElementState*
+   * @param shape_disp shape displacement
+   * @param fields inputs to residual operator
    * @param field_ordinal index for which field to take the gradient with respect to
    * @return mfem::Vector
    */
@@ -61,8 +61,8 @@ class ScalarObjective {
    *
    * @param time time
    * @param dt time step
-   * @param shape_disp shape displacement const serac::FiniteElementState*
-   * @param fields vector of const serac::FiniteElementState*
+   * @param shape_disp shape displacement
+   * @param fields inputs to residual operator
    * @return mfem::Vector
    */
   virtual mfem::Vector mesh_coordinate_gradient(double time, double dt, ConstFieldPtr shape_disp,

@@ -78,7 +78,7 @@ class Residual {
                                                          int block_row = 0) const = 0;
 
   /**
-   * @brief Jacobian-vector product, will overwrite any existing values in jvpReactions
+   * @brief Jacobian-vector product, will overwrite any existing values in jvp_reactions
    * @param time time
    * @param dt time step
    * @param shape_disp serac::FiniteElementState*, change in model coordinates relative to the initially read in mesh
@@ -87,7 +87,7 @@ class Residual {
    * @param v_shape_disp shape_displacement tangent
    * @param v_fields field tangents, right hand side 'v' fields
    * @param v_quad_fields quadrature_field_tangents
-   * @param jvp_reactions output vjps, 1 per row of a block system: d{r}_i / d{fields}_j * fieldsV[j]
+   * @param jvp_reactions output jvps, 1 per row of a block system: d{r}_i / d{fields}_j * fieldsV[j]
    * nullptr fieldsV are assumed to be all zero to avoid extra calculations
    */
   virtual void jvp(double time, double dt, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
@@ -104,9 +104,9 @@ class Residual {
    * @param fields vector of serac::FiniteElementState*
    * @param quad_fields vector of ConstQuadratureFieldPtr
    * @param v_fields left hand side 'v' fields
-   * @param vjp_shape_disp_sensitivity jvp for shape_displacement: v_fields[i] * d{r}_i / d{shape_disp}
-   * @param vjp_sensitivities output jvps, 1 per input field: v_fields[i] * d{r}_i / d{fields}_j
-   * @param vjp_quadrature_sensivities output jvps, 1 per input quadrature field: v_fields[i] * d{r}_i /
+   * @param vjp_shape_disp_sensitivity vjp for shape_displacement: v_fields[i] * d{r}_i / d{shape_disp}
+   * @param vjp_sensitivities output vjps, 1 per input field: v_fields[i] * d{r}_i / d{fields}_j
+   * @param vjp_quadrature_sensivities output vjps, 1 per input quadrature field: v_fields[i] * d{r}_i /
    * d{quadrature_field}_j
    */
   virtual void vjp(double time, double dt, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
