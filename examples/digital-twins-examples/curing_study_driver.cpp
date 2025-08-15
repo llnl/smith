@@ -77,7 +77,8 @@ int main(int argc, char *argv[])
     std::cout << "    Output files will be written to '" << output_directory << "'" << std::endl;
     std::cout << "    Spatial dimension " << dim << " polynomial order " << order << std::endl;
   }
-  MFEM_ASSERT(num_parts == comm_size, "Driver must be run with one rank per mesh part");
+  // MFEM_ASSERT(num_parts == comm_size, "Driver must be run with one rank per mesh part");
+  MFEM_ASSERT(static_cast<int>(num_parts) == comm_size, "Driver must be run with one rank per mesh part");
 
   // Load mesh from generated file; give it a name; pass to StateManager
   serac::StateManager::initialize(datastore, output_directory);
