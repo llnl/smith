@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "serac/serac_config.hpp"
+
 #ifdef SERAC_USE_TRIBOL
 
 #include <vector>

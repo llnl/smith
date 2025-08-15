@@ -67,7 +67,7 @@ int main(int argc, char* argv[])
 
   contact_states[serac::ContactFields::SHAPE] = 0.0;
 
-  double time = 0., dt = 1.0;
+  double time = 0.0, dt = 1.0;
   int direction = 0;
   auto input_states = getConstFieldPointers(contact_states);
   auto gap = contact_constraint.evaluate(time, dt, input_states);
