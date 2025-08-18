@@ -5,23 +5,23 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file heat_transfer_residual.hpp
+ * @file heat_transfer_weak_form.hpp
  *
- * @brief Implements the residual interface for solid mechanics physics.
- * Derives from functional_residual.
+ * @brief Implements the residual interface for heat transfer physics.
+ * Derives from FunctionalWeakForm.
  */
 
 #pragma once
 
-#include "serac/physics/functional_residual.hpp"
+#include "serac/physics/functional_weak_form.hpp"
 
 namespace serac {
 
 template <int order, int dim, typename InputSpaces = Parameters<>>
-class HeatTransferResidual;
+class HeatTransferWeakForm;
 
 /**
- * @brief The nonlinear residual class
+ * @brief The weak form for heat transfer
  *
  * This uses Functional to compute the heat transfer residuals and tangent
  * stiffness matrices.
@@ -30,11 +30,11 @@ class HeatTransferResidual;
  * @tparam dim The spatial dimension of the mesh
  */
 template <int order, int dim, typename... InputSpaces>
-class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
-    : public FunctionalResidual<dim, H1<order>, Parameters<H1<order>, H1<order>, InputSpaces...>> {
+class HeatTransferWeakForm<order, dim, Parameters<InputSpaces...>>
+    : public FunctionalWeakForm<dim, H1<order>, Parameters<H1<order>, H1<order>, InputSpaces...>> {
  public:
   /// @brief typedef for underlying functional type with templates
-  using BaseResidualT = FunctionalResidual<dim, H1<order>, Parameters<H1<order>, H1<order>, InputSpaces...>>;
+  using BaseWeakFormT = FunctionalWeakForm<dim, H1<order>, Parameters<H1<order>, H1<order>, InputSpaces...>>;
 
   // /// @brief a container holding quadrature point data of the specified type
   // /// @tparam T the type of data to store at each quadrature point
@@ -60,10 +60,10 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
    * @param test_space Test space
    * @param parameter_fe_spaces Vector of parameters spaces
    */
-  HeatTransferResidual(std::string physics_name, std::shared_ptr<Mesh> mesh,
+  HeatTransferWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
                        const mfem::ParFiniteElementSpace& test_space,
                        std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
-      : BaseResidualT(physics_name, mesh, test_space, constructAllSpaces(test_space, parameter_fe_spaces))
+      : BaseWeakFormT(physics_name, mesh, test_space, constructAllSpaces(test_space, parameter_fe_spaces))
   {
   }
 
@@ -93,17 +93,17 @@ class HeatTransferResidual<order, dim, Parameters<InputSpaces...>>
   void setMaterial(DependsOn<active_parameters...>, std::string body_name, const MaterialType& material)
   {
     ThermalMaterialFunctor<MaterialType> material_functor(material);
-    BaseResidualT::residual_->AddDomainIntegral(Dimension<dim>{},
-                                                DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
-                                                std::move(material_functor), BaseResidualT::mesh_->domain(body_name));
-    BaseResidualT::v_residual_->AddDomainIntegral(
+    BaseWeakFormT::weak_form_->AddDomainIntegral(Dimension<dim>{},
+                                                 DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
+                                                 std::move(material_functor), BaseWeakFormT::mesh_->domain(body_name));
+    BaseWeakFormT::v_residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + 1 + NUM_STATE_VARS...>{},
         [material_functor](double t, auto X, auto V, auto... params) {
           auto flux = material_functor(t, X, params...);
           return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
                  serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
         },
-        BaseResidualT::mesh_->domain(body_name));
+        BaseWeakFormT::mesh_->domain(body_name));
   }
 
   /// @overload

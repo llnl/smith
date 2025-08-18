@@ -13,7 +13,7 @@
 #include "mpi.h"
 #include "mfem.hpp"
 
-#include "serac/physics/solid_residual.hpp"
+#include "serac/physics/solid_weak_form.hpp"
 #include "serac/physics/functional_objective.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/physics/state/state_manager.hpp"
@@ -23,7 +23,6 @@
 #include "serac/numerics/functional/finite_element.hpp"  // for H1
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/physics/field_types.hpp"
-#include "serac/physics/residual.hpp"
 #include "serac/physics/scalar_objective.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
@@ -38,33 +37,34 @@ struct ConstrainedResidualFixture : public testing::Test {
   using DensitySpace = serac::L2<disp_order - 1>;
   using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 
-  using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
+  using SolidWeakFormT = serac::SolidWeakForm<disp_order, dim, serac::Parameters<DensitySpace>>;
 
   enum FIELD
   {
-    DISP = SolidResidualT::DISPLACEMENT,
-    VELO = SolidResidualT::VELOCITY,
-    ACCEL = SolidResidualT::ACCELERATION,
-    DENSITY = SolidResidualT::NUM_STATES
+    DISP = SolidWeakFormT::DISPLACEMENT,
+    VELO = SolidWeakFormT::VELOCITY,
+    ACCEL = SolidWeakFormT::ACCELERATION,
+    DENSITY = SolidWeakFormT::NUM_STATES
   };
 
-  auto constructResidual(const std::string& physics_name)
+  auto constructWeakForm(const std::string& physics_name)
   {
-    auto solid_mechanics_residual =
-        std::make_shared<SolidResidualT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
+    auto solid_mechanics_weak_form =
+        std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
     // setup material model
     SolidMaterial mat;
     mat.K = 1.0;
     mat.G = 0.5;
-    solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
+    solid_mechanics_weak_form->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
 
     // apply some traction boundary conditions
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
-    solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
+    solid_mechanics_weak_form->addBoundaryIntegral(surface_name,
+                                                   [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
 
     // residual is abstract Residual class to ensure usage only through BasePhysics interface
-    return solid_mechanics_residual;
+    return solid_mechanics_weak_form;
   }
 
   auto constructConstraints()
@@ -138,7 +138,7 @@ struct ConstrainedResidualFixture : public testing::Test {
     params = {density};
 
     std::string physics_name = "solid";
-    residual = constructResidual(physics_name);
+    weak_form = constructWeakForm(physics_name);
 
     params[0] = 1.2;  // set density before computing mass properties
     constraints = constructConstraints();
@@ -156,7 +156,7 @@ struct ConstrainedResidualFixture : public testing::Test {
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<serac::Residual> residual;
+  std::shared_ptr<serac::WeakForm> weak_form;
   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints;
 };
 
@@ -167,7 +167,7 @@ TEST_F(ConstrainedResidualFixture, CanComputeResidualObjectivesAndTheirGradients
   auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = residual->residual(time, dt, shape_disp.get(), input_fields);
+  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto objective_states = {input_fields[DISP], input_fields[DENSITY]};

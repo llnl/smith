@@ -19,19 +19,19 @@
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/tests/physics_test_utils.hpp"
-#include "serac/physics/heat_transfer_residual.hpp"
+#include "serac/physics/functional_weak_form.hpp"
+#include "serac/physics/heat_transfer_weak_form.hpp"
 #include "serac/numerics/functional/finite_element.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/physics/common.hpp"
 #include "serac/physics/field_types.hpp"
-#include "serac/physics/functional_residual.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
-struct ResidualFixture : public testing::Test {
+struct WeakFormFixture : public testing::Test {
   static constexpr int dim = 2;
   static constexpr int order = 1;
 
@@ -101,17 +101,17 @@ struct ResidualFixture : public testing::Test {
     });
     params[0] = 0.5;
 
-    residual = heat_transfer_residual;
+    weak_form = heat_transfer_residual;
   }
 
-  using HeatResidualT = serac::HeatTransferResidual<order, dim, serac::Parameters<ParamSpace>>;
+  using HeatResidualT = serac::HeatTransferWeakForm<order, dim, serac::Parameters<ParamSpace>>;
 
   const double time = 0.0;
   const double dt = 1.0;
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<serac::Residual> residual;
+  std::shared_ptr<serac::WeakForm> weak_form;
 
   std::unique_ptr<serac::FiniteElementState> shape_disp;
   std::unique_ptr<serac::FiniteElementDual> shape_disp_dual;
@@ -126,12 +126,12 @@ struct ResidualFixture : public testing::Test {
   std::vector<serac::FiniteElementState> param_tangents;
 };
 
-TEST_F(ResidualFixture, VjpConsistency)
+TEST_F(WeakFormFixture, VjpConsistency)
 {
   auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[HeatResidualT::TEMPERATURE].space(), "residual");
-  res_vector = residual->residual(time, dt, shape_disp.get(), input_fields);
+  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {
@@ -145,25 +145,25 @@ TEST_F(ResidualFixture, VjpConsistency)
   pseudoRand(v);
   auto field_vjps = getFieldPointers(state_duals, param_duals);
 
-  residual->vjp(time, dt, shape_disp.get(), input_fields, {}, getConstFieldPointers(v), shape_disp_dual.get(),
-                field_vjps, {});
+  weak_form->vjp(time, dt, shape_disp.get(), input_fields, {}, getConstFieldPointers(v), shape_disp_dual.get(),
+                 field_vjps, {});
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
     serac::FiniteElementState vjp = *input_fields[i];
     vjp = 0.0;
-    auto J = residual->jacobian(time, dt, shape_disp.get(), input_fields, jacobian_weights(i));
+    auto J = weak_form->jacobian(time, dt, shape_disp.get(), input_fields, jacobian_weights(i));
     J->MultTranspose(v, vjp);
     if (i == HeatResidualT::TEMPERATURE) vjp += 1.0;  // make sure vjp uses +=
     EXPECT_NEAR(vjp.Norml2(), field_vjps[i]->Norml2(), 1e-12);
   }
 }
 
-TEST_F(ResidualFixture, JvpConsistency)
+TEST_F(WeakFormFixture, JvpConsistency)
 {
   auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[HeatResidualT::TEMPERATURE].space(), "residual");
-  res_vector = residual->residual(time, dt, shape_disp.get(), input_fields);
+  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {
@@ -190,9 +190,9 @@ TEST_F(ResidualFixture, JvpConsistency)
   auto field_tangents = getFieldPointers(state_tangents, param_tangents);
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
-    auto J = residual->jacobian(time, dt, shape_disp.get(), input_fields, jacobian_weights(i));
+    auto J = weak_form->jacobian(time, dt, shape_disp.get(), input_fields, jacobian_weights(i));
     J->Mult(*field_tangents[i], jvp_slow);
-    residual->jvp(time, dt, shape_disp.get(), input_fields, {}, nullptr, selectStates(i), {}, jvps);
+    weak_form->jvp(time, dt, shape_disp.get(), input_fields, {}, nullptr, selectStates(i), {}, jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 }

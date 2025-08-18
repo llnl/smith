@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file residual.hpp
+ * @file weak_form.hpp
  *
- * @brief Specifies interface for evaluating residuals and their gradients
+ * @brief Specifies interface for evaluating residuals and their gradients for weak forms
  */
 
 #pragma once
@@ -32,18 +32,18 @@ using QuadratureField = double;                 ///< This is a placeholder for q
 using QuadratureFieldPtr = double*;             ///< This is a placeholder for quadrature field pointers
 using ConstQuadratureFieldPtr = const double*;  ///< This is a placeholder for quadrature field pointers
 
-/// @brief Abstract residual class
-class Residual {
+/// @brief Abstract WeakForm class
+class WeakForm {
  public:
   /** @brief base constructor takes the name of the physics
    * @param name provide a name corresponding to the physics
    */
-  Residual(std::string name) : name_(name) {}
+  WeakForm(std::string name) : name_(name) {}
 
   /// @brief destructor
-  virtual ~Residual() {}
+  virtual ~WeakForm() {}
 
-  /** @brief Virtual interface for computing residual from a vector of serac::FiniteElementState*
+  /** @brief Virtual interface for computing the residual vector residual of a weak form
    *
    * @param time time
    * @param dt time step
