@@ -136,7 +136,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *    2. `tensor<T,dim> X` the spatial coordinates for the quadrature point.
    *    3. `value`, a variadic list of field values, one tuple for each of the trial spaces specified in the
    * `DependsOn<...>` argument.
-   *    The expected return is the value (either double or tensor<double,field_dim>) of the body source/load flux
+   *    The expected return is the value of the body source/load (either double or tensor<double,field_dim>) 
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
