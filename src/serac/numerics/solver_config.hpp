@@ -134,6 +134,13 @@ inline std::string linearName(const LinearSolver& s)
 /// output linear solver string representation to a stream
 inline std::ostream& operator<<(std::ostream& os, LinearSolver s) { return os << linearName(s); }
 
+// string->value matching for optionally entering options as string in command line
+inline std::map<std::string, LinearSolver> linearSolverMap = {
+    {"CG", LinearSolver::CG},           {"GMRES", LinearSolver::GMRES},
+    {"SuperLU", LinearSolver::SuperLU}, {"Strumpack", LinearSolver::Strumpack},
+    {"PetscCG", LinearSolver::PetscCG}, {"PetscGMRES", LinearSolver::PetscGMRES},
+};
+
 // Add a custom list of strings? conduit node?
 // Arbitrary string (e.g. json) to define parameters?
 
@@ -188,6 +195,21 @@ inline std::string nonlinearName(const NonlinearSolver& s)
 
 /// output nonlinear solver string representation to a stream
 inline std::ostream& operator<<(std::ostream& os, NonlinearSolver s) { return os << nonlinearName(s); }
+
+// string->value matching for optionally entering options as string in command line
+inline std::map<std::string, NonlinearSolver> nonlinearSolverMap = {
+    {"Newton", NonlinearSolver::Newton},
+    {"LBFGS", NonlinearSolver::LBFGS},
+    {"NewtonLineSearch", NonlinearSolver::NewtonLineSearch},
+    {"TrustRegion", NonlinearSolver::TrustRegion},
+    {"KINFullStep", NonlinearSolver::KINFullStep},
+    {"KINBacktrackingLineSearch", NonlinearSolver::KINBacktrackingLineSearch},
+    {"KINPicard", NonlinearSolver::KINPicard},
+    {"PetscNewton", NonlinearSolver::PetscNewton},
+    {"PetscNewtonBacktracking", NonlinearSolver::PetscNewtonBacktracking},
+    {"PetscNewtonCriticalPoint", NonlinearSolver::PetscNewtonCriticalPoint},
+    {"PetscTrustRegion", NonlinearSolver::PetscTrustRegion},
+};
 
 /**
  * @brief Solver types supported by AMGX
@@ -336,6 +358,18 @@ inline std::string preconditionerName(Preconditioner p)
 
 /// output preconditioner string representation to a stream
 inline std::ostream& operator<<(std::ostream& os, Preconditioner p) { return os << preconditionerName(p); }
+
+// string->value matching for optionally entering options as string in command line
+inline std::map<std::string, Preconditioner> preconditionerMap = {
+    {"HypreJacobi", Preconditioner::HypreJacobi},
+    {"HypreL1Jacobi", Preconditioner::HypreL1Jacobi},
+    {"HypreGaussSeidel", Preconditioner::HypreGaussSeidel},
+    {"HypreAMG", Preconditioner::HypreAMG},
+    {"HypreILU", Preconditioner::HypreILU},
+    {"AMGX", Preconditioner::AMGX},
+    {"Petsc", Preconditioner::Petsc},
+    {"None", Preconditioner::None},
+};
 
 // _linear_options_start
 /// Parameters for an iterative linear solution scheme
