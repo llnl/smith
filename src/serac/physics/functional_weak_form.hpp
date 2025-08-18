@@ -126,11 +126,12 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   /**
    * @brief Add a body source (body load) to the weak form
    *
-   * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
+   * @tparam active_parameters Type for indices into fields which the body integral may depend on
    * @tparam BodyLoadType The type of the body load function
    * @param body_name The name of the registered domain over which the body loads are applied.
-   * @param integrand A function describing the body force applied.
-   * @pre integrand must be a object that can be called with the following arguments:
+   * @param depends_on Andices into fields which the body integral may depend on
+   * @param load_function A function describing the body force applied.
+   * @pre load_function must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    2. `tensor<T,dim> X` the spatial coordinates for the quadrature point.
    *    3. `value`, a variadic list of field values, one tuple for each of the trial spaces specified in the
@@ -142,9 +143,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    */
   template <int... active_parameters, typename BodyLoadType>
-  void addBodySource(DependsOn<active_parameters...> depends, std::string body_name, BodyLoadType load_function)
+  void addBodySource(DependsOn<active_parameters...> depends_on, std::string body_name, BodyLoadType load_function)
   {
-    addBodyIntegral(depends, body_name, [load_function](double t, auto X, auto... inputs) {
+    addBodyIntegral(depends_on, body_name, [load_function](double t, auto X, auto... inputs) {
       return serac::tuple{-load_function(t, get<VALUE>(X), get<VALUE>(inputs)...), serac::zero{}};
     });
   }
@@ -168,7 +169,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * residual.  This also ensures that the Jacobian of the residual is positive definite for most physics.  A body
    * integrand involving 'right hand side' contributions like a body load, should be supplied by the user with a
    * negative sign.  Otherwise, the addBoundaryFlux method can be used.
-   * @pre BoundaryIntegrandType must be a object that can be called with the following arguments:
+   * @pre integrand must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    2. `tuple{tensor<T,dim>, surface isoparametric derivative} X` the spatial coordinates for the quadrature point
    *    3. `tuple{value, surface isoparametric derivative}`, a variadic list of tuples (each with a values and
@@ -204,16 +205,17 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   /**
    * @brief Add a boundary flux term to the weak form
    *
-   * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
+   * @tparam active_parameters Type for indices into fields which the body integral may depend on
    * @tparam BoundaryFluxType The type of the traction load
+   * @param depends_on Andices into fields which the body integral may depend on
    * @param boundary_name The name of the registered domain over which the boundary integral is applied.
-   * @param integrand A function describing the boundary integral term to include in the weak form.
+   * @param flux_function A function describing the boundary integral term to include in the weak form.
    * Our convention for the sign of the residual
    * vector is that it is expected to be a 'negative force', so the mass terms show up with a positive sign in the
    * residual.  This also ensures that the Jacobian of the residual is positive definite for most physics.  A body
    * integrand involving 'right hand side' contributions like a body load, should be supplied by the user with a
    * negative sign.
-   * @pre BoundaryFluxType must be a object that can be called with the following arguments:
+   * @pre flux_function must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    1. `tensor<T,dim> X` the spatial coordinates for the quadrature point
    *    3. `tensor<T,dim> n` the outward-facing unit normal for the quadrature point
@@ -228,10 +230,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    */
   template <int... active_parameters, typename BoundaryFluxType>
-  void addBoundaryFlux(DependsOn<active_parameters...> depends, std::string boundary_name,
+  void addBoundaryFlux(DependsOn<active_parameters...> depends_on, std::string boundary_name,
                        BoundaryFluxType flux_function)
   {
-    addBoundaryIntegral(depends, boundary_name, [flux_function](double t, auto X, auto... inputs) {
+    addBoundaryIntegral(depends_on, boundary_name, [flux_function](double t, auto X, auto... inputs) {
       auto n = cross(get<DERIVATIVE>(X));
       return -flux_function(t, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
     });
