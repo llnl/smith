@@ -66,14 +66,14 @@ For other machines:
 
    $ python3 scripts/uberenv/uberenv.py --project-json=scripts/spack/devtools.json --spack-env-file=<scripts/spack/configs/platform/spack.yaml> --prefix=<devtool/build/path>
 
-For example on **Ubuntu 20.04**:
+For example on **Ubuntu 24.04**:
 
 .. code-block:: bash
 
-   python3 scripts/uberenv/uberenv.py --project-json=scripts/spack/devtools.json --spack-env-file=scripts/spack/configs/linux_ubuntu_20/spack.yaml --prefix=../path/to/install
+   python3 scripts/uberenv/uberenv.py --project-json=scripts/spack/devtools.json --spack-env-file=scripts/spack/configs/linux_ubuntu_24/spack.yaml --prefix=../path/to/install
 
 Unlike Serac's library dependencies, our developer tools can be built with any compiler because
-they are not linked into the serac executable.  We recommend GCC 10 because we have tested that they all
+they are not linked into the serac executable.  We recommend Clang 19 because we have tested that they all
 build with that compiler.
 
 Building Serac's Dependencies via Spack/uberenv
