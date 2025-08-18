@@ -239,6 +239,10 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     # Conflicts
     #
 
+    # Enzyme required an LLVM-based compiler
+    for compiler in ["aocc", "cce", "gcc", "nag", fj", "intel", "nvhpc", "xl"]
+        conflicts("+enzyme", when=f"%{compiler}")
+
     conflicts("+openmp", when="+rocm")
     conflicts("+cuda", when="+rocm")
     conflicts("~umpire", when="+raja", msg="Axom requires both raja and umpire in order to properly set CAMP_DIR.")
