@@ -313,8 +313,7 @@ by another package, so you can also add it with this yaml section:
 .. important::
 
     Uberenv will override existing ``spack.yaml`` files in the current working directory. Now that we have made modifications,
-    you should rename or move the file so they are not lost. For the rest of instruction, we will assume you renamed the file to
-    ``ubuntu24.yaml``.
+    you should rename/move the file so the changes are not lost and adjust the `uberenv.py` commands to reflect the new file name.
 
 
 .. _building_tpls-label:
