@@ -6,11 +6,11 @@
 
 #pragma once
 
+#include "mfem.hpp"
+
 #include "serac/numerics/functional/tuple.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/dual.hpp"
-
-#include "mfem.hpp"
 
 namespace serac {
 

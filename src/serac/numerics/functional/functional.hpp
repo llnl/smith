@@ -12,6 +12,15 @@
 
 #pragma once
 
+#include <algorithm>
+#include <array>
+#include <functional>
+#include <memory>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
@@ -21,13 +30,8 @@
 #include "serac/numerics/functional/finite_element.hpp"
 #include "serac/numerics/functional/integral.hpp"
 #include "serac/numerics/functional/differentiate_wrt.hpp"
-
 #include "serac/numerics/functional/element_restriction.hpp"
-
 #include "serac/numerics/functional/domain.hpp"
-
-#include <array>
-#include <vector>
 
 namespace serac {
 

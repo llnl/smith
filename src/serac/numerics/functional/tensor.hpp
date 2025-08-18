@@ -12,11 +12,10 @@
 
 #pragma once
 
-#include "serac/infrastructure/accelerator.hpp"
-
-#include "detail/metaprogramming.hpp"
-
 #include <cmath>
+
+#include "serac/infrastructure/accelerator.hpp"
+#include "detail/metaprogramming.hpp"
 
 namespace serac {
 

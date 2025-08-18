@@ -5,18 +5,20 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file test_finite_element_staet.cpp
+ * @file test_finite_element_state.cpp
  */
 
+#include "gtest/gtest.h"
+#include <memory>
+#include <string>
+
 #include "serac/physics/state/finite_element_state.hpp"
-
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
-#include "mfem.hpp"
-
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/functional/functional.hpp"
+#include "serac/serac_config.hpp"
 
 namespace serac {
 

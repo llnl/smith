@@ -6,7 +6,13 @@
 
 #pragma once
 
+#include <cstdlib>
 #include <vector>
+#include <array>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <set>
 
 #include "mfem.hpp"
 

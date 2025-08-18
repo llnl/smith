@@ -6,6 +6,10 @@
 
 #include "serac/infrastructure/cli.hpp"
 
+#include <cstdlib>
+#include <utility>
+#include <vector>
+
 #include "axom/CLI11.hpp"
 
 #include "serac/infrastructure/input.hpp"

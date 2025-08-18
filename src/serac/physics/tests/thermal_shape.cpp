@@ -4,20 +4,25 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/heat_transfer.hpp"
-#include "serac/physics/materials/thermal_material.hpp"
-#include "serac/physics/materials/parameterized_thermal_material.hpp"
+#include <memory>
+#include <set>
+#include <string>
 
-#include <fstream>
-
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "mpi.h"
 #include "mfem.hpp"
 
+#include "serac/physics/heat_transfer.hpp"
+#include "serac/physics/materials/thermal_material.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"  // for H1
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 namespace serac {
 
@@ -155,9 +160,6 @@ TEST(HeatTransfer, MoveShape)
 }
 
 }  // namespace serac
-
-//------------------------------------------------------------------------------
-#include "axom/slic/core/SimpleLogger.hpp"
 
 int main(int argc, char* argv[])
 {

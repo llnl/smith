@@ -13,6 +13,9 @@
 
 #pragma once
 
+#include <memory>
+#include <variant>
+
 #include "serac/mesh_utils/mesh_utils_base.hpp"
 
 /**

@@ -13,7 +13,6 @@
 #pragma once
 
 #include <iostream>
-
 #include <cmath>
 
 #include "serac/infrastructure/accelerator.hpp"
