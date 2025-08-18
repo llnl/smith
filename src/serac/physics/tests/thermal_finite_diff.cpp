@@ -15,9 +15,6 @@
 
 #include "serac/serac_config.hpp"
 
-#ifndef SERAC_USE_ENZYME
-#error "This file requires Enzyme to be enabled
-
 #include "serac/physics/heat_transfer.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
