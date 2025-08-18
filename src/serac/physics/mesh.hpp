@@ -116,17 +116,14 @@ class Mesh {
   serac::Domain& addDomainOfBodyElements(const std::string& domain_name,
                                          std::function<bool(std::vector<vec2>, int)> func);
 
-  /// @brief get non-const shape displacement
-  serac::FiniteElementState& shapeDisplacement();
+  /// @brief get space associated with shape displacement
+  const mfem::ParFiniteElementSpace& shapeDisplacementSpace();
 
-  /// @brief get const shape displacement
-  const serac::FiniteElementState& shapeDisplacement() const;
+  /// @brief create new shape displacement
+  serac::FiniteElementState newShapeDisplacement();
 
-  /// @brief get non-const shape displacement dual
-  serac::FiniteElementDual& shapeDisplacementDual();
-
-  /// @brief get const shape displacement dual
-  const serac::FiniteElementDual& shapeDisplacementDual() const;
+  /// @brief create new shape displacement sensitivity
+  serac::FiniteElementDual newShapeDisplacementDual();
 
  private:
   /// @brief Sets up some initial domains: entire domain, entire boundary, and interior faces. Eventually we can read
@@ -141,12 +138,6 @@ class Mesh {
 
   /// @brief map from registered domain name to the domain instance
   mutable std::map<std::string, serac::Domain> domains_;
-
-  /// @brief shape_displacement
-  std::shared_ptr<serac::FiniteElementState> shape_displacement_;
-
-  /// @brief shape_displacement dual
-  std::shared_ptr<serac::FiniteElementDual> shape_displacement_dual_;
 };
 
 }  // namespace serac

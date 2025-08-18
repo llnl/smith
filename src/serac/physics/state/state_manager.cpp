@@ -21,6 +21,7 @@ namespace serac {
 // Initialize StateManager's static members - these will be fully initialized in StateManager::initialize
 std::unordered_map<std::string, axom::sidre::MFEMSidreDataCollection> StateManager::datacolls_;
 std::unordered_map<std::string, std::unique_ptr<FiniteElementState>> StateManager::shape_displacements_;
+std::unordered_map<std::string, std::unique_ptr<FiniteElementDual>> StateManager::shape_displacement_duals_;
 bool StateManager::is_restart_ = false;
 axom::sidre::DataStore* StateManager::ds_ = nullptr;
 std::string StateManager::output_dir_ = "";
@@ -114,8 +115,17 @@ void StateManager::initialize(axom::sidre::DataStore& ds, const std::string& out
   }
 }
 
+FiniteElementDual& StateManager::shapeDisplacementDual(const std::string& mesh_tag)
+{
+  SLIC_ERROR_ROOT_IF(shape_displacement_duals_.count(mesh_tag) == 0,
+                     axom::fmt::format("No shape displacement dual exists on mesh named '{}'", mesh_tag));
+  return *shape_displacement_duals_[mesh_tag];
+}
+
 FiniteElementState& StateManager::shapeDisplacement(const std::string& mesh_tag)
 {
+  SLIC_ERROR_ROOT_IF(shape_displacements_.count(mesh_tag) == 0,
+                     axom::fmt::format("No shape displacement exists on mesh named '{}'", mesh_tag));
   return *shape_displacements_[mesh_tag];
 }
 
@@ -237,10 +247,12 @@ void StateManager::constructShapeFields(const std::string& mesh_tag)
   // Construct the shape displacement field associated with this mesh
   auto& new_mesh = mesh(mesh_tag);
 
-  if (new_mesh.Dimension() == 2) {
+  int dim = new_mesh.Dimension();
+
+  if (dim == 2) {
     shape_displacements_[mesh_tag] =
         std::make_unique<FiniteElementState>(new_mesh, SHAPE_DIM_2, mesh_tag + "_shape_displacement");
-  } else if (new_mesh.Dimension() == 3) {
+  } else if (dim == 3) {
     shape_displacements_[mesh_tag] =
         std::make_unique<FiniteElementState>(new_mesh, SHAPE_DIM_3, mesh_tag + "_shape_displacement");
   } else {
@@ -251,6 +263,16 @@ void StateManager::constructShapeFields(const std::string& mesh_tag)
   storeState(*shape_displacements_[mesh_tag]);
 
   *shape_displacements_[mesh_tag] = 0.0;
+
+  if (dim == 2) {
+    shape_displacement_duals_[mesh_tag] =
+        std::make_unique<FiniteElementDual>(new_mesh, SHAPE_DIM_2, mesh_tag + "_shape_displacement_dual");
+  } else {
+    shape_displacement_duals_[mesh_tag] =
+        std::make_unique<FiniteElementDual>(new_mesh, SHAPE_DIM_3, mesh_tag + "_shape_displacement_dual");
+  }
+
+  storeDual(*shape_displacement_duals_[mesh_tag]);
 }
 
 mfem::ParMesh& StateManager::mesh(const std::string& mesh_tag)
