@@ -96,7 +96,7 @@ struct WeakFormFixture : public testing::Test {
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
 
-    f_weak_form->addBoundaryIntegral(surface_name, [](double /*t*/, auto /*x*/, auto n) { return 1.0 * n; });
+    f_weak_form->addBoundaryFlux(surface_name, [](double /*t*/, auto /*x*/, auto n) { return 1.0 * n; });
     f_weak_form->addBodySource(serac::DependsOn<0>{}, mesh->entireBodyName(),
                                [](double /*t*/, auto /*x*/, auto u) { return u; });
     f_weak_form->addBodySource(mesh->entireBodyName(), [](double /*t*/, auto x) { return 0.5 * x; });
@@ -126,7 +126,7 @@ struct WeakFormFixture : public testing::Test {
 
     params[DENSITY] = 1.2;
 
-    // residual is abstract Residual class to ensure usage only through BasePhysics interface
+    // weak_form is abstract WeakForm class to ensure usage only through WeakForm interface
     weak_form = f_weak_form;
   }
 
@@ -158,7 +158,6 @@ TEST_F(WeakFormFixture, VjpConsistency)
   auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-
   res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 

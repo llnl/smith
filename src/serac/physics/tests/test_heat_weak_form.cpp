@@ -72,17 +72,16 @@ struct WeakFormFixture : public testing::Test {
 
     std::string physics_name = "heat";
 
-    auto heat_transfer_residual = std::make_shared<HeatResidualT>(
-        physics_name, mesh, states[HeatResidualT::TEMPERATURE].space(), getSpaces(params));
+    auto heat_transfer_weak_form = std::make_shared<HeatWeakFormT>(
+        physics_name, mesh, states[HeatWeakFormT::TEMPERATURE].space(), getSpaces(params));
 
     ThermalMaterial mat(1.0, 1.0, 1.0);
-    heat_transfer_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
+    heat_transfer_weak_form->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
 
     std::string source_name = "source";
     mesh->addDomainOfBoundaryElements(source_name, serac::by_attr<dim>({1, 2}));
 
-    heat_transfer_residual->addBoundaryIntegral(source_name,
-                                                [](auto /* t */, auto /* x */, auto /* n */) { return 1.0; });
+    heat_transfer_weak_form->addBoundaryFlux(source_name, [](auto /* t */, auto /* x */, auto /* n */) { return 1.0; });
 
     for (auto& s : state_tangents) {
       pseudoRand(s);
@@ -92,19 +91,19 @@ struct WeakFormFixture : public testing::Test {
     }
 
     // used to test that vjp acts via +=, add initial value to shape displacement dual
-    state_duals[HeatResidualT::TEMPERATURE] = 1.0;
+    state_duals[HeatWeakFormT::TEMPERATURE] = 1.0;
 
-    states[HeatResidualT::TEMPERATURE].setFromFieldFunction(
+    states[HeatWeakFormT::TEMPERATURE].setFromFieldFunction(
         [](serac::tensor<double, dim> x) { return 0.1 * std::pow(std::pow(x[0], 2.0) + std::pow(x[1], 2.0), 0.5); });
-    states[HeatResidualT::TEMPERATURE_RATE].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[HeatWeakFormT::TEMPERATURE_RATE].setFromFieldFunction([](serac::tensor<double, dim> x) {
       return 0.01 * std::pow(std::pow(x[0], 2.0) + std::pow(0.5 * x[1], 2.0), 0.5);
     });
     params[0] = 0.5;
 
-    weak_form = heat_transfer_residual;
+    weak_form = heat_transfer_weak_form;
   }
 
-  using HeatResidualT = serac::HeatTransferWeakForm<order, dim, serac::Parameters<ParamSpace>>;
+  using HeatWeakFormT = serac::HeatTransferWeakForm<order, dim, serac::Parameters<ParamSpace>>;
 
   const double time = 0.0;
   const double dt = 1.0;
@@ -130,7 +129,7 @@ TEST_F(WeakFormFixture, VjpConsistency)
 {
   auto input_fields = getConstFieldPointers(states, params);
 
-  serac::FiniteElementDual res_vector(states[HeatResidualT::TEMPERATURE].space(), "residual");
+  serac::FiniteElementDual res_vector(states[HeatWeakFormT::TEMPERATURE].space(), "residual");
   res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
@@ -153,7 +152,7 @@ TEST_F(WeakFormFixture, VjpConsistency)
     vjp = 0.0;
     auto J = weak_form->jacobian(time, dt, shape_disp.get(), input_fields, jacobian_weights(i));
     J->MultTranspose(v, vjp);
-    if (i == HeatResidualT::TEMPERATURE) vjp += 1.0;  // make sure vjp uses +=
+    if (i == HeatWeakFormT::TEMPERATURE) vjp += 1.0;  // make sure vjp uses +=
     EXPECT_NEAR(vjp.Norml2(), field_vjps[i]->Norml2(), 1e-12);
   }
 }
@@ -162,7 +161,7 @@ TEST_F(WeakFormFixture, JvpConsistency)
 {
   auto input_fields = getConstFieldPointers(states, params);
 
-  serac::FiniteElementDual res_vector(states[HeatResidualT::TEMPERATURE].space(), "residual");
+  serac::FiniteElementDual res_vector(states[HeatWeakFormT::TEMPERATURE].space(), "residual");
   res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
@@ -182,8 +181,8 @@ TEST_F(WeakFormFixture, JvpConsistency)
     return field_tangents;
   };
 
-  serac::FiniteElementDual jvp_slow(states[HeatResidualT::TEMPERATURE].space(), "jvp_slow");
-  serac::FiniteElementDual jvp(states[HeatResidualT::TEMPERATURE].space(), "jvp");
+  serac::FiniteElementDual jvp_slow(states[HeatWeakFormT::TEMPERATURE].space(), "jvp_slow");
+  serac::FiniteElementDual jvp(states[HeatWeakFormT::TEMPERATURE].space(), "jvp");
   jvp = 4.0;
   auto jvps = getFieldPointers(jvp);
 

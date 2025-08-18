@@ -29,7 +29,7 @@
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
-struct ConstrainedResidualFixture : public testing::Test {
+struct ConstrainedWeakFormFixture : public testing::Test {
   static constexpr int dim = 3;
   static constexpr int disp_order = 1;
 
@@ -60,10 +60,8 @@ struct ConstrainedResidualFixture : public testing::Test {
     // apply some traction boundary conditions
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
-    solid_mechanics_weak_form->addBoundaryIntegral(surface_name,
-                                                   [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
+    solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
 
-    // residual is abstract Residual class to ensure usage only through BasePhysics interface
     return solid_mechanics_weak_form;
   }
 
@@ -160,7 +158,7 @@ struct ConstrainedResidualFixture : public testing::Test {
   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints;
 };
 
-TEST_F(ConstrainedResidualFixture, CanComputeResidualObjectivesAndTheirGradients)
+TEST_F(ConstrainedWeakFormFixture, CanComputeObjectivesAndTheirGradients)
 {
   double time = 0.0;
   double dt = 1.0;

@@ -23,7 +23,7 @@ class SolidWeakForm;
 /**
  * @brief The weak form for solid mechanics
  *
- * This uses Functional to compute the solid mechanics residuals and tangent
+ * This uses serac::unctional to compute the solid mechanics residuals and tangent
  * stiffness matrices.
  *
  * @tparam order The order of the discretization of the displacement and velocity fields
@@ -104,7 +104,7 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
         Dimension<dim>{}, DependsOn<0, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
         BaseWeakFormT::mesh_->domain(body_name), qdata);
 
-    BaseWeakFormT::v_residual_->AddDomainIntegral(
+    BaseWeakFormT::v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 1, 3, active_parameters + 1 + NUM_STATE_VARS...>{},
         [material_functor](double t, auto X, auto state, auto V, auto... params) {
           auto flux = material_functor(t, X, state, params...);
@@ -157,7 +157,7 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
         Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
         BaseWeakFormT::mesh_->domain(body_name), qdata);
 
-    BaseWeakFormT::v_residual_->AddDomainIntegral(
+    BaseWeakFormT::v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 1, 2, 3, active_parameters + 1 + NUM_STATE_VARS...>{},
         [material_functor, qdata](double t, auto X, auto state, auto V, auto... params) {
           auto flux = material_functor(t, X, state, params...);
@@ -222,7 +222,7 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
         },
         BaseWeakFormT::mesh_->domain(boundary_name));
 
-    BaseWeakFormT::v_residual_->AddBoundaryIntegral(
+    BaseWeakFormT::v_dot_weak_form_residual_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + 1 + NUM_STATE_VARS...>{},
         [pressure_function](double t, auto X, auto V, auto displacement, auto... params) {
           auto x = X + displacement;
@@ -341,12 +341,12 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
 };
 
 /**
- * @brief Utility function for creating a shared_ptr<SolidResidual<>>
+ * @brief Utility function for creating a shared_ptr<SolidWeakForm<>>
  */
 template <int order, int dim, typename... ParameterSpaces>
-auto create_solid_residual(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
-                           const std::vector<serac::FiniteElementState*>& states,  // u, v, a, e
-                           const std::vector<serac::FiniteElementState*>& params)
+auto create_solid_weak_form(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
+                            const std::vector<serac::FiniteElementState*>& states,  // u, v, a, e
+                            const std::vector<serac::FiniteElementState*>& params)
 {
   /// Local enum to better document the expected indexing order to states
   enum FieldNumbering

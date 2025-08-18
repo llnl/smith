@@ -28,8 +28,8 @@ class FunctionalWeakForm;
 /**
  * @brief A nonlinear WeakForm class implemented using serac::Functional
  *
- * This uses Functional to compute fairly arbitrary residuals and tangent
- * stiffness matrices based on body and boundary integrals.
+ * This uses Functional to compute fairly general residuals and tangent
+ * stiffness matrices based on body and boundary weak form integrals.
  *
  */
 template <int spatial_dim, typename OutputSpace, typename... InputSpaces, int... input_indices>
@@ -41,7 +41,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   using ShapeDispSpace = H1<SHAPE_ORDER, spatial_dim>;  ///< typedef
 
   /**
-   * @brief Construct a new FunctionalResidual object
+   * @brief Construct a new FunctionalWeakForm object
    *
    * @param physics_name A name for the physics module instance
    * @param mesh The serac mesh
@@ -72,8 +72,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     weak_form_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>>(
         &shape_disp_space, &output_mfem_space, trial_spaces);
 
-    v_residual_ = std::make_unique<ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>>(
-        &shape_disp_space, vector_residual_trial_spaces);
+    v_dot_weak_form_residual_ =
+        std::make_unique<ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>>(
+            &shape_disp_space, vector_residual_trial_spaces);
   }
 
   /**
@@ -102,11 +103,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BodyIntegralType>
   void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType integrand)
   {
-    weak_form_->AddDomainIntegral(
-        Dimension<spatial_dim>{}, DependsOn<active_parameters...>{},
-        [integrand](double t, auto X, auto... inputs) { return integrand(t, X, inputs...); }, mesh_->domain(body_name));
+    weak_form_->AddDomainIntegral(Dimension<spatial_dim>{}, DependsOn<active_parameters...>{}, integrand,
+                                  mesh_->domain(body_name));
 
-    v_residual_->AddDomainIntegral(
+    v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
         [integrand](double t, auto X, auto V, auto... inputs) {
           auto orig_tuple = integrand(t, X, inputs...);
@@ -124,10 +124,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /**
-   * @brief Add a body source to the weak form
+   * @brief Add a body source (body load) to the weak form
    *
    * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
-   * @tparam BodyLoadType The type of the body integral
+   * @tparam BodyLoadType The type of the body load function
    * @param body_name The name of the registered domain over which the body loads are applied.
    * @param integrand A function describing the body force applied.
    * @pre integrand must be a object that can be called with the following arguments:
@@ -160,20 +160,19 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * @brief Add a boundary integral term to the weak form
    *
    * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
-   * @tparam NeumannType The type of the traction load
+   * @tparam BoundaryIntegrandType The type of the boundary integral function.
    * @param boundary_name The name of the registered domain over which the boundary integral is applied.
    * @param integrand A function describing the boundary integral term to include in the weak form.
    * Our convention for the sign of the residual
    * vector is that it is expected to be a 'negative force', so the mass terms show up with a positive sign in the
    * residual.  This also ensures that the Jacobian of the residual is positive definite for most physics.  A body
    * integrand involving 'right hand side' contributions like a body load, should be supplied by the user with a
-   * negative sign.
-   * @pre NeumannType must be a object that can be called with the following arguments:
+   * negative sign.  Otherwise, the addBoundaryFlux method can be used.
+   * @pre BoundaryIntegrandType must be a object that can be called with the following arguments:
    *    1. `double t` the time
-   *    1. `tensor<T,dim> X` the spatial coordinates for the quadrature point
-   *    3. `tensor<T,dim> n` the outward-facing unit normal for the quadrature point
-   *    4. `tuple{value, derivative}`, a variadic list of tuples (each with a values and derivative),
-   *            one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
+   *    2. `tuple{tensor<T,dim>, surface isoparametric derivative} X` the spatial coordinates for the quadrature point
+   *    3. `tuple{value, surface isoparametric derivative}`, a variadic list of tuples (each with a values and
+   * derivative), one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
@@ -183,19 +182,13 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BoundaryIntegrandType>
   void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, BoundaryIntegrandType integrand)
   {
-    weak_form_->AddBoundaryIntegral(
-        Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
-        [integrand](double t, auto X, auto... params) {
-          auto n = cross(get<DERIVATIVE>(X));
-          return integrand(t, get<VALUE>(X), normalize(n), params...);
-        },
-        mesh_->domain(boundary_name));
+    weak_form_->AddBoundaryIntegral(Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{}, integrand,
+                                    mesh_->domain(boundary_name));
 
-    v_residual_->AddBoundaryIntegral(
+    v_dot_weak_form_residual_->AddBoundaryIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
         [integrand](double t, auto X, auto V, auto... params) {
-          auto n = cross(get<DERIVATIVE>(X));
-          auto orig_surface_flux = integrand(t, get<VALUE>(X), normalize(n), params...);
+          auto orig_surface_flux = integrand(t, X, params...);
           return serac::inner(get<VALUE>(V), orig_surface_flux);
         },
         mesh_->domain(boundary_name));
@@ -203,9 +196,52 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
   /// @overload
   template <typename BoundaryIntegrandType>
-  void addBoundaryIntegral(std::string boundary_name, BoundaryIntegrandType integrand)
+  void addBoundaryIntegral(std::string boundary_name, const BoundaryIntegrandType& integrand)
   {
     addBoundaryIntegral(DependsOn<>{}, boundary_name, integrand);
+  }
+
+  /**
+   * @brief Add a boundary flux term to the weak form
+   *
+   * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
+   * @tparam BoundaryFluxType The type of the traction load
+   * @param boundary_name The name of the registered domain over which the boundary integral is applied.
+   * @param integrand A function describing the boundary integral term to include in the weak form.
+   * Our convention for the sign of the residual
+   * vector is that it is expected to be a 'negative force', so the mass terms show up with a positive sign in the
+   * residual.  This also ensures that the Jacobian of the residual is positive definite for most physics.  A body
+   * integrand involving 'right hand side' contributions like a body load, should be supplied by the user with a
+   * negative sign.
+   * @pre BoundaryFluxType must be a object that can be called with the following arguments:
+   *    1. `double t` the time
+   *    1. `tensor<T,dim> X` the spatial coordinates for the quadrature point
+   *    3. `tensor<T,dim> n` the outward-facing unit normal for the quadrature point
+   *    4. `value`, a variadic list of tuples of field values at quadrature points,
+   *            one for each of the trial spaces specified in the `DependsOn<...>` argument.
+   *   The expected return is the (potentially vector) value of the boundary flux, oriented relative to the outward
+   * normal.
+   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
+   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
+   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
+   * 3>`)
+   *
+   */
+  template <int... active_parameters, typename BoundaryFluxType>
+  void addBoundaryFlux(DependsOn<active_parameters...> depends, std::string boundary_name,
+                       BoundaryFluxType flux_function)
+  {
+    addBoundaryIntegral(depends, boundary_name, [flux_function](double t, auto X, auto... inputs) {
+      auto n = cross(get<DERIVATIVE>(X));
+      return -flux_function(t, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
+    });
+  }
+
+  /// @overload
+  template <typename BoundaryFluxType>
+  void addBoundaryFlux(std::string boundary_name, const BoundaryFluxType& integrand)
+  {
+    addBoundaryFlux(DependsOn<>{}, boundary_name, integrand);
   }
 
   /// @overload
@@ -297,8 +333,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
                                            shape_disp, v_fields[0], fields);
     {
-      auto shape_vjp = serac::get<DERIVATIVE>(
-          (*v_residual_)(DifferentiateWRT<0>{}, time, *shape_disp, *v_fields[0], *fields[input_indices]...));
+      auto shape_vjp = serac::get<DERIVATIVE>((*v_dot_weak_form_residual_)(DifferentiateWRT<0>{}, time, *shape_disp,
+                                                                           *v_fields[0], *fields[input_indices]...));
       auto shape_vjp_vector = assemble(shape_vjp);
       *vjp_shape_disp_sensitivity += *shape_vjp_vector;
     }
@@ -321,7 +357,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   /// @return Reference to ShapeAwareFunctional instance.
   ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>& getShapeAwareVectorTimesResidual()
   {
-    return *v_residual_;
+    return *v_dot_weak_form_residual_;
   }
 
  protected:
@@ -344,11 +380,11 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
                                const std::vector<ConstFieldPtr>& fs) const
   {
     using GradFuncType =
-        std::function<decltype((*v_residual_)(DifferentiateWRT<1>{}, time, *shape_disp, *v, *fs[i]...))(
+        std::function<decltype((*v_dot_weak_form_residual_)(DifferentiateWRT<1>{}, time, *shape_disp, *v, *fs[i]...))(
             double, ConstFieldPtr, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
     return std::array<GradFuncType, sizeof...(i)>{
         [=](double _time, ConstFieldPtr _shape_disp, ConstFieldPtr _v, const std::vector<ConstFieldPtr>& _fs) {
-          return (*v_residual_)(DifferentiateWRT<i + 2>{}, _time, *_shape_disp, *_v, *_fs[i]...);
+          return (*v_dot_weak_form_residual_)(DifferentiateWRT<i + 2>{}, _time, *_shape_disp, *_v, *_fs[i]...);
         }...};
   };
 
@@ -362,7 +398,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   std::unique_ptr<ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>> weak_form_;
 
   /// @brief functional residual times and arbitrary vector v (same space as residual) evaluator, shape aware
-  std::unique_ptr<ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>> v_residual_;
+  std::unique_ptr<ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>> v_dot_weak_form_residual_;
 };
 
 /// @brief Helper function to construct vector of spaces from an existing vector of FiniteElementState.

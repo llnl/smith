@@ -7,7 +7,7 @@
 /**
  * @file heat_transfer_weak_form.hpp
  *
- * @brief Implements the residual interface for heat transfer physics.
+ * @brief Implements the WeakForm interface for heat transfer physics.
  * Derives from FunctionalWeakForm.
  */
 
@@ -23,7 +23,7 @@ class HeatTransferWeakForm;
 /**
  * @brief The weak form for heat transfer
  *
- * This uses Functional to compute the heat transfer residuals and tangent
+ * This uses serac::functional to compute the heat transfer residuals and tangent
  * stiffness matrices.
  *
  * @tparam order The order of the discretization of the temperature and temperature rate
@@ -53,7 +53,7 @@ class HeatTransferWeakForm<order, dim, Parameters<InputSpaces...>>
   };
 
   /**
-   * @brief Construct a new HeatTransferResidual object
+   * @brief Construct a new HeatTransferWeakForm object
    *
    * @param physics_name A name for the physics module instance
    * @param mesh The serac Mesh
@@ -96,7 +96,7 @@ class HeatTransferWeakForm<order, dim, Parameters<InputSpaces...>>
     BaseWeakFormT::weak_form_->AddDomainIntegral(Dimension<dim>{},
                                                  DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
                                                  std::move(material_functor), BaseWeakFormT::mesh_->domain(body_name));
-    BaseWeakFormT::v_residual_->AddDomainIntegral(
+    BaseWeakFormT::v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + 1 + NUM_STATE_VARS...>{},
         [material_functor](double t, auto X, auto V, auto... params) {
           auto flux = material_functor(t, X, params...);

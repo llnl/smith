@@ -7,7 +7,7 @@
 /**
  * @file weak_form.hpp
  *
- * @brief Specifies interface for evaluating residuals and their gradients for weak forms
+ * @brief Specifies interface for evaluating weak form residuals and their gradients
  */
 
 #pragma once
@@ -43,7 +43,7 @@ class WeakForm {
   /// @brief destructor
   virtual ~WeakForm() {}
 
-  /** @brief Virtual interface for computing the residual vector residual of a weak form
+  /** @brief Virtual interface for computing the residual vector of a weak form
    *
    * @param time time
    * @param dt time step

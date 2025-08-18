@@ -127,8 +127,7 @@ struct WeakFormFixture : public testing::Test {
     // apply traction boundary conditions
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
-    solid_mechanics_weak_form->addBoundaryIntegral(surface_name,
-                                                   [](auto /*t*/, auto /*x*/, auto n) { return 1.0 * n; });
+    solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*t*/, auto /*x*/, auto n) { return 1.0 * n; });
     solid_mechanics_weak_form->addPressure(surface_name, [](auto /*t*/, auto /*x*/) { return 0.6; });
 
     // initialize fields for testing
@@ -155,7 +154,7 @@ struct WeakFormFixture : public testing::Test {
     });
     params[0] = 1.2;
 
-    // weak_form is abstract Residual class to ensure usage only through BasePhysics interface
+    // weak_form is abstract WeakForm class to ensure usage only through WeakForm interface
     weak_form = solid_mechanics_weak_form;
   }
 
