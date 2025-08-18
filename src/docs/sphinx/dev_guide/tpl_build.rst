@@ -331,7 +331,7 @@ that you want to develop with:
 
 Some helpful uberenv options include :
 
-* ``--spec=" build_type=Debug"`` (build the MFEM and Hypre libraries with debug symbols)
+* ``--spec=" build_type=Debug"`` (build core TPLs, such as MFEM and Hypre, with debug symbols)
 * ``--spec=+profiling`` (build the Adiak and Caliper libraries)
 * ``--spec=+devtools`` (also build the devtools with one command)
 * ``--spec=%clang@19.1.1`` (build with a specific compiler as defined in the ``spack.yaml`` file)
