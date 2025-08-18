@@ -14,24 +14,6 @@
 #define USE_TET_MESH
 // #undef USE_TET_MESH
 
-
-// Uncomment the following line to use millimeter units
-#define USE_MM_UNITS
-// #undef USE_MM_UNITS
-
-// template <typename lambda>
-// struct ParameterizedBodyForce {
-//   template <int dim, typename T1, typename T2>
-//   auto operator()(const tensor<T1, dim> x, double /*t*/, T2 density) const
-//   {
-//     return get<0>(density) * acceleration(x);
-//   }
-//   lambda acceleration;
-// };
-//
-// template <typename T>
-// ParameterizedBodyForce(T) -> ParameterizedBodyForce<T>;
-
 int main(int argc, char *argv[])
 {
   using namespace serac;
@@ -70,21 +52,13 @@ int main(int argc, char *argv[])
   // Thus, loads in Newtons yields stresses and stiffnesses in units of MPa
   //       mass in kilograms yields densities in Tg/m^3
   //       density of kg/m^3 is equivalent to mg/mm^3
-#ifdef USE_MM_UNITS
+
   const double shear_modulus_value = 43.9; // MPa
   const double poisson_ratio_value = 0.48; // dimensionless
   const double mass_density_value = 1.20;  // mg/mm^3
   const double body_force_value = 5*11.76e-5; // N/mm^3
   // constexpr double mesh_unit_scale = 1.0;    // mm
   constexpr char mesh_unit_str[] = "mm";
-#else
-  const double shear_modulus_value = 43.9e6; // Pa (MPa to Pa)
-  const double poisson_ratio_value = 0.48;   // dimensionless
-  const double mass_density_value = 1200.0;  // kg/m^3
-  const double body_force_value = 11.76;     // N/m^3
-  constexpr double mesh_unit_scale = 1.0e-3; // convert mm to m
-  constexpr char mesh_unit_str[] = "m";
-#endif
 
   const double bulk_modulus_value = (2.0*shear_modulus_value*(1.0+poisson_ratio_value)) / (3.0*(1.0 - 2.0*poisson_ratio_value)); // MPa  
 
@@ -113,41 +87,6 @@ int main(int argc, char *argv[])
   // std::istream is(&fb);
   // auto mesh = std::make_unique<mfem::ParMesh>(mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false));
   auto mesh = std::make_shared<serac::Mesh>(mesh_name, mesh_tag, 0, 0);
-  
-  // mesh->EnsureNodes();
-  // mesh->ExchangeFaceNbrData();
-  // mfem::FiniteElementSpace *fespace = mesh->GetNodes()->FESpace();
-  // mesh->SetNodalFESpace(fespace);
-
-  // ----- SCALE MESH COORDINATES TO DESIRED UNITS -----
-#ifndef USE_MM_UNITS
-  // Only scale if not using mm units (i.e., when using SI/meters)
-  mfem::GridFunction *nodes = mesh->GetNodes();
-  if (0 == myid) { std::cout << "... nodes.Norml2() before scaling: " << nodes->Norml2() << std::endl; }
-  if (nodes) {
-      int vdim = nodes->VectorDim();
-      int ndofs = nodes->FESpace()->GetNDofs();
-      for (int i = 0; i < ndofs; ++i) {
-          for (int d = 0; d < vdim; ++d) {
-              (*nodes)(i + d * ndofs) *= mesh_unit_scale;
-          }
-      }
-      mesh->SetNodes(*nodes);
-      if (0 == myid) { std::cout << "... nodes.Norml2() after scaling: " << nodes->Norml2() << std::endl; }
-  }
-#endif
-
-  // mesh->Finalize(/* refine */ false, /* fix orientation */ true);
-
-  // serac::StateManager::setMesh(std::move(mesh), mesh_tag);
-  // fb.close();
-
-  // auto &mesh->mfemParMesh() = serac::StateManager::mesh(mesh_tag);
-
-  // Create domain of entire mesh
-  // ::serac::Domain entireDomain = ::serac::EntireDomain(mesh->mfemParMesh());
-
-  if (0 == myid) { std::cout << "ParMesh formed and passed to serac::StateManager." << std::endl; }
 
   double x_min(1e6), x_max(-1e6), y_min(1e6), y_max(-1e6), z_min(1e6), z_max(-1e6), xy_min(1e6), xy_max(-1e6);
   for (int i = 0; i < mesh->mfemParMesh().GetNV(); ++i) {
@@ -298,7 +237,7 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   if (0 == myid) { std::cout << "..... Solve completed. Saving output...." << std::endl; }
 
   // Save problem state for later visualization
-  std::string outname = "paraview_curing_study_driver_nonlinear_contact";
+  std::string outname = "sol_paraview_indentation_with_contact_nonlinear";
   solid_solver.outputStateToDisk(outname);
 
   double dt = 1.0;
@@ -312,9 +251,6 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   if (0 == myid) { std::cout << "Complete." << std::endl; }
 
   // TODO compute some QOIs
-
-  // Close out problem.
-  // MPI_Finalize();
 
   return 0;
 }
