@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/physics/state/finite_element_state.hpp"
+
+#include "serac/numerics/functional/domain.hpp"
 #include "serac/infrastructure/logger.hpp"
 
 namespace serac {
@@ -75,7 +77,7 @@ void FiniteElementState::projectOnBoundary(mfem::VectorCoefficient& coef, const 
 
 void FiniteElementState::project(mfem::Coefficient& coef, const Domain& domain)
 {
-  mfem::Array<int> uniq_dof_ids = domain.dof_list(gridFunction().FESpace());
+  mfem::Array<int> uniq_dof_ids = domain.dof_list(gridFunction().ParFESpace());
   mfem::ParGridFunction& grid_function = gridFunction();
   grid_function.ProjectCoefficient(coef, uniq_dof_ids);
   setFromGridFunction(grid_function);
@@ -83,7 +85,7 @@ void FiniteElementState::project(mfem::Coefficient& coef, const Domain& domain)
 
 void FiniteElementState::project(mfem::VectorCoefficient& coef, const Domain& domain)
 {
-  mfem::Array<int> uniq_dof_ids = domain.dof_list(gridFunction().FESpace());
+  mfem::Array<int> uniq_dof_ids = domain.dof_list(gridFunction().ParFESpace());
   mfem::ParGridFunction& grid_function = gridFunction();
   grid_function.ProjectCoefficient(coef, uniq_dof_ids);
   setFromGridFunction(grid_function);

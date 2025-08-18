@@ -7,14 +7,19 @@
 #include <array>
 #include <cstring>
 #include <exception>
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <stdexcept>
+#include <string>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "mpi.h"
 
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/infrastructure/cli.hpp"
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/serac_config.hpp"
 
 namespace serac {
 

@@ -15,7 +15,9 @@
 #include <memory>
 #include <optional>
 #include <variant>
+#include <utility>
 
+#include "mpi.h"
 #include "mfem.hpp"
 
 #include "serac/infrastructure/input.hpp"

@@ -6,7 +6,13 @@
 
 #pragma once
 
+#include <cstdlib>
 #include <vector>
+#include <array>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <set>
 
 #include "mfem.hpp"
 
@@ -95,6 +101,9 @@ struct Domain {
    *        these restriction operators in each Integral over a given Domain.
    */
   std::map<FunctionSpace, BlockElementRestriction> restriction_operators;
+
+  /// @brief Ids of interior faces that lie on the boundary shared by two processors
+  std::vector<int> shared_interior_face_ids_;
 
   /**
    * @brief empty Domain constructor, with connectivity info to be populated later
@@ -244,6 +253,12 @@ struct Domain {
   /// thereby populate the element lists.
   void addElements(const std::vector<int>& geom_id, const std::vector<int>& elem_id,
                    mfem::Geometry::Type element_geometry);
+
+  /**
+   * @brief Find the list of interior faces shared by two processors to make sure
+   *        these faces are only integrated once.
+   */
+  void insert_shared_interior_face_list();
 };
 
 /// @brief constructs a domain from all the elements in a mesh

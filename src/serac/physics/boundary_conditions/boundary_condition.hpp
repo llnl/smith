@@ -16,11 +16,12 @@
 #include <optional>
 #include <set>
 #include <type_traits>
-#include <typeinfo>
 #include <utility>
+#include <cstddef>
 
 #include "serac/infrastructure/logger.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
+#include "serac/physics/state/finite_element_vector.hpp"
 
 namespace serac {
 

@@ -5,6 +5,9 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 #pragma once
 
+#include <array>
+#include <cstdint>
+
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/accelerator.hpp"
 #include "serac/numerics/functional/quadrature_data.hpp"
@@ -13,9 +16,6 @@
 #ifdef SERAC_USE_RAJA
 #include "RAJA/RAJA.hpp"
 #endif
-
-#include <array>
-#include <cstdint>
 
 namespace serac {
 

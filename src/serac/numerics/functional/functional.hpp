@@ -12,6 +12,15 @@
 
 #pragma once
 
+#include <algorithm>
+#include <array>
+#include <functional>
+#include <memory>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
@@ -21,13 +30,8 @@
 #include "serac/numerics/functional/finite_element.hpp"
 #include "serac/numerics/functional/integral.hpp"
 #include "serac/numerics/functional/differentiate_wrt.hpp"
-
 #include "serac/numerics/functional/element_restriction.hpp"
-
 #include "serac/numerics/functional/domain.hpp"
-
-#include <array>
-#include <vector>
 
 namespace serac {
 
@@ -107,25 +111,6 @@ inline void check_for_unsupported_elements(const mfem::Mesh& mesh)
 }
 
 /**
- * @brief function for verifying that DG spaces aren't used on interior face integrals over meshes that contain "shared"
- * faces
- *
- * sam: I would like to support these "shared" faces, but apparently mfem handles them in a fundamentally different way
- * than the "finite element operator decomposition" pattern used by everything else (see: "ExchangeFaceNbrData")
- */
-inline void check_interior_face_compatibility(const mfem::Mesh& mesh, const FunctionSpace space)
-{
-  if (space.family == Family::L2) {
-    const mfem::ParMesh* pmesh = dynamic_cast<const mfem::ParMesh*>(&mesh);
-    if (pmesh) {
-      SLIC_ERROR_IF(
-          pmesh->GetNSharedFaces() > 0,
-          "interior face integrals involving DG function spaces don't currently support meshes with shared faces");
-    }
-  }
-}
-
-/**
  * @brief create an mfem::ParFiniteElementSpace from one of serac's
  * tag types: H1, Hcurl, L2
  *
@@ -164,6 +149,89 @@ generateParFiniteElementSpace(mfem::ParMesh* mesh)
       std::make_unique<mfem::ParFiniteElementSpace>(mesh, fec.get(), function_space::components, serac::ordering);
 
   return std::pair(std::move(fes), std::move(fec));
+}
+
+/**
+ * @brief helper function to locally cast away const on FE space so we can update face neighbor
+ * data with ExchangeFaceNbrData. This is ok because : 1) the original trial FE space is declared
+ * without const; 2) we constrained the non-constness locally; 3) the locally owned data associated
+ * with the trial function space is NOT altered and ONLY ghost data is updated.
+ */
+inline void updateFaceNbrData(const mfem::ParFiniteElementSpace* const_trial_space, mfem::ParGridFunction& trial_pgf,
+                              mfem::Vector& trial_tdof_vals)
+{
+  mfem::ParFiniteElementSpace* nonconst_trial_space = const_cast<mfem::ParFiniteElementSpace*>(const_trial_space);
+
+  // Link the ParGridFunction to external FE space and data by reference
+  trial_pgf.MakeRef(nonconst_trial_space, trial_tdof_vals.GetData());
+
+  // Exchange face nbr data to set the vector in ParGridFunction with the right size
+  // This should automatically invoke ExchangeFaceNbrData on the subsequent ParFESpace and ParMesh
+  trial_pgf.ExchangeFaceNbrData();
+}
+
+/**
+ * @brief helper functional to reorder the ordering of FaceNbrData for L2 space to byVDIM and append this vector
+ * to the end of local dof vector, which will result in a vector in form   [   ---   L    ---   |  ---  FND ---  ]
+ */
+inline void appendFaceNbrData(const mfem::ParFiniteElementSpace* trial_space, const mfem::ParGridFunction& trial_pgf,
+                              const int LSize, mfem::Vector& input_L)
+{
+  int num_ghost_elem = trial_space->GetParMesh()->GetNFaceNeighborElements();
+  int components_per_node = trial_space->GetVDim();
+  const mfem::Vector& face_neighbor_data = trial_pgf.FaceNbrData();
+
+  int offset = 0;
+  for (int n = 0; n < num_ghost_elem; ++n) {
+    mfem::Array<int> old_shared_elem_vdof_ids;
+    trial_space->GetFaceNbrElementVDofs(n, old_shared_elem_vdof_ids);
+    int dofs_per_element = old_shared_elem_vdof_ids.Size() / components_per_node;
+
+    // Put the entries into their new index
+    for (int m = 0; m < old_shared_elem_vdof_ids.Size(); ++m) {
+      //            -------------- dofs before --------------     ---- component -----
+      int new_id = (m % dofs_per_element) * components_per_node + m / dofs_per_element + offset;
+      input_L[LSize + new_id] = face_neighbor_data(old_shared_elem_vdof_ids[m]);
+    }
+    // Increase offset for next ghost element
+    offset += old_shared_elem_vdof_ids.Size();
+  }
+}
+
+/**
+ * @brief helper functional to reorder the face_nbr_glob_dof_map for L2 space to byVDIM
+ */
+inline void rearrangeFaceNbrDofGlobalIndex(const mfem::ParFiniteElementSpace* trial_space,
+                                           mfem::Array<HYPRE_BigInt>& face_nbr_glob_vdof_map)
+{
+  int components_per_node = trial_space->GetVDim();
+  if (components_per_node == 1) {
+    face_nbr_glob_vdof_map = trial_space->face_nbr_glob_dof_map;
+    return;
+  }
+
+  if (components_per_node > 1 && trial_space->GetOrdering() == mfem::Ordering::byNODES) {
+    SLIC_ERROR_ROOT("Unsupported: L2 vector field ordered by nodes");
+  }
+
+  face_nbr_glob_vdof_map.SetSize(trial_space->face_nbr_glob_dof_map.Size());
+  int num_ghost_elem = trial_space->GetParMesh()->GetNFaceNeighborElements();
+  const HYPRE_BigInt* face_nbr_glob_dof_index = trial_space->face_nbr_glob_dof_map;
+
+  int offset = 0;
+  for (int n = 0; n < num_ghost_elem; ++n) {
+    mfem::Array<int> old_shared_elem_vdof_ids;
+    trial_space->GetFaceNbrElementVDofs(n, old_shared_elem_vdof_ids);
+    int dofs_per_element = old_shared_elem_vdof_ids.Size() / components_per_node;
+
+    // Put the entries into their new index
+    for (int m = 0; m < old_shared_elem_vdof_ids.Size(); ++m) {
+      int new_id = (m % dofs_per_element) * components_per_node + m / dofs_per_element + offset;
+      face_nbr_glob_vdof_map[new_id] = face_nbr_glob_dof_index[old_shared_elem_vdof_ids[m]];
+    }
+    // Increase offset for next ghost element
+    offset += old_shared_elem_vdof_ids.Size();
+  }
 }
 
 /// @cond
@@ -247,23 +315,40 @@ class Functional<test(trials...), exec> {
   {
     SERAC_MARK_FUNCTION;
 
-    for (uint32_t i = 0; i < num_trial_spaces; i++) {
-      P_trial_[i] = trial_space_[i]->GetProlongationMatrix();
-
-      input_L_[i].SetSize(P_trial_[i]->Height(), mfem::Device::GetMemoryType());
-
-      // create the necessary number of empty mfem::Vectors, to be resized later
-      input_E_.push_back({});
-      input_E_buffer_.push_back({});
-    }
-
     test_function_space_ = {test::family, test::order, test::components};
 
     std::array<Family, num_trial_spaces> trial_families = {trials::family...};
     std::array<int, num_trial_spaces> trial_orders = {trials::order...};
     std::array<int, num_trial_spaces> trial_components = {trials::components...};
+
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
       trial_function_spaces_[i] = {trial_families[i], trial_orders[i], trial_components[i]};
+
+      P_trial_[i] = trial_space_[i]->GetProlongationMatrix();
+
+      // For L2 spaces, configure a ParGridFunction with external data to exchange face neighbor data.
+      // This is for DG method where interior faces on the processor boundary need to access data on
+      // the neighrbor element
+      if (trial_function_spaces_[i].family == Family::L2) {
+        // Set the vector size to store tdof data
+        input_ldof_values_[i].SetSize(P_trial_[i]->Height(), mem_type);
+
+        // Initialize face neighbor data vector
+        updateFaceNbrData(trial_space_[i], trial_pargrid_functions_[i], input_ldof_values_[i]);
+
+        // Set the local input vector size to store local + ghost data
+        input_L_[i].SetSize(input_ldof_values_[i].Size() + trial_pargrid_functions_[i].FaceNbrData().Size(), mem_type);
+
+        // Rearrange the global index of face neighbor vdofs to the correct ordering.
+        // This only needs to be done once
+        rearrangeFaceNbrDofGlobalIndex(trial_space_[i], face_nbr_glob_vdof_maps_[i]);
+      } else {
+        input_L_[i].SetSize(P_trial_[i]->Height(), mem_type);
+      }
+
+      // create the necessary number of empty mfem::Vectors, to be resized later
+      input_E_.push_back({});
+      input_E_buffer_.push_back({});
     }
 
     // for (auto type : {Domain::Type::Elements, Domain::Type::BoundaryElements, Domain::Type::InteriorFaces}) {
@@ -272,7 +357,16 @@ class Functional<test(trials...), exec> {
 
     P_test_ = test_space_->GetProlongationMatrix();
 
-    output_L_.SetSize(P_test_->Height(), mem_type);
+    if (test_function_space_.family == Family::L2) {
+      // We only need these variables to set the output_L_ vector to the right size
+      mfem::ParGridFunction X_pgf;
+      mfem::Vector X_ldof_values(P_test_->Height(), mem_type);
+
+      updateFaceNbrData(test_space_, X_pgf, X_ldof_values);
+      output_L_.SetSize(X_ldof_values.Size() + X_pgf.FaceNbrData().Size(), mem_type);
+    } else {
+      output_L_.SetSize(P_test_->Height(), mem_type);
+    }
 
     output_T_.SetSize(test_fes->GetTrueVSize(), mem_type);
 
@@ -357,10 +451,8 @@ class Functional<test(trials...), exec> {
     std::vector<uint32_t> arg_vec = {args...};
     for (uint32_t i : arg_vec) {
       domain.insert_restriction(trial_space_[i], trial_function_spaces_[i]);
-      check_interior_face_compatibility(domain.mesh_, trial_function_spaces_[i]);
     }
     domain.insert_restriction(test_space_, test_function_space_);
-    check_interior_face_compatibility(domain.mesh_, test_function_space_);
 
     using signature = test(decltype(serac::type<args>(trial_spaces))...);
     integrals_.push_back(
@@ -419,7 +511,29 @@ class Functional<test(trials...), exec> {
    */
   void ActionOfGradient(const mfem::Vector& input_T, mfem::Vector& output_T, uint32_t which) const
   {
-    P_trial_[which]->Mult(input_T, input_L_[which]);
+    // Please refer to 'operator()' below for detailed comments of this implementation
+    if (trial_function_spaces_[which].family == Family::L2) {
+      // copy input_L[which] and facenbrdata[which] into a common array like:
+      //          first part        second part
+      //    [   ---   L    ---   |  ---  FND ---  ]
+      P_trial_[which]->Mult(input_T, input_ldof_values_[which]);
+      input_L_[which].SetVector(input_ldof_values_[which], 0);
+      updateFaceNbrData(trial_space_[which], trial_pargrid_functions_[which], input_ldof_values_[which]);
+
+      // Ensure ghost data ordering is consistent with local data
+      if (trial_space_[which]->GetVDim() == 1) {
+        input_L_[which].SetVector(trial_pargrid_functions_[which].FaceNbrData(), input_ldof_values_[which].Size());
+      } else {
+        if (trial_space_[which]->GetOrdering() == mfem::Ordering::byVDIM) {
+          int local_size = input_ldof_values_[which].Size();
+          appendFaceNbrData(trial_space_[which], trial_pargrid_functions_[which], local_size, input_L_[which]);
+        } else {
+          SLIC_ERROR_ROOT("Unsupported: L2 vector field ordered by nodes");
+        }
+      }
+    } else {
+      P_trial_[which]->Mult(input_T, input_L_[which]);
+    }
 
     output_L_ = 0.0;
 
@@ -444,7 +558,17 @@ class Functional<test(trials...), exec> {
     }
 
     // scatter-add to compute global residuals
-    P_test_->MultTranspose(output_L_, output_T);
+    if (test_function_space_.family == Family::L2) {
+      // Extract a subvector from output_L_ for local residuals excluding ghost dofs for L2 spaces
+      // The output vector is in form [   ---   L    ---   |  ---  FND ---  ]
+      mfem::Vector output_ldof_values(P_test_->Height(), mem_type);
+      for (int j = 0; j < output_ldof_values.Size(); ++j) {
+        output_ldof_values[j] = output_L_[j];
+      }
+      P_test_->MultTranspose(output_ldof_values, output_T);
+    } else {
+      P_test_->MultTranspose(output_L_, output_T);
+    }
   }
 
   /**
@@ -466,36 +590,54 @@ class Functional<test(trials...), exec> {
 
     // get the values for each local processor
     for (uint32_t i = 0; i < num_trial_spaces; i++) {
-#if 0
       if (trial_function_spaces_[i].family == Family::L2) {
-
-        // make a PGF on the fly
-        // TODO: don't allocate/deallocate this data every invocation
-        mfem::ParGridFunction X;
-        X.MakeRef(trial_space_[i], input_L_[i].GetData());
-
-        // call exchange face nbr
-        X.ExchangeFaceNbrData();
-
-        // copy input_L[i] and facenbrdata [i] into a common array like:
+        // copy input_L[i] and facenbrdata[i] into a common array like:
         //          first part        second part
         //    [   ---   L    ---   |  ---  FND ---  ]
-        mfem::Vector first_part;
-        first_part.MakeRef(input_L_[i], 0);
-        P_trial_[i]->Mult(*input_T[i], first_part);
+        P_trial_[i]->Mult(*input_T[i], input_ldof_values_[i]);
 
-        mfem::Vector second_part;
-        second_part.MakeRef(input_L_[i], first_part.Size());
-        second_part = X.FaceNbrData();
+        // MakeRef from mfem::Vector will actually delete the data in the original vector, so we assign the
+        // values directly by SetVector, which invokes additional operations. This can be optimized later.
+        input_L_[i].SetVector(input_ldof_values_[i], 0);
 
+        // Update again with new data
+        updateFaceNbrData(trial_space_[i], trial_pargrid_functions_[i], input_ldof_values_[i]);
+
+        // Set the values of neighbor ghost dofs
+        // The entries in face_nbr_data vector is ALWAYS arranged byNODES per "volumetric" element.
+        // For example with two quadrilateral ghost elements we would have such face_nbr_data
+        //  ----------- Ghost elem 1 ----------   ----------- Ghost elem 2 ----------
+        // {X1 X1 X1 X1 Y1 Y1 Y1 Y1 Z1 Z1 Z1 Z1   X2 X2 X2 X2 Y2 Y2 Y2 Y2 Z2 Z2 Z2 Z2}
+        //
+        // This is because 1) mfem prepares face neighbor data element by element to communicate later (standard).
+        // 2) mfem uses GetElementVDofs to gather the data for communication which returns a set of indices ALWAYS
+        // ordered byNODES (???). If the ordering we set for ParFiniteElementSpace is byVDIM, we need the entries to be
+        //  ----------- Ghost elem 1 ----------   ----------- Ghost elem 2 ----------
+        // {X1 Y1 Z1 X1 Y1 Z1 X1 Y1 Z1 X1 Y1 Z1   X2 Y2 Z2 X2 Y2 Z2 X2 Y2 Z2 X2 Y2 Z2}
+        // so it's consistent with the local data. Therefore, we need to manually change this ordering.
+        if (trial_space_[i]->GetVDim() == 1) {
+          // For scalar fields, this weird ordering doesn't cause any problems.
+          input_L_[i].SetVector(trial_pargrid_functions_[i].FaceNbrData(), input_ldof_values_[i].Size());
+        } else {
+          if (trial_space_[i]->GetOrdering() == mfem::Ordering::byVDIM) {
+            // For vector fields with byVDIM ordering, we manually set the entries in VDIM order. By the way this
+            // is really annoying because we have to get face neighbor vdof indices again in element restriction.
+            int local_size = input_ldof_values_[i].Size();
+            appendFaceNbrData(trial_space_[i], trial_pargrid_functions_[i], local_size, input_L_[i]);
+          } else {
+            // For vector fields with byNODES ordering, we need to prepare the local input vector in the form
+            // { true_comp_X ghost_comp_X true_comp_Y ghost_comp_Y true_comp_Z ghost_comp_Z }.
+            // In this form, to ensure the correct mapping between dof and vdof, we need to change the ndofs in
+            // FiniteElementSpace to include ones from ghost element. Additionally, we need to prepare
+            // ghost_comp_X / ghost_comp_Y / ghost_comp_Z from element wise entries in face_nbr_data,
+            // eg. ghost_comp_X includes X component entries of all ghost element dofs.
+            // This requires significant renumbering of the dofs and therefore is not supported for now.
+            SLIC_ERROR_ROOT("Unsupported: L2 vector field ordered by nodes");
+          }
+        }
       } else {
-
         P_trial_[i]->Mult(*input_T[i], input_L_[i]);
-
       }
-#else
-      P_trial_[i]->Mult(*input_T[i], input_L_[i]);
-#endif
     }
 
     output_L_ = 0.0;
@@ -521,7 +663,17 @@ class Functional<test(trials...), exec> {
     }
 
     // scatter-add to compute global residuals
-    P_test_->MultTranspose(output_L_, output_T_);
+    if (test_function_space_.family == Family::L2) {
+      // Extract a subvector from output_L_ for local residuals excluding ghost dofs for L2 spaces
+      // The output vector is in form [   ---   L    ---   |  ---  FND ---  ]
+      mfem::Vector output_ldof_values(P_test_->Height(), mem_type);
+      for (int j = 0; j < output_ldof_values.Size(); ++j) {
+        output_ldof_values[j] = output_L_[j];
+      }
+      P_test_->MultTranspose(output_ldof_values, output_T_);
+    } else {
+      P_test_->MultTranspose(output_L_, output_T_);
+    }
 
     if constexpr (wrt != NO_DIFFERENTIATION) {
       // if the user has indicated they'd like to evaluate and differentiate w.r.t.
@@ -770,9 +922,51 @@ class Functional<test(trials...), exec> {
 
       auto* R = form_.test_space_->Dof_TrueDof_Matrix();
 
-      auto* A_hypre =
-          new mfem::HypreParMatrix(test_space_->GetComm(), test_space_->GlobalVSize(), trial_space_->GlobalVSize(),
-                                   test_space_->GetDofOffsets(), trial_space_->GetDofOffsets(), &A_local);
+      // If either test_space_ or trial_space_ is L2, the local matrix (A_local) will includ ghost rows and columns like
+      //  ------------  -------
+      // |            ||       |
+      // |  diagonal  || off-d |
+      // |   block    || block |
+      // |            ||       |
+      //  ------------  -------
+      //  ------------  -------
+      // |    ghost   ||  XXX  |
+      // |    rows    ||  XXX  |
+      //  ------------  -------
+      // We only need
+      //  ------------  -------
+      // |            ||       |
+      // |  diagonal  || off-d |
+      // |   block    || block |
+      // |            ||       |
+      //  ------------  -------
+      // to compute local residual and the neighbor dof values will be communicated to multiply into off-digonal block.
+      // So we construct a HypreParMatrix that contains the off-diagonal block from the local sparse matrix
+      mfem::HypreParMatrix* A_hypre;
+      if (dynamic_cast<const mfem::L2_FECollection*>(test_space_->FEColl()) ||
+          dynamic_cast<const mfem::L2_FECollection*>(trial_space_->FEColl())) {
+        int lrows = test_space_->GetVSize();
+        int lcols = trial_space_->GetVSize();
+        HYPRE_BigInt col_offset = trial_space_->GetMyDofOffset();
+        mfem::Array<HYPRE_BigInt> glob_J(A_local.NumNonZeroElems());
+
+        int* J = A_local.GetJ();
+        for (int j = 0; j < glob_J.Size(); ++j) {
+          if (J[j] < lcols) {
+            glob_J[j] = J[j] + col_offset;
+          } else {
+            glob_J[j] = form_.face_nbr_glob_vdof_maps_[which_argument][J[j] - lcols];
+          }
+        }
+        A_hypre = new mfem::HypreParMatrix(test_space_->GetComm(), lrows, test_space_->GlobalVSize(),
+                                           trial_space_->GlobalVSize(), A_local.GetI(), glob_J, A_local.GetData(),
+                                           test_space_->GetDofOffsets(), trial_space_->GetDofOffsets());
+        glob_J.DeleteAll();
+      } else {
+        A_hypre =
+            new mfem::HypreParMatrix(test_space_->GetComm(), test_space_->GlobalVSize(), trial_space_->GlobalVSize(),
+                                     test_space_->GetDofOffsets(), trial_space_->GetDofOffsets(), &A_local);
+      }
 
       auto* P = trial_space_->Dof_TrueDof_Matrix();
 
@@ -822,6 +1016,15 @@ class Functional<test(trials...), exec> {
 
   std::array<FunctionSpace, num_trial_spaces> trial_function_spaces_;
   FunctionSpace test_function_space_;
+
+  /// @brief Manage global index of face neighbor vdofs
+  std::array<mfem::Array<HYPRE_BigInt>, num_trial_spaces> face_nbr_glob_vdof_maps_;
+
+  /// @brief Cache for access of neighbor element info for processor boundary faces
+  mutable std::array<mfem::ParGridFunction, num_trial_spaces> trial_pargrid_functions_;
+
+  /// @brief Cache to store values of L2 ldofs on the local processor
+  mutable std::array<mfem::Vector, num_trial_spaces> input_ldof_values_;
 
   /**
    * @brief Operator that converts true (global) DOF values to local (current rank) DOF values
