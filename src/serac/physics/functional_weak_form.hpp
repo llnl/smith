@@ -136,6 +136,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *    2. `tensor<T,dim> X` the spatial coordinates for the quadrature point.
    *    3. `value`, a variadic list of field values, one tuple for each of the trial spaces specified in the
    * `DependsOn<...>` argument.
+   *    The expected return is the value (either double or tensor<double,field_dim>) of the body source/load flux
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
@@ -209,20 +210,15 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * @tparam BoundaryFluxType The type of the traction load
    * @param depends_on Andices into fields which the body integral may depend on
    * @param boundary_name The name of the registered domain over which the boundary integral is applied.
-   * @param flux_function A function describing the boundary integral term to include in the weak form.
-   * Our convention for the sign of the residual
-   * vector is that it is expected to be a 'negative force', so the mass terms show up with a positive sign in the
-   * residual.  This also ensures that the Jacobian of the residual is positive definite for most physics.  A body
-   * integrand involving 'right hand side' contributions like a body load, should be supplied by the user with a
-   * negative sign.
+   * @param flux_function A function describing the outward normal flux applied.
    * @pre flux_function must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    1. `tensor<T,dim> X` the spatial coordinates for the quadrature point
    *    3. `tensor<T,dim> n` the outward-facing unit normal for the quadrature point
    *    4. `value`, a variadic list of tuples of field values at quadrature points,
    *            one for each of the trial spaces specified in the `DependsOn<...>` argument.
-   *   The expected return is the (potentially vector) value of the boundary flux, oriented relative to the outward
-   * normal.
+   *   The expected return is the value of the boundary flux (either double or tensor<double,field_dim>), oriented
+   * relative to the outward normal.
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
