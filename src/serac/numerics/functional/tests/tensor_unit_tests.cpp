@@ -4,12 +4,13 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include <cmath>
+
+#include "gtest/gtest.h"
 
 #include "serac/numerics/functional/tensor.hpp"
-#include "serac/numerics/functional/tuple_tensor_dual_functions.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/dual.hpp"
 
 using namespace serac;
 
@@ -470,7 +471,6 @@ TEST(Tensor, EigendecompWithUniqueEigenvalues)
                                 { 0.28601542687348 , -0.794929932679048, -0.535052873762272}}};
   // clang-format on
   const auto A = dot(Q, dot(diag(lambda), transpose(Q)));
-  // std::cout << "A =\n" << A << std::endl;
   auto [eigvals, eigvecs] = eig_symm(A);
 
   // eigenvalues should be returned in ascending order
@@ -492,7 +492,6 @@ TEST(Tensor, EigendecompWith2NearlyDegenerateEigenvalues)
                                 { 0.28601542687348 , -0.794929932679048, -0.535052873762272}}};
   // clang-format on
   const auto A = dot(Q, dot(diag(lambda), transpose(Q)));
-  // std::cout << "A =\n" << A << std::endl;
   auto [eigvals, eigvecs] = eig_symm(A);
 
   // check eigenvalues

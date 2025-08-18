@@ -13,6 +13,8 @@
 #pragma once
 
 #include <string>
+#include <variant>
+
 #include "serac/infrastructure/input.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/hardening_input.hpp"

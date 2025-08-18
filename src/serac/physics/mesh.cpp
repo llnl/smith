@@ -5,11 +5,16 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/physics/mesh.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
+
+#include <utility>
+
+#include <axom/fmt.hpp>
+#include <axom/slic.hpp>
+
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/numerics/functional/domain.hpp"
-#include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
 
 namespace serac {
 

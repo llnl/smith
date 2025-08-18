@@ -14,8 +14,15 @@
 
 #include <memory>
 #include <string>
+#include <functional>
+#include <map>
+#include <vector>
+
+#include "mpi.h"
+
 #include "mfem.hpp"
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/domain.hpp"
 
 namespace serac {
 
@@ -122,8 +129,8 @@ class Mesh {
   const serac::FiniteElementDual& shapeDisplacementDual() const;
 
  private:
-  /// @brief Sets up some initial domains, for now just the 'entire_domain', but eventually we can read of
-  /// names/blocks/attributes from the mesh and create default domains.
+  /// @brief Sets up some initial domains: entire domain, entire boundary, and interior faces. Eventually we can read
+  /// off names/blocks/attributes from the mesh and create default domains.
   void createDomains();
 
   /// @brief string identifying mesh in the state manager

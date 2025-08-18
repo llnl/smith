@@ -6,11 +6,11 @@
 
 #include <string>
 #include <fstream>
+#include <memory>
 
 #include "axom/inlet.hpp"
 #include "axom/slic.hpp"
 #include "mfem.hpp"
-
 #include "serac/serac.hpp"
 
 template <class Physics>

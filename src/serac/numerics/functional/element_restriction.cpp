@@ -1,8 +1,17 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #include "serac/numerics/functional/element_restriction.hpp"
 
-#include "mfem.hpp"
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
 
 #include "serac/numerics/functional/geometry.hpp"
+#include "serac/numerics/functional/domain.hpp"
 
 std::vector<std::vector<int> > lexicographic_permutations(int p)
 {

@@ -4,14 +4,12 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <random>
-#include <iostream>
-
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "serac/numerics/functional/tuple.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/dual.hpp"
 
 using namespace serac;
 

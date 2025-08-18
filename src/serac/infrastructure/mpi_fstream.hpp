@@ -7,7 +7,9 @@
 #pragma once
 
 #include <fstream>
-#include <mpi.h>
+#include <string>
+
+#include "mpi.h"
 
 namespace mpi {
 
