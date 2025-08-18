@@ -17,6 +17,23 @@
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
 
+namespace mfem {
+namespace future {
+
+// Inner product of 1D tensors
+template <typename S, typename T, int m>
+MFEM_HOST_DEVICE auto inner(const tensor<S, m>& A, const tensor<T, m>& B) -> decltype(S{} * T{})
+{
+  decltype(S{} * T{}) sum{};
+  for (int i = 0; i < m; i++) {
+    sum += A[i] * B[i];
+  }
+  return sum;
+}
+
+}  // namespace future
+}  // namespace mfem
+
 namespace serac {
 
 // NOTE: Args needs to be on the functor struct instead of the operator() so that operator() isn't overloaded and dfem
@@ -27,12 +44,20 @@ struct InnerQFunction {
 
   SERAC_HOST_DEVICE inline auto operator()(Primal V, Args... args) const
   {
-    auto orig_residual = mfem::future::get<0>(orig_qfn_(std::forward<Args>(args)...));
+    Primal orig_residual = mfem::future::get<0>(orig_qfn_(std::forward<Args>(args)...));
     return mfem::future::tuple{mfem::future::inner(V, orig_residual)};
   }
 
   OrigQFn orig_qfn_;
 };
+
+// template struct InnerQFunction<
+//     mfem::future::tensor<double, 2>,
+//     std::function<mfem::future::tuple<mfem::future::tensor<double, 2>>(
+//         const mfem::future::tensor<double, 2>&, const mfem::future::tensor<double, 2>&,
+//         const mfem::future::tensor<double, 2>&, const mfem::future::tensor<double, 2, 2>&, double, double)>,
+//     const mfem::future::tensor<double, 2>&, const mfem::future::tensor<double, 2>&,
+//     const mfem::future::tensor<double, 2>&, const mfem::future::tensor<double, 2, 2>&, double, double>;
 
 // Step 2: deduce the type of the parameters and the first tuple element of the return type of the operator()
 // Step 3: create the InnerQFunction with the deduced types
@@ -111,10 +136,9 @@ class DfemResidual : public Residual {
     residual_.AddDomainIntegrator(body_integral, integral_inputs, integral_outputs, integration_rule, domain_attributes,
                                   derivative_ids);
     auto scalar_body_integral = makeInnerQFunction(body_integral);
-    // TODO: updated integral_inputs and integral_outputs for scalar_body_integral
-    virtual_work_.AddDomainIntegrator(scalar_body_integral, integral_inputs,
-                                      mfem::future::tuple<mfem::future::Sum<0>>{}, integration_rule, domain_attributes,
-                                      derivative_ids);
+    virtual_work_.AddDomainIntegrator(
+        scalar_body_integral, addToTupleType(integral_inputs, mfem::future::get<0>(integral_outputs)),
+        makeVirtualWorkOutputs(integral_outputs), integration_rule, domain_attributes, derivative_ids);
   }
 
   /// @overload
@@ -144,11 +168,14 @@ class DfemResidual : public Residual {
                        "Invalid number of field sensitivities relative to the number of fields");
     SLIC_ERROR_ROOT_IF(jvp_reactions.size() != 1, "DfemResidual nonlinear systems only supports 1 output residual");
 
+    std::vector<mfem::Vector*> test_par_gf({&fields[0]->gridFunction()});
+    std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
+
     *jvp_reactions[0] = 0.0;
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (v_fields[input_col] != nullptr) {
-        auto deriv_op = residual_.GetDerivative(input_col, {&fields[0]->gridFunction()}, getLVectors(fields));
+        auto deriv_op = residual_.GetDerivative(input_col, test_par_gf, field_par_gf);
         deriv_op->AddMult(*v_fields[input_col], *jvp_reactions[0]);
       }
     }
@@ -162,11 +189,15 @@ class DfemResidual : public Residual {
                        "Invalid number of field sensitivities relative to the number of fields");
     SLIC_ERROR_ROOT_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
+    std::vector<mfem::Vector*> test_par_gf({&fields[0]->gridFunction()});
+    std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
+    field_par_gf.push_back(&v_fields[0]->gridFunction());
+
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-        // TODO: update to use the virtual_work_ operator once it's working right
-        // auto grad_op = residual_.GetDerivative(input_col, {&fields[0]->gridFunction()}, getLVectors(fields));
-        // grad_op->AddMultTranspose(*v_fields[0], *vjp_sensitivities[input_col]);
+        auto deriv_op = virtual_work_.GetDerivative(input_col, test_par_gf, field_par_gf);
+        mfem::HypreParMatrix A;
+        deriv_op->Assemble(A);
       }
     }
   }
@@ -191,6 +222,19 @@ class DfemResidual : public Residual {
       fields_l.push_back(&fields[i]->gridFunction());
     }
     return fields_l;
+  }
+
+  template <typename Tnew, typename... Ttuple>
+  static auto addToTupleType(const mfem::future::tuple<Ttuple...>&, const Tnew&)
+  {
+    return mfem::future::tuple<Ttuple..., Tnew>{};
+  }
+
+  // The field ID doesn't matter, since the test function is one
+  template <int Id, template <int> class FieldOp>
+  static auto makeVirtualWorkOutputs(mfem::future::tuple<FieldOp<Id>>)
+  {
+    return mfem::future::tuple<mfem::future::Sum<Id>>{};
   }
 
   /// @brief primary mesh
