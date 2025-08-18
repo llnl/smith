@@ -134,7 +134,7 @@ inline std::string linearName(const LinearSolver& s)
 /// output linear solver string representation to a stream
 inline std::ostream& operator<<(std::ostream& os, LinearSolver s) { return os << linearName(s); }
 
-// string->value matching for optionally entering options as string in command line
+/// string->value matching for optionally entering options as string in command line
 inline std::map<std::string, LinearSolver> linearSolverMap = {
     {"CG", LinearSolver::CG},           {"GMRES", LinearSolver::GMRES},
     {"SuperLU", LinearSolver::SuperLU}, {"Strumpack", LinearSolver::Strumpack},
@@ -196,7 +196,7 @@ inline std::string nonlinearName(const NonlinearSolver& s)
 /// output nonlinear solver string representation to a stream
 inline std::ostream& operator<<(std::ostream& os, NonlinearSolver s) { return os << nonlinearName(s); }
 
-// string->value matching for optionally entering options as string in command line
+/// string->value matching for optionally entering options as string in command line
 inline std::map<std::string, NonlinearSolver> nonlinearSolverMap = {
     {"Newton", NonlinearSolver::Newton},
     {"LBFGS", NonlinearSolver::LBFGS},
@@ -359,7 +359,7 @@ inline std::string preconditionerName(Preconditioner p)
 /// output preconditioner string representation to a stream
 inline std::ostream& operator<<(std::ostream& os, Preconditioner p) { return os << preconditionerName(p); }
 
-// string->value matching for optionally entering options as string in command line
+/// string->value matching for optionally entering options as string in command line
 inline std::map<std::string, Preconditioner> preconditionerMap = {
     {"HypreJacobi", Preconditioner::HypreJacobi},
     {"HypreL1Jacobi", Preconditioner::HypreL1Jacobi},
