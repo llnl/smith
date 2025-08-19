@@ -129,14 +129,14 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * @tparam active_parameters Type for indices into fields which the body integral may depend on
    * @tparam BodyLoadType The type of the body load function
    * @param body_name The name of the registered domain over which the body loads are applied.
-   * @param depends_on Andices into fields which the body integral may depend on
+   * @param depends_on Indices into fields which the body integral may depend on
    * @param load_function A function describing the body force applied.
    * @pre load_function must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    2. `tensor<T,dim> X` the spatial coordinates for the quadrature point.
    *    3. `value`, a variadic list of field values, one tuple for each of the trial spaces specified in the
    * `DependsOn<...>` argument.
-   *    The expected return is the value of the body source/load (either double or tensor<double,field_dim>) 
+   *    The expected return is the value of the source at X.
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
@@ -208,7 +208,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    * @tparam active_parameters Type for indices into fields which the body integral may depend on
    * @tparam BoundaryFluxType The type of the traction load
-   * @param depends_on Andices into fields which the body integral may depend on
+   * @param depends_on Indices into fields which the body integral may depend on
    * @param boundary_name The name of the registered domain over which the boundary integral is applied.
    * @param flux_function A function describing the outward normal flux applied.
    * @pre flux_function must be a object that can be called with the following arguments:
@@ -217,8 +217,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *    3. `tensor<T,dim> n` the outward-facing unit normal for the quadrature point
    *    4. `value`, a variadic list of tuples of field values at quadrature points,
    *            one for each of the trial spaces specified in the `DependsOn<...>` argument.
-   *   The expected return is the value of the boundary flux (either double or tensor<double,field_dim>), oriented
-   * relative to the outward normal.
+   *   The expected return is the value of the boundary flux oriented in the sense of the outward normal.
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
