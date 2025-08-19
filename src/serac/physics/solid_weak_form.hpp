@@ -5,37 +5,37 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file solid_residual.hpp
+ * @file solid_weak_form.hpp
  *
- * @brief Implements the residual interface for solid mechanics physics.
- * Derives from functional_residual.
+ * @brief Implements the WeakForm interface for solid mechanics physics.
+ * Derives from FunctionalWeakForm.
  */
 
 #pragma once
 
-#include "serac/physics/functional_residual.hpp"
+#include "serac/physics/functional_weak_form.hpp"
 
 namespace serac {
 
 template <int order, int dim, typename InputSpaces = Parameters<>>
-class SolidResidual;
+class SolidWeakForm;
 
 /**
- * @brief The nonlinear residual class
+ * @brief The weak form for solid mechanics
  *
- * This uses Functional to compute the solid mechanics residuals and tangent
+ * This uses serac::unctional to compute the solid mechanics residuals and tangent
  * stiffness matrices.
  *
  * @tparam order The order of the discretization of the displacement and velocity fields
  * @tparam dim The spatial dimension of the mesh
  */
 template <int order, int dim, typename... InputSpaces>
-class SolidResidual<order, dim, Parameters<InputSpaces...>>
-    : public FunctionalResidual<dim, H1<order, dim>,
+class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
+    : public FunctionalWeakForm<dim, H1<order, dim>,
                                 Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>> {
  public:
   /// @brief typedef for underlying functional type with templates
-  using BaseResidualT = FunctionalResidual<dim, H1<order, dim>,
+  using BaseWeakFormT = FunctionalWeakForm<dim, H1<order, dim>,
                                            Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, InputSpaces...>>;
 
   /// @brief a container holding quadrature point data of the specified type
@@ -56,16 +56,16 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
   };
 
   /**
-   * @brief Construct a new SolidResidual object
+   * @brief Construct a new SolidWeakForm object
    *
    * @param physics_name A name for the physics module instance
    * @param mesh The serac Mesh
    * @param test_space Test space
    * @param parameter_fe_spaces Vector of parameters spaces
    */
-  SolidResidual(std::string physics_name, std::shared_ptr<Mesh> mesh, const mfem::ParFiniteElementSpace& test_space,
+  SolidWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh, const mfem::ParFiniteElementSpace& test_space,
                 std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
-      : BaseResidualT(physics_name, mesh, test_space, constructAllSpaces(test_space, parameter_fe_spaces))
+      : BaseWeakFormT(physics_name, mesh, test_space, constructAllSpaces(test_space, parameter_fe_spaces))
   {
   }
 
@@ -100,18 +100,18 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
                   "invalid quadrature data provided in setMaterial()");
     MaterialStressFunctor<MaterialType> material_functor(material);
-    BaseResidualT::residual_->AddDomainIntegral(
+    BaseWeakFormT::weak_form_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
-        BaseResidualT::mesh_->domain(body_name), qdata);
+        BaseWeakFormT::mesh_->domain(body_name), qdata);
 
-    BaseResidualT::v_residual_->AddDomainIntegral(
+    BaseWeakFormT::v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 1, 3, active_parameters + 1 + NUM_STATE_VARS...>{},
         [material_functor](double t, auto X, auto state, auto V, auto... params) {
           auto flux = material_functor(t, X, state, params...);
           return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
                  serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
         },
-        BaseResidualT::mesh_->domain(body_name), qdata);
+        BaseWeakFormT::mesh_->domain(body_name), qdata);
   }
 
   /// @overload
@@ -153,18 +153,18 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
     static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
                   "invalid quadrature data provided in setMaterial()");
     RateMaterialStressFunctor<MaterialType> material_functor(material, &this->dt_);
-    BaseResidualT::residual_->AddDomainIntegral(
+    BaseWeakFormT::weak_form_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + NUM_STATE_VARS...>{}, std::move(material_functor),
-        BaseResidualT::mesh_->domain(body_name), qdata);
+        BaseWeakFormT::mesh_->domain(body_name), qdata);
 
-    BaseResidualT::v_residual_->AddDomainIntegral(
+    BaseWeakFormT::v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<dim>{}, DependsOn<0, 1, 2, 3, active_parameters + 1 + NUM_STATE_VARS...>{},
         [material_functor, qdata](double t, auto X, auto state, auto V, auto... params) {
           auto flux = material_functor(t, X, state, params...);
           return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
                  serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
         },
-        BaseResidualT::mesh_->domain(body_name), qdata);
+        BaseWeakFormT::mesh_->domain(body_name), qdata);
   }
 
   /// @overload
@@ -200,7 +200,7 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
   template <int... active_parameters, typename PressureType>
   void addPressure(DependsOn<active_parameters...>, std::string boundary_name, PressureType pressure_function)
   {
-    BaseResidualT::residual_->AddBoundaryIntegral(
+    BaseWeakFormT::weak_form_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<0, active_parameters + NUM_STATE_VARS...>{},
         [pressure_function](double t, auto X, auto displacement, auto... params) {
           // Calculate the position and normal in the shape perturbed deformed configuration
@@ -218,19 +218,19 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
           // = pressure * (normal_new / norm(normal_old)) * w_old
 
           // We always query the pressure function in the undeformed configuration
-          return -pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
+          return pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
         },
-        BaseResidualT::mesh_->domain(boundary_name));
+        BaseWeakFormT::mesh_->domain(boundary_name));
 
-    BaseResidualT::v_residual_->AddBoundaryIntegral(
+    BaseWeakFormT::v_dot_weak_form_residual_->AddBoundaryIntegral(
         Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + 1 + NUM_STATE_VARS...>{},
         [pressure_function](double t, auto X, auto V, auto displacement, auto... params) {
           auto x = X + displacement;
           auto n = cross(get<DERIVATIVE>(x));
           auto pressure = pressure_function(t, get<VALUE>(X), params...) * (n / norm(cross(get<DERIVATIVE>(X))));
-          return -inner(get<VALUE>(V), pressure);
+          return inner(get<VALUE>(V), pressure);
         },
-        BaseResidualT::mesh_->domain(boundary_name));
+        BaseWeakFormT::mesh_->domain(boundary_name));
   }
 
   /// @overload
@@ -289,10 +289,8 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
     {
       auto du_dX = get<DERIVATIVE>(displacement);
       auto d2u_dt2 = get<VALUE>(acceleration);
-
       auto stress = material_.pkStress(state, du_dX, params...);
-
-      return serac::tuple{-material_.density(params...) * d2u_dt2, -stress};
+      return serac::tuple{material_.density(params...) * d2u_dt2, stress};
     }
   };
 
@@ -336,21 +334,19 @@ class SolidResidual<order, dim, Parameters<InputSpaces...>>
       auto du_dX = get<DERIVATIVE>(displacement);
       auto dv_dX = get<DERIVATIVE>(velocity);
       auto d2u_dt2 = get<VALUE>(acceleration);
-
       auto stress = material_.pkStress(*dt_, state, du_dX, dv_dX, params...);
-
-      return serac::tuple{-material_.density(params...) * d2u_dt2, -stress};
+      return serac::tuple{material_.density(params...) * d2u_dt2, stress};
     }
   };
 };
 
 /**
- * @brief Utility function for creating a shared_ptr<SolidResidual<>>
+ * @brief Utility function for creating a shared_ptr<SolidWeakForm<>>
  */
 template <int order, int dim, typename... ParameterSpaces>
-auto create_solid_residual(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
-                           const std::vector<serac::FiniteElementState*>& states,  // u, v, a, e
-                           const std::vector<serac::FiniteElementState*>& params)
+auto create_solid_weak_form(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
+                            const std::vector<serac::FiniteElementState*>& states,  // u, v, a, e
+                            const std::vector<serac::FiniteElementState*>& params)
 {
   /// Local enum to better document the expected indexing order to states
   enum FieldNumbering
@@ -366,9 +362,9 @@ auto create_solid_residual(const std::string& physics_name, std::shared_ptr<sera
     for_constexpr<sizeof...(ParameterSpaces)>([&](auto i) { parameter_fe_spaces.push_back(&params[i]->space()); });
   }
 
-  using ResidualT = SolidResidual<order, dim, Parameters<ParameterSpaces...>>;
+  using WeakFormT = SolidWeakForm<order, dim, Parameters<ParameterSpaces...>>;
 
-  return std::make_shared<ResidualT>(physics_name, mesh, states[DISP]->space(), parameter_fe_spaces);
+  return std::make_shared<WeakFormT>(physics_name, mesh, states[DISP]->space(), parameter_fe_spaces);
 }
 
 }  // namespace serac

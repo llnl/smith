@@ -70,7 +70,6 @@ void functional_test_static_3D(double expected_norm)
       heat_transfer::default_nonlinear_options, heat_transfer::default_linear_options,
       heat_transfer::default_static_options, default_nonlinear_options, default_linear_options,
       solid_mechanics::default_quasistatic_options, "thermal_solid_functional", mesh);
-
   double rho = 1.0;
   double E = 1.0;
   double nu = 0.25;
@@ -102,7 +101,6 @@ void functional_test_static_3D(double expected_norm)
   thermal_solid_solver.advanceTimestep(1.0);
 
   EXPECT_NEAR(expected_norm, norm(thermal_solid_solver.displacement()), 1.0e-6);
-
   // Check the final temperature norm
   double temperature_norm_exact = 2.0 * std::sqrt(2.0);
   EXPECT_NEAR(temperature_norm_exact, norm(thermal_solid_solver.temperature()), 1.0e-6);
