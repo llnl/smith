@@ -32,10 +32,10 @@ set(physics_headers
     thermomechanics.hpp
     thermomechanics_input.hpp
     thermomechanics_monolithic.hpp
-    residual.hpp
-    functional_residual.hpp
-    solid_residual.hpp
-    heat_transfer_residual.hpp
+    weak_form.hpp
+    functional_weak_form.hpp
+    solid_weak_form.hpp
+    heat_transfer_weak_form.hpp
     scalar_objective.hpp
     functional_objective.hpp
     )
