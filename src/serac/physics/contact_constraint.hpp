@@ -63,7 +63,7 @@ class ContactConstraint : public Constraint {
   ContactConstraint(int interaction_id, const mfem::ParMesh& mesh, const std::set<int>& bdry_attr_surf1,
                     const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts,
                     const std::string& name = "contact_constraint")
-      : Constraint(name), contact_(mesh), contact_opts_{contact_opts}, mesh_{mesh}
+      : Constraint(name), contact_(mesh), contact_opts_{contact_opts}
   {
     contact_opts_.enforcement = ContactEnforcement::LagrangeMultiplier;
     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts_);
@@ -137,12 +137,6 @@ class ContactConstraint : public Constraint {
    * @brief interaction_id Unique identifier for the ContactInteraction (used in Tribol)
    */
   int interaction_id_;
-
- private:
-  /**
-   * @brief The volume mesh for the problem
-   */
-  [[maybe_unused]] const mfem::ParMesh& mesh_;
 };
 
 }  // namespace serac
