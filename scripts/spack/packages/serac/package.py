@@ -93,7 +93,6 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("llvm@19+clang", when="+devtools")
     depends_on("python", when="+devtools")
     depends_on("py-sphinx", when="+devtools")
-    depends_on("py-ats", when="+devtools")
 
     with when("+sundials"):
         # Going to sundials@7: causes 80%+ test failures
@@ -535,10 +534,6 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
             path1 = os.path.realpath(spec["cppcheck"].prefix)
             path2 = os.path.realpath(spec["doxygen"].prefix)
             self.find_path_replacement(path1, path2, path_replacements, "DEVTOOLS_ROOT", entries)
-
-            ats_bin_dir = get_spec_path(spec, "py-ats", path_replacements, use_bin=True)
-            ats_bin_dir = pjoin(ats_bin_dir, "ats")
-            entries.append(cmake_cache_path("ATS_EXECUTABLE", ats_bin_dir))
 
             # Only turn on clang tools support if devtools is on
             llvm_path = get_spec_path(spec, "llvm", path_replacements, use_bin=True)
