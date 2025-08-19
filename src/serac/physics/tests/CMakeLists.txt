@@ -39,6 +39,7 @@ set(physics_serial_test_sources
 
 if (TRIBOL_FOUND)
     set(physics_serial_tribol_test_sources 
+        test_contact_constraint.cpp
         contact_solid_adjoint.cpp)
     if (ENZYME_FOUND)
         list(APPEND physics_serial_tribol_test_sources 

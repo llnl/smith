@@ -13,14 +13,18 @@
 
 #pragma once
 
+#include <vector>
+
 #include "serac/serac_config.hpp"
 
 #ifdef SERAC_USE_TRIBOL
 
-#include <vector>
-#include "serac/physics/common.hpp"
-#include "serac/physics/field_types.hpp"
 #include "tribol/interface/tribol.hpp"
+
+#include "serac/physics/constraint.hpp"
+#include "serac/physics/field_types.hpp"
+#include "serac/physics/contact/contact_config.hpp"
+#include "serac/physics/contact/contact_data.hpp"
 
 namespace mfem {
 class Vector;
