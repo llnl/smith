@@ -254,31 +254,25 @@ spack:
       - spec: cmake@3.23.1
         prefix: /usr/tce
     cppcheck:
-      version: [2.9]
+      version: [2.17.1]
       buildable: false
       externals:
-      - spec: cppcheck@2.9
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/cppcheck-2.9
+      - spec: cppcheck@2.17.1
+        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/cppcheck-2.17.1
     doxygen:
-      version: [1.9.8]
+      version: [1.13.2]
       buildable: false
       externals:
-      - spec: doxygen@1.9.8
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/doxygen-1.9.8
-    py-ats:
-      version: [7.0.105]
-      buildable: false
-      externals:
-      - spec: py-ats@7.0.105
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.11.7
+      - spec: doxygen@1.13.2
+        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/doxygen-1.13.2
     py-sphinx:
-      version: [7.2.6]
+      version: [8.2.0]
       buildable: false
       externals:
-      - spec: py-sphinx@7.2.6
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.11.7
+      - spec: py-sphinx@8.2.0
+        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.13.2
     python:
       buildable: false
       externals:
-      - spec: python@3.9.12
-        prefix: /usr/tce/packages/python/python-3.9.12
+      - spec: python@3.13.2
+        prefix: /usr/tce/packages/python/python-3.13.2
