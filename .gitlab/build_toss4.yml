@@ -44,7 +44,7 @@ toss4-clang_14_0_6-src:
   variables:
     COMPILER: "clang@14.0.6"
     HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=Debug"
     # DO_INTEGRATION_TESTS: "yes"
     ALLOC_NODES: "2"
     ALLOC_TIME: "30"
@@ -54,7 +54,7 @@ toss4-gcc_10_3_1-src:
   variables:
     COMPILER: "gcc@10.3.1"
     HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
@@ -63,7 +63,7 @@ toss4-clang_16_0_6-src:
   variables:
     COMPILER: "clang@16.0.6"
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=Debug"
     EXTRA_BUILD_OPTIONS: "--skip-install"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
@@ -73,7 +73,7 @@ toss4-gcc_10_3_1-src-no-tribol:
   variables:
     COMPILER: "gcc@10.3.1"
     HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -UTRIBOL_DIR"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -UTRIBOL_DIR -DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
@@ -82,7 +82,7 @@ toss4-gcc_10_3_1-src-no-optional-solvers:
   variables:
     COMPILER: "gcc@10.3.1"
     HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -USUNDIALS_DIR -UPETSC_DIR"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -USUNDIALS_DIR -UPETSC_DIR -DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
@@ -115,6 +115,7 @@ toss4-clang_16_0_6-examples:
   variables:
     COMPILER: "clang@16.0.6"
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .examples_build_on_toss4
@@ -123,6 +124,7 @@ toss4-clang_14_0_6-examples:
   variables:
     COMPILER: "clang@14.0.6"
     HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .examples_build_on_toss4
@@ -131,6 +133,7 @@ toss4-gcc_10_3_1-examples:
   variables:
     COMPILER: "gcc@10.3.1"
     HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .examples_build_on_toss4

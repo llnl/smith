@@ -28,8 +28,10 @@ _host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmak
                      "tioga"     : "tioga-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
                      "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake"}
 
+
 def get_machine_name():
     return socket.gethostname().rstrip('1234567890')
+
 
 def get_default_host_config():
     machine_name = get_machine_name()
@@ -142,9 +144,9 @@ def get_platform_info(hostconfigpath):
         
 
 #####################
-# Setup Build Dir
+# Setup Build And Install Dir
 #####################
-def setup_build_dir(args, platform_info):
+def setup_build_and_install_dir(args, platform_info):
     if args.buildpath != "":
         # use explicit build path
         buildpath = args.buildpath
@@ -152,21 +154,6 @@ def setup_build_dir(args, platform_info):
         # use platform info & build type
         buildpath = "-".join(["build", platform_info, args.buildtype.lower()])
 
-    buildpath = os.path.abspath(buildpath)
-
-    if os.path.exists(buildpath):
-        print("WARNING: Build directory '%s' already exists. Consider clearing out the directory before proceeding." % buildpath)
-    else:
-        print("Creating build directory '%s'..." % buildpath)
-        os.makedirs(buildpath)
-
-    return buildpath
-
-
-#####################
-# Setup Install Dir
-#####################
-def setup_install_dir(args, platform_info):
     # For install directory, we will clean up old ones, but we don't need to create it, cmake will do that.
     if args.installpath != "":
         installpath = os.path.abspath(args.installpath)
@@ -177,18 +164,23 @@ def setup_install_dir(args, platform_info):
         )
 
     installpath = os.path.abspath(installpath)
+    buildpath = os.path.abspath(buildpath)
 
-    if os.path.exists(installpath):
-        print("WARNING: Install directory '%s' already exists. Consider clearing out the directory before proceeding." % installpath)
+    if os.path.exists(buildpath) or os.path.exists(installpath):
+        print("ERROR: Build and/ or install directory specified already exists. Remove them before proceeding. Example command:")
+        print(f"rm -rf {buildpath} {installpath}")
+        exit(1)
     else:
         print("Creating install directory '%s'..." % installpath)
         os.makedirs(installpath)
+        print("Creating build directory '%s'..." % buildpath)
+        os.makedirs(buildpath)
 
-    return installpath
+    return buildpath, installpath
 
 
 ############################
-# Check if executable exists 
+# Check if executable exists
 ############################
 def executable_exists(path):
     if path == "cmake":
@@ -303,8 +295,7 @@ def main():
 
     basehostconfigpath = find_host_config(args, repodir)
     platform_info = get_platform_info(basehostconfigpath)
-    buildpath = setup_build_dir(args, platform_info)
-    installpath = setup_install_dir(args, platform_info)
+    buildpath, installpath  = setup_build_and_install_dir(args, platform_info)
 
     cmakeline = create_cmake_command_line(args, unknown_args, buildpath, installpath, basehostconfigpath)
     return run_cmake(buildpath, cmakeline)
