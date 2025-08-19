@@ -129,7 +129,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * @tparam active_parameters Type for indices into fields which the body integral may depend on
    * @tparam BodyLoadType The type of the body load function
    * @param body_name The name of the registered domain over which the body loads are applied.
-   * @param depends_on Andices into fields which the body integral may depend on
+   * @param depends_on Indices into fields which the body integral may depend on
    * @param load_function A function describing the body force applied.
    * @pre load_function must be a object that can be called with the following arguments:
    *    1. `double t` the time
