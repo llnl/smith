@@ -140,11 +140,11 @@ generateParFiniteElementSpace(mfem::ParMesh* mesh)
       fec = std::make_unique<mfem::L2_FECollection>(function_space::order, dim, mfem::BasisType::GaussLobatto);
       break;
     default:
-      return std::pair<std::unique_ptr<mfem::ParFiniteElementSpace>, std::unique_ptr<mfem::FiniteElementCollection>>(
-          nullptr, nullptr);
-      break;
+      return {nullptr, nullptr};
   }
 
+  // NOTE: Clang-tidy complains about a potential leak of memory pointed at `fes` whenever its dereferenced,
+  // because MFEM still uses raw pointers. Assuming MFEM handles its pointers properly, it can be safely ignored.
   auto fes =
       std::make_unique<mfem::ParFiniteElementSpace>(mesh, fec.get(), function_space::components, serac::ordering);
 

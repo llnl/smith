@@ -286,14 +286,6 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
     implicit_sensitivity_temperature_start_of_step_ = 0.0;
     temperature_adjoint_load_ = 0.0;
     temperature_rate_adjoint_load_ = 0.0;
-
-    if (!checkpoint_to_disk_) {
-      checkpoint_states_.clear();
-      auto state_names = stateNames();
-      for (const auto& state_name : state_names) {
-        checkpoint_states_[state_name].push_back(state(state_name));
-      }
-    }
   }
 
   /**
@@ -306,6 +298,14 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
   {
     BasePhysics::initializeBasePhysicsStates(cycle, time);
     initializeThermalStates();
+
+    if (!checkpoint_to_disk_) {
+      checkpoint_states_.clear();
+      auto state_names = stateNames();
+      for (const auto& state_name : state_names) {
+        checkpoint_states_[state_name].push_back(state(state_name));
+      }
+    }
   }
 
   /**
