@@ -73,7 +73,6 @@ auto get_opts(serac::NonlinearSolver nonlinearSolver, serac::LinearSolver linear
   SLIC_INFO_ROOT(axom::fmt::format("Preconditioner   = {}", serac::preconditionerName(preconditioner)));
   SLIC_INFO_ROOT("================================================================================");
 
-  // TODO do we always want to set min iters and max line serach?
   switch (nonlinearSolver) {
     case serac::NonlinearSolver::Newton: {
       nonlinear_options.min_iterations = 0;
