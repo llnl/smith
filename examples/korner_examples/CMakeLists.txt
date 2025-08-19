@@ -48,6 +48,7 @@ if(TRIBOL_FOUND)
 		    # small_lattice
 		    2x2lattice
             5x5lattice
+	    5x5lattice_active_eos
             gyroid
                     # multi_tensile
 		    hole

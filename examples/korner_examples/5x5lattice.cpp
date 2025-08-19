@@ -173,6 +173,7 @@ void lattice_squish(const solve_options& so)
     	solid_solver.addContactInteraction(self_contact_interaction_id_4, {sideset4}, {sideset4}, so.contact_options);
 	    }
   }
+
   // auto contact_interaction_id_top = 1;
   // solid_solver->addContactInteraction(contact_interaction_id_top, {top_contact1}, {top_contact2}, so.contact_options);
 
@@ -249,7 +250,7 @@ int main(int argc, char* argv[])
     .jacobian = serac::ContactJacobian::Exact
   };
 
-  so.mesh_location = SERAC_REPO_DIR "/data/meshes/5x5lattice.g";
+  so.mesh_location = SERAC_REPO_DIR "/data/meshes/5x5lattice2.g";
   so.simulation_tag = "5x5lattice_squish";
   so.serial_refinement = 1;
   so.parallel_refinement = 1;
