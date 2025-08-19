@@ -208,7 +208,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    * @tparam active_parameters Type for indices into fields which the body integral may depend on
    * @tparam BoundaryFluxType The type of the traction load
-   * @param depends_on Andices into fields which the body integral may depend on
+   * @param depends_on Indices into fields which the body integral may depend on
    * @param boundary_name The name of the registered domain over which the boundary integral is applied.
    * @param flux_function A function describing the outward normal flux applied.
    * @pre flux_function must be a object that can be called with the following arguments:
