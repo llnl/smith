@@ -11,6 +11,7 @@
 #pragma once
 
 #include "data_store.hpp"
+#include "upstream_state.hpp"
 #include <functional>
 
 namespace gretl {
@@ -40,16 +41,16 @@ gretl::State<T, D> create_state_impl(
   auto newState = state0.template create_state<T, D>(state_bases, zeroFunc);
 
   newState.set_eval([eval](const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) {
-    const T e = eval(inputs[0].get<typename State0::type, typename State0::dual_type>(),
-                     inputs[state_indices + 1].get<typename StatesN::type, typename StatesN::dual_type>()...);
+    const T e = eval(inputs[0].get<typename State0::type>(),
+                     inputs[state_indices + 1].get<typename StatesN::type>()...);
     output.set<T, D>(e);
   });
 
   newState.set_vjp([vjp](gretl::UpstreamStates& inputs, const gretl::DownstreamState& output) {
-    vjp(inputs[0].get<typename State0::type, typename State0::dual_type>(),
-        inputs[state_indices + 1].get<typename StatesN::type, typename StatesN::dual_type>()..., output.get<T, D>(),
-        inputs[0].get_dual<typename State0::dual_type, typename State0::type>(),
-        inputs[state_indices + 1].get_dual<typename StatesN::dual_type, typename StatesN::type>()...,
+    vjp(inputs[0].get<typename State0::type>(),
+        inputs[state_indices + 1].get<typename StatesN::type>()..., output.get<T>(),
+        inputs[0].get_dual<typename State0::dual_type>(),
+        inputs[state_indices + 1].get_dual<typename StatesN::dual_type>()...,
         output.get_dual<D, T>());
   });
 
@@ -104,17 +105,17 @@ gretl::State<typename State0::type, typename State0::dual_type> clone_state_impl
   auto newState = state0.clone(state_bases);
 
   newState.set_eval([eval](const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) {
-    const T e = eval(inputs[0].get<typename State0::type, typename State0::dual_type>(),
-                     inputs[state_indices + 1].get<typename StatesN::type, typename StatesN::dual_type>()...);
+    const T e = eval(inputs[0].get<typename State0::type>(),
+                     inputs[state_indices + 1].get<typename StatesN::type>()...);
     output.set<T, D>(e);
   });
 
   newState.set_vjp([vjp](gretl::UpstreamStates& inputs, const gretl::DownstreamState& output) {
-    vjp(inputs[0].get<typename State0::type, typename State0::dual_type>(),
-        inputs[state_indices + 1].get<typename StatesN::type, typename StatesN::dual_type>()..., output.get<T, D>(),
-        inputs[0].get_dual<typename State0::dual_type, typename State0::type>(),
-        inputs[state_indices + 1].get_dual<typename StatesN::dual_type, typename StatesN::type>()...,
-        output.get_dual<D, T>());
+    vjp(inputs[0].get<typename State0::type>(),
+        inputs[state_indices + 1].get<typename StatesN::type>()..., output.get<T, D>(),
+        inputs[0].get_dual<typename State0::dual_type>(),
+        inputs[state_indices + 1].get_dual<typename StatesN::dual_type>()...,
+        output.get_dual<D>());
   });
 
   return newState.finalize();
@@ -129,7 +130,6 @@ gretl::State<typename State0::type, typename State0::dual_type> clone_state_impl
 /// duals
 /// @param state0 First upstream state
 /// @param ...statesN Variadic list of upstream states
-template <typename T, typename D, typename State0, typename... StatesN>
 template <typename State0, typename... StatesN>
 gretl::State<typename State0::type, typename State0::dual_type> clone_state(
     const std::function<typename State0::type(const typename State0::type&, const typename StatesN::type&...)>& eval,

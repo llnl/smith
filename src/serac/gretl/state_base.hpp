@@ -45,6 +45,11 @@ struct StateBase {
     dataStore_->set_dual<D>(step_, d);
   }
 
+  void clear_dual()
+  {
+    dataStore_->clear_dual(step_);
+  }
+
   /// @brief create a new state, given the upstream input dependencies and a function specifying how to initial the dual
   /// value to zero.
   template <typename T, typename D = T>

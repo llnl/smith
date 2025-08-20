@@ -51,6 +51,11 @@ struct UpstreamStates {
 
   /// @brief Accessor for individual upstream states
   /// @param index index
+  template <typename IntT>
+  const UpstreamState& operator[](IntT index) const { return states_[static_cast<size_t>(index)]; }
+
+  /// @brief Accessor for individual upstream states
+  /// @param index index
   const UpstreamState& operator[](Int index) const { return states_[index]; }
 
   /// @brief Number of upstream states
@@ -82,7 +87,7 @@ struct DownstreamState {
   template <typename T, typename D = T>
   const T& get() const
   {
-    return *dataStore_->get_primal<T>(step_);
+    return dataStore_->get_primal<T>(step_);
   }
 
   /// @brief get underlying dual value

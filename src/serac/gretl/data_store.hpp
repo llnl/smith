@@ -77,6 +77,11 @@ class DataStore {
   /// @brief unwind the entire graph
   void back_prop();
 
+  /// @brief set state back to the end of time
+  void reset_for_backprop() { 
+    gretl_assert_msg(false, "Reset for backprop not yet implemented");
+  }
+
   /// @brief clear all but persistent state, keeping the graph
   void reset();
 
@@ -185,6 +190,13 @@ class DataStore {
     auto dualData = std::any_cast<D>(duals_[step].get());
     gretl_assert(dualData);
     *dualData = d;
+  }
+
+  /// @brief Deallocate the dual value
+  /// @param step
+  void clear_dual(Int step)
+  {
+    duals_[step] = nullptr;
   }
 
   /// @brief Check if state in use
