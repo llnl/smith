@@ -12,6 +12,7 @@ set(differentiable_numerics_sources
 set(differentiable_numerics_headers
     field_state.hpp
     state_advancer.hpp
+    timestep_estimator.hpp
     serac_mechanics.hpp
     explicit_dynamic_solve.hpp
     lumped_mass_weak_form.hpp

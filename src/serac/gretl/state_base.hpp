@@ -45,10 +45,8 @@ struct StateBase {
     dataStore_->set_dual<D>(step_, d);
   }
 
-  void clear_dual()
-  {
-    dataStore_->clear_dual(step_);
-  }
+  /// @brief method to clear out the memory usage for state's dual value
+  void clear_dual() { dataStore_->clear_dual(step_); }
 
   /// @brief create a new state, given the upstream input dependencies and a function specifying how to initial the dual
   /// value to zero.

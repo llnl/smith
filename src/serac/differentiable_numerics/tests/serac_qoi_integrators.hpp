@@ -58,8 +58,9 @@ gretl::State<double> compute_kinetic_energy(
 }
 
 // testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
-inline auto check_gradients(const gretl::State<double>& objectiveState, FieldState& inputState, serac::FiniteElementDual& inputDual, double objectiveBase,
-                            gretl::DataStore& dataStore, double eps)
+inline auto check_gradients(const gretl::State<double>& objectiveState, FieldState& inputState,
+                            serac::FiniteElementDual& inputDual, double objectiveBase, gretl::DataStore& dataStore,
+                            double eps)
 {
   serac::FiniteElementState inputSave(*inputState.get());
   dataStore.reset();
@@ -84,7 +85,6 @@ inline auto check_gradients(const gretl::State<double>& objectiveState, FieldSta
   return std::make_pair(directionDeriv, (objectivePlus - objectiveBase) / eps);
 }
 
-
 inline double check_grad_wrt(const gretl::State<double>& objective, serac::FieldState& input, gretl::DataStore& graph,
                              double eps, size_t num_fd_steps = 4, bool printmore = false)
 {
@@ -99,7 +99,7 @@ inline double check_grad_wrt(const gretl::State<double>& objective, serac::Field
   graph.back_prop();
 
   auto dual_vec = *input.get_dual();
-  
+
   std::vector<double> grad_errors;
   auto [grad, grad_fd] = check_gradients(objective, input, dual_vec, objectiveBase, graph, eps);
   grad_errors.push_back(std::abs(grad - grad_fd));

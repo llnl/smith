@@ -39,7 +39,6 @@ class StateAdvancer {
   }
 };
 
-
 class LumpedMassExplicitNewmark : public StateAdvancer {
  public:
   LumpedMassExplicitNewmark(const std::shared_ptr<WeakForm>& r, const std::shared_ptr<WeakForm>& mr,

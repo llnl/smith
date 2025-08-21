@@ -13,14 +13,12 @@ gretl::State<int> make_milestone(const std::vector<FieldState>& states)
     base_states.push_back(s);
   }
 
-  auto milestone = states[0].create_state<int,int>(base_states);
+  auto milestone = states[0].create_state<int, int>(base_states);
 
   milestone.set_eval(
-      []([[maybe_unused]] const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) { 
-        output.set<int>(0);
-      });
+      []([[maybe_unused]] const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) { output.set<int>(0); });
   milestone.set_vjp(
-    []([[maybe_unused]] gretl::UpstreamStates& inputs, [[maybe_unused]] const gretl::DownstreamState& output) {});
+      []([[maybe_unused]] gretl::UpstreamStates& inputs, [[maybe_unused]] const gretl::DownstreamState& output) {});
 
   return milestone.finalize();
 }
@@ -78,8 +76,8 @@ void Mechanics::resetAdjointStates()
   /// MRT, this needs to be testing and correctly implemented
   checkpointer_->reset_for_backprop();
   // Find the most last saved milestone
-  //auto milestone = milestones_.back();
-  //if (milestone.data() != checkpointer_->get_state().data()) {
+  // auto milestone = milestones_.back();
+  // if (milestone.data() != checkpointer_->get_state().data()) {
   //  while (milestone.data() != checkpointer_->reverse_state().data()) {
   //  }
   //}

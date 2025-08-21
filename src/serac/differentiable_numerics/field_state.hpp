@@ -74,9 +74,9 @@ inline FieldState square(const FieldState& state)
   });
 
   newState.set_vjp([](gretl::UpstreamStates& inputs, const gretl::DownstreamState& output) {
-    const FiniteElementDual& output_ = *output.get_dual<D,T>();
+    const FiniteElementDual& output_ = *output.get_dual<D, T>();
     const FiniteElementState& input = *inputs[0].get<T>();
-    FiniteElementDual& input_ = *inputs[0].get_dual<D,T>();
+    FiniteElementDual& input_ = *inputs[0].get_dual<D, T>();
     int sz = input_.Size();
     for (int i = 0; i < sz; ++i) {
       input_[i] += 2.0 * input[i] * output_[i];
@@ -101,17 +101,17 @@ inline gretl::State<double> inner_product(const FieldState& a, const FieldState&
   });
 
   c.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    const double& Cbar = downstream.get_dual<double,double>();
+    const double& Cbar = downstream.get_dual<double, double>();
     auto& a_ = upstreams[0];
     auto& b_ = upstreams[1];
 
     const FiniteElementState& A = *a_.get<T>();
     const FiniteElementState& B = *b_.get<T>();
 
-    FiniteElementDual& Abar = *a_.get_dual<D,T>();
+    FiniteElementDual& Abar = *a_.get_dual<D, T>();
     Abar.Add(Cbar, B);
 
-    FiniteElementDual& Bbar = *b_.get_dual<D,T>();
+    FiniteElementDual& Bbar = *b_.get_dual<D, T>();
     Bbar.Add(Cbar, A);
   });
 

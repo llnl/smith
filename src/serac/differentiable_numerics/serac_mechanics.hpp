@@ -1,6 +1,22 @@
+// Copyright (c), Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+/**
+ * @file serac_mechanics.hpp
+ *
+ * @brief Implementation of BasePhysics which uses FieldStates and gretl to track the computational graph, dynamically
+ * checkpoint, and backpropagate sensitivities.
+ */
+
+#pragma once
+
 #include "serac/physics/base_physics.hpp"
-#include "serac/differentiable_numerics/field_state.hpp"
 #include "serac/gretl/data_store.hpp"
+#include "serac/differentiable_numerics/field_state.hpp"
+#include "serac/differentiable_numerics/timestep_estimator.hpp"
 #include <vector>
 #include <map>
 
@@ -10,26 +26,6 @@ class Mesh;
 class WeakForm;
 class DifferentiableSolver;
 class StateAdvancer;
-
-class TimestepEstimator {
- public:
-  virtual ~TimestepEstimator() {}
-  virtual double dt([[maybe_unused]] const FieldState& shape_disp, const std::vector<FieldState>& states,
-                    const std::vector<FieldState>& params) const = 0;
-};
-
-class ConstantTimeStepEstimator : public TimestepEstimator {
- public:
-  ConstantTimeStepEstimator(double dt) : dt_(dt) {}
-
-  double dt([[maybe_unused]] const FieldState& shape_disp, [[maybe_unused]] const std::vector<FieldState>& states,
-            [[maybe_unused]] const std::vector<FieldState>& params) const override
-  {
-    return dt_;
-  }
-
-  double dt_;
-};
 
 class Mechanics : public BasePhysics {
  public:

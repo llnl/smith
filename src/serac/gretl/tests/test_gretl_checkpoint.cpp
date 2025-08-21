@@ -160,16 +160,15 @@ TEST_F(CheckpointFixture, Automated)
 
   X = set_as_objective(X);
   dataStore.stillConstructingGraph_ = false;
-  // dataStore.back_prop();
 
   reverseStates[N] = X.get();
   EXPECT_EQ(X.get_dual(), 1.0);
   for (size_t n = N; n > 0; --n) {
-    // auto rev = dataStore.reverse_state();
     dataStore.reverse_state();
     auto restoredState = static_cast<gretl::Int>(n - 1);
     reverseStates[n - 1] = dataStore.get_primal<double>(restoredState);
-    ASSERT_NEAR(dataStore.get_dual<double>(restoredState), std::pow(1. / 3., (N - n + 1)), 1e-14);
+    double dual_val = dataStore.get_dual<double, double>(restoredState);
+    ASSERT_NEAR(dual_val, std::pow(1. / 3., (N - n + 1)), 1e-14);
   }
 
   for (size_t n = 0; n < N + 1; ++n) {

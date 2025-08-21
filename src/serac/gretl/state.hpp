@@ -34,7 +34,7 @@ struct State : public StateBase {
   inline const T& get() const { return dataStore_->get_primal<T>(step_); }
 
   /// @brief Get dual value of correct type
-  inline const D& get_dual() const { return dataStore_->get_dual<D,T>(step_); }
+  inline const D& get_dual() const { return dataStore_->get_dual<D, T>(step_); }
 
   /// @brief Set the std::functions which evaluates downstream primals given upstream primals
   void set_eval(const std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)>& e)

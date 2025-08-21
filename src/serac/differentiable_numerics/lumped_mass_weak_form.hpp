@@ -1,14 +1,13 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c), Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file nonlinear_system.hpp
+ * @file lumped_mass_weak_form.hpp
  *
- * @brief Specifies parametrized residuals and various linearized evaluations for arbitrary nonlinear systems of
- * equations
+ * @brief serac::functional implementation for evaluating nodal lumped masses, give an input density field
  */
 
 #pragma once

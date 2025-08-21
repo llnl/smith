@@ -41,10 +41,10 @@ inline FieldState computeLumpedMass(const WeakForm* mass_residual_eval, const Fi
 
   z.set_vjp([=](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
     const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
-    const FEFieldPtr& ShapeDisp = upstreams[0].get<FEFieldPtr>();  // shape disp tate
-    const FEFieldPtr& Rho = upstreams[1].get<FEFieldPtr>();        // density parameter state
-    FEDualPtr& Shape_dual = upstreams[0].get_dual<FEDualPtr, FEFieldPtr>();   // dual of shape parameter state
-    FEDualPtr& Rho_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();     // dual of density parameter state
+    const FEFieldPtr& ShapeDisp = upstreams[0].get<FEFieldPtr>();            // shape disp tate
+    const FEFieldPtr& Rho = upstreams[1].get<FEFieldPtr>();                  // density parameter state
+    FEDualPtr& Shape_dual = upstreams[0].get_dual<FEDualPtr, FEFieldPtr>();  // dual of shape parameter state
+    FEDualPtr& Rho_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();    // dual of density parameter state
 
     FiniteElementState Z_dual_state(Z_dual->space(), Z_dual->name());
     Z_dual_state = *Z_dual;

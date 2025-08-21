@@ -29,7 +29,7 @@ struct UpstreamState {
   }
 
   /// @brief get underlying dual value
-  template <typename D, typename T>
+  template <typename D, typename T = D>
   D& get_dual() const
   {
     return dataStore_->get_dual<D, T>(step_);
@@ -52,7 +52,10 @@ struct UpstreamStates {
   /// @brief Accessor for individual upstream states
   /// @param index index
   template <typename IntT>
-  const UpstreamState& operator[](IntT index) const { return states_[static_cast<size_t>(index)]; }
+  const UpstreamState& operator[](IntT index) const
+  {
+    return states_[static_cast<size_t>(index)];
+  }
 
   /// @brief Accessor for individual upstream states
   /// @param index index
@@ -91,10 +94,10 @@ struct DownstreamState {
   }
 
   /// @brief get underlying dual value
-  template <typename D, typename T>
+  template <typename D, typename T = D>
   const D& get_dual() const
   {
-    return dataStore_->get_dual<D,T>(step_);
+    return dataStore_->get_dual<D, T>(step_);
   }
 
   friend class DataStore;

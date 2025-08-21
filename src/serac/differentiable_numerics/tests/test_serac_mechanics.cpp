@@ -108,7 +108,7 @@ struct MeshFixture : public testing::Test {
     serac::StateManager::initialize(datastore, "solid_dynamics");
 
     // create mesh
-    auto mfem_shape = mfem::Element::QUADRILATERAL; // mfem::Element::TRIANGLE;
+    auto mfem_shape = mfem::Element::QUADRILATERAL;  // mfem::Element::TRIANGLE;
     double length = 0.5;
     double width = 2.0;
     mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem_shape, true, length, width), MESHTAG, 0,
@@ -157,7 +157,8 @@ struct MeshFixture : public testing::Test {
 
     std::shared_ptr<serac::StateAdvancer> time_integrator;
 
-    time_integrator = std::make_shared<serac::LumpedMassExplicitNewmark>(solid_mechanics_residual, solid_mass_residual, bc_manager);
+    time_integrator =
+        std::make_shared<serac::LumpedMassExplicitNewmark>(solid_mechanics_residual, solid_mass_residual, bc_manager);
     auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(1e-3);
 
     // construct mechanics
