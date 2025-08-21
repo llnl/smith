@@ -27,8 +27,8 @@ VectorState testing_update(const VectorState& a)
   });
 
   b.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
-    Vector& Abar = upstreams[0].get_dual<Vector>();
-    const Vector& Bbar = downstream.get_dual<Vector>();
+    Vector& Abar = upstreams[0].get_dual<Vector, Vector>();
+    const Vector& Bbar = downstream.get_dual<Vector, Vector>();
     const size_t sz = Bbar.size();
 
     for (size_t i = 0; i < sz; ++i) {
@@ -54,15 +54,15 @@ VectorState operator+(const VectorState& a, const VectorState& b)
   });
 
   c.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
-    const Vector& Cbar = downstream.get_dual<Vector>();
+    const Vector& Cbar = downstream.get_dual<Vector, Vector>();
     size_t sz = Cbar.size();
 
-    Vector& Abar = upstreams[0].get_dual<Vector>();
+    Vector& Abar = upstreams[0].get_dual<Vector, Vector>();
     for (size_t i = 0; i < sz; ++i) {
       Abar[i] += Cbar[i];
     }
 
-    Vector& Bbar = upstreams[1].get_dual<Vector>();
+    Vector& Bbar = upstreams[1].get_dual<Vector, Vector>();
     for (size_t i = 0; i < sz; ++i) {
       Bbar[i] += Cbar[i];
     }
@@ -84,8 +84,8 @@ VectorState operator*(const VectorState& a, double b)
   });
 
   c.set_vjp([b](UpstreamStates& upstreams, const DownstreamState& downstream) {
-    const Vector& Cbar = downstream.get_dual<Vector>();
-    Vector& Abar = upstreams[0].get_dual<Vector>();
+    const Vector& Cbar = downstream.get_dual<Vector, Vector>();
+    Vector& Abar = upstreams[0].get_dual<Vector, Vector>();
     for (size_t i = 0; i < Abar.size(); ++i) {
       Abar[i] += b * Cbar[i];
     }
@@ -112,7 +112,7 @@ State<double> inner_product(const VectorState& a, const VectorState& b)
   });
 
   c.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
-    double Cbar = downstream.get_dual<double>();
+    double Cbar = downstream.get_dual<double, double>();
 
     auto a_ = upstreams[0];
     auto b_ = upstreams[1];
@@ -121,12 +121,12 @@ State<double> inner_product(const VectorState& a, const VectorState& b)
     const Vector& B = b_.get<Vector>();
     size_t sz = get_same_size<double>({&A, &B});
 
-    Vector& Abar = a_.get_dual<Vector>();
+    Vector& Abar = a_.get_dual<Vector, Vector>();
     for (size_t i = 0; i < sz; ++i) {
       Abar[i] += B[i] * Cbar;
     }
 
-    Vector& Bbar = b_.get_dual<Vector>();
+    Vector& Bbar = b_.get_dual<Vector, Vector>();
     for (size_t i = 0; i < sz; ++i) {
       Bbar[i] += A[i] * Cbar;
     }
@@ -150,7 +150,7 @@ VectorState operator*(const VectorState& a, const VectorState& b)
   });
 
   c.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
-    const Vector& Cbar = downstream.get_dual<Vector>();
+    const Vector& Cbar = downstream.get_dual<Vector, Vector>();
 
     auto a_ = upstreams[0];
     auto b_ = upstreams[1];
@@ -159,12 +159,12 @@ VectorState operator*(const VectorState& a, const VectorState& b)
     const Vector& B = b_.get<Vector>();
     size_t sz = get_same_size<double>({&A, &B});
 
-    Vector& Abar = a_.get_dual<Vector>();
+    Vector& Abar = a_.get_dual<Vector, Vector>();
     for (size_t i = 0; i < sz; ++i) {
       Abar[i] += B[i] * Cbar[i];
     }
 
-    Vector& Bbar = b_.get_dual<Vector>();
+    Vector& Bbar = b_.get_dual<Vector, Vector>();
     for (size_t i = 0; i < sz; ++i) {
       Bbar[i] += A[i] * Cbar[i];
     }
@@ -181,9 +181,9 @@ VectorState copy(const VectorState& a)
       [](const UpstreamStates& upstreams, DownstreamState& downstream) { downstream.set(upstreams[0].get<Vector>()); });
 
   b.set_vjp([](UpstreamStates& upstreams, const DownstreamState& downstream) {
-    const Vector& Bbar = downstream.get_dual<Vector>();
+    const Vector& Bbar = downstream.get_dual<Vector, Vector>();
     auto a_ = upstreams[0];
-    Vector& Abar = a_.get_dual<Vector>();
+    Vector& Abar = a_.get_dual<Vector, Vector>();
     for (size_t i = 0; i < Abar.size(); ++i) {
       Abar[i] += Bbar[i];
     }

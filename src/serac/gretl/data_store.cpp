@@ -11,11 +11,12 @@
 
 namespace gretl {
 
-DataStore::DataStore(size_t maxStates) : checkpointManager{.maxNumStates = maxStates, .cps{}} { current_step_ = 0; }
+DataStore::DataStore(size_t maxStates) : checkpointManager_{.maxNumStates = maxStates, .cps{}} { current_step_ = 0; }
 
 void DataStore::back_prop()
 {
-  stillConstructingGraph = false;
+  stillConstructingGraph_ = false;
+  current_step_ = static_cast<Int>(states_.size());
   for (size_t n = states_.size(); n > 0; --n) {
     reverse_state();
   }
@@ -52,18 +53,19 @@ bool DataStore::state_in_use(Int step) const { return states_[step]->primal_ && 
 
 void DataStore::reset()
 {
+  Int num_persistent = 0;
   for (size_t n = states_.size(); n > 0; --n) {
     Int stepToClear = static_cast<Int>(n - 1);
     if (!is_persistent(stepToClear)) {
       clear_usage(stepToClear);
     } else {
+      num_persistent++;
       duals_[stepToClear] = nullptr;
     }
   }
 
-  checkpointManager.reset();
-
-  current_step_ = 0;
+  checkpointManager_.reset();
+  current_step_ = num_persistent;
 }
 
 void DataStore::vjp(StateBase& state) { state.evaluate_vjp(); }
@@ -74,14 +76,14 @@ void DataStore::reverse_state()
 {
   // must erase the final step in the cp manager before we get started
   if (current_step_ == states_.size()) {
-    checkpointManager.erase_step(current_step_ - 1);
+    checkpointManager_.erase_step(current_step_ - 1);
   }
   --current_step_;
   if (upstreams_[current_step_].size()) {
     fetch_state_data(current_step_ - 1);
     vjp(*states_[current_step_]);
     clear_usage(current_step_);
-    checkpointManager.erase_step(current_step_ - 1);
+    checkpointManager_.erase_step(current_step_ - 1);
   }
 }
 
@@ -120,7 +122,7 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
 
   bool persistent = upstreams.size() == 0;
   if (persistent) {
-    checkpointManager.add_checkpoint_and_get_index_to_remove(step, persistent);
+    checkpointManager_.add_checkpoint_and_get_index_to_remove(step, persistent);
   }
 
   std::vector<Int> upstreamSteps;
@@ -184,9 +186,9 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
 
 void DataStore::fetch_state_data(Int stepIndex)
 {
-  gretl_assert(!stillConstructingGraph);
+  gretl_assert(!stillConstructingGraph_);
 
-  Int lastCheckpoint = static_cast<Int>(checkpointManager.last_checkpoint_step());
+  Int lastCheckpoint = static_cast<Int>(checkpointManager_.last_checkpoint_step());
 
   gretl_assert(lastCheckpoint <= stepIndex);
   gretl_assert(state_in_use(lastCheckpoint));
@@ -216,8 +218,8 @@ void DataStore::fetch_state_data(Int stepIndex)
 void DataStore::erase_step_state_data(Int step)
 {
   if (!is_persistent(step)) {
-    size_t stepToErase = checkpointManager.add_checkpoint_and_get_index_to_remove(step);
-    if (checkpointManager.valid_checkpoint_index(stepToErase)) {
+    size_t stepToErase = checkpointManager_.add_checkpoint_and_get_index_to_remove(step);
+    if (checkpointManager_.valid_checkpoint_index(stepToErase)) {
       gretl_assert(usageCount_[stepToErase]);
       usageCount_[stepToErase]--;
       active_[stepToErase] = false;
@@ -246,7 +248,7 @@ bool DataStore::check_validity() const
   for (size_t i = 0; i < current_step_; ++i) {
     if (active_[i]) {
       bool cp_has_i = false;
-      for (auto& cp : checkpointManager.cps) {
+      for (auto& cp : checkpointManager_.cps) {
         if (cp.step == i) {
           cp_has_i = true;
           break;
@@ -298,7 +300,7 @@ void DataStore::print() const
     }
     std::cout << std::endl;
   }
-  std::cout << checkpointManager << std::endl;
+  std::cout << checkpointManager_ << std::endl;
 }
 
 }  // namespace gretl

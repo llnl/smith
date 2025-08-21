@@ -14,8 +14,8 @@
 
 #include <string>
 #include "mfem.hpp"
-#include "smith/physics/field_state.hpp"
 #include "serac/physics/mesh.hpp"
+#include "serac/differentiable_numerics/field_state.hpp"
 
 namespace serac {
 
@@ -76,9 +76,9 @@ class ParaviewWriter {
       *state = *current_fields[n].get();
       state->gridFunction();
 
-      auto& dual = dual_states[n];
-      current_fields[n].get_dual()->linearForm().ParallelAssemble(*dual);
-      dual->gridFunction();
+      //auto& dual = dual_states[n];
+      //current_fields[n].get_dual()->linearForm().ParallelAssemble(*dual);
+      //dual->gridFunction();
     }
 
     pv->SetCycle(static_cast<int>(step));
@@ -113,7 +113,7 @@ inline auto createParaviewOutput(const serac::Mesh& mesh, const std::vector<Fiel
     paraview_dc->RegisterField(state->name(), &output_states.back()->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
 
-    const auto& dual = fstate.get_dual();
+    const auto& dual = fstate.get(); // not getting the dual, as it may not exist on the graph!
     output_duals.push_back(std::make_shared<serac::FiniteElementState>(dual->space(), dual->name()));
     paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
@@ -205,6 +205,7 @@ inline std::vector<const serac::FiniteElementDual*> get_dual_ptrs_for_output(
     serac::FieldState shape_disp, const std::vector<serac::FieldState>& states_in,
     std::vector<serac::FieldState> other_fields = {})
 {
+  exit(1);
   std::vector<const serac::FiniteElementDual*> duals_out{shape_disp.get_dual().get()};
   for (auto& s : states_in) {
     duals_out.push_back(s.get_dual().get());

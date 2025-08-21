@@ -159,7 +159,7 @@ TEST_F(CheckpointFixture, Automated)
   }
 
   X = set_as_objective(X);
-  dataStore.stillConstructingGraph = false;
+  dataStore.stillConstructingGraph_ = false;
   // dataStore.back_prop();
 
   reverseStates[N] = X.get();

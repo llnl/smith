@@ -17,9 +17,9 @@ FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryCondit
   });
 
   s_bc.set_vjp([=](gretl::UpstreamStates& inputs, const gretl::DownstreamState& output) {
-    FiniteElementDual tmp(*output.get_dual<FEDualPtr>());
+    FiniteElementDual tmp(*output.get_dual<FEDualPtr, FEFieldPtr>());
     tmp.SetSubVector(bc_manager->allEssentialTrueDofs(), 0.0);
-    inputs[0].get_dual<FEDualPtr>()->Add(1.0, tmp);
+    inputs[0].get_dual<FEDualPtr, FEFieldPtr>()->Add(1.0, tmp);
   });
 
   return s_bc.finalize();

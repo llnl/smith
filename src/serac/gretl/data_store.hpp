@@ -133,13 +133,13 @@ class DataStore {
   const T& get_primal(Int step)
   {
     T* tptr = std::any_cast<T>(any_primal(step).get());
-    if (stillConstructingGraph) {
+    if (stillConstructingGraph_) {
       gretl_assert_msg(tptr, "bad step " + std::to_string(step));
     } else {
       if (!tptr) {
         fetch_state_data(step);
+        tptr = std::any_cast<T>(any_primal(step).get());
       }
-      tptr = std::any_cast<T>(any_primal(step).get());
       gretl_assert_msg(tptr, "bad step " + std::to_string(step));
     }
     return *tptr;
@@ -153,7 +153,7 @@ class DataStore {
   {
     T* tptr = std::any_cast<T>(any_primal(step).get());
     if (!tptr) {
-      gretl_assert(!stillConstructingGraph);
+      gretl_assert(!stillConstructingGraph_);
       gretl_assert(usageCount_[step] == 1);
       any_primal(step) = std::make_shared<std::any>(t);
       return;
@@ -164,13 +164,13 @@ class DataStore {
 
   /// @brief Get dual value
   /// @param step
-  template <typename D, typename T = D>
+  template <typename D, typename T>
   D& get_dual(Int step)
   {
     if (!duals_[step]) {
       const T& thisPrimal = get_primal<T>(step);
       auto thisState = dynamic_cast<const State<T, D>*>(states_[step].get());
-      gretl_assert(thisState);
+      gretl_assert_msg(thisState, std::string("failed to get primal to this state, step ") + std::to_string(step));
       duals_[step] = std::make_unique<std::any>(thisState->initialize_zero_dual_(thisPrimal));
     }
     auto dualData = std::any_cast<D>(duals_[step].get());
@@ -223,13 +223,13 @@ class DataStore {
                                                 ///< eventually used in some future step as an upstream
 
   /// container which track the states in the graph with allocated data
-  CheckpointManager checkpointManager;
+  CheckpointManager checkpointManager_;
 
   /// step counter
   Int current_step_;
 
   /// @brief specifies if graph is in construction or back-prop mode.  This is used for internal asserts.
-  bool stillConstructingGraph = true;
+  bool stillConstructingGraph_ = true;
 
   friend struct StateBase;
 

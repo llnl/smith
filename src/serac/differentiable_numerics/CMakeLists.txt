@@ -27,7 +27,7 @@ set(differentiable_numerics_depends
     )
 
 blt_add_library(
-    NAME        differentiable_numerics
+    NAME        serac_differentiable_numerics
     SOURCES     ${differentiable_numerics_sources}
     HEADERS     ${differentiable_numerics_headers}
     DEPENDS_ON  ${differentiable_numerics_depends}
@@ -35,12 +35,12 @@ blt_add_library(
 
 serac_write_unified_header(
     NAME    differentiable_numerics
-    HEADERS ${differentiable_numerics}
+    HEADERS ${differentiable_numerics_headers}
     )
 
 install(FILES ${differentiable_numerics} DESTINATION include/serac/differentiable_numerics )
 
-install(TARGETS              differentiable_numerics
+install(TARGETS              serac_differentiable_numerics
         EXPORT               serac-targets
         DESTINATION          lib
         )
@@ -49,6 +49,3 @@ if(SERAC_ENABLE_TESTS)
     add_subdirectory(tests)
 endif()
     
-#if(SERAC_ENABLE_BENCHMARKS)
-#    add_subdirectory(benchmarks)
-#endif()

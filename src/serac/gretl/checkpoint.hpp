@@ -164,7 +164,7 @@ struct CheckpointManager {
   }
 
   size_t maxNumStates =
-      20;  ///< The maximum number of non-persistent, not-in-scope states stored by the CheckpointManager
+      20;  ///< The max number of non-persistent, not-in-scope states stored by the CheckpointManager
   std::set<Checkpoint> cps;  ///< Vector of checkpoints
 };
 

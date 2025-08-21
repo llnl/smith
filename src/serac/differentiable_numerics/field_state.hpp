@@ -74,9 +74,9 @@ inline FieldState square(const FieldState& state)
   });
 
   newState.set_vjp([](gretl::UpstreamStates& inputs, const gretl::DownstreamState& output) {
-    const FiniteElementDual& output_ = *output.get_dual<D>();
+    const FiniteElementDual& output_ = *output.get_dual<D,T>();
     const FiniteElementState& input = *inputs[0].get<T>();
-    FiniteElementDual& input_ = *inputs[0].get_dual<D>();
+    FiniteElementDual& input_ = *inputs[0].get_dual<D,T>();
     int sz = input_.Size();
     for (int i = 0; i < sz; ++i) {
       input_[i] += 2.0 * input[i] * output_[i];
@@ -101,17 +101,17 @@ inline gretl::State<double> inner_product(const FieldState& a, const FieldState&
   });
 
   c.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    const double& Cbar = downstream.get_dual<double>();
+    const double& Cbar = downstream.get_dual<double,double>();
     auto& a_ = upstreams[0];
     auto& b_ = upstreams[1];
 
     const FiniteElementState& A = *a_.get<T>();
     const FiniteElementState& B = *b_.get<T>();
 
-    FiniteElementDual& Abar = *a_.get_dual<D>();
+    FiniteElementDual& Abar = *a_.get_dual<D,T>();
     Abar.Add(Cbar, B);
 
-    FiniteElementDual& Bbar = *b_.get_dual<D>();
+    FiniteElementDual& Bbar = *b_.get_dual<D,T>();
     Bbar.Add(Cbar, A);
   });
 
@@ -131,9 +131,9 @@ inline FieldState axpby(double a, const FieldState& x, double b, const FieldStat
   });
 
   z.set_vjp([a, b](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr>();
-    FEDualPtr& X_dual = upstreams[0].get_dual<FEDualPtr>();
-    FEDualPtr& Y_dual = upstreams[1].get_dual<FEDualPtr>();
+    const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
+    FEDualPtr& X_dual = upstreams[0].get_dual<FEDualPtr, FEFieldPtr>();
+    FEDualPtr& Y_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();
     add(*X_dual, a, *Z_dual, *X_dual);
     add(*Y_dual, b, *Z_dual, *Y_dual);
   });
@@ -185,40 +185,6 @@ inline FieldState add(FieldState a, FieldState b, FieldState c)
       a, b, c);
 
   return g;
-}
-
-inline auto check_gradients(const gretl::State<double>& objectiveState, FieldState& inputState,
-                            gretl::DataStore& dataStore, double eps)
-{
-  dataStore.reset();
-  serac::FiniteElementState inputSave(*inputState.get());
-  double objectiveBase = objectiveState.get();
-  serac::FiniteElementDual grad = *inputState.get_dual();
-
-  dataStore.reset();
-  serac::FiniteElementState& input = *inputState.get();
-  serac::FiniteElementState pert(input.space(), input.name() + "_pert");
-
-  int sz = pert.Size();
-  for (int i = 0; i < sz; ++i) {
-    pert[i] = -1.2 + 2.02 * (double(i) / sz);
-    input[i] += eps * pert[i];
-  }
-
-  double objectivePlus = objectiveState.get();
-
-  double directionDeriv = 0.0;
-  for (int i = 0; i < sz; ++i) {
-    directionDeriv += pert[i] * grad[i];
-  }
-
-  // EXPECT_NEAR(directionDeriv, (objectivePlus-objectiveBase)/eps, tol) << objectivePlus << " " << objectiveBase <<
-  // std::endl; double gradient_error = std::abs(directionDeriv - (objectivePlus-objectiveBase)/eps);
-
-  dataStore.reset();
-  *inputState.get() = inputSave;
-
-  return std::make_pair(directionDeriv, (objectivePlus - objectiveBase) / eps);
 }
 
 }  // namespace serac

@@ -40,11 +40,11 @@ inline FieldState computeLumpedMass(const WeakForm* mass_residual_eval, const Fi
   });
 
   z.set_vjp([=](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr>();
+    const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
     const FEFieldPtr& ShapeDisp = upstreams[0].get<FEFieldPtr>();  // shape disp tate
     const FEFieldPtr& Rho = upstreams[1].get<FEFieldPtr>();        // density parameter state
-    FEDualPtr& Shape_dual = upstreams[0].get_dual<FEDualPtr>();   // dual of shape parameter state
-    FEDualPtr& Rho_dual = upstreams[1].get_dual<FEDualPtr>();     // dual of density parameter state
+    FEDualPtr& Shape_dual = upstreams[0].get_dual<FEDualPtr, FEFieldPtr>();   // dual of shape parameter state
+    FEDualPtr& Rho_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();     // dual of density parameter state
 
     FiniteElementState Z_dual_state(Z_dual->space(), Z_dual->name());
     Z_dual_state = *Z_dual;
@@ -73,8 +73,8 @@ inline FieldState diagInverse(const FieldState& x)
   });
 
   z.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    FiniteElementDual& Z_dual = *downstream.get_dual<FEDualPtr>();
-    FiniteElementDual& X_dual = *upstreams[0].get_dual<FEDualPtr>();
+    FiniteElementDual& Z_dual = *downstream.get_dual<FEDualPtr, FEFieldPtr>();
+    FiniteElementDual& X_dual = *upstreams[0].get_dual<FEDualPtr, FEFieldPtr>();
     FiniteElementState& X_ = *upstreams[0].get<FEFieldPtr>();
     int sz = X_.Size();
     for (int index = 0; index < sz; index++) {
@@ -125,7 +125,7 @@ inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_d
     SERAC_MARK_FUNCTION;
 
     const FEFieldPtr Z = output.get<FEFieldPtr>();
-    const FEDualPtr Z_dual = output.get_dual<FEDualPtr>();
+    const FEDualPtr Z_dual = output.get_dual<FEDualPtr, FEFieldPtr>();
     FiniteElementState Z_dual_state(Z_dual->space(), Z_dual->name());
     Z_dual_state = *Z_dual;
 
@@ -143,13 +143,13 @@ inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_d
 
     std::vector<DualFieldPtr> field_sensitivities(num_fields);
     for (size_t field_index = 0; field_index < num_fields; ++field_index) {
-      field_sensitivities[field_index] = inputs[field_index].get_dual<FEDualPtr>().get();
+      field_sensitivities[field_index] = inputs[field_index].get_dual<FEDualPtr, FEFieldPtr>().get();
     }
     // setting the field sensitivity to nullptr means if will not be computed in the vjp call
     field_sensitivities[inertial_index] = nullptr;
 
     auto shape_disp_ptr = inputs[num_fields].get<FEFieldPtr>();
-    auto shape_disp_sensitivity_ptr = inputs[num_fields].get_dual<FEDualPtr>();
+    auto shape_disp_sensitivity_ptr = inputs[num_fields].get_dual<FEDualPtr, FEFieldPtr>();
 
     // set the dual fields for each input, using the call to residual that pulls the derivative
     residual_eval->vjp(time, dt, shape_disp_ptr.get(), fields, {}, getConstFieldPointers(Z_dual_state),
@@ -188,11 +188,11 @@ inline FieldState componentWiseMult(const FieldState& x, const FieldState& y,
   });
 
   z.set_vjp([=](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    auto Z_dual = *downstream.get_dual<FEDualPtr>();
+    auto Z_dual = *downstream.get_dual<FEDualPtr, FEFieldPtr>();
     const FiniteElementState& X = *upstreams[0].get<FEFieldPtr>();
     const FiniteElementState& Y = *upstreams[1].get<FEFieldPtr>();
-    FiniteElementDual& X_dual = *upstreams[0].get_dual<FEDualPtr>();
-    FiniteElementDual& Y_dual = *upstreams[1].get_dual<FEDualPtr>();
+    FiniteElementDual& X_dual = *upstreams[0].get_dual<FEDualPtr, FEFieldPtr>();
+    FiniteElementDual& Y_dual = *upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();
 
     // enforce zero acceleration at fixed BCs
     if (bc_manager) {
@@ -238,11 +238,11 @@ inline FieldState negativeComponentWiseMult(const FieldState& x, const FieldStat
   });
 
   z.set_vjp([=](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    auto Z_dual = *downstream.get_dual<FEDualPtr>();
+    auto Z_dual = *downstream.get_dual<FEDualPtr, FEFieldPtr>();
     const FiniteElementState& X = *upstreams[0].get<FEFieldPtr>();
     const FiniteElementState& Y = *upstreams[1].get<FEFieldPtr>();
-    FiniteElementDual& X_dual = *upstreams[0].get_dual<FEDualPtr>();
-    FiniteElementDual& Y_dual = *upstreams[1].get_dual<FEDualPtr>();
+    FiniteElementDual& X_dual = *upstreams[0].get_dual<FEDualPtr, FEFieldPtr>();
+    FiniteElementDual& Y_dual = *upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();
 
     // enforce zero acceleration at fixed BCs
     if (bc_manager) {

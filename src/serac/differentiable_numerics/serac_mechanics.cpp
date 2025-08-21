@@ -12,10 +12,16 @@ gretl::State<int> make_milestone(const std::vector<FieldState>& states)
   for (const auto& s : states) {
     base_states.push_back(s);
   }
-  auto milestone = states[0].create_state<int>(base_states);
+
+  auto milestone = states[0].create_state<int,int>(base_states);
 
   milestone.set_eval(
-      []([[maybe_unused]] const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) { output.set<int>(0); });
+      []([[maybe_unused]] const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) { 
+        output.set<int>(0);
+      });
+  milestone.set_vjp(
+    []([[maybe_unused]] gretl::UpstreamStates& inputs, [[maybe_unused]] const gretl::DownstreamState& output) {});
+
   return milestone.finalize();
 }
 
@@ -69,6 +75,7 @@ void Mechanics::initializationStep()
 
 void Mechanics::resetAdjointStates()
 {
+  /// MRT, this needs to be testing and correctly implemented
   checkpointer_->reset_for_backprop();
   // Find the most last saved milestone
   //auto milestone = milestones_.back();
@@ -211,7 +218,7 @@ void Mechanics::reverseAdjointTimestep()
   SLIC_ERROR_IF(field_states_.size() != upstreams.size(), "field states and upstream sizes do not match.");
   for (size_t s = 0; s < upstreams.size(); ++s) {
     field_states_[s].set(upstreams[s].get<FEFieldPtr>());
-    field_states_[s].set_dual(upstreams[s].get_dual<FEDualPtr>());
+    field_states_[s].set_dual(upstreams[s].get_dual<FEDualPtr, FEFieldPtr>());
   }
 }
 

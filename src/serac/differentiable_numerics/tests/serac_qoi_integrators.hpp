@@ -1,5 +1,5 @@
-#include "smith/gretl/double_state.hpp"
-#include "smith/physics/field_state.hpp"
+#include "serac/gretl/double_state.hpp"
+#include "serac/differentiable_numerics/field_state.hpp"
 
 namespace serac {
 
@@ -58,18 +58,55 @@ gretl::State<double> compute_kinetic_energy(
 }
 
 // testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
+inline auto check_gradients(const gretl::State<double>& objectiveState, FieldState& inputState, serac::FiniteElementDual& inputDual, double objectiveBase,
+                            gretl::DataStore& dataStore, double eps)
+{
+  serac::FiniteElementState inputSave(*inputState.get());
+  dataStore.reset();
+  serac::FiniteElementState& input = *inputState.get();
+  serac::FiniteElementState pert(input.space(), input.name() + "_pert");
+
+  int sz = pert.Size();
+  for (int i = 0; i < sz; ++i) {
+    pert[i] = -1.2 + 2.02 * (double(i) / sz);
+    input[i] += eps * pert[i];
+  }
+
+  double objectivePlus = objectiveState.get();
+
+  double directionDeriv = 0.0;
+  for (int i = 0; i < sz; ++i) {
+    directionDeriv += pert[i] * inputDual[i];
+  }
+
+  *inputState.get() = inputSave;
+
+  return std::make_pair(directionDeriv, (objectivePlus - objectiveBase) / eps);
+}
+
 
 inline double check_grad_wrt(const gretl::State<double>& objective, serac::FieldState& input, gretl::DataStore& graph,
                              double eps, size_t num_fd_steps = 4, bool printmore = false)
 {
-  std::vector<double> grad_errors;
+  // reset each time, just to be sure
+  graph.reset();
 
-  auto [grad, grad_fd] = check_gradients(objective, input, graph, eps);
+  // re-evaluate the final objective value
+  double objectiveBase = objective.get();
+
+  // back-propagate to get sensitivity wrt input states
+  gretl::set_as_objective(objective);
+  graph.back_prop();
+
+  auto dual_vec = *input.get_dual();
+  
+  std::vector<double> grad_errors;
+  auto [grad, grad_fd] = check_gradients(objective, input, dual_vec, objectiveBase, graph, eps);
   grad_errors.push_back(std::abs(grad - grad_fd));
 
   for (size_t step = 1; step < num_fd_steps; ++step) {
     eps /= 2;
-    std::tie(grad, grad_fd) = check_gradients(objective, input, graph, eps);
+    std::tie(grad, grad_fd) = check_gradients(objective, input, dual_vec, objectiveBase, graph, eps);
     if (printmore) std::cout << "grad    = " << grad << "\ngrad fd = " << grad_fd << std::endl;
     grad_errors.push_back(std::abs(grad - grad_fd));
   }

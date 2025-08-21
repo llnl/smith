@@ -1,34 +1,22 @@
-#include "serac/differentiable_numerics/serac_mechanics.hpp"
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/materials/solid_material.hpp"
+#include "serac/physics/mesh.hpp"
 
-
-#include "serac/physics/serac_common.hpp"
-#include "serac/differentiable_numerics/differentiable_solver.hpp"
+#include "serac/differentiable_numerics/serac_mechanics.hpp"
 #include "serac/gretl/data_store.hpp"
 #include "serac/physics/solid_weak_form.hpp"
-#include "serac/physics/lumped_mass_weak_form.hpp"
-#include "serac/physics/state_advancer.hpp"
 
+#include "serac/differentiable_numerics/state_advancer.hpp"
+#include "serac/differentiable_numerics/lumped_mass_weak_form.hpp"
 #include "serac/differentiable_numerics/tests/paraview_helper.hpp"
 #include "serac/differentiable_numerics/tests/serac_qoi_integrators.hpp"
 
 // This tests the interface between the new serac::WeakForm with gretl and its conformity to the existing base_physics
 // interface
 
-static constexpr serac::ELEMENT_SHAPE SHAPE = serac::ELEMENT_SHAPE::QUADRILATERAL;
-// static constexpr serac::ELEMENT_SHAPE SHAPE = serac::ELEMENT_SHAPE::TRIANGLE;
 const std::string MESHTAG = "mesh";
-
-serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::CG,
-                                          .preconditioner = serac::Preconditioner::HypreJacobi,
-                                          .relative_tol = 1e-9,
-                                          .absolute_tol = 1e-9,
-                                          .max_iterations = 100000,
-                                          .print_level = 0};
 
 /**
  * @brief Neo-Hookean material model
@@ -120,19 +108,13 @@ struct MeshFixture : public testing::Test {
     serac::StateManager::initialize(datastore, "solid_dynamics");
 
     // create mesh
-    auto mfem_shape = SHAPE == serac::ELEMENT_SHAPE::TRIANGLE ? mfem::Element::TRIANGLE : mfem::Element::QUADRILATERAL;
+    auto mfem_shape = mfem::Element::QUADRILATERAL; // mfem::Element::TRIANGLE;
     double length = 0.5;
     double width = 2.0;
     mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem_shape, true, length, width), MESHTAG, 0,
                                          0);
-
-    // create solver
-    auto [linear_solver, mech_precond] = serac::buildLinearSolverAndPreconditioner(linear_options, mesh->getComm());
-    auto solver =
-        std::make_shared<serac::LinearDifferentiableSolver>(std::move(linear_solver), std::move(mech_precond));
-
     // checkpointing graph
-    checkpointer = std::make_shared<gretl::DataStore>(200000);
+    checkpointer = std::make_shared<gretl::DataStore>(200);
 
     // create residual evaluator
     const double density = 1.0;
@@ -145,7 +127,6 @@ struct MeshFixture : public testing::Test {
     auto disp = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_displacement", mesh->tag());
     auto velo = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_velocity", mesh->tag());
     auto accel = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
-
     auto density0 = create_field_state(*checkpointer, DensitySpace{}, physics_name + "_density", mesh->tag());
     *density0.get() = density;
 
@@ -176,17 +157,8 @@ struct MeshFixture : public testing::Test {
 
     std::shared_ptr<serac::StateAdvancer> time_integrator;
 
-    if (use_explicit_dynamics) {
-      // setup time integrator objects
-      time_integrator =
-          std::make_shared<serac::LumpedMassExplicitNewmark>(solid_mechanics_residual, solid_mass_residual, bc_manager);
-    } else {
-      time_integrator = std::make_shared<serac::ExplicitNewmark>(solid_mechanics_residual, solver, bc_manager);
-    }
-    auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(1e-4);
-
-    // MRT, need to design when this should happen
-    solver->completeSetup(*initial_states[DISP].get());
+    time_integrator = std::make_shared<serac::LumpedMassExplicitNewmark>(solid_mechanics_residual, solid_mass_residual, bc_manager);
+    auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(1e-3);
 
     // construct mechanics
     mechanics = std::make_shared<serac::Mechanics>(mesh, checkpointer, solid_mechanics_residual, *shape_disp, states,
@@ -292,7 +264,7 @@ struct MeshFixture : public testing::Test {
 
   std::shared_ptr<serac::Functional<double(VectorSpace, VectorSpace, DensitySpace)>> kinetic_energy_integrator;
 
-  const double dt = 0.01;
+  const double dt = 0.001;
   const size_t num_steps = 4;
 };
 
@@ -331,7 +303,6 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
   resetAndApplyInitialConditions();
   mechanics->initializationStep();
 
-  // auto shape_disp = mechanics->getShapeDispFieldState();
   auto all_fields = mechanics->getAllFieldStates();
   gretl::State<double> gretl_qoi = serac::compute_kinetic_energy(kinetic_energy_integrator, *shape_disp,
                                                                  all_fields[F_VELO], all_fields[F_DENSITY], 1.0);
@@ -349,7 +320,6 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
   }
 
   set_as_objective(gretl_qoi);
-
   checkpointer->back_prop();
 
   for (auto s : initial_states) {
