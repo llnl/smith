@@ -9,13 +9,13 @@ add_custom_target(run_examples
 
 configure_file(
     using-with-cmake/host-config.cmake.in
-    ${CMAKE_BINARY_DIR}/examples/using-with-cmake/host-config.cmake)
+    ${PROJECT_BINARY_DIR}/examples/using-with-cmake/host-config.cmake)
 
 install(
     FILES
         using-with-cmake/CMakeLists.txt
         using-with-cmake/serac_example.cpp
-        ${CMAKE_BINARY_DIR}/examples/using-with-cmake/host-config.cmake
+        ${PROJECT_BINARY_DIR}/examples/using-with-cmake/host-config.cmake
     DESTINATION
         examples/serac/using-with-cmake
 )
