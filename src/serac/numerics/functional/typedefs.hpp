@@ -13,8 +13,8 @@ namespace serac {
 //      interface change like that, so these typedefs mark the parts that would need to eventually change
 
 /// @cond
-using mesh_t = mfem::Mesh;
-using fes_t = mfem::FiniteElementSpace;
+using mesh_t = mfem::ParMesh;
+using fes_t = mfem::ParFiniteElementSpace;
 /// @endcond
 
 }  // namespace serac

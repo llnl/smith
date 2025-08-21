@@ -14,8 +14,15 @@
 
 #include <memory>
 #include <string>
+#include <functional>
+#include <map>
+#include <vector>
+
+#include "mpi.h"
+
 #include "mfem.hpp"
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/domain.hpp"
 
 namespace serac {
 
@@ -34,7 +41,9 @@ class Mesh {
   /// @param meshtag string tag name for mesh
   /// @param serial_refine number of serial refinements
   /// @param parallel_refine number of parallel refinements
-  Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0);
+  /// @param comm the communicator that the parallel form of @p mesh should be made with
+  Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0,
+       MPI_Comm comm = MPI_COMM_WORLD);
 
   /// @brief Construct from existing parallel mfem mesh
   /// @param mesh parallel mfem mesh
@@ -46,7 +55,9 @@ class Mesh {
   /// @param meshtag string tag name for mesh
   /// @param serial_refine number of serial refinements
   /// @param parallel_refine number of parallel refinements
-  Mesh(const std::string& meshfile, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0);
+  /// @param comm the communicator that the parallel form of @p mesh should be made with
+  Mesh(const std::string& meshfile, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0,
+       MPI_Comm comm = MPI_COMM_WORLD);
 
   /// @brief Returns string tag for mesh
   const std::string& tag() const { return mesh_tag_; }
@@ -105,21 +116,18 @@ class Mesh {
   serac::Domain& addDomainOfBodyElements(const std::string& domain_name,
                                          std::function<bool(std::vector<vec2>, int)> func);
 
-  /// @brief get non-const shape displacement
-  serac::FiniteElementState& shapeDisplacement();
+  /// @brief get space associated with shape displacement
+  const mfem::ParFiniteElementSpace& shapeDisplacementSpace();
 
-  /// @brief get const shape displacement
-  const serac::FiniteElementState& shapeDisplacement() const;
+  /// @brief create new shape displacement
+  serac::FiniteElementState newShapeDisplacement();
 
-  /// @brief get non-const shape displacement dual
-  serac::FiniteElementDual& shapeDisplacementDual();
-
-  /// @brief get const shape displacement dual
-  const serac::FiniteElementDual& shapeDisplacementDual() const;
+  /// @brief create new shape displacement sensitivity
+  serac::FiniteElementDual newShapeDisplacementDual();
 
  private:
-  /// @brief Sets up some initial domains, for now just the 'entire_domain', but eventually we can read of
-  /// names/blocks/attributes from the mesh and create default domains.
+  /// @brief Sets up some initial domains: entire domain, entire boundary, and interior faces. Eventually we can read
+  /// off names/blocks/attributes from the mesh and create default domains.
   void createDomains();
 
   /// @brief string identifying mesh in the state manager
@@ -130,12 +138,6 @@ class Mesh {
 
   /// @brief map from registered domain name to the domain instance
   mutable std::map<std::string, serac::Domain> domains_;
-
-  /// @brief shape_displacement
-  std::shared_ptr<serac::FiniteElementState> shape_displacement_;
-
-  /// @brief shape_displacement dual
-  std::shared_ptr<serac::FiniteElementDual> shape_displacement_dual_;
 };
 
 }  // namespace serac

@@ -4,21 +4,30 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <fstream>
+#include <cstdlib>
 #include <iostream>
+#include <algorithm>
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+#include <vector>
 
-#include "axom/slic/core/SimpleLogger.hpp"
 #include "mfem.hpp"
+#include "gtest/gtest.h"
 
 #include "serac/infrastructure/about.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/mesh_utils/mesh_utils_base.hpp"
-#include "serac/numerics/stdfunction_operator.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-#include <gtest/gtest.h>
-#include "serac/infrastructure/debug_print.hpp"
+#include "serac/infrastructure/accelerator.hpp"
+#include "serac/numerics/functional/differentiate_wrt.hpp"
+#include "serac/numerics/functional/domain.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/functional/geometry.hpp"
+#include "serac/numerics/functional/tuple.hpp"
 
 using namespace serac;
 

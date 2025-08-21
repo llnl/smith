@@ -6,15 +6,15 @@
 
 #pragma once
 
-#include "mfem.hpp"
-#include "axom/core.hpp"
-
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <string>
 #include <typeinfo>
 #include <vector>
+
+#include "mfem.hpp"
+#include "axom/core.hpp"
 
 #ifdef __GNUG__
 #include <cxxabi.h>

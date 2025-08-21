@@ -4,16 +4,28 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <array>
-#include <fstream>
+#include <cmath>
 #include <functional>
+#include <algorithm>
+#include <iterator>
+#include <memory>
+#include <set>
+#include <string>
+#include <tuple>
+#include <vector>
 
-#include <gtest/gtest.h>
+#include "mpi.h"
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "serac/numerics/odes.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/equation_solver.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 using namespace serac;
 using namespace serac::mfem_ext;
@@ -207,7 +219,8 @@ int order_of_convergence(serac::TimestepMethod m)
   if (m == serac::TimestepMethod::CentralDifference) return 2;
   if (m == serac::TimestepMethod::FoxGoodwin) return 2;
 
-  return -1;
+  SLIC_ERROR(axom::fmt::format("Unsupported serac::TimestepMethod {0}", static_cast<int>(m)));
+  return 0;
 }
 
 // does this method apply to a first- or second-order ode?
@@ -234,7 +247,8 @@ int which_kind_of_ode(serac::TimestepMethod m)
   if (m == serac::TimestepMethod::CentralDifference) return 2;
   if (m == serac::TimestepMethod::FoxGoodwin) return 2;
 
-  return -1;
+  SLIC_ERROR(axom::fmt::format("Unsupported serac::TimestepMethod {0}", static_cast<int>(m)));
+  return 0;
 }
 
 double first_order_ode_test(int nsteps, ode_type type, constraint_type constraint, TimestepMethod timestepper,
@@ -244,7 +258,7 @@ double first_order_ode_test(int nsteps, ode_type type, constraint_type constrain
   double ode_residual_eval_time = 0.0;
   double dt = 1.0 / nsteps;
   double previous_dt = -1.0;
-  double c0;
+  double c0 = 0.0;
 
   mfem::Vector x(3);
   mfem::Vector previous(3);

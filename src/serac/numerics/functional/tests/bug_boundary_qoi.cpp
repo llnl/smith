@@ -4,15 +4,13 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <fstream>
-#include <iostream>
+#include <algorithm>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "mpi.h"
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/mesh_utils/mesh_utils_base.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
@@ -20,7 +18,6 @@
 #include "serac/physics/state/finite_element_state.hpp"
 
 using namespace serac;
-using namespace serac::profiling;
 
 double t = 0.0;
 

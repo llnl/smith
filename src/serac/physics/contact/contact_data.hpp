@@ -12,6 +12,10 @@
 
 #pragma once
 
+#include <memory>
+#include <set>
+#include <vector>
+
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"

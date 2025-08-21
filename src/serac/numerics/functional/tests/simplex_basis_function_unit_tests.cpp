@@ -2,17 +2,18 @@
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
-// SPDX-License-Identifier: (BSD-3-Clause)#include <gtest/gtest.h>
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+#include <cmath>
+#include <vector>
 
 #include "mfem.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
-#include "axom/slic/core/SimpleLogger.hpp"
-
-#include "serac/numerics/functional/detail/metaprogramming.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/finite_element.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/polynomials.hpp"
 
 using namespace serac;
 

@@ -45,8 +45,10 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         # Can be removed once this BLT PR is merged https://github.com/LLNL/blt/pull/585 (?)
         find_package(CUDAToolkit REQUIRED)
         set(serac_device_depends blt::cuda CUDA::cublasLt CACHE STRING "" FORCE)
+        set(SERAC_ENABLE_CONTINUATION FALSE)
     elseif(SERAC_ENABLE_HIP)
         set(serac_device_depends blt::hip CACHE STRING "" FORCE)
+        set(SERAC_ENABLE_CONTINUATION FALSE)
     else()
         set(serac_device_depends "" CACHE STRING "" FORCE)
     endif()
@@ -366,7 +368,44 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
 
         set(MFEM_BUILT_WITH_CMAKE TRUE)
     endif()
+    #------------------------------------------------------------------------------
+    # ContinuationSolvers
+    #------------------------------------------------------------------------------
+    if (NOT DEFINED SERAC_ENABLE_CONTINUATION)
+        set(SERAC_ENABLE_CONTINUATION ON)
+    endif()
+    message(STATUS "Serac Enable Continuation: ${SERAC_ENABLE_CONTINUATION}")
+    
+    if(SERAC_ENABLE_CONTINUATION)
+        # Allow homotopy solver as a non-submodule
+        if (DEFINED CONTINUATION_SOURCE_DIR)
+            if(NOT EXISTS "${CONTINUATION_SOURCE_DIR}/CMakeLists.txt")
+                message(FATAL_ERROR "Given CONTINUATION_SOURCE_DIR does not contain CMakeLists.txt")
+            endif()
+        else()
+            if(${PROJECT_NAME} STREQUAL "smith")
+                set(CONTINUATION_SOURCE_DIR "${PROJECT_SOURCE_DIR}/serac/ContinuationSolvers" CACHE PATH "")
+            else()
+                set(CONTINUATION_SOURCE_DIR "${PROJECT_SOURCE_DIR}/ContinuationSolvers" CACHE PATH "")
+            endif()
 
+            if (NOT EXISTS "${CONTINUATION_SOURCE_DIR}/CMakeLists.txt")
+                message(FATAL_ERROR
+                    "The continuationsolver repo is not present. "
+                    "Either run the following command in your git repository: \n"
+                    "    git submodule update --init --recursive\n"
+                    "Or add -DCONTINUATION_SOURCE_DIR=/path/to/ContinuationSolvers to your CMake command." )
+            endif()
+        endif()
+
+        # Add MUMPS direct solver to MFEM codevelop (we have to do this before Serac's MFEM library is added)
+        if (SERAC_ENABLE_CODEVELOP AND MUMPS_DIR)
+            set(MFEM_USE_MUMPS ON CACHE BOOL "")
+        endif()
+
+        set(CONTINUATION_FOUND TRUE)
+        add_subdirectory("${CONTINUATION_SOURCE_DIR}")
+    endif()
     #------------------------------------------------------------------------------
     # Axom
     #------------------------------------------------------------------------------

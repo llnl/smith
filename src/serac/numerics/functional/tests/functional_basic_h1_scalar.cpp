@@ -4,23 +4,21 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <fstream>
-#include <iostream>
-#include "mfem.hpp"
-#include <gtest/gtest.h>
+#include <cmath>
+#include <string>
 
-#include "axom/slic/core/SimpleLogger.hpp"
+#include "gtest/gtest.h"
+
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/mesh_utils/mesh_utils_base.hpp"
-#include "serac/numerics/stdfunction_operator.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
-
 #include "serac/numerics/functional/tests/check_gradient.hpp"
+#include "serac/numerics/functional/domain.hpp"
+#include "serac/numerics/functional/tuple.hpp"
 
 using namespace serac;
-using namespace serac::profiling;
 
 #ifdef SERAC_USE_CUDA_KERNEL_EVALUATION
 constexpr auto exec_space = serac::ExecutionSpace::GPU;

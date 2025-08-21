@@ -6,11 +6,10 @@
 
 #include <set>
 #include <string>
+#include <memory>
 
 #include "axom/slic.hpp"
-
 #include "mfem.hpp"
-
 #include "serac/serac.hpp"
 
 int main(int argc, char* argv[])
