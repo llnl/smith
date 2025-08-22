@@ -172,8 +172,8 @@ int main(int argc, char* argv[])
   bool visualize = false;
 
   // Solver options
-  double nonlinear_absolute_tol = 1e-6;
-  int nonlinear_max_iterations = 100;
+  [[maybe_unused]] double nonlinear_absolute_tol = 1e-6;
+  [[maybe_unused]] int nonlinear_max_iterations = 100;
   
   // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
@@ -327,28 +327,42 @@ int main(int argc, char* argv[])
   mfem::Vector yf(dimy);
   yf = 0.0;
 
-  HomotopySolver solver(&problem);
-  mfem::MINRESSolver linSolver(MPI_COMM_WORLD);
-  linSolver.SetPrintLevel(1);
-  linSolver.SetMaxIter(400);
-  linSolver.SetRelTol(1.e-10);
-  solver.SetLinearSolver(linSolver);
-  solver.SetTol(nonlinear_absolute_tol);
-  solver.SetMaxIter(nonlinear_max_iterations);
+  mfem::Vector q0(dimy); q0 = 0.0;
+  mfem::Vector qf(dimy); qf = 0.0;
+  [[maybe_unused]] mfem::HypreParMatrix * dQy;
+  int eval_err = 0;
+  problem.Q(x0, y0, q0, eval_err);
+  std::cout << "queried Q once\n";
+  //dQy = problem.DyQ(x0, y0);
+  problem.Q(xf, yf, qf, eval_err);
+  std::cout << "queried Q twice\n";
+  //problem.Q(x0, y0, q0, eval_err);
+  //std::cout << "queried Q thrice\n";
+  //dQy = problem.DyQ(x0, y0);
+  //problem.Q(xf, yf, qf, eval_err);
+  
+  //HomotopySolver solver(&problem);
+  //mfem::MINRESSolver linSolver(MPI_COMM_WORLD);
+  //linSolver.SetPrintLevel(1);
+  //linSolver.SetMaxIter(400);
+  //linSolver.SetRelTol(1.e-10);
+  //solver.SetLinearSolver(linSolver);
+  //solver.SetTol(nonlinear_absolute_tol);
+  //solver.SetMaxIter(nonlinear_max_iterations);
 
-  solver.Mult(x0, y0, xf, yf);
-  bool converged = solver.GetConverged();
-  if (myid == 0) {
-    if (converged) {
-      std::cout << "converged!\n";
-    } else {
-      std::cout << "homotopy solver did not converge\n";
-    }
-  }
-  if (visualize)
-  {
-     writer.write(1, 1.0, objective_states);
-  }
+  //solver.Mult(x0, y0, xf, yf);
+  //bool converged = solver.GetConverged();
+  //if (myid == 0) {
+  //  if (converged) {
+  //    std::cout << "converged!\n";
+  //  } else {
+  //    std::cout << "homotopy solver did not converge\n";
+  //  }
+  //}
+  //if (visualize)
+  //{
+  //   writer.write(1, 1.0, objective_states);
+  //}
 }
 
 InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementState*> obj_states_,
@@ -460,13 +474,15 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   qblock = 0.0;
 
   obj_states[DISP]->Set(1.0, yblock.GetBlock(0));
-
+  //auto const_all_states = serac::getConstFieldPointers(all_states);
+  //auto const_obj_states = serac::getConstFieldPointers(obj_states);
   serac::FiniteElementDual res_vector(all_states[DISP]->space(), "tempresidual");
   res_vector = residual->residual(time, dt, serac::getConstFieldPointers(all_states));
+  //res_vector = residual->residual(time, dt, const_all_states);
   qblock.GetBlock(0).Set(-1.0, res_vector);
 
   double * multipliers = new double[6];
-  double * send_multipliers = new double[dimc];
+  double * send_multipliers = new double[static_cast<size_t>(dimc)];
   for (int i = 0; i < dimc; i++)
   {
      send_multipliers[i] = yblock.GetBlock(1)(i);
@@ -476,22 +492,29 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   mfem::Vector gradc(dimu);
   gradc = 0.0;
 
-  std::cout << "constraint.size() = " << constraints.size() << std::endl;
   for (size_t i = 0; i < constraints.size(); i++) {
     const int idx = static_cast<int>(i);
     const size_t i2 = static_cast<size_t>(idx);
     SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
     gradc = 0.0;
-    std::cout << "about to query grad(c_i) size\n";
+    std::cout << "about to compute constraint gradient\n";
+    mfem::Vector grad_temp = constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP);
+    //mfem::Vector grad_temp = constraints[i]->gradient(time, dt, const_obj_states, DISP);
+    std::cout << "computed the gradient\n";
+    gradc.Set(1.0, grad_temp);
+    //gradc.Set(1.0, constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
     
-    gradc.Set(1.0, constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
+    
     qblock.GetBlock(0).Add(multipliers[idx], gradc);
 
     double constraint_i = constraints[i]->evaluate(time, dt, serac::getConstFieldPointers(obj_states));
+    //double constraint_i = constraints[i]->evaluate(time, dt, const_obj_states);
+
 
     if (dimc > 0)
     {
       qblock.GetBlock(1)(idx) = -1.0 * constraint_i;
+      std::cout << "c_" << i << " = " << constraint_i << std::endl;
     }
   }
 
@@ -524,6 +547,8 @@ mfem::HypreParMatrix* InertialReliefProblem::DxQ(const mfem::Vector& /*x*/, cons
 
 mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, const mfem::Vector& y)
 {
+  MFEM_VERIFY(y.Size() == dimy,
+              "InertialReliefProblem::DyQ -- Inconsistent dimensions");
   std::cout << "in DyQ, (rank " << mfem::Mpi::WorldRank() << ")\n";
   // dQdy = [dr/du   dc/du^T]
   //        [dc/du   0  ]
@@ -534,7 +559,7 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
   qblock = 0.0;
   std::cout << "settign obj_states[DISP]\n";
   obj_states[DISP]->Set(1.0, yblock.GetBlock(0));
-
+  std::cout << "set obj_states[DISP]\n";
   if (dQdy) {
     delete dQdy;
   }
@@ -596,11 +621,13 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
     BlockMat(1, 0) = dcdu;
     BlockMat(1, 1) = nullptr;
     dQdy = HypreParMatrixFromBlocks(BlockMat);
-    delete drdu;
-    delete dcduT;
-    delete dcdu;
+    //delete drdu;
+    //delete dcduT;
+    //delete dcdu;
   }
   std::cout << "end DyQ, (rank " << mfem::Mpi::WorldRank() << ")\n";
+  dQdy->Print("dQdy");
+  std::cout << "Printed dQdy\n";
   return dQdy;
 }
 
