@@ -43,12 +43,14 @@ Mechanics::Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStor
     field_states_.push_back(s);
     initial_field_states_.push_back(s);
     state_name_to_field_index_[s.get()->name()] = i;
+    state_names.push_back(s.get()->name());
   }
 
   for (size_t i = 0; i < params.size(); ++i) {
     const auto& p = params[i];
     field_params_.push_back(p);
     param_name_to_field_index_[p.get()->name()] = i;
+    param_names.push_back(p.get()->name());
   }
 
   completeSetup();
@@ -67,40 +69,21 @@ void Mechanics::resetStates([[maybe_unused]] int cycle, [[maybe_unused]] double 
   cycle_ = 0;
 }
 
-void Mechanics::initializationStep()
-{
-  field_states_ = initial_field_states_;
-  milestones_.push_back(make_milestone(field_states_).step());
-}
-
 void Mechanics::resetAdjointStates()
 {
-  /// MRT, this needs to be testing and correctly implemented
+  checkpointer_->finalize_graph();
   checkpointer_->reset_for_backprop();
-  // Find the most last saved milestone
-  // auto milestone = milestones_.back();
-  // if (milestone.data() != checkpointer_->get_state().data()) {
-  //  while (milestone.data() != checkpointer_->reverse_state().data()) {
-  //  }
-  //}
+  gretl_assert(checkpointer_->check_validity());
 }
 
 std::vector<std::string> Mechanics::stateNames() const
 {
-  std::vector<std::string> names;
-  for (auto& n : state_name_to_field_index_) {
-    names.emplace_back(n.first);
-  }
-  return names;
+  return state_names;
 }
 
 std::vector<std::string> Mechanics::parameterNames() const
 {
-  std::vector<std::string> names;
-  for (auto& n : param_name_to_field_index_) {
-    names.emplace_back(n.first);
-  }
-  return names;
+  return param_names;
 }
 
 const FiniteElementState& Mechanics::state([[maybe_unused]] const std::string& field_name) const
@@ -182,10 +165,13 @@ const FiniteElementState& Mechanics::adjoint([[maybe_unused]] const std::string&
   return *adjoints_[0];
 }
 
-void Mechanics::reverseAdjointInitializationStep() {}
-
 void Mechanics::advanceTimestep([[maybe_unused]] double dt)
 {
+  if (cycle_==0) {
+    field_states_ = initial_field_states_;
+    milestones_.push_back(make_milestone(field_states_).step());
+  }
+
   double target_time = time_ + dt;
 
   while (time_ < target_time) {
@@ -215,10 +201,14 @@ void Mechanics::reverseAdjointTimestep()
   }
 
   auto& upstreams = checkpointer_->upstreams_[milestone];
+
   SLIC_ERROR_IF(field_states_.size() != upstreams.size(), "field states and upstream sizes do not match.");
+  // recreate the upstream field states with upstream step, field, and dual values.
   for (size_t s = 0; s < upstreams.size(); ++s) {
+    field_states_[s].reset_step(upstreams[s].step_);
     field_states_[s].set(upstreams[s].get<FEFieldPtr>());
     field_states_[s].set_dual(upstreams[s].get_dual<FEDualPtr, FEFieldPtr>());
+
   }
 }
 

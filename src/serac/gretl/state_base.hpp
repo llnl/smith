@@ -25,7 +25,7 @@ struct StateBase {
   virtual ~StateBase() = default;
 
   /// @brief get the underlying value
-  template <typename T, typename D = T>
+  template <typename T>
   const T& get() const
   {
     return dataStore_->get_primal<T>(step_);
@@ -77,6 +77,9 @@ struct StateBase {
 
   /// @brief Get step
   Int step() const { return step_; }
+
+  /// @brief Reset step.
+  void reset_step(Int newStep) { step_ = newStep; }
 
  protected:
   DataStore* dataStore_;              ///< datastore

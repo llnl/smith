@@ -63,9 +63,38 @@ void DataStore::reset()
       duals_[stepToClear] = nullptr;
     }
   }
+  checkpointManager_.reset();
+  current_step_ = num_persistent;
+}
+
+void DataStore::reset_graph()
+{
+  Int num_persistent = 0;
+  while (is_persistent(num_persistent)) {
+    duals_[num_persistent] = nullptr;
+    ++num_persistent;
+  }
+  states_.resize(num_persistent);
+  duals_.resize(num_persistent);
+  upstreams_.resize(num_persistent);
+  evals_.resize(num_persistent);
+  vjps_.resize(num_persistent);
+  active_.resize(num_persistent);
+  usageCount_.resize(num_persistent);
+  lastStepUsed_.resize(num_persistent);
+  passthroughs_.resize(num_persistent);
 
   checkpointManager_.reset();
   current_step_ = num_persistent;
+}
+
+void DataStore::reset_for_backprop()
+{
+  current_step_ = static_cast<Int>(states_.size());
+  fetch_state_data(current_step_-1);
+  for (auto& dual : duals_) {
+    dual = nullptr;
+  }
 }
 
 void DataStore::vjp(StateBase& state) { state.evaluate_vjp(); }
@@ -186,21 +215,17 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
 
 void DataStore::fetch_state_data(Int stepIndex)
 {
-  gretl_assert(!stillConstructingGraph_);
-
+  gretl_assert_msg(!stillConstructingGraph_, "not allowed to fetch state before the graph is constructed");
   Int lastCheckpoint = static_cast<Int>(checkpointManager_.last_checkpoint_step());
-
-  gretl_assert(lastCheckpoint <= stepIndex);
-  gretl_assert(state_in_use(lastCheckpoint));
+  gretl_assert_msg(lastCheckpoint <= stepIndex, "last checkpoint cannot be ahead of the currently requested step");
+  gretl_assert_msg(state_in_use(lastCheckpoint), "cannot confirm that last checkpointed state is actually currently in memory");
   for_each_active_upstream(this, lastCheckpoint, [&](Int upstream) { gretl_assert(state_in_use(upstream)); });
-
   for (Int i = lastCheckpoint; i < stepIndex; ++i) {
     Int iEval = i + 1;
     for_each_active_upstream(this, iEval, [&](Int u) {
       gretl_assert(state_in_use(u));
       usageCount_[u]++;
     });
-
     gretl_assert(!active_[iEval]);
     active_[iEval] = true;
     usageCount_[iEval]++;
@@ -215,6 +240,7 @@ void DataStore::fetch_state_data(Int stepIndex)
     gretl_assert(check_validity());
   }
 }
+
 void DataStore::erase_step_state_data(Int step)
 {
   if (!is_persistent(step)) {
@@ -286,7 +312,7 @@ bool DataStore::check_validity() const
   return valid;
 }
 
-void DataStore::print() const
+void DataStore::print_graph() const
 {
   for (Int i = 0; i < states_.size(); ++i) {
     std::cout << i << ", act: " << active_[i] << ":" << usageCount_[i] << ":" << (states_[i]->primal_ != nullptr)

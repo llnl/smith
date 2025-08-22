@@ -77,14 +77,17 @@ class DataStore {
   /// @brief unwind the entire graph
   void back_prop();
 
-  /// @brief set state back to the end of time
-  void reset_for_backprop() { gretl_assert_msg(false, "Reset for backprop not yet implemented"); }
-
-  /// @brief clear all but persistent state, keeping the graph
+  /// @brief clear all but persistent state, keeping the graph. Returns the number of persistent states.
   void reset();
 
+  /// @brief reevaluates the final state and refills checkpoints to get ready for another back propagation
+  void reset_for_backprop();
+
+  /// @brief clear all but persistent state, remove the graph
+  void reset_graph();
+
   /// @brief print all checkpoint data in data store
-  void print() const;
+  void print_graph() const;
 
   /// @brief do internal checks of consistency with respect to checkpoints and
   bool check_validity() const;
@@ -152,6 +155,10 @@ class DataStore {
     T* tptr = std::any_cast<T>(any_primal(step).get());
     if (!tptr) {
       gretl_assert(!stillConstructingGraph_);
+      if (usageCount_[step]!=1) {
+        print("step", step);
+        print_graph();
+      }
       gretl_assert(usageCount_[step] == 1);
       any_primal(step) = std::make_shared<std::any>(t);
       return;
@@ -203,6 +210,8 @@ class DataStore {
   /// @param step step
   /// @return bool
   bool is_persistent(Int step) const;
+
+  void finalize_graph() { stillConstructingGraph_ = false; }
 
   std::vector<std::unique_ptr<StateBase>> states_;  ///< states for steps
   std::vector<std::unique_ptr<std::any>> duals_;    ///< duals for steps

@@ -187,7 +187,6 @@ struct MeshFixture : public testing::Test {
   double integrateForward()
   {
     resetAndApplyInitialConditions();
-    mechanics->initializationStep();
     double lido_qoi = (*kinetic_energy_integrator)(physics->time(), physics->shapeDisplacement(),
                                                    physics->state(velo_name), physics->parameter(DENSITY));
     for (size_t m = 0; m < num_steps; ++m) {
@@ -238,14 +237,6 @@ struct MeshFixture : public testing::Test {
         (*kinetic_energy_integrator)(physics->time(), physics->shapeDisplacement(), physics->state(velo_name),
                                      differentiate_wrt(physics->parameter(DENSITY))));
     parameter_sensitivities[DENSITY] += *assemble(density_sensitivity_op);
-
-    auto velo_sensivitity_op = serac::get<serac::DERIVATIVE>(
-        (*kinetic_energy_integrator)(physics->time(), physics->shapeDisplacement(),
-                                     serac::differentiate_wrt(physics->state(velo_name)), physics->parameter(DENSITY)));
-    velo_adjoint_load = *assemble(velo_sensivitity_op);
-
-    physics->setAdjointLoad({{velo_name, velo_adjoint_load}});
-    mechanics->reverseAdjointInitializationStep();
   }
 
   std::string velo_name = "solid_velocity";
@@ -298,18 +289,14 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_LIDO)
 TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
 {
   SERAC_MARK_FUNCTION;
-
   resetAndApplyInitialConditions();
-  mechanics->initializationStep();
 
   auto all_fields = mechanics->getAllFieldStates();
   gretl::State<double> gretl_qoi = serac::compute_kinetic_energy(kinetic_energy_integrator, *shape_disp,
                                                                  all_fields[F_VELO], all_fields[F_DENSITY], 1.0);
-
   std::string pv_dir = std::string("paraview_") + mechanics->name();
   auto pv_writer = serac::createParaviewOutput(*mesh, all_fields, pv_dir);
   pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);
-
   for (size_t m = 0; m < num_steps; ++m) {
     mechanics->advanceTimestep(dt);
     all_fields = mechanics->getAllFieldStates();

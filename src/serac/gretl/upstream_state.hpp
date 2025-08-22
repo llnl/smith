@@ -39,6 +39,9 @@ struct UpstreamState {
 /// @brief UpstreamStates is a wrapper for a vector of states.  Its used in external-facing interfaces to ensure const
 /// correctness for users to encourage correct usage.
 struct UpstreamStates {
+  /// @brief Default constructor to use in std containers
+  UpstreamStates() {}
+
   /// @brief Constructor for upstream states
   /// @param store datastore
   /// @param steps vector of upstream steps

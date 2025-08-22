@@ -1,3 +1,14 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+/**
+ * @file explicit_dynamic_solve.hpp
+ */
+
+#pragma once
 
 #include "serac/physics/weak_form.hpp"
 #include "serac/differentiable_numerics/field_state.hpp"

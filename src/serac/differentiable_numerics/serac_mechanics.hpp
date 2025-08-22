@@ -84,12 +84,6 @@ class Mechanics : public BasePhysics {
   /// @overload
   const FiniteElementState& adjoint(const std::string& adjoint_name) const override;
 
-  /// @brief Initialize time integrator
-  virtual void initializationStep() override;
-
-  /// @brief Compute adjoint sensitivity corresponding to time integrator initialization
-  virtual void reverseAdjointInitializationStep() override;
-
   /// @overload
   virtual void advanceTimestep(double dt) override;
 
@@ -126,6 +120,8 @@ class Mechanics : public BasePhysics {
 
   std::map<std::string, size_t> state_name_to_field_index_;  ///< map from state names to field index
   std::map<std::string, size_t> param_name_to_field_index_;  ///< map from param names to param index
+  std::vector<std::string> state_names; ///< names of all the states in order
+  std::vector<std::string> param_names; ///< names of all the states in order
 
   std::vector<gretl::Int> milestones_;  ///< a record of the steps in the graph that represent the end conditions of
                                         ///< advanceTimestep(dt). this information is used to halt the gretl graph when
