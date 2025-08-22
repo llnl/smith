@@ -76,15 +76,9 @@ void Mechanics::resetAdjointStates()
   gretl_assert(checkpointer_->check_validity());
 }
 
-std::vector<std::string> Mechanics::stateNames() const
-{
-  return state_names;
-}
+std::vector<std::string> Mechanics::stateNames() const { return state_names; }
 
-std::vector<std::string> Mechanics::parameterNames() const
-{
-  return param_names;
-}
+std::vector<std::string> Mechanics::parameterNames() const { return param_names; }
 
 const FiniteElementState& Mechanics::state([[maybe_unused]] const std::string& field_name) const
 {
@@ -167,7 +161,7 @@ const FiniteElementState& Mechanics::adjoint([[maybe_unused]] const std::string&
 
 void Mechanics::advanceTimestep([[maybe_unused]] double dt)
 {
-  if (cycle_==0) {
+  if (cycle_ == 0) {
     field_states_ = initial_field_states_;
     milestones_.push_back(make_milestone(field_states_).step());
   }
@@ -208,7 +202,6 @@ void Mechanics::reverseAdjointTimestep()
     field_states_[s].reset_step(upstreams[s].step_);
     field_states_[s].set(upstreams[s].get<FEFieldPtr>());
     field_states_[s].set_dual(upstreams[s].get_dual<FEDualPtr, FEFieldPtr>());
-
   }
 }
 

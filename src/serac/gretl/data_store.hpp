@@ -155,7 +155,7 @@ class DataStore {
     T* tptr = std::any_cast<T>(any_primal(step).get());
     if (!tptr) {
       gretl_assert(!stillConstructingGraph_);
-      if (usageCount_[step]!=1) {
+      if (usageCount_[step] != 1) {
         print("step", step);
         print_graph();
       }
@@ -211,6 +211,7 @@ class DataStore {
   /// @return bool
   bool is_persistent(Int step) const;
 
+  /// @brief Register the graph as being complete.  This is mostly for internal consistency checks.
   void finalize_graph() { stillConstructingGraph_ = false; }
 
   std::vector<std::unique_ptr<StateBase>> states_;  ///< states for steps

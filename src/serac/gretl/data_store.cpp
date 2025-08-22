@@ -91,7 +91,7 @@ void DataStore::reset_graph()
 void DataStore::reset_for_backprop()
 {
   current_step_ = static_cast<Int>(states_.size());
-  fetch_state_data(current_step_-1);
+  fetch_state_data(current_step_ - 1);
   for (auto& dual : duals_) {
     dual = nullptr;
   }
@@ -218,7 +218,8 @@ void DataStore::fetch_state_data(Int stepIndex)
   gretl_assert_msg(!stillConstructingGraph_, "not allowed to fetch state before the graph is constructed");
   Int lastCheckpoint = static_cast<Int>(checkpointManager_.last_checkpoint_step());
   gretl_assert_msg(lastCheckpoint <= stepIndex, "last checkpoint cannot be ahead of the currently requested step");
-  gretl_assert_msg(state_in_use(lastCheckpoint), "cannot confirm that last checkpointed state is actually currently in memory");
+  gretl_assert_msg(state_in_use(lastCheckpoint),
+                   "cannot confirm that last checkpointed state is actually currently in memory");
   for_each_active_upstream(this, lastCheckpoint, [&](Int upstream) { gretl_assert(state_in_use(upstream)); });
   for (Int i = lastCheckpoint; i < stepIndex; ++i) {
     Int iEval = i + 1;

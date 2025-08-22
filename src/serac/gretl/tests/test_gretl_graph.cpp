@@ -135,9 +135,7 @@ TEST(Graph, LargeNonlinearGraphGradients)
   auto qoi = gretl::inner_product(end, f);
 
   gretl::set_as_objective(qoi);
-
-  dataStore.print();
-
+  // dataStore.print_graph();
   dataStore.back_prop();
 
   double constexpr eps = 1e-7;
