@@ -6,15 +6,11 @@
 
 namespace serac {
 
-inline std::vector<FieldPtr> getResidualFieldPtrs(const std::vector<FEFieldPtr>& shared_ptrs)
-{
-  std::vector<FieldPtr> field_ptrs;
-  for (auto& s : shared_ptrs) {
-    field_ptrs.push_back(s.get());
-  }
-  return field_ptrs;
-}
-
+/// @brief  gretl-function implementation to compute lumped mass vectors from shape_displacements FieldState and a
+/// density field FieldState.  A lumped_field is also passed to communicate the intended dimension of the lumped mass.
+/// For example, as scalar lumped field will result in a single lumped mass per node, while a vector lumped field will
+/// give a nodal lumped field, where every component of the lumped vector per node has the full mass lumped value (the
+/// sum of all lumped masses will be dim * total_mass)
 inline FieldState computeLumpedMass(const WeakForm* mass_residual_eval, const FieldState& shape_u,
                                     const FieldState& lumped_field, const FieldState& rho)
 {
@@ -56,6 +52,7 @@ inline FieldState computeLumpedMass(const WeakForm* mass_residual_eval, const Fi
   return z.finalize();
 }
 
+/// @brief  gretl-function implementation to compute invert the values for every entry in a FieldState.
 inline FieldState diagInverse(const FieldState& x)
 {
   auto z = x.clone({x});
@@ -85,6 +82,9 @@ inline FieldState diagInverse(const FieldState& x)
   return z.finalize();
 }
 
+/// @brief gretl-function implementation which evaluates the residual force (which is minus the mechanical force) given
+/// shape displacement, states and params.  The inertial index denotes which index in the state corresponds to the
+/// highest time derivative term (e.g., acceleration for solid mechanics)
 inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_disp,
                                const std::vector<FieldState>& states, const std::vector<FieldState>& params,
                                double time, double dt, size_t inertial_index)

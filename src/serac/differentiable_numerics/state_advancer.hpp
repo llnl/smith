@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c), Lawrence Livermore National Security, LLC and
 // other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -7,8 +7,7 @@
 /**
  * @file state_advancer.hpp
  *
- * @brief Specifies parametrized residuals and various linearized evaluations for arbitrary nonlinear systems of
- * equations
+ * @brief Interface and implementations for advancing from one step to the next.  Typically these are time integrators.
  */
 
 #pragma once
@@ -22,41 +21,43 @@ class DifferentiableSolver;
 class WeakForm;
 class BoundaryConditionManager;
 
+/// Base state advancer class, allows specification for quasi-static solve strategies, or time integration algorithms
 class StateAdvancer {
  public:
+  /// @brief destructor
   virtual ~StateAdvancer() {}
 
+  /// @brief interface method to advance the states from a given cycle and time, to the next cycle (cycle+1) and time
+  /// (time+dt). shape_disp and params are assumed to be fixed in this advance.
   virtual std::tuple<std::vector<FieldState>, double> advanceState(const FieldState& shape_disp,
                                                                    const std::vector<FieldState>& states,
                                                                    const std::vector<FieldState>& params, double time,
                                                                    double dt, size_t cycle) const = 0;
-
-  virtual std::vector<FieldState> initializeState(const FieldState& /*hape_disp*/,
-                                                  const std::vector<FieldState>& states,
-                                                  const std::vector<FieldState>& /*params*/, double /*time*/) const
-  {
-    return states;
-  }
 };
 
+/// Lumped mass explicit dynamics implementation for the StateAdvancer interface
 class LumpedMassExplicitNewmark : public StateAdvancer {
  public:
+  /// Constructor for lumped mass explicit Newmark implementation
   LumpedMassExplicitNewmark(const std::shared_ptr<WeakForm>& r, const std::shared_ptr<WeakForm>& mr,
                             std::shared_ptr<BoundaryConditionManager> bc)
       : residual_eval(r), mass_residual_eval(mr), bc_manager(bc)
   {
   }
 
+  /// @overload
   std::tuple<std::vector<FieldState>, double> advanceState(const FieldState& shape_disp,
                                                            const std::vector<FieldState>& states,
                                                            const std::vector<FieldState>& params, double time,
                                                            double dt, size_t cycle) const override;
 
  private:
-  const std::shared_ptr<WeakForm> residual_eval;
-  const std::shared_ptr<WeakForm> mass_residual_eval;
-  const std::shared_ptr<BoundaryConditionManager> bc_manager;
-  mutable std::unique_ptr<FieldState> m_diag_inv;
+  const std::shared_ptr<WeakForm> residual_eval;               ///< weak form to evaluate mechanical forces
+  const std::shared_ptr<WeakForm> mass_residual_eval;          ///< weak form to evaluate lumped masses
+  const std::shared_ptr<BoundaryConditionManager> bc_manager;  ///< tracks information on which dofs are constrainted
+  mutable std::unique_ptr<FieldState>
+      m_diag_inv;  ///< save off FieldState for inverse lumped mass.  This can be computed up front and reused every
+                   ///< timestep to avoid recomputing the mass each step.
 };
 
 }  // namespace serac

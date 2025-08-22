@@ -7,32 +7,36 @@
 
 namespace serac {
 
-using FEFieldPtr = std::shared_ptr<FiniteElementState>;
-using FEDualPtr = std::shared_ptr<FiniteElementDual>;
-using FieldState = gretl::State<FEFieldPtr, FEDualPtr>;
-using ResultantState = gretl::State<FEDualPtr, FEFieldPtr>;
+using FEFieldPtr = std::shared_ptr<FiniteElementState>;      ///< typedef
+using FEDualPtr = std::shared_ptr<FiniteElementDual>;        ///< typedef
+using FieldState = gretl::State<FEFieldPtr, FEDualPtr>;      ///< typedef
+using ResultantState = gretl::State<FEDualPtr, FEFieldPtr>;  ///< typedef
 
+/// @brief functor which takes a std::shared_ptr<FiniteElementState>, and returns a zero-valued
+/// std::shared_ptr<FiniteElementDual> with the same space
 struct zero_dual_from_state {
-  zero_dual_from_state() {}
   auto operator()(const serac::FEFieldPtr& f) const
   {
     return std::make_shared<serac::FiniteElementDual>(f->space(), f->name() + "_dual");
   };
 };
 
+/// @brief functor which takes a std::shared_ptr<FiniteElementDual>, and returns a zero-valued
+/// std::shared_ptr<FiniteElementState> with the same space
 struct zero_state_from_dual {
-  zero_state_from_dual() {}
   auto operator()(const serac::FEDualPtr& f) const
   {
     return std::make_shared<serac::FiniteElementState>(f->space(), f->name() + "_undual");
   };
 };
 
+/// @brief initialize on the gretl::DataStore a FieldState with values from s
 inline FieldState create_field_state(gretl::DataStore& dataStore, const serac::FEFieldPtr& s)
 {
   return dataStore.create_state<serac::FEFieldPtr, serac::FEDualPtr>(s, zero_dual_from_state());
 }
 
+/// @brief initialize on the gretl::DataStore a FieldState from a FiniteElementState of given space, name and mesh.
 template <typename function_space>
 FieldState create_field_state(gretl::DataStore& dataStore, function_space space, const std::string& name,
                               const std::string& mesh_tag)
@@ -41,11 +45,13 @@ FieldState create_field_state(gretl::DataStore& dataStore, function_space space,
   return create_field_state(dataStore, f);
 }
 
+/// @brief initialize on the gretl::DataStore a ResultantState with values from s
 inline ResultantState create_field_resultant(gretl::DataStore& dataStore, const serac::FEDualPtr& s)
 {
   return dataStore.create_state<serac::FEDualPtr, serac::FEFieldPtr>(s, zero_state_from_dual());
 }
 
+/// @brief initialize on the gretl::DataStore a ResultantState from a FiniteElementDual of given space, name and mesh.
 template <typename function_space>
 ResultantState create_field_resultant(gretl::DataStore& dataStore, function_space space, const std::string& name,
                                       const std::string& mesh_tag)
@@ -54,14 +60,11 @@ ResultantState create_field_resultant(gretl::DataStore& dataStore, function_spac
   return create_field_resultant(dataStore, f);
 }
 
+/// @brief gretl-function to compute the inner product (vector l2-norm) of state and state
 inline FieldState square(const FieldState& state)
 {
   using T = FieldState::type;
   using D = FieldState::dual_type;
-
-  // StateFunc<FieldState> sf(state);
-  // return create_operator(state)([&](const FieldState& input) {
-  // })
 
   auto newState = state.clone(std::vector<gretl::StateBase>{state});
 
@@ -86,6 +89,7 @@ inline FieldState square(const FieldState& state)
   return newState.finalize();
 }
 
+/// @brief gretl-function to compute the inner product (vector l2-norm) of a and b
 inline gretl::State<double> inner_product(const FieldState& a, const FieldState& b)
 {
   using T = FieldState::type;
@@ -118,6 +122,7 @@ inline gretl::State<double> inner_product(const FieldState& a, const FieldState&
   return c.finalize();
 }
 
+/// @brief gretl-function to compute a*x + b*y
 inline FieldState axpby(double a, const FieldState& x, double b, const FieldState& y)
 {
   auto z = x.clone({x, y});
@@ -141,6 +146,7 @@ inline FieldState axpby(double a, const FieldState& x, double b, const FieldStat
   return z.finalize();
 }
 
+/// @brief gretl-function to make a deep-copy of a FieldState and initialize it to 0.
 inline FieldState zero_copy(const FieldState& x)
 {
   auto z = x.clone({x});
@@ -157,15 +163,19 @@ inline FieldState zero_copy(const FieldState& x)
   return z.finalize();
 }
 
+/// @brief gretl-function to compute the weighted average a * weight + b * (1-weight)
 inline FieldState weighted_average(const FieldState& a, const FieldState& b, double weight)
 {
   return axpby(weight, a, 1.0 - weight, b);
 }
 
+/// @brief gretl-function to add two FieldState
 inline FieldState operator+(const FieldState& a, const FieldState& b) { return axpby(1.0, a, 1.0, b); }
 
+/// @brief gretl-function to subtract two FieldState
 inline FieldState operator-(const FieldState& a, const FieldState& b) { return axpby(1.0, a, -1.0, b); }
 
+/// @brief gretl-function to add three FieldState
 inline FieldState add(FieldState a, FieldState b, FieldState c)
 {
   auto g = clone_state(

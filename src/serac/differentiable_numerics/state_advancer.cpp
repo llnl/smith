@@ -6,6 +6,7 @@
 
 namespace serac {
 
+/// @brief uses the constrained docs on the bc_manager to zero the corresponding dofs in FieldState s.
 FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryConditionManager* bc_manager)
 {
   auto s_bc = s.clone({s});

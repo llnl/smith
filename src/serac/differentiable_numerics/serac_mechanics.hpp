@@ -27,11 +27,15 @@ class WeakForm;
 class DifferentiableSolver;
 class StateAdvancer;
 
+/// @brief Implementation of BasePhysics which uses FieldStates and gretl to track the computational graph, dynamically
+/// checkpoint, and back-propagate sensitivities.
 class Mechanics : public BasePhysics {
  public:
-  Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, std::shared_ptr<WeakForm> res,
+  /// @brief constructor
+  Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
             const FieldState& shape_disp, const std::vector<FieldState>& states, const std::vector<FieldState>& params,
-            std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate);
+            std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate, std::string mech_name="mechanics");
+  /// @brief destructor
   ~Mechanics() {}
 
   /// overload
@@ -101,25 +105,31 @@ class Mechanics : public BasePhysics {
   const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity()
       const override;
 
-  /// @brief Get all the fields, states first, parameters next
-  /// @return vector of all states
+  /// @brief Get all the FieldStates... states first, parameters next
   std::vector<FieldState> getAllFieldStates() const;
+
+  /// @brief Get the shape displacement FieldState
   FieldState getShapeDispFieldState() const;
 
-  std::shared_ptr<gretl::DataStore> checkpointer_;
-  std::shared_ptr<WeakForm> residual_;
-  std::shared_ptr<StateAdvancer> advancer_;
-  std::shared_ptr<TimestepEstimator> dt_estimator_;
+  std::shared_ptr<gretl::DataStore> checkpointer_;  ///< gretl data store manages dynamic checkpointing logic
+  std::shared_ptr<StateAdvancer> advancer_;  ///< abstract interface for advancing state from one cycle to the next
+  std::shared_ptr<TimestepEstimator>
+      dt_estimator_;  ///< abstract interface for estimating stable timestep from the current states
 
-  std::vector<FieldState> initial_field_states_;
-  std::vector<FieldState> field_states_;
-  std::vector<FieldState> field_params_;
-  std::unique_ptr<FieldState> field_shape_displacement_;
+  std::vector<FieldState> initial_field_states_;  ///< hold a copy of the initial states, mostly to have a record of
+                                                  ///< initial condition sensitivities
+  std::vector<FieldState> field_states_;          ///< all the states that may be changed by the StateAdvancer
+  std::vector<FieldState> field_params_;  ///< all the parameters which should not be changed by the StateAdvancer
+  std::unique_ptr<FieldState>
+      field_shape_displacement_;  ///< shape displacement which is also fixed for a given simulation
 
-  std::map<std::string, size_t> state_name_to_field_index_;
-  std::map<std::string, size_t> param_name_to_field_index_;
+  std::map<std::string, size_t> state_name_to_field_index_;  ///< map from state names to field index
+  std::map<std::string, size_t> param_name_to_field_index_;  ///< map from param names to param index
 
-  std::vector<gretl::Int> milestones_;
+  std::vector<gretl::Int> milestones_;  ///< a record of the steps in the graph that represent the end conditions of
+                                        ///< advanceTimestep(dt). this information is used to halt the gretl graph when
+                                        ///< back-propagating to allow users of reverseAdjointTimestep to specify
+                                        ///< adjoint loads and to retrieve timestep sensitivity information.
 };
 
 }  // namespace serac

@@ -162,7 +162,7 @@ struct MeshFixture : public testing::Test {
     auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(1e-3);
 
     // construct mechanics
-    mechanics = std::make_shared<serac::Mechanics>(mesh, checkpointer, solid_mechanics_residual, *shape_disp, states,
+    mechanics = std::make_shared<serac::Mechanics>(mesh, checkpointer, *shape_disp, states,
                                                    params, time_integrator, dt_estimator);
     physics = mechanics;
 

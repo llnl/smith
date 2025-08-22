@@ -24,13 +24,11 @@ gretl::State<int> make_milestone(const std::vector<FieldState>& states)
 }
 
 // mesh, equation, fields, parameters, state advancer, solver
-Mechanics::Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, std::shared_ptr<WeakForm> res,
-                     const FieldState& shape_disp, const std::vector<FieldState>& states,
-                     const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer,
-                     std::shared_ptr<TimestepEstimator> dt_estimate)
-    : BasePhysics(res->name(), mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
+Mechanics::Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, const FieldState& shape_disp,
+                     const std::vector<FieldState>& states, const std::vector<FieldState>& params,
+                     std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate, std::string mech_name)
+    : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
-      residual_(res),  // eventually this may be used to evaluate reaction forces
       advancer_(advancer),
       dt_estimator_(dt_estimate)
 {
