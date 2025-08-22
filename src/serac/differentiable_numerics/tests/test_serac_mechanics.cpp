@@ -155,15 +155,13 @@ struct MeshFixture : public testing::Test {
     auto zero_bcs = std::make_shared<mfem::FunctionCoefficient>([](const mfem::Vector&) { return 0.0; });
     bc_manager->addEssential(std::set<int>{1}, zero_bcs, states[DISP].get()->space());
 
-    std::shared_ptr<serac::StateAdvancer> time_integrator;
-
-    time_integrator =
+    std::shared_ptr<serac::StateAdvancer> time_integrator =
         std::make_shared<serac::LumpedMassExplicitNewmark>(solid_mechanics_residual, solid_mass_residual, bc_manager);
     auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(1e-3);
 
     // construct mechanics
-    mechanics = std::make_shared<serac::Mechanics>(mesh, checkpointer, *shape_disp, states,
-                                                   params, time_integrator, dt_estimator);
+    mechanics = std::make_shared<serac::Mechanics>(mesh, checkpointer, *shape_disp, states, params, time_integrator,
+                                                   dt_estimator);
     physics = mechanics;
 
     // kinetic energy integrator for qoi

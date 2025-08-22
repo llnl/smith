@@ -84,7 +84,7 @@ inline FieldState diagInverse(const FieldState& x)
 
 /// @brief gretl-function implementation which evaluates the residual force (which is minus the mechanical force) given
 /// shape displacement, states and params.  The inertial index denotes which index in the state corresponds to the
-/// highest time derivative term (e.g., acceleration for solid mechanics)
+/// highest time derivative term (e.g., acceleration for solid mechanics).
 inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_disp,
                                const std::vector<FieldState>& states, const std::vector<FieldState>& params,
                                double time, double dt, size_t inertial_index)
@@ -159,6 +159,8 @@ inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_d
   return z.finalize();
 }
 
+/// @brief gretl-function implementation which multiplies x and y component-wise to create a new FieldState.  The
+/// bc_manager is used to zero the constrained dofs of the output Field.
 inline FieldState componentWiseMult(const FieldState& x, const FieldState& y,
                                     const BoundaryConditionManager* bc_manager)
 {
@@ -209,6 +211,10 @@ inline FieldState componentWiseMult(const FieldState& x, const FieldState& y,
   return z.finalize();
 }
 
+/// @brief gretl-function implementation which multiplies and then negates x and y component-wise to create a new
+/// FieldState.  The bc_manager is used to zero the constrained dofs of the output Field.  The intended use-case here is
+/// explicit dynamics, where the residual is the negative of the force, and the inverse of the mass is strictly
+/// positive.  The negative component-wise multiplication of these gives the nodal accelerations.
 inline FieldState negativeComponentWiseMult(const FieldState& x, const FieldState& y,
                                             const BoundaryConditionManager* bc_manager)
 {

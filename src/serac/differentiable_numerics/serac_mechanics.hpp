@@ -32,9 +32,10 @@ class StateAdvancer;
 class Mechanics : public BasePhysics {
  public:
   /// @brief constructor
-  Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
-            const FieldState& shape_disp, const std::vector<FieldState>& states, const std::vector<FieldState>& params,
-            std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate, std::string mech_name="mechanics");
+  Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, const FieldState& shape_disp,
+            const std::vector<FieldState>& states, const std::vector<FieldState>& params,
+            std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate,
+            std::string mech_name = "mechanics");
   /// @brief destructor
   ~Mechanics() {}
 

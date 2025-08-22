@@ -15,6 +15,7 @@ using ResultantState = gretl::State<FEDualPtr, FEFieldPtr>;  ///< typedef
 /// @brief functor which takes a std::shared_ptr<FiniteElementState>, and returns a zero-valued
 /// std::shared_ptr<FiniteElementDual> with the same space
 struct zero_dual_from_state {
+  /// @brief functor operator
   auto operator()(const serac::FEFieldPtr& f) const
   {
     return std::make_shared<serac::FiniteElementDual>(f->space(), f->name() + "_dual");
@@ -24,6 +25,7 @@ struct zero_dual_from_state {
 /// @brief functor which takes a std::shared_ptr<FiniteElementDual>, and returns a zero-valued
 /// std::shared_ptr<FiniteElementState> with the same space
 struct zero_state_from_dual {
+  /// @brief functor operator
   auto operator()(const serac::FEDualPtr& f) const
   {
     return std::make_shared<serac::FiniteElementState>(f->space(), f->name() + "_undual");

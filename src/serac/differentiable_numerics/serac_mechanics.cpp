@@ -6,6 +6,9 @@
 
 namespace serac {
 
+/// @brief gretl-function to create a dummy-state which records all states and params of interest to the mechanics. This
+/// is used to inject additional adjoint loads and evaluate individual timestep sensitivities for the BasePhysics
+/// interface.
 gretl::State<int> make_milestone(const std::vector<FieldState>& states)
 {
   std::vector<gretl::StateBase> base_states;
@@ -26,7 +29,8 @@ gretl::State<int> make_milestone(const std::vector<FieldState>& states)
 // mesh, equation, fields, parameters, state advancer, solver
 Mechanics::Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, const FieldState& shape_disp,
                      const std::vector<FieldState>& states, const std::vector<FieldState>& params,
-                     std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate, std::string mech_name)
+                     std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate,
+                     std::string mech_name)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
       advancer_(advancer),
