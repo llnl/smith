@@ -11,7 +11,7 @@
 #include "serac/differentiable_numerics/state_advancer.hpp"
 #include "serac/differentiable_numerics/lumped_mass_weak_form.hpp"
 #include "serac/differentiable_numerics/tests/paraview_helper.hpp"
-#include "serac/differentiable_numerics/tests/serac_qoi_integrators.hpp"
+#include "serac/differentiable_numerics/serac_qoi_integrators.hpp"
 
 // This tests the interface between the new serac::WeakForm with gretl and its conformity to the existing base_physics
 // interface

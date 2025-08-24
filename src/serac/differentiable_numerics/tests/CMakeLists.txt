@@ -8,7 +8,6 @@ set(differentiable_numerics_test_depends serac_physics serac_gretl serac_differe
 
 set(differentiable_numerics_tests
     test_serac_mechanics.cpp
-    serac_qoi_integrators.hpp
     paraview_helper.hpp
     )
 

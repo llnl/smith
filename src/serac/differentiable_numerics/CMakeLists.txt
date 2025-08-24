@@ -16,6 +16,7 @@ set(differentiable_numerics_headers
     serac_mechanics.hpp
     explicit_dynamic_solve.hpp
     lumped_mass_weak_form.hpp
+    serac_qoi_integrators.hpp
     )
 
 set(differentiable_numerics_depends
