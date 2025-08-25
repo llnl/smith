@@ -4,14 +4,14 @@
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 
-#include "serac/differentiable_numerics/serac_mechanics.hpp"
+#include "serac/differentiable_numerics/mechanics.hpp"
 #include "serac/gretl/data_store.hpp"
 #include "serac/physics/solid_weak_form.hpp"
 
 #include "serac/differentiable_numerics/state_advancer.hpp"
 #include "serac/differentiable_numerics/lumped_mass_weak_form.hpp"
 #include "serac/differentiable_numerics/tests/paraview_helper.hpp"
-#include "serac/differentiable_numerics/serac_qoi_integrators.hpp"
+#include "serac/differentiable_numerics/differentiable_utils.hpp"
 
 // This tests the interface between the new serac::WeakForm with gretl and its conformity to the existing base_physics
 // interface

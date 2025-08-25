@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file serac_mechanics.hpp
+ * @file mechanics.hpp
  *
  * @brief Implementation of BasePhysics which uses FieldStates and gretl to track the computational graph, dynamically
  * checkpoint, and backpropagate sensitivities.

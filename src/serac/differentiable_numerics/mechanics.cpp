@@ -1,4 +1,4 @@
-#include "serac/differentiable_numerics/serac_mechanics.hpp"
+#include "serac/differentiable_numerics/mechanics.hpp"
 #include "serac/physics/weak_form.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/differentiable_numerics/state_advancer.hpp"

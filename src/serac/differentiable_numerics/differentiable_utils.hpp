@@ -1,8 +1,23 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Serac Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+/**
+ * @file differentiable_utils.hpp
+ *
+ * @brief Utility functions for testing.
+ */
+
+#pragma once
+
 #include "serac/gretl/double_state.hpp"
 #include "serac/differentiable_numerics/field_state.hpp"
 
 namespace serac {
 
+/// @brief Utility function to construct a serac::functional which evaluates the total kinetic energy
 template <typename DispSpace, typename DensitySpace>
 auto create_kinetic_energy_integrator(serac::Domain& domain, const mfem::ParFiniteElementSpace& velocity_space,
                                       const mfem::ParFiniteElementSpace& density_space)
@@ -24,6 +39,7 @@ auto create_kinetic_energy_integrator(serac::Domain& domain, const mfem::ParFini
   return ke_integrator;
 }
 
+/// @brief Utility function which computes the kinetic energy and returns it as a gretl state (with its vjp defined)
 template <typename DispSpace, typename DensitySpace>
 gretl::State<double> compute_kinetic_energy(
     const std::shared_ptr<serac::Functional<double(DispSpace, DispSpace, DensitySpace)>>& energy_func,
@@ -57,7 +73,7 @@ gretl::State<double> compute_kinetic_energy(
       disp, velo, density);
 }
 
-// testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
+/// testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
 inline auto check_gradients(const gretl::State<double>& objectiveState, FieldState& inputState,
                             serac::FiniteElementDual& inputDual, double objectiveBase, gretl::DataStore& dataStore,
                             double eps)
@@ -85,6 +101,9 @@ inline auto check_gradients(const gretl::State<double>& objectiveState, FieldSta
   return std::make_pair(directionDeriv, (objectivePlus - objectiveBase) / eps);
 }
 
+/// @brief Testing utility function which runs a gretl graph num_fd_steps (with increasingly smaller finite difference
+/// steps) to check if the computed graph gradients are converging to the finite differenced gradients at the expected
+/// rate
 inline double check_grad_wrt(const gretl::State<double>& objective, serac::FieldState& input, gretl::DataStore& graph,
                              double eps, size_t num_fd_steps = 4, bool printmore = false)
 {
