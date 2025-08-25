@@ -40,7 +40,7 @@ serac_write_unified_header(
     HEADERS ${differentiable_numerics_headers}
     )
 
-install(FILES ${differentiable_numerics} DESTINATION include/serac/differentiable_numerics )
+install(FILES ${differentiable_numerics_headers} DESTINATION include/serac/differentiable_numerics )
 
 install(TARGETS              serac_differentiable_numerics
         EXPORT               serac-targets
