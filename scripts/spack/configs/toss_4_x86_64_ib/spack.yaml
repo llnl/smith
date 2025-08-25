@@ -16,28 +16,24 @@ spack:
   - ../defaults.yaml
   - ../versions.yaml
 
-  compilers::
-  - compiler:
-      environment: {}
-      extra_rpaths: []
-      flags:
-        fflags: -fPIC
-      modules: []
-      operating_system: rhel8
-      paths:
-        cc: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/llvm-19.1.7/bin/clang
-        cxx: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/llvm-19.1.7/bin/clang++
-        f77: /usr/tce/packages/gcc/gcc-13.3.1/bin/gfortran
-        fc: /usr/tce/packages/gcc/gcc-13.3.1/bin/gfortran
-      spec: clang@19.1.7
-      target: x86_64
+
+  toolchains:
+    clang_gfortran:
+    - spec: '%c=llvm'
+      when: '%c'
+    - spec: '%cxx=llvm'
+      when: '%cxx'
+    - spec: '%fortran=gcc'
+      when: '%fortran'
+    - spec: '%mvapich2@2.3.7'
+      when: '%mpi'
+
 
   packages:
     all:
       # This defaults us to machine specific flags of ivybridge which allows
       # us to run on broadwell as well
       target: [ivybridge]
-      compiler: [gcc, intel, clang, xl, nag]
       providers:
         blas: [openblas]
         lapack: [netlib-lapack]
@@ -45,6 +41,27 @@ spack:
         gl: [opengl]
         glu: [openglu]
         zlib-api: [zlib]
+
+    #Compiler packages
+    gcc:
+      externals:
+      - spec: gcc@13.3.1 languages:=c,c++,fortran
+        prefix: /usr/tce/packages/gcc/gcc-13.3.1
+        extra_attributes:
+          compilers:
+            c: /usr/tce/packages/gcc/gcc-13.3.1/bin/gcc
+            cxx: /usr/tce/packages/gcc/gcc-13.3.1/bin/g++
+            fortran: /usr/tce/packages/gcc/gcc-13.3.1/bin/gfortran
+    llvm:
+      externals:
+      - spec: llvm@19.1.7+clang~lld~lldb
+        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/llvm-19.1.7
+        extra_attributes:
+          compilers:
+            c: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/llvm-19.1.7/bin/clang
+            cxx: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/llvm-19.1.7/bin/clang++
+          flags:
+            fflags: -fPIC
 
     openblas:
       buildable: false
@@ -68,7 +85,7 @@ spack:
     mvapich2:
       buildable: false
       externals:
-      - spec: mvapich2@2.3.7~alloca~cuda~debug~hwloc_graphics~hwlocv2+regcache+wrapperrpath build_system=autotools ch3_rank_bits=32 fabrics=mrail file_systems=auto process_managers=slurm threads=multiple %clang@19.1.7
+      - spec: mvapich2@2.3.7~alloca~cuda~debug~hwloc_graphics~hwlocv2+regcache+wrapperrpath build_system=autotools ch3_rank_bits=32 fabrics=mrail file_systems=auto process_managers=slurm threads=multiple
         prefix: /usr/tce/packages/mvapich2/mvapich2-2.3.7-gcc-13.3.1
 
     netlib-lapack:
@@ -183,12 +200,6 @@ spack:
       externals:
       - spec: libx11@1.6.8
         prefix: /usr
-    llvm:
-      version: [19.1.7]
-      buildable: false
-      externals:
-      - spec: llvm@19.1.7
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/llvm-19.1.7
     lua:
       buildable: false
       externals:
@@ -275,3 +286,4 @@ spack:
       externals:
       - spec: python@3.13.2
         prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.13.2
+

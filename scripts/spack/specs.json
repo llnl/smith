@@ -14,11 +14,11 @@
     "__comment__":"##############################################################################",
 
     "toss_4_x86_64_ib":
-    [ "clang@19.1.7+devtools+profiling+enzyme" ],
+    [ "+devtools+profiling+enzyme %clang_gfortran" ],
 
     "toss_4_x86_64_ib_cray":
-    [ "rocmcc@6.2.1~openmp+profiling+rocm+raja+umpire+strumpack~petsc amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion"],
+    [ "~openmp+profiling+rocm+raja+umpire+strumpack~petsc %rocmcc@6.2.1 amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion"],
 
     "blueos_3_ppc64le_ib_p9":
-    [ "clang@14.0.5+devtools+cuda+raja+umpire+profiling~strumpack cuda_arch=70" ]
+    [ "+devtools+cuda+raja+umpire+profiling~strumpack %clang_gfortran cuda_arch=70" ]
 }

@@ -79,6 +79,12 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     # Dependencies
     # -----------------------------------------------------------------------
     # Basic dependencies
+    depends_on("c", type="build")
+    depends_on("cxx", type="build")
+    # Serac itself has no fortran but needs to pass a constrained fortran compiler
+    # to its dependencies
+    depends_on("fortran", type="build")
+
     depends_on("mpi")
     depends_on("cmake@3.14:")
     depends_on("cmake@3.21:", type="build", when="+rocm")
@@ -240,7 +246,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     # Enzyme required an LLVM-based compiler
     for compiler in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
-        conflicts("+enzyme", when=f"%{compiler}")
+        conflicts("+enzyme", when=f"%[virtuals=c,cxx] {compiler}")
 
     conflicts("+openmp", when="+rocm")
     conflicts("+cuda", when="+rocm")
