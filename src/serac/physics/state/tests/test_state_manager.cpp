@@ -8,19 +8,25 @@
  * @file test_state_manager.cpp
  */
 
-#include "serac/physics/state/state_manager.hpp"
+#include <cmath>
+#include <cstddef>
+#include <functional>
+#include <memory>
+#include <string>
+#include <utility>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "mpi.h"
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
+#include "serac/physics/state/state_manager.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/numerics/functional/quadrature_data.hpp"
-#include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/serac_config.hpp"
 
 namespace serac {
 

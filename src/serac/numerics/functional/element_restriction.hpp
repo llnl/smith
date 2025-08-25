@@ -6,7 +6,9 @@
 
 #pragma once
 
+#include <cstdint>
 #include <vector>
+#include <map>
 
 #include "mfem.hpp"
 #include "axom/core.hpp"

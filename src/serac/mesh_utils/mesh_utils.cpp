@@ -6,7 +6,14 @@
 
 #include "serac/mesh_utils/mesh_utils.hpp"
 
+#include <cmath>
 #include <fstream>
+#include <algorithm>
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "axom/core.hpp"
 #include "axom/fmt.hpp"

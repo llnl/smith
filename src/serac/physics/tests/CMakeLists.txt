@@ -18,6 +18,7 @@ set(physics_test_depends serac_physics serac_physics_test_utils gtest)
 set(physics_serial_test_sources
     beam_bending.cpp
     fit_test.cpp
+    test_mesh_wrapper.cpp
     thermal_finite_diff.cpp
     thermal_statics_patch.cpp
     thermal_dynamics_patch.cpp
@@ -28,9 +29,9 @@ set(physics_serial_test_sources
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
-    test_solid_residual.cpp
-    test_heat_residual.cpp
-    test_functional_residual.cpp
+    test_solid_weak_form.cpp
+    test_heat_weak_form.cpp
+    test_functional_weak_form.cpp
     thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
     test_kinematic_objective.cpp

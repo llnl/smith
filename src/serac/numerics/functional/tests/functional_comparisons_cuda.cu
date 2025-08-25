@@ -7,21 +7,21 @@
 #include <fstream>
 #include <iostream>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "serac/infrastructure/input.hpp"
+#include "serac/infrastructure/profiling.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/numerics/expr_template_ops.hpp"
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh_utils/mesh_utils_base.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 
 using namespace serac;
-using namespace serac::profiling;
+
 int serial_refinement = 1;
 int parallel_refinement = 0;
 
@@ -88,11 +88,11 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
   auto pmesh = mesh::refineAndDistribute(buildMeshFromFile(meshfiles.at(dim)), serial_refinement, parallel_refinement);
   mfem::ParMesh& mesh = *pmesh;
 
-  std::string postfix = concat("_H1<", p, ">");
+  std::string postfix = profiling::concat("_H1<", p, ">");
 
-  std::cout << serac::accelerator::getCUDAMemInfoString() << std::endl;
+  std::cout << accelerator::getCUDAMemInfoString() << std::endl;
 
-  serac::profiling::initialize();
+  profiling::initialize();
 
   // Define the types for the test and trial spaces using the function arguments
   using test_space = decltype(test);
@@ -113,13 +113,13 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
 
   // Assemble the bilinear form into a matrix
   {
-    SERAC_MARK_SCOPE(concat("mfem_localAssemble", postfix));
+    SERAC_MARK_SCOPE(profiling::concat("mfem_localAssemble", postfix));
     A.Assemble(0);
   }
 
   A.Finalize();
   std::unique_ptr<mfem::HypreParMatrix> J(
-      SERAC_PROFILE_EXPR(concat("mfem_parallelAssemble", postfix), A.ParallelAssemble()));
+      SERAC_PROFILE_EXPR(profiling::concat("mfem_parallelAssemble", postfix), A.ParallelAssemble()));
 
   // Create a linear form for the load term using the standard MFEM method
   mfem::ParLinearForm f(fespace.get());
@@ -127,9 +127,9 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
 
   // Create and assemble the linear load term into a vector
   f.AddDomainIntegrator(new mfem::DomainLFIntegrator(load_func));
-  SERAC_PROFILE_EXPR(serac::profiling::concat("mfem_fAssemble", postfix), f.Assemble());
+  SERAC_PROFILE_EXPR(profiling::concat("mfem_fAssemble", postfix), f.Assemble());
   std::unique_ptr<mfem::HypreParVector> F(
-      SERAC_PROFILE_EXPR(concat("mfem_fParallelAssemble", postfix), f.ParallelAssemble()));
+      SERAC_PROFILE_EXPR(profiling::concat("mfem_fParallelAssemble", postfix), f.ParallelAssemble()));
   F->UseDevice(true);
 
   // Set a random state to evaluate the residual
@@ -142,7 +142,7 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
   u_global.GetTrueDofs(U);
 
   cudaDeviceSynchronize();
-  std::cout << "MFEM " << serac::accelerator::getCUDAMemInfoString() << std::endl;
+  std::cout << "MFEM " << accelerator::getCUDAMemInfoString() << std::endl;
 
   // Set up the same problem using functional
 
@@ -176,14 +176,16 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
 
   EXPECT_NEAR(0., error.Norml2() / r1.Norml2(), 1.e-14);
 
-  serac::accelerator::displayLastCUDAMessage();
+  accelerator::displayLastCUDAMessage();
 
   // Compute the gradient using functional
-  mfem::Operator& grad2 = SERAC_PROFILE_EXPR(concat("functional_GetGradient", postfix), residual.GetGradient(U));
+  mfem::Operator& grad2 =
+      SERAC_PROFILE_EXPR(profiling::concat("functional_GetGradient", postfix), residual.GetGradient(U));
 
   // Compute the gradient action using standard MFEM and functional
-  mfem::Vector g1 = SERAC_PROFILE_EXPR_LOOP(concat("mfem_ApplyGradient", postfix), (*J) * U, nsamples);
-  mfem::Vector g2 = SERAC_PROFILE_EXPR_LOOP(concat("functional_ApplyGradient", postfix), grad2 * U, nsamples);
+  mfem::Vector g1 = SERAC_PROFILE_EXPR_LOOP(profiling::concat("mfem_ApplyGradient", postfix), (*J) * U, nsamples);
+  mfem::Vector g2 =
+      SERAC_PROFILE_EXPR_LOOP(profiling::concat("functional_ApplyGradient", postfix), grad2 * U, nsamples);
 
   if (verbose) {
     std::cout << "||g1||: " << g1.Norml2() << std::endl;
@@ -194,9 +196,9 @@ void functional_test(H1<p> test, H1<p> trial, Dimension<dim>)
   // Ensure the two methods generate the same result
   EXPECT_NEAR(0., mfem::Vector(g1 - g2).Norml2() / g1.Norml2(), 1.e-14);
 
-  std::cout << "Functional:" << serac::accelerator::getCUDAMemInfoString() << std::endl;
+  std::cout << "Functional:" << accelerator::getCUDAMemInfoString() << std::endl;
 
-  serac::profiling::finalize();
+  profiling::finalize();
 }
 
 // this test sets up a toy "elasticity" problem where the residual includes contributions
@@ -210,9 +212,9 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
   auto pmesh = mesh::refineAndDistribute(buildMeshFromFile(meshfiles.at(dim)), serial_refinement, parallel_refinement);
   mfem::ParMesh& mesh = *pmesh;
 
-  std::string postfix = concat("_H1<", p, ",", dim, ">");
+  std::string postfix = profiling::concat("_H1<", p, ",", dim, ">");
 
-  serac::profiling::initialize();
+  profiling::initialize();
 
   using test_space = decltype(test);
   using trial_space = decltype(trial);
@@ -228,13 +230,13 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
   mfem::ConstantCoefficient mu_coef(b);
   A.AddDomainIntegrator(new mfem::ElasticityIntegrator(lambda_coef, mu_coef));
   {
-    SERAC_MARK_SCOPE(concat("mfem_localAssemble", postfix));
+    SERAC_MARK_SCOPE(profiling::concat("mfem_localAssemble", postfix));
     A.Assemble(0);
   }
   A.Finalize();
 
   std::unique_ptr<mfem::HypreParMatrix> J(
-      SERAC_PROFILE_EXPR(concat("mfem_parallelAssemble", postfix), A.ParallelAssemble()));
+      SERAC_PROFILE_EXPR(profiling::concat("mfem_parallelAssemble", postfix), A.ParallelAssemble()));
 
   mfem::ParLinearForm f(fespace.get());
   mfem::VectorFunctionCoefficient load_func(dim, [&](const mfem::Vector& /*coords*/, mfem::Vector& force) {
@@ -244,12 +246,12 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
 
   f.AddDomainIntegrator(new mfem::VectorDomainLFIntegrator(load_func));
   {
-    SERAC_MARK_SCOPE(concat("mfem_fAssemble", postfix));
+    SERAC_MARK_SCOPE(profiling::concat("mfem_fAssemble", postfix));
     f.Assemble();
   }
 
   std::unique_ptr<mfem::HypreParVector> F(
-      SERAC_PROFILE_EXPR(concat("mfem_fParallelAssemble", postfix), f.ParallelAssemble()));
+      SERAC_PROFILE_EXPR(profiling::concat("mfem_fParallelAssemble", postfix), f.ParallelAssemble()));
   F->UseDevice(true);
 
   F->HostRead();
@@ -267,8 +269,8 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
   Functional<test_space(trial_space), ExecutionSpace::GPU> residual(fespace.get(), fespace.get());
   residual.AddDomainIntegral(Dimension<dim>{}, elastic_qfunction<dim>{}, mesh);
 
-  mfem::Vector r1 = SERAC_PROFILE_EXPR(concat("mfem_Apply", postfix), (*J) * U - (*F));
-  mfem::Vector r2 = SERAC_PROFILE_EXPR(concat("functional_Apply", postfix), residual(U));
+  mfem::Vector r1 = SERAC_PROFILE_EXPR(profiling::concat("mfem_Apply", postfix), (*J) * U - (*F));
+  mfem::Vector r2 = SERAC_PROFILE_EXPR(profiling::concat("functional_Apply", postfix), residual(U));
 
   if (verbose) {
     std::cout << "||r1||: " << r1.Norml2() << std::endl;
@@ -277,10 +279,11 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
   }
   EXPECT_NEAR(0., mfem::Vector(r1 - r2).Norml2() / r1.Norml2(), 1.e-14);
 
-  mfem::Operator& grad = SERAC_PROFILE_EXPR(concat("functional_GetGradient", postfix), residual.GetGradient(U));
+  mfem::Operator& grad =
+      SERAC_PROFILE_EXPR(profiling::concat("functional_GetGradient", postfix), residual.GetGradient(U));
 
-  mfem::Vector g1 = SERAC_PROFILE_EXPR(concat("mfem_ApplyGradient", postfix), (*J) * U);
-  mfem::Vector g2 = SERAC_PROFILE_EXPR(concat("functional_ApplyGradient", postfix), grad * U);
+  mfem::Vector g1 = SERAC_PROFILE_EXPR(profiling::concat("mfem_ApplyGradient", postfix), (*J) * U);
+  mfem::Vector g2 = SERAC_PROFILE_EXPR(profiling::concat("functional_ApplyGradient", postfix), grad * U);
 
   if (verbose) {
     std::cout << "||g1||: " << g1.Norml2() << std::endl;
@@ -289,7 +292,7 @@ void functional_test(H1<p, dim> test, H1<p, dim> trial, Dimension<dim>)
   }
   EXPECT_NEAR(0., mfem::Vector(g1 - g2).Norml2() / g1.Norml2(), 1.e-14);
 
-  serac::profiling::finalize();
+  profiling::finalize();
 }
 
 // this test sets up part of a toy "magnetic diffusion" problem where the residual includes contributions
@@ -303,9 +306,9 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
   auto pmesh = mesh::refineAndDistribute(buildMeshFromFile(meshfiles.at(dim)), serial_refinement, parallel_refinement);
   mfem::ParMesh& mesh = *pmesh;
 
-  std::string postfix = concat("_Hcurl<", p, ">");
+  std::string postfix = profiling::concat("_Hcurl<", p, ">");
 
-  serac::profiling::initialize();
+  profiling::initialize();
 
   using test_space = decltype(test);
   using trial_space = decltype(trial);
@@ -320,12 +323,12 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
   mfem::ConstantCoefficient b_coef(b);
   B.AddDomainIntegrator(new mfem::CurlCurlIntegrator(b_coef));
   {
-    SERAC_MARK_SCOPE(concat("mfem_localAssemble", postfix));
+    SERAC_MARK_SCOPE(profiling::concat("mfem_localAssemble", postfix));
     B.Assemble(0);
   }
   B.Finalize();
   std::unique_ptr<mfem::HypreParMatrix> J(
-      SERAC_PROFILE_EXPR(concat("mfem_parallelAssemble", postfix), B.ParallelAssemble()));
+      SERAC_PROFILE_EXPR(profiling::concat("mfem_parallelAssemble", postfix), B.ParallelAssemble()));
 
   mfem::ParLinearForm f(fespace.get());
   mfem::VectorFunctionCoefficient load_func(dim, [&](const mfem::Vector& coords, mfem::Vector& output) {
@@ -338,11 +341,11 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
 
   f.AddDomainIntegrator(new mfem::VectorFEDomainLFIntegrator(load_func));
   {
-    SERAC_MARK_SCOPE(concat("mfem_fAssemble", postfix));
+    SERAC_MARK_SCOPE(profiling::concat("mfem_fAssemble", postfix));
     f.Assemble();
   }
   std::unique_ptr<mfem::HypreParVector> F(
-      SERAC_PROFILE_EXPR(concat("mfem_fParallelAssemble", postfix), f.ParallelAssemble()));
+      SERAC_PROFILE_EXPR(profiling::concat("mfem_fParallelAssemble", postfix), f.ParallelAssemble()));
   F->UseDevice(true);
 
   mfem::ParGridFunction u_global(fespace.get());
@@ -363,12 +366,12 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
   // Compute the residual using standard MFEM methods
   mfem::Vector r1(U.Size());
   {
-    SERAC_MARK_SCOPE(concat("mfem_Apply", postfix));
+    SERAC_MARK_SCOPE(profiling::concat("mfem_Apply", postfix));
     J->Mult(U, r1);
     r1 -= *F;
   }
 
-  mfem::Vector r2 = SERAC_PROFILE_EXPR(concat("functional_Apply", postfix), residual(U));
+  mfem::Vector r2 = SERAC_PROFILE_EXPR(profiling::concat("functional_Apply", postfix), residual(U));
 
   if (verbose) {
     std::cout << "||r1||: " << r1.Norml2() << std::endl;
@@ -377,10 +380,11 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
   }
   EXPECT_NEAR(0., mfem::Vector(r1 - r2).Norml2() / r1.Norml2(), 1.e-13);
 
-  mfem::Operator& grad = SERAC_PROFILE_EXPR(concat("functional_GetGradient", postfix), residual.GetGradient(U));
+  mfem::Operator& grad =
+      SERAC_PROFILE_EXPR(profiling::concat("functional_GetGradient", postfix), residual.GetGradient(U));
 
-  mfem::Vector g1 = SERAC_PROFILE_EXPR(concat("mfem_ApplyGradient", postfix), (*J) * U);
-  mfem::Vector g2 = SERAC_PROFILE_EXPR(concat("functional_ApplyGradient", postfix), grad * U);
+  mfem::Vector g1 = SERAC_PROFILE_EXPR(profiling::concat("mfem_ApplyGradient", postfix), (*J) * U);
+  mfem::Vector g2 = SERAC_PROFILE_EXPR(profiling::concat("functional_ApplyGradient", postfix), grad * U);
 
   if (verbose) {
     std::cout << "||g1||: " << g1.Norml2() << std::endl;
@@ -389,7 +393,7 @@ void functional_test(Hcurl<p> test, Hcurl<p> trial, Dimension<dim>)
   }
   EXPECT_NEAR(0., mfem::Vector(g1 - g2).Norml2() / g1.Norml2(), 1.e-13);
 
-  serac::profiling::finalize();
+  profiling::finalize();
 }
 
 TEST(Thermal, 2DLinear) { functional_test(H1<1>{}, H1<1>{}, Dimension<2>{}); };
@@ -421,7 +425,7 @@ int main(int argc, char* argv[])
   ::testing::InitGoogleTest(&argc, argv);
 
   cudaDeviceSynchronize();
-  std::cout << "Initial:" << serac::accelerator::getCUDAMemInfoString() << std::endl;
+  std::cout << "Initial:" << accelerator::getCUDAMemInfoString() << std::endl;
 
   serac::ApplicationManager applicationManager(argc, argv);
 

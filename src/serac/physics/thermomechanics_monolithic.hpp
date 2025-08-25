@@ -142,9 +142,9 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     adjoints_.push_back(&temperature_adjoint_);
     adjoints_.push_back(&displacement_adjoint_);
 
-    mfem::ParFiniteElementSpace* test_space_1 = &temperature_.space();
-    mfem::ParFiniteElementSpace* test_space_2 = &displacement_.space();
-    mfem::ParFiniteElementSpace* shape_space = &mesh_->shapeDisplacement().space();
+    const mfem::ParFiniteElementSpace* test_space_1 = &temperature_.space();
+    const mfem::ParFiniteElementSpace* test_space_2 = &displacement_.space();
+    const mfem::ParFiniteElementSpace* shape_space = &mesh_->shapeDisplacementSpace();
 
     std::array<const mfem::ParFiniteElementSpace*, NUM_STATE_VARS + sizeof...(parameter_space)> trial_spaces;
     trial_spaces[0] = &temperature_.space();
@@ -190,7 +190,6 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     block_nonlinear_oper_ = std::make_unique<mfem::BlockOperator>(block_thermomech_offsets_);
     block_nonlinear_oper_transpose_ = std::make_unique<mfem::BlockOperator>(block_thermomech_offsets_);
 
-    mesh_->shapeDisplacement() = 0.0;
     initializeThermoMechanicsStates();
   }
 
@@ -215,14 +214,6 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
 
     temperature_adjoint_load_ = 0.0;
     displacement_adjoint_load_ = 0.0;
-
-    if (!checkpoint_to_disk_) {
-      checkpoint_states_.clear();
-      auto state_names = stateNames();
-      for (const auto& state_name : state_names) {
-        checkpoint_states_[state_name].push_back(state(state_name));
-      }
-    }
   }
 
   /**
@@ -233,6 +224,14 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   {
     BasePhysics::initializeBasePhysicsStates(cycle, time);
     initializeThermoMechanicsStates();
+
+    if (!checkpoint_to_disk_) {
+      checkpoint_states_.clear();
+      auto state_names = stateNames();
+      for (const auto& state_name : state_names) {
+        checkpoint_states_[state_name].push_back(state(state_name));
+      }
+    }
   }
 
   /**
@@ -734,6 +733,16 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
 
           return *block_nonlinear_oper_;
         });
+
+    if (checkpoint_to_disk_) {
+      outputStateToDisk();
+    } else {
+      checkpoint_states_.clear();
+      auto state_names = stateNames();
+      for (const auto& state_name : state_names) {
+        checkpoint_states_[state_name].push_back(state(state_name));
+      }
+    }
   }
 
   /// @overload
@@ -932,8 +941,8 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     auto dr1_dshape_mat = assemble(dr1_dshape);
     auto dr2_dshape_mat = assemble(dr2_dshape);
 
-    dr1_dshape_mat->MultTranspose(temperature_adjoint_, shapeDisplacementSensitivity());
-    dr2_dshape_mat->AddMultTranspose(displacement_adjoint_, shapeDisplacementSensitivity());
+    dr1_dshape_mat->MultTranspose(temperature_adjoint_, shape_displacement_dual_);
+    dr2_dshape_mat->AddMultTranspose(displacement_adjoint_, shape_displacement_dual_);
 
     return shapeDisplacementSensitivity();
   }
@@ -1108,22 +1117,20 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   /// @brief Array functions computing the derivative of the residual with respect to each given parameter
   /// @note This is needed so the user can ask for a specific sensitivity at runtime as opposed to it being a
   /// template parameter.
-  std::array<std::function<decltype((*residual_T_)(DifferentiateWRT<1>{}, 0.0, mesh_->shapeDisplacement(), temperature_,
+  std::array<std::function<decltype((*residual_T_)(DifferentiateWRT<1>{}, 0.0, shape_displacement_, temperature_,
                                                    displacement_, *parameters_[parameter_indices].state...))(double)>,
              sizeof...(parameter_indices)>
       d_residual_T_d_ = {[&](double _t) {
-        return (*residual_T_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, _t,
-                              mesh_->shapeDisplacement(), temperature_, displacement_,
-                              *parameters_[parameter_indices].state...);
+        return (*residual_T_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, _t, shape_displacement_,
+                              temperature_, displacement_, *parameters_[parameter_indices].state...);
       }...};
 
-  std::array<std::function<decltype((*residual_u_)(DifferentiateWRT<1>{}, 0.0, mesh_->shapeDisplacement(), temperature_,
+  std::array<std::function<decltype((*residual_u_)(DifferentiateWRT<1>{}, 0.0, shape_displacement_, temperature_,
                                                    displacement_, *parameters_[parameter_indices].state...))(double)>,
              sizeof...(parameter_indices)>
       d_residual_u_d_ = {[&](double _t) {
-        return (*residual_u_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, _t,
-                              mesh_->shapeDisplacement(), temperature_, displacement_,
-                              *parameters_[parameter_indices].state...);
+        return (*residual_u_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, _t, shape_displacement_,
+                              temperature_, displacement_, *parameters_[parameter_indices].state...);
       }...};
 };
 

@@ -54,7 +54,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
       for_constexpr<sizeof...(InputSpaces)>([&](auto i) { mfem_spaces[i] = input_mfem_spaces[i]; });
     }
 
-    auto& shape_disp_space = mesh_->shapeDisplacement().space();
+    const auto& shape_disp_space = mesh_->shapeDisplacementSpace();
 
     objective_ =
         std::make_unique<ShapeAwareFunctional<ShapeDispSpace, double(InputSpaces...)>>(&shape_disp_space, mfem_spaces);
@@ -76,32 +76,31 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
   }
 
   /// @overload
-  virtual double evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields) const override
+  virtual double evaluate(double time, double dt, ConstFieldPtr shape_disp,
+                          const std::vector<ConstFieldPtr>& fields) const override
   {
     dt_ = dt;
-    return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time,
-                             &mesh_->shapeDisplacement(), fields);
+    return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time, shape_disp, fields);
   }
 
   /// @overload
-  virtual mfem::Vector gradient(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                int field_ordinal) const override
+  virtual mfem::Vector gradient(double time, double dt, ConstFieldPtr shape_disp,
+                                const std::vector<ConstFieldPtr>& fields, int field_ordinal) const override
   {
     dt_ = dt;
-    auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time,
-                                    &mesh_->shapeDisplacement(), fields);
-    auto g =
-        serac::get<DERIVATIVE>(grads[static_cast<size_t>(field_ordinal)](time, &mesh_->shapeDisplacement(), fields));
+    auto grads =
+        gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time, shape_disp, fields);
+    auto g = serac::get<DERIVATIVE>(grads[static_cast<size_t>(field_ordinal)](time, shape_disp, fields));
     return *assemble(g);
   }
 
   /// @overload
-  virtual mfem::Vector mesh_coordinate_gradient(double time, double dt,
+  virtual mfem::Vector mesh_coordinate_gradient(double time, double dt, ConstFieldPtr shape_disp,
                                                 const std::vector<ConstFieldPtr>& fields) const override
   {
     dt_ = dt;
-    auto g = serac::get<DERIVATIVE>(
-        (*objective_)(DifferentiateWRT<0>{}, time, mesh_->shapeDisplacement(), *fields[parameter_indices]...));
+    auto g =
+        serac::get<DERIVATIVE>((*objective_)(DifferentiateWRT<0>{}, time, *shape_disp, *fields[parameter_indices]...));
     return *assemble(g);
   }
 

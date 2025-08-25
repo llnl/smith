@@ -8,12 +8,12 @@
 #include <iostream>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/mesh_utils/mesh_utils_base.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
@@ -21,7 +21,6 @@
 #include "serac/numerics/functional/tests/check_gradient.hpp"
 
 using namespace serac;
-using namespace serac::profiling;
 
 double t = 0.0;
 

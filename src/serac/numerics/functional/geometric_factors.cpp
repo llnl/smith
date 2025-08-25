@@ -5,6 +5,10 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/numerics/functional/geometric_factors.hpp"
+
+#include <iostream>
+#include <vector>
+
 #include "serac/numerics/functional/finite_element.hpp"
 
 namespace serac {
@@ -67,10 +71,10 @@ void compute_geometric_factors(mfem::Vector& positions_q, mfem::Vector& jacobian
 
 GeometricFactors::GeometricFactors(const Domain& domain, int q, mfem::Geometry::Type geom)
 {
-  // const mfem::ParGridFunction* nodes = static_cast< const mfem::ParGridFunction * >(domain.mesh_.GetNodes());
-  //  mfem::ParFiniteElementSpace * pfes = nodes->ParFESpace();
-  const mfem::GridFunction* nodes = domain.mesh_.GetNodes();
-  const mfem::FiniteElementSpace* fes = nodes->FESpace();
+  const mfem::ParGridFunction* nodes = static_cast<const mfem::ParGridFunction*>(domain.mesh_.GetNodes());
+  mfem::ParFiniteElementSpace* fes = nodes->ParFESpace();
+  // const mfem::GridFunction* nodes = domain.mesh_.GetNodes();
+  // const mfem::FiniteElementSpace* fes = nodes->FESpace();
 
   const std::vector<int>& element_ids = domain.get_mfem_ids(geom);
 

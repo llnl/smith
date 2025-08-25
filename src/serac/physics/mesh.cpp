@@ -5,11 +5,16 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/physics/mesh.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
+
+#include <utility>
+
+#include <axom/fmt.hpp>
+#include <axom/slic.hpp>
+
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/numerics/functional/domain.hpp"
-#include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
 
 namespace serac {
 
@@ -46,33 +51,6 @@ void Mesh::createDomains()
   domains_.insert({entireBodyName(), serac::EntireDomain(*mfem_mesh_)});
   domains_.insert({entireBoundaryName(), serac::EntireBoundary(*mfem_mesh_)});
   domains_.insert({internalBoundaryName(), serac::InteriorFaces(*mfem_mesh_)});
-
-  int dim = mfem_mesh_->Dimension();
-
-  auto addPrefix = [](const std::string& prefix, const std::string& target) {
-    if (prefix.empty()) {
-      return target;
-    }
-    return prefix + "_" + target;
-  };
-
-  auto shape_disp_name = addPrefix(mesh_tag_, "shape_displacement");
-  if (dim == 2) {
-    shape_displacement_ =
-        std::shared_ptr<FiniteElementState>(&StateManager::shapeDisplacement(mesh_tag_), [](FiniteElementState*) {});
-  } else if (dim == 3) {
-    shape_displacement_ =
-        std::shared_ptr<FiniteElementState>(&StateManager::shapeDisplacement(mesh_tag_), [](FiniteElementState*) {});
-  }
-
-  auto shape_disp_dual_name = addPrefix(mesh_tag_, "shape_displacement_dual");
-  if (dim == 2) {
-    shape_displacement_dual_ =
-        std::make_shared<FiniteElementDual>(StateManager::newDual(H1<1, 2>{}, shape_disp_dual_name, mesh_tag_));
-  } else if (dim == 3) {
-    shape_displacement_dual_ =
-        std::make_shared<FiniteElementDual>(StateManager::newDual(H1<1, 3>{}, shape_disp_dual_name, mesh_tag_));
-  }
 }
 
 serac::Domain& Mesh::entireBody() const { return domain(entireBodyName()); }
@@ -124,12 +102,13 @@ serac::Domain& Mesh::addDomainOfBodyElements(const std::string& domain_name,
   return domain(domain_name);
 }
 
-serac::FiniteElementState& Mesh::shapeDisplacement() { return *shape_displacement_; }
+const mfem::ParFiniteElementSpace& Mesh::shapeDisplacementSpace()
+{
+  return serac::StateManager::shapeDisplacement(tag()).space();
+}
 
-const serac::FiniteElementState& Mesh::shapeDisplacement() const { return *shape_displacement_; }
+serac::FiniteElementState Mesh::newShapeDisplacement() { return StateManager::shapeDisplacement(tag()); }
 
-serac::FiniteElementDual& Mesh::shapeDisplacementDual() { return *shape_displacement_dual_; }
-
-const serac::FiniteElementDual& Mesh::shapeDisplacementDual() const { return *shape_displacement_dual_; }
+serac::FiniteElementDual Mesh::newShapeDisplacementDual() { return StateManager::shapeDisplacementDual(tag()); }
 
 }  // namespace serac

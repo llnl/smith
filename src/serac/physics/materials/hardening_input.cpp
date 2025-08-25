@@ -4,7 +4,10 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/materials/solid_material_input.hpp"
+#include <string>
+
+#include "serac/physics/materials/hardening_input.hpp"
+#include "serac/physics/materials/solid_material.hpp"
 
 namespace serac {
 

@@ -4,10 +4,19 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h>
+#include <functional>
+#include <iostream>
+#include <string>
+#include <vector>
+
+#include "gtest/gtest.h"
 
 #include "serac/numerics/functional/geometric_factors.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/infrastructure/logger.hpp"
+#include "serac/numerics/functional/domain.hpp"
+#include "serac/serac_config.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 
 using namespace serac;
 
@@ -30,11 +39,12 @@ mfem::Mesh import_mesh(std::string meshfile)
 
 TEST(geometric_factors, with_2D_domains)
 {
-  auto mesh = import_mesh("patch2D_tris_and_quads.mesh");
+  auto bmesh = import_mesh("patch2D_tris_and_quads.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   // `d` will consist of one tri and one quad
   Domain d = Domain::ofElements(
-      mesh, std::function([](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; }));
+      *mesh, std::function([](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; }));
 
   int q = 2;
 
@@ -59,12 +69,13 @@ TEST(geometric_factors, with_2D_domains)
 
 TEST(geometric_factors, with_3D_domains)
 {
-  auto mesh = import_mesh("patch3D_tets_and_hexes.mesh");
+  auto bmesh = import_mesh("patch3D_tets_and_hexes.mesh");
+  auto mesh = serac::mesh::refineAndDistribute(std::move(bmesh));
 
   // `d` will consist of 6 tets and 1 hex
-  Domain d = Domain::ofElements(mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
-                                  return average(vertices)[1] < 0.75;  // y coordinate of face center
-                                }));
+  Domain d = Domain::ofElements(*mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    return average(vertices)[1] < 0.75;  // y coordinate of face center
+  }));
 
   int q = 2;
 

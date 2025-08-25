@@ -5,7 +5,12 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 #pragma once
 
+#include <memory>
+#include <string>
+
+#include "mpi.h"
 #include "mfem.hpp"
+
 #include "serac/serac_config.hpp"
 #include "serac/numerics/solver_config.hpp"
 

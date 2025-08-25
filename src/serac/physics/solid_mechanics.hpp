@@ -12,6 +12,16 @@
 
 #pragma once
 
+#include <cstddef>
+#include <array>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
@@ -26,6 +36,21 @@
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/materials/solid_material.hpp"
+#include "serac/infrastructure/accelerator.hpp"
+#include "serac/infrastructure/profiling.hpp"
+#include "serac/numerics/equation_solver.hpp"
+#include "serac/numerics/functional/differentiate_wrt.hpp"
+#include "serac/numerics/functional/functional.hpp"
+#include "serac/numerics/functional/geometry.hpp"
+#include "serac/numerics/functional/quadrature_data.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/tuple.hpp"
+#include "serac/numerics/petsc_solvers.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
+#include "serac/physics/state/finite_element_vector.hpp"
 
 namespace serac {
 namespace solid_mechanics {
@@ -216,8 +241,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     dual_adjoints_.push_back(&reactions_adjoint_bcs_);
 
     // Create a pack of the primal field and parameter finite element spaces
-    mfem::ParFiniteElementSpace* test_space = &displacement_.space();
-    mfem::ParFiniteElementSpace* shape_space = &mesh_->shapeDisplacement().space();
+    const mfem::ParFiniteElementSpace* test_space = &displacement_.space();
+    const mfem::ParFiniteElementSpace* shape_space = &mesh_->shapeDisplacementSpace();
 
     std::array<const mfem::ParFiniteElementSpace*, NUM_STATE_VARS + sizeof...(parameter_space)> trial_spaces;
     trial_spaces[0] = &displacement_.space();
@@ -232,7 +257,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       tuple<parameter_space...> types{};
       for_constexpr<sizeof...(parameter_space)>([&](auto i) {
         parameters_.emplace_back(mfemParMesh(), get<i>(types), detail::addPrefix(name_, parameter_names[i]));
-
         trial_spaces[i + NUM_STATE_VARS] = &(parameters_[i].state->space());
       });
     }
@@ -261,7 +285,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     du_.SetSize(true_size);
     predicted_displacement_.SetSize(true_size);
 
-    mesh_->shapeDisplacement() = 0.0;
     initializeSolidMechanicsStates();
   }
 
@@ -298,6 +321,13 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     v_ = 0.0;
     du_ = 0.0;
     predicted_displacement_ = 0.0;
+  }
+
+  /// @overload
+  void resetStates(int cycle = 0, double time = 0.0) override
+  {
+    BasePhysics::initializeBasePhysicsStates(cycle, time);
+    initializeSolidMechanicsStates();
 
     if (checkpoint_to_disk_) {
       outputStateToDisk();
@@ -308,13 +338,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
         checkpoint_states_[state_name].push_back(state(state_name));
       }
     }
-  }
-
-  /// @overload
-  void resetStates(int cycle = 0, double time = 0.0) override
-  {
-    BasePhysics::initializeBasePhysicsStates(cycle, time);
-    initializeSolidMechanicsStates();
   }
 
   /**
@@ -1323,7 +1346,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
     auto drdshape_mat = assemble(drdshape);
 
-    drdshape_mat->MultTranspose(adjoint_displacement_, shapeDisplacementSensitivity());
+    drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_dual_);
 
     return shapeDisplacementSensitivity();
   }
@@ -1462,11 +1485,11 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// @brief Array functions computing the derivative of the residual with respect to each given parameter
   /// @note This is needed so the user can ask for a specific sensitivity at runtime as opposed to it being a
   /// template parameter.
-  std::array<std::function<decltype((*residual_)(DifferentiateWRT<1>{}, 0.0, mesh_->shapeDisplacement(), displacement_,
+  std::array<std::function<decltype((*residual_)(DifferentiateWRT<1>{}, 0.0, shape_displacement_, displacement_,
                                                  acceleration_, *parameters_[parameter_indices].state...))(double)>,
              sizeof...(parameter_indices)>
       d_residual_d_ = {[&](double _t) {
-        return (*residual_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, _t, mesh_->shapeDisplacement(),
+        return (*residual_)(DifferentiateWRT<NUM_STATE_VARS + 1 + parameter_indices>{}, _t, shape_displacement_,
                             displacement_, acceleration_, *parameters_[parameter_indices].state...);
       }...};
 
