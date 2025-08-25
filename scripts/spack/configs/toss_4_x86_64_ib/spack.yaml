@@ -281,9 +281,15 @@ spack:
       externals:
       - spec: py-sphinx@8.2.0
         prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.13.2
+    # Note: This is not using the python we build because petsc@3.21 needs xdrlib removed in python@3.13
+    # This should be removed when we upgrade petsc.
+    # python:
+    #   buildable: false
+    #   externals:
+    #   - spec: python@3.13.2
+    #     prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.13.2
     python:
       buildable: false
       externals:
-      - spec: python@3.13.2
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.13.2
-
+      - spec: python@3.9.12
+        prefix: /usr/tce/packages/python/python-3.9.12

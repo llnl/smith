@@ -60,19 +60,21 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     variant("profiling", default=False, 
             description="Build with hooks for Adiak/Caliper performance analysis")
 
-    variant("enzyme", default=True, description="Enable Enzyme Automatic Differentiation Framework") 
-    variant("petsc", default=True,
+    variant("enzyme", default=True, sticky=True,
+            description="Enable Enzyme Automatic Differentiation Framework")
+    variant("petsc", default=True, sticky=True,
             description="Enable PETSc support")
-    variant("slepc", default=True, description="Enable SLEPc integration") 
-    variant("sundials", default=True,
+    variant("slepc", default=True,  sticky=True,
+            description="Enable SLEPc integration")
+    variant("sundials", default=True, sticky=True,
             description="Build MFEM TPL with SUNDIALS nonlinear/ODE solver support")
-    variant("umpire",   default=True,
+    variant("umpire",   default=True, sticky=True,
             description="Build with portable memory access support")
-    variant("raja",     default=True,
+    variant("raja",     default=True, sticky=True,
             description="Build with portable kernel execution support")
-    variant("tribol", default=True,
+    variant("tribol", default=True, sticky=True,
             description="Build Tribol, an interface physics library")
-    variant("strumpack", default=True,
+    variant("strumpack", default=True, sticky=True,
             description="Build MFEM TPL with Strumpack, a direct linear solver library")
 
     # -----------------------------------------------------------------------
