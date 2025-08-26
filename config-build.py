@@ -28,10 +28,8 @@ _host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmak
                      "tioga"     : "tioga-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
                      "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake"}
 
-
 def get_machine_name():
     return socket.gethostname().rstrip('1234567890')
-
 
 def get_default_host_config():
     machine_name = get_machine_name()
@@ -80,12 +78,12 @@ def parse_arguments():
 
     parser.add_argument("-e",
                         "--eclipse",
-                        action="store_true",
+                        action='store_true',
                         help="create an eclipse project file.")
 
     parser.add_argument("-ecc",
                         "--exportcompilercommands",
-                        action="store_true",
+                        action='store_true',
                         help="generate a compilation database.  Can be used by the clang tools such as clang-modernize.  Will create a 'compile_commands.json' file in build directory.")
 
     parser.add_argument("-hc",
@@ -95,22 +93,17 @@ def parse_arguments():
                         help="select a specific host-config file to initalize CMake's cache")
 
     parser.add_argument("--print-default-host-config",
-                        action="store_true",
+                        action='store_true',
                         help="print the default host config for this system and exit")
 
     parser.add_argument("--print-machine-name",
-                        action="store_true",
+                        action='store_true',
                         help="print the machine name for this system and exit")
 
-    parser.add_argument("-n",
+    parser.add_argument("-n", 
                         "--ninja",
-                        action="store_true",
+                        action='store_true',
                         help="use ninja generator to build serac instead of make")
-
-    parser.add_argument("-f",
-                        "--force",
-                        action="store_true",
-                        help="if specified build/ install dir already exists, remove them automatically")
 
     args, unknown_args = parser.parse_known_args()
     if unknown_args:
@@ -149,9 +142,9 @@ def get_platform_info(hostconfigpath):
         
 
 #####################
-# Setup Build And Install Dir
+# Setup Build Dir
 #####################
-def setup_build_and_install_dir(args, platform_info, force):
+def setup_build_dir(args, platform_info):
     if args.buildpath != "":
         # use explicit build path
         buildpath = args.buildpath
@@ -159,6 +152,21 @@ def setup_build_and_install_dir(args, platform_info, force):
         # use platform info & build type
         buildpath = "-".join(["build", platform_info, args.buildtype.lower()])
 
+    buildpath = os.path.abspath(buildpath)
+
+    if os.path.exists(buildpath):
+        print("Build directory '%s' already exists.  Deleting..." % buildpath)
+        shutil.rmtree(buildpath)
+
+    print("Creating build directory '%s'..." % buildpath)
+    os.makedirs(buildpath)
+    return buildpath
+
+
+#####################
+# Setup Install Dir
+#####################
+def setup_install_dir(args, platform_info):
     # For install directory, we will clean up old ones, but we don't need to create it, cmake will do that.
     if args.installpath != "":
         installpath = os.path.abspath(args.installpath)
@@ -169,30 +177,20 @@ def setup_build_and_install_dir(args, platform_info, force):
         )
 
     installpath = os.path.abspath(installpath)
-    buildpath = os.path.abspath(buildpath)
 
-    if os.path.exists(buildpath) or os.path.exists(installpath):
-        if force:
-            print("Build and/ or install directory specified already exists. Clearing them...")
-            shutil.rmtree(buildpath)
-            shutil.rmtree(installpath)
-        else:
-            print(f"ERROR: Build and/ or install directory specified already exists. Remove them before proceeding or add '--force' to wipe them automatically.")
-            print(f"Build path:   {buildpath}")
-            print(f"Install path: {installpath}")
-            exit(1)
+    if os.path.exists(installpath):
+        print(
+            "Install directory '%s' already exists, deleting..." % installpath
+        )
+        shutil.rmtree(installpath)
 
-    print("Creating install directory '%s'..." % installpath)
+    print("Creating install path '%s'..." % installpath)
     os.makedirs(installpath)
-
-    print("Creating build directory '%s'..." % buildpath)
-    os.makedirs(buildpath)
-
-    return buildpath, installpath
+    return installpath
 
 
 ############################
-# Check if executable exists
+# Check if executable exists 
 ############################
 def executable_exists(path):
     if path == "cmake":
@@ -228,7 +226,7 @@ def create_cmake_command_line(args, unknown_args, buildpath, installpath, hostco
     # Add cache file option
     cmakeline += " -C %s" % hostconfigpath
 
-    # Add build type (opt or Release)
+    # Add build type (opt or debug)
     cmakeline += " -DCMAKE_BUILD_TYPE=" + args.buildtype
 
     # Set install dir
@@ -307,7 +305,8 @@ def main():
 
     basehostconfigpath = find_host_config(args, repodir)
     platform_info = get_platform_info(basehostconfigpath)
-    buildpath, installpath  = setup_build_and_install_dir(args, platform_info, args.force)
+    buildpath = setup_build_dir(args, platform_info)
+    installpath = setup_install_dir(args, platform_info)
 
     cmakeline = create_cmake_command_line(args, unknown_args, buildpath, installpath, basehostconfigpath)
     return run_cmake(buildpath, cmakeline)
