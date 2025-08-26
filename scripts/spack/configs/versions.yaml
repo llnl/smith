@@ -38,7 +38,7 @@ packages:
     - spec: "@6.7.0"
   tribol:
     require:
-    - spec: "@0.1.0.18"
+    - spec: "@0.1.0.19"
   umpire:
     require:
     - spec: "@2024.07.0"
