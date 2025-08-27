@@ -327,38 +327,38 @@ int main(int argc, char* argv[])
   mfem::Vector yf(dimy);
   yf = 0.0;
 
-  mfem::Vector q0(dimy); q0 = 0.0;
-  mfem::Vector qf(dimy); qf = 0.0;
-  [[maybe_unused]] mfem::HypreParMatrix * dQy;
-  int eval_err = 0;
-  problem.Q(x0, y0, q0, eval_err);
-  std::cout << "queried Q once\n";
-  //dQy = problem.DyQ(x0, y0);
-  problem.Q(xf, yf, qf, eval_err);
-  std::cout << "queried Q twice\n";
+  //mfem::Vector q0(dimy); q0 = 0.0;
+  //mfem::Vector qf(dimy); qf = 0.0;
+  //[[maybe_unused]] mfem::HypreParMatrix * dQy;
+  //int eval_err = 0;
   //problem.Q(x0, y0, q0, eval_err);
-  //std::cout << "queried Q thrice\n";
-  //dQy = problem.DyQ(x0, y0);
+  //std::cout << "queried Q once\n";
+  ////dQy = problem.DyQ(x0, y0);
   //problem.Q(xf, yf, qf, eval_err);
+  //std::cout << "queried Q twice\n";
+  ////problem.Q(x0, y0, q0, eval_err);
+  ////std::cout << "queried Q thrice\n";
+  ////dQy = problem.DyQ(x0, y0);
+  ////problem.Q(xf, yf, qf, eval_err);
   
-  //HomotopySolver solver(&problem);
+  HomotopySolver solver(&problem);
   //mfem::MINRESSolver linSolver(MPI_COMM_WORLD);
   //linSolver.SetPrintLevel(1);
   //linSolver.SetMaxIter(400);
   //linSolver.SetRelTol(1.e-10);
   //solver.SetLinearSolver(linSolver);
-  //solver.SetTol(nonlinear_absolute_tol);
-  //solver.SetMaxIter(nonlinear_max_iterations);
+  solver.SetTol(nonlinear_absolute_tol);
+  solver.SetMaxIter(nonlinear_max_iterations);
 
-  //solver.Mult(x0, y0, xf, yf);
-  //bool converged = solver.GetConverged();
-  //if (myid == 0) {
-  //  if (converged) {
-  //    std::cout << "converged!\n";
-  //  } else {
-  //    std::cout << "homotopy solver did not converge\n";
-  //  }
-  //}
+  solver.Mult(x0, y0, xf, yf);
+  bool converged = solver.GetConverged();
+  if (myid == 0) {
+    if (converged) {
+      std::cout << "converged!\n";
+    } else {
+      std::cout << "homotopy solver did not converge\n";
+    }
+  }
   //if (visualize)
   //{
   //   writer.write(1, 1.0, objective_states);
@@ -474,20 +474,16 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   qblock = 0.0;
 
   obj_states[DISP]->Set(1.0, yblock.GetBlock(0));
-  //auto const_all_states = serac::getConstFieldPointers(all_states);
-  //auto const_obj_states = serac::getConstFieldPointers(obj_states);
   serac::FiniteElementDual res_vector(all_states[DISP]->space(), "tempresidual");
   res_vector = residual->residual(time, dt, serac::getConstFieldPointers(all_states));
-  //res_vector = residual->residual(time, dt, const_all_states);
   qblock.GetBlock(0).Set(-1.0, res_vector);
 
   double * multipliers = new double[6];
-  double * send_multipliers = new double[static_cast<size_t>(dimc)];
   for (int i = 0; i < dimc; i++)
   {
-     send_multipliers[i] = yblock.GetBlock(1)(i);
+     multipliers[i] = yblock.GetBlock(1)(i);
   }
-  MPI_Allgather(send_multipliers, dimc, MPI_DOUBLE, multipliers, 6, MPI_DOUBLE, MPI_COMM_WORLD);
+  MPI_Bcast(multipliers, 6, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
   mfem::Vector gradc(dimu);
   gradc = 0.0;
@@ -499,42 +495,38 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
     gradc = 0.0;
     std::cout << "about to compute constraint gradient\n";
     mfem::Vector grad_temp = constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP);
-    //mfem::Vector grad_temp = constraints[i]->gradient(time, dt, const_obj_states, DISP);
-    //std::cout << "computed the gradient\n";
-    //gradc.Set(1.0, grad_temp);
-    ////gradc.Set(1.0, constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
-    //
-    //
-    //qblock.GetBlock(0).Add(multipliers[idx], gradc);
+    std::cout << "computed the gradient\n";
+    gradc.Set(1.0, grad_temp);
+    qblock.GetBlock(0).Add(multipliers[idx], gradc);
 
-    //double constraint_i = constraints[i]->evaluate(time, dt, serac::getConstFieldPointers(obj_states));
+    double constraint_i = constraints[i]->evaluate(time, dt, serac::getConstFieldPointers(obj_states));
 
 
-    //if (dimc > 0)
-    //{
-    //  qblock.GetBlock(1)(idx) = -1.0 * constraint_i;
-    //  std::cout << "c_" << i << " = " << constraint_i << std::endl;
-    //}
+    if (dimc > 0)
+    {
+      qblock.GetBlock(1)(idx) = -1.0 * constraint_i;
+      std::cout << "c_" << i << " = " << constraint_i << std::endl;
+    }
   }
 
   qeval.Set(1.0, qblock);
 
   Qeval_err = 0;
-  //int Qeval_err_loc = 0;
-  //for (int i = 0; i < qeval.Size(); i++) {
-  //  if (std::isnan(qeval(i))) {
-  //    Qeval_err_loc = 1;
-  //    break;
-  //  }
-  //}
-  //MPI_Allreduce(&Qeval_err_loc, &Qeval_err, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  //if (Qeval_err > 0)
-  //{
-  //  Qeval_err = 1;
-  //}
-  //if (Qeval_err > 0 && mfem::Mpi::WorldRank() == 0) {
-  //  std::cout << "at least one nan entry\n";
-  //}
+  int Qeval_err_loc = 0;
+  for (int i = 0; i < qeval.Size(); i++) {
+    if (std::isnan(qeval(i))) {
+      Qeval_err_loc = 1;
+      break;
+    }
+  }
+  MPI_Allreduce(&Qeval_err_loc, &Qeval_err, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  if (Qeval_err > 0)
+  {
+    Qeval_err = 1;
+  }
+  if (Qeval_err > 0 && mfem::Mpi::WorldRank() == 0) {
+    std::cout << "at least one nan entry\n";
+  }
   std::cout << "end Q, (rank " << mfem::Mpi::WorldRank() << ")\n";
 }
 
