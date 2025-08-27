@@ -141,6 +141,15 @@ void printv(const std::vector<StateBase>& v)
   std::cout << std::endl;
 }
 
+void DataStore::try_to_free(Int step)
+{
+  if (states_[step] && states_[step]->data_) {
+    if (usageCount_[step] == 0 && !active_[step] && states_[step]->data_.use_count() <= 1) {
+      states_[step]->primal() = nullptr;
+    }
+  }
+}
+
 void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector<StateBase>& upstreams)
 {
   Int step = newState->step();
@@ -203,7 +212,8 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
     gretl_assert(false);
   });
 
-  gretl_assert(check_validity());
+  bool isGood = check_validity();
+  gretl_assert(isGood);
 
   ++current_step_;
   gretl_assert(current_step_ == states_.size());
@@ -241,15 +251,6 @@ void DataStore::fetch_state_data(Int stepIndex)
     }
 
     gretl_assert(check_validity());
-  }
-}
-
-void DataStore::try_to_free(Int step)
-{
-  if (states_[step] && states_[step]->data_) {
-    if (usageCount_[step] == 0 && !active_[step] && states_[step]->data_.use_count() <= 1) {
-      states_[step]->primal() = nullptr;
-    }
   }
 }
 
@@ -310,7 +311,9 @@ bool DataStore::check_validity() const
     }
     if (usageCount_[i] == 0 && !active_[i] && states_[i]->primal()) {
       // print_graph();
-      if (states_[i]->data_.use_count() == 1) {
+      // if (states_[i]->data_.use_count() == 1) {
+      // if (states_[i]->data_.use_count() == 1) {
+      if (states_[i]->wild_count() == 0) {
         gretl::print("step", i, "has a no usage count, but is still allocated");
         valid = false;
         print_graph();

@@ -30,9 +30,28 @@ struct StateBase {
   /// @brief Construct state base from a date store and a type-erased values
   StateBase(DataStore* store, const std::shared_ptr<std::any>& val) : data_(std::make_shared<StateData>(store, val)) {}
 
+  /// @brief assignment operator
+  StateBase& operator=(const StateBase& oldState)
+  {
+    if (!data_) {
+      data_ = oldState.data_;
+      return *this;
+    }
+    auto* dataStore = &data_store();
+    Int s = step();
+    data_ = oldState.data_;
+    if (dataStore) {
+      dataStore->try_to_free(s);
+    }
+    return *this;
+  }
+
   /// @brief default virtual destructor
   virtual ~StateBase()
   {
+    if (!data_) {
+      return;
+    }
     auto* dataStore = &data_store();
     Int s = step();
     data_ = nullptr;
