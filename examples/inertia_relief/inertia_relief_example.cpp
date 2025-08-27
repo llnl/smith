@@ -137,6 +137,7 @@ class InertialReliefProblem : public GeneralNLMCProblem {
   HYPRE_BigInt* cOffsets;
   int dimu;
   int dimc;
+  int dimcglb;
   mfem::Array<int> y_partition;
   std::vector<serac::FieldPtr> obj_states;
   std::vector<serac::FieldPtr> all_states;
@@ -172,39 +173,39 @@ int main(int argc, char* argv[])
   bool visualize = false;
 
   // Solver options
-  [[maybe_unused]] double nonlinear_absolute_tol = 1e-6;
-  [[maybe_unused]] int nonlinear_max_iterations = 100;
-  
+  double nonlinear_absolute_tol = 1e-6;
+  int nonlinear_max_iterations = 100;
+
   // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
-  
+
   //// Handle command line arguments
-  //axom::CLI::App app{"Inertia relief example"};
+  // axom::CLI::App app{"Inertia relief example"};
   //// Mesh options
-  //app.add_option("--nx", nx, "Elements in x-direction")->check(axom::CLI::PositiveNumber);
-  //app.add_option("--ny", ny, "Elements in y-direction")->check(axom::CLI::PositiveNumber);
-  //app.add_option("--nz", nz, "Elements in z-direction")->check(axom::CLI::PositiveNumber);
-  //app.add_option("--Lx", xlength, "Domain extent in x-direction")->check(axom::CLI::PositiveNumber);
-  //app.add_option("--Ly", ylength, "Domain extent in y-direction")->check(axom::CLI::PositiveNumber);
-  //app.add_option("--Lz", zlength, "Domain extent in z-direction")->check(axom::CLI::PositiveNumber);
-  //app.add_option("--visualize", visualize,
-  //               "Visaulize solution of inertia relief problem, 0 for no visualization penalty or 1 for visualization")
-  //    ->expected(0, 1);
+  // app.add_option("--nx", nx, "Elements in x-direction")->check(axom::CLI::PositiveNumber);
+  // app.add_option("--ny", ny, "Elements in y-direction")->check(axom::CLI::PositiveNumber);
+  // app.add_option("--nz", nz, "Elements in z-direction")->check(axom::CLI::PositiveNumber);
+  // app.add_option("--Lx", xlength, "Domain extent in x-direction")->check(axom::CLI::PositiveNumber);
+  // app.add_option("--Ly", ylength, "Domain extent in y-direction")->check(axom::CLI::PositiveNumber);
+  // app.add_option("--Lz", zlength, "Domain extent in z-direction")->check(axom::CLI::PositiveNumber);
+  // app.add_option("--visualize", visualize,
+  //                "Visaulize solution of inertia relief problem, 0 for no visualization penalty or 1 for
+  //                visualization")
+  //     ->expected(0, 1);
   //// Solver options
-  //app.add_option("--nonlinear-solver-tolerance", nonlinear_absolute_tol,
-  //               "Nonlinear solver absolute tolerance")->check(axom::CLI::PositiveNumber);
-  //app.add_option("--nonlinear-solver-max-iterations", nonlinear_max_iterations,
-  //               "Nonlinear solver maximum iterations")->check(axom::CLI::PositiveNumber);
-  
+  // app.add_option("--nonlinear-solver-tolerance", nonlinear_absolute_tol,
+  //                "Nonlinear solver absolute tolerance")->check(axom::CLI::PositiveNumber);
+  // app.add_option("--nonlinear-solver-max-iterations", nonlinear_max_iterations,
+  //                "Nonlinear solver maximum iterations")->check(axom::CLI::PositiveNumber);
+
   int nprocs;
   int myid;
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-  //SLIC_ERROR_ROOT_IF(nprocs > 1, "serial example (for now)");
+  // SLIC_ERROR_ROOT_IF(nprocs > 1, "serial example (for now)");
 
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "solid_dynamics");
-
 
   std::shared_ptr<serac::Mesh> mesh;
   std::vector<serac::FiniteElementState> states;
@@ -308,8 +309,7 @@ int main(int argc, char* argv[])
   });
 
   auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "");
-  if (visualize)
-  {
+  if (visualize) {
     writer.write(0, 0.0, objective_states);
   }
   auto non_const_states = getFieldPointers(states, params);
@@ -327,26 +327,7 @@ int main(int argc, char* argv[])
   mfem::Vector yf(dimy);
   yf = 0.0;
 
-  //mfem::Vector q0(dimy); q0 = 0.0;
-  //mfem::Vector qf(dimy); qf = 0.0;
-  //[[maybe_unused]] mfem::HypreParMatrix * dQy;
-  //int eval_err = 0;
-  //problem.Q(x0, y0, q0, eval_err);
-  //std::cout << "queried Q once\n";
-  ////dQy = problem.DyQ(x0, y0);
-  //problem.Q(xf, yf, qf, eval_err);
-  //std::cout << "queried Q twice\n";
-  ////problem.Q(x0, y0, q0, eval_err);
-  ////std::cout << "queried Q thrice\n";
-  ////dQy = problem.DyQ(x0, y0);
-  ////problem.Q(xf, yf, qf, eval_err);
-  
   HomotopySolver solver(&problem);
-  //mfem::MINRESSolver linSolver(MPI_COMM_WORLD);
-  //linSolver.SetPrintLevel(1);
-  //linSolver.SetMaxIter(400);
-  //linSolver.SetRelTol(1.e-10);
-  //solver.SetLinearSolver(linSolver);
   solver.SetTol(nonlinear_absolute_tol);
   solver.SetMaxIter(nonlinear_max_iterations);
 
@@ -359,10 +340,9 @@ int main(int argc, char* argv[])
       std::cout << "homotopy solver did not converge\n";
     }
   }
-  //if (visualize)
-  //{
-  //   writer.write(1, 1.0, objective_states);
-  //}
+  if (visualize) {
+    writer.write(1, 1.0, objective_states);
+  }
 }
 
 InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementState*> obj_states_,
@@ -395,9 +375,6 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   }
 
   int myid = mfem::Mpi::WorldRank();
-  for (int i = 0; i < 2; i++) {
-    std::cout << "uOffsets_" << i << " = " << uOffsets[i] << " (rank " << myid << ")\n";
-  }
   if (myid == 0) {
     cOffsets[0] = 0;
   } else {
@@ -466,7 +443,6 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
 {
   MFEM_VERIFY(x.Size() == dimx && y.Size() == dimy && qeval.Size() == dimy,
               "InertialReliefProblem::Q -- Inconsistent dimensions");
-  std::cout << "in Q, (rank " << mfem::Mpi::WorldRank() << ")\n";
   qeval = 0.0;
   mfem::BlockVector yblock(y_partition);
   yblock.Set(1.0, y);
@@ -478,12 +454,11 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   res_vector = residual->residual(time, dt, serac::getConstFieldPointers(all_states));
   qblock.GetBlock(0).Set(-1.0, res_vector);
 
-  double * multipliers = new double[6];
-  for (int i = 0; i < dimc; i++)
-  {
-     multipliers[i] = yblock.GetBlock(1)(i);
+  double* multipliers = new double[constraints.size()];
+  for (int i = 0; i < dimc; i++) {
+    multipliers[i] = yblock.GetBlock(1)(i);
   }
-  MPI_Bcast(multipliers, 6, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Bcast(multipliers, constraints.size(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
   mfem::Vector gradc(dimu);
   gradc = 0.0;
@@ -493,19 +468,13 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
     const size_t i2 = static_cast<size_t>(idx);
     SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
     gradc = 0.0;
-    std::cout << "about to compute constraint gradient\n";
     mfem::Vector grad_temp = constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP);
-    std::cout << "computed the gradient\n";
     gradc.Set(1.0, grad_temp);
     qblock.GetBlock(0).Add(multipliers[idx], gradc);
 
     double constraint_i = constraints[i]->evaluate(time, dt, serac::getConstFieldPointers(obj_states));
-
-
-    if (dimc > 0)
-    {
+    if (dimc > 0) {
       qblock.GetBlock(1)(idx) = -1.0 * constraint_i;
-      std::cout << "c_" << i << " = " << constraint_i << std::endl;
     }
   }
 
@@ -520,14 +489,12 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
     }
   }
   MPI_Allreduce(&Qeval_err_loc, &Qeval_err, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  if (Qeval_err > 0)
-  {
+  if (Qeval_err > 0) {
     Qeval_err = 1;
   }
   if (Qeval_err > 0 && mfem::Mpi::WorldRank() == 0) {
     std::cout << "at least one nan entry\n";
   }
-  std::cout << "end Q, (rank " << mfem::Mpi::WorldRank() << ")\n";
 }
 
 mfem::HypreParMatrix* InertialReliefProblem::DxF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdx; }
@@ -538,9 +505,7 @@ mfem::HypreParMatrix* InertialReliefProblem::DxQ(const mfem::Vector& /*x*/, cons
 
 mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, const mfem::Vector& y)
 {
-  MFEM_VERIFY(y.Size() == dimy,
-              "InertialReliefProblem::DyQ -- Inconsistent dimensions");
-  std::cout << "in DyQ, (rank " << mfem::Mpi::WorldRank() << ")\n";
+  MFEM_VERIFY(y.Size() == dimy, "InertialReliefProblem::DyQ -- Inconsistent dimensions");
   // dQdy = [dr/du   dc/du^T]
   //        [dc/du   0  ]
   // note we are neglecting Hessian constraint terms
@@ -548,17 +513,13 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
   yblock.Set(1.0, y);
   mfem::BlockVector qblock(y_partition);
   qblock = 0.0;
-  std::cout << "settign obj_states[DISP]\n";
   obj_states[DISP]->Set(1.0, yblock.GetBlock(0));
-  std::cout << "set obj_states[DISP]\n";
   if (dQdy) {
     delete dQdy;
   }
   {
     mfem::HypreParMatrix* drdu = nullptr;
-    std::cout << "computing Jacobian\n";
     auto drdu_unique = residual->jacobian(time, dt, getConstFieldPointers(all_states), jacobian_weights);
-    std::cout << "computed Jacobian\n";
     MFEM_VERIFY(drdu_unique->Height() == dimu, "size error");
 
     drdu = drdu_unique.release();
@@ -569,33 +530,28 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
     int myid = mfem::Mpi::WorldRank();
     int dimuglb = drdu->GetGlobalNumCols();
     int nentries = dimuglb;
-    if (myid > 0)
-    {
-       nentries = 0;
+    if (myid > 0) {
+      nentries = 0;
     }
     dcdumat = new mfem::SparseMatrix(dimc, dimuglb, nentries);
 
     mfem::Array<int> cols;
     cols.SetSize(dimuglb);
-    for (int i = 0; i < dimuglb; i++)
-    {
-       cols[i] = i;
+    for (int i = 0; i < dimuglb; i++) {
+      cols[i] = i;
     }
-    for (size_t i = 0; i < constraints.size(); i++)
-    {
+    for (size_t i = 0; i < constraints.size(); i++) {
       const int idx = static_cast<int>(i);
       const size_t i2 = static_cast<size_t>(idx);
       SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
-       // gradient --> HypreParVec --> Global Vec --> passed to row on process 0
-       mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb, uOffsets);
-       gradVector.Set(1.0, constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
-       mfem::Vector globalGradVector(dimuglb);
-       globalGradVector = 0.0;
-       globalGradVector.Add(1.0, *gradVector.GlobalVector());
-       if (myid == 0)
-       {
-          dcdumat->SetRow(idx, cols, globalGradVector);
-       }
+      mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb, uOffsets);
+      gradVector.Set(1.0, constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
+      mfem::Vector globalGradVector(dimuglb);
+      globalGradVector = 0.0;
+      globalGradVector.Add(1.0, *gradVector.GlobalVector());
+      if (myid == 0) {
+        dcdumat->SetRow(idx, cols, globalGradVector);
+      }
     }
 
     dcdumat->Threshold(1.e-20);
@@ -612,13 +568,10 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
     BlockMat(1, 0) = dcdu;
     BlockMat(1, 1) = nullptr;
     dQdy = HypreParMatrixFromBlocks(BlockMat);
-    //delete drdu;
-    //delete dcduT;
-    //delete dcdu;
+    delete drdu;
+    delete dcduT;
+    delete dcdu;
   }
-  std::cout << "end DyQ, (rank " << mfem::Mpi::WorldRank() << ")\n";
-  dQdy->Print("dQdy");
-  std::cout << "Printed dQdy\n";
   return dQdy;
 }
 
