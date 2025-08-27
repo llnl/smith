@@ -10,7 +10,6 @@
 #include <iostream>
 #include <iomanip>
 
-
 namespace gretl {
 
 DataStore::DataStore(size_t maxStates) : checkpointManager_{.maxNumStates = maxStates, .cps{}} { current_step_ = 0; }
