@@ -506,7 +506,7 @@ class BasePhysics {
    *
    * @return The shape displacement sensitivity dual
    */
-  FiniteElementDual& shapeDisplacementSensitivity() const;
+  const FiniteElementDual& shapeDisplacementSensitivity() const;
 
   /**
    * @brief Create a paraview data collection for the physics package if requested
@@ -702,6 +702,16 @@ class BasePhysics {
    * @brief A optional view of the shape sensitivity in grid function form for paraview output
    */
   mutable std::unique_ptr<mfem::ParGridFunction> shape_sensitivity_grid_function_;
+
+  /**
+   * @brief The shape displacement field
+   */
+  serac::FiniteElementState shape_displacement_;
+
+  /**
+   * @brief The shape displacement field sensitivity
+   */
+  serac::FiniteElementDual shape_displacement_dual_;
 
   /**
    * @brief Boundary condition manager instance
