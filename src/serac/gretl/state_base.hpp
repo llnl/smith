@@ -30,6 +30,9 @@ struct StateBase {
   /// @brief Construct state base from a date store and a type-erased values
   StateBase(DataStore* store, const std::shared_ptr<std::any>& val) : data_(std::make_shared<StateData>(store, val)) {}
 
+  /// @brief copy operator
+  StateBase(const StateBase& oldState) { data_ = oldState.data_; }
+
   /// @brief assignment operator
   StateBase& operator=(const StateBase& oldState)
   {
