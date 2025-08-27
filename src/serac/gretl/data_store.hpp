@@ -67,7 +67,6 @@ class DataStore {
   {
     State<T, D> state(this, states_.size(), std::make_shared<std::any>(t), initial_zero_dual);
     add_state(std::make_unique<State<T, D>>(state), {});
-
     return state;
   }
 
@@ -135,6 +134,11 @@ class DataStore {
   {
     T* tptr = std::any_cast<T>(any_primal(step).get());
     if (stillConstructingGraph_) {
+      if (!tptr) {
+        gretl_assert(check_validity());
+        print_graph();
+        print("on reverse, at ", current_step_, "getting", step);
+      }
       gretl_assert_msg(tptr, "bad step " + std::to_string(step));
     } else {
       if (!tptr) {
@@ -155,11 +159,12 @@ class DataStore {
     T* tptr = std::any_cast<T>(any_primal(step).get());
     if (!tptr) {
       gretl_assert(!stillConstructingGraph_);
-      if (usageCount_[step] != 1) {
-        print("step", step);
-        print_graph();
-      }
-      gretl_assert(usageCount_[step] == 1);
+      // MRT, debug reverse pass here
+      // if (usageCount_[step] != 1) {
+      //   print("step", step);
+      //   print_graph();
+      // }
+      // gretl_assert(usageCount_[step] == 1);
       any_primal(step) = std::make_shared<std::any>(t);
       return;
     }
@@ -214,6 +219,11 @@ class DataStore {
   /// @brief Register the graph as being complete.  This is mostly for internal consistency checks.
   void finalize_graph() { stillConstructingGraph_ = false; }
 
+  /// @brief Attempt to free the primal value for this state.  This will happen so long as: 1.) the checkpointer doesn't
+  /// have is as an active state; 2.) no downstream state which is active according to checkpointer depends on it as an
+  /// upstream; and 3.) an external copy of this state is not being help for potential future use outside of the graph.
+  void try_to_free(Int step);
+
   std::vector<std::unique_ptr<StateBase>> states_;  ///< states for steps
   std::vector<std::unique_ptr<std::any>> duals_;    ///< duals for steps
   std::vector<UpstreamStates> upstreams_;           ///< upstreams dependencies for steps
@@ -222,6 +232,7 @@ class DataStore {
   std::vector<bool> active_;                        ///< active status for steps
   std::vector<Int> usageCount_;  ///< count how many times a step is used in some downstream still is the scope of the
                                  ///< checkpoint algorithm
+
   std::vector<Int>
       lastStepUsed_;  ///< for a given step, records the last known future-step where its used as an upstream
   std::vector<std::vector<Int>> passthroughs_;  ///< at a given step, the list of all the previous steps which are

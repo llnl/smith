@@ -28,25 +28,25 @@ struct State : public StateBase {
   using dual_type = D;  ///< dual_type
 
   /// @brief Set primal value of correct type
-  inline void set(const T& t) { dataStore_->set_primal(step_, t); }
+  inline void set(const T& t) { data_store().set_primal(step(), t); }
 
   /// @brief Get primal value of correct type
-  inline const T& get() const { return dataStore_->get_primal<T>(step_); }
+  inline const T& get() const { return data_store().template get_primal<T>(step()); }
 
   /// @brief Get dual value of correct type
-  inline const D& get_dual() const { return dataStore_->get_dual<D, T>(step_); }
+  inline const D& get_dual() const { return data_store().template get_dual<D, T>(step()); }
 
   /// @brief Set the std::functions which evaluates downstream primals given upstream primals
   void set_eval(const std::function<void(const UpstreamStates& upstreams, DownstreamState& downstream)>& e)
   {
-    dataStore_->evals_[step_] = e;
+    data_store().evals_[step()] = e;
   }
 
   /// @brief Set the std::functions which computes the action of the jacobian transpose on the downstream dual, and
   /// plus-equals into the upstream duals.
   void set_vjp(const std::function<void(UpstreamStates& upstreams, const DownstreamState& downstream)>& v)
   {
-    dataStore_->vjps_[step_] = v;
+    data_store().vjps_[step()] = v;
   }
 
   /// @brief Helper function to clone an existing state (keeping its type)
@@ -54,14 +54,14 @@ struct State : public StateBase {
   State<T, D> clone(const std::vector<StateBase>& upstreams) const
   {
     gretl_assert(!upstreams.empty());
-    auto primal_ptr = primal_.get();
+    auto primal_ptr = primal().get();
     gretl_assert(primal_ptr);
-    std::shared_ptr<std::any> newVal;
+    std::shared_ptr<std::any> new_val;
     if (primal_ptr) {
-      newVal = std::make_shared<std::any>(*std::any_cast<T>(primal_ptr));
+      new_val = std::make_shared<std::any>(*std::any_cast<T>(primal_ptr));
     }
-    State<T, D> state(dataStore_, dataStore_->states_.size(), newVal, initialize_zero_dual_);
-    dataStore_->add_state(std::make_unique<State<T, D>>(state), upstreams);
+    State<T, D> state(&data_store(), data_store().states_.size(), new_val, initialize_zero_dual_);
+    data_store().add_state(std::make_unique<State<T, D>>(state), upstreams);
     return state;
   }
 
@@ -87,10 +87,10 @@ struct State : public StateBase {
         const InitializeZeroDual<T, D>& initialize_zero_dual)
       : StateBase(store, val), initialize_zero_dual_(initialize_zero_dual)
   {
-    step_ = static_cast<Int>(step);
+    reset_step(static_cast<Int>(step));
   }
 
-  InitializeZeroDual<T, D> initialize_zero_dual_;  ///< std::function which initializes and zeros a dual value of type
+  InitializeZeroDual<T, D> initialize_zero_dual_;  ///< std::function which initializes and zeroes a dual value of type
                                                    ///< D, given a primal value of type T.
 };
 

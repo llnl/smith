@@ -174,6 +174,7 @@ void Mechanics::advanceTimestep([[maybe_unused]] double dt)
     std::tie(field_states_, time_) = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_,
                                                              time_, dt_to_take, static_cast<size_t>(cycle_));
   }
+
   ++cycle_;
   milestones_.push_back(make_milestone(field_states_).step());
 }

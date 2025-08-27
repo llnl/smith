@@ -86,7 +86,7 @@ inline FieldState diagInverse(const FieldState& x)
     FiniteElementState& X_ = *upstreams[0].get<FEFieldPtr>();
     int sz = X_.Size();
     for (int index = 0; index < sz; index++) {
-      X_dual[index] += -1 * Z_dual[index] / (std::pow(X_[index], 2));
+      X_dual[index] -= Z_dual[index] / (std::pow(X_[index], 2));
     }
   });
 

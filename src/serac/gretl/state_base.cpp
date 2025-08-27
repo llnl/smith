@@ -11,15 +11,15 @@ namespace gretl {
 
 void StateBase::evaluate_forward()
 {
-  DownstreamState ds(dataStore_, step_);
-  dataStore_->evals_[step_](dataStore_->upstreams_[step_], ds);
-  dataStore_->erase_step_state_data(step_);
+  DownstreamState ds(&data_store(), step());
+  data_store().evals_[step()](data_store().upstreams_[step()], ds);
+  data_store().erase_step_state_data(step());
 }
 
 void StateBase::evaluate_vjp()
 {
-  const DownstreamState ds(dataStore_, step_);
-  dataStore_->vjps_[step_](dataStore_->upstreams_[step_], ds);
+  const DownstreamState ds(&data_store(), step());
+  data_store().vjps_[step()](data_store().upstreams_[step()], ds);
 }
 
 }  // namespace gretl

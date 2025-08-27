@@ -120,8 +120,6 @@ struct MeshFixture : public testing::Test {
     const double density = 1.0;
     std::string physics_name = "solid";
 
-    bool use_explicit_dynamics = true;
-
     shape_disp = std::make_unique<serac::FieldState>(
         create_field_state(*checkpointer, VectorSpace{}, physics_name + "_shape_displacement", mesh->tag()));
     auto disp = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_displacement", mesh->tag());
@@ -139,7 +137,7 @@ struct MeshFixture : public testing::Test {
         physics_name, mesh, getStatePtrs(states), getStatePtrs(params));
 
     SolidMaterial mat;
-    mat.density0 = use_explicit_dynamics ? 0.0 : density;
+    mat.density0 = density;
     mat.K = 1.0;
     mat.G = 0.5;
 
