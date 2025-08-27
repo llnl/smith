@@ -500,42 +500,41 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
     std::cout << "about to compute constraint gradient\n";
     mfem::Vector grad_temp = constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP);
     //mfem::Vector grad_temp = constraints[i]->gradient(time, dt, const_obj_states, DISP);
-    std::cout << "computed the gradient\n";
-    gradc.Set(1.0, grad_temp);
-    //gradc.Set(1.0, constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
-    
-    
-    qblock.GetBlock(0).Add(multipliers[idx], gradc);
+    //std::cout << "computed the gradient\n";
+    //gradc.Set(1.0, grad_temp);
+    ////gradc.Set(1.0, constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
+    //
+    //
+    //qblock.GetBlock(0).Add(multipliers[idx], gradc);
 
-    double constraint_i = constraints[i]->evaluate(time, dt, serac::getConstFieldPointers(obj_states));
-    //double constraint_i = constraints[i]->evaluate(time, dt, const_obj_states);
+    //double constraint_i = constraints[i]->evaluate(time, dt, serac::getConstFieldPointers(obj_states));
 
 
-    if (dimc > 0)
-    {
-      qblock.GetBlock(1)(idx) = -1.0 * constraint_i;
-      std::cout << "c_" << i << " = " << constraint_i << std::endl;
-    }
+    //if (dimc > 0)
+    //{
+    //  qblock.GetBlock(1)(idx) = -1.0 * constraint_i;
+    //  std::cout << "c_" << i << " = " << constraint_i << std::endl;
+    //}
   }
 
   qeval.Set(1.0, qblock);
 
   Qeval_err = 0;
-  int Qeval_err_loc = 0;
-  for (int i = 0; i < qeval.Size(); i++) {
-    if (std::isnan(qeval(i))) {
-      Qeval_err_loc = 1;
-      break;
-    }
-  }
-  MPI_Allreduce(&Qeval_err_loc, &Qeval_err, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  if (Qeval_err > 0)
-  {
-    Qeval_err = 1;
-  }
-  if (Qeval_err > 0 && mfem::Mpi::WorldRank() == 0) {
-    std::cout << "at least one nan entry\n";
-  }
+  //int Qeval_err_loc = 0;
+  //for (int i = 0; i < qeval.Size(); i++) {
+  //  if (std::isnan(qeval(i))) {
+  //    Qeval_err_loc = 1;
+  //    break;
+  //  }
+  //}
+  //MPI_Allreduce(&Qeval_err_loc, &Qeval_err, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  //if (Qeval_err > 0)
+  //{
+  //  Qeval_err = 1;
+  //}
+  //if (Qeval_err > 0 && mfem::Mpi::WorldRank() == 0) {
+  //  std::cout << "at least one nan entry\n";
+  //}
   std::cout << "end Q, (rank " << mfem::Mpi::WorldRank() << ")\n";
 }
 
