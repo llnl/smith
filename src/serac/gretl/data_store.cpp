@@ -8,6 +8,8 @@
 #include "data_store.hpp"
 #include "state.hpp"
 #include <iostream>
+#include <iomanip>
+
 
 namespace gretl {
 
