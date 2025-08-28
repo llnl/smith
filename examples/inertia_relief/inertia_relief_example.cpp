@@ -69,7 +69,6 @@ struct LinearIsotropicWithFieldDensity {
   {
     return get<serac::VALUE>(density);
   }
-
   double K;  ///< bulk modulus
   double G;  ///< shear modulus
 };
@@ -485,7 +484,8 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   for (int i = 0; i < dimc; i++) {
     multipliers[i] = yblock.GetBlock(1)(i);
   }
-  MPI_Bcast(multipliers, constraints.size(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  const int nconstraints = static_cast<int>(constraints.size());
+  MPI_Bcast(multipliers, nconstraints, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
   mfem::Vector gradc(dimu);
   gradc = 0.0;
