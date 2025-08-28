@@ -44,7 +44,7 @@
 // SERAC_EDIT_START
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "serac/serac_config.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 // SERAC_EDIT_END
 
 

@@ -4,22 +4,32 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h>
-#include "serac/physics/solid_residual.hpp"
-#include "serac/physics/functional_objective.hpp"
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <vector>
 
+#include "gtest/gtest.h"
+#include "mpi.h"
+#include "mfem.hpp"
+
+#include "serac/physics/solid_weak_form.hpp"
+#include "serac/physics/functional_objective.hpp"
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/physics/state/state_manager.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/common.hpp"
-#include "mfem.hpp"
-#include "serac/physics/tests/physics_test_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"  // for H1
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/physics/field_types.hpp"
+#include "serac/physics/scalar_objective.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
-struct ConstrainedResidualFixture : public testing::Test {
+struct ConstrainedWeakFormFixture : public testing::Test {
   static constexpr int dim = 3;
   static constexpr int disp_order = 1;
 
@@ -27,33 +37,32 @@ struct ConstrainedResidualFixture : public testing::Test {
   using DensitySpace = serac::L2<disp_order - 1>;
   using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 
-  using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
+  using SolidWeakFormT = serac::SolidWeakForm<disp_order, dim, serac::Parameters<DensitySpace>>;
 
   enum FIELD
   {
-    DISP = SolidResidualT::DISPLACEMENT,
-    VELO = SolidResidualT::VELOCITY,
-    ACCEL = SolidResidualT::ACCELERATION,
-    DENSITY = SolidResidualT::NUM_STATES
+    DISP = SolidWeakFormT::DISPLACEMENT,
+    VELO = SolidWeakFormT::VELOCITY,
+    ACCEL = SolidWeakFormT::ACCELERATION,
+    DENSITY = SolidWeakFormT::NUM_STATES
   };
 
-  auto constructResidual(const std::string& physics_name)
+  auto constructWeakForm(const std::string& physics_name)
   {
-    auto solid_mechanics_residual =
-        std::make_shared<SolidResidualT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
+    auto solid_mechanics_weak_form =
+        std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
     // setup material model
     SolidMaterial mat;
     mat.K = 1.0;
     mat.G = 0.5;
-    solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
+    solid_mechanics_weak_form->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
 
     // apply some traction boundary conditions
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
-    solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
+    solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
 
-    // residual is abstract Residual class to ensure usage only through BasePhysics interface
-    return solid_mechanics_residual;
+    return solid_mechanics_weak_form;
   }
 
   auto constructConstraints()
@@ -73,7 +82,7 @@ struct ConstrainedResidualFixture : public testing::Test {
     mass_objective.addBodyIntegral(serac::DependsOn<1>{}, mesh->entireBodyName(),
                                    [](double /*time*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
 
-    double mass = mass_objective.evaluate(time, dt, objective_states);
+    double mass = mass_objective.evaluate(time, dt, shape_disp.get(), objective_states);
 
     serac::tensor<double, dim> initial_cg;
 
@@ -85,7 +94,7 @@ struct ConstrainedResidualFixture : public testing::Test {
               /*time*/,
               auto X, auto U,
               auto RHO) { return (get<serac::VALUE>(X)[i] + get<serac::VALUE>(U)[i]) * get<serac::VALUE>(RHO); });
-      initial_cg[i] = cg_objective->evaluate(time, dt, objective_states) / mass;
+      initial_cg[i] = cg_objective->evaluate(time, dt, shape_disp.get(), objective_states) / mass;
       constraint_evaluators.push_back(cg_objective);
     }
 
@@ -117,6 +126,7 @@ struct ConstrainedResidualFixture : public testing::Test {
     mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian3D(6, 4, 4, element_shape, xlength, ylength, zlength),
                                          "this_mesh_name", 0, 0);
 
+    shape_disp = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
     serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
     serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
     serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
@@ -126,7 +136,7 @@ struct ConstrainedResidualFixture : public testing::Test {
     params = {density};
 
     std::string physics_name = "solid";
-    residual = constructResidual(physics_name);
+    weak_form = constructWeakForm(physics_name);
 
     params[0] = 1.2;  // set density before computing mass properties
     constraints = constructConstraints();
@@ -138,32 +148,33 @@ struct ConstrainedResidualFixture : public testing::Test {
     });
   }
 
+  std::unique_ptr<serac::FiniteElementState> shape_disp;
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<serac::Residual> residual;
+  std::shared_ptr<serac::WeakForm> weak_form;
   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints;
 };
 
-TEST_F(ConstrainedResidualFixture, CanComputeResidualObjectivesAndTheirGradients)
+TEST_F(ConstrainedWeakFormFixture, CanComputeObjectivesAndTheirGradients)
 {
   double time = 0.0;
   double dt = 1.0;
   auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = residual->residual(time, dt, input_fields);
+  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto objective_states = {input_fields[DISP], input_fields[DENSITY]};
   for (const auto& c : constraints) {
-    ASSERT_NE(0.0, c->evaluate(time, dt, objective_states));
+    ASSERT_NE(0.0, c->evaluate(time, dt, shape_disp.get(), objective_states));
     for (size_t f_ordinal = 0; f_ordinal < objective_states.size(); ++f_ordinal) {
-      ASSERT_NE(0.0, c->gradient(time, dt, objective_states, int(f_ordinal)).Norml2());
+      ASSERT_NE(0.0, c->gradient(time, dt, shape_disp.get(), objective_states, int(f_ordinal)).Norml2());
     }
-    ASSERT_NE(0.0, c->mesh_coordinate_gradient(time, dt, objective_states).Norml2());
+    ASSERT_NE(0.0, c->mesh_coordinate_gradient(time, dt, shape_disp.get(), objective_states).Norml2());
   }
 }
 

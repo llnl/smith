@@ -4,9 +4,6 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/solid_mechanics.hpp"
-#include "serac/physics/solid_mechanics_contact.hpp"
-
 #include <algorithm>
 #include <fstream>
 #include <functional>
@@ -17,260 +14,88 @@
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "mfem.hpp"
 
-#include "serac/physics/materials/liquid_crystal_elastomer.hpp"
-
-#include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/mesh.hpp"
-#include "serac/physics/materials/solid_material.hpp"
-#include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-
-using namespace serac;
-
-enum class Prec
-{
-  JACOBI,
-  STRUMPACK,
-  CHOLESKI,
-  LU,
-  MULTIGRID,
-  PETSC_MULTIGRID,
-  NONE
-};
-
-enum class NonlinSolve
-{
-  NEWTON,
-  LINESEARCH,
-  CRITICALPOINT,
-  TRUSTREGION,
-  NONE
-};
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/materials/liquid_crystal_elastomer.hpp"
+#include "serac/physics/materials/solid_material.hpp"
+#include "serac/physics/mesh.hpp"
+#include "serac/physics/solid_mechanics_contact.hpp"
+#include "serac/physics/solid_mechanics.hpp"
+#include "serac/physics/state/state_manager.hpp"
+#include "serac/serac_config.hpp"
 
 enum class ProblemSize
 {
-  SMALL,
-  LARGE,
+  Small,
+  Large,
 };
 
-std::string mesh_path = ".";
-// string->value matching for optionally entering options as string in command line
-std::map<std::string, Prec> precMap = {
-    {"jacobi", Prec::JACOBI}, {"strumpack", Prec::STRUMPACK}, {"choleski", Prec::CHOLESKI},
-    {"lu", Prec::LU},         {"multigrid", Prec::MULTIGRID}, {"petsc_multigrid", Prec::PETSC_MULTIGRID},
-    {"none", Prec::NONE},
-};
-std::map<std::string, NonlinSolve> nonlinSolveMap = {
-    {"newton", NonlinSolve::NEWTON},
-    {"linesearch", NonlinSolve::LINESEARCH},
-    {"criticalpoint", NonlinSolve::CRITICALPOINT},
-    {"trustregion", NonlinSolve::TRUSTREGION},
-    {"none", NonlinSolve::NONE},
-};
+std::string problemSizeName(const ProblemSize& ps)
+{
+  switch (ps) {
+    case ProblemSize::Small:
+      return "Small";
+    case ProblemSize::Large:
+      return "Large";
+  }
+  // This cannot happen, but GCC doesn't know that
+  return "UNKNOWN";
+}
+
 std::map<std::string, ProblemSize> problemSizeMap = {
-    {"small", ProblemSize::SMALL},
-    {"large", ProblemSize::LARGE},
+    {"Small", ProblemSize::Small},
+    {"Large", ProblemSize::Large},
 };
 
-const std::string precToString(Prec prec)
+auto get_opts(serac::NonlinearSolver nonlinearSolver, serac::LinearSolver linearSolver,
+              serac::Preconditioner preconditioner, int max_iters, double abs_tol = 1e-9)
 {
-  for (const auto& p : precMap) {
-    if (p.second == prec) {
-      return p.first;
-    }
-  }
-  return "unknown";
-}
-
-const std::string nonlinSolveToString(NonlinSolve nonlinSolve)
-{
-  for (const auto& n : nonlinSolveMap) {
-    if (n.second == nonlinSolve) {
-      return n.first;
-    }
-  }
-  return "unknown";
-}
-
-auto get_opts(NonlinSolve nonlinSolve, Prec prec, int max_iters, double abs_tol = 1e-9)
-{
-  serac::NonlinearSolverOptions nonlinear_options{
-      .nonlin_solver = NonlinearSolver::TrustRegion,
-      //.nonlin_solver = NonlinearSolver::NewtonLineSearch, //LineSearch,
-      //.nonlin_solver = NonlinearSolver::PetscNewton,  //LineSearch,
-      //.nonlin_solver = NonlinearSolver::PetscNewtonCriticalPoint, // breaks for snap_cell
-      .relative_tol = abs_tol,
-      .absolute_tol = abs_tol,
-      .min_iterations = 1,
-      .max_iterations = 2000,
-      .max_line_search_iterations = 20,
-      .print_level = 1};
+  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = nonlinearSolver,
+                                                  .relative_tol = abs_tol,
+                                                  .absolute_tol = abs_tol,
+                                                  .min_iterations = 1,
+                                                  .max_iterations = 2000,
+                                                  .max_line_search_iterations = 20,
+                                                  .print_level = 1};
 
   // best for critical point newton: ls = PetscGMRES, petsc_preconditioner = PetscPCType::LU;
-  serac::LinearSolverOptions linear_options = {.linear_solver = LinearSolver::CG,
-                                               //.linear_solver  = LinearSolver::PetscGMRES,
-                                               //.linear_solver  = LinearSolver::PetscCG,
-                                               .preconditioner = Preconditioner::HypreJacobi,
-                                               //.preconditioner = Preconditioner::Petsc,
-                                               //.petsc_preconditioner = PetscPCType::JACOBI,
-                                               //.petsc_preconditioner = PetscPCType::JACOBI_ROWMAX,
-                                               //.petsc_preconditioner = PetscPCType::GAMG,
-                                               //.petsc_preconditioner = PetscPCType::HMG, // Zach's prefered
-                                               //.petsc_preconditioner = PetscPCType::LU,
-                                               //.petsc_preconditioner = PetscPCType::CHOLESKY,
+  serac::LinearSolverOptions linear_options = {.linear_solver = linearSolver,
+                                               .preconditioner = preconditioner,
                                                .relative_tol = 0.7 * abs_tol,
                                                .absolute_tol = 0.7 * abs_tol,
                                                .max_iterations = max_iters,
                                                .print_level = 1};
 
-  switch (nonlinSolve) {
-    case NonlinSolve::NEWTON: {
-      SLIC_INFO_ROOT("using newton solver");
+  SLIC_INFO_ROOT("================================================================================");
+  SLIC_INFO_ROOT(axom::fmt::format("Nonlinear Solver = {}", serac::nonlinearName(nonlinearSolver)));
+  SLIC_INFO_ROOT(axom::fmt::format("Linear Solver    = {}", serac::linearName(linearSolver)));
+  SLIC_INFO_ROOT(axom::fmt::format("Preconditioner   = {}", serac::preconditionerName(preconditioner)));
+  SLIC_INFO_ROOT("================================================================================");
+
+  switch (nonlinearSolver) {
+    case serac::NonlinearSolver::Newton: {
       nonlinear_options.min_iterations = 0;
       nonlinear_options.max_line_search_iterations = 0;
-      nonlinear_options.nonlin_solver = NonlinearSolver::Newton;
       break;
     }
-    case NonlinSolve::LINESEARCH: {
-      SLIC_INFO_ROOT("using newton linesearch solver");
+    case serac::NonlinearSolver::NewtonLineSearch: {
       nonlinear_options.min_iterations = 0;
-      nonlinear_options.nonlin_solver = NonlinearSolver::PetscNewtonBacktracking;
-      // nonlinear_options.nonlin_solver = NonlinearSolver::NewtonLineSearch;
       break;
     }
-    case NonlinSolve::CRITICALPOINT: {
-      SLIC_INFO_ROOT("using newton critical point solver");
+    case serac::NonlinearSolver::PetscNewtonCriticalPoint: {
       nonlinear_options.min_iterations = 0;
-      nonlinear_options.nonlin_solver = NonlinearSolver::PetscNewtonCriticalPoint;
       break;
     }
-    case NonlinSolve::TRUSTREGION: {
-      SLIC_INFO_ROOT("using trust region solver");
-      nonlinear_options.nonlin_solver = NonlinearSolver::TrustRegion;
+    default:
       break;
-    }
-    case NonlinSolve::NONE:
-    default: {
-      SLIC_ERROR_ROOT("invalid nonlinear solver specified");
-    }
-  }
-
-  switch (prec) {
-    case Prec::JACOBI: {
-      SLIC_INFO_ROOT("using jacobi");
-      linear_options.linear_solver = LinearSolver::CG;
-      linear_options.preconditioner = Preconditioner::HypreJacobi;
-      break;
-    }
-    case Prec::STRUMPACK: {
-      SLIC_INFO_ROOT("using strumpack");
-      linear_options.linear_solver = LinearSolver::Strumpack;
-      break;
-    }
-    case Prec::CHOLESKI: {
-      SLIC_INFO_ROOT("using choleski");
-      linear_options.linear_solver = LinearSolver::CG;
-      linear_options.preconditioner = Preconditioner::Petsc;
-      linear_options.petsc_preconditioner = PetscPCType::CHOLESKY;
-      break;
-    }
-    case Prec::LU: {
-      SLIC_INFO_ROOT("using lu");
-      linear_options.linear_solver = LinearSolver::GMRES;
-      linear_options.preconditioner = Preconditioner::Petsc;
-      linear_options.petsc_preconditioner = PetscPCType::LU;
-      break;
-    }
-    case Prec::MULTIGRID: {
-      SLIC_INFO_ROOT("using multigrid");
-      linear_options.linear_solver = LinearSolver::CG;
-      linear_options.preconditioner = Preconditioner::HypreAMG;
-      break;
-    }
-    case Prec::PETSC_MULTIGRID: {
-      SLIC_INFO_ROOT("using petsc multigrid");
-      linear_options.linear_solver = LinearSolver::CG;
-      linear_options.preconditioner = Preconditioner::Petsc;
-      linear_options.petsc_preconditioner = PetscPCType::HMG;
-      break;
-    }
-    case Prec::NONE:
-    default: {
-      SLIC_ERROR_ROOT("invalid preconditioner specified");
-    }
   }
 
   return std::make_pair(nonlinear_options, linear_options);
 }
 
-void functional_solid_test_euler(NonlinSolve nonlinSolve, Prec prec)
-{
-  // initialize serac
-  axom::sidre::DataStore datastore;
-  serac::StateManager::initialize(datastore, "eulerStore");
-
-  static constexpr int ORDER{1};
-  static constexpr int DIM{3};
-
-  int Nx = 4;
-  int Ny = 7;
-  int Nz = 10 * 5;
-
-  double Lx = 1.0;
-  double Ly = 1.2;
-  double Lz = 30.0;
-
-  double density = 1.0;
-  double E = 10.0;
-  double v = 0.33;
-  double bulkMod = E / (3. * (1. - 2. * v));
-  double shearMod = E / (2. * (1. + v));
-  double load = 0.002;  // 0.004
-
-  std::string meshTag = "mesh";
-  auto pmesh = std::make_shared<serac::Mesh>(
-      mfem::Mesh::MakeCartesian3D(Nx, Ny, Nz, mfem::Element::HEXAHEDRON, Lx, Ly, Lz), meshTag, 0, 0);
-
-  // solid mechanics
-  using seracSolidType = serac::SolidMechanics<ORDER, DIM, serac::Parameters<>>;
-
-  auto [nonlinear_options, linear_options] = get_opts(nonlinSolve, prec, 3 * Nx * Ny * Nz, 1e-9);
-
-  auto seracSolid = std::make_unique<seracSolidType>(nonlinear_options, linear_options,
-                                                     serac::solid_mechanics::default_quasistatic_options, "serac_solid",
-                                                     pmesh, std::vector<std::string>{});
-
-  serac::solid_mechanics::NeoHookean material{density, bulkMod, shearMod};
-  seracSolid->setMaterial(material, pmesh->entireBody());
-
-  std::string backSurfaceName = "back_surface";
-  std::string topSurfaceName = "top_surface";
-  pmesh->addDomainOfBoundaryElements(backSurfaceName, serac::by_attr<DIM>(3));  // 4,5 with traction makes a twist
-  pmesh->addDomainOfBoundaryElements(topSurfaceName, serac::by_attr<DIM>(6));
-
-  int num_time_steps = 2;
-  double total_time = 1.0;
-  double dt = total_time / num_time_steps;
-
-  seracSolid->setTraction([&](auto, auto n, auto t) { return -load * t * n; }, pmesh->domain(topSurfaceName));
-  seracSolid->setTraction([&](auto, auto n, auto) { return 1e-5 * n; }, pmesh->domain(backSurfaceName));
-
-  // displacement on bottom surface
-  std::string bottomSurfaceName = "bottom_surface";
-  pmesh->addDomainOfBoundaryElements(bottomSurfaceName, serac::by_attr<DIM>(1));
-  seracSolid->setFixedBCs(pmesh->domain(bottomSurfaceName));
-
-  seracSolid->completeSetup();
-
-  seracSolid->outputStateToDisk("paraview_euler");
-  for (int i = 0; i < num_time_steps; ++i) {
-    seracSolid->advanceTimestep(dt);
-    seracSolid->outputStateToDisk("paraview_euler");
-  }
-}
-
-void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, ProblemSize problemSize)
+void functional_solid_test_nonlinear_buckle(serac::NonlinearSolver nonlinearSolver, serac::LinearSolver linearSolver,
+                                            serac::Preconditioner preconditioner, ProblemSize problemSize)
 {
   // initialize serac
   axom::sidre::DataStore datastore;
@@ -281,13 +106,13 @@ void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, 
 
   int Nx, Ny, Nz;
   switch (problemSize) {
-    case ProblemSize::SMALL:
+    case ProblemSize::Small:
       Nx = 500;
       Ny = 6;
       Nz = 5;
       break;
     default:
-    case ProblemSize::LARGE:
+    case ProblemSize::Large:
       Nx = 1000;
       Ny = 60;
       Nz = 50;
@@ -315,7 +140,8 @@ void functional_solid_test_nonlinear_buckle(NonlinSolve nonlinSolve, Prec prec, 
   // solid mechanics
   using seracSolidType = serac::SolidMechanics<ORDER, DIM, serac::Parameters<>>;
 
-  auto [nonlinear_options, linear_options] = get_opts(nonlinSolve, prec, 3 * Nx * Ny * Nz, 1e-11);
+  auto [nonlinear_options, linear_options] =
+      get_opts(nonlinearSolver, linearSolver, preconditioner, 3 * Nx * Ny * Nz, 1e-11);
 
   auto seracSolid = std::make_unique<seracSolidType>(nonlinear_options, linear_options,
                                                      serac::solid_mechanics::default_quasistatic_options, "serac_solid",
@@ -344,16 +170,18 @@ int main(int argc, char* argv[])
 
   SERAC_MARK_FUNCTION;
 
-  NonlinSolve nonlinSolve = NonlinSolve::NONE;
-  Prec prec = Prec::NONE;
-  ProblemSize problemSize = ProblemSize::LARGE;
+  ProblemSize problemSize = ProblemSize::Small;
+  serac::NonlinearSolver nonlinearSolver = serac::NonlinearSolver::Newton;
+  serac::LinearSolver linearSolver = serac::LinearSolver::CG;
+  serac::Preconditioner preconditioner = serac::Preconditioner::HypreJacobi;
 
   axom::CLI::App app{"Solid Nonlinear Solve Benchmark"};
-  // app.add_option("-m,--mesh", mesh_path, "Path to mesh files")->check(axom::CLI::ExistingDirectory);
-  app.add_option("-n,--nonlinear-solver", nonlinSolve, "Nonlinear Solver")
-      ->transform(axom::CLI::CheckedTransformer(nonlinSolveMap, axom::CLI::ignore_case));
-  app.add_option("-p,--preconditioner", prec, "Preconditioner")
-      ->transform(axom::CLI::CheckedTransformer(precMap, axom::CLI::ignore_case));
+  auto* nonlinOpt = app.add_option("-n,--nonlinear-solver", nonlinearSolver, "Nonlinear Solver")
+                        ->transform(axom::CLI::CheckedTransformer(serac::nonlinearSolverMap, axom::CLI::ignore_case));
+  auto* linOpt = app.add_option("-l,--linear-solver", linearSolver, "Linear Solver")
+                     ->transform(axom::CLI::CheckedTransformer(serac::linearSolverMap, axom::CLI::ignore_case));
+  auto* precOpt = app.add_option("-p,--preconditioner", preconditioner, "Preconditioner")
+                      ->transform(axom::CLI::CheckedTransformer(serac::preconditionerMap, axom::CLI::ignore_case));
   app.add_option("-s,--problem-size", problemSize, "Problem Size")
       ->transform(axom::CLI::CheckedTransformer(problemSizeMap, axom::CLI::ignore_case));
 
@@ -373,32 +201,37 @@ int main(int argc, char* argv[])
   }
 
   SERAC_SET_METADATA("test", "solid_nonlinear_solve");
+  SERAC_SET_METADATA("Problem Size", problemSizeName(problemSize));
 
-  // If you do not specify preconditioner and nonlinear solver, run the following pre-selected options
-  if (nonlinSolve == NonlinSolve::NONE && prec == Prec::NONE) {
+  // If you do not specify solver options, run the following pre-selected options
+  if (nonlinOpt->count() == 0 && linOpt->count() == 0 && precOpt->count() == 0) {
     SERAC_MARK_BEGIN("Jacobi Preconditioner");
-    functional_solid_test_nonlinear_buckle(NonlinSolve::NEWTON, Prec::JACOBI, problemSize);
+    functional_solid_test_nonlinear_buckle(serac::NonlinearSolver::Newton, serac::LinearSolver::CG,
+                                           serac::Preconditioner::HypreJacobi, problemSize);
     SERAC_MARK_END("Jacobi Preconditioner");
 
     SERAC_MARK_BEGIN("Multigrid Preconditioner");
-    functional_solid_test_nonlinear_buckle(NonlinSolve::NEWTON, Prec::MULTIGRID, problemSize);
+    functional_solid_test_nonlinear_buckle(serac::NonlinearSolver::Newton, serac::LinearSolver::CG,
+                                           serac::Preconditioner::HypreAMG, problemSize);
     SERAC_MARK_END("Multigrid Preconditioner");
 
 #ifdef SERAC_USE_PETSC
     SERAC_MARK_BEGIN("Petsc Multigrid Preconditioner");
-    functional_solid_test_nonlinear_buckle(NonlinSolve::NEWTON, Prec::PETSC_MULTIGRID, problemSize);
+    // newton, cg, petsc, petsc-HMG
+    // NOTE: not supporting different petsc types atm, since petsc less prio
+    functional_solid_test_nonlinear_buckle(serac::NonlinearSolver::Newton, serac::LinearSolver::CG,
+                                           serac::Preconditioner::Petsc, problemSize);
     SERAC_MARK_END("Petsc Multigrid Preconditioner");
 #endif
   } else {
-    SERAC_SET_METADATA("nonlinear solver", nonlinSolveToString(nonlinSolve));
-    SERAC_SET_METADATA("preconditioner", precToString(prec));
+    SERAC_SET_METADATA("Nonlinear Solver", serac::nonlinearName(nonlinearSolver));
+    SERAC_SET_METADATA("Linear Solver", serac::linearName(linearSolver));
+    SERAC_SET_METADATA("Preconditioner", serac::preconditionerName(preconditioner));
 
     SERAC_MARK_BEGIN("Custom Preconditioner");
-    functional_solid_test_nonlinear_buckle(nonlinSolve, prec, problemSize);
+    functional_solid_test_nonlinear_buckle(nonlinearSolver, linearSolver, preconditioner, problemSize);
     SERAC_MARK_END("Custom Preconditioner");
   }
-
-  // functional_solid_test_euler();
 
   return 0;
 }

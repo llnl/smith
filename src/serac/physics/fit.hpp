@@ -8,10 +8,20 @@
 
 #include <fstream>
 #include <iostream>
+#include <array>
+#include <utility>
+
+#include "mpi.h"
+#include "mfem.hpp"
 
 #include "serac/numerics/functional/functional.hpp"
 #include "serac/numerics/functional/tensor.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
+#include "serac/numerics/functional/differentiate_wrt.hpp"
+#include "serac/numerics/functional/domain.hpp"
+#include "serac/numerics/functional/function_signature.hpp"
+#include "serac/numerics/functional/geometry.hpp"
+#include "serac/numerics/functional/tuple.hpp"
 
 namespace serac {
 

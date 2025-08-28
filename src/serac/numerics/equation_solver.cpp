@@ -6,15 +6,20 @@
 
 #include "serac/numerics/equation_solver.hpp"
 
+#include <cstdlib>
 #include <iomanip>
-#include <sstream>
-#include <ios>
 #include <iostream>
+#include <algorithm>
+#include <cmath>
+#include <exception>
+#include <limits>
+#include <string>
+#include <tuple>
 
-#include "serac/infrastructure/logger.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/numerics/trust_region_solver.hpp"
+#include "serac/infrastructure/logger.hpp"
 
 namespace serac {
 
@@ -730,9 +735,8 @@ class TrustRegion : public mfem::NewtonSolver {
 
       bool have_computed_Hvs = false;
 
-      bool happyAboutTrSize = false;
       int lineSearchIter = 0;
-      while (!happyAboutTrSize && lineSearchIter <= nonlinear_options.max_line_search_iterations) {
+      while (lineSearchIter <= nonlinear_options.max_line_search_iterations) {
         ++lineSearchIter;
 
         doglegStep(trResults.cauchy_point, trResults.z, tr_size, trResults.d);
@@ -787,7 +791,6 @@ class TrustRegion : public mfem::NewtonSolver {
           X = x_pred;
           r = r_pred;
           norm = normPred;
-          happyAboutTrSize = true;
           if (print_options.iterations) {
             printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
             trResults.cg_iterations_count =
@@ -839,7 +842,6 @@ class TrustRegion : public mfem::NewtonSolver {
           X = x_pred;
           r = r_pred;
           norm = normPred;
-          happyAboutTrSize = true;
           break;
         }
       }

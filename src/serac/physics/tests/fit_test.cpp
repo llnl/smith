@@ -5,18 +5,25 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/physics/fit.hpp"
-#include "serac/numerics/functional/functional.hpp"
 
-#include "serac/mesh_utils/mesh_utils.hpp"
+#include <memory>
+#include <string>
+
+#include "gtest/gtest.h"
+
+#include "serac/numerics/functional/functional.hpp"
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-
-#include <gtest/gtest.h>
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/common.hpp"
+#include "serac/physics/state/state_manager.hpp"
+#include "serac/serac_config.hpp"
 
 using namespace serac;
-using namespace serac::profiling;
 
 int nsamples = 1;  // because mfem doesn't take in unsigned int
 
