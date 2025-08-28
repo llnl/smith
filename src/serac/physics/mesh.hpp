@@ -89,6 +89,12 @@ class Mesh {
   /// @brief Returns domain boundary corresponding to the internal boundary elements
   serac::Domain& internalBoundary() const;
 
+  /// @brief Helper function used to check if a domain name already exists
+  void Mesh::errorIfDomainExists(const std::string &domain_name) const;
+
+  /// @brief Insert a domain onto mesh
+  void insertDomain(const std::string &domain_name, const Domain &domain);
+
   /// @brief Returns registered domain with specified name
   serac::Domain& domain(const std::string& domain_name) const;
 
