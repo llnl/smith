@@ -59,13 +59,13 @@ serac::Domain& Mesh::entireBoundary() const { return domain(entireBoundaryName()
 
 serac::Domain& Mesh::internalBoundary() const { return domain(internalBoundaryName()); }
 
-void Mesh::errorIfDomainExists(const std::string &domain_name) const
+void Mesh::errorIfDomainExists(const std::string& domain_name) const
 {
   SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
                 axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
 }
 
-void Mesh::insertDomain(const std::string &domain_name, const Domain &domain)
+void Mesh::insertDomain(const std::string& domain_name, const Domain& domain)
 {
   SLIC_ERROR_IF(&this->mfemParMesh() != &domain.mesh_, "A domain inserted onto a mesh must be defined on that mesh");
   errorIfDomainExists(domain_name);
