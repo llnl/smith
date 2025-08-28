@@ -133,7 +133,6 @@ We currently regularly test the following Spack configuration files:
 
 * Linux Ubuntu 22.04 (via Github Actions)
 * TOSS4 (On Ruby at LC)
-* BlueOS (On Lassen at LC)
 
 To install Serac on a new platform, it is a good idea to start with a known Spack environments file, or ``spack.yaml`` file,
 (located in the Serac repo at ``scripts/spack/configs/<platform>``). The ``spack.yaml`` file

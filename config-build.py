@@ -23,10 +23,8 @@ import socket
 _host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmake",
                      "rzwhippet" : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmake",
                      "rzvernal"  : "rzvernal-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
-                     "rzansel"   : "rzansel-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake",
                      "dane"      : "ruby-toss_4_x86_64_ib-clang@14.0.6.cmake", # TODO change host configs name to dane
-                     "tioga"     : "tioga-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
-                     "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake"}
+                     "tioga"     : "tioga-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake"}
 
 def get_machine_name():
     return socket.gethostname().rstrip('1234567890')

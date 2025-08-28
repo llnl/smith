@@ -11,7 +11,6 @@
 ## Test Invocations
 #
 # TOSS3: salloc -N2 ./ats.sh
-# BlueOS: lalloc 2 ./ats.sh
 # WSL: ./ats.sh
 
 # Variables used inside of the base test.ats and this script
@@ -25,7 +24,6 @@ Help()
     echo "Test Invocations"
     echo "=========================="
     echo "TOSS4: salloc -N2 ./ats.sh"
-    echo "BlueOS: lalloc 2 ./ats.sh"
     echo "WSL: ./ats.sh"
     echo "Options:"
     echo "  -b | --baseline   = copies generated baselines from a pre-existing serac run"

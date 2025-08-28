@@ -170,7 +170,7 @@ on LC, since the baseline benchmarks are generated on LC systems.
 
 It's possible to perform this comparison locally. Since baseline benchmarks are generated across different machines and
 compilers, a single build won't compare against all baselines. The benchmarks can be compared using ruby-gcc,
-ruby-clang, and lassen-clang builds.
+ruby-clang builds.
 
 1. Run benchmarks (see :ref:`Benchmarking Serac <benchmarking-label>` above)
 2. ``../scripts/llnl/compare_benchmarks.py --current-cali-dir /path/to/caliper/files``

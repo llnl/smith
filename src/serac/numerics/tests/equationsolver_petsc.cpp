@@ -128,8 +128,6 @@ TEST_P(EquationSolverSuite, All)
   }
 }
 
-// Note: HMG is excluded due to strange failures on Lassen
-// It is still tested elsewhere, e.g. tests/solid_shape
 #ifdef SERAC_USE_SUNDIALS
 INSTANTIATE_TEST_SUITE_P(
     AllEquationSolverTests, EquationSolverSuite,
@@ -143,7 +141,7 @@ INSTANTIATE_TEST_SUITE_P(
         testing::Values(PetscPCType::JACOBI, PetscPCType::JACOBI_L1, PetscPCType::JACOBI_ROWSUM,
                         PetscPCType::JACOBI_ROWMAX, PetscPCType::PBJACOBI, PetscPCType::BJACOBI, PetscPCType::LU,
                         PetscPCType::ILU, PetscPCType::CHOLESKY, PetscPCType::SVD, PetscPCType::ASM, PetscPCType::GASM,
-                        PetscPCType::GAMG)),  //, PetscPCType::HMG)),
+                        PetscPCType::GAMG, PetscPCType::HMG)),
     [](const testing::TestParamInfo<EquationSolverSuite::ParamType>& test_info) -> std::string {
       std::string name = axom::fmt::format("{}_{}_{}_{}", std::get<0>(test_info.param), std::get<1>(test_info.param),
                                            std::get<2>(test_info.param), std::get<3>(test_info.param));
@@ -160,7 +158,7 @@ INSTANTIATE_TEST_SUITE_P(
         testing::Values(PetscPCType::JACOBI, PetscPCType::JACOBI_L1, PetscPCType::JACOBI_ROWSUM,
                         PetscPCType::JACOBI_ROWMAX, PetscPCType::PBJACOBI, PetscPCType::BJACOBI, PetscPCType::LU,
                         PetscPCType::ILU, PetscPCType::CHOLESKY, PetscPCType::SVD, PetscPCType::ASM, PetscPCType::GASM,
-                        PetscPCType::GAMG)),  //, PetscPCType::HMG)));
+                        PetscPCType::GAMG, PetscPCType::HMG)),
     [](const testing::TestParamInfo<EquationSolverSuite::ParamType>& test_info) {
       std::string name = axom::fmt::format("{}_{}_{}_{}", std::get<0>(test_info.param), std::get<1>(test_info.param),
                                            std::get<2>(test_info.param), std::get<3>(test_info.param));

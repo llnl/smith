@@ -316,25 +316,6 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
                 )
             )
 
-        if spec.satisfies('target=ppc64le:'):
-            # Fix for working around CMake adding implicit link directories
-            # returned by the BlueOS compilers to link executables with
-            # non-system default stdlib
-            _roots = ["/usr/tce/packages/gcc/gcc-4.9.3",
-                      "/usr/tce/packages/gcc/gcc-4.9.3/gnu"]
-            _subdirs = ["lib64",
-                        "lib64/gcc/powerpc64le-unknown-linux-gnu/4.9.3"]
-            _existing_paths = []
-            for root in _roots:
-                for subdir in _subdirs:
-                    _curr_path = pjoin(root, subdir)
-                    if os.path.exists(_curr_path):
-                        _existing_paths.append(_curr_path)
-            if _existing_paths:
-                entries.append(cmake_cache_string(
-                    "BLT_CMAKE_IMPLICIT_LINK_DIRECTORIES_EXCLUDE",
-                    ";".join(_existing_paths)))
-
         return entries
 
 
@@ -343,8 +324,6 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
         entries = super(Tribol, self).initconfig_mpi_entries()
 
         entries.append(cmake_cache_option("ENABLE_MPI", True))
-        if spec["mpi"].name == "spectrum-mpi":
-            entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND", "mpibind"))
 
         # Replace /usr/bin/srun path with srun flux wrapper path on TOSS 4
         # TODO: Remove this logic by adding `using_flux` case in

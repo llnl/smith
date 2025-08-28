@@ -41,7 +41,7 @@ Requirements:
       >>> socket.gethostname().rstrip('1234567890')
       >>> exit()
 
-  Currently, there are configuration json files for TOSS4 and BlueOS which can be
+  Currently, there are configuration json files for TOSS4 which can be
   used as reference.
 
 #. **Build the code.**
@@ -50,9 +50,6 @@ Requirements:
 
 #. **Run integration tests.**
    Run the corresponding command for the system you are on::
-
-     # BlueOS
-     $ lalloc 2 ./ats.sh
      
      # TOSS4
      $ salloc -N2 ./ats.sh

@@ -542,8 +542,6 @@ def build_devtools(builds_dir, timestamp, short_path, report_to_stdout = False):
 
     if "toss_4" in sys_type:
         compiler_spec = "%gcc@10.3.1"
-    elif "blueos" in sys_type:
-        compiler_spec = "%gcc@8.3.1"
 
     print("[Building devtools using compiler spec: {0}]".format(compiler_spec))
 
