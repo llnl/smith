@@ -17,6 +17,8 @@
 
 #include "mfem.hpp"
 
+//#include "serac/physics/solid_weak_form.hpp"
+
 // ContinuationSolver headers
 #include "problems/Problems.hpp"
 #include "solvers/HomotopySolver.hpp"
@@ -24,13 +26,14 @@
 
 #include "axom/sidre.hpp"
 
-enum FIELD
-{
-  DISP,
-  VELO,
-  ACCEL,
-  DENSITY
-};
+
+//enum FIELD
+//{
+//  DISP = SolidWeakFormT::DISPLACEMENT,
+//  VELO = ,
+//  ACCEL,
+//  DENSITY
+//};
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 static constexpr int dim = 3;
@@ -42,7 +45,16 @@ using DensitySpace = serac::L2<disp_order - 1>;
 
 using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 
-using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
+using SolidWeakFormT = serac::SolidWeakForm<disp_order, dim, serac::Parameters<DensitySpace>>;
+
+//using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
+enum FIELD
+{
+  DISP = SolidWeakFormT::DISPLACEMENT,
+  VELO = SolidWeakFormT::VELOCITY,
+  ACCEL = SolidWeakFormT::ACCELERATION,
+  DENSITY = SolidWeakFormT::NUM_STATES
+};
 
 class ParaviewWriter {
  public:
@@ -141,15 +153,18 @@ class InertialReliefProblem : public GeneralNLMCProblem {
   mfem::Array<int> y_partition;
   std::vector<serac::FieldPtr> obj_states;
   std::vector<serac::FieldPtr> all_states;
-  std::shared_ptr<serac::Residual> residual;
+  std::shared_ptr<SolidWeakFormT> weak_form;
+  std::unique_ptr<serac::FiniteElementState> shape_disp;
+  std::shared_ptr<serac::Mesh> mesh;
   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints;
   double time = 0.0;
   double dt = 0.0;
   std::vector<double> jacobian_weights = {1.0, 0.0, 0.0, 0.0};
 
  public:
-  InertialReliefProblem(std::vector<serac::FieldPtr> obj_states_, std::vector<serac::FieldPtr> all_states_,
-                        std::shared_ptr<serac::Residual> residual_,
+  InertialReliefProblem(std::vector<serac::FieldPtr> obj_states_, std::vector<serac::FieldPtr> all_states_, 
+                        std::shared_ptr<serac::Mesh> mesh_,
+		        std::shared_ptr<SolidWeakFormT> weak_form_,
                         std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_);
   void F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int& Feval_err) const;
   void Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval, int& Qeval_err) const;
@@ -202,7 +217,6 @@ int main(int argc, char* argv[])
   int myid;
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-  // SLIC_ERROR_ROOT_IF(nprocs > 1, "serial example (for now)");
 
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "solid_dynamics");
@@ -210,7 +224,6 @@ int main(int argc, char* argv[])
   std::shared_ptr<serac::Mesh> mesh;
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
-  std::shared_ptr<serac::Residual> residual;
   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints;
 
   mesh = std::make_shared<serac::Mesh>(
@@ -220,6 +233,7 @@ int main(int argc, char* argv[])
   serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
   serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
   serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
+  std::unique_ptr<serac::FiniteElementState> shape_disp = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
 
   velo = 0.0;
   accel = 0.0;
@@ -230,31 +244,32 @@ int main(int argc, char* argv[])
   std::string physics_name = "solid";
 
   // construct residual
-  auto solid_mechanics_residual =
-      std::make_shared<SolidResidualT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
+  auto solid_mechanics_weak_form = std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
+  //auto solid_mechanics_residual =
+  //    std::make_shared<SolidResidualT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
 
   SolidMaterial mat;
   mat.K = 1.0;
   mat.G = 0.5;
-  solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
+  solid_mechanics_weak_form->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
 
   // apply some traction boundary conditions
   std::string surface_name = "side";
   mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
-  solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
+  solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
+  //solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
 
   serac::tensor<double, dim> constant_force{};
   for (int i = 0; i < dim; i++) {
     constant_force[i] = -1.e0;
   }
 
-  solid_mechanics_residual->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
+  solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
     return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
   });
-  residual = solid_mechanics_residual;
 
   // construct constraints
-  params[0] = 1.0;
+  params[0] = 1.2;
 
   using ObjectiveT =
       serac::FunctionalObjective<dim, serac::Parameters<VectorSpace, DensitySpace>>;  // functional objective on
@@ -271,7 +286,7 @@ int main(int argc, char* argv[])
 
   mass_objective.addBodyIntegral(serac::DependsOn<1>{}, mesh->entireBodyName(),
                                  [](double /*t*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
-  double mass = mass_objective.evaluate(time, dt, objective_states);
+  double mass = mass_objective.evaluate(time, dt, shape_disp.get(), objective_states);
 
   serac::tensor<double, dim> initial_cg;
 
@@ -283,7 +298,7 @@ int main(int argc, char* argv[])
                                       auto X, auto U, auto RHO) {
                                     return (get<serac::VALUE>(X)[i] + get<serac::VALUE>(U)[i]) * get<serac::VALUE>(RHO);
                                   });
-    initial_cg[i] = cg_objective->evaluate(time, dt, objective_states) / mass;
+    initial_cg[i] = cg_objective->evaluate(time, dt, shape_disp.get(), objective_states) / mass;
 
     constraints.push_back(cg_objective);
   }
@@ -313,8 +328,8 @@ int main(int argc, char* argv[])
     writer.write(0, 0.0, objective_states);
   }
   auto non_const_states = getFieldPointers(states, params);
-  InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]}, non_const_states,
-                                solid_mechanics_residual, constraints);
+  InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]}, non_const_states, mesh,
+                                solid_mechanics_weak_form, constraints);
   int dimx = problem.GetDimx();
   int dimy = problem.GetDimy();
 
@@ -346,8 +361,8 @@ int main(int argc, char* argv[])
 }
 
 InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementState*> obj_states_,
-                                             std::vector<serac::FiniteElementState*> all_states_,
-                                             std::shared_ptr<serac::Residual> residual_,
+                                             std::vector<serac::FiniteElementState*> all_states_,  std::shared_ptr<serac::Mesh> mesh_, 
+					     std::shared_ptr<SolidWeakFormT> weak_form_,
                                              std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_)
     : GeneralNLMCProblem(),
       dFdx(nullptr),
@@ -357,7 +372,11 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
       uOffsets(nullptr),
       cOffsets(nullptr)
 {
-  residual = residual_;
+  weak_form = weak_form_;
+  mesh = mesh_;
+  shape_disp = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
+  
+  
   constraints.resize(constraints_.size());
   std::copy(constraints_.begin(), constraints_.end(), constraints.begin());
 
@@ -451,8 +470,20 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
 
   obj_states[DISP]->Set(1.0, yblock.GetBlock(0));
   serac::FiniteElementDual res_vector(all_states[DISP]->space(), "tempresidual");
-  res_vector = residual->residual(time, dt, serac::getConstFieldPointers(all_states));
+  res_vector = weak_form->residual(time, dt, shape_disp.get(), serac::getConstFieldPointers(all_states));
   qblock.GetBlock(0).Set(-1.0, res_vector);
+  int err_res_vector = 0;
+    for (int j = 0; j < res_vector.Size(); j++)
+    {
+       if (std::isnan(res_vector(j))) {
+	       err_res_vector = 1;
+	       continue;
+       }
+    }
+    if (err_res_vector > 0)
+    {	       
+       std::cout << "nan res vector entry\n";
+    }
 
   double* multipliers = new double[constraints.size()];
   for (int i = 0; i < dimc; i++) {
@@ -468,11 +499,17 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
     const size_t i2 = static_cast<size_t>(idx);
     SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
     gradc = 0.0;
-    mfem::Vector grad_temp = constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP);
+    mfem::Vector grad_temp = constraints[i]->gradient(time, dt, shape_disp.get(), serac::getConstFieldPointers(obj_states), DISP);
+    for (int j = 0; j < grad_temp.Size(); j++)
+    {
+       if (std::isnan(grad_temp(j))) {
+	       std::cout << "nan constraint grad entry\n";
+       }
+    }
     gradc.Set(1.0, grad_temp);
     qblock.GetBlock(0).Add(multipliers[idx], gradc);
 
-    double constraint_i = constraints[i]->evaluate(time, dt, serac::getConstFieldPointers(obj_states));
+    double constraint_i = constraints[i]->evaluate(time, dt, shape_disp.get(), serac::getConstFieldPointers(obj_states));
     if (dimc > 0) {
       qblock.GetBlock(1)(idx) = -1.0 * constraint_i;
     }
@@ -519,7 +556,7 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
   }
   {
     mfem::HypreParMatrix* drdu = nullptr;
-    auto drdu_unique = residual->jacobian(time, dt, getConstFieldPointers(all_states), jacobian_weights);
+    auto drdu_unique = weak_form->jacobian(time, dt, shape_disp.get(), getConstFieldPointers(all_states), jacobian_weights);
     MFEM_VERIFY(drdu_unique->Height() == dimu, "size error");
 
     drdu = drdu_unique.release();
@@ -545,7 +582,7 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
       const size_t i2 = static_cast<size_t>(idx);
       SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
       mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb, uOffsets);
-      gradVector.Set(1.0, constraints[i]->gradient(time, dt, serac::getConstFieldPointers(obj_states), DISP));
+      gradVector.Set(1.0, constraints[i]->gradient(time, dt, shape_disp.get(), serac::getConstFieldPointers(obj_states), DISP));
       mfem::Vector globalGradVector(dimuglb);
       globalGradVector = 0.0;
       globalGradVector.Add(1.0, *gradVector.GlobalVector());
