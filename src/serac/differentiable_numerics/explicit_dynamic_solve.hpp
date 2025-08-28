@@ -39,7 +39,7 @@ inline FieldState computeLumpedMass(const WeakForm* mass_residual_eval, const Fi
         "diag_mass");  // create a pointer to a new FE space for our new values to live in
 
     auto m_diagonal = mass_residual_eval->residual(
-        0.0, 0.0, ShapeDisp.get(),
+        TimeInfo(0.0, 0.0), ShapeDisp.get(),
         getConstFieldPointers(Rho));  // diagonal of the diagonalized lumped mass matrix, in mfem vector format
     *Z = m_diagonal;
 
@@ -56,7 +56,7 @@ inline FieldState computeLumpedMass(const WeakForm* mass_residual_eval, const Fi
     FiniteElementState Z_dual_state(Z_dual->space(), Z_dual->name());
     Z_dual_state = *Z_dual;
 
-    mass_residual_eval->vjp(0.0, 0.0, ShapeDisp.get(), getConstFieldPointers(Rho), {},
+    mass_residual_eval->vjp(TimeInfo(0.0, 0.0), ShapeDisp.get(), getConstFieldPointers(Rho), {},
                             getConstFieldPointers(Z_dual_state), Shape_dual.get(), getFieldPointers(Rho_dual), {});
   });
 
@@ -98,7 +98,7 @@ inline FieldState diagInverse(const FieldState& x)
 /// highest time derivative term (e.g., acceleration for solid mechanics).
 inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_disp,
                                const std::vector<FieldState>& states, const std::vector<FieldState>& params,
-                               double time, double dt, size_t inertial_index)
+                               TimeInfo time_info, size_t inertial_index)
 {
   std::vector<gretl::StateBase> allStateBases;
   for (auto& s : states) allStateBases.push_back(s);
@@ -127,7 +127,7 @@ inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_d
     fields[inertial_index] = &zero_accel;
 
     // evaluate the residual with zero acceleration contribution
-    *R = residual_eval->residual(time, dt, inputs[num_fields].get<FEFieldPtr>().get(), fields);
+    *R = residual_eval->residual(time_info, inputs[num_fields].get<FEFieldPtr>().get(), fields);
 
     output.set<FEFieldPtr, FEDualPtr>(R);
   });
@@ -163,7 +163,7 @@ inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_d
     auto shape_disp_sensitivity_ptr = inputs[num_fields].get_dual<FEDualPtr, FEFieldPtr>();
 
     // set the dual fields for each input, using the call to residual that pulls the derivative
-    residual_eval->vjp(time, dt, shape_disp_ptr.get(), fields, {}, getConstFieldPointers(Z_dual_state),
+    residual_eval->vjp(time_info, shape_disp_ptr.get(), fields, {}, getConstFieldPointers(Z_dual_state),
                        shape_disp_sensitivity_ptr.get(), field_sensitivities, {});
   });
 

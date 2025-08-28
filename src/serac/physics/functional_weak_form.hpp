@@ -108,8 +108,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
     v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
-        [integrand](double t, auto X, auto V, auto... inputs) {
-          auto orig_tuple = integrand(t, X, inputs...);
+        [integrand](double time, auto X, auto V, auto... inputs) {
+          auto orig_tuple = integrand(time, X, inputs...);
           return serac::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
                  serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
         },
@@ -242,25 +242,27 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /// @overload
-  mfem::Vector residual(double time, double dt, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  mfem::Vector residual(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
                         [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {},
                         int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
-    dt_ = dt;
-    auto ret = (*weak_form_)(time, *shape_disp, *fields[input_indices]...);
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
+    auto ret = (*weak_form_)(time_info.time(), *shape_disp, *fields[input_indices]...);
     return ret;
   }
 
   /// @overload
   std::unique_ptr<mfem::HypreParMatrix> jacobian(
-      double time, double dt, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+      TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
       const std::vector<double>& jacobian_weights,
       [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}, int block_row = 0) const override
   {
     SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
 
-    dt_ = dt;
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
 
     std::unique_ptr<mfem::HypreParMatrix> J;
 
@@ -277,12 +279,12 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       }
     };
 
-    auto jacs =
-        jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time, shape_disp, fields);
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time_info.time(),
+                                  shape_disp, fields);
 
     for (size_t input_col = 0; input_col < jacobian_weights.size(); ++input_col) {
       if (jacobian_weights[input_col] != 0.0) {
-        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, shape_disp, fields));
+        auto K = serac::get<DERIVATIVE>(jacs[input_col](time_info.time(), shape_disp, fields));
         addToJ(jacobian_weights[input_col], assemble(K));
       }
     }
@@ -291,7 +293,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /// @overload
-  void jvp(double time, double dt, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  void jvp(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
            [[maybe_unused]] ConstFieldPtr v_shape_disp, const std::vector<ConstFieldPtr>& v_fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& v_quad_fields,
@@ -301,22 +303,24 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
                   "Invalid number of field sensitivities relative to the number of fields");
     SLIC_ERROR_IF(jvp_reactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
-    dt_ = dt;
-    auto jacs =
-        jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time, shape_disp, fields);
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
+
+    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time_info.time(),
+                                  shape_disp, fields);
 
     *jvp_reactions[0] = 0.0;
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (v_fields[input_col] != nullptr) {
-        auto K = serac::get<DERIVATIVE>(jacs[input_col](time, shape_disp, fields));
+        auto K = serac::get<DERIVATIVE>(jacs[input_col](time_info.time(), shape_disp, fields));
         K.AddMult(*v_fields[input_col], *jvp_reactions[0]);
       }
     }
   }
 
   /// @overload
-  void vjp(double time, double dt, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  void vjp(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
            const std::vector<ConstFieldPtr>& v_fields, DualFieldPtr vjp_shape_disp_sensitivity,
            const std::vector<DualFieldPtr>& vjp_sensitivities,
@@ -326,19 +330,20 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
                   "Invalid number of field sensitivities relative to the number of fields");
     SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
-    dt_ = dt;
-    auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time,
-                                           shape_disp, v_fields[0], fields);
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
+    auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{},
+                                           time_info.time(), shape_disp, v_fields[0], fields);
     {
-      auto shape_vjp = serac::get<DERIVATIVE>((*v_dot_weak_form_residual_)(DifferentiateWRT<0>{}, time, *shape_disp,
-                                                                           *v_fields[0], *fields[input_indices]...));
+      auto shape_vjp = serac::get<DERIVATIVE>((*v_dot_weak_form_residual_)(
+          DifferentiateWRT<0>{}, time_info.time(), *shape_disp, *v_fields[0], *fields[input_indices]...));
       auto shape_vjp_vector = assemble(shape_vjp);
       *vjp_shape_disp_sensitivity += *shape_vjp_vector;
     }
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-        auto vec_jac = serac::get<DERIVATIVE>(vecJacs[input_col](time, shape_disp, v_fields[0], fields));
+        auto vec_jac = serac::get<DERIVATIVE>(vecJacs[input_col](time_info.time(), shape_disp, v_fields[0], fields));
         auto vec_jac_mfem_vector = assemble(vec_jac);
         *vjp_sensitivities[input_col] += *vec_jac_mfem_vector;
       }
@@ -387,6 +392,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
   /// @brief timestep, this needs to be held here and modified for rate dependent applications
   mutable double dt_ = std::numeric_limits<double>::max();
+
+  /// @brief cycle or step or iteration.  This counter is useful for certain time integrators.
+  mutable size_t cycle_ = 0;
 
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;

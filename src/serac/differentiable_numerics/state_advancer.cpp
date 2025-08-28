@@ -30,6 +30,8 @@ std::tuple<std::vector<FieldState>, double> LumpedMassExplicitNewmark::advanceSt
     const FieldState& shape_disp, const std::vector<FieldState>& states, const std::vector<FieldState>& params,
     double time, double dt, [[maybe_unused]] size_t cycle) const
 {
+  TimeInfo time_info(time, dt, cycle);
+
   SERAC_MARK_FUNCTION;
   SLIC_ERROR_IF(states.size() != 3, "ExplicitNewmark is a 2nd order time integrator requiring 3 states.");
 
@@ -68,7 +70,7 @@ std::tuple<std::vector<FieldState>, double> LumpedMassExplicitNewmark::advanceSt
   //}
 
   // should return the evaluation of the residual for the current state variables
-  auto zero_mass_res = evalResidual(residual_eval.get(), shape_disp, state_pred, params, time + dt, dt, ACCEL);
+  auto zero_mass_res = evalResidual(residual_eval.get(), shape_disp, state_pred, params, time_info, ACCEL);
   // m_diag_inv*zero_mass_res; // calculate the acceleration
   // auto a_pred = componentWiseMult(*m_diag_inv, zero_mass_res, bc_manager.get());
   auto a_pred = componentWiseMult(diag_inv, zero_mass_res, bc_manager.get());

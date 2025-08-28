@@ -31,6 +31,8 @@
 auto element_shape = mfem::Element::QUADRILATERAL;
 
 struct WeakFormFixture : public testing::Test {
+  WeakFormFixture() : time_info(time, dt) {}
+
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
 
@@ -132,6 +134,7 @@ struct WeakFormFixture : public testing::Test {
 
   const double time = 0.0;
   const double dt = 1.0;
+  serac::TimeInfo time_info;
 
   std::string velo_name = "solid_velocity";
 
@@ -158,7 +161,7 @@ TEST_F(WeakFormFixture, VjpConsistency)
   auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
+  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {
@@ -179,10 +182,10 @@ TEST_F(WeakFormFixture, VjpConsistency)
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
     serac::FiniteElementDual& vjp = field_vjps_slow[i];
-    auto J = weak_form->jacobian(time, dt, shape_disp.get(), input_fields, jacobian_weights(i));
+    auto J = weak_form->jacobian(time_info, shape_disp.get(), input_fields, jacobian_weights(i));
     J->AddMultTranspose(v, vjp);
   }
-  weak_form->vjp(time, dt, shape_disp.get(), input_fields, {}, getConstFieldPointers(v), shape_disp_dual.get(),
+  weak_form->vjp(time_info, shape_disp.get(), input_fields, {}, getConstFieldPointers(v), shape_disp_dual.get(),
                  field_vjps, {});
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
@@ -197,7 +200,7 @@ TEST_F(WeakFormFixture, JvpConsistency)
   auto input_fields = getConstFieldPointers(states, params);
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
+  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobianWeights = [&](size_t i) {
@@ -224,9 +227,9 @@ TEST_F(WeakFormFixture, JvpConsistency)
   auto field_tangents = getConstFieldPointers(state_tangents, param_tangents);
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
-    auto J = weak_form->jacobian(time, dt, shape_disp.get(), input_fields, jacobianWeights(i));
+    auto J = weak_form->jacobian(time_info, shape_disp.get(), input_fields, jacobianWeights(i));
     J->Mult(*field_tangents[i], jvp_slow);
-    weak_form->jvp(time, dt, shape_disp.get(), input_fields, {}, nullptr, selectStates(i), {}, jvps);
+    weak_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr, selectStates(i), {}, jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 
@@ -237,11 +240,11 @@ TEST_F(WeakFormFixture, JvpConsistency)
     double velo_factor = 0.2;
     std::vector<double> jacobian_weights = {1.0, velo_factor, 0.0};
 
-    auto J = weak_form->jacobian(time, dt, shape_disp.get(), input_fields, jacobian_weights);
+    auto J = weak_form->jacobian(time_info, shape_disp.get(), input_fields, jacobian_weights);
     J->Mult(*field_tangents[DISP], jvp_slow);
 
     state_tangents[VELO] *= velo_factor;
-    weak_form->jvp(time, dt, shape_disp.get(), input_fields, {}, nullptr, field_tangents, {}, jvps);
+    weak_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr, field_tangents, {}, jvps);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 }
