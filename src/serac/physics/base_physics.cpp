@@ -446,10 +446,10 @@ BasePhysics::getAbsoluteChangeState(
   auto current_state  = this->getCheckpointedStates(cycle).at(state_name);
   auto previous_state = this->getCheckpointedStates(cycle - 1).at(state_name);
 
-  mfem::GridFunction diff(current_state.gridFunction());
-  diff -= previous_state.gridFunction();
+  auto diff(current_state);
+  diff.Add(-1.0, previous_state);
 
-  return diff.Norml2();
+  return norm(diff);
 
 }
 
@@ -462,7 +462,7 @@ BasePhysics::getRelativeChangeState(
   double norm_diff = this->getAbsoluteChangeState(cycle, state_name);
 
   auto current_state = this->getCheckpointedStates(cycle).at(state_name);
-  double norm_curr = current_state.gridFunction().Norml2();
+  double norm_curr = norm(current_state);
 
   return norm_diff / (norm_curr + 1.0e-12);  // Prevent division by zero.
 
