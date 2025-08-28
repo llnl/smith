@@ -18,14 +18,23 @@ spack:
 
 
   toolchains:
-    clang_gfortran:
+    clang_19:
     - spec: '%c=llvm'
       when: '%c'
     - spec: '%cxx=llvm'
       when: '%cxx'
     - spec: '%fortran=gcc'
       when: '%fortran'
-    - spec: '%mvapich2@2.3.7'
+    - spec: '%mvapich2@2.3.7.clang_19'
+      when: '%mpi'
+    gcc_13:
+    - spec: '%c=gcc'
+      when: '%c'
+    - spec: '%cxx=gcc'
+      when: '%cxx'
+    - spec: '%fortran=gcc'
+      when: '%fortran'
+    - spec: '%mvapich2@2.3.7.gcc_13'
       when: '%mpi'
 
 
@@ -54,12 +63,12 @@ spack:
             fortran: /usr/tce/packages/gcc/gcc-13.3.1/bin/gfortran
     llvm:
       externals:
-      - spec: llvm@19.1.7+clang~lld~lldb
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/llvm-19.1.7
+      - spec: llvm@19.1.3+clang~lld~lldb
+        prefix: /usr/tce/packages/clang/clang-19.1.3
         extra_attributes:
           compilers:
-            c: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/llvm-19.1.7/bin/clang
-            cxx: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/llvm-19.1.7/bin/clang++
+            c: /usr/tce/packages/clang/clang-19.1.3-magic/bin/clang
+            cxx: /usr/tce/packages/clang/clang-19.1.3-magic/bin/clang++
           flags:
             fflags: -fPIC
 
@@ -85,8 +94,10 @@ spack:
     mvapich2:
       buildable: false
       externals:
-      - spec: mvapich2@2.3.7~alloca~cuda~debug~hwloc_graphics~hwlocv2+regcache+wrapperrpath build_system=autotools ch3_rank_bits=32 fabrics=mrail file_systems=auto process_managers=slurm threads=multiple
-        prefix: /usr/tce/packages/mvapich2/mvapich2-2.3.7-gcc-13.3.1
+      - spec: mvapich2@2.3.7.clang_19~alloca~cuda~debug~hwloc_graphics~hwlocv2+regcache+wrapperrpath build_system=autotools ch3_rank_bits=32 fabrics=mrail file_systems=auto process_managers=slurm threads=multiple
+        prefix: /usr/tce/packages/mvapich2/mvapich2-2.3.7-clang-19.1.3-magic
+      - spec: mvapich2@2.3.7.gcc_13~alloca~cuda~debug~hwloc_graphics~hwlocv2+regcache+wrapperrpath build_system=autotools ch3_rank_bits=32 fabrics=mrail file_systems=auto process_managers=slurm threads=multiple
+        prefix: /usr/tce/packages/mvapich2/mvapich2-2.3.7-gcc-13.3.1-magic
 
     netlib-lapack:
       buildable: false
@@ -264,30 +275,29 @@ spack:
       - spec: cmake@3.23.1
         prefix: /usr/tce
     cppcheck:
-      version: [2.17.1]
+      version: [2.9]
       buildable: false
       externals:
-      - spec: cppcheck@2.17.1
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/cppcheck-2.17.1
+      - spec: cppcheck@2.9
+        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/cppcheck-2.9
     doxygen:
-      version: [1.13.2]
+      version: [1.9.8]
       buildable: false
       externals:
-      - spec: doxygen@1.13.2
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/doxygen-1.13.2
+      - spec: doxygen@1.9.8
+        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/doxygen-1.9.8
+    py-ats:
+      version: [7.0.105]
+      buildable: false
+      externals:
+      - spec: py-ats@7.0.105
+        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.11.7
     py-sphinx:
-      version: [8.2.0]
+      version: [7.2.6]
       buildable: false
       externals:
-      - spec: py-sphinx@8.2.0
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.13.2
-    # Note: This is not using the python we build because petsc@3.21 needs xdrlib removed in python@3.13
-    # This should be removed when we upgrade petsc.
-    # python:
-    #   buildable: false
-    #   externals:
-    #   - spec: python@3.13.2
-    #     prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.13.2
+      - spec: py-sphinx@7.2.6
+        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.11.7
     python:
       buildable: false
       externals:
