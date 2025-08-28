@@ -60,7 +60,6 @@ if [[ "$CHECK_TYPE" == "coverage" ]] ; then
     or_die make serac_coverage
     # Rename to file expected by codecov
     cp serac_coverage.info.cleaned lcov.info
-    or_die curl -s https://codecov.io/bash | bash /dev/stdin -X gcov
 fi
 
 if [[ "$CHECK_TYPE" == "docs" ]] ; then
