@@ -23,13 +23,18 @@ struct TimeInfo {
   {
   }
 
+  /// @brief accessor for time
   double time() const { return time_.first; }
+
+  /// @brief accessor for dt
   double dt() const { return dt_.first; }
+
+  /// @brief accessor for cycle
   size_t cycle() const { return cycle_; }
 
-  std::pair<double, double> time_;
-  std::pair<double, double> dt_;
-  size_t cycle_;
+  std::pair<double, double> time_;  ///< time and its dual
+  std::pair<double, double> dt_;    ///< timestep and its dual
+  size_t cycle_;                    ///< cycle, step, iteration count
 };
 
 /**
