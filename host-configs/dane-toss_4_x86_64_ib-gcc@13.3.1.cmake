@@ -117,7 +117,7 @@ set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.19-s27sxpcq3wpunhf3hat37pcgfaopsofg" CA
 # Devtools
 #------------------------------------------------------------------------------
 
-set(DEVTOOLS_ROOT "/usr/WS2/smithdev/devtools/toss_4_x86_64_ib/2024_05_30_15_02_20" CACHE PATH "")
+set(DEVTOOLS_ROOT "/usr/WS2/smithdev/devtools/toss_4_x86_64_ib/2024_05_30_15_02_20/._view/psk2dcrijss6s4i6qmxplzthrzm3y7nh" CACHE PATH "")
 
 set(CLANGFORMAT_EXECUTABLE "/usr/tce/packages/clang/clang-14.0.6/bin/clang-format" CACHE PATH "")
 
