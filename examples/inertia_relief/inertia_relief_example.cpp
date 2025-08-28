@@ -17,23 +17,12 @@
 
 #include "mfem.hpp"
 
-//#include "serac/physics/solid_weak_form.hpp"
-
 // ContinuationSolver headers
 #include "problems/Problems.hpp"
 #include "solvers/HomotopySolver.hpp"
 #include "utilities.hpp"
 
 #include "axom/sidre.hpp"
-
-
-//enum FIELD
-//{
-//  DISP = SolidWeakFormT::DISPLACEMENT,
-//  VELO = ,
-//  ACCEL,
-//  DENSITY
-//};
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 static constexpr int dim = 3;
@@ -43,7 +32,7 @@ using VectorSpace = serac::H1<disp_order, dim>;
 
 using DensitySpace = serac::L2<disp_order - 1>;
 
-struct MyLinearIsotropic {
+struct LinearIsotropicWithFieldDensity {
   using State = serac::Empty;  ///< this material has no internal variables
 
   /**
@@ -57,8 +46,8 @@ struct MyLinearIsotropic {
    * @param du_dX Displacement gradient with respect to the reference configuration
    * @return The stress
    */
-  template <typename T, int dim>
-  SERAC_HOST_DEVICE auto operator()(State& /* state */, const serac::tensor<T, dim, dim>& du_dX) const
+  template <typename T, int dim, typename Density>
+  SERAC_HOST_DEVICE auto operator()(State& /* state */, const serac::tensor<T, dim, dim>& du_dX, const Density&) const
   {
     auto I = serac::Identity<dim>();
     auto lambda = K - (2.0 / 3.0) * G;
@@ -72,18 +61,6 @@ struct MyLinearIsotropic {
     auto lambda = K - (2.0 / 3.0) * G;
     auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
     return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
-    //using std::log1p;
-    //constexpr auto I = Identity<dim>();
-    //auto lambda = K - (2.0 / 3.0) * G;
-    //auto B_minus_I = dot(du_dX, transpose(du_dX)) + transpose(du_dX) + du_dX;
-
-    //auto logJ = log1p(detApIm1(du_dX));
-    //// Kirchoff stress, in form that avoids cancellation error when F is near I
-    //auto TK = lambda * logJ * I + G * B_minus_I;
-
-    //// Pull back to Piola
-    //auto F = du_dX + I;
-    //return dot(TK, inv(transpose(F)));
   }
 
   /// @brief interpolates density field
@@ -93,17 +70,13 @@ struct MyLinearIsotropic {
     return get<serac::VALUE>(density);
   }
 
-  //double density;  ///< mass density
-  double K;        ///< bulk modulus
-  double G;        ///< shear modulus
+  double K;  ///< bulk modulus
+  double G;  ///< shear modulus
 };
 
-using SolidMaterial = MyLinearIsotropic;
-//using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
-
+using SolidMaterial = LinearIsotropicWithFieldDensity;
 using SolidWeakFormT = serac::SolidWeakForm<disp_order, dim, serac::Parameters<DensitySpace>>;
 
-//using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
 enum FIELD
 {
   DISP = SolidWeakFormT::DISPLACEMENT,
@@ -218,9 +191,8 @@ class InertialReliefProblem : public GeneralNLMCProblem {
   std::vector<double> jacobian_weights = {1.0, 0.0, 0.0, 0.0};
 
  public:
-  InertialReliefProblem(std::vector<serac::FieldPtr> obj_states_, std::vector<serac::FieldPtr> all_states_, 
-                        std::shared_ptr<serac::Mesh> mesh_,
-		        std::shared_ptr<SolidWeakFormT> weak_form_,
+  InertialReliefProblem(std::vector<serac::FieldPtr> obj_states_, std::vector<serac::FieldPtr> all_states_,
+                        std::shared_ptr<serac::Mesh> mesh_, std::shared_ptr<SolidWeakFormT> weak_form_,
                         std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_);
   void F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int& Feval_err) const;
   void Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval, int& Qeval_err) const;
@@ -250,25 +222,6 @@ int main(int argc, char* argv[])
   // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
 
-  //// Handle command line arguments
-  // axom::CLI::App app{"Inertia relief example"};
-  //// Mesh options
-  // app.add_option("--nx", nx, "Elements in x-direction")->check(axom::CLI::PositiveNumber);
-  // app.add_option("--ny", ny, "Elements in y-direction")->check(axom::CLI::PositiveNumber);
-  // app.add_option("--nz", nz, "Elements in z-direction")->check(axom::CLI::PositiveNumber);
-  // app.add_option("--Lx", xlength, "Domain extent in x-direction")->check(axom::CLI::PositiveNumber);
-  // app.add_option("--Ly", ylength, "Domain extent in y-direction")->check(axom::CLI::PositiveNumber);
-  // app.add_option("--Lz", zlength, "Domain extent in z-direction")->check(axom::CLI::PositiveNumber);
-  // app.add_option("--visualize", visualize,
-  //                "Visaulize solution of inertia relief problem, 0 for no visualization penalty or 1 for
-  //                visualization")
-  //     ->expected(0, 1);
-  //// Solver options
-  // app.add_option("--nonlinear-solver-tolerance", nonlinear_absolute_tol,
-  //                "Nonlinear solver absolute tolerance")->check(axom::CLI::PositiveNumber);
-  // app.add_option("--nonlinear-solver-max-iterations", nonlinear_max_iterations,
-  //                "Nonlinear solver maximum iterations")->check(axom::CLI::PositiveNumber);
-
   int nprocs;
   int myid;
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
@@ -289,7 +242,8 @@ int main(int argc, char* argv[])
   serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
   serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
   serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
-  std::unique_ptr<serac::FiniteElementState> shape_disp = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
+  std::unique_ptr<serac::FiniteElementState> shape_disp =
+      std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
 
   velo = 0.0;
   accel = 0.0;
@@ -300,7 +254,8 @@ int main(int argc, char* argv[])
   std::string physics_name = "solid";
 
   // construct residual
-  auto solid_mechanics_weak_form = std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
+  auto solid_mechanics_weak_form =
+      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
 
   SolidMaterial mat;
   mat.K = 1.0;
@@ -414,8 +369,9 @@ int main(int argc, char* argv[])
 }
 
 InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementState*> obj_states_,
-                                             std::vector<serac::FiniteElementState*> all_states_,  std::shared_ptr<serac::Mesh> mesh_, 
-					     std::shared_ptr<SolidWeakFormT> weak_form_,
+                                             std::vector<serac::FiniteElementState*> all_states_,
+                                             std::shared_ptr<serac::Mesh> mesh_,
+                                             std::shared_ptr<SolidWeakFormT> weak_form_,
                                              std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_)
     : GeneralNLMCProblem(),
       dFdx(nullptr),
@@ -428,8 +384,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   weak_form = weak_form_;
   mesh = mesh_;
   shape_disp = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
-  
-  
+
   constraints.resize(constraints_.size());
   std::copy(constraints_.begin(), constraints_.end(), constraints.begin());
 
@@ -525,18 +480,6 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   serac::FiniteElementDual res_vector(all_states[DISP]->space(), "tempresidual");
   res_vector = weak_form->residual(time, dt, shape_disp.get(), serac::getConstFieldPointers(all_states));
   qblock.GetBlock(0).Set(-1.0, res_vector);
-  int err_res_vector = 0;
-    for (int j = 0; j < res_vector.Size(); j++)
-    {
-       if (std::isnan(res_vector(j))) {
-	       err_res_vector = 1;
-	       continue;
-       }
-    }
-    if (err_res_vector > 0)
-    {	       
-       std::cout << "nan res vector entry\n";
-    }
 
   double* multipliers = new double[constraints.size()];
   for (int i = 0; i < dimc; i++) {
@@ -552,17 +495,13 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
     const size_t i2 = static_cast<size_t>(idx);
     SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
     gradc = 0.0;
-    mfem::Vector grad_temp = constraints[i]->gradient(time, dt, shape_disp.get(), serac::getConstFieldPointers(obj_states), DISP);
-    for (int j = 0; j < grad_temp.Size(); j++)
-    {
-       if (std::isnan(grad_temp(j))) {
-	       std::cout << "nan constraint grad entry\n";
-       }
-    }
+    mfem::Vector grad_temp =
+        constraints[i]->gradient(time, dt, shape_disp.get(), serac::getConstFieldPointers(obj_states), DISP);
     gradc.Set(1.0, grad_temp);
     qblock.GetBlock(0).Add(multipliers[idx], gradc);
 
-    double constraint_i = constraints[i]->evaluate(time, dt, shape_disp.get(), serac::getConstFieldPointers(obj_states));
+    double constraint_i =
+        constraints[i]->evaluate(time, dt, shape_disp.get(), serac::getConstFieldPointers(obj_states));
     if (dimc > 0) {
       qblock.GetBlock(1)(idx) = -1.0 * constraint_i;
     }
@@ -609,7 +548,8 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
   }
   {
     mfem::HypreParMatrix* drdu = nullptr;
-    auto drdu_unique = weak_form->jacobian(time, dt, shape_disp.get(), getConstFieldPointers(all_states), jacobian_weights);
+    auto drdu_unique =
+        weak_form->jacobian(time, dt, shape_disp.get(), getConstFieldPointers(all_states), jacobian_weights);
     MFEM_VERIFY(drdu_unique->Height() == dimu, "size error");
 
     drdu = drdu_unique.release();
@@ -635,7 +575,8 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
       const size_t i2 = static_cast<size_t>(idx);
       SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
       mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb, uOffsets);
-      gradVector.Set(1.0, constraints[i]->gradient(time, dt, shape_disp.get(), serac::getConstFieldPointers(obj_states), DISP));
+      gradVector.Set(
+          1.0, constraints[i]->gradient(time, dt, shape_disp.get(), serac::getConstFieldPointers(obj_states), DISP));
       mfem::Vector globalGradVector(dimuglb);
       globalGradVector = 0.0;
       globalGradVector.Add(1.0, *gradVector.GlobalVector());
