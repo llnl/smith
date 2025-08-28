@@ -92,10 +92,7 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : 
     exit(1);
   }
 
-  auto [_, rank] = getMPIInfo();
-  if (rank == 0) {
-    printRunInfo();
-  }
+  printRunInfo();
 
   // Start the profiler (no-op if not enabled)
   profiling::initialize(comm_);
