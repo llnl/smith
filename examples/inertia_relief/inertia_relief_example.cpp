@@ -43,7 +43,63 @@ using VectorSpace = serac::H1<disp_order, dim>;
 
 using DensitySpace = serac::L2<disp_order - 1>;
 
-using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
+struct MyLinearIsotropic {
+  using State = serac::Empty;  ///< this material has no internal variables
+
+  /**
+   * @brief stress calculation for a linear isotropic material model
+   *
+   * When applied to 2D displacement gradients, the stress is computed in plane strain,
+   * returning only the in-plane components.
+   *
+   * @tparam T Number-like type for the displacement gradient components
+   * @tparam dim Dimensionality of space
+   * @param du_dX Displacement gradient with respect to the reference configuration
+   * @return The stress
+   */
+  template <typename T, int dim>
+  SERAC_HOST_DEVICE auto operator()(State& /* state */, const serac::tensor<T, dim, dim>& du_dX) const
+  {
+    auto I = serac::Identity<dim>();
+    auto lambda = K - (2.0 / 3.0) * G;
+    auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
+    return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
+  }
+  template <typename T, int dim, typename Density>
+  SERAC_HOST_DEVICE auto pkStress(State& /* state */, const serac::tensor<T, dim, dim>& du_dX, const Density&) const
+  {
+    auto I = serac::Identity<dim>();
+    auto lambda = K - (2.0 / 3.0) * G;
+    auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
+    return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
+    //using std::log1p;
+    //constexpr auto I = Identity<dim>();
+    //auto lambda = K - (2.0 / 3.0) * G;
+    //auto B_minus_I = dot(du_dX, transpose(du_dX)) + transpose(du_dX) + du_dX;
+
+    //auto logJ = log1p(detApIm1(du_dX));
+    //// Kirchoff stress, in form that avoids cancellation error when F is near I
+    //auto TK = lambda * logJ * I + G * B_minus_I;
+
+    //// Pull back to Piola
+    //auto F = du_dX + I;
+    //return dot(TK, inv(transpose(F)));
+  }
+
+  /// @brief interpolates density field
+  template <typename Density>
+  SERAC_HOST_DEVICE auto density(const Density& density) const
+  {
+    return get<serac::VALUE>(density);
+  }
+
+  //double density;  ///< mass density
+  double K;        ///< bulk modulus
+  double G;        ///< shear modulus
+};
+
+using SolidMaterial = MyLinearIsotropic;
+//using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 
 using SolidWeakFormT = serac::SolidWeakForm<disp_order, dim, serac::Parameters<DensitySpace>>;
 
@@ -245,8 +301,6 @@ int main(int argc, char* argv[])
 
   // construct residual
   auto solid_mechanics_weak_form = std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
-  //auto solid_mechanics_residual =
-  //    std::make_shared<SolidResidualT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
 
   SolidMaterial mat;
   mat.K = 1.0;
@@ -257,7 +311,6 @@ int main(int argc, char* argv[])
   std::string surface_name = "side";
   mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
   solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
-  //solid_mechanics_residual->addBoundaryIntegral(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
 
   serac::tensor<double, dim> constant_force{};
   for (int i = 0; i < dim; i++) {
