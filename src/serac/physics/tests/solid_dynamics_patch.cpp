@@ -308,7 +308,8 @@ double solution_error(solution_type exact_solution, PatchBoundaryCondition bc)
   solid.setDisplacement([&exact_solution](tensor<double, dim> X) { return exact_solution.displacement(X, 0.0); });
 
   // forcing terms
-  mesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
+  auto essBC = Domain::ofBoundaryElements(&mesh->mfemParMesh(), by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
+  mesh->insertDomain("essential_boundary", essBC);
   exact_solution.applyLoads(mat, solid, mesh->domain("essential_boundary"), mesh->entireBody());
 
   // Finalize the data structures
