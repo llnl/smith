@@ -195,9 +195,10 @@ std::string gitSHA() { return SERAC_GIT_SHA; }
 void printRunInfo()
 {
   // Add header
-  std::string infoMsg = axom::fmt::format("\n{:*^80}\n", "Run Information");
+  std::string infoMsg = axom::fmt::format("\n{:*^80}\n", " Serac Run Information ");
 
   infoMsg += axom::fmt::format("{0}: {1}\n", "Version", version());
+  infoMsg += axom::fmt::format("{0}: {1}\n", "Build Type", buildType());
   infoMsg += axom::fmt::format("{0}: {1}\n", "User Name", axom::utilities::getUserName());
   infoMsg += axom::fmt::format("{0}: {1}\n", "Host Name", axom::utilities::getHostName());
 
@@ -225,6 +226,14 @@ std::string version(bool add_SHA)
 }
 
 std::string compiler() { return axom::fmt::format("{0} version {1}", SERAC_COMPILER_NAME, SERAC_COMPILER_VERSION); }
+
+std::string buildType() {
+#ifdef SERAC_DEBUG
+  return "Debug";
+#else
+  return "Release";
+#endif
+}
 
 std::pair<int, int> getMPIInfo(MPI_Comm comm)
 {

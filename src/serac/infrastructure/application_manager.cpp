@@ -29,6 +29,7 @@
 #include "serac/infrastructure/accelerator.hpp"
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/profiling.hpp"
+#include "serac/infrastructure/about.hpp"
 
 namespace serac {
 /**
@@ -89,6 +90,11 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : 
   if (!logger::initialize(comm_)) {
     std::cerr << "Failed to initialize SLIC logger" << std::endl;
     exit(1);
+  }
+
+  auto [_, rank] = getMPIInfo();
+  if (rank == 0) {
+    printRunInfo();
   }
 
   // Start the profiler (no-op if not enabled)
