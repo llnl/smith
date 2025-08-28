@@ -227,7 +227,8 @@ std::string version(bool add_SHA)
 
 std::string compiler() { return axom::fmt::format("{0} version {1}", SERAC_COMPILER_NAME, SERAC_COMPILER_VERSION); }
 
-std::string buildType() {
+std::string buildType()
+{
 #ifdef SERAC_DEBUG
   return "Debug";
 #else
