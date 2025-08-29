@@ -187,6 +187,32 @@ inline FieldState operator+(const FieldState& a, const FieldState& b) { return a
 /// @brief gretl-function to subtract two FieldState
 inline FieldState operator-(const FieldState& a, const FieldState& b) { return axpby(1.0, a, -1.0, b); }
 
+/// @brief temporary object to register the multiplication of a double with a FieldState.  Casts back to a FieldState if
+/// needed.
+struct ScalarFieldStateMult {
+  double a;                                                    ///< the double
+  FieldState b;                                                ///< the FieldState
+  operator FieldState() const { return axpby(a, b, 0.0, b); }  ///< implicit cast to a FieldState
+};
+
+/// @brief multiply scalar by a FieldState to get a temporary ScalarFieldStateMult which can cast back to a FieldState
+inline ScalarFieldStateMult operator*(double a, const FieldState& b) { return ScalarFieldStateMult{.a = a, .b = b}; }
+
+/// @brief multiply scalar by a FieldState to get a temporary ScalarFieldStateMult which can cast back to a FieldState
+inline ScalarFieldStateMult operator*(const FieldState& b, double a) { return ScalarFieldStateMult{.a = a, .b = b}; }
+
+/// @brief add two ScalarFieldStateMult
+inline FieldState operator+(const ScalarFieldStateMult& ax, const ScalarFieldStateMult& by)
+{
+  return axpby(ax.a, ax.b, by.a, by.b);
+};
+
+/// @brief add ScalarFieldStateMult to a FieldState
+inline FieldState operator+(const ScalarFieldStateMult& ax, const FieldState& y) { return axpby(ax.a, ax.b, 1.0, y); };
+
+/// @brief add FieldState to a ScalarFieldStateMult
+inline FieldState operator+(const FieldState& x, const ScalarFieldStateMult& by) { return axpby(1.0, x, by.a, by.b); };
+
 /// @brief gretl-function to add three FieldState
 inline FieldState add(FieldState a, FieldState b, FieldState c)
 {
@@ -208,5 +234,18 @@ inline FieldState add(FieldState a, FieldState b, FieldState c)
 
   return g;
 }
+
+/// @brief Get the space from the primal field of a field states
+inline const mfem::ParFiniteElementSpace& space(FieldState field) { return field.get()->space(); }
+
+/// @brief Get the spaces from the primal fields of a vector of field states
+inline std::vector<const mfem::ParFiniteElementSpace*> spaces(std::vector<FieldState> states)
+{
+  std::vector<const mfem::ParFiniteElementSpace*> spaces;
+  for (auto s : states) {
+    spaces.push_back(&s.get()->space());
+  }
+  return spaces;
+};
 
 }  // namespace serac

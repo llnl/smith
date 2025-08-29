@@ -7,7 +7,8 @@
 set(differentiable_numerics_test_depends serac_physics serac_gretl serac_differentiable_numerics gtest)
 
 set(differentiable_numerics_tests
-    test_serac_mechanics.cpp
+    test_mechanics.cpp
+    test_field_state.cpp
     paraview_helper.hpp
     )
 
