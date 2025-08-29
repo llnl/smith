@@ -58,8 +58,8 @@ or_die cd build-check-debug
 if [[ "$CHECK_TYPE" == "coverage" ]] ; then
     or_die make -j4
     or_die make serac_coverage
-    # Rename to file expected by codecov
-    cp serac_coverage.info.cleaned lcov.info
+    # Move cov report to repo dir, so that Github Actions can find it
+    mv serac_coverage.info.cleaned ..
 fi
 
 if [[ "$CHECK_TYPE" == "docs" ]] ; then
