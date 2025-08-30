@@ -235,6 +235,60 @@ inline FieldState add(FieldState a, FieldState b, FieldState c)
   return g;
 }
 
+/// @brief axpby using State<double> and FieldState
+inline FieldState axpby(const gretl::State<double>& a, const FieldState& x, const gretl::State<double>& b,
+                        const FieldState& y)
+{
+  auto z = x.clone({a, x, b, y});
+
+  z.set_eval([](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
+    double A = upstreams[0].get<double>();
+    const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
+    double B = upstreams[2].get<double>();
+    const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
+    FEFieldPtr Z = std::make_shared<FiniteElementState>(X->space(), "axpby");
+    add(A, *X, B, *Y, *Z);
+    downstream.set<FEFieldPtr, FEDualPtr>(Z);
+  });
+
+  z.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
+    double A = upstreams[0].get<double>();
+    // const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
+    double B = upstreams[2].get<double>();
+    // const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
+
+    const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
+    // double A_dual = upstreams[0].get_dual<double, double>();
+    FEDualPtr& X_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();
+    // double B_dual = upstreams[2].get_dual<double, double>();
+    FEDualPtr& Y_dual = upstreams[3].get_dual<FEDualPtr, FEFieldPtr>();
+    add(*X_dual, A, *Z_dual, *X_dual);
+    add(*Y_dual, B, *Z_dual, *Y_dual);
+  });
+
+  return z.finalize();
+}
+
+/// @brief temporary object to register the multiplication of a gretl::State<d  ouble> with a FieldState.  Casts back to
+/// a FieldState if needed.
+struct GretlScalarFieldStateMult {
+  gretl::State<double> a;  ///< the double
+  FieldState b;            ///< the FieldState
+  // operator FieldState() const { return axpby(a, b, 0.0, b); }  ///< implicit cast to a FieldState
+};
+
+/// @brief multiply gretl-scalar by a FieldState to get a temporary ScalarFieldStateMult which can cast back to a
+/// FieldState
+// inline ScalarFieldStateMult operator*(gretl::State<double> a, const FieldState& b) { return ScalarFieldStateMult{.a =
+// a, .b = b}; }
+
+/// @brief multiply FieldState by a gretl-scalar to get a temporary ScalarFieldStateMult which can cast back to a
+/// FieldState
+// inline ScalarFieldStateMult operator*(const FieldState& b, gretl::State<double> a) { return ScalarFieldStateMult{.a =
+// a, .b = b}; }
+
+// Utilty functions for quickly getting spaces from FieldStates
+
 /// @brief Get the space from the primal field of a field states
 inline const mfem::ParFiniteElementSpace& space(FieldState field) { return field.get()->space(); }
 

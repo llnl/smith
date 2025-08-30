@@ -189,10 +189,10 @@ void Mechanics::reverseAdjointTimestep()
     p.clear_dual();
   }
 
-  gretl::Int current_step = checkpointer_->current_step_;
+  gretl::Int current_step = checkpointer_->currentStep_;
   while (milestone != current_step) {
     checkpointer_->reverse_state();
-    current_step = checkpointer_->current_step_;
+    current_step = checkpointer_->currentStep_;
   }
 
   auto& upstreams = checkpointer_->upstreams_[milestone];

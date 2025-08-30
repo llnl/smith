@@ -12,12 +12,12 @@
 
 namespace gretl {
 
-DataStore::DataStore(size_t maxStates) : checkpointManager_{.maxNumStates = maxStates, .cps{}} { current_step_ = 0; }
+DataStore::DataStore(size_t maxStates) : checkpointManager_{.maxNumStates = maxStates, .cps{}} { currentStep_ = 0; }
 
 void DataStore::back_prop()
 {
   stillConstructingGraph_ = false;
-  current_step_ = static_cast<Int>(states_.size());
+  currentStep_ = static_cast<Int>(states_.size());
   for (size_t n = states_.size(); n > 0; --n) {
     reverse_state();
   }
@@ -67,7 +67,7 @@ void DataStore::reset()
     }
   }
   checkpointManager_.reset();
-  current_step_ = num_persistent;
+  currentStep_ = num_persistent;
 }
 
 void DataStore::reset_graph()
@@ -77,24 +77,30 @@ void DataStore::reset_graph()
     duals_[num_persistent] = nullptr;
     ++num_persistent;
   }
-  states_.resize(num_persistent);
-  duals_.resize(num_persistent);
-  upstreams_.resize(num_persistent);
-  evals_.resize(num_persistent);
-  vjps_.resize(num_persistent);
-  active_.resize(num_persistent);
-  usageCount_.resize(num_persistent);
-  lastStepUsed_.resize(num_persistent);
-  passthroughs_.resize(num_persistent);
-
+  resize(num_persistent);
   checkpointManager_.reset();
-  current_step_ = num_persistent;
+}
+
+///@ brief deallocate back down to a new, smaller, size
+void DataStore::resize(Int newSize)
+{
+  gretl_assert(newSize <= currentStep_);
+  states_.resize(newSize);
+  duals_.resize(newSize);
+  upstreams_.resize(newSize);
+  evals_.resize(newSize);
+  vjps_.resize(newSize);
+  active_.resize(newSize);
+  usageCount_.resize(newSize);
+  lastStepUsed_.resize(newSize);
+  passthroughs_.resize(newSize);
+  currentStep_ = newSize;
 }
 
 void DataStore::reset_for_backprop()
 {
-  current_step_ = static_cast<Int>(states_.size());
-  fetch_state_data(current_step_ - 1);
+  currentStep_ = size();
+  fetch_state_data(currentStep_ - 1);
   for (auto& dual : duals_) {
     dual = nullptr;
   }
@@ -107,15 +113,15 @@ bool DataStore::is_persistent(Int step) const { return !upstreams_[step].size();
 void DataStore::reverse_state()
 {
   // must erase the final step in the cp manager before we get started
-  if (current_step_ == states_.size()) {
-    checkpointManager_.erase_step(current_step_ - 1);
+  if (currentStep_ == states_.size()) {
+    checkpointManager_.erase_step(currentStep_ - 1);
   }
-  --current_step_;
-  if (upstreams_[current_step_].size()) {
-    fetch_state_data(current_step_ - 1);
-    vjp(*states_[current_step_]);
-    clear_usage(current_step_);
-    checkpointManager_.erase_step(current_step_ - 1);
+  --currentStep_;
+  if (upstreams_[currentStep_].size()) {
+    fetch_state_data(currentStep_ - 1);
+    vjp(*states_[currentStep_]);
+    clear_usage(currentStep_);
+    checkpointManager_.erase_step(currentStep_ - 1);
   }
 }
 
@@ -203,33 +209,38 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
   }
 
   evals_.emplace_back([=](const UpstreamStates&, DownstreamState&) {
-    std::cout << "eval not implemented for step " << current_step_ << std::endl;
+    std::cout << "eval not implemented for step " << currentStep_ << std::endl;
     gretl_assert(false);
   });
 
   vjps_.emplace_back([=](UpstreamStates&, const DownstreamState&) {
-    std::cout << "vjp not implemented for step " << current_step_ << std::endl;
+    std::cout << "vjp not implemented for step " << currentStep_ << std::endl;
     gretl_assert(false);
   });
 
   bool isGood = check_validity();
   gretl_assert(isGood);
 
-  ++current_step_;
-  gretl_assert(current_step_ == states_.size());
-  gretl_assert(current_step_ == duals_.size());
-  gretl_assert(current_step_ == upstreams_.size());
-  gretl_assert(current_step_ == passthroughs_.size());
-  gretl_assert(current_step_ == active_.size());
-  gretl_assert(current_step_ == usageCount_.size());
-  gretl_assert(current_step_ == vjps_.size());
-  gretl_assert(current_step_ == lastStepUsed_.size());
+  ++currentStep_;
+  gretl_assert(currentStep_ == states_.size());
+  gretl_assert(currentStep_ == duals_.size());
+  gretl_assert(currentStep_ == upstreams_.size());
+  gretl_assert(currentStep_ == passthroughs_.size());
+  gretl_assert(currentStep_ == active_.size());
+  gretl_assert(currentStep_ == usageCount_.size());
+  gretl_assert(currentStep_ == vjps_.size());
+  gretl_assert(currentStep_ == lastStepUsed_.size());
 }
 
 void DataStore::fetch_state_data(Int stepIndex)
 {
   gretl_assert_msg(!stillConstructingGraph_, "not allowed to fetch state before the graph is constructed");
   Int lastCheckpoint = static_cast<Int>(checkpointManager_.last_checkpoint_step());
+  if (lastCheckpoint > stepIndex) {
+    print("not looking good\n");
+    print_graph();
+    std::cout << checkpointManager_ << std::endl;
+  }
   gretl_assert_msg(lastCheckpoint <= stepIndex, "last checkpoint cannot be ahead of the currently requested step");
   gretl_assert_msg(state_in_use(lastCheckpoint),
                    "cannot confirm that last checkpointed state is actually currently in memory");
@@ -278,7 +289,7 @@ bool DataStore::check_validity() const
   bool valid = true;
   // first check that our version of the saved states matches the cp manager
   // we are allowed to be saving an extra step here at the end
-  for (size_t i = 0; i < current_step_; ++i) {
+  for (size_t i = 0; i < currentStep_; ++i) {
     if (active_[i]) {
       bool cp_has_i = false;
       for (auto& cp : checkpointManager_.cps) {

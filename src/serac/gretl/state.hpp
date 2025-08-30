@@ -101,6 +101,10 @@ inline State<double> set_as_objective(State<double> o)
 {
   o.set_dual(1.0);
   o.data_store().stillConstructingGraph_ = false;
+  o.data_store().currentStep_ = o.data_store().size();
+  std::cout << "s " << o.data_store().currentStep_ << " " << o.step() << std::endl;
+  gretl_assert_msg(o.step() == o.data_store().currentStep_ - 1,
+                   "Only the last state on the graph can be set as the objective");
   return o;
 }
 

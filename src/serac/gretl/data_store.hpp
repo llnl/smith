@@ -85,6 +85,12 @@ class DataStore {
   /// @brief clear all but persistent state, remove the graph
   void reset_graph();
 
+  /// @brief resize data structures
+  void resize(Int newSize);
+
+  /// @brief get total number of states in the graph
+  Int size() { return static_cast<Int>(states_.size()); }
+
   /// @brief print all checkpoint data in data store
   void print_graph() const;
 
@@ -137,7 +143,7 @@ class DataStore {
       if (!tptr) {
         gretl_assert(check_validity());
         print_graph();
-        print("on reverse, at ", current_step_, "getting", step);
+        print("on reverse, at ", currentStep_, "getting", step);
       }
       gretl_assert_msg(tptr, "bad step " + std::to_string(step));
     } else {
@@ -242,7 +248,7 @@ class DataStore {
   CheckpointManager checkpointManager_;
 
   /// step counter
-  Int current_step_;
+  Int currentStep_;
 
   /// @brief specifies if graph is in construction or back-prop mode.  This is used for internal asserts.
   bool stillConstructingGraph_ = true;
