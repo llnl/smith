@@ -53,17 +53,17 @@ void Mesh::createDomains()
   domains_.insert({internalBoundaryName(), serac::InteriorFaces(*mfem_mesh_)});
 }
 
-serac::Domain& Mesh::entireBody() const { return domain(entireBodyName()); }
-
-serac::Domain& Mesh::entireBoundary() const { return domain(entireBoundaryName()); }
-
-serac::Domain& Mesh::internalBoundary() const { return domain(internalBoundaryName()); }
-
 void Mesh::errorIfDomainExists(const std::string& domain_name) const
 {
   SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
                 axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
 }
+
+serac::Domain& Mesh::entireBody() const { return domain(entireBodyName()); }
+
+serac::Domain& Mesh::entireBoundary() const { return domain(entireBoundaryName()); }
+
+serac::Domain& Mesh::internalBoundary() const { return domain(internalBoundaryName()); }
 
 void Mesh::insertDomain(const std::string& domain_name, const Domain& domain)
 {
