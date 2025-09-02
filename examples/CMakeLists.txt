@@ -31,3 +31,5 @@ add_subdirectory(buckling)
 
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
+
+add_subdirectory(bistable_beam)
