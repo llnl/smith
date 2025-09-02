@@ -119,16 +119,16 @@ set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.19-fipns3lh4m4qj265yui4p2xeyqchfj63" CA
 
 set(DEVTOOLS_ROOT "/usr/WS2/smithdev/devtools/toss_4_x86_64_ib/2024_05_30_15_09_55/._view/rkqkran3ydsuprr2wip5pdnz5wh7xwnr" CACHE PATH "")
 
-set(CLANGFORMAT_EXECUTABLE "/usr/tce/packages/clang/clang-19.1.3/bin/clang-format" CACHE PATH "")
+set(CLANGFORMAT_EXECUTABLE "/usr/tce/packages/clang/clang-14.0.6/bin/clang-format" CACHE PATH "")
 
 set(CLANGTIDY_EXECUTABLE "/usr/tce/packages/clang/clang-19.1.3/bin/clang-tidy" CACHE PATH "")
 
 set(ENABLE_DOCS ON CACHE BOOL "")
 
-set(SPHINX_EXECUTABLE "${DEVTOOLS_ROOT}/python-3.13.2/bin/sphinx-build" CACHE PATH "")
+set(SPHINX_EXECUTABLE "${DEVTOOLS_ROOT}/python-3.11.7/bin/sphinx-build" CACHE PATH "")
 
-set(CPPCHECK_EXECUTABLE "${DEVTOOLS_ROOT}/cppcheck-2.17.1/bin/cppcheck" CACHE PATH "")
+set(CPPCHECK_EXECUTABLE "${DEVTOOLS_ROOT}/cppcheck-2.9/bin/cppcheck" CACHE PATH "")
 
-set(DOXYGEN_EXECUTABLE "${DEVTOOLS_ROOT}/doxygen-1.13.2/bin/doxygen" CACHE PATH "")
+set(DOXYGEN_EXECUTABLE "${DEVTOOLS_ROOT}/doxygen-1.9.8/bin/doxygen" CACHE PATH "")
 
 
