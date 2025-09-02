@@ -14,6 +14,7 @@
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
+
 #include "serac/physics/heat_transfer.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
