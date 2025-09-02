@@ -11,6 +11,7 @@ Developer Guide
    :hidden:
    :maxdepth: 2
 
+   tpl_build.rst
    style_guide
    docker_env
    modern_cpp
@@ -25,7 +26,6 @@ Developer Guide
    state_manager
    equation_solver
    macmini
-   ubuntu_build
 
 Developing a New Physics Module
 -------------------------------
