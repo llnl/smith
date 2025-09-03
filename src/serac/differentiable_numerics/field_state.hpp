@@ -246,6 +246,7 @@ inline FieldState axpby(const gretl::State<double>& a, const FieldState& x, cons
     const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
     double B = upstreams[2].get<double>();
     const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
+
     FEFieldPtr Z = std::make_shared<FiniteElementState>(X->space(), "axpby");
     add(A, *X, B, *Y, *Z);
     downstream.set<FEFieldPtr, FEDualPtr>(Z);
@@ -253,39 +254,168 @@ inline FieldState axpby(const gretl::State<double>& a, const FieldState& x, cons
 
   z.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
     double A = upstreams[0].get<double>();
-    // const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
+    const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
     double B = upstreams[2].get<double>();
-    // const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
+    const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
 
     const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
-    // double A_dual = upstreams[0].get_dual<double, double>();
+    double& A_dual = upstreams[0].get_dual<double, double>();
     FEDualPtr& X_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();
-    // double B_dual = upstreams[2].get_dual<double, double>();
+    double& B_dual = upstreams[2].get_dual<double, double>();
     FEDualPtr& Y_dual = upstreams[3].get_dual<FEDualPtr, FEFieldPtr>();
+
     add(*X_dual, A, *Z_dual, *X_dual);
     add(*Y_dual, B, *Z_dual, *Y_dual);
+    A_dual += serac::innerProduct(*Z_dual, *X);
+    B_dual += serac::innerProduct(*Z_dual, *Y);
   });
 
   return z.finalize();
 }
 
-/// @brief temporary object to register the multiplication of a gretl::State<d  ouble> with a FieldState.  Casts back to
-/// a FieldState if needed.
-struct GretlScalarFieldStateMult {
-  gretl::State<double> a;  ///< the double
-  FieldState b;            ///< the FieldState
-  // operator FieldState() const { return axpby(a, b, 0.0, b); }  ///< implicit cast to a FieldState
+/// @brief axpby using State<double> and FieldState
+inline FieldState aTimesX(const gretl::State<double>& a, const FieldState& x)
+{
+  auto z = x.clone({a, x});
+
+  z.set_eval([](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
+    double A = upstreams[0].get<double>();
+    const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
+    
+    FEFieldPtr Z = std::make_shared<FiniteElementState>(X->space(), "axpby");
+    Z->Set(A, *X);
+    downstream.set<FEFieldPtr, FEDualPtr>(Z);
+  });
+
+  z.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
+    double A = upstreams[0].get<double>();
+    const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
+
+    const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
+    double& A_dual = upstreams[0].get_dual<double, double>();
+    FEDualPtr& X_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();
+
+    add(*X_dual, A, *Z_dual, *X_dual);
+    A_dual += serac::innerProduct(*Z_dual, *X);
+  });
+
+  return z.finalize();
+}
+
+
+FieldState weighted_sum(std::vector<double> weights, std::vector<FieldState> weighted_fields, 
+std::vector<gretl::State<double>> differentiable_weights={}, std::vector<FieldState> differentiably_weighted_fields={}) {
+  SLIC_ERROR_IF(weights.size() != weighted_fields.size(), "weights and the fields they are weighting do not match in size");
+  SLIC_ERROR_IF(differentiable_weights.size() != differentiably_weighted_fields.size(), "differentiable weights and the fields they are weighting do not match in size");
+  SLIC_ERROR_IF((weights.size()==0) && (differentiable_weights.size()==0), "At least 1 weight must be passed to a weighted sum");
+
+  std::vector<gretl::StateBase> inputs;
+  inputs.insert(inputs.end(), weighted_fields.begin(), weighted_fields.end());
+  inputs.insert(inputs.end(), differentiable_weights.begin(), differentiable_weights.end());
+  inputs.insert(inputs.end(), differentiably_weighted_fields.begin(), differentiably_weighted_fields.end());
+
+  auto x = weights.size() ? weighted_fields[0] : differentiably_weighted_fields[0];
+  auto z = x.clone(inputs);
+
+  z.set_eval([weights](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
+    size_t num_weights = weights.size();
+    size_t num_diffable_weights = (upstreams.size() - num_weights) / 2;
+
+    // f1,f2,f3... w1,w2,w3,w4... g1,g2,g3,g4... 
+    auto X = weights.size() ? upstreams[0].get<FEFieldPtr>() : upstreams[num_weights+num_diffable_weights].get<FEFieldPtr>();
+
+    FEFieldPtr Z = std::make_shared<FiniteElementState>(X->space(), "weighted_sum");
+
+    if (num_weights>0) {
+      double weightOld = weights[0];
+      auto vecOld = upstreams[0].get<FEFieldPtr>();
+      if (num_weights==1) {
+        Z->Set(weightOld, *vecOld);
+      }
+      for (size_t i=1; i < num_weights; ++i) {
+        double weightNew = weights[i];
+        add(weightOld, *vecOld, weightNew, *upstreams[i].get<FEFieldPtr>(), *Z);
+        weightOld = 1.0;
+        vecOld = Z;
+      }
+    }
+
+    if (num_diffable_weights>0) {
+      size_t start_index = 0;
+      double weightOld = 1.0;
+      FEFieldPtr vecOld = Z;
+
+      if (weights.size()==0) {
+        start_index = 1;
+        weightOld = upstreams[num_weights].get<double>();
+        vecOld = upstreams[num_weights+num_diffable_weights].get<FEFieldPtr>();
+        if (num_diffable_weights==1) {
+          Z->Set(weightOld, *vecOld);
+        }
+      }
+
+      for (size_t i=start_index; i < num_diffable_weights; ++i) {
+        double weightNew = upstreams[num_weights+i].get<double>();
+        add(weightOld, *vecOld, weightNew, *upstreams[num_weights+num_diffable_weights+i].get<FEFieldPtr>(), *Z);
+        weightOld = 1.0;
+        vecOld = Z;
+      }
+    }
+
+    downstream.set<FEFieldPtr, FEDualPtr>(Z);
+  });
+
+
+  z.set_vjp([weights](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
+    size_t num_weights = weights.size();
+    size_t num_diffable_weights = (upstreams.size() - num_weights) / 2;
+
+    const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
+
+    for (size_t i=0; i < num_weights; ++i) {
+      FEDualPtr& V_dual = upstreams[i].get_dual<FEDualPtr, FEFieldPtr>();
+      double weight = weights[i];
+      add(*V_dual, weight, *Z_dual, *V_dual);
+    }
+
+    for (size_t i=0; i < num_diffable_weights; ++i) {
+      double& weight_dual = upstreams[num_weights+i].get_dual<double,double>();
+      FEDualPtr& V_dual = upstreams[num_weights+num_diffable_weights+i].get_dual<FEDualPtr, FEFieldPtr>();
+      double weight = upstreams[num_weights+i].get<double>();
+      FEFieldPtr V = upstreams[num_weights+num_diffable_weights+i].get<FEFieldPtr>();
+      add(*V_dual, weight, *Z_dual, *V_dual);
+      weight_dual += serac::innerProduct(*Z_dual, *V);
+    }
+  });
+
+  return z.finalize();
+
+}
+
+struct FieldStateWeightedSum
+{
+  std::vector<double> weights;
+  std::vector<FieldState> weighted_fields;
+  std::vector<gretl::State<double>> differentiable_weights;
+  std::vector<FieldState> differentiably_weighted_fields;
+  operator FieldState() const { return weighted_sum(weights, weighted_fields, differentiable_weights, differentiably_weighted_fields); }
 };
 
-/// @brief multiply gretl-scalar by a FieldState to get a temporary ScalarFieldStateMult which can cast back to a
-/// FieldState
-// inline ScalarFieldStateMult operator*(gretl::State<double> a, const FieldState& b) { return ScalarFieldStateMult{.a =
-// a, .b = b}; }
+// /// @brief temporary object to register the multiplication of a gretl::State<d  ouble> with a FieldState.  Casts back to
+// /// a FieldState if needed.
+// struct GretlScalarFieldStateMult {
+//   gretl::State<double> a;  ///< the double
+//   FieldState b;            ///< the FieldState
+//   operator FieldState() const { return aTimesX(a, b); }  ///< implicit cast to a FieldState
+// };
 
-/// @brief multiply FieldState by a gretl-scalar to get a temporary ScalarFieldStateMult which can cast back to a
-/// FieldState
-// inline ScalarFieldStateMult operator*(const FieldState& b, gretl::State<double> a) { return ScalarFieldStateMult{.a =
-// a, .b = b}; }
+// ///@brief multiply gretl-scalar by a FieldState to get a temporary ScalarFieldStateMult which can cast back to a
+// inline GretlScalarFieldStateMult operator*(gretl::State<double> a, const FieldState& b) { return GretlScalarFieldStateMult{.a =
+//  a, .b = b}; }
+
+//  ///@brief multiply FieldState by gretl-scalar to get a temporary ScalarFieldStateMult which can cast back to a
+// inline GretlScalarFieldStateMult operator*(const FieldState& b, gretl::State<double> a) { return a*b; }
+
 
 // Utilty functions for quickly getting spaces from FieldStates
 

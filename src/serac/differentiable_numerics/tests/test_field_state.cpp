@@ -19,21 +19,22 @@ struct MeshFixture : public ::testing::Test {
 
   void SetUp()
   {
-    serac::StateManager::initialize(datastore, "generic");
+    serac::StateManager::initialize(datastore_, "generic");
 
     // create mesh
     auto mfem_shape = mfem::Element::QUADRILATERAL;
     double length = 1.0;
     double width = 1.0;
-    mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem_shape, true, length, width), MESHTAG, 0,
+    mesh_ = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem_shape, true, length, width), MESHTAG, 0,
                                          0);
-    checkpointer = std::make_shared<gretl::DataStore>(5);
+    checkpointer_ = std::make_shared<gretl::DataStore>(5);
 
     std::string physics_name = "generic";
-    auto disp = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_displacement", mesh->tag());
-    auto velo = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_velocity", mesh->tag());
-    auto accel = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
-    dt = std::make_unique<gretl::State<double, double>>(checkpointer->create_state<double, double>(1e-4));
+    auto disp = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh_->tag());
+    auto velo = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_velocity", mesh_->tag());
+    auto accel = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_acceleration", mesh_->tag());
+    dt_ = std::make_unique<gretl::State<double, double>>(checkpointer_->create_state<double, double>(0.9));
+    h_ = std::make_unique<gretl::State<double, double>>(checkpointer_->create_state<double, double>(0.7));
 
     disp.get()->setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto v = x;
@@ -56,38 +57,130 @@ struct MeshFixture : public ::testing::Test {
       return v;
     });
 
-    states = {disp, velo, accel};
+    states_ = {disp, velo, accel};
   }
 
-  axom::sidre::DataStore datastore;
-  std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<gretl::DataStore> checkpointer;
+  axom::sidre::DataStore datastore_;
+  std::shared_ptr<serac::Mesh> mesh_;
+  std::shared_ptr<gretl::DataStore> checkpointer_;
 
-  std::vector<serac::FieldState> states;
-  std::unique_ptr<gretl::State<double, double>> dt;
+  std::vector<serac::FieldState> states_;
+  std::unique_ptr<gretl::State<double, double>> dt_;
+  std::unique_ptr<gretl::State<double, double>> h_;
 };
 
-TEST_F(MeshFixture, FieldStateUpdates)
+TEST_F(MeshFixture, FieldStateWithDifferentiable_axpby)
 {
-  using gretl::print;
-  serac::FieldState disp = states[0];
-  serac::FieldState velo = states[1];
-  serac::FieldState accel = states[2];
+  serac::FieldState disp = states_[0];
+  serac::FieldState velo = states_[1];
+  serac::FieldState accel = states_[2];
+  gretl::State<double> dt = *dt_;
+  double dt_f = dt.get(); // fixed dt for correctness checks
 
-  auto u = axpby(*dt, disp, *dt, velo);
-  auto u_exact = axpby(dt->get(), disp, dt->get(), velo);
+  auto u = axpby(dt, disp, dt, velo);
+  auto u_exact = axpby(dt_f, disp, dt_f, velo);
+
   auto uu_exact = serac::inner_product(u_exact, u_exact);
   auto uu = serac::inner_product(u, u);
+  gretl::set_as_objective(uu);
+
   EXPECT_EQ(uu.get(), uu_exact.get());
 
-  gretl::set_as_objective(uu);
-  print("f");
-  checkpointer->back_prop();
-  print("g");
-  EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer, 1e-5, 4, true), 0.95);
-  EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer, 1e-5, 4, true), 0.95);
-  // EXPECT_GT(serac::check_grad_wrt(uu, *dt, *checkpointer, 1e-5, 4, true), 0.95);
+  checkpointer_->back_prop();
+  
+  EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(serac::check_grad_wrt(uu, dt, *checkpointer_, 1e-7, 4, true), 0.95);
 }
+
+TEST_F(MeshFixture, FieldStateWeightedSum)
+{
+  serac::FieldState disp = states_[0];
+  serac::FieldState velo = states_[1];
+  serac::FieldState accel = states_[2];
+  gretl::State<double> dt = *dt_;
+
+  auto u = serac::weighted_sum({0.3}, {velo});
+  u = serac::weighted_sum({0.1, 0.4}, {disp, u});
+  u = serac::weighted_sum({0.2, 0.3, 0.5}, {disp, accel, u});
+
+  serac::FieldState u_exact = 0.3 * velo;
+  u_exact = 0.1 * disp + 0.4 * u_exact;
+  u_exact = 0.2 * disp + 0.3 * accel + 0.5 * u_exact;
+
+  auto uu_exact = serac::inner_product(u_exact, u_exact);
+  auto uu = serac::inner_product(u, u);
+
+  gretl::set_as_objective(uu);
+
+  EXPECT_EQ(uu.get(), uu_exact.get());
+
+  checkpointer_->back_prop();
+  
+  EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(serac::check_grad_wrt(uu, accel, *checkpointer_, 1e-5, 4, true), 0.95);
+}
+
+TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum)
+{
+  serac::FieldState disp = states_[0];
+  serac::FieldState velo = states_[1];
+  serac::FieldState accel = states_[2];
+  gretl::State<double> dt = *dt_;
+  gretl::State<double> h = *h_;
+
+  auto u = serac::weighted_sum({}, {}, {dt}, {velo});
+  u = serac::weighted_sum({}, {}, {dt, h}, {disp, u});
+  u = serac::weighted_sum({0.2}, {disp}, {dt, h}, {accel, u});
+  u = serac::weighted_sum({0.2, dt.get()}, {disp, accel}, {h}, {u});
+
+  serac::FieldState u_exact = dt.get() * velo;
+  u_exact = dt.get() * disp + h.get() * u_exact;
+  u_exact = 0.2 * disp + dt.get() * accel + h.get() * u_exact;
+  u_exact = 0.2 * disp + dt.get() * accel + h.get() * u_exact;
+
+  auto uu_exact = serac::inner_product(u_exact, u_exact);
+  auto uu = serac::inner_product(u, u);
+
+  gretl::set_as_objective(uu);
+
+  ASSERT_EQ(uu.get(), uu_exact.get());
+
+  checkpointer_->back_prop();
+  
+  EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(serac::check_grad_wrt(uu, accel, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(serac::check_grad_wrt(uu, dt, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(serac::check_grad_wrt(uu, h, *checkpointer_, 1e-5, 4, true), 0.95);
+}
+
+/*
+TEST_F(MeshFixture, FieldStateWithDifferentiable_VariousCombinations)
+{
+  serac::FieldState disp = states_[0];
+  serac::FieldState velo = states_[1];
+  serac::FieldState accel = states_[2];
+  gretl::State<double> dt = *dt_;
+  double dt_f = dt.get(); // fixed dt for correctness checks
+
+  auto u = dt * disp;
+  auto u_exact = dt_f * disp;
+
+  auto uu_exact = serac::inner_product(u_exact, u_exact);
+  auto uu = serac::inner_product(u, u);
+  gretl::set_as_objective(uu);
+
+  EXPECT_EQ(uu.get(), uu_exact.get());
+
+  checkpointer_->back_prop();
+  
+  EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(serac::check_grad_wrt(uu, dt, *checkpointer_, 1e-7, 4, true), 0.95);
+}
+*/
 
 int main(int argc, char* argv[])
 {

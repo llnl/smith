@@ -29,7 +29,7 @@ static constexpr int scalar_field_order = 1;
 struct MeshFixture : public testing::Test {
   void SetUp()
   {
-    serac::StateManager::initialize(datastore, "solver_test");
+    serac::StateManager::initialize(datastore_, "solver_test");
 
     auto mfem_shape = mfem::Element::QUADRILATERAL;
 
@@ -40,7 +40,7 @@ struct MeshFixture : public testing::Test {
     mesh = &serac::StateManager::setMesh(std::move(meshtmp), MESHTAG);
   }
 
-  axom::sidre::DataStore datastore;
+  axom::sidre::DataStore datastore_;
   mfem::ParMesh* mesh;
 };
 

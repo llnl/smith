@@ -105,7 +105,7 @@ struct MeshFixture : public testing::Test {
   void SetUp()
   {
     MPI_Barrier(MPI_COMM_WORLD);
-    serac::StateManager::initialize(datastore, "solid_dynamics");
+    serac::StateManager::initialize(datastore_, "solid_dynamics");
 
     // create mesh
     auto mfem_shape = mfem::Element::QUADRILATERAL;  // mfem::Element::TRIANGLE;
@@ -239,7 +239,7 @@ struct MeshFixture : public testing::Test {
 
   std::string velo_name = "solid_velocity";
 
-  axom::sidre::DataStore datastore;
+  axom::sidre::DataStore datastore_;
   std::shared_ptr<serac::Mesh> mesh;
   std::shared_ptr<gretl::DataStore> checkpointer;
 
