@@ -2,7 +2,7 @@
 # This is the shared configuration of jobs for toss4_cray
 .on_toss4_cray:
   variables:
-    SCHEDULER_PARAMETERS: "--queue pci --exclusive --time-limit=${ALLOC_TIME}m --nodes=${ALLOC_NODES}"
+    SCHEDULER_PARAMETERS: "--queue pdebug --exclusive --time-limit=${ALLOC_TIME}m --nodes=${ALLOC_NODES}"
   tags:
     - batch
     - tioga
