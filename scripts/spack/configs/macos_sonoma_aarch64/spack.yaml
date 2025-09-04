@@ -15,30 +15,46 @@ spack:
     - ../defaults.yaml
     - ../versions.yaml
 
-  compilers::
-  - compiler:
-      spec: clang@=14.0.6
-      paths:
-        cc: /opt/homebrew/opt/llvm@14/bin/clang
-        cxx: /opt/homebrew/opt/llvm@14/bin/clang++
-        f77: /opt/homebrew/bin/gfortran-14
-        fc: /opt/homebrew/bin/gfortran-14
-      flags: {}
-      operating_system: sequoia
-      target: aarch64
-      modules: []
-      environment: {}
-      extra_rpaths:
-      - /opt/homebrew/lib/gcc/14
+  toolchains:
+    clang_19:
+    - spec: '%c=llvm'
+      when: '%c'
+    - spec: '%cxx=llvm'
+      when: '%cxx'
+    - spec: '%fortran=gcc'
+      when: '%fortran'
+    - spec: '%openmpi@5.0.8.clang_19'
+      when: '%mpi'
 
   packages:
     all:
-      compiler: [clang, gcc]
+      target: [aarch64]
       providers:
         blas: [openblas]
         lapack: [netlib-lapack]
         mpi: [openmpi]
         zlib-api: [zlib]
+
+    #Compiler packages
+    gcc:
+      externals:
+      - spec: gcc@15.1.0 languages:=fortran
+        prefix: /opt/homebrew/Cellar/gcc/15.1.0
+        extra_attributes:
+          compilers:
+            fortran: /opt/homebrew/Cellar/gcc/15.1.0/bin/gfortran
+    llvm:
+      externals:
+      - spec: llvm@19.1.7+clang~lld~lldb
+        prefix: /opt/homebrew/Cellar/llvm@19/19.1.7
+        extra_attributes:
+          compilers:
+            c: /opt/homebrew/Cellar/llvm@19/19.1.7/bin/clang
+            cxx: /opt/homebrew/Cellar/llvm@19/19.1.7/bin/clang++
+          flags:
+            fflags: -fPIC
+      - spec: llvm+clang@14 # for clang-format
+        prefix: /opt/homebrew/opt/llvm@14
     
     # Providers
     mpi:
@@ -46,12 +62,12 @@ spack:
     openmpi:
       buildable: false
       externals:
-      - spec: openmpi@5.0.3_1
-        prefix: /opt/homebrew
+      - spec: openmpi@5.0.8.clang_19
+        prefix: /opt/homebrew/Cellar/open-mpi/5.0.8/
     openblas:
       buildable: false
       externals:
-      - spec: openblas@0.3.29
+      - spec: openblas@0.3.30
         prefix: /opt/homebrew
     netlib-lapack:
       buildable: false
@@ -199,19 +215,8 @@ spack:
       externals:
       - spec: doxygen@1.13.2
         prefix: /opt/homebrew
-    llvm:
-      version: [14.0.6]
-      buildable: false
-      externals:
-      - spec: llvm+clang@14.0.6
-        prefix: /opt/homebrew/opt/llvm@14
     py-sphinx:
       buildable: false
       externals:
       - spec: py-sphinx@7.4.7
-        prefix: /Users/chapman39/dev/serac/venv
-    py-ats:
-      buildable: false
-      externals:
-      - spec: py-ats@7.0.105
         prefix: /Users/chapman39/dev/serac/venv

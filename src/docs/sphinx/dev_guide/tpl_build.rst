@@ -110,8 +110,11 @@ If you plan to install the developer tools, you should also run:
 
 .. code-block:: bash
 
-   $ brew install cppcheck doxygen
-   $ ln -s /opt/homebrew/opt/llvm@19/bin/clang-format /opt/homebrew/bin/clang-format
+   $ brew install llvm@14 cppcheck doxygen
+   $ ln -fs /opt/homebrew/opt/llvm@14/bin/clang-format /opt/homebrew/bin/clang-format
+
+.. note::
+  We build TPLs with clang 19. However, the clang-format version we use is 14, which is why if you're using devtools ``llvm@14`` must also be installed.
 
 If you have installed Homebrew using the default installation prefix, most packages will be accessible through the prefix ``/opt/homebrew``.
 Note for Intel-based Macs, the installation prefix is ``/usr/local``. If you set a custom prefix or aren't sure what the prefix is, run ``brew --prefix``.
@@ -174,17 +177,17 @@ Versions and prefixes may vary.
       externals:
       - spec: doxygen@1.12.0
         prefix: /opt/homebrew
-    llvm:
-      version: [19.1.1]
-      buildable: false
-      externals:
-      - spec: llvm+clang@19.1.1
-        prefix: /opt/homebrew/opt/llvm@19
     py-sphinx:
       buildable: false
       externals:
       - spec: py-sphinx@7.4.7
         prefix: /path/to/venv
+    
+    # NOTE: This section needs to be appended to `llvm:externals:` section above
+    llvm:
+      externals:
+      - spec: llvm+clang@14
+        prefix: /opt/homebrew/opt/llvm@14
 
 
 Livermore Computing (LC)
