@@ -34,8 +34,9 @@ int main(int argc, char* argv[])
   int serial_refinement = 0;
   int parallel_refinement = 0;
 
-  // number of time steps (max load is fixed)
+  // load stepping options
   int steps = 40;
+  double max_load = 855e-6;
 
   // Solver options
   serac::NonlinearSolverOptions nonlinear_options = serac::solid_mechanics::default_nonlinear_options;
@@ -54,6 +55,7 @@ int main(int argc, char* argv[])
   linear_options.max_iterations = 2000;
 
   // Initialize and automatically finalize MPI and other libraries
+  PetscOptionsSetValue(NULL, "-options_left", "no");
   serac::ApplicationManager applicationManager(argc, argv);
   auto [num_ranks, rank] = serac::getMPIInfo(MPI_COMM_WORLD);
 
@@ -77,10 +79,13 @@ int main(int argc, char* argv[])
       ->expected(0, 14);
   // Time stepping options
   app.add_option("--time-steps", steps, "Number of time steps to take")->check(axom::CLI::PositiveNumber);
+  app.add_option("--max-load", max_load, "Maximum downward load magnutude")
+    ->check(axom::CLI::PositiveNumber);
 
   // Need to allow extra arguments for PETSc support
   app.set_help_flag("--help");
-  app.allow_extras()->parse(argc, argv);
+  app.allow_extras();
+  CLI11_PARSE(app, argc, argv);
 
   double dt = 1.0/steps;
 
@@ -106,9 +111,23 @@ int main(int argc, char* argv[])
   // Create solver
   auto solid_solver = std::make_unique<serac::SolidMechanics<p, dim>>(
         nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
-  
+
   // Define the time-dependent load
-  constexpr double peak_traction = 0.03;
+  //  Compute the area of the surface over which the traction is applied
+  //double peak_traction = 0.03;
+  using DisplacementSpace = serac::H1<p, dim>;
+  auto compute_load_surface_area = serac::Functional<double(DisplacementSpace)>({&solid_solver->displacement().space()});
+  compute_load_surface_area.AddBoundaryIntegral(
+    serac::Dimension<dim - 1>{}, serac::DependsOn<>{},
+    [](auto, auto) {
+      return 1.0;
+    },
+    mesh->domain("load_surface"));
+  double area = compute_load_surface_area(solid_solver->time(), solid_solver->displacement());
+  std::cout << "area = " << area << std::endl;
+
+  // Set traction function to apply load cycle over time
+  const double peak_traction = max_load/area;
   auto traction = [peak_traction](auto, auto, double t) { 
     return serac::tensor<double, dim> {0.0, -peak_traction*std::sin(M_PI*t)};
   };
@@ -130,16 +149,6 @@ int main(int argc, char* argv[])
   solid_solver->completeSetup();
 
   // Output functionals
-  using DisplacementSpace = serac::H1<p, dim>;
-  // Compute the area of the surface over which the traction is applied
-  auto compute_load_surface_area = serac::Functional<double(DisplacementSpace)>({&solid_solver->displacement().space()});
-  compute_load_surface_area.AddBoundaryIntegral(
-    serac::Dimension<dim - 1>{}, serac::DependsOn<>{},
-    [](auto, auto) {
-      return 1.0;
-    },
-    mesh->domain("load_surface"));
-  double area = compute_load_surface_area(solid_solver->time(), solid_solver->displacement());
 
   // Define function to compute the average downward displacement of the loading surface
   auto u_integral = serac::Functional<double(DisplacementSpace)>({&solid_solver->displacement().space()});
