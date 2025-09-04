@@ -15,6 +15,7 @@
 
 #include "serac/serac.hpp"
 
+// this example is intended to eventually replace twist.cpp
 int main(int argc, char* argv[])
 {
   // Initialize and automatically finalize MPI and other libraries

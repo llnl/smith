@@ -91,10 +91,10 @@ class ContactConstraint : public Constraint {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
 
-    // TODO: how to specify the right cycle?
+    // note: Tribol does not use cycle.
     int cycle = 0;
     contact_.update(cycle, time, dt);
-    return contact_.mergedGaps(true);
+    return contact_.mergedGaps(false);
   };
 
   /** @brief Interface for computing contact gap constraint Jacobian from a vector of serac::FiniteElementState*
@@ -112,16 +112,15 @@ class ContactConstraint : public Constraint {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
-    // TODO: how to specify the right cycle?
     int cycle = 0;
     contact_.update(cycle, time, dt);
     auto J_contact = contact_.mergedJacobian();
     J_contact->owns_blocks = false;
     delete &J_contact->GetBlock(0, 0);
-    delete &J_contact->GetBlock(1, 0);
+    delete &J_contact->GetBlock(0, 1);
     delete &J_contact->GetBlock(1, 1);
 
-    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(0, 1));
+    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(1, 0));
     std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
     return dgdu_unique;
   };

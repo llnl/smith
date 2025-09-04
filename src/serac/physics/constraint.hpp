@@ -58,6 +58,7 @@ class Constraint {
                                                          int direction) const = 0;
 
   /** @brief Virtual interface for computing constraint Jacobian_tilde from a vector of serac::FiniteElementState*
+   *         Jacobian_tilde is an optional approximation of the true Jacobian
    *
    * @param time time
    * @param dt time step

@@ -10,7 +10,7 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
         ironing.cpp
         sphere.cpp
         twist.cpp
-	constraint_twist.cpp
+        constraint_twist.cpp
     )
 
     foreach(filename ${CONTACT_EXAMPLES_SOURCES})
