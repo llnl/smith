@@ -32,48 +32,7 @@ using VectorSpace = serac::H1<disp_order, dim>;
 
 using DensitySpace = serac::L2<disp_order - 1>;
 
-struct LinearIsotropicWithFieldDensity {
-  using State = serac::Empty;  ///< this material has no internal variables
-
-  /**
-   * @brief stress calculation for a linear isotropic material model
-   *
-   * When applied to 2D displacement gradients, the stress is computed in plane strain,
-   * returning only the in-plane components.
-   *
-   * @tparam T Number-like type for the displacement gradient components
-   * @tparam dim Dimensionality of space
-   * @param du_dX Displacement gradient with respect to the reference configuration
-   * @return The stress
-   */
-  template <typename T, int dim, typename Density>
-  SERAC_HOST_DEVICE auto operator()(State& /* state */, const serac::tensor<T, dim, dim>& du_dX, const Density&) const
-  {
-    auto I = serac::Identity<dim>();
-    auto lambda = K - (2.0 / 3.0) * G;
-    auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
-    return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
-  }
-  template <typename T, int dim, typename Density>
-  SERAC_HOST_DEVICE auto pkStress(State& /* state */, const serac::tensor<T, dim, dim>& du_dX, const Density&) const
-  {
-    auto I = serac::Identity<dim>();
-    auto lambda = K - (2.0 / 3.0) * G;
-    auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
-    return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
-  }
-
-  /// @brief interpolates density field
-  template <typename Density>
-  SERAC_HOST_DEVICE auto density(const Density& density) const
-  {
-    return get<serac::VALUE>(density);
-  }
-  double K;  ///< bulk modulus
-  double G;  ///< shear modulus
-};
-
-using SolidMaterial = LinearIsotropicWithFieldDensity;
+using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 using SolidWeakFormT = serac::SolidWeakForm<disp_order, dim, serac::Parameters<DensitySpace>>;
 
 enum FIELD
@@ -204,6 +163,9 @@ class InertialReliefProblem : public GeneralNLMCProblem {
 
 int main(int argc, char* argv[])
 {
+  // Initialize and automatically finalize MPI and other libraries
+  serac::ApplicationManager applicationManager(argc, argv);
+  
   // Command line arguments
   // Mesh options
   double xlength = 0.5;
@@ -212,14 +174,29 @@ int main(int argc, char* argv[])
   int nx = 6;
   int ny = 4;
   int nz = 4;
-  bool visualize = false;
+  int visualize = 0;
 
   // Solver options
   double nonlinear_absolute_tol = 1e-6;
   int nonlinear_max_iterations = 100;
+  // Handle command line arguments
+  axom::CLI::App app{"Inertial relief."};
+  // Mesh options
+  app.add_option("--xlength", xlength, "extent along x-axis")
+      ->default_val("0.5")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--ylength", ylength, "extent along y-axis")
+      ->default_val("0.7")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--zlength", zlength, "extent along z-axis")
+      ->default_val("0.3")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--visualize", visualize, "solution visualization")
+      ->default_val("0")  // Matches value set above
+      ->check(axom::CLI::Range(0, 1));
+  app.set_help_flag("--help");
 
-  // Initialize and automatically finalize MPI and other libraries
-  serac::ApplicationManager applicationManager(argc, argv);
+  CLI11_PARSE(app, argc, argv);
 
   int nprocs;
   int myid;
@@ -330,7 +307,7 @@ int main(int argc, char* argv[])
     return u;
   });
 
-  auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "");
+  auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "inertia_relief");
   if (visualize) {
     writer.write(0, 0.0, objective_states);
   }
@@ -460,11 +437,10 @@ void InertialReliefProblem::F(const mfem::Vector& x, const mfem::Vector& y, mfem
   Feval_err = 0;
 }
 
-// Q = [ r + J^T l]
-//     [ c ]
-// dQ / dy = [K  J^T]
-//           [J   0 ]
-// Q(x, y) = 0 (equalities)
+// Q = [  r + J^T l]
+//     [ -c ]
+// dQ / dy = [ K  J^T]
+//           [-J   0 ]
 void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval, int& Qeval_err) const
 {
   MFEM_VERIFY(x.Size() == dimx && y.Size() == dimy && qeval.Size() == dimy,
@@ -478,7 +454,7 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   obj_states[DISP]->Set(1.0, yblock.GetBlock(0));
   serac::FiniteElementDual res_vector(all_states[DISP]->space(), "tempresidual");
   res_vector = weak_form->residual(time, dt, shape_disp.get(), serac::getConstFieldPointers(all_states));
-  qblock.GetBlock(0).Set(-1.0, res_vector);
+  qblock.GetBlock(0).Set(1.0, res_vector);
 
   double* multipliers = new double[constraints.size()];
   for (int i = 0; i < dimc; i++) {
@@ -553,9 +529,8 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
     MFEM_VERIFY(drdu_unique->Height() == dimu, "size error");
 
     drdu = drdu_unique.release();
-    *drdu *= -1.0;
 
-    mfem::HypreParMatrix* dcdu = nullptr;
+    mfem::HypreParMatrix* negdcdu = nullptr;
     mfem::SparseMatrix* dcdumat = nullptr;
     int myid = mfem::Mpi::WorldRank();
     int dimuglb = drdu->GetGlobalNumCols();
@@ -587,21 +562,21 @@ mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, cons
 
     dcdumat->Threshold(1.e-20);
     dcdumat->Finalize();
-    dcdu = GenerateHypreParMatrixFromSparseMatrix(uOffsets, cOffsets, dcdumat);
-    mfem::HypreParMatrix* dcduT = dcdu->Transpose();
-    mfem::Vector scale(dcdu->Height());
+    negdcdu = GenerateHypreParMatrixFromSparseMatrix(uOffsets, cOffsets, dcdumat);
+    mfem::HypreParMatrix* dcduT = negdcdu->Transpose();
+    mfem::Vector scale(dimc);
     scale = -1.0;
-    dcdu->ScaleRows(scale);
+    negdcdu->ScaleRows(scale);
 
     mfem::Array2D<const mfem::HypreParMatrix*> BlockMat(2, 2);
     BlockMat(0, 0) = drdu;
     BlockMat(0, 1) = dcduT;
-    BlockMat(1, 0) = dcdu;
+    BlockMat(1, 0) = negdcdu;
     BlockMat(1, 1) = nullptr;
     dQdy = HypreParMatrixFromBlocks(BlockMat);
     delete drdu;
     delete dcduT;
-    delete dcdu;
+    delete negdcdu;
   }
   return dQdy;
 }
