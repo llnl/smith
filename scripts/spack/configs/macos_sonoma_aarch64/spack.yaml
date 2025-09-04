@@ -63,7 +63,7 @@ spack:
       buildable: false
       externals:
       - spec: openmpi@5.0.8.clang_19
-        prefix: /opt/homebrew/Cellar/open-mpi/5.0.8/
+        prefix: /opt/homebrew
     openblas:
       buildable: false
       externals:
