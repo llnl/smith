@@ -102,21 +102,27 @@ FieldStateWeightedSum operator*(const gretl::State<double>& a, const FieldState&
 
 FieldStateWeightedSum operator*(const FieldState& b, const gretl::State<double>& a) { return a * b; }
 
+/// @brief add two FieldState
+FieldStateWeightedSum operator+(const FieldState& x, const FieldState& y)
+{
+  return FieldStateWeightedSum({1.0, 1.0}, {x, y});
+}
+
 FieldStateWeightedSum operator+(const FieldStateWeightedSum& ax, const FieldStateWeightedSum& by)
 {
  FieldStateWeightedSum c = ax;
  return c += by;
-};
+}
 
 FieldStateWeightedSum operator+(const FieldStateWeightedSum& ax, const FieldState& y)
 {
  FieldStateWeightedSum y1({1.0}, {y});
  return ax + y1;
-};
+}
 
 FieldStateWeightedSum operator+(const FieldState& y, const FieldStateWeightedSum& ax)
 {
   return ax + y;
-};
+}
 
 }

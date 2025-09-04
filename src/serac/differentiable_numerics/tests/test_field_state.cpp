@@ -195,14 +195,16 @@ TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
   double initial_dt = dt.get();
   double initial_h = h.get();
 
-  serac::FieldState u = dt * velo;
+  auto u = dt * velo;
+  auto v = accel + disp;
   u = dt * disp + h * u;
-  u = 0.2 * disp + dt * accel + h * u;
+  u = 0.2 * disp + dt * accel + h * u + v;
   u = 0.2 * disp + accel + h * u;
 
-  serac::FieldState u_exact = serac::axpby(initial_dt, velo, 0.0, velo);
+  auto u_exact = serac::axpby(initial_dt, velo, 0.0, velo);
+  auto v_exact = serac::axpby(1.0, accel, 1.0, disp);
   u_exact = axpby(initial_dt, disp, initial_h, u_exact);
-  u_exact = axpby(1.0, axpby(0.2, disp, initial_dt, accel), initial_h, u_exact);
+  u_exact = axpby(1.0, axpby(1.0, axpby(0.2, disp, initial_dt, accel), initial_h, u_exact), 1.0, v_exact);
   u_exact = axpby(1.0, axpby(0.2, disp, 1.0, accel), initial_h, u_exact);
 
   auto uu_exact = serac::inner_product(u_exact, u_exact);

@@ -290,6 +290,8 @@ struct FieldStateWeightedSum {
 
   FieldStateWeightedSum(const FieldStateWeightedSum& old) = default;
 
+  FieldStateWeightedSum& operator =(const FieldStateWeightedSum& old) = default;
+
   FieldStateWeightedSum& operator += (const FieldStateWeightedSum& b) {
     weights.insert(weights.end(), b.weights.begin(), b.weights.end());
     weighted_fields.insert(weighted_fields.end(), b.weighted_fields.begin(), b.weighted_fields.end());
@@ -322,6 +324,9 @@ FieldStateWeightedSum operator*(const gretl::State<double>& a, const FieldState&
 
 /// @brief multiply scalar by a FieldState to get a temporary FieldStateWeightedSum which can cast back to a FieldState
 FieldStateWeightedSum operator*(const FieldState& b, const gretl::State<double>& a);
+
+/// @brief add two FieldState
+FieldStateWeightedSum operator+(const FieldState& x, const FieldState& y);
 
 /// @brief add two FieldStateWeightedSum
 FieldStateWeightedSum operator+(const FieldStateWeightedSum& ax, const FieldStateWeightedSum& by);
