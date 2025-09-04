@@ -6,6 +6,7 @@
 
 set(differentiable_numerics_sources
     state_advancer.cpp
+    field_state.cpp
     mechanics.cpp
     )
 
