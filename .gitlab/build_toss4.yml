@@ -55,7 +55,7 @@ toss4-gcc_13_3_1-src:
   variables:
     COMPILER: "gcc@13.3.1"
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
@@ -64,7 +64,7 @@ toss4-gcc_13_3_1-src-no-tribol:
   variables:
     COMPILER: "gcc@13.3.1"
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -UTRIBOL_DIR"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -UTRIBOL_DIR"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
@@ -73,7 +73,7 @@ toss4-gcc_13_3_1-src-no-optional-solvers:
   variables:
     COMPILER: "gcc@13.3.1"
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -USUNDIALS_DIR -UPETSC_DIR"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -USUNDIALS_DIR -UPETSC_DIR"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
