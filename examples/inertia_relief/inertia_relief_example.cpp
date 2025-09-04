@@ -245,7 +245,7 @@ int main(int argc, char* argv[])
 
   serac::tensor<double, dim> constant_force{};
   for (int i = 0; i < dim; i++) {
-    constant_force[i] = -1.e0;
+    constant_force[i] = 1.e0;
   }
 
   solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
@@ -253,7 +253,7 @@ int main(int argc, char* argv[])
   });
 
   // construct constraints
-  params[0] = 1.2;
+  params[0] = 1.;
 
   using ObjectiveT =
       serac::FunctionalObjective<dim, serac::Parameters<VectorSpace, DensitySpace>>;  // functional objective on
