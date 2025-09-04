@@ -25,8 +25,8 @@ struct MeshFixture : public ::testing::Test {
     auto mfem_shape = mfem::Element::QUADRILATERAL;
     double length = 1.0;
     double width = 1.0;
-    mesh_ = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem_shape, true, length, width), MESHTAG, 0,
-                                         0);
+    mesh_ = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem_shape, true, length, width), MESHTAG,
+                                          0, 0);
     checkpointer_ = std::make_shared<gretl::DataStore>(5);
 
     std::string physics_name = "generic";
@@ -75,7 +75,7 @@ TEST_F(MeshFixture, FieldStateWithDifferentiable_axpby)
   serac::FieldState velo = states_[1];
   serac::FieldState accel = states_[2];
   gretl::State<double> dt = *dt_;
-  double dt_f = dt.get(); // fixed dt for correctness checks
+  double dt_f = dt.get();  // fixed dt for correctness checks
 
   auto u = axpby(dt, disp, dt, velo);
   auto u_exact = axpby(dt_f, disp, dt_f, velo);
@@ -87,7 +87,7 @@ TEST_F(MeshFixture, FieldStateWithDifferentiable_axpby)
   EXPECT_EQ(uu.get(), uu_exact.get());
 
   checkpointer_->back_prop();
-  
+
   EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
   EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
   EXPECT_GT(serac::check_grad_wrt(uu, dt, *checkpointer_, 1e-7, 4, true), 0.95);
@@ -116,7 +116,7 @@ TEST_F(MeshFixture, FieldStateWeightedSum)
   EXPECT_EQ(uu.get(), uu_exact.get());
 
   checkpointer_->back_prop();
-  
+
   EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
   EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
   EXPECT_GT(serac::check_grad_wrt(uu, accel, *checkpointer_, 1e-5, 4, true), 0.95);
@@ -148,7 +148,7 @@ TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum)
   ASSERT_EQ(uu.get(), uu_exact.get());
 
   checkpointer_->back_prop();
-  
+
   EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
   EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
   EXPECT_GT(serac::check_grad_wrt(uu, accel, *checkpointer_, 1e-5, 4, true), 0.95);
@@ -175,7 +175,7 @@ TEST_F(MeshFixture, FieldStateWithDifferentiable_VariousCombinations)
   EXPECT_EQ(uu.get(), uu_exact.get());
 
   checkpointer_->back_prop();
-  
+
   EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
   EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
   EXPECT_GT(serac::check_grad_wrt(uu, dt, *checkpointer_, 1e-7, 4, true), 0.95);
