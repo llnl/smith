@@ -53,11 +53,24 @@ void Mesh::createDomains()
   domains_.insert({internalBoundaryName(), serac::InteriorFaces(*mfem_mesh_)});
 }
 
+void Mesh::errorIfDomainExists(const std::string& domain_name) const
+{
+  SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
+                axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
+}
+
 serac::Domain& Mesh::entireBody() const { return domain(entireBodyName()); }
 
 serac::Domain& Mesh::entireBoundary() const { return domain(entireBoundaryName()); }
 
 serac::Domain& Mesh::internalBoundary() const { return domain(internalBoundaryName()); }
+
+void Mesh::insertDomain(const std::string& domain_name, const Domain& domain)
+{
+  SLIC_ERROR_IF(&this->mfemParMesh() != &domain.mesh_, "A domain inserted onto a mesh must be defined on that mesh");
+  errorIfDomainExists(domain_name);
+  domains_.insert({domain_name, domain});
+}
 
 serac::Domain& Mesh::domain(const std::string& domain_name) const
 {
@@ -69,8 +82,7 @@ serac::Domain& Mesh::domain(const std::string& domain_name) const
 serac::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name,
                                                  std::function<bool(std::vector<vec2>, int)> func)
 {
-  SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
-                axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
+  errorIfDomainExists(domain_name);
   domains_.emplace(domain_name, Domain::ofBoundaryElements(*mfem_mesh_, func));
   return domain(domain_name);
 }
@@ -78,8 +90,7 @@ serac::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name,
 serac::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name,
                                                  std::function<bool(std::vector<vec3>, int)> func)
 {
-  SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
-                axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
+  errorIfDomainExists(domain_name);
   domains_.emplace(domain_name, Domain::ofBoundaryElements(*mfem_mesh_, func));
   return domain(domain_name);
 }
@@ -87,8 +98,7 @@ serac::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name,
 serac::Domain& Mesh::addDomainOfBodyElements(const std::string& domain_name,
                                              std::function<bool(std::vector<vec2>, int)> func)
 {
-  SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
-                axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
+  errorIfDomainExists(domain_name);
   domains_.emplace(domain_name, Domain::ofElements(*mfem_mesh_, func));
   return domain(domain_name);
 }
@@ -96,8 +106,7 @@ serac::Domain& Mesh::addDomainOfBodyElements(const std::string& domain_name,
 serac::Domain& Mesh::addDomainOfBodyElements(const std::string& domain_name,
                                              std::function<bool(std::vector<vec3>, int)> func)
 {
-  SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
-                axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
+  errorIfDomainExists(domain_name);
   domains_.emplace(domain_name, Domain::ofElements(*mfem_mesh_, func));
   return domain(domain_name);
 }
