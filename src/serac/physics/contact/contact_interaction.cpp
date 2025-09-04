@@ -68,7 +68,9 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
 
   // set up Tribol to compute exact Jacobian if requested
   if (getContactOptions().jacobian == ContactJacobian::Exact) {
+#ifdef SERAC_USE_ENZYME
     tribol::enableEnzyme(interaction_id, true);
+#endif
     tribol::registerMfemReferenceCoords(interaction_id, static_cast<const mfem::ParGridFunction&>(*mesh.GetNodes()));
   }
 }

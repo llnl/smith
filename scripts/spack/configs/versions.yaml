@@ -27,6 +27,9 @@ packages:
   mfem:
     require:
     - spec: "@4.8.0.1"
+  petsc:
+    require:
+    - spec: "@3.21.6"
   raja:
     require:
     - spec: "@2024.07.0"

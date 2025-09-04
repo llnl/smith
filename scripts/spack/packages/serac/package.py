@@ -60,37 +60,47 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     variant("profiling", default=False, 
             description="Build with hooks for Adiak/Caliper performance analysis")
 
-    variant("petsc", default=True,
+    variant("enzyme", default=True, sticky=True,
+            description="Enable Enzyme Automatic Differentiation Framework")
+    variant("petsc", default=True, sticky=True,
             description="Enable PETSc support")
-    variant("slepc", default=True, description="Enable SLEPc integration") 
-    variant("sundials", default=True,
+    variant("slepc", default=True,  sticky=True,
+            description="Enable SLEPc integration")
+    variant("sundials", default=True, sticky=True,
             description="Build MFEM TPL with SUNDIALS nonlinear/ODE solver support")
-    variant("umpire",   default=True,
+    variant("umpire",   default=True, sticky=True,
             description="Build with portable memory access support")
-    variant("raja",     default=True,
+    variant("raja",     default=True, sticky=True,
             description="Build with portable kernel execution support")
-    variant("tribol", default=True,
+    variant("tribol", default=True, sticky=True,
             description="Build Tribol, an interface physics library")
-    variant("strumpack", default=True,
+    variant("strumpack", default=True, sticky=True,
             description="Build MFEM TPL with Strumpack, a direct linear solver library")
 
     # -----------------------------------------------------------------------
     # Dependencies
     # -----------------------------------------------------------------------
     # Basic dependencies
+    depends_on("c", type="build")
+    depends_on("cxx", type="build")
+    # Serac itself has no fortran but needs to pass a constrained fortran compiler
+    # to its dependencies
+    depends_on("fortran", type="build")
+
     depends_on("mpi")
     depends_on("cmake@3.14:")
     depends_on("cmake@3.21:", type="build", when="+rocm")
 
     depends_on("lua")
 
+    depends_on('enzyme@0.0.180', when="+enzyme")
+
     # Devtool dependencies these need to match serac_devtools/package.py
     depends_on("cppcheck", when="+devtools")
     depends_on("doxygen", when="+devtools")
-    depends_on("llvm+clang@14", when="+devtools")
+    depends_on("llvm@19+clang", when="+devtools")
     depends_on("python", when="+devtools")
     depends_on("py-sphinx", when="+devtools")
-    depends_on("py-ats", when="+devtools")
 
     with when("+sundials"):
         # Going to sundials@7: causes 80%+ test failures
@@ -235,6 +245,10 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     #
     # Conflicts
     #
+
+    # Enzyme required an LLVM-based compiler
+    for compiler in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
+        conflicts("+enzyme", when=f"%[virtuals=c,cxx] {compiler}")
 
     conflicts("+openmp", when="+rocm")
     conflicts("+cuda", when="+rocm")
@@ -505,8 +519,8 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
             entries.append(cmake_cache_path("ARPACK_DIR", dep_dir))
 
         # optional tpls
-        for dep in ("adiak", "amgx", "caliper", "petsc", "raja", "slepc", "strumpack", "sundials", "umpire",
-                    "tribol"):
+        for dep in ("adiak", "amgx", "caliper", "enzyme", "petsc", "raja", "slepc",
+                    "strumpack", "sundials", "umpire", "tribol"):
             if spec.satisfies("^{0}".format(dep)):
                 dep_dir = get_spec_path(spec, dep, path_replacements)
                 entries.append(cmake_cache_path("%s_DIR" % dep.upper(),
@@ -528,10 +542,6 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
             path1 = os.path.realpath(spec["cppcheck"].prefix)
             path2 = os.path.realpath(spec["doxygen"].prefix)
             self.find_path_replacement(path1, path2, path_replacements, "DEVTOOLS_ROOT", entries)
-
-            ats_bin_dir = get_spec_path(spec, "py-ats", path_replacements, use_bin=True)
-            ats_bin_dir = pjoin(ats_bin_dir, "ats")
-            entries.append(cmake_cache_path("ATS_EXECUTABLE", ats_bin_dir))
 
             # Only turn on clang tools support if devtools is on
             llvm_path = get_spec_path(spec, "llvm", path_replacements, use_bin=True)
