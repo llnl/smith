@@ -104,9 +104,9 @@ TEST_F(MeshFixture, FieldStateWeightedSum)
   u = serac::weighted_sum({0.1, 0.4}, {disp, u});
   u = serac::weighted_sum({0.2, 0.3, 0.5}, {disp, accel, u});
 
-  serac::FieldState u_exact = 0.3 * velo;
-  u_exact = 0.1 * disp + 0.4 * u_exact;
-  u_exact = 0.2 * disp + 0.3 * accel + 0.5 * u_exact;
+  serac::FieldState u_exact = axpby(0.3, velo, 0.0, velo);
+  u_exact = axpby(0.1, disp, 0.4, u_exact);
+  u_exact = axpby(1.0, axpby(0.2, disp, 0.3, accel), 0.5, u_exact);
 
   auto uu_exact = serac::inner_product(u_exact, u_exact);
   auto uu = serac::inner_product(u, u);
@@ -135,10 +135,10 @@ TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum)
   u = serac::weighted_sum({0.2}, {disp}, {dt, h}, {accel, u});
   u = serac::weighted_sum({0.2, dt.get()}, {disp, accel}, {h}, {u});
 
-  serac::FieldState u_exact = dt.get() * velo;
-  u_exact = dt.get() * disp + h.get() * u_exact;
-  u_exact = 0.2 * disp + dt.get() * accel + h.get() * u_exact;
-  u_exact = 0.2 * disp + dt.get() * accel + h.get() * u_exact;
+  serac::FieldState u_exact = serac::axpby(dt.get(), velo, 0.0, velo);
+  u_exact = axpby(dt.get(), disp, h.get(), u_exact);
+  u_exact = axpby(1.0, axpby(0.2, disp, dt.get(), accel), h.get(), u_exact);
+  u_exact = axpby(1.0, axpby(0.2, disp, dt.get(), accel), h.get(), u_exact);
 
   auto uu_exact = serac::inner_product(u_exact, u_exact);
   auto uu = serac::inner_product(u, u);
