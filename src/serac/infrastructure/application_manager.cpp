@@ -101,6 +101,11 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : 
 #endif
 
 #ifdef SERAC_USE_PETSC
+  // PETSc tries to parse all command line options, but Serac applications
+  // may have others intended for MPI or the application itself.
+  // Silence the PETSc warning that there are leftover options it doesn't
+  // know.
+  PetscOptionsSetValue(NULL, "-options_left", "no");
 #ifdef SERAC_USE_SLEPC
   mfem::MFEMInitializeSlepc(&argc, &argv);
 #else
