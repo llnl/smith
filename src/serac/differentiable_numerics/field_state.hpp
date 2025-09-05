@@ -103,8 +103,11 @@ struct FieldStateWeightedSum {
   }
 
   /// @brief construct from State<double> weights, and fields
-  FieldStateWeightedSum(const std::vector<gretl::State<double>>& w, const std::vector<FieldState>& f)
-      : differentiable_weights_(w), differentiably_weighted_fields_(f), differentiable_scale_factors_(w.size(), 1.0)
+  FieldStateWeightedSum(const std::vector<gretl::State<double>>& w, const std::vector<FieldState>& f,
+                        double initial_scaling)
+      : differentiable_weights_(w),
+        differentiably_weighted_fields_(f),
+        differentiable_scale_factors_(w.size(), initial_scaling)
   {
   }
 

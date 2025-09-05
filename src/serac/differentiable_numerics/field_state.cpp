@@ -30,36 +30,6 @@ gretl::State<double> inner_product(const FieldState& a, const FieldState& b)
         B_->Add(product_, *A);
       },
       a, b);
-
-  /*
-  using T = FieldState::type;
-  using D = FieldState::dual_type;
-  gretl::State<double> c = a.create_state<double>({a, b});
-
-  c.set_eval([](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
-    auto A = upstreams[0].get<T>();
-    auto B = upstreams[1].get<T>();
-    double prod = serac::innerProduct(*A, *B);
-    downstream.set(prod);
-  });
-
-  c.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    const double& Cbar = downstream.get_dual<double, double>();
-    auto& a_ = upstreams[0];
-    auto& b_ = upstreams[1];
-
-    const FiniteElementState& A = *a_.get<T>();
-    const FiniteElementState& B = *b_.get<T>();
-
-    FiniteElementDual& Abar = *a_.get_dual<D, T>();
-    Abar.Add(Cbar, B);
-
-    FiniteElementDual& Bbar = *b_.get_dual<D, T>();
-    Bbar.Add(Cbar, A);
-  });
-
-  return c.finalize();
-*/
 }
 
 FieldState axpby(double a, const FieldState& x, double b, const FieldState& y)
@@ -108,41 +78,6 @@ FieldState axpby(const gretl::State<double>& a, const FieldState& x, const gretl
         B_ += serac::innerProduct(*Z_, *Y);
       },
       x, y, a, b);
-
-  /*
-  auto z = x.clone({a, x, b, y});
-
-  z.set_eval([](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
-    double A = upstreams[0].get<double>();
-    const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
-    double B = upstreams[2].get<double>();
-    const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
-
-    FEFieldPtr Z = std::make_shared<FiniteElementState>(X->space(), "axpby");
-    add(A, *X, B, *Y, *Z);
-    downstream.set<FEFieldPtr, FEDualPtr>(Z);
-  });
-
-  z.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    double A = upstreams[0].get<double>();
-    const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
-    double B = upstreams[2].get<double>();
-    const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
-
-    const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
-    double& A_dual = upstreams[0].get_dual<double, double>();
-    FEDualPtr& X_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();
-    double& B_dual = upstreams[2].get_dual<double, double>();
-    FEDualPtr& Y_dual = upstreams[3].get_dual<FEDualPtr, FEFieldPtr>();
-
-    add(*X_dual, A, *Z_dual, *X_dual);
-    add(*Y_dual, B, *Z_dual, *Y_dual);
-    A_dual += serac::innerProduct(*Z_dual, *X);
-    B_dual += serac::innerProduct(*Z_dual, *Y);
-  });
-
-  return z.finalize();
-  */
 }
 
 /// @brief compute the differentiable weighted sum of fields, weighted by both double weights, and also
@@ -331,7 +266,7 @@ FieldStateWeightedSum operator*(const FieldStateWeightedSum& b, double a)
 
 FieldStateWeightedSum operator*(const gretl::State<double>& a, const FieldState& b)
 {
-  return FieldStateWeightedSum({a}, {b});
+  return FieldStateWeightedSum({a}, {b}, 1.0);
 }
 
 FieldStateWeightedSum operator*(const FieldState& b, const gretl::State<double>& a) { return a * b; }
