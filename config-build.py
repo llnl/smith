@@ -90,7 +90,7 @@ def parse_arguments():
                         "--hostconfig",
                         default="",
                         type=str,
-                        help="select a specific host-config file to initalize CMake's cache")
+                        help="select a specific host-config file to initialize CMake's cache")
 
     parser.add_argument("--print-default-host-config",
                         action='store_true',
@@ -100,7 +100,7 @@ def parse_arguments():
                         action='store_true',
                         help="print the machine name for this system and exit")
 
-    parser.add_argument("-n", 
+    parser.add_argument("-n",
                         "--ninja",
                         action='store_true',
                         help="use ninja generator to build serac instead of make")
@@ -139,7 +139,7 @@ def get_platform_info(hostconfigpath):
     if platform_info.endswith(".cmake"):
         platform_info = platform_info[:-6]
     return platform_info
-        
+
 
 #####################
 # Setup Build Dir
@@ -190,7 +190,7 @@ def setup_install_dir(args, platform_info):
 
 
 ############################
-# Check if executable exists 
+# Check if executable exists
 ############################
 def executable_exists(path):
     if path == "cmake":
