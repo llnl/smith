@@ -14,6 +14,7 @@
 
 #include <vector>
 #include "serac/differentiable_numerics/field_state.hpp"
+#include "serac/gretl/double_state.hpp"
 
 namespace serac {
 
@@ -28,11 +29,13 @@ class StateAdvancer {
   virtual ~StateAdvancer() {}
 
   /// @brief interface method to advance the states from a given cycle and time, to the next cycle (cycle+1) and time
-  /// (time+dt). shape_disp and params are assumed to be fixed in this advance.
-  virtual std::tuple<std::vector<FieldState>, double> advanceState(const FieldState& shape_disp,
-                                                                   const std::vector<FieldState>& states,
-                                                                   const std::vector<FieldState>& params, double time,
-                                                                   double dt, size_t cycle) const = 0;
+  /// (time+dt). shape_disp and params are assumed to be fixed in this advance.  Time and time increment (dt) are gretl::State in order to record the duals on the reverse pass
+  virtual std::tuple<std::vector<FieldState>, DoubleState> advanceState(const FieldState& shape_disp,
+                                                                        const std::vector<FieldState>& states,
+                                                                        const std::vector<FieldState>& params,
+                                                                        DoubleState time, DoubleState dt,
+                                                                        size_t cycle) const = 0;
+
 };
 
 /// Lumped mass explicit dynamics implementation for the StateAdvancer interface
@@ -46,10 +49,10 @@ class LumpedMassExplicitNewmark : public StateAdvancer {
   }
 
   /// @overload
-  std::tuple<std::vector<FieldState>, double> advanceState(const FieldState& shape_disp,
+  std::tuple<std::vector<FieldState>, DoubleState> advanceState(const FieldState& shape_disp,
                                                            const std::vector<FieldState>& states,
-                                                           const std::vector<FieldState>& params, double time,
-                                                           double dt, size_t cycle) const override;
+                                                           const std::vector<FieldState>& params, DoubleState time,
+                                                           DoubleState dt, size_t cycle) const override;
 
  private:
   const std::shared_ptr<WeakForm> residual_eval;               ///< weak form to evaluate mechanical forces

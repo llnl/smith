@@ -159,20 +159,29 @@ const FiniteElementState& Mechanics::adjoint([[maybe_unused]] const std::string&
   return *adjoints_[0];
 }
 
-void Mechanics::advanceTimestep([[maybe_unused]] double dt)
+void Mechanics::advanceTimestep(double dt)
 {
   if (cycle_ == 0) {
     field_states_ = initial_field_states_;
     milestones_.push_back(make_milestone(field_states_).step());
   }
 
+  double time_for_capture = time_;
   double target_time = time_ + dt;
 
+  DoubleState stable_dt = dt_estimator_->dt(*field_shape_displacement_, field_states_, field_params_);
+  DoubleState time = gretl::clone_state([time_for_capture](double) { return time_for_capture; }, [](double, double, double&, double) {}, stable_dt);
   while (time_ < target_time) {
-    double stable_dt = dt_estimator_->dt(*field_shape_displacement_, field_states_, field_params_);
-    double dt_to_take = std::min(stable_dt, target_time - time_);
-    std::tie(field_states_, time_) = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_,
-                                                             time_, dt_to_take, static_cast<size_t>(cycle_));
+    if (time.get() + stable_dt.get() > target_time) {
+      stable_dt = target_time - time;
+    }
+
+    std::tie(field_states_, time) = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_,
+                                                             time, stable_dt, static_cast<size_t>(cycle_));
+    time_ = time.get();
+    if (time_ < target_time) {
+      stable_dt = dt_estimator_->dt(*field_shape_displacement_, field_states_, field_params_);
+    }
   }
 
   ++cycle_;

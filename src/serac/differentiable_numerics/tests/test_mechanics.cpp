@@ -126,6 +126,8 @@ struct MeshFixture : public testing::Test {
     auto velo = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_velocity", mesh->tag());
     auto accel = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
     auto density0 = create_field_state(*checkpointer, DensitySpace{}, physics_name + "_density", mesh->tag());
+    serac::DoubleState fixed_dt = checkpointer->create_state<double,double>(1e-3);
+    
     *density0.get() = density;
 
     initial_states = {disp, velo, accel};
@@ -155,7 +157,7 @@ struct MeshFixture : public testing::Test {
 
     std::shared_ptr<serac::StateAdvancer> time_integrator =
         std::make_shared<serac::LumpedMassExplicitNewmark>(solid_mechanics_residual, solid_mass_residual, bc_manager);
-    auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(1e-3);
+    auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(fixed_dt);
 
     // construct mechanics
     mechanics = std::make_shared<serac::Mechanics>(mesh, checkpointer, *shape_disp, states, params, time_integrator,

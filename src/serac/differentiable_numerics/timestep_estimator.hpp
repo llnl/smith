@@ -13,6 +13,7 @@
 #pragma once
 
 #include "serac/differentiable_numerics/field_state.hpp"
+#include "serac/gretl/double_state.hpp"
 
 namespace serac {
 
@@ -23,7 +24,7 @@ class TimestepEstimator {
   virtual ~TimestepEstimator() {}
 
   /// @brief Interface method for estimating the stable timestep give the current state and parameters
-  virtual double dt([[maybe_unused]] const FieldState& shape_disp, const std::vector<FieldState>& states,
+  virtual DoubleState dt(const FieldState& shape_disp, const std::vector<FieldState>& states,
                     const std::vector<FieldState>& params) const = 0;
 };
 
@@ -32,16 +33,16 @@ class ConstantTimeStepEstimator : public TimestepEstimator {
  public:
   /// @brief Constructor
   /// @param dt fixed timestep to use throughout the simulation
-  ConstantTimeStepEstimator(double dt) : dt_(dt) {}
+  ConstantTimeStepEstimator(DoubleState dt) : dt_(dt) {}
 
   /// @overload
-  double dt([[maybe_unused]] const FieldState& shape_disp, [[maybe_unused]] const std::vector<FieldState>& states,
+  DoubleState dt([[maybe_unused]] const FieldState& shape_disp, [[maybe_unused]] const std::vector<FieldState>& states,
             [[maybe_unused]] const std::vector<FieldState>& params) const override
   {
     return dt_;
   }
 
-  double dt_;  ///< fixed timestep
+  DoubleState dt_;  ///< fixed timestep
 };
 
 }  // namespace serac

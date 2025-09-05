@@ -26,11 +26,11 @@ FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryCondit
   return s_bc.finalize();
 }
 
-std::tuple<std::vector<FieldState>, double> LumpedMassExplicitNewmark::advanceState(
+std::tuple<std::vector<FieldState>, DoubleState> LumpedMassExplicitNewmark::advanceState(
     const FieldState& shape_disp, const std::vector<FieldState>& states, const std::vector<FieldState>& params,
-    double time, double dt, [[maybe_unused]] size_t cycle) const
+    DoubleState time, DoubleState dt, [[maybe_unused]] size_t cycle) const
 {
-  TimeInfo time_info(time, dt, cycle);
+  TimeInfo time_info(time.get(), dt.get(), cycle);
 
   SERAC_MARK_FUNCTION;
   SLIC_ERROR_IF(states.size() != 3, "ExplicitNewmark is a 2nd order time integrator requiring 3 states.");
@@ -53,8 +53,8 @@ std::tuple<std::vector<FieldState>, double> LumpedMassExplicitNewmark::advanceSt
   const FieldState& a = states[ACCEL];
 
   // first pass of setting u and v predictors
-  FieldState v_half_step = axpby(1.0, v, 0.5 * dt, a);
-  auto u_pred = axpby(1.0, u, dt, v_half_step);
+  FieldState v_half_step = v + 0.5 * (dt * a); //axpby(1.0, v, 0.5 * dt, a);
+  FieldState u_pred = u + dt * v_half_step; //auto u_pred = axpby(1.0, u, dt, v_half_step);
 
   // zeroing out u predictor dofs associated with zero BCs
   u_pred = applyZeroBoundaryConditions(u_pred, bc_manager.get());
@@ -75,11 +75,12 @@ std::tuple<std::vector<FieldState>, double> LumpedMassExplicitNewmark::advanceSt
   // auto a_pred = componentWiseMult(*m_diag_inv, zero_mass_res, bc_manager.get());
   auto a_pred = componentWiseMult(diag_inv, zero_mass_res, bc_manager.get());
   // update the v predictor after a predictor solves
-  auto v_pred = axpby(1.0, v_half_step, 0.5 * dt, a_pred);
+  FieldState v_pred = v_half_step + 0.5 * (dt * a_pred);
   // place all solved updated states into the output
   auto new_states = std::vector<FieldState>{u_pred, v_pred, a_pred};
+  DoubleState time_new = time + dt;
 
-  return std::make_tuple(new_states, time + dt);  // return the new states output along with the new time
+  return std::make_tuple(new_states, time_new);  // return the new states output along with the new time
 }
 
 }  // namespace serac

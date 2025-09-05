@@ -21,6 +21,7 @@ using FEFieldPtr = std::shared_ptr<FiniteElementState>;      ///< typedef
 using FEDualPtr = std::shared_ptr<FiniteElementDual>;        ///< typedef
 using FieldState = gretl::State<FEFieldPtr, FEDualPtr>;      ///< typedef
 using ResultantState = gretl::State<FEDualPtr, FEFieldPtr>;  ///< typedef
+using DoubleState = gretl::State<double, double>;            ///> typedef
 
 /// @brief functor which takes a std::shared_ptr<FiniteElementState>, and returns a zero-valued
 /// std::shared_ptr<FiniteElementDual> with the same space
@@ -94,7 +95,7 @@ inline FieldState weighted_average(const FieldState& a, const FieldState& b, dou
 FieldState axpby(const gretl::State<double>& a, const FieldState& x, const gretl::State<double>& b,
                  const FieldState& y);
 
-/// @brief temporary object to register the multiplication of a gretl::State<d  ouble> with a FieldState.  Casts back
+/// @brief temporary object to register the multiplication of a gretl::State<double> with a FieldState.  Casts back
 struct FieldStateWeightedSum {
   /// @brief construct from double weights, and fields
   FieldStateWeightedSum(const std::vector<double>& w, const std::vector<FieldState>& f)
