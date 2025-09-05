@@ -89,6 +89,9 @@ class Mesh {
   /// @brief Returns domain boundary corresponding to the internal boundary elements
   serac::Domain& internalBoundary() const;
 
+  /// @brief Insert a domain onto mesh
+  void insertDomain(const std::string& domain_name, const Domain& domain);
+
   /// @brief Returns registered domain with specified name
   serac::Domain& domain(const std::string& domain_name) const;
 
@@ -129,6 +132,9 @@ class Mesh {
   /// @brief Sets up some initial domains: entire domain, entire boundary, and interior faces. Eventually we can read
   /// off names/blocks/attributes from the mesh and create default domains.
   void createDomains();
+
+  /// @brief Helper function used to check if a domain name already exists
+  void errorIfDomainExists(const std::string& domain_name) const;
 
   /// @brief string identifying mesh in the state manager
   std::string mesh_tag_;

@@ -39,114 +39,89 @@
 ####
 # Build jobs
 
-# Only run integration tests on one spec
-toss4-clang_14_0_6-src:
+toss4-clang_19_1_3-src:
   variables:
-    COMPILER: "clang@14.0.6"
-    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
+    COMPILER: "clang@19.1.3"
+    HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF"
+    # Only run integration tests on one spec (Disabled until integration tests are reenabled)
     # DO_INTEGRATION_TESTS: "yes"
-    ALLOC_NODES: "2"
-    ALLOC_TIME: "30"
-  extends: .src_build_on_toss4
-
-toss4-gcc_10_3_1-src:
-  variables:
-    COMPILER: "gcc@10.3.1"
-    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
+    # ALLOC_NODES: "2"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
 
-toss4-clang_16_0_6-src:
+toss4-gcc_13_3_1-src:
   variables:
-    COMPILER: "clang@16.0.6"
+    COMPILER: "gcc@13.3.1"
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
-    EXTRA_BUILD_OPTIONS: "--skip-install"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
 
-toss4-gcc_10_3_1-src-no-tribol:
+toss4-gcc_13_3_1-src-no-tribol:
   variables:
-    COMPILER: "gcc@10.3.1"
-    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -UTRIBOL_DIR"
+    COMPILER: "gcc@13.3.1"
+    HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -UTRIBOL_DIR"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
 
-toss4-gcc_10_3_1-src-no-optional-solvers:
+toss4-gcc_13_3_1-src-no-optional-solvers:
   variables:
-    COMPILER: "gcc@10.3.1"
-    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -USUNDIALS_DIR -UPETSC_DIR"
+    COMPILER: "gcc@13.3.1"
+    HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -USUNDIALS_DIR -UPETSC_DIR"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
 
-toss4-clang_16_0_6-tpl:
+toss4-clang_19_1_3-tpl:
   variables:
-    COMPILER: "clang@16.0.6"
-    SPEC: "--spec %${COMPILER}~openmp"
-    ALLOC_NODES: "1"
-    ALLOC_TIME: "45"
-  extends: .tpl_build_on_toss4
-
-toss4-clang_14_0_6-tpl:
-  variables:
-    COMPILER: "clang@14.0.6"
+    COMPILER: "clang@19.1.3"
     SPEC: "--spec %${COMPILER}"
     ALLOC_NODES: "1"
     ALLOC_TIME: "45"
   extends: .tpl_build_on_toss4
 
-toss4-gcc_10_3_1-tpl:
+toss4-gcc_13_3_1-tpl:
   variables:
-    COMPILER: "gcc@10.3.1"
+    COMPILER: "gcc@13.3.1"
     SPEC: "--spec %${COMPILER}"
     ALLOC_NODES: "1"
     ALLOC_TIME: "45"
   extends: .tpl_build_on_toss4
 
-toss4-clang_16_0_6-examples:
+toss4-clang_19_1_3-examples:
   variables:
-    COMPILER: "clang@16.0.6"
+    COMPILER: "clang@19.1.3"
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .examples_build_on_toss4
 
-toss4-clang_14_0_6-examples:
+toss4-gcc_13_3_1-examples:
   variables:
-    COMPILER: "clang@14.0.6"
-    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
+    COMPILER: "gcc@13.3.1"
+    HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .examples_build_on_toss4
 
-toss4-gcc_10_3_1-examples:
+toss4-clang_19_1_3-benchmarks:
   variables:
-    COMPILER: "gcc@10.3.1"
-    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
-    ALLOC_NODES: "1"
-    ALLOC_TIME: "30"
-  extends: .examples_build_on_toss4
-
-toss4-clang_14_0_6-benchmarks:
-  variables:
-    COMPILER: "clang@14.0.6"
-    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
+    COMPILER: "clang@19.1.3"
+    HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "75"
   extends: .benchmarks_build_on_toss4
 
-toss4-gcc_10_3_1-benchmarks:
+toss4-gcc_13_3_1-benchmarks:
   variables:
-    COMPILER: "gcc@10.3.1"
-    HOST_CONFIG: "ruby-toss_4_x86_64_ib-${COMPILER}.cmake"
+    COMPILER: "gcc@13.3.1"
+    HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "75"
   extends: .benchmarks_build_on_toss4

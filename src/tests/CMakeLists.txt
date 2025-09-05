@@ -23,6 +23,19 @@ blt_list_append(TO language_depends ELEMENTS blt::openmp IF SERAC_ENABLE_OPENMP)
 serac_add_tests( SOURCES    ${language_tests}
                  DEPENDS_ON ${language_depends})
 
+#
+# Enzyme test
+#
+
+if(ENZYME_FOUND)
+    serac_add_tests( SOURCES    enzyme_smoketest.cpp
+                     DEPENDS_ON ClangEnzymeFlags gtest)
+endif()
+
+#
+# GPU tests
+#
+
 if(SERAC_ENABLE_CUDA)
     blt_add_library( NAME       cuda_smoketest_kernel
                      SOURCES    cuda_smoketest_kernel.cpp
