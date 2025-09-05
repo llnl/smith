@@ -195,25 +195,33 @@ FieldState weighted_sum(const std::vector<double>& weights, const std::vector<Fi
 
 /// @brief temporary object to register the multiplication of a gretl::State<d  ouble> with a FieldState.  Casts back
 struct FieldStateWeightedSum {
+  /// @brief construct from double weights, and fields
   FieldStateWeightedSum(const std::vector<double>& w, const std::vector<FieldState>& f) : weights(w), weighted_fields(f)
   {
   }
 
+  /// @brief construct from State<double> weights, and fields
   FieldStateWeightedSum(const std::vector<gretl::State<double>>& w, const std::vector<FieldState>& f)
       : differentiable_weights(w), differentiably_weighted_fields(f), differentiable_scale_factors(w.size(), 1.0)
   {
   }
 
+  /// @brief default copy
   FieldStateWeightedSum(const FieldStateWeightedSum& old) = default;
 
+  /// @brief default assignment
   FieldStateWeightedSum& operator=(const FieldStateWeightedSum& old) = default;
 
+  /// @brief add another weighted sum in place
   FieldStateWeightedSum& operator+=(const FieldStateWeightedSum& b);
 
+  /// @brief subtract another weighted sum in place
   FieldStateWeightedSum& operator-=(const FieldStateWeightedSum& b);
 
+  /// @brief mulitply by a fixed scalar
   FieldStateWeightedSum& operator*=(double weight);
 
+  /// @brief negate
   FieldStateWeightedSum operator-() const;
 
   std::vector<double> weights;                               ///< non-differentiable weights
