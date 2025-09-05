@@ -2,14 +2,54 @@
 
 namespace serac {
 
-FieldState weighted_sum(std::vector<double> weights, std::vector<FieldState> weighted_fields,
-                        std::vector<gretl::State<double>> differentiable_weights,
-                        std::vector<FieldState> differentiably_weighted_fields)
+/// @brief axpby using State<double> and FieldState
+FieldState axpby(const gretl::State<double>& a, const FieldState& x, const gretl::State<double>& b, const FieldState& y)
+{
+  auto z = x.clone({a, x, b, y});
+
+  z.set_eval([](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
+    double A = upstreams[0].get<double>();
+    const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
+    double B = upstreams[2].get<double>();
+    const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
+
+    FEFieldPtr Z = std::make_shared<FiniteElementState>(X->space(), "axpby");
+    add(A, *X, B, *Y, *Z);
+    downstream.set<FEFieldPtr, FEDualPtr>(Z);
+  });
+
+  z.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
+    double A = upstreams[0].get<double>();
+    const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
+    double B = upstreams[2].get<double>();
+    const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
+
+    const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
+    double& A_dual = upstreams[0].get_dual<double, double>();
+    FEDualPtr& X_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();
+    double& B_dual = upstreams[2].get_dual<double, double>();
+    FEDualPtr& Y_dual = upstreams[3].get_dual<FEDualPtr, FEFieldPtr>();
+
+    add(*X_dual, A, *Z_dual, *X_dual);
+    add(*Y_dual, B, *Z_dual, *Y_dual);
+    A_dual += serac::innerProduct(*Z_dual, *X);
+    B_dual += serac::innerProduct(*Z_dual, *Y);
+  });
+
+  return z.finalize();
+}
+
+FieldState weighted_sum(const std::vector<double>& weights, const std::vector<FieldState>& weighted_fields,
+                        const std::vector<gretl::State<double>>& differentiable_weights,
+                        const std::vector<FieldState>& differentiably_weighted_fields,
+                        const std::vector<double>& differentiable_scale_factors)
 {
   SLIC_ERROR_IF(weights.size() != weighted_fields.size(),
                 "weights and the fields they are weighting do not match in size");
   SLIC_ERROR_IF(differentiable_weights.size() != differentiably_weighted_fields.size(),
                 "differentiable weights and the fields they are weighting do not match in size");
+  SLIC_ERROR_IF(differentiable_weights.size() != differentiable_scale_factors.size(),
+                "differentiable weights and the vector of their signs do not match in size");
   SLIC_ERROR_IF((weights.size() == 0) && (differentiable_weights.size() == 0),
                 "At least 1 weight must be passed to a weighted sum");
 
@@ -21,7 +61,8 @@ FieldState weighted_sum(std::vector<double> weights, std::vector<FieldState> wei
   auto x = weights.size() ? weighted_fields[0] : differentiably_weighted_fields[0];
   auto z = x.clone(inputs);
 
-  z.set_eval([weights](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
+  z.set_eval([weights, differentiable_scale_factors](const gretl::UpstreamStates& upstreams,
+                                                     gretl::DownstreamState& downstream) {
     size_t num_weights = weights.size();
     size_t num_diffable_weights = (upstreams.size() - num_weights) / 2;
 
@@ -51,7 +92,8 @@ FieldState weighted_sum(std::vector<double> weights, std::vector<FieldState> wei
 
       if (weights.size() == 0) {
         start_index = 1;
-        weightOld = upstreams[num_weights].get<double>();
+        double scale = differentiable_scale_factors[0];
+        weightOld = scale * upstreams[num_weights].get<double>();
         vecOld = upstreams[num_weights + num_diffable_weights].get<FEFieldPtr>();
         if (num_diffable_weights == 1) {
           Z->Set(weightOld, *vecOld);
@@ -59,7 +101,8 @@ FieldState weighted_sum(std::vector<double> weights, std::vector<FieldState> wei
       }
 
       for (size_t i = start_index; i < num_diffable_weights; ++i) {
-        double weightNew = upstreams[num_weights + i].get<double>();
+        double scale = differentiable_scale_factors[i];
+        double weightNew = scale * upstreams[num_weights + i].get<double>();
         add(weightOld, *vecOld, weightNew, *upstreams[num_weights + num_diffable_weights + i].get<FEFieldPtr>(), *Z);
         weightOld = 1.0;
         vecOld = Z;
@@ -69,7 +112,8 @@ FieldState weighted_sum(std::vector<double> weights, std::vector<FieldState> wei
     downstream.set<FEFieldPtr, FEDualPtr>(Z);
   });
 
-  z.set_vjp([weights](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
+  z.set_vjp([weights, differentiable_scale_factors](gretl::UpstreamStates& upstreams,
+                                                    const gretl::DownstreamState& downstream) {
     size_t num_weights = weights.size();
     size_t num_diffable_weights = (upstreams.size() - num_weights) / 2;
 
@@ -84,45 +128,137 @@ FieldState weighted_sum(std::vector<double> weights, std::vector<FieldState> wei
     for (size_t i = 0; i < num_diffable_weights; ++i) {
       double& weight_dual = upstreams[num_weights + i].get_dual<double, double>();
       FEDualPtr& V_dual = upstreams[num_weights + num_diffable_weights + i].get_dual<FEDualPtr, FEFieldPtr>();
-      double weight = upstreams[num_weights + i].get<double>();
+      double scale = differentiable_scale_factors[i];
+      double weight = scale * upstreams[num_weights + i].get<double>();
       FEFieldPtr V = upstreams[num_weights + num_diffable_weights + i].get<FEFieldPtr>();
       add(*V_dual, weight, *Z_dual, *V_dual);
-      weight_dual += serac::innerProduct(*Z_dual, *V);
+      weight_dual += scale * serac::innerProduct(*Z_dual, *V);
     }
   });
 
   return z.finalize();
 }
 
-FieldStateWeightedSum operator*(double a, const FieldState& b) { return FieldStateWeightedSum({a},{b}); }
+FieldStateWeightedSum& FieldStateWeightedSum::operator+=(const FieldStateWeightedSum& b)
+{
+  weights.insert(weights.end(), b.weights.begin(), b.weights.end());
+  weighted_fields.insert(weighted_fields.end(), b.weighted_fields.begin(), b.weighted_fields.end());
+  differentiable_weights.insert(differentiable_weights.end(), b.differentiable_weights.begin(),
+                                b.differentiable_weights.end());
+  differentiably_weighted_fields.insert(differentiably_weighted_fields.end(), b.differentiably_weighted_fields.begin(),
+                                        b.differentiably_weighted_fields.end());
+  differentiable_scale_factors.insert(differentiable_scale_factors.end(), b.differentiable_scale_factors.begin(),
+                                      b.differentiable_scale_factors.end());
+  return *this;
+}
+
+FieldStateWeightedSum& FieldStateWeightedSum::operator-=(const FieldStateWeightedSum& b)
+{
+  const size_t num_initial_weights = weights.size();
+
+  weights.insert(weights.end(), b.weights.begin(), b.weights.end());
+  for (size_t n = num_initial_weights; n < weights.size(); ++n) {
+    weights[n] *= -1.0;
+  }
+
+  weighted_fields.insert(weighted_fields.end(), b.weighted_fields.begin(), b.weighted_fields.end());
+
+  differentiable_weights.insert(differentiable_weights.end(), b.differentiable_weights.begin(),
+                                b.differentiable_weights.end());
+
+  differentiably_weighted_fields.insert(differentiably_weighted_fields.end(), b.differentiably_weighted_fields.begin(),
+                                        b.differentiably_weighted_fields.end());
+
+  const size_t num_initial_differentiable_weights = differentiable_scale_factors.size();
+
+  differentiable_scale_factors.insert(differentiable_scale_factors.end(), b.differentiable_scale_factors.begin(),
+                                      b.differentiable_scale_factors.end());
+  for (size_t n = num_initial_differentiable_weights; n < differentiable_scale_factors.size(); ++n) {
+    differentiable_scale_factors[n] *= -1.0;
+  }
+  return *this;
+}
+
+FieldStateWeightedSum FieldStateWeightedSum::operator-() const
+{
+  FieldStateWeightedSum zero(std::vector<double>{}, std::vector<FieldState>{});
+  return zero -= *this;
+}
+
+FieldStateWeightedSum& FieldStateWeightedSum::operator*=(double weight)
+{
+  for (auto& w : weights) {
+    w *= weight;
+  }
+  for (auto& w : differentiable_scale_factors) {
+    w *= weight;
+  }
+  return *this;
+}
+
+FieldStateWeightedSum operator*(double a, const FieldState& b) { return FieldStateWeightedSum({a}, {b}); }
 
 FieldStateWeightedSum operator*(const FieldState& b, double a) { return a * b; }
 
-FieldStateWeightedSum operator*(const gretl::State<double>& a, const FieldState& b) { return FieldStateWeightedSum({a},{b}); }
+FieldStateWeightedSum operator*(double a, const FieldStateWeightedSum& b)
+{
+  FieldStateWeightedSum z = b;
+  return z *= a;
+}
+
+FieldStateWeightedSum operator*(const FieldStateWeightedSum& b, double a)
+{
+  FieldStateWeightedSum z = b;
+  return z *= a;
+}
+
+FieldStateWeightedSum operator*(const gretl::State<double>& a, const FieldState& b)
+{
+  return FieldStateWeightedSum({a}, {b});
+}
 
 FieldStateWeightedSum operator*(const FieldState& b, const gretl::State<double>& a) { return a * b; }
 
-/// @brief add two FieldState
 FieldStateWeightedSum operator+(const FieldState& x, const FieldState& y)
 {
   return FieldStateWeightedSum({1.0, 1.0}, {x, y});
 }
 
+FieldStateWeightedSum operator-(const FieldState& x, const FieldState& y)
+{
+  return FieldStateWeightedSum({1.0, -1.0}, {x, y});
+}
+
 FieldStateWeightedSum operator+(const FieldStateWeightedSum& ax, const FieldStateWeightedSum& by)
 {
- FieldStateWeightedSum c = ax;
- return c += by;
+  FieldStateWeightedSum c = ax;
+  return c += by;
+}
+
+FieldStateWeightedSum operator-(const FieldStateWeightedSum& ax, const FieldStateWeightedSum& by)
+{
+  FieldStateWeightedSum c = ax;
+  return c -= by;
 }
 
 FieldStateWeightedSum operator+(const FieldStateWeightedSum& ax, const FieldState& y)
 {
- FieldStateWeightedSum y1({1.0}, {y});
- return ax + y1;
+  FieldStateWeightedSum y1({1.0}, {y});
+  return ax + y1;
 }
 
-FieldStateWeightedSum operator+(const FieldState& y, const FieldStateWeightedSum& ax)
+FieldStateWeightedSum operator+(const FieldState& y, const FieldStateWeightedSum& ax) { return ax + y; }
+
+FieldStateWeightedSum operator-(const FieldStateWeightedSum& ax, const FieldState& y)
 {
-  return ax + y;
+  FieldStateWeightedSum z = ax;
+  return z += FieldStateWeightedSum({-1.0}, {y});
 }
 
+FieldStateWeightedSum operator-(const FieldState& x, const FieldStateWeightedSum& by)
+{
+  FieldStateWeightedSum z = -by;
+  return z += FieldStateWeightedSum({1.0}, {x});
 }
+
+}  // namespace serac

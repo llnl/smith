@@ -181,135 +181,52 @@ inline FieldState weighted_average(const FieldState& a, const FieldState& b, dou
   return axpby(weight, a, 1.0 - weight, b);
 }
 
-/*
-
-/// @brief gretl-function to add two FieldState
-inline FieldState operator+(const FieldState& a, const FieldState& b) { return axpby(1.0, a, 1.0, b); }
-
-/// @brief gretl-function to subtract two FieldState
-inline FieldState operator-(const FieldState& a, const FieldState& b) { return axpby(1.0, a, -1.0, b); }
-
-/// @brief temporary object to register the multiplication of a double with a FieldState.  Casts back to a FieldState if
-/// needed.
-struct ScalarFieldStateMult {
-  double a;                                                    ///< the double
-  FieldState b;                                                ///< the FieldState
-  operator FieldState() const { return axpby(a, b, 0.0, b); }  ///< implicit cast to a FieldState
-};
-
-/// @brief multiply scalar by a FieldState to get a temporary ScalarFieldStateMult which can cast back to a FieldState
-inline ScalarFieldStateMult operator*(double a, const FieldState& b) { return ScalarFieldStateMult{.a = a, .b = b}; }
-
-/// @brief multiply scalar by a FieldState to get a temporary ScalarFieldStateMult which can cast back to a FieldState
-inline ScalarFieldStateMult operator*(const FieldState& b, double a) { return ScalarFieldStateMult{.a = a, .b = b}; }
-
-/// @brief add two ScalarFieldStateMult
-inline FieldState operator+(const ScalarFieldStateMult& ax, const ScalarFieldStateMult& by)
-{
-  return axpby(ax.a, ax.b, by.a, by.b);
-};
-
-/// @brief add ScalarFieldStateMult to a FieldState
-inline FieldState operator+(const ScalarFieldStateMult& ax, const FieldState& y) { return axpby(ax.a, ax.b, 1.0, y); };
-
-/// @brief add FieldState to a ScalarFieldStateMult
-inline FieldState operator+(const FieldState& x, const ScalarFieldStateMult& by) { return axpby(1.0, x, by.a, by.b); };
-
-*/
-
-// /// @brief gretl-function to add three FieldState
-// inline FieldState add(FieldState a, FieldState b, FieldState c)
-// {
-//   auto g = clone_state(
-//       [](const FEFieldPtr& A, const FEFieldPtr& B, const FEFieldPtr& C) -> FEFieldPtr {
-//         FEFieldPtr D = std::make_shared<FiniteElementState>(A->space(), "d");
-//         *D = *A;
-//         *D += *B;
-//         *D += *C;
-//         return D;
-//       },
-//       [](const FEFieldPtr& /*A*/, const FEFieldPtr& /*B*/, const FEFieldPtr& /*C*/, const FEFieldPtr& /*D*/,
-//          FEDualPtr& A_dual_v, FEDualPtr& B_dual_v, FEDualPtr& C_dual_v, const FEDualPtr& D_dual_v) -> void {
-//         *A_dual_v += *D_dual_v;
-//         *B_dual_v += *D_dual_v;
-//         *C_dual_v += *D_dual_v;
-//       },
-//       a, b, c);
-
-//   return g;
-// }
-
 /// @brief axpby using State<double> and FieldState
-inline FieldState axpby(const gretl::State<double>& a, const FieldState& x, const gretl::State<double>& b,
-                        const FieldState& y)
-{
-  auto z = x.clone({a, x, b, y});
+FieldState axpby(const gretl::State<double>& a, const FieldState& x, const gretl::State<double>& b,
+                 const FieldState& y);
 
-  z.set_eval([](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
-    double A = upstreams[0].get<double>();
-    const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
-    double B = upstreams[2].get<double>();
-    const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
-
-    FEFieldPtr Z = std::make_shared<FiniteElementState>(X->space(), "axpby");
-    add(A, *X, B, *Y, *Z);
-    downstream.set<FEFieldPtr, FEDualPtr>(Z);
-  });
-
-  z.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    double A = upstreams[0].get<double>();
-    const FEFieldPtr& X = upstreams[1].get<FEFieldPtr>();
-    double B = upstreams[2].get<double>();
-    const FEFieldPtr& Y = upstreams[3].get<FEFieldPtr>();
-
-    const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
-    double& A_dual = upstreams[0].get_dual<double, double>();
-    FEDualPtr& X_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();
-    double& B_dual = upstreams[2].get_dual<double, double>();
-    FEDualPtr& Y_dual = upstreams[3].get_dual<FEDualPtr, FEFieldPtr>();
-
-    add(*X_dual, A, *Z_dual, *X_dual);
-    add(*Y_dual, B, *Z_dual, *Y_dual);
-    A_dual += serac::innerProduct(*Z_dual, *X);
-    B_dual += serac::innerProduct(*Z_dual, *Y);
-  });
-
-  return z.finalize();
-}
-
-FieldState weighted_sum(std::vector<double> weights, std::vector<FieldState> weighted_fields,
-                        std::vector<gretl::State<double>> differentiable_weights = {},
-                        std::vector<FieldState> differentiably_weighted_fields = {});
+/// @brief compute the differentiable weighted sum of fields, weighted by both double weights, and also
+/// gret::State<double> differentiable weights.  The differentiable_scale_factors are applied to the differentiable
+/// weights to enable negation and scalar muliplication of weights.
+FieldState weighted_sum(const std::vector<double>& weights, const std::vector<FieldState>& weighted_fields,
+                        const std::vector<gretl::State<double>>& differentiable_weights = {},
+                        const std::vector<FieldState>& differentiably_weighted_fields = {},
+                        const std::vector<double>& differentiable_scale_factors = {});
 
 /// @brief temporary object to register the multiplication of a gretl::State<d  ouble> with a FieldState.  Casts back
 struct FieldStateWeightedSum {
+  FieldStateWeightedSum(const std::vector<double>& w, const std::vector<FieldState>& f) : weights(w), weighted_fields(f)
+  {
+  }
 
-  FieldStateWeightedSum(const std::vector<double>& w, const std::vector<FieldState>& f) : weights(w) , weighted_fields(f) {}
-
-  FieldStateWeightedSum(const std::vector<gretl::State<double>>& w, const std::vector<FieldState>& f) : differentiable_weights(w) , differentiably_weighted_fields(f) {}
+  FieldStateWeightedSum(const std::vector<gretl::State<double>>& w, const std::vector<FieldState>& f)
+      : differentiable_weights(w), differentiably_weighted_fields(f), differentiable_scale_factors(w.size(), 1.0)
+  {
+  }
 
   FieldStateWeightedSum(const FieldStateWeightedSum& old) = default;
 
-  FieldStateWeightedSum& operator =(const FieldStateWeightedSum& old) = default;
+  FieldStateWeightedSum& operator=(const FieldStateWeightedSum& old) = default;
 
-  FieldStateWeightedSum& operator += (const FieldStateWeightedSum& b) {
-    weights.insert(weights.end(), b.weights.begin(), b.weights.end());
-    weighted_fields.insert(weighted_fields.end(), b.weighted_fields.begin(), b.weighted_fields.end());
-    differentiable_weights.insert(differentiable_weights.end(), b.differentiable_weights.begin(), b.differentiable_weights.end());
-    differentiably_weighted_fields.insert(differentiably_weighted_fields.end(), b.differentiably_weighted_fields.begin(), b.differentiably_weighted_fields.end());
-    return *this;
-  }
+  FieldStateWeightedSum& operator+=(const FieldStateWeightedSum& b);
+
+  FieldStateWeightedSum& operator-=(const FieldStateWeightedSum& b);
+
+  FieldStateWeightedSum& operator*=(double weight);
+
+  FieldStateWeightedSum operator-() const;
 
   std::vector<double> weights;                               ///< non-differentiable weights
   std::vector<FieldState> weighted_fields;                   ///< fields to weight by non-differentiable weights
   std::vector<gretl::State<double>> differentiable_weights;  ///< differentiable weights
   std::vector<FieldState> differentiably_weighted_fields;    ///< fields to weight by differentiable weights
-  std::vector<bool> negative_differentiable_weights; ///< flag differentiable weights to be negated
+  std::vector<double> differentiable_scale_factors;          ///< flag differentiable weights to be negated
 
   /// @brief conversion operator to a FieldState
   operator FieldState() const
   {
-    return weighted_sum(weights, weighted_fields, differentiable_weights, differentiably_weighted_fields);
+    return weighted_sum(weights, weighted_fields, differentiable_weights, differentiably_weighted_fields,
+                        differentiable_scale_factors);
   }
 };
 
@@ -318,6 +235,14 @@ FieldStateWeightedSum operator*(double a, const FieldState& b);
 
 /// @brief multiply scalar by a FieldState to get a temporary FieldStateWeightedSum which can cast back to a FieldState
 FieldStateWeightedSum operator*(const FieldState& b, double a);
+
+/// @brief multiply scalar by a FieldStateWeightedSum to get a temporary FieldStateWeightedSum which can cast back to a
+/// FieldState
+FieldStateWeightedSum operator*(double a, const FieldStateWeightedSum& b);
+
+/// @brief multiply scalar by a FieldStateWeightedSum to get a temporary FieldStateWeightedSum which can cast back to a
+/// FieldState
+FieldStateWeightedSum operator*(const FieldStateWeightedSum& b, double a);
 
 /// @brief multiply scalar by a FieldState to get a temporary FieldStateWeightedSum which can cast back to a FieldState
 FieldStateWeightedSum operator*(const gretl::State<double>& a, const FieldState& b);
@@ -328,14 +253,30 @@ FieldStateWeightedSum operator*(const FieldState& b, const gretl::State<double>&
 /// @brief add two FieldState
 FieldStateWeightedSum operator+(const FieldState& x, const FieldState& y);
 
+/// @brief subtract two FieldState
+FieldStateWeightedSum operator-(const FieldState& x, const FieldState& y);
+
 /// @brief add two FieldStateWeightedSum
 FieldStateWeightedSum operator+(const FieldStateWeightedSum& ax, const FieldStateWeightedSum& by);
+
+/// @brief subtract two FieldStateWeightedSum
+FieldStateWeightedSum operator-(const FieldStateWeightedSum& ax, const FieldStateWeightedSum& by);
 
 /// @brief add FieldStateWeightedSum and FieldState
 FieldStateWeightedSum operator+(const FieldStateWeightedSum& ax, const FieldState& y);
 
 /// @brief add FieldStateWeightedSum and FieldState
-//FieldStateWeightedSum operator+(const FieldState& y, const FieldStateWeightedSum& ax);
+FieldStateWeightedSum operator+(const FieldState& y, const FieldStateWeightedSum& ax);
+
+/// @brief subtract FieldState from FieldStateWeightedSum
+FieldStateWeightedSum operator-(const FieldStateWeightedSum& ax, const FieldState& by);
+
+/// @brief subtract FieldStateWeightedSum from FieldState
+FieldStateWeightedSum operator-(const FieldState& ax, const FieldStateWeightedSum& by);
+
+// TO DO
+// Add multplication of WeightedSum by a differentiable State<double> for improve efficiency
+// Consider adding divide operators, maybe component-wise things as well
 
 // Utilty functions for quickly getting spaces from FieldStates
 
