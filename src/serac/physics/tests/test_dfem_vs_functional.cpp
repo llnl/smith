@@ -119,7 +119,7 @@ struct NeoHookeanWithFieldWithRateDfem {
 
 }  // namespace serac
 
-struct ResidualFixture : public testing::Test {
+struct DfemVsFunctionalFixture : public testing::Test {
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
 
@@ -264,7 +264,7 @@ struct ResidualFixture : public testing::Test {
   std::vector<serac::FiniteElementState> param_tangents;
 };
 
-TEST_F(ResidualFixture, CheckDfemVsFunctionalResidual)
+TEST_F(DfemVsFunctionalFixture, CheckDfemVsFunctionalResidual)
 {
   // initialize the displacement and acceleration to a non-trivial field
   auto functional_input_fields = getConstFieldPointers(states, params);
@@ -285,17 +285,19 @@ TEST_F(ResidualFixture, CheckDfemVsFunctionalResidual)
   ASSERT_NEAR(0.0, dfem_vs_functional_vector.Norml2(), 1.0e-12) << "Functional and DFEM residuals do not match!";
 }
 
-// TEST_F(ResidualFixture, JvpConsistency)
+// TEST_F(DfemVsFunctionalFixture, JvpConsistency)
 // {
 //   // initialize the displacement and acceleration to a non-trivial field
-//   auto input_fields = getConstFieldPointers(states, params);
-
-//   serac::FiniteElementDual res_vector(states[SolidResidualT::DISPLACEMENT].space(), "residual");
-//   res_vector = residual->residual(time, dt, input_fields);
-//   ASSERT_NE(0.0, res_vector.Norml2());
+//   auto functional_input_fields = getConstFieldPointers(states, params);
+//   serac::FiniteElementState
+//   coords(*static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes())->ParFESpace(),
+//                                    "coordinates");
+//   std::vector<const serac::FiniteElementState*> dfem_input_fields(
+//       {functional_input_fields[1], functional_input_fields[2], functional_input_fields[3], &coords,
+//        functional_input_fields[4]});
 
 //   auto jacobianWeights = [&](size_t i) {
-//     std::vector<double> tangents(input_fields.size());
+//     std::vector<double> tangents(functional_input_fields.size());
 //     tangents[i] = 1.0;
 //     return tangents;
 //   };
@@ -310,37 +312,42 @@ TEST_F(ResidualFixture, CheckDfemVsFunctionalResidual)
 //     return field_tangents;
 //   };
 
-//   serac::FiniteElementDual jvp_slow(states[SolidResidualT::DISPLACEMENT].space(), "jvp_slow");
-//   serac::FiniteElementDual jvp(states[SolidResidualT::DISPLACEMENT].space(), "jvp");
-//   jvp = 4.0;  // set to some value to test jvp resets these values
-//   auto jvps = getFieldPointers(jvp);
+//   serac::FiniteElementDual jvp_functional(states[SolidResidualT::DISPLACEMENT].space(), "jvp_functional");
+//   jvp_functional = 4.0;  // set to some value to test jvp resets these values
+//   auto jvps_functional = getFieldPointers(jvp_functional);
+//   serac::FiniteElementDual jvp_dfem(states[SolidResidualT::DISPLACEMENT].space(), "jvp_dfem");
+//   jvp_dfem = 4.0;  // set to some value to test jvp resets these values
+//   auto jvps_dfem = getFieldPointers(jvp_dfem);
 
-//   auto field_tangents = getConstFieldPointers(state_tangents, param_tangents);
+//   auto functional_field_tangents = getConstFieldPointers(state_tangents, param_tangents);
+//   std::vector<const serac::FiniteElementState*> dfem_field_tangents(
+//       {dfem_field_tangents[1], dfem_field_tangents[2], dfem_field_tangents[3], &coords, dfem_field_tangents[4]});
 
-//   for (size_t i = 0; i < input_fields.size(); ++i) {
-//     auto J = residual->jacobian(time, dt, input_fields, jacobianWeights(i));
-//     J->Mult(*field_tangents[i], jvp_slow);
-//     residual->jvp(time, dt, input_fields, selectStates(i), jvps);
-//     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
-//   }
+// // TODO from here: figure out a better way to map fields between dfem and functional
+// for (size_t i = 0; i < input_fields.size(); ++i) {
+//   auto J = residual->jacobian(time, dt, input_fields, jacobianWeights(i));
+//   J->Mult(*field_tangents[i], jvp_slow);
+//   residual->jvp(time, dt, input_fields, selectStates(i), jvps);
+//   EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
+// }
 
-//   // test jacobians in weighted combinations
-//   {
-//     field_tangents[SolidResidualT::SHAPE_DISPLACEMENT] = nullptr;
-//     field_tangents[SolidResidualT::VELOCITY] = nullptr;
-//     field_tangents[size_t(SolidResidualT::NUM_STATES) + size_t(DENSITY)] = nullptr;
+// // test jacobians in weighted combinations
+// {
+//   field_tangents[SolidResidualT::SHAPE_DISPLACEMENT] = nullptr;
+//   field_tangents[SolidResidualT::VELOCITY] = nullptr;
+//   field_tangents[size_t(SolidResidualT::NUM_STATES) + size_t(DENSITY)] = nullptr;
 
-//     double acceleration_factor = 0.2;
-//     std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, acceleration_factor, 0.0};
+//   double acceleration_factor = 0.2;
+//   std::vector<double> jacobian_weights = {0.0, 1.0, 0.0, acceleration_factor, 0.0};
 
-//     auto J = residual->jacobian(time, dt, input_fields, jacobian_weights);
-//     J->Mult(*field_tangents[SolidResidualT::DISPLACEMENT], jvp_slow);
+//   auto J = residual->jacobian(time, dt, input_fields, jacobian_weights);
+//   J->Mult(*field_tangents[SolidResidualT::DISPLACEMENT], jvp_slow);
 
-//     state_tangents[SolidResidualT::ACCELERATION] *= acceleration_factor;
+//   state_tangents[SolidResidualT::ACCELERATION] *= acceleration_factor;
 
-//     residual->jvp(time, dt, input_fields, field_tangents, jvps);
-//     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
-//   }
+//   residual->jvp(time, dt, input_fields, field_tangents, jvps);
+//   EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
+// }
 // }
 
 int main(int argc, char* argv[])

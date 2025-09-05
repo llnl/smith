@@ -11,23 +11,13 @@
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
-#include "serac/physics/tests/physics_test_utils.hpp"
-#include "serac/physics/solid_residual.hpp"
+#include "serac/physics/functional_residual.hpp"
 #include "serac/physics/solid_dfem_residual.hpp"
 #include "serac/physics/dfem_mass_residual.hpp"
-
-#include "serac/numerics/equation_solver.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
 const std::string MESHTAG = "mesh";
-
-serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::CG,
-                                          .preconditioner = serac::Preconditioner::HypreJacobi,
-                                          .relative_tol = 1e-9,
-                                          .absolute_tol = 1e-9,
-                                          .max_iterations = 100000,
-                                          .print_level = 0};
 
 namespace serac {
 
@@ -176,9 +166,6 @@ struct ExplicitDynamicsFixture : public testing::Test {
     // shift one of the x coordinates so the mesh is not affine
     auto* coords = mesh->mfemParMesh().GetNodes()->ReadWrite();
     coords[6] += 0.1;
-
-    // create solver
-    auto [linear_solver, mech_precond] = serac::buildLinearSolverAndPreconditioner(linear_options, mesh->getComm());
 
     // create residual evaluator
     serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());

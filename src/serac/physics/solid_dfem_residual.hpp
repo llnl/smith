@@ -25,6 +25,14 @@ struct ScalarParameter {
   using QFunctionFieldOp = mfem::future::Value<FieldId>;
 };
 
+template <int Idx, int NumVars>
+struct InternalVariableParameter {
+  static constexpr int index = Idx;
+  using QFunctionInput = mfem::future::tensor<mfem::real_t, NumVars>;
+  template <int FieldId>
+  using QFunctionFieldOp = mfem::future::Identity<FieldId>;
+};
+
 template <typename Material, typename... Parameters>
 struct StressDivQFunction {
   SERAC_HOST_DEVICE inline auto operator()(
@@ -126,6 +134,8 @@ class SolidDfemResidual : public DfemResidual {
   void setMaterial(const mfem::Array<int>& domain_attributes, const MaterialType& material,
                    const mfem::IntegrationRule& displacement_ir)
   {
+    SLIC_ERROR_IF(material.dim != DfemResidual::mesh_->mfemParMesh().Dimension(),
+                  "Material model dimension does not match mesh dimension.");
     auto stress_div_integral = StressDivQFunction<MaterialType, ParameterTypes...>{.material = material};
     mfem::future::tuple<mfem::future::Gradient<DISP>, mfem::future::Gradient<VELO>, mfem::future::Gradient<ACCEL>,
                         mfem::future::Gradient<COORD>, mfem::future::Weight,
@@ -177,6 +187,28 @@ class SolidDfemResidual : public DfemResidual {
                                       acceleration_integral_outputs, displacement_ir, std::index_sequence<ACCEL>{});
       }
     }
+  }
+
+  template <int dim>
+  void addConstBodyForce(const mfem::Array<int>& domain_attributes, mfem::future::tensor<mfem::real_t, dim> body_force,
+                         const mfem::IntegrationRule& displacement_ir)
+  {
+    static_assert(dim == DfemResidual::mesh_->mfemParMesh().Dimension(),
+                  "Dimension of body force must match spatial dimension of mesh.");
+    auto body_force_integral = [=] SERAC_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim>&,
+                                                     const mfem::future::tensor<mfem::real_t, dim>&,
+                                                     const mfem::future::tensor<mfem::real_t, dim>&,
+                                                     const mfem::future::tensor<mfem::real_t, dim, dim>& dX_dxi,
+                                                     mfem::real_t weight) {
+      auto J = mfem::future::det(dX_dxi) * weight;
+      return mfem::future::tuple{body_force * J};
+    };
+    mfem::future::tuple<mfem::future::Value<DISP>, mfem::future::Value<VELO>, mfem::future::Value<ACCEL>,
+                        mfem::future::Gradient<COORD>, mfem::future::Weight>
+        body_force_integral_inputs{};
+    mfem::future::tuple<mfem::future::Value<NUM_STATE_VARS + 1>> body_force_integral_outputs{};
+    DfemResidual::addBodyIntegral(domain_attributes, body_force_integral, body_force_integral_inputs,
+                                  body_force_integral_outputs, displacement_ir, std::index_sequence<>{});
   }
 
   void massMatrix(const std::vector<ConstFieldPtr>& fields, const mfem::Vector& direction_t,

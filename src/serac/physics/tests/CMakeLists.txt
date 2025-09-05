@@ -32,6 +32,7 @@ set(physics_serial_test_sources
     test_dfem_explicit_dynamics.cpp
     test_dfem_lumped_mass.cpp
     test_dfem_vs_functional.cpp
+    test_dfem_residual.cpp
     test_heat_residual.cpp
     test_functional_residual.cpp
     thermomech_finite_diff.cpp

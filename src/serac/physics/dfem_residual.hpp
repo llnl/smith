@@ -102,10 +102,11 @@ class DfemResidual : public Residual {
         input_mfem_spaces_(input_mfem_spaces),
         residual_(makeFieldDescriptors({&output_mfem_space}, input_mfem_spaces.size()),
                   makeFieldDescriptors(input_mfem_spaces), mesh->mfemParMesh()),
-        // TODO: add space for residual.  do we need a space for the output (virtual work)?
         virtual_work_(makeFieldDescriptors({&output_mfem_space}, input_mfem_spaces.size()),
                       makeFieldDescriptors(input_mfem_spaces), mesh->mfemParMesh())
   {
+    // sum field operator doesn't work with sum factorization
+    virtual_work_.DisableTensorProductStructure();
   }
 
   /**
@@ -138,7 +139,9 @@ class DfemResidual : public Residual {
     auto scalar_body_integral = makeInnerQFunction(body_integral);
     virtual_work_.AddDomainIntegrator(
         scalar_body_integral, addToTupleType(integral_inputs, mfem::future::get<0>(integral_outputs)),
-        makeVirtualWorkOutputs(integral_outputs), integration_rule, domain_attributes, derivative_ids);
+        /*makeVirtualWorkOutputs(integral_outputs)*/
+        mfem::future::tuple<mfem::future::Sum<mfem::future::get<0>(integral_outputs).GetFieldId()>>{}, integration_rule,
+        domain_attributes, derivative_ids);
   }
 
   /// @overload
@@ -187,17 +190,25 @@ class DfemResidual : public Residual {
   {
     SLIC_ERROR_ROOT_IF(vjp_sensitivities.size() != fields.size(),
                        "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_ROOT_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
+    SLIC_ERROR_ROOT_IF(v_fields.size() != 1, "DfemResidual nonlinear systems only supports 1 output residual");
 
-    std::vector<mfem::Vector*> test_par_gf({&fields[0]->gridFunction()});
+    std::vector<mfem::Vector*> test_par_gf({&v_fields[0]->gridFunction()});
     std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
-    field_par_gf.push_back(&v_fields[0]->gridFunction());
+    // field_par_gf.push_back(&v_fields[0]->gridFunction());
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
         auto deriv_op = virtual_work_.GetDerivative(input_col, test_par_gf, field_par_gf);
-        mfem::HypreParMatrix A;
-        deriv_op->Assemble(A);
+        // do this entry by entry until assembly is supported
+        mfem::Vector direction(vjp_sensitivities[input_col]->Size());
+        direction = 0.0;
+        for (int i = 0; i < vjp_sensitivities[input_col]->Size(); ++i) {
+          direction[i] = 1.0;
+          mfem::Vector value(1);
+          deriv_op->Mult(direction, value);
+          (*vjp_sensitivities[input_col])[i] += value[0];
+          direction[i] = 0.0;
+        }
       }
     }
   }
@@ -227,7 +238,7 @@ class DfemResidual : public Residual {
   template <typename Tnew, typename... Ttuple>
   static auto addToTupleType(const mfem::future::tuple<Ttuple...>&, const Tnew&)
   {
-    return mfem::future::tuple<Ttuple..., Tnew>{};
+    return mfem::future::tuple<Tnew, Ttuple...>{};
   }
 
   // The field ID doesn't matter, since the test function is one
