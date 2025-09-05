@@ -165,7 +165,7 @@ int main(int argc, char* argv[])
 {
   // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
-  
+
   // Command line arguments
   // Mesh options
   double xlength = 0.5;
