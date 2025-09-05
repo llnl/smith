@@ -64,7 +64,8 @@ stages:
   rules:
     - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
   dependencies:
-    - blueos-clang_14_0_5-benchmarks
+    # TODO re-enable with CZMatrix
+    # - blueos-clang_14_0_5-benchmarks
     - toss4-gcc_13_3_1-benchmarks
     - toss4-clang_19_1_3-benchmarks
 
@@ -153,7 +154,8 @@ stages:
 
 # This is where jobs are included for each system
 include:
-  - local: .gitlab/build_blueos.yml
+  # TODO re-enable with CZMatrix
+  # - local: .gitlab/build_blueos.yml
   - local: .gitlab/build_toss4.yml
   - local: .gitlab/build_toss4_cray.yml
   - project: 'lc-templates/id_tokens'
