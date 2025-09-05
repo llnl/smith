@@ -25,7 +25,7 @@ class TimestepEstimator {
 
   /// @brief Interface method for estimating the stable timestep give the current state and parameters
   virtual DoubleState dt(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                    const std::vector<FieldState>& params) const = 0;
+                         const std::vector<FieldState>& params) const = 0;
 };
 
 /// @brief TimeStepEstimator which uses a simple and fixed timestep
@@ -37,7 +37,7 @@ class ConstantTimeStepEstimator : public TimestepEstimator {
 
   /// @overload
   DoubleState dt([[maybe_unused]] const FieldState& shape_disp, [[maybe_unused]] const std::vector<FieldState>& states,
-            [[maybe_unused]] const std::vector<FieldState>& params) const override
+                 [[maybe_unused]] const std::vector<FieldState>& params) const override
   {
     return dt_;
   }

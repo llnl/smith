@@ -53,8 +53,8 @@ std::tuple<std::vector<FieldState>, DoubleState> LumpedMassExplicitNewmark::adva
   const FieldState& a = states[ACCEL];
 
   // first pass of setting u and v predictors
-  FieldState v_half_step = v + 0.5 * (dt * a); //axpby(1.0, v, 0.5 * dt, a);
-  FieldState u_pred = u + dt * v_half_step; //auto u_pred = axpby(1.0, u, dt, v_half_step);
+  FieldState v_half_step = v + 0.5 * (dt * a);  // axpby(1.0, v, 0.5 * dt, a);
+  FieldState u_pred = u + dt * v_half_step;     // auto u_pred = axpby(1.0, u, dt, v_half_step);
 
   // zeroing out u predictor dofs associated with zero BCs
   u_pred = applyZeroBoundaryConditions(u_pred, bc_manager.get());

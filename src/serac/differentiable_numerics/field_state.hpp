@@ -21,7 +21,7 @@ using FEFieldPtr = std::shared_ptr<FiniteElementState>;      ///< typedef
 using FEDualPtr = std::shared_ptr<FiniteElementDual>;        ///< typedef
 using FieldState = gretl::State<FEFieldPtr, FEDualPtr>;      ///< typedef
 using ResultantState = gretl::State<FEDualPtr, FEFieldPtr>;  ///< typedef
-using DoubleState = gretl::State<double, double>;            ///> typedef
+using DoubleState = gretl::State<double, double>;            ///< typedef
 
 /// @brief functor which takes a std::shared_ptr<FiniteElementState>, and returns a zero-valued
 /// std::shared_ptr<FiniteElementDual> with the same space

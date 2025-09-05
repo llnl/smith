@@ -170,14 +170,15 @@ void Mechanics::advanceTimestep(double dt)
   double target_time = time_ + dt;
 
   DoubleState stable_dt = dt_estimator_->dt(*field_shape_displacement_, field_states_, field_params_);
-  DoubleState time = gretl::clone_state([time_for_capture](double) { return time_for_capture; }, [](double, double, double&, double) {}, stable_dt);
+  DoubleState time = gretl::clone_state([time_for_capture](double) { return time_for_capture; },
+                                        [](double, double, double&, double) {}, stable_dt);
   while (time_ < target_time) {
     if (time.get() + stable_dt.get() > target_time) {
       stable_dt = target_time - time;
     }
 
     std::tie(field_states_, time) = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_,
-                                                             time, stable_dt, static_cast<size_t>(cycle_));
+                                                            time, stable_dt, static_cast<size_t>(cycle_));
     time_ = time.get();
     if (time_ < target_time) {
       stable_dt = dt_estimator_->dt(*field_shape_displacement_, field_states_, field_params_);

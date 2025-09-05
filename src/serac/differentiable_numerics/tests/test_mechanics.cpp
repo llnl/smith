@@ -126,8 +126,8 @@ struct MeshFixture : public testing::Test {
     auto velo = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_velocity", mesh->tag());
     auto accel = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
     auto density0 = create_field_state(*checkpointer, DensitySpace{}, physics_name + "_density", mesh->tag());
-    serac::DoubleState fixed_dt = checkpointer->create_state<double,double>(1e-3);
-    
+    serac::DoubleState fixed_dt = checkpointer->create_state<double, double>(1e-3);
+
     *density0.get() = density;
 
     initial_states = {disp, velo, accel};
