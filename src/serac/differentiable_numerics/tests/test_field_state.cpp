@@ -93,69 +93,6 @@ TEST_F(MeshFixture, FieldStateWithDifferentiable_axpby)
   EXPECT_GT(serac::check_grad_wrt(uu, dt, *checkpointer_, 1e-7, 4, true), 0.95);
 }
 
-TEST_F(MeshFixture, FieldStateWeightedSum)
-{
-  serac::FieldState disp = states_[0];
-  serac::FieldState velo = states_[1];
-  serac::FieldState accel = states_[2];
-  gretl::State<double> dt = *dt_;
-
-  auto u = serac::weighted_sum({0.3}, {velo});
-  u = serac::weighted_sum({0.1, 0.4}, {disp, u});
-  u = serac::weighted_sum({0.2, 0.3, 0.5}, {disp, accel, u});
-
-  serac::FieldState u_exact = axpby(0.3, velo, 0.0, velo);
-  u_exact = axpby(0.1, disp, 0.4, u_exact);
-  u_exact = axpby(1.0, axpby(0.2, disp, 0.3, accel), 0.5, u_exact);
-
-  auto uu_exact = serac::inner_product(u_exact, u_exact);
-  auto uu = serac::inner_product(u, u);
-
-  gretl::set_as_objective(uu);
-
-  EXPECT_EQ(uu.get(), uu_exact.get());
-
-  checkpointer_->back_prop();
-
-  EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(serac::check_grad_wrt(uu, accel, *checkpointer_, 1e-5, 4, true), 0.95);
-}
-
-TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum)
-{
-  serac::FieldState disp = states_[0];
-  serac::FieldState velo = states_[1];
-  serac::FieldState accel = states_[2];
-  gretl::State<double> dt = *dt_;
-  gretl::State<double> h = *h_;
-
-  auto u = serac::weighted_sum({}, {}, {dt}, {velo});
-  u = serac::weighted_sum({}, {}, {dt, h}, {disp, u});
-  u = serac::weighted_sum({0.2}, {disp}, {dt, h}, {accel, u});
-  u = serac::weighted_sum({0.2, dt.get()}, {disp, accel}, {h}, {u});
-
-  serac::FieldState u_exact = serac::axpby(dt.get(), velo, 0.0, velo);
-  u_exact = axpby(dt.get(), disp, h.get(), u_exact);
-  u_exact = axpby(1.0, axpby(0.2, disp, dt.get(), accel), h.get(), u_exact);
-  u_exact = axpby(1.0, axpby(0.2, disp, dt.get(), accel), h.get(), u_exact);
-
-  auto uu_exact = serac::inner_product(u_exact, u_exact);
-  auto uu = serac::inner_product(u, u);
-
-  gretl::set_as_objective(uu);
-
-  ASSERT_EQ(uu.get(), uu_exact.get());
-
-  checkpointer_->back_prop();
-
-  EXPECT_GT(serac::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(serac::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(serac::check_grad_wrt(uu, accel, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(serac::check_grad_wrt(uu, dt, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(serac::check_grad_wrt(uu, h, *checkpointer_, 1e-5, 4, true), 0.95);
-}
-
 TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
 {
   serac::FieldState disp = states_[0];
@@ -177,6 +114,9 @@ TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
   u = u - disp;
   u = 2.0 * (velo - u);
 
+  gretl::State<double> dth = dt * h;
+  u = dth * u;
+
   auto u_exact = serac::axpby(initial_dt, velo, 0.0, velo);
   auto v_exact = serac::axpby(1.0, accel, 1.0, disp);
   u_exact = axpby(initial_dt, disp, initial_h, u_exact);
@@ -185,6 +125,7 @@ TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
   u_exact = axpby(1.0, axpby(0.65, disp, 1.0, accel), initial_h, u_exact);
   u_exact = axpby(1.0, u_exact, -1.0, disp);
   u_exact = axpby(2.0, velo, -2.0, u_exact);
+  u_exact = axpby(initial_dt * initial_h, u_exact, 0.0, u_exact);
 
   auto uu_exact = serac::inner_product(u_exact, u_exact);
   auto uu = serac::inner_product(u, u);

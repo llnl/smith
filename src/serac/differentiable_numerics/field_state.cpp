@@ -39,6 +39,9 @@ FieldState axpby(const gretl::State<double>& a, const FieldState& x, const gretl
   return z.finalize();
 }
 
+/// @brief compute the differentiable weighted sum of fields, weighted by both double weights, and also
+/// gret::State<double> differentiable weights.  The differentiable_scale_factors are applied to the differentiable
+/// weights to enable negation and scalar muliplication of weights.
 FieldState weighted_sum(const std::vector<double>& weights, const std::vector<FieldState>& weighted_fields,
                         const std::vector<gretl::State<double>>& differentiable_weights,
                         const std::vector<FieldState>& differentiably_weighted_fields,
@@ -49,7 +52,7 @@ FieldState weighted_sum(const std::vector<double>& weights, const std::vector<Fi
   SLIC_ERROR_IF(differentiable_weights.size() != differentiably_weighted_fields.size(),
                 "differentiable weights and the fields they are weighting do not match in size");
   SLIC_ERROR_IF(differentiable_weights.size() != differentiable_scale_factors.size(),
-                "differentiable weights and the vector of their signs do not match in size");
+                "differentiable weights and the vector of fixed scale factors do not match in size");
   SLIC_ERROR_IF((weights.size() == 0) && (differentiable_weights.size() == 0),
                 "At least 1 weight must be passed to a weighted sum");
 
@@ -141,40 +144,42 @@ FieldState weighted_sum(const std::vector<double>& weights, const std::vector<Fi
 
 FieldStateWeightedSum& FieldStateWeightedSum::operator+=(const FieldStateWeightedSum& b)
 {
-  weights.insert(weights.end(), b.weights.begin(), b.weights.end());
-  weighted_fields.insert(weighted_fields.end(), b.weighted_fields.begin(), b.weighted_fields.end());
-  differentiable_weights.insert(differentiable_weights.end(), b.differentiable_weights.begin(),
-                                b.differentiable_weights.end());
-  differentiably_weighted_fields.insert(differentiably_weighted_fields.end(), b.differentiably_weighted_fields.begin(),
-                                        b.differentiably_weighted_fields.end());
-  differentiable_scale_factors.insert(differentiable_scale_factors.end(), b.differentiable_scale_factors.begin(),
-                                      b.differentiable_scale_factors.end());
+  weights_.insert(weights_.end(), b.weights_.begin(), b.weights_.end());
+  weighted_fields_.insert(weighted_fields_.end(), b.weighted_fields_.begin(), b.weighted_fields_.end());
+  differentiable_weights_.insert(differentiable_weights_.end(), b.differentiable_weights_.begin(),
+                                 b.differentiable_weights_.end());
+  differentiably_weighted_fields_.insert(differentiably_weighted_fields_.end(),
+                                         b.differentiably_weighted_fields_.begin(),
+                                         b.differentiably_weighted_fields_.end());
+  differentiable_scale_factors_.insert(differentiable_scale_factors_.end(), b.differentiable_scale_factors_.begin(),
+                                       b.differentiable_scale_factors_.end());
   return *this;
 }
 
 FieldStateWeightedSum& FieldStateWeightedSum::operator-=(const FieldStateWeightedSum& b)
 {
-  const size_t num_initial_weights = weights.size();
+  const size_t num_initial_weights = weights_.size();
 
-  weights.insert(weights.end(), b.weights.begin(), b.weights.end());
-  for (size_t n = num_initial_weights; n < weights.size(); ++n) {
-    weights[n] *= -1.0;
+  weights_.insert(weights_.end(), b.weights_.begin(), b.weights_.end());
+  for (size_t n = num_initial_weights; n < weights_.size(); ++n) {
+    weights_[n] *= -1.0;
   }
 
-  weighted_fields.insert(weighted_fields.end(), b.weighted_fields.begin(), b.weighted_fields.end());
+  weighted_fields_.insert(weighted_fields_.end(), b.weighted_fields_.begin(), b.weighted_fields_.end());
 
-  differentiable_weights.insert(differentiable_weights.end(), b.differentiable_weights.begin(),
-                                b.differentiable_weights.end());
+  differentiable_weights_.insert(differentiable_weights_.end(), b.differentiable_weights_.begin(),
+                                 b.differentiable_weights_.end());
 
-  differentiably_weighted_fields.insert(differentiably_weighted_fields.end(), b.differentiably_weighted_fields.begin(),
-                                        b.differentiably_weighted_fields.end());
+  differentiably_weighted_fields_.insert(differentiably_weighted_fields_.end(),
+                                         b.differentiably_weighted_fields_.begin(),
+                                         b.differentiably_weighted_fields_.end());
 
-  const size_t num_initial_differentiable_weights = differentiable_scale_factors.size();
+  const size_t num_initial_differentiable_weights = differentiable_scale_factors_.size();
 
-  differentiable_scale_factors.insert(differentiable_scale_factors.end(), b.differentiable_scale_factors.begin(),
-                                      b.differentiable_scale_factors.end());
-  for (size_t n = num_initial_differentiable_weights; n < differentiable_scale_factors.size(); ++n) {
-    differentiable_scale_factors[n] *= -1.0;
+  differentiable_scale_factors_.insert(differentiable_scale_factors_.end(), b.differentiable_scale_factors_.begin(),
+                                       b.differentiable_scale_factors_.end());
+  for (size_t n = num_initial_differentiable_weights; n < differentiable_scale_factors_.size(); ++n) {
+    differentiable_scale_factors_[n] *= -1.0;
   }
   return *this;
 }
@@ -185,12 +190,18 @@ FieldStateWeightedSum FieldStateWeightedSum::operator-() const
   return zero -= *this;
 }
 
+FieldStateWeightedSum::operator FieldState() const
+{
+  return weighted_sum(weights_, weighted_fields_, differentiable_weights_, differentiably_weighted_fields_,
+                      differentiable_scale_factors_);
+}
+
 FieldStateWeightedSum& FieldStateWeightedSum::operator*=(double weight)
 {
-  for (auto& w : weights) {
+  for (auto& w : weights_) {
     w *= weight;
   }
-  for (auto& w : differentiable_scale_factors) {
+  for (auto& w : differentiable_scale_factors_) {
     w *= weight;
   }
   return *this;

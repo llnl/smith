@@ -185,24 +185,17 @@ inline FieldState weighted_average(const FieldState& a, const FieldState& b, dou
 FieldState axpby(const gretl::State<double>& a, const FieldState& x, const gretl::State<double>& b,
                  const FieldState& y);
 
-/// @brief compute the differentiable weighted sum of fields, weighted by both double weights, and also
-/// gret::State<double> differentiable weights.  The differentiable_scale_factors are applied to the differentiable
-/// weights to enable negation and scalar muliplication of weights.
-FieldState weighted_sum(const std::vector<double>& weights, const std::vector<FieldState>& weighted_fields,
-                        const std::vector<gretl::State<double>>& differentiable_weights = {},
-                        const std::vector<FieldState>& differentiably_weighted_fields = {},
-                        const std::vector<double>& differentiable_scale_factors = {});
-
 /// @brief temporary object to register the multiplication of a gretl::State<d  ouble> with a FieldState.  Casts back
 struct FieldStateWeightedSum {
   /// @brief construct from double weights, and fields
-  FieldStateWeightedSum(const std::vector<double>& w, const std::vector<FieldState>& f) : weights(w), weighted_fields(f)
+  FieldStateWeightedSum(const std::vector<double>& w, const std::vector<FieldState>& f)
+      : weights_(w), weighted_fields_(f)
   {
   }
 
   /// @brief construct from State<double> weights, and fields
   FieldStateWeightedSum(const std::vector<gretl::State<double>>& w, const std::vector<FieldState>& f)
-      : differentiable_weights(w), differentiably_weighted_fields(f), differentiable_scale_factors(w.size(), 1.0)
+      : differentiable_weights_(w), differentiably_weighted_fields_(f), differentiable_scale_factors_(w.size(), 1.0)
   {
   }
 
@@ -224,18 +217,14 @@ struct FieldStateWeightedSum {
   /// @brief negate
   FieldStateWeightedSum operator-() const;
 
-  std::vector<double> weights;                               ///< non-differentiable weights
-  std::vector<FieldState> weighted_fields;                   ///< fields to weight by non-differentiable weights
-  std::vector<gretl::State<double>> differentiable_weights;  ///< differentiable weights
-  std::vector<FieldState> differentiably_weighted_fields;    ///< fields to weight by differentiable weights
-  std::vector<double> differentiable_scale_factors;          ///< flag differentiable weights to be negated
+  std::vector<double> weights_;                               ///< non-differentiable weights
+  std::vector<FieldState> weighted_fields_;                   ///< fields to weight by non-differentiable weights
+  std::vector<gretl::State<double>> differentiable_weights_;  ///< differentiable weights
+  std::vector<FieldState> differentiably_weighted_fields_;    ///< fields to weight by differentiable weights
+  std::vector<double> differentiable_scale_factors_;          ///< flag differentiable weights to be negated
 
   /// @brief conversion operator to a FieldState
-  operator FieldState() const
-  {
-    return weighted_sum(weights, weighted_fields, differentiable_weights, differentiably_weighted_fields,
-                        differentiable_scale_factors);
-  }
+  operator FieldState() const;
 };
 
 /// @brief multiply scalar by a FieldState to get a temporary FieldStateWeightedSum which can cast back to a FieldState

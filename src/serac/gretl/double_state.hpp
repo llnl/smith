@@ -81,4 +81,14 @@ inline State<double> operator/(double a, const State<double>& x)
   return z.finalize();
 }
 
+inline State<double> operator*(const State<double>& x, const State<double>& y)
+{
+  return clone_state([](const double& a, const double& b) { return a * b; },
+                     [](const double& a, const double& b, const double&, double& a_, double& b_, const double& c_) {
+                       a_ += b * c_;
+                       b_ += a * c_;
+                     },
+                     x, y);
+}
+
 }  // namespace gretl
