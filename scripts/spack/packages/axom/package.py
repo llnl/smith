@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 from spack.package import *
-from spack.pkg.builtin.axom import Axom as BuiltinAxom
+from spack_repo.builtin.packages.axom.package import Axom as BuiltinAxom
 
 class Axom(BuiltinAxom):
     # Note: Make sure this sha coincides with the git submodule

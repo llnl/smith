@@ -13,7 +13,8 @@ class SeracDevtools(BundlePackage):
     depends_on('cmake')
     depends_on('cppcheck')
     depends_on('doxygen')
-    depends_on('py-ats')
+    # Disabled due to integration tests being disabled
+    # depends_on('py-ats')
     depends_on('py-sphinx')
     depends_on('python')
-    depends_on("llvm@14+clang+python")
+    depends_on("llvm@19+clang+python")
