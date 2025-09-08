@@ -74,7 +74,7 @@ def parse_arguments():
                         "--buildtype",
                         type=str,
                         choices=["Release", "Debug", "RelWithDebInfo", "MinSizeRel"],
-                        help="build type. defaults to Debug")
+                        help="build type. defaults to Release")
 
     parser.add_argument("-e",
                         "--eclipse",
@@ -294,10 +294,10 @@ def main():
        else:
           return False
 
-    # CMake build type is Debug by default, but if CMAKE_BUILD_TYPE is an unknown argument (i.e. a CMake argument), then
-    # use that option instead.
     if args.buildtype == None:
-        args.buildtype = "Debug"
+        # Set default CMake build type
+        args.buildtype = "Release"
+        # If CMAKE_BUILD_TYPE was passed in as an argument, use that option instead
         for unknown_arg in unknown_args:
             if "-DCMAKE_BUILD_TYPE" in unknown_arg:
                 args.buildtype = unknown_arg.split("=")[1]

@@ -36,7 +36,7 @@ toss4_cray-rocmcc_6_2_1-src:
  variables:
    COMPILER: "rocmcc@6.2.1"
    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
-   EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF"
+   EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug"
    ALLOC_NODES: "1"
    ALLOC_TIME: "30"
  extends: .src_build_on_toss4_cray
@@ -45,7 +45,7 @@ toss4_cray-rocmcc_6_2_1-src-codevelop:
  variables:
    COMPILER: "rocmcc@6.2.1"
    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
-   EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DSERAC_ENABLE_CODEVELOP=ON"
+   EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug -DSERAC_ENABLE_CODEVELOP=ON"
    EXTRA_BUILD_OPTIONS: "--skip-install"
    ALLOC_NODES: "1"
    ALLOC_TIME: "30"
@@ -64,6 +64,7 @@ toss4_cray-rocmcc_6_2_1-examples:
   variables:
     COMPILER: "rocmcc@6.2.1"
     HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
     ALLOC_TIME: "45"
   extends: .examples_build_on_toss4_cray
