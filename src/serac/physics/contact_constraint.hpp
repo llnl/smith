@@ -96,7 +96,7 @@ class ContactConstraint : public Constraint {
     contact_.update(cycle, time, dt);
     return contact_.mergedGaps(false);
   };
-
+ 
   /** @brief Interface for computing contact gap constraint Jacobian from a vector of serac::FiniteElementState*
    *
    * @param time time
@@ -124,6 +124,63 @@ class ContactConstraint : public Constraint {
     std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
     return dgdu_unique;
   };
+  
+  /** @brief Interface for computing...*/ 
+  mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                             const mfem::Vector& multipliers, int direction) const
+  {
+    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
+    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
+
+    int cycle = 0;
+    contact_.update(cycle, time, dt);
+    return contact_.forces();
+  };
+  
+  std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(
+      [[maybe_unused]] double time, [[maybe_unused]] double dt,
+      [[maybe_unused]] const std::vector<ConstFieldPtr>& fields, [[maybe_unused]] const mfem::Vector& multipliers,
+      [[maybe_unused]] int direction) const
+  {
+    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
+    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
+
+    // TODO: how to specify the right cycle?
+    int cycle = 0;
+    contact_.update(cycle, time, dt);
+    auto J_contact = contact_.mergedJacobian();
+    J_contact->owns_blocks = false;
+    delete &J_contact->GetBlock(0, 1);
+    delete &J_contact->GetBlock(1, 0);
+    delete &J_contact->GetBlock(1, 1);
+
+    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(0, 0));
+    std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
+    return dgdu_unique;
+  };
+  
+  
+  std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt,
+                                                               const std::vector<ConstFieldPtr>& fields,
+                                                               int direction) const
+  {
+    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
+    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
+
+    // TODO: how to specify the right cycle?
+    int cycle = 0;
+    contact_.update(cycle, time, dt);
+    auto J_contact = contact_.mergedJacobian();
+    J_contact->owns_blocks = false;
+    delete &J_contact->GetBlock(0, 0);
+    delete &J_contact->GetBlock(1, 0);
+    delete &J_contact->GetBlock(1, 1);
+
+    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(0, 1));
+    std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
+    return dgdu_unique;
+  };
+
 
  protected:
   /**
