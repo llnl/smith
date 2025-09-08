@@ -64,6 +64,11 @@ class LumpedMassExplicitNewmark : public StateAdvancer {
                    ///< timestep to avoid recomputing the mass each step.
 };
 
+/// @brief creates a time info struct from gretl::State<double>
+/// @param t time
+/// @param dt timestep
+/// @param cycle iteration
+/// @return
 inline TimeInfo create_time_info(DoubleState t, DoubleState dt, size_t cycle)
 {
   return TimeInfo(t.get(), dt.get(), cycle);
