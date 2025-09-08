@@ -38,6 +38,8 @@ set(physics_headers
     heat_transfer_weak_form.hpp
     scalar_objective.hpp
     functional_objective.hpp
+    constraint.hpp
+    contact_constraint.hpp
     )
 
 set(physics_depends
