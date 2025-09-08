@@ -15,6 +15,7 @@
 #include <vector>
 #include "serac/differentiable_numerics/field_state.hpp"
 #include "serac/gretl/double_state.hpp"
+#include "serac/physics/common.hpp"
 
 namespace serac {
 
@@ -62,5 +63,10 @@ class LumpedMassExplicitNewmark : public StateAdvancer {
       m_diag_inv;  ///< save off FieldState for inverse lumped mass.  This can be computed up front and reused every
                    ///< timestep to avoid recomputing the mass each step.
 };
+
+inline TimeInfo create_time_info(DoubleState t, DoubleState dt, size_t cycle)
+{
+  return TimeInfo(t.get(), dt.get(), cycle);
+}
 
 }  // namespace serac

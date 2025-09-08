@@ -30,7 +30,7 @@ std::tuple<std::vector<FieldState>, DoubleState> LumpedMassExplicitNewmark::adva
     const FieldState& shape_disp, const std::vector<FieldState>& states, const std::vector<FieldState>& params,
     DoubleState time, DoubleState dt, [[maybe_unused]] size_t cycle) const
 {
-  TimeInfo time_info(time.get(), dt.get(), cycle);
+  TimeInfo time_info = create_time_info(time, dt, cycle);
 
   SERAC_MARK_FUNCTION;
   SLIC_ERROR_IF(states.size() != 3, "ExplicitNewmark is a 2nd order time integrator requiring 3 states.");
