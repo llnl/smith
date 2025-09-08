@@ -85,8 +85,8 @@ class ContactConstraint : public Constraint {
    * @param fields vector of serac::FiniteElementState*
    * @return mfem::Vector which is the constraint evaluation
    */
-  mfem::Vector evaluate([[maybe_unused]] double time, [[maybe_unused]] double dt,
-                        [[maybe_unused]] const std::vector<ConstFieldPtr>& fields) const
+  mfem::Vector evaluate(double time, double dt,
+                        const std::vector<ConstFieldPtr>& fields) const
   {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
@@ -105,10 +105,11 @@ class ContactConstraint : public Constraint {
    * @param direction index for which field to take the gradient with respect to
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  std::unique_ptr<mfem::HypreParMatrix> jacobian([[maybe_unused]] double time, [[maybe_unused]] double dt,
-                                                 [[maybe_unused]] const std::vector<ConstFieldPtr>& fields,
+  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt,
+                                                 const std::vector<ConstFieldPtr>& fields,
                                                  [[maybe_unused]] int direction) const
   {
+    // TODO: should direction be optional? should we check that the user has been an acceptable value?
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
@@ -125,9 +126,18 @@ class ContactConstraint : public Constraint {
     return dgdu_unique;
   };
   
-  /** @brief Interface for computing...*/ 
+  /** @brief Interface for computing residual contribution Jacobian_tilde^T multiplier from a vector of
+   * serac::FiniteElementState*
+   *
+   * @param time time
+   * @param dt time step
+   * @param fields vector of serac::FiniteElementState*
+   * @param multipliers mfem::Vector of Lagrange multipliers
+   * @param direction index for which field to take the gradient with respect to
+   * @return std::Vector
+   */
   mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                             const mfem::Vector& multipliers, int direction) const
+                                             [[maybe_unused]] const mfem::Vector& multipliers, [[maybe_unused]] int direction) const
   {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
@@ -137,15 +147,24 @@ class ContactConstraint : public Constraint {
     return contact_.forces();
   };
   
+  /** @brief Interface for computing Jacobians of the residual contribution from a vector of
+   * serac::FiniteElementState*
+   *
+   * @param time time
+   * @param dt time step
+   * @param fields vector of serac::FiniteElementState*
+   * @param multipliers mfem::Vector of Lagrange multipliers
+   * @param direction index for which field to take the gradient with respect to
+   * @return std::unique_ptr<mfem::HypreParMatrix>
+   */
   std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(
-      [[maybe_unused]] double time, [[maybe_unused]] double dt,
-      [[maybe_unused]] const std::vector<ConstFieldPtr>& fields, [[maybe_unused]] const mfem::Vector& multipliers,
+      double time, double dt,
+      const std::vector<ConstFieldPtr>& fields, [[maybe_unused]] const mfem::Vector& multipliers,
       [[maybe_unused]] int direction) const
   {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
-    // TODO: how to specify the right cycle?
     int cycle = 0;
     contact_.update(cycle, time, dt);
     auto J_contact = contact_.mergedJacobian();
@@ -160,14 +179,21 @@ class ContactConstraint : public Constraint {
   };
   
   
+  /** @brief Interface for computing contact constraint Jacobian_tilde from a vector of serac::FiniteElementState*
+   *
+   * @param time time
+   * @param dt time step
+   * @param fields vector of serac::FiniteElementState*
+   * @param direction index for which field to take the gradient with respect to
+   * @return std::unique_ptr<mfem::HypreParMatrix>
+   */
   std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt,
                                                                const std::vector<ConstFieldPtr>& fields,
-                                                               int direction) const
+                                                               [[maybe_unused]] int direction) const
   {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
-    // TODO: how to specify the right cycle?
     int cycle = 0;
     contact_.update(cycle, time, dt);
     auto J_contact = contact_.mergedJacobian();
