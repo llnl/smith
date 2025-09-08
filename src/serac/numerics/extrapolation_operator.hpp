@@ -33,6 +33,20 @@ struct ExtrapolationOperator {
   );
 
   /**
+   * @brief Constructs an extrapolation operator over the given finite element space.
+   *
+   * This operator enables time-extrapolation of fields defined in the specified finite element space,
+   * such as velocity or pressure, using a compile-time extrapolation order.
+   *
+   * The extrapolated field φ^{*,k+1} will live in the same space as the provided input states φᵏ, φᵏ⁻¹, etc.
+   *
+   * @param space The finite element space in which the extrapolated fields reside.
+   */
+  ExtrapolationOperator(
+    mfem::ParFiniteElementSpace *space
+  ) : space_(space) {}
+
+  /**
    * @brief Extrapolates a field value φ^{*,k+1} from previous states.
    *
    * The extrapolated value is computed as:
@@ -56,16 +70,17 @@ struct ExtrapolationOperator {
     int const available_order = std::min(cycle, r_order);  // Effective order.
 
     SLIC_ERROR_ROOT_IF(
-      static_cast<int>(previous_states.size()) < available_order,
+      static_cast<int>(previous_states.size()) != available_order,
       axom::fmt::format("Expected at least {} previous states, but got {}.", available_order, previous_states.size())
     );
 
-    ::serac::FiniteElementState result = previous_states[0];  // Initialize from most recent state (φ^k).
+    ::serac::FiniteElementState result(*space_);  // Initialize from most recent state (φ^k).
 
     if (available_order == 0) {
       result = 0.0;  // Zero extrapolation.
     } else {
       auto gammas = this->compute_gammas(available_order);
+      result  = previous_states[0];
       result *= gammas[0];  // result = γ₀ · φ^k
       for (int j = 1; j < available_order; ++j) {
         result.Add(gammas[j], previous_states[j]);  // result += γⱼ · φ^{k−j}
@@ -116,6 +131,9 @@ struct ExtrapolationOperator {
   }
 
 private:
+
+  /// @brief The finite element space in which the extrapolated fields are defined.
+  mfem::ParFiniteElementSpace *space_;
 
   /**
    * @brief Compute extrapolation weights γₘ for φ^{*,k+1} given an extrapolation order.
