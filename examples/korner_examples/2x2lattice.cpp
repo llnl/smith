@@ -71,11 +71,7 @@ void lattice_squish(const solve_options& so)
 
   // Setting up Solid Mechanics Problem
 
-  std::vector<std::string> fieldnames{"disp_old"};
-  serac::FiniteElementState disp_old(serac::StateManager::mesh(mesh_tag), serac::H1<p, dim>{}, "previous_displacement");
-  disp_old = 0.0;
 
-  using ParamT = serac::Parameters<serac::H1<p, dim>>;
 
   //   std::unique_ptr<serac::SolidMechanics<p, dim, ParamT>> solid_solver =
   //       std::make_unique<serac::SolidMechanics<p, dim, ParamT>>(so.nonlinear_options, so.linear_options,
@@ -86,18 +82,10 @@ void lattice_squish(const solve_options& so)
   //         so.nonlinear_options, so.linear_options, serac::solid_mechanics::default_quasistatic_options,
   //         so.simulation_tag, mesh_tag, fieldnames);
 
-  serac::SolidMechanicsContact<p, dim, ParamT> solid_solver(so.nonlinear_options, so.linear_options, serac::solid_mechanics::default_quasistatic_options, "name", pmesh, {"disp_old"});
+  serac::SolidMechanicsContact<p, dim> solid_solver(so.nonlinear_options, so.linear_options, serac::solid_mechanics::default_quasistatic_options, "name", pmesh);
 
   // Setting Ground Stiffness
-  double ground_stiffness = so.ground_stiffness;
-  auto ground_force = [ground_stiffness](double /*t*/, auto /*position*/, [[maybe_unused]] auto displacement,
-                                         auto /*acceleration*/, [[maybe_unused]] auto displacement_old) {
-    return ground_stiffness * (displacement - displacement_old);
-  };
 
-  solid_solver.addCustomDomainIntegral(serac::DependsOn<0>{}, ground_force, pmesh->entireBody());
-
-  //   solid_solver->addCustomBoundaryIntegral(serac::DependsOn<0>{}, ground_force);
 
   // Defining Material Properties
   auto lambda = 1.0;
@@ -170,8 +158,6 @@ void lattice_squish(const solve_options& so)
     SLIC_INFO_ROOT(axom::fmt::format("TIME STEP {}", i));
     SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of {})", solid_solver.time() + dt, so.max_time));
     serac::logger::flush();
-    disp_old = solid_solver.state("displacement");
-    solid_solver.setParameter(0, disp_old);
     solid_solver.advanceTimestep(dt);
     solid_solver.outputStateToDisk(paraview_tag);
   }
@@ -184,9 +170,9 @@ int main(int argc, char* argv[])
   serac::ApplicationManager applicationManager(argc, argv);
   solve_options so;
   so.linear_options = serac::LinearSolverOptions{//.linear_solver  = serac::LinearSolver::Strumpack,
-                                                 .linear_solver = serac::LinearSolver::CG,
+                                                //  .linear_solver = serac::LinearSolver::CG,
                                                  // .linear_solver  = serac::LinearSolver::SuperLU,
-                                                 // .linear_solver  = serac::LinearSolver::GMRES,
+                                                 .linear_solver  = serac::LinearSolver::GMRES,
                                                  //.preconditioner = serac::Preconditioner::HypreJacobi,
                                                  .preconditioner = serac::Preconditioner::HypreAMG,
                                                  .relative_tol = 0.7 * 1.0e-8,
@@ -209,9 +195,9 @@ int main(int argc, char* argv[])
     .jacobian = serac::ContactJacobian::Exact
   };
 
-  so.mesh_location = SERAC_REPO_DIR "/data/meshes/2x2lattice.g";
-  so.simulation_tag = "2x2lattice_squish";
-  so.serial_refinement = 1;
+  so.mesh_location = SERAC_REPO_DIR "/data/meshes/2x2lattice_tet.g";
+  so.simulation_tag = "2x2lattice_squish_tet";
+  so.serial_refinement = 0;
   so.parallel_refinement = 1;
   so.strain_rate = -10.0e0;
   so.ground_stiffness = 0.0;

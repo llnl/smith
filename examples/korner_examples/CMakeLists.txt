@@ -43,24 +43,25 @@ endfunction(create_symlinks)
 if(TRIBOL_FOUND)
                     set(SourceFiles
 		    # # Rate_Dependent_Viscous_Lattice
-		    # double_ring_tensile
+		    double_ring_tensile
 		    # logpile_lattice
-		    # small_lattice
+	        small_lattice
 		    2x2lattice
             5x5lattice
-	    5x5lattice_active_eos
+            5x5lattice_active_eos
             gyroid
+            box_lattice
                     # multi_tensile
 		    hole
 		    # # viscous_tensile
-                    )
-                    foreach (source IN LISTS SourceFiles)
+            )
+            foreach (source IN LISTS SourceFiles)
 
-                        blt_add_executable( NAME       ${source} 
-                                            SOURCES    ${source}.cpp
-                                            OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                                            DEPENDS_ON  serac_physics serac_mesh_utils
-                                            )
+                blt_add_executable( NAME       ${source} 
+                                    SOURCES    ${source}.cpp
+                                    OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                                    DEPENDS_ON  serac_physics serac_mesh_utils
+                                    )
 endforeach()
     # blt_add_executable( NAME       active_cantilever_metrics 
     #                     SOURCES    active_cantilever_metrics.cpp

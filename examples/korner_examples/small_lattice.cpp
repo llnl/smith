@@ -4,22 +4,16 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+
 #include <string>
 #include <fstream>
 
-#include "axom/inlet.hpp"
-#include "axom/slic/core/SimpleLogger.hpp"
+#include <memory>
+#include "axom/slic.hpp"
 #include "mfem.hpp"
-#include "serac/physics/solid_mechanics_contact.hpp"
-#include "serac/infrastructure/application_manager.hpp"
-// #include "serac/infrastructure/terminator.hpp"
-#include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
-#include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/solid_mechanics.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/serac_config.hpp"
-
+#include "serac/serac.hpp"
 constexpr int dim = 3;
 constexpr int p = 1;
 std::function<std::string(const std::string&)> petscPCTypeValidator = [](const std::string& in) -> std::string {
@@ -32,7 +26,7 @@ struct solve_options {
   int serial_refinement = 0;
   int parallel_refinement = 0;
   double max_time = 1.0;
-  int N_Steps = 200;
+  int N_Steps = 400;
   double ground_stiffness = 1.0e-8;
   double strain_rate = 1.0e-0;
   bool enable_contact = true;
@@ -50,6 +44,8 @@ struct solve_options {
 
 void lattice_squish(const solve_options& so)
 {
+
+
   // Creating DataStore
   const std::string& simulation_tag = so.simulation_tag;
   const std::string mesh_tag = simulation_tag + "mesh";
@@ -58,14 +54,12 @@ void lattice_squish(const solve_options& so)
   serac::StateManager::initialize(datastore, simulation_tag + "_data");
 
   // Loading Mesh
-  auto mesh = serac::buildMeshFromFile(so.mesh_location);
-  auto refined_mesh = serac::mesh::refineAndDistribute(std::move(mesh), so.serial_refinement, so.parallel_refinement);
-  auto& pmesh = serac::StateManager::setMesh(std::move(refined_mesh), mesh_tag);
-  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
+  auto pmesh = std::make_shared<serac::Mesh>(serac::buildMeshFromFile(so.mesh_location), mesh_tag, so.serial_refinement, so.parallel_refinement);
+  auto & whole_mesh = pmesh->entireBody();
 
   // Extracting boundary domains for boundary conditions
-  auto fix_bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  auto fix_top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
+  pmesh->addDomainOfBoundaryElements("fix_bottom", serac::by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("fix_top", serac::by_attr<dim>(2));
   constexpr int sideset1{3};
   constexpr int sideset2{4};
   constexpr int sideset3{5};
@@ -77,30 +71,10 @@ void lattice_squish(const solve_options& so)
 
   // Setting up Solid Mechanics Problem
 
-  std::vector<std::string> fieldnames{"disp_old"};
-  serac::FiniteElementState disp_old(serac::StateManager::mesh(mesh_tag), serac::H1<p, dim>{}, "previous_displacement");
-  disp_old = 0.0;
 
-  using ParamT = serac::Parameters<serac::H1<p, dim>>;
-
-  //   std::unique_ptr<serac::SolidMechanics<p, dim, ParamT>> solid_solver =
-  //       std::make_unique<serac::SolidMechanics<p, dim, ParamT>>(so.nonlinear_options, so.linear_options,
-  //                                                               serac::solid_mechanics::default_quasistatic_options,
-  //                                                               so.simulation_tag, mesh_tag, fieldnames);
-  std::unique_ptr<serac::SolidMechanicsContact<p, dim, ParamT>> solid_solver =
-      std::make_unique<serac::SolidMechanicsContact<p, dim, ParamT>>(
-          so.nonlinear_options, so.linear_options, serac::solid_mechanics::default_quasistatic_options,
-          so.simulation_tag, mesh_tag, fieldnames);
+  serac::SolidMechanicsContact<p, dim> solid_solver(so.nonlinear_options, so.linear_options, serac::solid_mechanics::default_quasistatic_options, "name", pmesh, {});
 
   // Setting Ground Stiffness
-  double ground_stiffness = so.ground_stiffness;
-  auto ground_force = [ground_stiffness](double /*t*/, auto /*position*/, [[maybe_unused]] auto displacement,
-                                         auto /*acceleration*/, [[maybe_unused]] auto displacement_old) {
-    return ground_stiffness * (displacement - displacement_old);
-  };
-  solid_solver->addCustomDomainIntegral(serac::DependsOn<0>{}, ground_force, whole_mesh);
-
-  //   solid_solver->addCustomBoundaryIntegral(serac::DependsOn<0>{}, ground_force);
 
   // Defining Material Properties
   auto lambda = 1.0;
@@ -109,71 +83,76 @@ void lattice_squish(const solve_options& so)
 
   // Defining Boundary Conditions
 
-  solid_solver->setMaterial(mat, whole_mesh);
-  solid_solver->setFixedBCs(fix_bottom, serac::Component::Y);
-  solid_solver->setFixedBCs(fix_bottom, serac::Component::X);
+  solid_solver.setMaterial(mat, whole_mesh);
+  solid_solver.setFixedBCs(pmesh->domain("fix_bottom"),serac::Component::Y);
+  // solid_solver.setFixedBCs(fix_bottom, serac::Component::X);
+  solid_solver.setFixedBCs(pmesh->domain("fix_bottom"),serac::Component::X);
   auto strain_rate = so.strain_rate;
   auto applied_displacement = [strain_rate](serac::vec3, double t) {
     return serac::vec3{0.0, strain_rate * t, 0.0};
   };
 
-  solid_solver->setDisplacementBCs(applied_displacement, fix_top, serac::Component::Y);
-  // solid_solver->setFixedBCs(fix_top,serac::Component::X);
-  // solid_solver->setFixedBCs(fix_bottom,serac::Component::Z);
-  // solid_solver->setFixedBCs(fix_top,serac::Component::Z);
-  solid_solver->setFixedBCs(whole_mesh, serac::Component::Z);
 
+  solid_solver.setDisplacementBCs(applied_displacement, pmesh->domain("fix_top"));
+  solid_solver.setFixedBCs(pmesh->entireBody(), serac::Component::Z);
   // Adding Contact Interactions
   if (so.enable_contact) {
     auto contact_interaction_id_1 = 0;
-    solid_solver->addContactInteraction(contact_interaction_id_1, {sideset1}, {sideset2}, so.contact_options);
+    solid_solver.addContactInteraction(contact_interaction_id_1, {sideset1}, {sideset2}, so.contact_options);
 
     auto contact_interaction_id_2 = 1;
-    solid_solver->addContactInteraction(contact_interaction_id_2, {sideset2}, {sideset3}, so.contact_options);
+    solid_solver.addContactInteraction(contact_interaction_id_2, {sideset2}, {sideset3}, so.contact_options);
 
     auto contact_interaction_id_3 = 2;
-    solid_solver->addContactInteraction(contact_interaction_id_3, {sideset3}, {sideset4}, so.contact_options);
+    solid_solver.addContactInteraction(contact_interaction_id_3, {sideset3}, {sideset4}, so.contact_options);
 
     auto contact_interaction_id_4 = 3;
-    solid_solver->addContactInteraction(contact_interaction_id_4, {sideset4}, {sideset1}, so.contact_options);
+    solid_solver.addContactInteraction(contact_interaction_id_4, {sideset4}, {sideset1}, so.contact_options);
 
     bool self_contact = true;
     if (self_contact){
 	    auto self_contact_interaction_id_1 = 4;
-    	solid_solver->addContactInteraction(self_contact_interaction_id_1, {sideset1}, {sideset1}, so.contact_options);
+    	solid_solver.addContactInteraction(self_contact_interaction_id_1, {sideset1}, {sideset1}, so.contact_options);
 
 	    auto self_contact_interaction_id_2 = 5;
-    	solid_solver->addContactInteraction(self_contact_interaction_id_2, {sideset2}, {sideset2}, so.contact_options);
+    	solid_solver.addContactInteraction(self_contact_interaction_id_2, {sideset2}, {sideset2}, so.contact_options);
 
 	    auto self_contact_interaction_id_3 = 6;
-    	solid_solver->addContactInteraction(self_contact_interaction_id_3, {sideset3}, {sideset3}, so.contact_options);
+    	solid_solver.addContactInteraction(self_contact_interaction_id_3, {sideset3}, {sideset3}, so.contact_options);
 
 	    auto self_contact_interaction_id_4 = 7;
-    	solid_solver->addContactInteraction(self_contact_interaction_id_4, {sideset4}, {sideset4}, so.contact_options);
+    	solid_solver.addContactInteraction(self_contact_interaction_id_4, {sideset4}, {sideset4}, so.contact_options);
 	    }
   }
-  // auto contact_interaction_id_top = 1;
-  // solid_solver->addContactInteraction(contact_interaction_id_top, {top_contact1}, {top_contact2}, so.contact_options);
 
   // Completing Setup
-  solid_solver->completeSetup();
+  solid_solver.completeSetup();
 
   // Running Quasistatics
   double dt = so.max_time / (static_cast<double>(so.N_Steps - 1));
 
   // Save Initial State
   std::string paraview_tag = simulation_tag + "_paraview";
-  solid_solver->outputStateToDisk(paraview_tag);
+  solid_solver.outputStateToDisk(paraview_tag);
+
+
+  std::ofstream reaction_log;
+  if (mfem::Mpi::Root()){
+    reaction_log.open("reaction_log.csv");
+  }
 
   for (int i = 1; i < so.N_Steps; ++i) {
     SLIC_INFO_ROOT("------------------------------------------");
     SLIC_INFO_ROOT(axom::fmt::format("TIME STEP {}", i));
-    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of {})", solid_solver->time() + dt, so.max_time));
+    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of {})", solid_solver.time() + dt, so.max_time));
     serac::logger::flush();
-    disp_old = solid_solver->state("displacement");
-    solid_solver->setParameter(0, disp_old);
-    solid_solver->advanceTimestep(dt);
-    solid_solver->outputStateToDisk(paraview_tag);
+    solid_solver.advanceTimestep(dt);
+    solid_solver.outputStateToDisk(paraview_tag);
+
+
+  }
+  if (mfem::Mpi::Root()){
+    reaction_log.close();
   }
 }
 
@@ -211,9 +190,9 @@ int main(int argc, char* argv[])
 
   so.mesh_location = SERAC_REPO_DIR "/data/meshes/small_lattice.g";
   so.simulation_tag = "small_lattice_squish";
-  so.serial_refinement = 0;
-  so.parallel_refinement = 0;
-  so.strain_rate = -10.0e0;
+  so.serial_refinement = 1;
+  so.parallel_refinement = 1;
+  so.strain_rate = -3.0e0;
   so.ground_stiffness = 0.0;
   so.enable_contact = true;
   lattice_squish(so);

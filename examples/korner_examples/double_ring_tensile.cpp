@@ -4,22 +4,16 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+
 #include <string>
 #include <fstream>
 
-#include "axom/inlet.hpp"
-#include "axom/slic/core/SimpleLogger.hpp"
+#include <memory>
+#include "axom/slic.hpp"
 #include "mfem.hpp"
-#include "serac/physics/solid_mechanics_contact.hpp"
-#include "serac/infrastructure/application_manager.hpp"
-// #include "serac/infrastructure/terminator.hpp"
-#include "serac/mesh/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
-#include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/solid_mechanics.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/serac_config.hpp"
-
+#include "serac/serac.hpp"
 constexpr int dim = 3;
 constexpr int p = 1;
 std::function<std::string(const std::string&)> petscPCTypeValidator = [](const std::string& in) -> std::string {
@@ -57,14 +51,12 @@ void ring_pull(const solve_options& so)
   serac::StateManager::initialize(datastore, simulation_tag + "_data");
 
   // Loading Mesh
-  auto mesh = serac::buildMeshFromFile(so.mesh_location);
-  auto refined_mesh = serac::mesh::refineAndDistribute(std::move(mesh), so.serial_refinement, so.parallel_refinement);
-  auto& pmesh = serac::StateManager::setMesh(std::move(refined_mesh), mesh_tag);
-  serac::Domain whole_mesh = serac::EntireDomain(pmesh);
+  auto pmesh = std::make_shared<serac::Mesh>(serac::buildMeshFromFile(so.mesh_location), mesh_tag, so.serial_refinement, so.parallel_refinement);
+  auto & whole_mesh = pmesh->entireBody();
 
   // Extracting boundary domains for boundary conditions
-  auto fix_bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  auto fix_top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(2));
+  pmesh->addDomainOfBoundaryElements("fix_bottom", serac::by_attr<dim>(1));
+  pmesh->addDomainOfBoundaryElements("fix_top", serac::by_attr<dim>(2));
   constexpr int bottom_contact1{3};
   constexpr int bottom_contact2{4};
   constexpr int top_contact1{5};
@@ -82,18 +74,15 @@ void ring_pull(const solve_options& so)
   //       std::make_unique<serac::SolidMechanics<p, dim, ParamT>>(so.nonlinear_options, so.linear_options,
   //                                                               serac::solid_mechanics::default_quasistatic_options,
   //                                                               so.simulation_tag, mesh_tag, fieldnames);
-  std::unique_ptr<serac::SolidMechanicsContact<p, dim, ParamT>> solid_solver =
-      std::make_unique<serac::SolidMechanicsContact<p, dim, ParamT>>(
-          so.nonlinear_options, so.linear_options, serac::solid_mechanics::default_quasistatic_options,
-          so.simulation_tag, mesh_tag, fieldnames);
 
+  serac::SolidMechanicsContact<p, dim, ParamT> solid_solver(so.nonlinear_options, so.linear_options, serac::solid_mechanics::default_quasistatic_options,"name", pmesh, {"disp_old"});
   // Setting Ground Stiffness
   double ground_stiffness = so.ground_stiffness;
   auto ground_force = [ground_stiffness](double /*t*/, auto /*position*/, [[maybe_unused]] auto displacement,
                                          auto /*acceleration*/, [[maybe_unused]] auto displacement_old) {
     return ground_stiffness * (displacement - displacement_old);
   };
-  solid_solver->addCustomDomainIntegral(serac::DependsOn<0>{}, ground_force, whole_mesh);
+  solid_solver.addCustomDomainIntegral(serac::DependsOn<0>{}, ground_force, whole_mesh);
 
   //   solid_solver->addCustomBoundaryIntegral(serac::DependsOn<0>{}, ground_force);
 
@@ -104,41 +93,41 @@ void ring_pull(const solve_options& so)
 
   // Defining Boundary Conditions
 
-  solid_solver->setMaterial(mat, whole_mesh);
-  solid_solver->setFixedBCs(fix_bottom, serac::Component::Y);
+  solid_solver.setMaterial(mat, whole_mesh);
+  solid_solver.setFixedBCs(pmesh->domain("fix_bottom"), serac::Component::Y);
   auto strain_rate = so.strain_rate;
   auto applied_displacement = [strain_rate](serac::vec3, double t) {
     return serac::vec3{0.0, strain_rate * t, 0.0};
   };
 
-  solid_solver->setDisplacementBCs(applied_displacement, fix_top, serac::Component::Y);
+  solid_solver.setDisplacementBCs(applied_displacement, pmesh->domain("fix_top"), serac::Component::Y);
 
   // Adding Contact Interactions
   auto contact_interaction_id_bottom = 0;
-  solid_solver->addContactInteraction(contact_interaction_id_bottom, {bottom_contact1}, {bottom_contact2},
+  solid_solver.addContactInteraction(contact_interaction_id_bottom, {bottom_contact1}, {bottom_contact2},
                                       so.contact_options);
   auto contact_interaction_id_top = 1;
-  solid_solver->addContactInteraction(contact_interaction_id_top, {top_contact1}, {top_contact2}, so.contact_options);
+  solid_solver.addContactInteraction(contact_interaction_id_top, {top_contact1}, {top_contact2}, so.contact_options);
 
   // Completing Setup
-  solid_solver->completeSetup();
+  solid_solver.completeSetup();
 
   // Running Quasistatics
   double dt = so.max_time / (static_cast<double>(so.N_Steps - 1));
 
   // Save Initial State
   std::string paraview_tag = simulation_tag + "_paraview";
-  solid_solver->outputStateToDisk(paraview_tag);
+  solid_solver.outputStateToDisk(paraview_tag);
 
   for (int i = 1; i < so.N_Steps; ++i) {
     SLIC_INFO_ROOT("------------------------------------------");
     SLIC_INFO_ROOT(axom::fmt::format("TIME STEP {}", i));
-    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of {})", solid_solver->time() + dt, so.max_time));
+    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of {})", solid_solver.time() + dt, so.max_time));
     serac::logger::flush();
-    disp_old = solid_solver->state("displacement");
-    solid_solver->setParameter(0, disp_old);
-    solid_solver->advanceTimestep(dt);
-    solid_solver->outputStateToDisk(paraview_tag);
+    disp_old = solid_solver.state("displacement");
+    solid_solver.setParameter(0, disp_old);
+    solid_solver.advanceTimestep(dt);
+    solid_solver.outputStateToDisk(paraview_tag);
   }
 }
 
