@@ -5,8 +5,9 @@
 "package_final_phase" : "",
 "spack_build_mode" : "install",
 "spack_url": "https://github.com/spack/spack.git",
-"spack_commit": "fbdf9d9e0120c5dcdb3fd1f6573ec321449919bc",
+"spack_commit": "b4b1c5f271c75e918ce922ff1bcc77542eda3ec9",
+"spack_packages_url": "https://github.com/spack/spack-packages.git",
+"spack_packages_commit": "a75a7f75182ffc7a51c6ca7f0fec4bf9b2705be8",
 "spack_configs_path": "scripts/spack/devtools_configs",
-"spack_packages_path": ["scripts/spack/radiuss-spack-configs/packages", "scripts/spack/packages"],
-"spack_concretizer": "clingo"
+"spack_packages_path": ["scripts/spack/radiuss-spack-configs/spack_repo/llnl_radiuss/packages", "scripts/spack/packages"]
 }
