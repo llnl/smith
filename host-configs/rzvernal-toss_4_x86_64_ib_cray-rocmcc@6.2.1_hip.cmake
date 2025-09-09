@@ -127,6 +127,8 @@ set(UMPIRE_DIR "${TPL_ROOT}/umpire-2024.07.0-h4aizqln4js5uo6o5dnkkjadcq5apw37" C
 
 set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.18-neize4eyd3wxmeuui44az2x5ecqfe2pd" CACHE PATH "")
 
+set(ENZYME_DIR "/usr/WS2/smithdev/toss_4_x86_64_ib_cray/rocm-6.2.1/enzyme/0.0.180" CACHE PATH "")
+
 #------------------------------------------------------------------------------
 # Devtools
 #------------------------------------------------------------------------------
@@ -141,4 +143,7 @@ set(ENABLE_CLANGTIDY OFF CACHE BOOL "")
 
 set(ENABLE_DOCS OFF CACHE BOOL "")
 
+set(SERAC_ENABLE_CODEVELOP ON CACHE BOOL "")
+
+set(SERAC_DISABLE_TRIBOL ON CACHE BOOL "")
 
