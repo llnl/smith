@@ -9,11 +9,17 @@
 #include <fem/datacollection.hpp>
 #include <functional>
 #include <mesh/vtk.hpp>
+#include <mfem/fem/coefficient.hpp>
+#include <mfem/fem/fe_coll.hpp>
+#include <mfem/fem/pfespace.hpp>
+#include <mfem/fem/pgridfunc.hpp>
+#include <mfem/linalg/hypre.hpp>
 #include <set>
 #include <src/serac/physics/contact/contact_config.hpp>
 #include <string>
 #include "axom/slic/core/SimpleLogger.hpp"
 #include <gtest/gtest.h>
+#include <mpi.h>
 #include "mfem.hpp"
 
 #include "shared/mesh/MeshBuilder.hpp"
@@ -24,6 +30,15 @@
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include <fenv.h>
+
+
+// static void enable_fpe() {
+//   // trap on invalid ops (NaN), divide-by-zero, and overflow
+//   feclearexcept(FE_ALL_EXCEPT);
+//   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
+  
+// }
 
 namespace serac {
 
@@ -45,16 +60,16 @@ TEST_P(ContactTest, patch)
   // Construct the appropriate dimension mesh and give it to the data store
 
   auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(64 , 64).translate({0.0,  1.0}).bdrAttribInfo()
+    shared::MeshBuilder::SquareMesh(100,100 ).translate({0.0,  1.0}).bdrAttribInfo()
     .updateBdrAttrib(4, 7).updateBdrAttrib(3, 9).updateBdrAttrib(1, 6),
-    shared::MeshBuilder::SquareMesh(64, 64).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
+    shared::MeshBuilder::SquareMesh(80, 80).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
 
   mfem::VisItDataCollection visit_dc("contact_patch_visit", &mesh->mfemParMesh());
 
   visit_dc.SetPrefixPath("visit_out");
   visit_dc.Save();
 
-
+  
   
 
   mesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(7));
@@ -79,23 +94,24 @@ TEST_P(ContactTest, patch)
   return;
 #endif
 
-  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
                                            .relative_tol = 1.0e-13,
                                            .absolute_tol = 1.0e-13,
                                            .max_iterations = 20,
+                                           .max_line_search_iterations = 12,
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
                                  .enforcement =serac::ContactEnforcement::Penalty,
                                  .type = ContactType::Frictionless,
-                                 .penalty = 100000,
+                                 .penalty = 10000000,
                                  .penalty2 = 0,
                                  .jacobian = serac::ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, mesh);
 
-  double K = 10000.0;
+  double K = 1000.0;
   double G = 10;
   solid_mechanics::NeoHookean mat{1.0, K, G};
   solid_solver.setMaterial(mat, mesh->entireBody());
@@ -114,6 +130,7 @@ TEST_P(ContactTest, patch)
 
   // Finalize the data structures
   solid_solver.completeSetup();
+
 
   std::string paraview_name = name + "_paraview";
   solid_solver.outputStateToDisk(paraview_name);
@@ -137,16 +154,69 @@ TEST_P(ContactTest, patch)
   mfem::ParFiniteElementSpace elasticity_fes(solid_solver.reactions().space());
   mfem::ParGridFunction elasticity_sol(&elasticity_fes);
   elasticity_sol.ProjectCoefficient(elasticity_sol_coeff);
-  mfem::ParGridFunction approx_error(elasticity_sol);
-  approx_error -= solid_solver.displacement().gridFunction();
-  auto approx_error_l2 = mfem::ParNormlp(approx_error, 2, MPI_COMM_WORLD);
-  EXPECT_NEAR(0.0, approx_error_l2, 1.0e-2);
+  // mfem::ParGridFunction approx_error(elasticity_sol);
+  // approx_error -= solid_solver.displacement().gridFunction();
+  // auto approx_error_l2 = mfem::ParNormlp(approx_error, 2, MPI_COMM_WORLD);
+  // EXPECT_NEAR(0.0, approx_error_l2, 1.0e-2);
+
+  //Set up test to only look at y component of error*********
+const mfem::ParFiniteElementSpace& u_space_const = solid_solver.displacement().space();
+auto& u_space = const_cast<mfem::ParFiniteElementSpace&>(u_space_const); 
+mfem::ParGridFunction U_exact(&u_space);
+U_exact.ProjectCoefficient(elasticity_sol_coeff);       
+
+// Numerical displacement
+const mfem::ParGridFunction& U_num = solid_solver.displacement().gridFunction();
+
+// Overall Error
+mfem::ParGridFunction U_err(U_exact);
+U_err -= U_num;
+const double L2_err_vec = mfem::ParNormlp(U_err, 2, MPI_COMM_WORLD);
+std::cout << "L2_err_vec = " << L2_err_vec << std::endl;
+
+//y-component error 
+const mfem::FiniteElementCollection* fec = u_space.FEColl();
+mfem::ParFiniteElementSpace y_fes(&mesh->mfemParMesh(), fec, /*vdim=*/1, u_space.GetOrdering()); //builds scalar space on same mesh 
+
+mfem::ParGridFunction uy_ex(&y_fes), uy_num(&y_fes);
+const int n = y_fes.GetNDofs();
+
+for (int i = 0; i < n; ++i) {
+  uy_ex(i)  = U_exact(n*1 + i);   
+  uy_num(i) = U_num  (n*1 + i);
+}
+
+//Same thing for x forces. 
+mfem::ParGridFunction ux_ex(&y_fes), ux_num(&y_fes);
+
+for( int i = 0; i < n; ++i) {
+  ux_ex(i) = U_exact(i);
+  ux_num(i) = U_num(i);
+}
+
+mfem::ParGridFunction uy_err(uy_ex);
+mfem::ParGridFunction ux_err(ux_ex);
+uy_err -= uy_num;
+ux_err -= ux_num;
+const double L2_err_y = mfem::ParNormlp(uy_err, 2, MPI_COMM_WORLD);
+const double L2_err_x = mfem::ParNormlp(ux_err, 2, MPI_COMM_WORLD);
+std::cout << "L2_err_y   = " << L2_err_y << std::endl;
+std::cout << "L2_err_x   = " << L2_err_x << std::endl;
+
+EXPECT_NEAR(0.0, L2_err_vec, 1e-2);
+EXPECT_NEAR(0.0, L2_err_y,   1e-2);
+EXPECT_NEAR(0.0, L2_err_x, 1e-2);
+
+
+std::cout << "check = " 
+          << std::abs(L2_err_vec*L2_err_vec - (L2_err_x*L2_err_x + L2_err_y*L2_err_y))
+          << "\n";
 }
 
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTest,
     testing::Values(
-                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ")));
+                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_approxJ")));
                     // std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")));
 
 }  // namespace serac
@@ -155,7 +225,7 @@ int main(int argc, char* argv[])
 {
 
 
-
+  // enable_fpe();
   testing::InitGoogleTest(&argc, argv);
   serac::ApplicationManager applicationManager(argc, argv);
   return RUN_ALL_TESTS();
