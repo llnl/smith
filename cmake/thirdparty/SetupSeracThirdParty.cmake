@@ -216,7 +216,7 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         message(STATUS "Using MFEM submodule")
 
         #### Store Data that MFEM clears
-        set(tpls_to_save ADIAK AMGX AXOM CALIPER CAMP CONDUIT HDF5
+        set(tpls_to_save ADIAK AMGX AXOM CALIPER CAMP CONDUIT ENZYME HDF5
                          HYPRE LUA METIS MFEM NETCDF PARMETIS PETSC RAJA 
                          SLEPC SUPERLU_DIST STRUMPACK SUNDIALS TRIBOL
                          UMPIRE)
