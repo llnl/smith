@@ -69,10 +69,19 @@ int main(int argc, char* argv[])
   contact_states[serac::ContactFields::SHAPE] = 0.0;
 
   double time = 0.0, dt = 1.0;
-  int direction = 0;
+  int direction = serac::ContactFields::DISP;
   auto input_states = getConstFieldPointers(contact_states);
   auto gap = contact_constraint.evaluate(time, dt, input_states);
   auto gap_Jacobian = contact_constraint.jacobian(time, dt, input_states, direction);
+  auto gap_Jacobian_tilde = contact_constraint.jacobian_tilde(time, dt, input_states, direction);
+
+  int nPressureDofs = contact_constraint.numPressureDofs();
+  mfem::Vector multipliers(nPressureDofs);
+  auto residual = contact_constraint.residual_contribution(time, dt, input_states, multipliers, direction);
+  // auto residual_Jacobian = contact_constraint.residual_contribution_jacobian(time, dt,
+  //       	                                                             input_states, multipliers,
+  //       								     direction);
+  //
 
   return 0;
 }

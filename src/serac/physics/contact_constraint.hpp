@@ -115,11 +115,22 @@ class ContactConstraint : public Constraint {
     contact_.update(cycle, time, dt);
     auto J_contact = contact_.mergedJacobian();
     J_contact->owns_blocks = false;
-    delete &J_contact->GetBlock(0, 0);
-    delete &J_contact->GetBlock(0, 1);
-    delete &J_contact->GetBlock(1, 1);
 
-    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(1, 0));
+    int iblock = 1;
+    int jblock = 0;
+    for (int i = 0; i < 2; i++) {
+      for (int j = 0; j < 2; j++) {
+        if (i == iblock && j == jblock) {
+          continue;
+        }
+        if (!J_contact->IsZeroBlock(i, j)) {
+          delete &J_contact->GetBlock(i, j);
+        }
+      }
+    }
+
+    SLIC_ERROR_IF(J_contact->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
+    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(iblock, jblock));
     std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
     return dgdu_unique;
   };
@@ -137,6 +148,7 @@ class ContactConstraint : public Constraint {
   mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                      const mfem::Vector& multipliers, [[maybe_unused]] int direction) const
   {
+    SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     contact_.setPressures(multipliers);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
@@ -161,6 +173,7 @@ class ContactConstraint : public Constraint {
                                                                        const mfem::Vector& multipliers,
                                                                        [[maybe_unused]] int direction) const
   {
+    SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     contact_.setPressures(multipliers);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
@@ -169,13 +182,24 @@ class ContactConstraint : public Constraint {
     contact_.update(cycle, time, dt);
     auto J_contact = contact_.mergedJacobian();
     J_contact->owns_blocks = false;
-    delete &J_contact->GetBlock(0, 1);
-    delete &J_contact->GetBlock(1, 0);
-    delete &J_contact->GetBlock(1, 1);
 
-    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(0, 0));
-    std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
-    return dgdu_unique;
+    int iblock = 0;
+    int jblock = 0;
+    for (int i = 0; i < 2; i++) {
+      for (int j = 0; j < 2; j++) {
+        if (i == iblock && j == jblock) {
+          continue;
+        }
+        if (!J_contact->IsZeroBlock(i, j)) {
+          delete &J_contact->GetBlock(i, j);
+        }
+      }
+    }
+
+    SLIC_ERROR_IF(J_contact->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
+    auto Hessian = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(iblock, jblock));  // constraint Hessian
+    std::unique_ptr<mfem::HypreParMatrix> Hessian_unique(Hessian);
+    return Hessian_unique;
   };
 
   /** @brief Interface for computing contact constraint Jacobian_tilde from a vector of serac::FiniteElementState*
@@ -189,6 +213,7 @@ class ContactConstraint : public Constraint {
   std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                                        [[maybe_unused]] int direction) const
   {
+    SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
@@ -196,14 +221,29 @@ class ContactConstraint : public Constraint {
     contact_.update(cycle, time, dt);
     auto J_contact = contact_.mergedJacobian();
     J_contact->owns_blocks = false;
-    delete &J_contact->GetBlock(0, 0);
-    delete &J_contact->GetBlock(1, 0);
-    delete &J_contact->GetBlock(1, 1);
 
-    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(0, 1));
+    int iblock = 0;
+    int jblock = 1;
+    for (int i = 0; i < 2; i++) {
+      for (int j = 0; j < 2; j++) {
+        if (i == iblock && j == jblock) {
+          continue;
+        }
+        if (!J_contact->IsZeroBlock(i, j)) {
+          delete &J_contact->GetBlock(i, j);
+        }
+      }
+    }
+
+    SLIC_ERROR_IF(J_contact->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
+    auto dgduT = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(iblock, jblock));
+    auto dgdu = dgduT->Transpose();
+    delete dgduT;
     std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
     return dgdu_unique;
   };
+
+  int numPressureDofs() const { return contact_.numPressureDofs(); }
 
  protected:
   /**
