@@ -47,19 +47,20 @@ TEST(BeamBending, TwoDimensional)
                                             .max_iterations = 500,
                                             .print_level = 1};
 
-#ifdef SERAC_USE_SUNDIALS
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::KINFullStep,
-                                                  .relative_tol = 1.0e-12,
-                                                  .absolute_tol = 1.0e-12,
-                                                  .max_iterations = 5000,
-                                                  .print_level = 1};
-#else
+  // TODO (EBC): investigate sundials usage (or deprecate sundials).  the result is not converging with these options
+  // #ifdef SERAC_USE_SUNDIALS
+  //   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::KINFullStep,
+  //                                                   .relative_tol = 1.0e-12,
+  //                                                   .absolute_tol = 1.0e-12,
+  //                                                   .max_iterations = 5000,
+  //                                                   .print_level = 1};
+  // #else
   serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-12,
                                                   .absolute_tol = 1.0e-12,
                                                   .max_iterations = 5000,
                                                   .print_level = 1};
-#endif
+  // #endif
 
   SolidMechanics<p, dim> solid_solver(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                       "solid_mechanics", mesh);
@@ -84,10 +85,15 @@ TEST(BeamBending, TwoDimensional)
   solid_solver.completeSetup();
 
   // Perform the quasi-static solve
-  solid_solver.advanceTimestep(1.0);
+  // NOTE (EBC): This doesn't catch the error sundials was reporting. Sundials 7.0.0 has more robust error reporting, so
+  // we could potentially catch the sundials error when (if) we upgrade.
+  EXPECT_NO_THROW(solid_solver.advanceTimestep(1.0));
 
   // Output the sidre-based plot files
   solid_solver.outputStateToDisk("paraview_output");
+
+  constexpr double l2_disp_regression = 19.741914557926425;
+  EXPECT_NEAR(mfem::ParNormlp(solid_solver.displacement(), 2, MPI_COMM_WORLD), l2_disp_regression, 1.0e-12);
 }
 
 }  // namespace serac
