@@ -6,7 +6,6 @@
 
 #include "mfem.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
@@ -35,50 +34,8 @@ SERAC_HOST_DEVICE auto greenStrain(const tensor<T, dim, dim>& grad_u)
 
 namespace serac {
 
-// template <template <typename, int...> class TensorT>
-// struct NeoHookeanWithFieldDensityDfem {
-//   static constexpr int dim = 2;
-//   /**
-//    * @brief stress calculation for a NeoHookean material model
-//    * @tparam T type of float or dual in tensor
-//    * @tparam dim Dimensionality of space
-//    * @param du_dX displacement gradient with respect to the reference configuration
-//    * When applied to 2D displacement gradients, the stress is computed in plane strain,
-//    * returning only the in-plane components.
-//    * @return The first Piola stress
-//    */
-//   template <typename T, int dim, typename Density>
-//   SERAC_HOST_DEVICE auto pkStress(double, const TensorT<T, dim, dim>& du_dX, const TensorT<T, dim, dim>&,
-//                                   const Density&) const
-//   {
-//     // using std::log1p;
-//     using std::log;
-//     auto I = mfem::future::IdentityMatrix<dim>();
-//     auto lambda = K - (2.0 / 3.0) * G;
-//     auto B_minus_I = mfem::future::dot(du_dX, transpose(du_dX)) + mfem::future::transpose(du_dX) + du_dX;
-
-//     // NOTE: version that avoids cancellation error leads to an unimplemented intrinsic in Enzyme
-//     // auto logJ = log1p(detApIm1(du_dX));
-//     auto logJ = log(mfem::future::det(du_dX + mfem::future::IdentityMatrix<dim>()));
-//     // Kirchoff stress, in form that avoids cancellation error when F is near I
-//     auto TK = lambda * logJ * I + G * B_minus_I;
-
-//     // Pull back to Piola
-//     auto F = du_dX + I;
-//     return mfem::future::tuple{mfem::future::dot(TK, mfem::future::inv(mfem::future::transpose(F)))};
-//   }
-
-//   /// @brief interpolates density field
-//   template <typename Density>
-//   SERAC_HOST_DEVICE auto density(const Density& density) const
-//   {
-//     return density;
-//   }
-
-//   double K;  ///< bulk modulus
-//   double G;  ///< shear modulus
-// };
-
+// NOTE (EBC): NeoHookean is not working with dfem on device with HIP, since some needed LLVM intrinsics are not
+// implemented in Enzyme with the call to log1p()/log().
 struct StVenantKirchhoffWithFieldDensityDfem {
   static constexpr int dim = 2;
 
@@ -113,71 +70,6 @@ struct StVenantKirchhoffWithFieldDensityDfem {
 
   double K;  ///< Bulk modulus
   double G;  ///< Shear modulus
-};
-
-class LumpedMassExplicitNewmark {
- public:
-  LumpedMassExplicitNewmark(const std::shared_ptr<WeakForm>& weak_form, const std::shared_ptr<WeakForm>& mass_weak_form,
-                            std::shared_ptr<BoundaryConditionManager> bc_manager)
-      : weak_form_(weak_form), mass_weak_form_(mass_weak_form), bc_manager_(bc_manager)
-  {
-  }
-
-  std::tuple<std::vector<FiniteElementState>, double> advanceState(const std::vector<ConstFieldPtr>& states,
-                                                                   const std::vector<ConstFieldPtr>& params,
-                                                                   double time, double dt)
-  {
-    SLIC_ERROR_ROOT_IF(states.size() != 4, "Expected 4 states: displacement, velocity, acceleration, and coordinates");
-
-    enum States
-    {
-      DISP,
-      VELO,
-      ACCEL,
-      COORD
-    };
-
-    enum Params
-    {
-      DENSITY
-    };
-
-    const auto& u = *states[DISP];
-    const auto& v = *states[VELO];
-    const auto& a = *states[ACCEL];
-
-    auto v_pred = v;
-    v_pred.Add(0.5 * dt, a);
-    auto u_pred = u;
-    u_pred.Add(dt, v_pred);
-
-    if (bc_manager_) {
-      u_pred.SetSubVector(bc_manager_->allEssentialTrueDofs(), 0.0);
-    }
-
-    auto m_inv = mass_weak_form_->residual(time, dt, &u, {states[COORD], params[DENSITY]});
-    m_inv.Reciprocal();
-
-    std::vector<ConstFieldPtr> pred_states = {&u_pred, &v_pred, &a, states[COORD], params[DENSITY]};
-
-    auto zero_mass_resid = weak_form_->residual(time, dt, &u_pred, pred_states);
-
-    FiniteElementState a_pred(a.space(), "acceleration_pred");
-    auto a_pred_ptr = a_pred.Write();
-    auto m_inv_ptr = m_inv.Read();
-    auto zero_mass_resid_ptr = zero_mass_resid.Read();
-    mfem::forall_switch(a_pred.UseDevice(), a_pred.Size(),
-                        [=] MFEM_HOST_DEVICE(int i) { a_pred_ptr[i] = m_inv_ptr[i] * zero_mass_resid_ptr[i]; });
-
-    v_pred.Add(0.5 * dt, a_pred);
-
-    return {{u_pred, v_pred, a_pred, *states[COORD]}, time + dt};
-  }
-
- private:
-  std::shared_ptr<WeakForm> weak_form_;
-  std::shared_ptr<WeakForm> mass_weak_form_;
-  std::shared_ptr<BoundaryConditionManager> bc_manager_;
 };
 
 }  // namespace serac
@@ -227,6 +119,10 @@ int main(int argc, char* argv[])
   serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
   serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
   serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
+  disp.UseDevice(true);
+  velo.UseDevice(true);
+  accel.UseDevice(true);
+  density.UseDevice(true);
 
   std::vector<serac::FiniteElementState> states{disp, velo, accel};
   std::vector<serac::FiniteElementState> params{density};
@@ -298,6 +194,7 @@ int main(int argc, char* argv[])
     auto state_ptrs = serac::getConstFieldPointers(states);
     serac::FiniteElementState coords_state(
         *static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes())->ParFESpace(), "coordinates");
+    coords_state.UseDevice(true);
     coords_state.setFromGridFunction(*static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes()));
     state_ptrs.push_back(&coords_state);
     auto new_states_and_time = advancer->advanceState(state_ptrs, getConstFieldPointers(params), time, dt);

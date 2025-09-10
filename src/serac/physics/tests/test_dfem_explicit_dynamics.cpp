@@ -36,50 +36,8 @@ SERAC_HOST_DEVICE auto greenStrain(const tensor<T, dim, dim>& grad_u)
 
 namespace serac {
 
-// template <template <typename, int...> class TensorT>
-// struct NeoHookeanWithFieldDensityDfem {
-//   static constexpr int dim = 2;
-//   /**
-//    * @brief stress calculation for a NeoHookean material model
-//    * @tparam T type of float or dual in tensor
-//    * @tparam dim Dimensionality of space
-//    * @param du_dX displacement gradient with respect to the reference configuration
-//    * When applied to 2D displacement gradients, the stress is computed in plane strain,
-//    * returning only the in-plane components.
-//    * @return The first Piola stress
-//    */
-//   template <typename T, int dim, typename Density>
-//   SERAC_HOST_DEVICE auto pkStress(double, const TensorT<T, dim, dim>& du_dX, const TensorT<T, dim, dim>&,
-//                                   const Density&) const
-//   {
-//     // using std::log1p;
-//     using std::log;
-//     auto I = mfem::future::IdentityMatrix<dim>();
-//     auto lambda = K - (2.0 / 3.0) * G;
-//     auto B_minus_I = mfem::future::dot(du_dX, transpose(du_dX)) + mfem::future::transpose(du_dX) + du_dX;
-
-//     // NOTE: version that avoids cancellation error leads to an unimplemented intrinsic in Enzyme
-//     // auto logJ = log1p(detApIm1(du_dX));
-//     auto logJ = log(mfem::future::det(du_dX + mfem::future::IdentityMatrix<dim>()));
-//     // Kirchoff stress, in form that avoids cancellation error when F is near I
-//     auto TK = lambda * logJ * I + G * B_minus_I;
-
-//     // Pull back to Piola
-//     auto F = du_dX + I;
-//     return mfem::future::tuple{mfem::future::dot(TK, mfem::future::inv(mfem::future::transpose(F)))};
-//   }
-
-//   /// @brief interpolates density field
-//   template <typename Density>
-//   SERAC_HOST_DEVICE auto density(const Density& density) const
-//   {
-//     return density;
-//   }
-
-//   double K;  ///< bulk modulus
-//   double G;  ///< shear modulus
-// };
-
+// NOTE (EBC): NeoHookean is not working with dfem on device with HIP, since some needed LLVM intrinsics are not
+// implemented in Enzyme with the call to log1p()/log().
 struct StVenantKirchhoffWithFieldDensityDfem {
   static constexpr int dim = 2;
 
@@ -116,73 +74,6 @@ struct StVenantKirchhoffWithFieldDensityDfem {
   double G;  ///< Shear modulus
 };
 
-class LumpedMassExplicitNewmark {
- public:
-  LumpedMassExplicitNewmark(const std::shared_ptr<WeakForm>& weak_form, const std::shared_ptr<WeakForm>& mass_weak_form,
-                            std::shared_ptr<BoundaryConditionManager> bc_manager)
-      : weak_form_(weak_form), mass_weak_form_(mass_weak_form), bc_manager_(bc_manager)
-  {
-  }
-
-  std::tuple<std::vector<FiniteElementState>, double> advanceState(const std::vector<ConstFieldPtr>& states,
-                                                                   const std::vector<ConstFieldPtr>& params,
-                                                                   double time, double dt)
-  {
-    SLIC_ERROR_ROOT_IF(states.size() != 4, "Expected 4 states: displacement, velocity, acceleration, and coordinates");
-
-    enum States
-    {
-      DISP,
-      VELO,
-      ACCEL,
-      COORD
-    };
-
-    enum Params
-    {
-      DENSITY
-    };
-
-    const auto& u = *states[DISP];
-    const auto& v = *states[VELO];
-    const auto& a = *states[ACCEL];
-
-    auto v_pred = v;
-    v_pred.Add(0.5 * dt, a);
-    auto u_pred = u;
-    u_pred.Add(dt, v_pred);
-
-    if (bc_manager_) {
-      u_pred.SetSubVector(bc_manager_->allEssentialTrueDofs(), 0.0);
-    }
-
-    // NOTE: DfemWeakForm will ignore shape displacement; just send it u to fill the slot
-    auto m_inv = mass_weak_form_->residual(time, dt, &u, {states[COORD], params[DENSITY]});
-    m_inv.Reciprocal();
-
-    std::vector<ConstFieldPtr> pred_states = {&u_pred, &v_pred, &a, states[COORD], params[DENSITY]};
-
-    // NOTE: DfemWeakForm will ignore shape displacement; just send it u_pred to fill the slot
-    auto zero_mass_resid = weak_form_->residual(time, dt, &u_pred, pred_states);
-
-    FiniteElementState a_pred(a.space(), "acceleration_pred");
-    auto a_pred_ptr = a_pred.Write();
-    auto m_inv_ptr = m_inv.Read();
-    auto zero_mass_resid_ptr = zero_mass_resid.Read();
-    mfem::forall_switch(a_pred.UseDevice(), a_pred.Size(),
-                        [=] MFEM_HOST_DEVICE(int i) { a_pred_ptr[i] = m_inv_ptr[i] * zero_mass_resid_ptr[i]; });
-
-    v_pred.Add(0.5 * dt, a_pred);
-
-    return {{u_pred, v_pred, a_pred, *states[COORD]}, time + dt};
-  }
-
- private:
-  std::shared_ptr<WeakForm> weak_form_;
-  std::shared_ptr<WeakForm> mass_weak_form_;
-  std::shared_ptr<BoundaryConditionManager> bc_manager_;
-};
-
 }  // namespace serac
 
 struct ExplicitDynamicsFixture : public testing::Test {
@@ -192,7 +83,6 @@ struct ExplicitDynamicsFixture : public testing::Test {
   using VectorSpace = serac::H1<disp_order, dim>;
   using DensitySpace = serac::L2<disp_order - 1>;
 
-  // using SolidMaterialDfem = serac::NeoHookeanWithFieldDensityDfem<mfem::future::tensor>;
   using SolidMaterialDfem = serac::StVenantKirchhoffWithFieldDensityDfem;
 
   enum STATE
@@ -222,13 +112,17 @@ struct ExplicitDynamicsFixture : public testing::Test {
                                          MESHTAG, 0, 0);
     // shift one of the x coordinates so the mesh is not affine
     auto* coords = mesh->mfemParMesh().GetNodes()->ReadWrite();
-    coords[6] += 0.1;
+    coords[6] += 0.01;
 
     // create residual evaluator
     serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
     serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
     serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
     serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
+    disp.UseDevice(true);
+    velo.UseDevice(true);
+    accel.UseDevice(true);
+    density.UseDevice(true);
 
     states = {disp, velo, accel};
     params = {density};
@@ -269,7 +163,10 @@ struct ExplicitDynamicsFixture : public testing::Test {
 
     states[DISPLACEMENT] = 0.0;
     states[VELOCITY] = 0.0;
-    states[ACCELERATION] = 0.0;
+    states[ACCELERATION].setFromFieldFunction([](serac::tensor<double, dim>) {
+      serac::tensor<double, dim> u({0.0, -9.81});
+      return u;
+    });
     params[DENSITY] = 1.0;
 
     dfem_weak_form = solid_dfem_weak_form;
@@ -298,46 +195,74 @@ struct ExplicitDynamicsFixture : public testing::Test {
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
 
-  std::vector<serac::FiniteElementDual> state_duals;
-  std::vector<serac::FiniteElementDual> state_params;
-
-  std::vector<serac::FiniteElementState> state_tangents;
-  std::vector<serac::FiniteElementState> param_tangents;
-
   mfem::IntegrationRule nodal_ir_2d;
   std::shared_ptr<serac::LumpedMassExplicitNewmark> advancer;
-
-  std::unique_ptr<axom::sidre::MFEMSidreDataCollection> dc;
 };
 
 TEST_F(ExplicitDynamicsFixture, RunDfemExplicitDynamicsSim)
 {
-  mfem::VisItDataCollection dc("solid_explicit_dynamics", &mesh->mfemParMesh());
-  dc.RegisterField("displacement", &states[DISPLACEMENT].gridFunction());
-  dc.RegisterField("velocity", &states[VELOCITY].gridFunction());
-  dc.RegisterField("acceleration", &states[ACCELERATION].gridFunction());
-  dc.RegisterField("density", &params[DENSITY].gridFunction());
+  // acceleration (constant)
+  mfem::Vector exact_accel_value({0.0, -9.81});
+  serac::FiniteElementState exact_accel(states[ACCELERATION].space(), "exact_acceleration");
+  exact_accel.UseDevice(true);
+  mfem::VectorConstantCoefficient exact_accel_coeff(exact_accel_value);
+  exact_accel.project(exact_accel_coeff);
+  auto exact_accel_ptr = exact_accel.HostRead();
+
+  // velocity
+  mfem::Vector exact_velo_value({0.0, exact_accel_value[1] * dt});
+
+  // displacement
+  mfem::Vector exact_disp_value({0.0, 0.5 * exact_velo_value[1] * dt});
+
   double time = 0.0;
-  int cycle = 0;
   for (size_t step = 0; step < num_steps; ++step) {
     for (auto& state : states) {
       state.gridFunction();
     }
-    dc.SetCycle(cycle);
-    dc.SetTime(time);
-    dc.Save();
     std::cout << "Step " << step << ", time = " << time << std::endl;
     auto state_ptrs = serac::getConstFieldPointers(states);
     serac::FiniteElementState coords(*static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes())->ParFESpace(),
                                      "coordinates");
+    coords.UseDevice(true);
     coords.setFromGridFunction(*static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes()));
     state_ptrs.push_back(&coords);
     auto new_states_and_time = advancer->advanceState(state_ptrs, getConstFieldPointers(params), time, dt);
-    cycle++;
+
     time = std::get<1>(new_states_and_time);
     for (size_t i = 0; i < states.size(); ++i) {
       states[i] = std::get<0>(new_states_and_time)[i];
     }
+
+    // check acceleration
+    auto accel_ptr = states[ACCELERATION].HostRead();
+    for (int i = 0; i < states[ACCELERATION].Size(); ++i) {
+      EXPECT_NEAR(accel_ptr[i], exact_accel_ptr[i], 1.0e-14);
+    }
+
+    // update and check velocity
+    serac::FiniteElementState exact_velo(states[VELOCITY].space(), "exact_velocity");
+    exact_velo.UseDevice(true);
+    mfem::VectorConstantCoefficient exact_velo_coeff(exact_velo_value);
+    exact_velo.project(exact_velo_coeff);
+    auto velo_ptr = states[VELOCITY].HostRead();
+    auto exact_velo_ptr = exact_velo.HostRead();
+    for (int i = 0; i < states[VELOCITY].Size(); ++i) {
+      EXPECT_NEAR(velo_ptr[i], exact_velo_ptr[i], 1.0e-14);
+    }
+    exact_velo_value[1] += exact_accel_value[1] * dt;
+
+    // update and check displacement
+    serac::FiniteElementState exact_disp(states[DISPLACEMENT].space(), "exact_displacement");
+    exact_disp.UseDevice(true);
+    mfem::VectorConstantCoefficient exact_disp_coeff(exact_disp_value);
+    exact_disp.project(exact_disp_coeff);
+    auto disp_ptr = states[DISPLACEMENT].HostRead();
+    auto exact_disp_ptr = exact_disp.HostRead();
+    for (int i = 0; i < states[DISPLACEMENT].Size(); ++i) {
+      EXPECT_NEAR(disp_ptr[i], exact_disp_ptr[i], 1.0e-14);
+    }
+    exact_disp_value[1] += exact_velo_value[1] * dt - 0.5 * exact_accel_value[1] * dt * dt;
   }
 }
 

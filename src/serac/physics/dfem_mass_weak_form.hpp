@@ -15,8 +15,74 @@
 #include "serac/physics/dfem_weak_form.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
+#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 
 namespace serac {
+
+class LumpedMassExplicitNewmark {
+ public:
+  LumpedMassExplicitNewmark(const std::shared_ptr<WeakForm>& weak_form, const std::shared_ptr<WeakForm>& mass_weak_form,
+                            std::shared_ptr<BoundaryConditionManager> bc_manager)
+      : weak_form_(weak_form), mass_weak_form_(mass_weak_form), bc_manager_(bc_manager)
+  {
+  }
+
+  std::tuple<std::vector<FiniteElementState>, double> advanceState(const std::vector<ConstFieldPtr>& states,
+                                                                   const std::vector<ConstFieldPtr>& params,
+                                                                   double time, double dt)
+  {
+    SLIC_ERROR_ROOT_IF(states.size() != 4, "Expected 4 states: displacement, velocity, acceleration, and coordinates");
+
+    enum States
+    {
+      DISPLACEMENT,
+      VELOCITY,
+      ACCELERATION,
+      COORDINATES
+    };
+
+    enum Params
+    {
+      DENSITY
+    };
+
+    const auto& u = *states[DISPLACEMENT];
+    const auto& v = *states[VELOCITY];
+    const auto& a = *states[ACCELERATION];
+
+    auto v_pred = v;
+    v_pred.Add(0.5 * dt, a);
+    auto u_pred = u;
+    u_pred.Add(dt, v_pred);
+
+    if (bc_manager_) {
+      u_pred.SetSubVector(bc_manager_->allEssentialTrueDofs(), 0.0);
+    }
+
+    auto m_inv = mass_weak_form_->residual(time, dt, &u, {states[COORDINATES], params[DENSITY]});
+    m_inv.Reciprocal();
+
+    std::vector<ConstFieldPtr> pred_states = {&u_pred, &v_pred, &a, states[COORDINATES], params[DENSITY]};
+
+    auto zero_mass_resid = weak_form_->residual(time, dt, &u_pred, pred_states);
+
+    FiniteElementState a_pred(a.space(), "acceleration_pred");
+    auto a_pred_ptr = a_pred.Write();
+    auto m_inv_ptr = m_inv.Read();
+    auto zero_mass_resid_ptr = zero_mass_resid.Read();
+    mfem::forall_switch(a_pred.UseDevice(), a_pred.Size(),
+                        [=] MFEM_HOST_DEVICE(int i) { a_pred_ptr[i] = m_inv_ptr[i] * zero_mass_resid_ptr[i]; });
+
+    v_pred.Add(0.5 * dt, a_pred);
+
+    return {{u_pred, v_pred, a_pred, *states[COORDINATES]}, time + dt};
+  }
+
+ private:
+  std::shared_ptr<WeakForm> weak_form_;
+  std::shared_ptr<WeakForm> mass_weak_form_;
+  std::shared_ptr<BoundaryConditionManager> bc_manager_;
+};
 
 template <int MassDim, int SpatialDim>
 auto create_solid_mass_weak_form(const std::string& physics_name, std::shared_ptr<serac::Mesh>& mesh,
