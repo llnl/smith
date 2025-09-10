@@ -197,11 +197,11 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  std::unique_ptr<mfem::HypreParMatrix> jacobian(
-      double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
-      const std::vector<ConstFieldPtr>& /*fields*/, const std::vector<double>& /*jacobian_weights*/,
-      const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {},
-      int /*block_row*/ = 0) const override
+  std::unique_ptr<mfem::HypreParMatrix> jacobian(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
+                                                 const std::vector<ConstFieldPtr>& /*fields*/,
+                                                 const std::vector<double>& /*jacobian_weights*/,
+                                                 const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {},
+                                                 int /*block_row*/ = 0) const override
   {
     SLIC_ERROR_ROOT("DfemWeakForm does not support matrix assembly");
 
@@ -211,10 +211,9 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  void jvp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
-           const std::vector<ConstFieldPtr>& /*fields*/,
-           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/,
-           ConstFieldPtr /*v_shape_disp*/, const std::vector<ConstFieldPtr>& /*v_fields*/,
+  void jvp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
+           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, ConstFieldPtr /*v_shape_disp*/,
+           const std::vector<ConstFieldPtr>& /*v_fields*/,
            const std::vector<ConstQuadratureFieldPtr>& /*v_quad_fields*/,
            const std::vector<DualFieldPtr>& /*jvp_reactions*/) const override
   {
@@ -241,11 +240,9 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  void vjp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
-           const std::vector<ConstFieldPtr>& /*fields*/,
-           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/,
-           const std::vector<ConstFieldPtr>& /*v_fields*/, DualFieldPtr /*vjp_shape_disp_sensitivity*/,
-           const std::vector<DualFieldPtr>& /*vjp_sensitivities*/,
+  void vjp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
+           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, const std::vector<ConstFieldPtr>& /*v_fields*/,
+           DualFieldPtr /*vjp_shape_disp_sensitivity*/, const std::vector<DualFieldPtr>& /*vjp_sensitivities*/,
            const std::vector<QuadratureFieldPtr>& /*vjp_quad_field_sensitivities*/) const override
   {
     SLIC_ERROR_ROOT("DfemWeakForm does not support vjp calculations");

@@ -7,8 +7,7 @@
 /**
  * @file solid_weak_form.hpp
  *
- * @brief Implements the WeakForm interface for solid mechanics physics.
- * Derives from FunctionalWeakForm.
+ * @brief Implements the WeakForm interface for solid mechanics physics using dFEM. Derives from DfemWeakForm.
  */
 
 #pragma once
@@ -50,11 +49,7 @@ struct StressDivQFunction {
 /**
  * @brief The weak form for solid mechanics
  *
- * This uses serac::unctional to compute the solid mechanics residuals and tangent
- * stiffness matrices.
- *
- * @tparam order The order of the discretization of the displacement and velocity fields
- * @tparam dim The spatial dimension of the mesh
+ * This uses dFEM to compute the solid mechanics residuals and tangent stiffness matrices.
  */
 class DfemSolidWeakForm : public DfemWeakForm {
  public:
@@ -94,21 +89,14 @@ class DfemSolidWeakForm : public DfemWeakForm {
    * @brief Set the material stress response and mass properties for the physics module
    *
    * @tparam MaterialType The solid material type
-   * @tparam StateType the type that contains the internal variables for MaterialType
-   * @param body_name string name for a registered body Domain on the mesh
-   * @param material A material that provides a function to evaluate stress
-   * @pre material must be a object that can be called with the following arguments:
-   *    1. `MaterialType::State & state` an mutable reference to the internal variables for this quadrature point
-   *    2. `tensor<T,dim,dim> du_dx` the displacement gradient at this quadrature point
-   *    3. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
-   *            specified in the `DependsOn<...>` argument.
-   *
-   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
-   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
-   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
-   * 3>`)
-   *
-   * @param qdata the buffer of material internal variables at each quadrature point
+   * @tparam ParameterTypes types that contains the internal variables for MaterialType
+   * @param domain_attributes Array of MFEM element attributes over which to compute the integral
+   * @param material A material that provides a function to evaluate PK1 stress
+   * @pre material must be a object that has a pkStress method with the following arguments:
+   *    1. `double dt` the timestep size
+   *    2. `tensor<double,dim,dim> du_dX` the displacement gradient at this quadrature point
+   *    3. `tensor<double,dim,dim> dv_dX` the velocity gradient at this quadrature point
+   *    4. Additional arguments for the dependent parameters of the material
    *
    * @pre MaterialType must have a public method `density` which can take FiniteElementState parameter inputs
    * @pre MaterialType must have a public method 'pkStress' which returns the first Piola-Kirchhoff stress
@@ -133,6 +121,14 @@ class DfemSolidWeakForm : public DfemWeakForm {
   }
 
  protected:
+  /**
+   * @brief Creates a list of MFEM input spaces compatible with dFEM
+   *
+   * @param test_space Space the q-function will be integrated against
+   * @param mesh Problem mesh
+   * @param parameter_fe_spaces Vector of finite element spaces which are parameter arguments to the residual
+   * @return Vector of input spaces that are passed along to the dFEM differentiable operator constructor
+   */
   std::vector<const mfem::ParFiniteElementSpace*> makeInputSpaces(
       const mfem::ParFiniteElementSpace& test_space, const std::shared_ptr<Mesh>& mesh,
       const std::vector<const mfem::ParFiniteElementSpace*>& parameter_fe_spaces)
