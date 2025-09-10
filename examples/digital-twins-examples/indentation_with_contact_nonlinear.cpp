@@ -14,10 +14,28 @@
 #define USE_TET_MESH
 // #undef USE_TET_MESH
 
+using namespace serac;
+
+FiniteElementState createReactionDirection(const BasePhysics& solid_solver, int direction,
+                                           std::shared_ptr<serac::Mesh> mesh, int dim)
+{
+  const FiniteElementDual& reactions = solid_solver.dual("reactions");
+
+  FiniteElementState reactionDirections(reactions.space(), "reaction_directions");
+  reactionDirections = 0.0;
+
+  mfem::VectorFunctionCoefficient func(dim, [direction](const mfem::Vector& /*x*/, mfem::Vector& u) {
+    u = 0.0;
+    u[direction] = 1.0;
+  });
+
+  reactionDirections.project(func, mesh->domain("contact_surface"));
+
+  return reactionDirections;
+}
+
 int main(int argc, char *argv[])
 {
-  using namespace serac;
-
   // Initialize problem: init MPI; start logger; create data store; and init StateManager
   MPI_Init(&argc, &argv);
   axom::slic::SimpleLogger logger;
@@ -42,7 +60,7 @@ int main(int argc, char *argv[])
   uint32_t num_parts = 4;
   app.add_option("-n, --num-parts", num_parts, "number of partitions on which to solve");
 
-  std::string output_directory = "/g/g90/barrera/runs/digitalTwins/results/indentationWithContact/";
+  std::string output_directory = "/g/g90/barrera/runs_lustre/digital_twins_SI/serac_runs/indentation_with_contact_nonlinear/";
   app.add_option("-o, --output-directory", output_directory, "directory for writing any output files");
 
   app.parse(argc, argv);
@@ -77,7 +95,8 @@ int main(int argc, char *argv[])
   // std::stringstream mesh_name_stream;
   // mesh_name_stream << mesh_prefix << "." << std::setfill('0') << std::setw(6) << myid;
 #ifdef USE_TET_MESH
-  std::string mesh_name = "/g/g90/barrera/codes/serac-digital-twins/serac/data/meshes/tetWithIndenter_tets.g"; // mesh_name_stream.str();
+  // std::string mesh_name = "/g/g90/barrera/codes/serac-digital-twins/serac/data/meshes/tetWithIndenter_tets.g"; // mesh_name_stream.str();
+  std::string mesh_name = "/g/g90/barrera/codes_lustre/serac_digital_twins_SI/data/meshes/tetWithIndenter_tets.g";
 #else
   std::string mesh_name = "/g/g90/barrera/codes/serac-digital-twins/serac/data/meshes/tetWithIndenter.g"; // mesh_name_stream.str();
 #endif
@@ -87,6 +106,8 @@ int main(int argc, char *argv[])
   // std::istream is(&fb);
   // auto mesh = std::make_unique<mfem::ParMesh>(mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false));
   auto mesh = std::make_shared<serac::Mesh>(mesh_name, mesh_tag, 0, 0);
+
+  if (0 == myid) { std::cout << "ParMesh formed and passed to serac::StateManager." << std::endl; }
 
   double x_min(1e6), x_max(-1e6), y_min(1e6), y_max(-1e6), z_min(1e6), z_max(-1e6), xy_min(1e6), xy_max(-1e6);
   for (int i = 0; i < mesh->mfemParMesh().GetNV(); ++i) {
@@ -188,15 +209,17 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
 
   // Domain angled_top_or_bottom_bundary_patch = Domain::ofBoundaryElements(mesh->mfemParMesh(), is_on_angled_bottom_patch);
   mesh->addDomainOfBoundaryElements("angled_top_or_bottom_bundary_patch", is_on_angled_bottom_patch);
+  mesh->addDomainOfBoundaryElements("contact_surface", serac::by_attr<dim>(2));
   mesh->addDomainOfBoundaryElements("applied_displacement_surface", serac::by_attr<dim>(3));
 
   // solid_solver.setDisplacementBCs(is_on_angled_bottom_patch, zero_vector);
   solid_solver.setFixedBCs(mesh->domain("angled_top_or_bottom_bundary_patch"));
   MPI_Reduce(&local_bc_count, &global_bc_count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
-  auto applied_displacement = [](serac::tensor<double, dim>, double t) {
+  auto contact_displacement_per_step = -0.05;
+  auto applied_displacement = [contact_displacement_per_step](serac::tensor<double, dim>, double t) {
     serac::tensor<double, dim> u{};
-    u[1] = -0.05 * t;
+    u[1] = contact_displacement_per_step * t;
     return u;
   };
   solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("applied_displacement_surface"));
@@ -240,17 +263,51 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   std::string outname = "sol_paraview_indentation_with_contact_nonlinear";
   solid_solver.outputStateToDisk(outname);
 
+  std::ofstream outputFile;
+  if (myid == 0) {
+      outputFile.open("displacement_and_reaction.csv");
+      outputFile << "Step Time AppliedDisplacementY TotalReaction" << std::endl;
+  }
+
   double dt = 1.0;
   for (int i{0}; i < 20; ++i) {
     solid_solver.advanceTimestep(dt);
 
-    // Output the sidre-based plot files
-    solid_solver.outputStateToDisk(outname);
+    // Get reaction force
+    const FiniteElementDual& all_reactions = solid_solver.dual("reactions");
+    
+    auto X_Dir = createReactionDirection(solid_solver, 0, mesh, dim);
+    auto Y_Dir = createReactionDirection(solid_solver, 1, mesh, dim);
+    auto Z_Dir = createReactionDirection(solid_solver, 2, mesh, dim);
+
+    auto contact_reaction_X = innerProduct(all_reactions, X_Dir);
+    auto contact_reaction_Y = innerProduct(all_reactions, Y_Dir);
+    auto contact_reaction_Z = innerProduct(all_reactions, Z_Dir);
+
+    auto total_reaction = std::pow(std::pow(contact_reaction_X, 2.0) + std::pow(contact_reaction_Y, 2.0) + std::pow(contact_reaction_Z, 2.0), 0.5);
+
+    // Compute applied displacement at this time (Y component)
+    auto current_time = solid_solver.time();
+    auto applied_dip = contact_displacement_per_step * current_time;
+
+    // Write to file (only on rank 0)
+    if (myid == 0) {
+        std::cout << "... i = " << i 
+        << ", time = " << current_time 
+        << ", applied_dip = " << applied_dip 
+        << ", total_reaction = " << total_reaction 
+        << std::endl;
+
+        outputFile << i << ", " << current_time << ", " << applied_dip << ", " << total_reaction << std::endl;
+    }
   }
 
-  if (0 == myid) { std::cout << "Complete." << std::endl; }
+  if (0 == myid) { std::cout << "Outputting solution of current time step." << std::endl; }
 
-  // TODO compute some QOIs
+  // Output the sidre-based plot files
+  solid_solver.outputStateToDisk(outname);
+
+  if (0 == myid) { std::cout << "Complete." << std::endl; }
 
   return 0;
 }
