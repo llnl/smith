@@ -386,7 +386,7 @@ std::unordered_map<std::string, FiniteElementState> BasePhysics::getCheckpointed
   return previous_states_map;
 }
 
-::std::vector<::serac::FiniteElementState>
+std::vector<serac::FiniteElementState>
 BasePhysics::getPreviousStates(
   int const &cycle,
   int const &num_requested_states,
@@ -394,7 +394,7 @@ BasePhysics::getPreviousStates(
 ) {
 
   int const num_available = std::min(num_requested_states, cycle);
-  ::std::vector<::serac::FiniteElementState> previous_states;
+  std::vector<::serac::FiniteElementState> previous_states;
 
   for (int i = 0; i < num_available; ++i) {
 

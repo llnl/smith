@@ -572,10 +572,12 @@ class BasePhysics {
   std::unordered_map<std::string, FiniteElementState> getCheckpointedStates(int cycle);
 
   /**
-   * @brief Retrieves a set of previous state values for time integration schemes (e.g., BDF, Extrapolation).
+   * @brief Retrieves a set of previous state values for time integration schemes
+   * (e.g., BDF, Extrapolation).
    *
-   * This version pulls data directly from the solver's checkpointing system via `getCheckpointedStates(cycle)`.
-   * The returned states are ordered from newest (`u^k`) to oldest (`u^{k-q+1}`).
+   * This version pulls data directly from the solver's checkpointing system via
+   * `getCheckpointedStates(cycle)`. The returned states are ordered from newest
+   * (`u^k`) to oldest (`u^{k-q+1}`).
    *
    * @param cycle                The current timestep index `k+1` when solving for `u^{k+1}`.
    * @param num_requested_states Number of past states required (e.g., 2 for BDF2, 1 for linear extrapolation).
@@ -583,7 +585,7 @@ class BasePhysics {
    *
    * @return A vector of previous states, ordered from latest to oldest.
    */
-  ::std::vector<::serac::FiniteElementState>
+  std::vector<serac::FiniteElementState>
   getPreviousStates(
     int const &cycle,
     int const &num_requested_states,

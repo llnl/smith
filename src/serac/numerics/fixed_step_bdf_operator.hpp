@@ -154,8 +154,7 @@ struct FixedStepBDFOperator {
   apply_derivative(
     int j,
     int t,
-    VectorType const &vec,
-    double dt
+    VectorType const &vec
   ) const {
 
     int r = std::min(j, s_order);  // Effective BDF order.
@@ -167,7 +166,7 @@ struct FixedStepBDFOperator {
       result = 0.0;
     } else {
       auto beta = compute_beta(r);  // Get β₀ through β_r.
-      result *= beta[m] / dt;
+      result *= beta[m];
     }
 
     return result;
