@@ -76,12 +76,12 @@ int main(int argc, char* argv[])
   auto gap_Jacobian_tilde = contact_constraint.jacobian_tilde(time, dt, input_states, direction);
 
   int nPressureDofs = contact_constraint.numPressureDofs();
-  mfem::Vector multipliers(nPressureDofs); multipliers = 0.0;
+  mfem::Vector multipliers(nPressureDofs);
+  multipliers = 0.0;
   auto residual = contact_constraint.residual_contribution(time, dt, input_states, multipliers, direction);
-  //auto residual_Jacobian = contact_constraint.residual_contribution_jacobian(time, dt,
-  //       	                                                             input_states, multipliers,
-  //       								     direction);
-  
+  // auto residual_Jacobian = contact_constraint.residual_contribution_jacobian(time, dt,
+  //        	                                                             input_states, multipliers,
+  //        								     direction);
 
   return 0;
 }
