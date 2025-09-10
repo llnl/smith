@@ -22,9 +22,6 @@ set(physics_headers
     base_physics.hpp
     mesh.hpp
     common.hpp
-    dfem_mass_weak_form.hpp
-    dfem_solid_weak_form.hpp
-    dfem_weak_form.hpp
     field_types.hpp
     fit.hpp
     heat_transfer.hpp
@@ -42,6 +39,13 @@ set(physics_headers
     scalar_objective.hpp
     functional_objective.hpp
     )
+
+if (SERAC_USE_ENZYME)
+    list(APPEND physics_headers
+                dfem_mass_weak_form.hpp
+                dfem_solid_weak_form.hpp
+                dfem_weak_form.hpp)
+endif()
 
 set(physics_depends
     serac_state

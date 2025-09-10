@@ -29,7 +29,6 @@ set(physics_serial_test_sources
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
-    test_dfem_explicit_dynamics.cpp
     test_solid_weak_form.cpp
     test_heat_weak_form.cpp
     test_functional_weak_form.cpp
@@ -50,6 +49,11 @@ if (TRIBOL_FOUND)
     endif()
     list(APPEND physics_serial_test_sources
         ${physics_serial_tribol_test_sources})
+endif()
+
+if (SERAC_USE_ENZYME)
+    list(APPEND physics_serial_test_sources
+                test_dfem_explicit_dynamics.cpp)
 endif()
 
 serac_add_tests(SOURCES       ${physics_serial_test_sources}
