@@ -17,6 +17,7 @@
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/finite_element_dual.hpp"
 
+// NOTE (EBC): these should be upstreamed to MFEM, so let's put them in the mfem::future namespace
 namespace mfem {
 namespace future {
 
@@ -93,14 +94,6 @@ struct InnerQFunction {
   OrigQFn orig_qfn_;
 };
 
-// template struct InnerQFunction<
-//     mfem::future::tensor<double, 2>,
-//     std::function<mfem::future::tuple<mfem::future::tensor<double, 2>>(
-//         const mfem::future::tensor<double, 2>&, const mfem::future::tensor<double, 2>&,
-//         const mfem::future::tensor<double, 2>&, const mfem::future::tensor<double, 2, 2>&, double, double)>,
-//     const mfem::future::tensor<double, 2>&, const mfem::future::tensor<double, 2>&,
-//     const mfem::future::tensor<double, 2>&, const mfem::future::tensor<double, 2, 2>&, double, double>;
-
 // Step 2: deduce the type of the parameters and the first tuple element of the return type of the operator()
 // Step 3: create the InnerQFunction with the deduced types
 template <typename OrigQFn, typename R, typename... Args>
@@ -155,22 +148,21 @@ class DfemWeakForm : public WeakForm {
    * @brief Add a body integral contribution to the residual
    *
    * @tparam BodyIntegralType The type of the body integral
-   * @param body_name The name of the registered domain over which the body integrals are evaluated.
-   * @param integrand A function describing the body force applied.  Our convention for the sign of the residual
+   * @tparam InputType mfem::future::tuple holding mfem::future::FieldOperator of the body integral inputs
+   * @tparam OutputType mfem::future::tuple holding the single mfem::future::FieldOperator of the body integral output
+   * @tparam DerivIdsType std::index_sequence of field IDs where derivatives are needed
+   * @param domain_attributes Array of MFEM element attributes over which to compute the integral
+   * @param body_integral A function describing the body force applied.  Our convention for the sign of the residual
    * vector is that it is expected to be a 'negative force', so the mass terms show up with a positive sign in the
    * residual.  This also ensures that the Jacobian of the residual is positive definite for most physics.  A body
    * integrand involving 'right hand side' contributions like a body load, should be supplied by the user with a
    * negative sign.
-   * @pre integrand must be a object that can be called with the following arguments:
-   *    1. `double t` the time
-   *    2. `tuple{tensor<T,dim>, isoparametric derivative} X` the spatial coordinates for the quadrature point and the
-   * coordinate's isoparametric derivative.
-   *    3. `tuple{value, derivative}`, a variadic list of tuples (each with a values and spatial derivative),
-   *            one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
-   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
-   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
-   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
-   * 3>`)
+   * @param integral_inputs Empty InputType
+   * @param integral_outputs Empty OutputType
+   * @param integration_rule Integration rule to use on each element
+   * @param derivative_ids Empty DerivIdsType
+   *
+   * @pre body_integral must take all fields as either an InputType or an OutputType
    *
    */
   template <typename BodyIntegralType, typename InputType, typename OutputType, typename DerivIdsType>
@@ -187,45 +179,10 @@ class DfemWeakForm : public WeakForm {
         domain_attributes, derivative_ids);
   }
 
-  /**
-   * @brief Add a body source (body load) to the weak form
-   *
-   * @tparam active_parameters Type for indices into fields which the body integral may depend on
-   * @tparam BodyLoadType The type of the body load function
-   * @param body_name The name of the registered domain over which the body loads are applied.
-   * @param depends_on Indices into fields which the body integral may depend on
-   * @param load_function A function describing the body force applied.
-   * @pre load_function must be a object that can be called with the following arguments:
-   *    1. `double t` the time
-   *    2. `tensor<T,dim> X` the spatial coordinates for the quadrature point.
-   *    3. `value`, a variadic list of field values, one tuple for each of the trial spaces specified in the
-   * `DependsOn<...>` argument.
-   *    The expected return is the value of the source at X.
-   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
-   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
-   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
-   * 3>`)
-   *
-   */
-  // template <int... active_parameters, typename BodyLoadType>
-  // void addBodySource(DependsOn<active_parameters...> depends_on, std::string body_name, BodyLoadType load_function)
-  // {
-  //   addBodyIntegral(depends_on, body_name, [load_function](double t, auto X, auto... inputs) {
-  //     return serac::tuple{-load_function(t, get<VALUE>(X), get<VALUE>(inputs)...), serac::zero{}};
-  //   });
-  // }
-
-  // /// @overload
-  // template <int... active_parameters, typename BodyLoadType>
-  // void addBodySource(std::string body_name, BodyLoadType load_function)
-  // {
-  //   return addBodySource(DependsOn<>{}, body_name, load_function);
-  // }
-
   /// @overload
-  mfem::Vector residual(double /*time*/, double dt, [[maybe_unused]] ConstFieldPtr shape_disp,
+  mfem::Vector residual(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
                         const std::vector<ConstFieldPtr>& fields,
-                        [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {},
+                        const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {},
                         int block_row = 0) const override
   {
     SLIC_ERROR_ROOT_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for DfemWeakForm");
@@ -241,9 +198,9 @@ class DfemWeakForm : public WeakForm {
 
   /// @overload
   std::unique_ptr<mfem::HypreParMatrix> jacobian(
-      double /*time*/, double dt, [[maybe_unused]] ConstFieldPtr shape_disp,
+      double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
       const std::vector<ConstFieldPtr>& /*fields*/, const std::vector<double>& /*jacobian_weights*/,
-      [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {},
+      const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {},
       int /*block_row*/ = 0) const override
   {
     SLIC_ERROR_ROOT("DfemWeakForm does not support matrix assembly");
@@ -254,65 +211,71 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  void jvp(double /*time*/, double dt, [[maybe_unused]] ConstFieldPtr shape_disp,
-           const std::vector<ConstFieldPtr>& fields,
-           [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
-           [[maybe_unused]] ConstFieldPtr v_shape_disp, const std::vector<ConstFieldPtr>& v_fields,
-           [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& v_quad_fields,
-           const std::vector<DualFieldPtr>& jvp_reactions) const override
+  void jvp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
+           const std::vector<ConstFieldPtr>& /*fields*/,
+           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/,
+           ConstFieldPtr /*v_shape_disp*/, const std::vector<ConstFieldPtr>& /*v_fields*/,
+           const std::vector<ConstQuadratureFieldPtr>& /*v_quad_fields*/,
+           const std::vector<DualFieldPtr>& /*jvp_reactions*/) const override
   {
-    SLIC_ERROR_IF(v_fields.size() != fields.size(),
-                  "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(jvp_reactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
+    SLIC_ERROR_ROOT("DfemWeakForm does not support jvp calculations");
+
+    // SLIC_ERROR_IF(v_fields.size() != fields.size(),
+    //               "Invalid number of field sensitivities relative to the number of fields");
+    // SLIC_ERROR_IF(jvp_reactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
 
-    std::vector<mfem::Vector*> test_par_gf({&fields[0]->gridFunction()});
-    std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
+    // TODO (EBC): add in a future PR...
+    // std::vector<mfem::Vector*> test_par_gf({&fields[0]->gridFunction()});
+    // std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
 
-    *jvp_reactions[0] = 0.0;
+    // *jvp_reactions[0] = 0.0;
 
-    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      if (v_fields[input_col] != nullptr) {
-        auto deriv_op = weak_form_.GetDerivative(input_col, test_par_gf, field_par_gf);
-        deriv_op->AddMult(*v_fields[input_col], *jvp_reactions[0]);
-      }
-    }
+    // for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
+    //   if (v_fields[input_col] != nullptr) {
+    //     auto deriv_op = weak_form_.GetDerivative(input_col, test_par_gf, field_par_gf);
+    //     deriv_op->AddMult(*v_fields[input_col], *jvp_reactions[0]);
+    //   }
+    // }
   }
 
   /// @overload
-  void vjp(double /*time*/, double dt, [[maybe_unused]] ConstFieldPtr shape_disp,
-           const std::vector<ConstFieldPtr>& fields,
-           [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
-           const std::vector<ConstFieldPtr>& v_fields, [[maybe_unused]] DualFieldPtr vjp_shape_disp_sensitivity,
-           const std::vector<DualFieldPtr>& vjp_sensitivities,
-           [[maybe_unused]] const std::vector<QuadratureFieldPtr>& vjp_quad_field_sensitivities) const override
+  void vjp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
+           const std::vector<ConstFieldPtr>& /*fields*/,
+           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/,
+           const std::vector<ConstFieldPtr>& /*v_fields*/, DualFieldPtr /*vjp_shape_disp_sensitivity*/,
+           const std::vector<DualFieldPtr>& /*vjp_sensitivities*/,
+           const std::vector<QuadratureFieldPtr>& /*vjp_quad_field_sensitivities*/) const override
   {
-    SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
-                  "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
+    SLIC_ERROR_ROOT("DfemWeakForm does not support vjp calculations");
+
+    // SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
+    //               "Invalid number of field sensitivities relative to the number of fields");
+    // SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
 
-    std::vector<mfem::Vector*> test_par_gf({&v_fields[0]->gridFunction()});
-    std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
-    // field_par_gf.push_back(&v_fields[0]->gridFunction());
+    // TODO (EBC): add in a future PR...
+    // std::vector<mfem::Vector*> test_par_gf({&v_fields[0]->gridFunction()});
+    // std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
+    // // field_par_gf.push_back(&v_fields[0]->gridFunction());
 
-    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-      if (vjp_sensitivities[input_col] != nullptr) {
-        auto deriv_op = v_dot_weak_form_residual_.GetDerivative(input_col, test_par_gf, field_par_gf);
-        // do this entry by entry until assembly is supported
-        mfem::Vector direction(vjp_sensitivities[input_col]->Size());
-        direction = 0.0;
-        for (int i = 0; i < vjp_sensitivities[input_col]->Size(); ++i) {
-          direction[i] = 1.0;
-          mfem::Vector value(1);
-          deriv_op->Mult(direction, value);
-          (*vjp_sensitivities[input_col])[i] += value[0];
-          direction[i] = 0.0;
-        }
-      }
-    }
+    // for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
+    //   if (vjp_sensitivities[input_col] != nullptr) {
+    //     auto deriv_op = v_dot_weak_form_residual_.GetDerivative(input_col, test_par_gf, field_par_gf);
+    //     // do this entry by entry until assembly is supported
+    //     mfem::Vector direction(vjp_sensitivities[input_col]->Size());
+    //     direction = 0.0;
+    //     for (int i = 0; i < vjp_sensitivities[input_col]->Size(); ++i) {
+    //       direction[i] = 1.0;
+    //       mfem::Vector value(1);
+    //       deriv_op->Mult(direction, value);
+    //       (*vjp_sensitivities[input_col])[i] += value[0];
+    //       direction[i] = 0.0;
+    //     }
+    //   }
+    // }
   }
 
  protected:
@@ -356,8 +319,10 @@ class DfemWeakForm : public WeakForm {
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;
 
+  /// @brief Output field (test) space
   const mfem::ParFiniteElementSpace& output_mfem_space_;
 
+  /// @brief Input field (trial) spaces
   std::vector<const mfem::ParFiniteElementSpace*> input_mfem_spaces_;
 
   /// @brief dfem residual evaluator
