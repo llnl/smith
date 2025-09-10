@@ -10,10 +10,6 @@
 #include "mfem.hpp"
 #include "serac/serac.hpp"
 
-
-#define USE_TET_MESH
-// #undef USE_TET_MESH
-
 using namespace serac;
 
 FiniteElementState createReactionDirection(const BasePhysics& solid_solver, int direction,
@@ -48,8 +44,6 @@ int main(int argc, char *argv[])
   // Set problem parameters. Only the input/output paths can be overwritten by the command line parser, below.
   const int order = 1; // displacement FE space polynomial order
   const int dim = 3;   // spatial dimension of the problem
-  // const int serial_refinement = 0;
-  // const int parallel_refinement = 0;
 
   // Read command line. Provide information and exit if requested. Otherwise check and overwrite problem parameters.
   axom::CLI::App app{"A driver for curing study analyses"};
@@ -70,41 +64,18 @@ int main(int argc, char *argv[])
   // Thus, loads in Newtons yields stresses and stiffnesses in units of MPa
   //       mass in kilograms yields densities in Tg/m^3
   //       density of kg/m^3 is equivalent to mg/mm^3
-
   const double shear_modulus_value = 43.9; // MPa
   const double poisson_ratio_value = 0.48; // dimensionless
   const double mass_density_value = 1.20;  // mg/mm^3
   const double body_force_value = 5*11.76e-5; // N/mm^3
-  // constexpr double mesh_unit_scale = 1.0;    // mm
   constexpr char mesh_unit_str[] = "mm";
 
   const double bulk_modulus_value = (2.0*shear_modulus_value*(1.0+poisson_ratio_value)) / (3.0*(1.0 - 2.0*poisson_ratio_value)); // MPa  
 
-  // if (0 == myid) {
-  //   std::cout << "Made it past initialization and CLI" << std::endl;
-  //   std::cout << "    Mesh file prefix is '" << mesh_prefix << "'" << std::endl;
-  //   std::cout << "    Expecting mesh to be split over " << num_parts << " partitions " << std::endl;
-  //   std::cout << "    Output files will be written to '" << output_directory << "'" << std::endl;
-  //   std::cout << "    Spatial dimension " << dim << " polynomial order " << order << std::endl;
-  // }
-  // MFEM_ASSERT(num_parts == comm_size, "Driver must be run with one rank per mesh part");
-
   // Load mesh from generated file; give it a name; pass to StateManager
   serac::StateManager::initialize(datastore, output_directory);
   const std::string mesh_tag = "mesh";
-  // std::stringstream mesh_name_stream;
-  // mesh_name_stream << mesh_prefix << "." << std::setfill('0') << std::setw(6) << myid;
-#ifdef USE_TET_MESH
-  // std::string mesh_name = "/g/g90/barrera/codes/serac-digital-twins/serac/data/meshes/tetWithIndenter_tets.g"; // mesh_name_stream.str();
   std::string mesh_name = "/g/g90/barrera/codes_lustre/serac_digital_twins_SI/data/meshes/tetWithIndenter_tets.g";
-#else
-  std::string mesh_name = "/g/g90/barrera/codes/serac-digital-twins/serac/data/meshes/tetWithIndenter.g"; // mesh_name_stream.str();
-#endif
-  // std::filebuf fb;
-  // fb.open(mesh_name.c_str(), std::ios::in);
-  // MFEM_ASSERT(&fb, "Could not open file '" + mesh_name + "'");
-  // std::istream is(&fb);
-  // auto mesh = std::make_unique<mfem::ParMesh>(mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false));
   auto mesh = std::make_shared<serac::Mesh>(mesh_name, mesh_tag, 0, 0);
 
   if (0 == myid) { std::cout << "ParMesh formed and passed to serac::StateManager." << std::endl; }
@@ -183,8 +154,6 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   user_defined_bulk_modulus = bulk_modulus_value;
   FiniteElementState user_defined_shear_modulus(mesh->mfemParMesh(), H1<1>{}, "parameterized_shear_modulus"); // TODO could project coefficient
   user_defined_shear_modulus = shear_modulus_value;
-  // FiniteElementState user_defined_mass_density(mesh->mfemParMesh(), H1<1>{}, "parameterized_density"); // TODO could use attribute or coeff
-  // user_defined_mass_density = mass_density_value;
 
   // Define the material property fields as parameters for the solver.
   solid_solver.setParameter(0, user_defined_bulk_modulus);
@@ -196,7 +165,6 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
 
   // Set essential BCs
   int local_bc_count(0), global_bc_count;
-  // auto zero_vector = [](const mfem::Vector&, mfem::Vector& u) { u = 0.0; };
   auto is_on_angled_bottom_patch = [&](std::vector<vec3> vertices, int /* attr */) {
     return std::all_of(vertices.begin(), vertices.end(), [&](vec3 x) { 
       if ((x(0) + x(1)) <= xy_cutoff_value && (x(2) <= z_bottom_cutoff_value || x(2) >= z_top_cutoff_value)) {
@@ -207,12 +175,10 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
      });
   };
 
-  // Domain angled_top_or_bottom_bundary_patch = Domain::ofBoundaryElements(mesh->mfemParMesh(), is_on_angled_bottom_patch);
   mesh->addDomainOfBoundaryElements("angled_top_or_bottom_bundary_patch", is_on_angled_bottom_patch);
   mesh->addDomainOfBoundaryElements("contact_surface", serac::by_attr<dim>(2));
   mesh->addDomainOfBoundaryElements("applied_displacement_surface", serac::by_attr<dim>(3));
 
-  // solid_solver.setDisplacementBCs(is_on_angled_bottom_patch, zero_vector);
   solid_solver.setFixedBCs(mesh->domain("angled_top_or_bottom_bundary_patch"));
   MPI_Reduce(&local_bc_count, &global_bc_count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
@@ -238,7 +204,7 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   //solid_solver.addBodyForce(DependsOn<1>{}, ParameterizedBodyForce{[](const auto& x) { return 0.0 * x; }});
 
   // Set a zero initial guess for the displacement solution
-  FiniteElementState zero_state = solid_solver.displacement(); // (mesh->mfemParMesh(), H1<1>{}, "zero");
+  FiniteElementState zero_state = solid_solver.displacement();
   zero_state = 0.0;
   solid_solver.setDisplacement(zero_state);
 
