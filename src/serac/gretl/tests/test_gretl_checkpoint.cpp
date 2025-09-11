@@ -134,7 +134,7 @@ gretl::State<double> advance_solution(const gretl::State<double>& a)
     //  for linear operators, this is unneeded, we just tell the dual its data and size
     //  a_.set_dual(bBar / 3.0);
     //} else {
-    a_.get_dual<double,double>() += bBar / 3.0;
+    a_.get_dual<double, double>() += bBar / 3.0;
     //}
   });
 

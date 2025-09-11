@@ -241,7 +241,9 @@ void DataStore::fetch_state_data(Int stepIndex)
     print_graph();
     std::cout << checkpointManager_ << std::endl;
   }
-  gretl_assert_msg(lastCheckpoint <= stepIndex, std::string("last checkpoint cannot be ahead of the currently requested step ") + std::to_string(lastCheckpoint) + " > " + std::to_string(stepIndex));
+  gretl_assert_msg(lastCheckpoint <= stepIndex,
+                   std::string("last checkpoint cannot be ahead of the currently requested step ") +
+                       std::to_string(lastCheckpoint) + " > " + std::to_string(stepIndex));
   gretl_assert_msg(state_in_use(lastCheckpoint),
                    "cannot confirm that last checkpointed state is actually currently in memory");
   for_each_active_upstream(this, lastCheckpoint, [&](Int upstream) { gretl_assert(state_in_use(upstream)); });
