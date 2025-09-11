@@ -61,13 +61,13 @@ State state_rate_equation(const State& state, const Param& params, [[maybe_unuse
     const Param::type& p = params_.get<Param::type>();
     const State::type& sNewBar = output.get_dual<State::type>();
 
-    State::type& sBar = state_.get_dual<State::type>();
+    State::dual_type& sBar = state_.get_dual<State::dual_type, State::type>();
     sBar.resize(s.size());
     sBar[0] += -p[0] * sNewBar[0] + (p[1] - s[2]) * sNewBar[1] + s[1] * sNewBar[2];
     sBar[1] += p[0] * sNewBar[0] - sNewBar[1] + s[0] * sNewBar[2];
     sBar[2] += -s[0] * sNewBar[1] - p[2] * sNewBar[2];
 
-    Param::type& pBar = params_.get_dual<Param::type>();
+    Param::dual_type& pBar = params_.get_dual<Param::dual_type, Param::type>();
     pBar.resize(p.size());
     pBar[0] += (s[1] - s[0]) * sNewBar[0];
     pBar[1] += s[0] * sNewBar[1];

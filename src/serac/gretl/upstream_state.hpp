@@ -29,7 +29,7 @@ struct UpstreamState {
   }
 
   /// @brief get underlying dual value
-  template <typename D, typename T = D>
+  template <typename D, typename T>
   D& get_dual() const
   {
     return dataStore_->get_dual<D, T>(step_);
