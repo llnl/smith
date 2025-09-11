@@ -116,11 +116,22 @@ class ContactConstraint : public Constraint {
     contact_.update(cycle, time, dt);
     auto J_contact = contact_.mergedJacobian();
     J_contact->owns_blocks = false;
-    delete &J_contact->GetBlock(0, 0);
-    delete &J_contact->GetBlock(0, 1);
-    delete &J_contact->GetBlock(1, 1);
 
-    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(1, 0));
+    int iblock = 1;
+    int jblock = 0;
+    for (int i = 0; i < 2; i++) {
+      for (int j = 0; j < 2; j++) {
+        if (i == iblock && j == jblock) {
+          continue;
+        }
+        if (!J_contact->IsZeroBlock(i, j)) {
+          delete &J_contact->GetBlock(i, j);
+        }
+      }
+    }
+
+    SLIC_ERROR_IF(J_contact->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
+    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(iblock, jblock));
     std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
     return dgdu_unique;
   };
