@@ -541,7 +541,7 @@ def build_devtools(builds_dir, timestamp, short_path, report_to_stdout = False):
     project_file = "scripts/spack/devtools.json"
 
     if "toss_4" in sys_type:
-        compiler_spec = "%gcc@10.3.1"
+        compiler_spec = "%gcc_13"
     elif "blueos" in sys_type:
         compiler_spec = "%gcc@8.3.1"
 

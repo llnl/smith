@@ -29,6 +29,7 @@
 #include "serac/infrastructure/accelerator.hpp"
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/profiling.hpp"
+#include "serac/infrastructure/about.hpp"
 
 namespace serac {
 /**
@@ -91,6 +92,8 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : 
     exit(1);
   }
 
+  printRunInfo();
+
   // Start the profiler (no-op if not enabled)
   profiling::initialize(comm_);
 
@@ -101,6 +104,11 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : 
 #endif
 
 #ifdef SERAC_USE_PETSC
+  // PETSc tries to parse all command line options, but Serac applications
+  // may have others intended for MPI or the application itself.
+  // Silence the PETSc warning that there are leftover options it doesn't
+  // know.
+  PetscOptionsSetValue(NULL, "-options_left", "no");
 #ifdef SERAC_USE_SLEPC
   mfem::MFEMInitializeSlepc(&argc, &argv);
 #else
