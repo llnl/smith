@@ -188,7 +188,7 @@ FieldStateWeightedSum operator-(const FieldState& ax, const FieldStateWeightedSu
 // Add multplication of WeightedSum by a differentiable State<double> for improve efficiency
 // Consider adding divide operators, maybe component-wise things as well
 
-// Utilty functions for quickly getting spaces from FieldStates
+// Utilty functions for easily getting spaces from FieldStates
 
 /// @brief Get the space from the primal field of a field states
 inline const mfem::ParFiniteElementSpace& space(FieldState field) { return field.get()->space(); }
