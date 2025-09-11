@@ -19,6 +19,10 @@
 
 namespace serac {
 
+/**
+ * @brief 
+ * 
+ */
 class LumpedMassExplicitNewmark {
  public:
   LumpedMassExplicitNewmark(const std::shared_ptr<WeakForm>& weak_form, const std::shared_ptr<WeakForm>& mass_weak_form,

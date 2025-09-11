@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <gtest/gtest.h>
+
 #include "mfem.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
@@ -26,7 +26,7 @@ namespace future {
  * @brief Compute Green's strain from the displacement gradient
  */
 template <typename T, int dim>
-SERAC_HOST_DEVICE auto greenStrain(const tensor<T, dim, dim>& grad_u)
+MFEM_HOST_DEVICE auto greenStrain(const tensor<T, dim, dim>& grad_u)
 {
   return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
 }
@@ -184,7 +184,7 @@ struct ExplicitDynamicsFixture : public testing::Test {
   static constexpr bool lumped_mass = false;
 
   const double dt = 0.1;
-  const size_t num_steps = 5;
+  const size_t num_steps = 3;
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;

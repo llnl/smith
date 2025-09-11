@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if(ENZYME_DIR AND SERAC_USE_ENZYME)
+if(ENZYME_FOUND)
     set(EXPLICIT_DYNAMICS_EXAMPLES_SOURCES
         dfem_gpu.cpp
     )

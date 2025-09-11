@@ -15,7 +15,6 @@
 #include "serac/physics/weak_form.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
-#include "serac/physics/state/finite_element_dual.hpp"
 
 // NOTE (EBC): these should be upstreamed to MFEM, so let's put them in the mfem::future namespace
 namespace mfem {
@@ -81,6 +80,10 @@ namespace serac {
 
 // NOTE: Args needs to be on the functor struct instead of the operator() so that operator() isn't overloaded and dfem
 // can deduce the type
+/**
+ * @brief Helper struct to build a (typically scalar) q-function as the inner product of an existing q-function output
+ * with a given tensor of the same type
+ */
 template <typename Primal, typename OrigQFn, typename... Args>
 struct InnerQFunction {
   InnerQFunction(OrigQFn orig_qfn) : orig_qfn_(orig_qfn) {}

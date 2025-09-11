@@ -14,6 +14,8 @@
 
 #include "serac/physics/dfem_weak_form.hpp"
 
+#include "serac/infrastructure/accelerator.hpp"
+
 namespace serac {
 
 template <int Idx>
