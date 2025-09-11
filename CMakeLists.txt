@@ -198,7 +198,9 @@ set(exported_targets
     serac_infrastructure
     serac_mesh_utils
     serac_numerics
-    serac_physics)
+    serac_physics
+    serac_gretl
+    serac_differentiable_numerics)
 
 add_library(serac INTERFACE)
 target_link_libraries(serac INTERFACE ${exported_targets})
