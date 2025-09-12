@@ -25,8 +25,14 @@ Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_s
 Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int refine_parallel, MPI_Comm comm)
     : mesh_tag_(meshtag)
 {
+  int rank = 0;
+MPI_Comm_rank(comm, &rank); // Get the rank of the current process
+
+if (rank == 0) { std::cout << ".... Before starting refineAndDistribute!" << std::endl;}
   auto meshtmp = serac::mesh::refineAndDistribute(std::move(mesh), refine_serial, refine_parallel, comm);
+if (rank == 0) { std::cout << ".... Before starting setMesh!" << std::endl;}
   mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
+if (rank == 0) { std::cout << ".... Before starting createDomains!" << std::endl;}
   createDomains();
 }
 

@@ -97,12 +97,18 @@ int main(int argc, char *argv[])
   // MFEM_ASSERT(&fb, "Could not open file '" + mesh_name + "'");
   // std::istream is(&fb);
   // auto mesh = std::make_unique<mfem::ParMesh>(mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false));
-  
-  if (0 == myid) { std::cout << "... About to load the parallel mesh." << std::endl; }
-  auto mesh = std::make_shared<serac::Mesh>(mesh_name, mesh_tag, 0, 0);
-  if (0 == myid) { std::cout << "... Parallel mesh has been loaded successfully." << std::endl; }
 
-  if (0 == myid) { std::cout << "ParMesh formed and passed to serac::StateManager." << std::endl; }
+  if (0 == myid) { std::cout << "... About to load the parallel mesh using mfem calls only." << std::endl; }
+  auto mfem_mesh = mfem::Mesh(mesh_name, 1, 1, true);
+  if (0 == myid) { std::cout << "... Parallel mesh using mfem calls only has been loaded successfully." << std::endl; }
+  
+sleep(5);
+
+  if (0 == myid) { std::cout << "... About to load the parallel mesh using serac::Mesh." << std::endl; }
+  auto mesh = std::make_shared<serac::Mesh>(std::move(mfem_mesh), mesh_tag, 0, 0);
+  if (0 == myid) { std::cout << "... Parallel mesh has been loaded successfully using serac::Mesh." << std::endl; }
+
+  // if (0 == myid) { std::cout << "ParMesh formed and passed to serac::StateManager." << std::endl; }
 
   double x_min(1e6), x_max(-1e6), y_min(1e6), y_max(-1e6), z_min(1e6), z_max(-1e6), xy_min(1e6), xy_max(-1e6);
   for (int i = 0; i < mesh->mfemParMesh().GetNV(); ++i) {
