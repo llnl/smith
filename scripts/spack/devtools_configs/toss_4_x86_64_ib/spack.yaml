@@ -16,21 +16,16 @@ spack:
       projections:
         all: '{name}-{version}'
 
-  compilers::
-  - compiler:
-      environment: {}
-      extra_rpaths: []
-      flags: {}
-      modules:
-      - gcc/13.3.1
-      operating_system: rhel8
-      paths:
-        cc: /usr/tce/packages/gcc/gcc-13.3.1/bin/gcc
-        cxx: /usr/tce/packages/gcc/gcc-13.3.1/bin/g++
-        f77: /usr/tce/packages/gcc/gcc-13.3.1/bin/gfortran
-        fc: /usr/tce/packages/gcc/gcc-13.3.1/bin/gfortran
-      spec: gcc@13.3.1
-      target: x86_64
+  toolchains:
+    gcc_13:
+    - spec: '%c=gcc'
+      when: '%c'
+    - spec: '%cxx=gcc'
+      when: '%cxx'
+    - spec: '%fortran=gcc'
+      when: '%fortran'
+    - spec: '%mvapich2@2.3.7.gcc_13'
+      when: '%mpi'
 
   packages:
     all:
@@ -45,6 +40,17 @@ spack:
         gl: [opengl]
         glu: [openglu]
         zlib-api: [zlib]
+
+    #Compiler packages
+    gcc:
+      externals:
+      - spec: gcc@13.3.1 languages:=c,c++,fortran
+        prefix: /usr/tce/packages/gcc/gcc-13.3.1
+        extra_attributes:
+          compilers:
+            c: /usr/tce/packages/gcc/gcc-13.3.1/bin/gcc
+            cxx: /usr/tce/packages/gcc/gcc-13.3.1/bin/g++
+            fortran: /usr/tce/packages/gcc/gcc-13.3.1/bin/gfortran
 
     openblas:
       buildable: false
@@ -68,8 +74,8 @@ spack:
     mvapich2:
       buildable: false
       externals:
-      - spec: mvapich2@2.3.7~alloca~cuda~debug~hwloc_graphics~hwlocv2+regcache+wrapperrpath build_system=autotools ch3_rank_bits=32 fabrics=mrail file_systems=auto process_managers=slurm threads=multiple %gcc@10.3.1
-        prefix: /usr/tce/packages/mvapich2/mvapich2-2.3.7-gcc-10.3.1
+      - spec: mvapich2@2.3.7.gcc_13~alloca~cuda~debug~hwloc_graphics~hwlocv2+regcache+wrapperrpath build_system=autotools ch3_rank_bits=32 fabrics=mrail file_systems=auto process_managers=slurm threads=multiple
+        prefix: /usr/tce/packages/mvapich2/mvapich2-2.3.7-gcc-13.3.1
 
     netlib-lapack:
       buildable: false
@@ -144,16 +150,6 @@ spack:
       externals:
       - spec: findutils@4.6.0
         prefix: /usr
-    gcc:
-      externals:
-      - spec: gcc@10.3.1 languages='c,c++,fortran'
-        prefix: /usr/tce/packages/gcc/gcc-10.3.1
-        extra_attributes:
-          compilers:
-            c: /usr/tce/packages/gcc/gcc-10.3.1/bin/gcc
-            cxx: /usr/tce/packages/gcc/gcc-10.3.1/bin/g++
-            fortran: /usr/tce/packages/gcc/gcc-10.3.1/bin/gfortran
-      buildable: false
     gettext:
       buildable: false
       externals:
