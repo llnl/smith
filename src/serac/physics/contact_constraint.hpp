@@ -42,6 +42,39 @@ enum ContactFields
   DISP,
 };
 
+/** @brief Interface for extracting the iblock, jblock block from a std::unique_ptr<mfem::BlockOperator>
+ *         said block is returned as a std::unique_ptr<mfem::HypreParMatrix> if possible
+ *         All other blocks are deleted
+ *
+ * @param block_operator the block operator
+ * @param iblock row block index
+ * @param jblock column block index
+ * @return std::unique_ptr<mfem::HypreParMatrix> The requested block of block_operator
+ */
+static std::unique_ptr<mfem::HypreParMatrix> safelyObtainBlock(mfem::BlockOperator* block_operator, int iblock,
+                                                               int jblock)
+{
+  SLIC_ERROR_IF(iblock < 0 || jblock < 0, "block indicies must be non-negative");
+  SLIC_ERROR_IF(iblock > block_operator->NumRowBlocks() || jblock > block_operator->NumColBlocks(),
+                "one or more block indicies are too large and the requested block does not exist");
+  SLIC_ERROR_IF(block_operator->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
+  block_operator->owns_blocks = false;
+  for (int i = 0; i < block_operator->NumRowBlocks(); i++) {
+    for (int j = 0; j < block_operator->NumColBlocks(); j++) {
+      if (i == iblock && j == jblock) {
+        continue;
+      }
+      if (!block_operator->IsZeroBlock(i, j)) {
+        delete &block_operator->GetBlock(i, j);
+      }
+    }
+  }
+  auto Ablk = dynamic_cast<mfem::HypreParMatrix*>(&block_operator->GetBlock(iblock, jblock));
+  SLIC_ERROR_IF(!Ablk, "failed cast to mfem::HypreParMatrix");
+  std::unique_ptr<mfem::HypreParMatrix> Ablk_unique(Ablk);
+  return Ablk_unique;
+};
+
 class FiniteElementState;
 
 /**
@@ -102,37 +135,23 @@ class ContactConstraint : public Constraint {
    * @param dt time step
    * @param fields vector of serac::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
-   * @return std::unique_ptr<mfem::HypreParMatrix>
+   * @return std::unique_ptr<mfem::HypreParMatrix> The true Jacobian
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                                  [[maybe_unused]] int direction) const
   {
-    // TODO: should direction be optional? should we check that the user has been an acceptable value?
+    SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
     int cycle = 0;
     contact_.update(cycle, time, dt);
     auto J_contact = contact_.mergedJacobian();
-    J_contact->owns_blocks = false;
 
     int iblock = 1;
     int jblock = 0;
-    for (int i = 0; i < 2; i++) {
-      for (int j = 0; j < 2; j++) {
-        if (i == iblock && j == jblock) {
-          continue;
-        }
-        if (!J_contact->IsZeroBlock(i, j)) {
-          delete &J_contact->GetBlock(i, j);
-        }
-      }
-    }
-
-    SLIC_ERROR_IF(J_contact->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
-    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(iblock, jblock));
-    std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
-    return dgdu_unique;
+    auto dgdu = safelyObtainBlock(J_contact.get(), iblock, jblock);
+    return dgdu;
   };
 
   /** @brief Interface for computing residual contribution Jacobian_tilde^T multiplier from a vector of
@@ -181,25 +200,10 @@ class ContactConstraint : public Constraint {
     int cycle = 0;
     contact_.update(cycle, time, dt);
     auto J_contact = contact_.mergedJacobian();
-    J_contact->owns_blocks = false;
-
     int iblock = 0;
     int jblock = 0;
-    for (int i = 0; i < 2; i++) {
-      for (int j = 0; j < 2; j++) {
-        if (i == iblock && j == jblock) {
-          continue;
-        }
-        if (!J_contact->IsZeroBlock(i, j)) {
-          delete &J_contact->GetBlock(i, j);
-        }
-      }
-    }
-
-    SLIC_ERROR_IF(J_contact->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
-    auto Hessian = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(iblock, jblock));  // constraint Hessian
-    std::unique_ptr<mfem::HypreParMatrix> Hessian_unique(Hessian);
-    return Hessian_unique;
+    auto Hessian = safelyObtainBlock(J_contact.get(), iblock, jblock);
+    return Hessian;
   };
 
   /** @brief Interface for computing contact constraint Jacobian_tilde from a vector of serac::FiniteElementState*
@@ -220,27 +224,11 @@ class ContactConstraint : public Constraint {
     int cycle = 0;
     contact_.update(cycle, time, dt);
     auto J_contact = contact_.mergedJacobian();
-    J_contact->owns_blocks = false;
-
     int iblock = 0;
     int jblock = 1;
-    for (int i = 0; i < 2; i++) {
-      for (int j = 0; j < 2; j++) {
-        if (i == iblock && j == jblock) {
-          continue;
-        }
-        if (!J_contact->IsZeroBlock(i, j)) {
-          delete &J_contact->GetBlock(i, j);
-        }
-      }
-    }
-
-    SLIC_ERROR_IF(J_contact->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
-    auto dgduT = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(iblock, jblock));
-    auto dgdu = dgduT->Transpose();
-    delete dgduT;
-    std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
-    return dgdu_unique;
+    auto dgduT = safelyObtainBlock(J_contact.get(), iblock, jblock);
+    std::unique_ptr<mfem::HypreParMatrix> dgdu(dgduT->Transpose());
+    return dgdu;
   };
 
   int numPressureDofs() const { return contact_.numPressureDofs(); }
