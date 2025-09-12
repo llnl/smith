@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -31,12 +32,17 @@ int main(int argc, char* argv[])
 
   // Command line arguments
   // Mesh options
+  std::string filename;
   int serial_refinement = 0;
   int parallel_refinement = 0;
 
   // load stepping options
   int steps = 40;
   double max_load = 855e-6;
+
+  // Material parameters
+  double E = 10.0;
+  double nu = 0.25;
 
   // Solver options
   serac::NonlinearSolverOptions nonlinear_options = serac::solid_mechanics::default_nonlinear_options;
@@ -55,37 +61,57 @@ int main(int argc, char* argv[])
   linear_options.max_iterations = 2000;
 
   // Initialize and automatically finalize MPI and other libraries
-  PetscOptionsSetValue(NULL, "-options_left", "no");
   serac::ApplicationManager applicationManager(argc, argv);
   auto [num_ranks, rank] = serac::getMPIInfo(MPI_COMM_WORLD);
 
   // Handle command line arguments
-  axom::CLI::App app{"Hollow cylinder buckling example"};
+  axom::CLI::App app{"Snap-through buckling of a curved beam"};
+  app.set_config("--config", "config.toml", "Read a configuration file");
+
   // Mesh options
-  app.add_option("--serial-refinement", serial_refinement, "Serial mesh refinements")->check(axom::CLI::PositiveNumber);
+  app.add_option("-m,--mesh", filename, "Name of mesh file")
+    ->required()
+    ->check(axom::CLI::ExistingFile)
+    ->capture_default_str();
+  app.add_option("--serial-refinement", serial_refinement, "Serial mesh refinements")
+    ->check(axom::CLI::NonNegativeNumber)
+    ->capture_default_str();
   app.add_option("--parallel-refinement", parallel_refinement, "Parallel mesh refinements")
-      ->check(axom::CLI::PositiveNumber);
+    ->check(axom::CLI::NonNegativeNumber)
+    ->capture_default_str();
+  // Time stepping options
+  app.add_option("--time-steps", steps, "Number of time steps to take")->check(axom::CLI::PositiveNumber)
+    ->capture_default_str()
+    ->capture_default_str();
+  app.add_option("--max-load", max_load, "Maximum downward load magnutude")
+    ->check(axom::CLI::PositiveNumber)
+    ->capture_default_str();
+  // Material parameters
+  app.add_option("--elastic-modulus", E, "Elastic modulus")
+    ->check(axom::CLI::PositiveNumber)
+    ->capture_default_str();
+  app.add_option("--poisson-ratio", nu, "Poisson ratio")
+    ->check(axom::CLI::Range(std::numeric_limits<double>::min(), 0.5*(1 - std::numeric_limits<double>::epsilon())))
+    ->capture_default_str();
   // Solver options
   app.add_option("--nonlinear-solver", nonlinear_options.nonlin_solver,
-                 "Nonlinear solver (Index of enum serac::NonlinearSolver)")
-      ->expected(0, 10);
+    "Nonlinear solver (Index of enum serac::NonlinearSolver)")
+    ->expected(0, 10);
   app.add_option("--linear-solver", linear_options.linear_solver, "Linear solver (Index of enum serac::LinearSolver)")
-      ->expected(0, 5);
+    ->expected(0, 5);
   app.add_option("--preconditioner", linear_options.preconditioner,
                  "Preconditioner (Index of enum serac::NonlinearSolver)")
-      ->expected(0, 7);
+    ->expected(0, 7);
   app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
                  "Petsc preconditioner (Index of enum serac::PetscPCType)")
-      ->expected(0, 14);
-  // Time stepping options
-  app.add_option("--time-steps", steps, "Number of time steps to take")->check(axom::CLI::PositiveNumber);
-  app.add_option("--max-load", max_load, "Maximum downward load magnutude")
-    ->check(axom::CLI::PositiveNumber);
+    ->expected(0, 14);
 
   // Need to allow extra arguments for PETSc support
-  app.set_help_flag("--help");
   app.allow_extras();
   CLI11_PARSE(app, argc, argv);
+
+  // echo options
+  //mfem::out << app.config_to_str(true, true);
 
   double dt = 1.0/steps;
 
@@ -96,7 +122,6 @@ int main(int argc, char* argv[])
   serac::StateManager::initialize(datastore, name + "_data");
 
   // Create and refine mesh
-  std::string filename = "./bistable_beam/sinusoidal_beam.g";
   auto mesh = std::make_shared<serac::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
 
   // Surfaces for boundary conditions
@@ -136,8 +161,6 @@ int main(int argc, char* argv[])
                             mesh->domain("load_surface"));
 
   // Define the material
-  double E = 10.0;
-  double nu = 0.25;
   serac::solid_mechanics::NeoHookean mat{.density = 1.0, .K = E / 3 / (1 - 2*nu), .G = 0.5*E/(1 + nu)};
   solid_solver->setMaterial(mat, mesh->entireBody());
 
