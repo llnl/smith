@@ -30,8 +30,10 @@ FiniteElementState createReactionDirection(const BasePhysics& solid_solver, int 
   return reactionDirections;
 }
 
+
 int main(int argc, char *argv[])
 {
+  
   // Initialize problem: init MPI; start logger; create data store; and init StateManager
   MPI_Init(&argc, &argv);
   axom::slic::SimpleLogger logger;
@@ -44,17 +46,19 @@ int main(int argc, char *argv[])
   // Set problem parameters. Only the input/output paths can be overwritten by the command line parser, below.
   const int order = 1; // displacement FE space polynomial order
   const int dim = 3;   // spatial dimension of the problem
+  // const int serial_refinement = 0;
+  // const int parallel_refinement = 0;
 
   // Read command line. Provide information and exit if requested. Otherwise check and overwrite problem parameters.
   axom::CLI::App app{"A driver for curing study analyses"};
 
   std::string mesh_prefix;
-  app.add_option("-m, --mesh-prefix", mesh_prefix, "name prefix for input mesh files");
+  app.add_option("-m, --mesh-prefix", mesh_prefix, "name prefix for input mesh files")->required();
 
   uint32_t num_parts = 4;
-  app.add_option("-n, --num-parts", num_parts, "number of partitions on which to solve");
+  app.add_option("-n, --num-parts", num_parts, "number of partitions on which to solve")->required();
 
-  std::string output_directory = "/g/g90/barrera/runs_lustre/digital_twins_SI/serac_runs/indentation_with_contact_nonlinear/";
+  std::string output_directory = "./";
   app.add_option("-o, --output-directory", output_directory, "directory for writing any output files");
 
   app.parse(argc, argv);
@@ -72,11 +76,31 @@ int main(int argc, char *argv[])
 
   const double bulk_modulus_value = (2.0*shear_modulus_value*(1.0+poisson_ratio_value)) / (3.0*(1.0 - 2.0*poisson_ratio_value)); // MPa  
 
+  if (0 == myid) {
+    std::cout << "Made it past initialization and CLI" << std::endl;
+    std::cout << "    Mesh file prefix is '" << mesh_prefix << "'" << std::endl;
+    std::cout << "    Expecting mesh to be split over " << num_parts << " partitions " << std::endl;
+    std::cout << "    Output files will be written to '" << output_directory << "'" << std::endl;
+    std::cout << "    Spatial dimension " << dim << " polynomial order " << order << std::endl;
+  }
+  // MFEM_ASSERT(num_parts == comm_size, "Driver must be run with one rank per mesh part");
+  MFEM_ASSERT(static_cast<int>(num_parts) == comm_size, "Driver must be run with one rank per mesh part");
+
   // Load mesh from generated file; give it a name; pass to StateManager
   serac::StateManager::initialize(datastore, output_directory);
   const std::string mesh_tag = "mesh";
-  std::string mesh_name = "/g/g90/barrera/codes_lustre/serac_digital_twins_SI/data/meshes/tetWithIndenter_tets.g";
+  std::stringstream mesh_name_stream;
+  mesh_name_stream << mesh_prefix << "." << std::setfill('0') << std::setw(6) << myid;
+  std::string mesh_name = mesh_name_stream.str();
+  // std::filebuf fb;
+  // fb.open(mesh_name.c_str(), std::ios::in);
+  // MFEM_ASSERT(&fb, "Could not open file '" + mesh_name + "'");
+  // std::istream is(&fb);
+  // auto mesh = std::make_unique<mfem::ParMesh>(mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false));
+  
+  if (0 == myid) { std::cout << "... About to load the parallel mesh." << std::endl; }
   auto mesh = std::make_shared<serac::Mesh>(mesh_name, mesh_tag, 0, 0);
+  if (0 == myid) { std::cout << "... Parallel mesh has been loaded successfully." << std::endl; }
 
   if (0 == myid) { std::cout << "ParMesh formed and passed to serac::StateManager." << std::endl; }
 
@@ -97,11 +121,18 @@ int main(int argc, char *argv[])
   MPI_Allreduce(&z_max,  &global_z_max,  1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
   MPI_Allreduce(&xy_min, &global_xy_min, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
   MPI_Allreduce(&xy_max, &global_xy_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+
+  // Update global Z max to remove the spherical top bump. From indenter capsule generation we have: 
+  global_z_max = 51.864; // excluding indenter geometry
+  double indenter_top_z = 61.384;
+  double indenter_bottom_z = 53.150;
+  double indenter_range = indenter_top_z-indenter_bottom_z;
+  
   double z_range = global_z_max - global_z_min;
   double z_bottom_cutoff_value = global_z_min + 0.01 * z_range;
   double z_top_cutoff_value = global_z_min + 0.99 * z_range;
   double xy_range = global_xy_max - global_xy_min;
-  double xy_cutoff_value = global_xy_min + 0.25 * xy_range;
+  double xy_cutoff_value = global_xy_min + 0.2 * xy_range; // was 0.25 * xy_range
 
   if (0 == myid) {
     std::cout << "Mesh vertex bounding box (" << mesh_unit_str << "):" << std::endl;
@@ -154,6 +185,8 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   user_defined_bulk_modulus = bulk_modulus_value;
   FiniteElementState user_defined_shear_modulus(mesh->mfemParMesh(), H1<1>{}, "parameterized_shear_modulus"); // TODO could project coefficient
   user_defined_shear_modulus = shear_modulus_value;
+  // FiniteElementState user_defined_mass_density(mesh->mfemParMesh(), H1<1>{}, "parameterized_density"); // TODO could use attribute or coeff
+  // user_defined_mass_density = mass_density_value;
 
   // Define the material property fields as parameters for the solver.
   solid_solver.setParameter(0, user_defined_bulk_modulus);
@@ -165,7 +198,7 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
 
   // Set essential BCs
   int local_bc_count(0), global_bc_count;
-  auto is_on_angled_bottom_patch = [&](std::vector<vec3> vertices, int /* attr */) {
+  auto is_on_angled_top_or_bottom_patch = [&](std::vector<vec3> vertices, int /* attr */) {
     return std::all_of(vertices.begin(), vertices.end(), [&](vec3 x) { 
       if ((x(0) + x(1)) <= xy_cutoff_value && (x(2) <= z_bottom_cutoff_value || x(2) >= z_top_cutoff_value)) {
         ++local_bc_count;
@@ -174,22 +207,31 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
       return false;
      });
   };
+  auto is_on_lower_third_of_sphere = [&](std::vector<vec3> vertices, int /* attr */) {
+    return std::all_of(vertices.begin(), vertices.end(), [&](vec3 x) { 
+      if ( (x(2) >= indenter_bottom_z) && (x(2) <=(indenter_bottom_z+0.33*indenter_range)) ) {
+        ++local_bc_count;
+        return true;
+      }
+      return false;
+     });
+  };
+  auto is_on_upper_third_of_sphere = [&](std::vector<vec3> vertices, int /* attr */) {
+    return std::all_of(vertices.begin(), vertices.end(), [&](vec3 x) { 
+      if ( (x(2) <= indenter_top_z) && (x(2) >=(indenter_bottom_z+0.67*indenter_range)) ) {
+        ++local_bc_count;
+        return true;
+      }
+      return false;
+     });
+  };
 
-  mesh->addDomainOfBoundaryElements("angled_top_or_bottom_bundary_patch", is_on_angled_bottom_patch);
-  mesh->addDomainOfBoundaryElements("contact_surface", serac::by_attr<dim>(2));
-  mesh->addDomainOfBoundaryElements("applied_displacement_surface", serac::by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("angled_top_or_bottom_bundary_patch", is_on_angled_top_or_bottom_patch);
+  mesh->addDomainOfBoundaryElements("contact_surface", is_on_lower_third_of_sphere);
+  mesh->addDomainOfBoundaryElements("applied_displacement_surface", is_on_upper_third_of_sphere);
 
   solid_solver.setFixedBCs(mesh->domain("angled_top_or_bottom_bundary_patch"));
   MPI_Reduce(&local_bc_count, &global_bc_count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-
-  auto contact_displacement_per_step = -0.05;
-  auto applied_displacement = [contact_displacement_per_step](serac::tensor<double, dim>, double t) {
-    serac::tensor<double, dim> u{};
-    u[1] = contact_displacement_per_step * t;
-    return u;
-  };
-  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("applied_displacement_surface"));
-
   if (myid == 0) { std::cout << "..... Fixed BCs for a total of " << global_bc_count << " nodes across all ranks" << std::endl; }
 
   // Set body force (self weight)
@@ -200,11 +242,17 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
   solid_solver.addBodyForce(force, mesh->entireBody());
 
-  // TODO
-  //solid_solver.addBodyForce(DependsOn<1>{}, ParameterizedBodyForce{[](const auto& x) { return 0.0 * x; }});
+  auto contact_displacement_per_step = -0.05;
+  auto applied_displacement = [contact_displacement_per_step](serac::tensor<double, dim>, double t) {
+    serac::tensor<double, dim> u{};
+    u[1] = contact_displacement_per_step * t;
+    return u;
+  };
+    
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("applied_displacement_surface"));
 
   // Set a zero initial guess for the displacement solution
-  FiniteElementState zero_state = solid_solver.displacement();
+  FiniteElementState zero_state = solid_solver.displacement(); // (mesh->mfemParMesh(), H1<1>{}, "zero");
   zero_state = 0.0;
   solid_solver.setDisplacement(zero_state);
 
@@ -214,7 +262,7 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   std::set<int> surface_2_boundary_attributes({2});
   solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,
                                      surface_2_boundary_attributes, contact_options);
-                                     
+
   // Finalize the data structures
   solid_solver.completeSetup();
 
@@ -226,7 +274,7 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
   if (0 == myid) { std::cout << "..... Solve completed. Saving output...." << std::endl; }
 
   // Save problem state for later visualization
-  std::string outname = "sol_paraview_indentation_with_contact_nonlinear";
+  std::string outname = "paraview_curing_study_driver_nonlinear_contact";
   solid_solver.outputStateToDisk(outname);
 
   std::ofstream outputFile;
@@ -272,8 +320,10 @@ if (0 == myid) { std::cout << "..... Before creating SolidMechanics object." << 
     // Output the sidre-based plot files
     solid_solver.outputStateToDisk(outname);
   }
-
+  
   if (0 == myid) { std::cout << "Complete." << std::endl; }
+
+  // TODO compute some QOIs
 
   return 0;
 }
