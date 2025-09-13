@@ -140,13 +140,4 @@ class FiniteElementDual : public FiniteElementVector {
   mutable std::unique_ptr<mfem::ParLinearForm> linear_form_;
 };
 
-inline double norm(mfem::HypreParVector const &fe_vector)
-{
-  // Use unique_ptr to automatically clean up the heap allocation.
-  std::unique_ptr<mfem::Vector> global_vec(fe_vector.GlobalVector());
-
-  // Compute and return the full L2 norm.
-  return global_vec->Norml2();
-}
-
 }  // namespace serac
