@@ -39,9 +39,16 @@ if (rank == 0) { std::cout << ".... Before starting createDomains!" << std::endl
 Mesh::Mesh(mfem::ParMesh&& mesh, const std::string& meshtag) : mesh_tag_(meshtag)
 {
   auto meshtmp = std::make_unique<mfem::ParMesh>(std::move(mesh));
+  int rank = 0;
+MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Get the rank of the current process
+
+if (rank == 0) { std::cout << ".... Before starting EnsureNodes!" << std::endl;}
   meshtmp->EnsureNodes();
+if (rank == 0) { std::cout << ".... Before starting ExchangeFaceNbrData!" << std::endl;}
   meshtmp->ExchangeFaceNbrData();
+if (rank == 0) { std::cout << ".... Before starting setMesh!" << std::endl;}
   mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
+if (rank == 0) { std::cout << ".... Before starting createDomains!" << std::endl;}
   createDomains();
 }
 

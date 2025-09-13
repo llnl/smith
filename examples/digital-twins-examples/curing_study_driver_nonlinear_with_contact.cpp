@@ -99,13 +99,20 @@ int main(int argc, char *argv[])
   // auto mesh = std::make_unique<mfem::ParMesh>(mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false));
 
   if (0 == myid) { std::cout << "... About to load the parallel mesh using mfem calls only." << std::endl; }
-  auto mfem_mesh = mfem::Mesh(mesh_name, 1, 1, true);
+  // auto mfem_mesh = mfem::Mesh(mesh_name, 1, 1, true);
+  std::ifstream is(mesh_name);
+  if (!is) {
+    std::cerr << "Failed to open mesh file: " << mesh_name << std::endl;
+    std::exit(1);
+  }
+  
+  auto mfem_mesh = mfem::ParMesh(MPI_COMM_WORLD, is, /* refine */ false);
   if (0 == myid) { std::cout << "... Parallel mesh using mfem calls only has been loaded successfully." << std::endl; }
   
 sleep(5);
 
   if (0 == myid) { std::cout << "... About to load the parallel mesh using serac::Mesh." << std::endl; }
-  auto mesh = std::make_shared<serac::Mesh>(std::move(mfem_mesh), mesh_tag, 0, 0);
+  auto mesh = std::make_shared<serac::Mesh>(std::move(mfem_mesh), mesh_tag);
   if (0 == myid) { std::cout << "... Parallel mesh has been loaded successfully using serac::Mesh." << std::endl; }
 
   // if (0 == myid) { std::cout << "ParMesh formed and passed to serac::StateManager." << std::endl; }
