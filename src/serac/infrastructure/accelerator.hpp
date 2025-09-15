@@ -217,7 +217,7 @@ namespace accelerator {
  *
  * @note This function should only be called once
  */
-void initializeDevice();
+void initializeDevice(ExecutionSpace exec_space);
 
 /**
  * @brief Cleans up the device, if applicable

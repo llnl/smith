@@ -11,6 +11,7 @@
 #include <iostream>
 
 #include "mpi.h"
+#include "serac/infrastructure/accelerator.hpp"
 
 namespace serac {
 
@@ -27,7 +28,8 @@ class ApplicationManager {
    * @param argv The command-line arguments, as C-strings
    * @param comm The MPI communicator to initialize with
    */
-  ApplicationManager(int argc, char* argv[], MPI_Comm comm = MPI_COMM_WORLD);
+  ApplicationManager(int argc, char* argv[], MPI_Comm comm = MPI_COMM_WORLD,
+                     ExecutionSpace exec_space = ExecutionSpace::CPU);
 
   /**
    * @brief Calls serac::finalizer

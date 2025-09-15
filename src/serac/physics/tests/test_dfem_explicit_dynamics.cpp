@@ -269,6 +269,6 @@ TEST_F(ExplicitDynamicsFixture, RunDfemExplicitDynamicsSim)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  serac::ApplicationManager applicationManager(argc, argv);
+  serac::ApplicationManager applicationManager(argc, argv, MPI_COMM_WORLD, serac::ExecutionSpace::GPU);
   return RUN_ALL_TESTS();
 }
