@@ -5,7 +5,9 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "mfem.hpp"
+#include "serac/infrastructure/accelerator.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
@@ -94,7 +96,27 @@ int main(int argc, char* argv[])
     DENSITY
   };
 
-  serac::ApplicationManager applicationManager(argc, argv);
+  // Command line-modifiable variables
+  int n_els = 8;
+  bool use_gpu = false;
+  bool write_output = false;
+
+  // Handle command line arguments
+  axom::CLI::App app{"Explicit dynamics"};
+  // Mesh options
+  app.add_option("--nels", n_els, "Number of elements in the x and y directions")->check(axom::CLI::PositiveNumber);
+  // GPU options
+  app.add_flag("--gpu,!--no-gpu", use_gpu, "Execute on GPU (where available)");
+  // Output options
+  app.add_flag("--output,!--no-output", write_output, "Save output to disk (e.g. for debugging)");
+
+  // Need to allow extra arguments for PETSc support
+  app.set_help_flag("--help");
+  app.allow_extras()->parse(argc, argv);
+
+  auto exec_space = use_gpu ? serac::ExecutionSpace::GPU : serac::ExecutionSpace::CPU;
+
+  serac::ApplicationManager applicationManager(argc, argv, MPI_COMM_WORLD, exec_space);
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -104,13 +126,10 @@ int main(int argc, char* argv[])
   // create mesh
   constexpr double length = 1.0;
   constexpr double width = 1.0;
-  constexpr int nel_x = 1;
-  constexpr int nel_y = 1;
+  int nel_x = n_els;
+  int nel_y = n_els;
   auto mesh = std::make_shared<serac::Mesh>(
       mfem::Mesh::MakeCartesian2D(nel_x, nel_y, element_shape, true, length, width), MESHTAG, 0, 0);
-  // shift one of the x coordinates so the mesh is not affine
-  auto* coords = mesh->mfemParMesh().GetNodes()->ReadWrite();
-  coords[6] += 0.1;
 
   // create residual evaluator
   using VectorSpace = serac::H1<disp_order, dim>;
@@ -119,10 +138,6 @@ int main(int argc, char* argv[])
   serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
   serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
   serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
-  disp.UseDevice(true);
-  velo.UseDevice(true);
-  accel.UseDevice(true);
-  density.UseDevice(true);
 
   std::vector<serac::FiniteElementState> states{disp, velo, accel};
   std::vector<serac::FiniteElementState> params{density};
@@ -161,47 +176,61 @@ int main(int argc, char* argv[])
       },
       g_inputs, g_outputs, displacement_ir, std::index_sequence<>{});
 
+  auto bc_manager = std::make_shared<serac::BoundaryConditionManager>(mesh->mfemParMesh());
+  auto zero_coeff = std::make_shared<mfem::ConstantCoefficient>(0.0);
+  bc_manager->addEssential({1}, zero_coeff, states[DISPLACEMENT].space());
+
   states[DISPLACEMENT] = 0.0;
-  states[VELOCITY] = 0.0;
+  states[VELOCITY].setFromFieldFunction([](serac::tensor<double, dim>) {
+    serac::tensor<double, dim> u({0.0, -1.0});
+    return u;
+  });
   states[ACCELERATION] = 0.0;
   params[DENSITY] = 1.0;
 
-  auto mass_dfem_weak_form =
-      serac::create_solid_mass_weak_form<dim, dim>(physics_name, mesh, states[DISPLACEMENT], params[0],
-                                                   displacement_ir);  // nodal_ir_2d);
+  auto mass_dfem_weak_form = serac::create_solid_mass_weak_form<dim, dim>(physics_name, mesh, states[DISPLACEMENT],
+                                                                          params[0], displacement_ir);
 
   // create time advancer
   auto advancer =
-      std::make_shared<serac::LumpedMassExplicitNewmark>(solid_dfem_weak_form, mass_dfem_weak_form, nullptr);
+      std::make_shared<serac::LumpedMassExplicitNewmark>(solid_dfem_weak_form, mass_dfem_weak_form, bc_manager);
 
-  mfem::VisItDataCollection dc("solid_explicit_dynamics", &mesh->mfemParMesh());
-  dc.RegisterField("displacement", &states[DISPLACEMENT].gridFunction());
-  dc.RegisterField("velocity", &states[VELOCITY].gridFunction());
-  dc.RegisterField("acceleration", &states[ACCELERATION].gridFunction());
-  dc.RegisterField("density", &params[DENSITY].gridFunction());
+  serac::FiniteElementState coords_state(
+      *static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes())->ParFESpace(), "coordinates");
+  coords_state.setFromGridFunction(*static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes()));
+
   double time = 0.0;
+  constexpr double dt = 0.0001;
   int cycle = 0;
-  constexpr double dt = 0.1;
-  constexpr size_t num_steps = 5;
+  constexpr size_t num_steps = 5000;
+  axom::utilities::Timer timer(true);
   for (size_t step = 0; step < num_steps; ++step) {
-    for (auto& state : states) {
-      state.gridFunction();
+    if (write_output && cycle % 100 == 0) {
+      for (auto& state : states) {
+        // copy to grid function
+        serac::StateManager::updateState(state);
+      }
+      for (auto& param : params) {
+        // copy to grid function
+        serac::StateManager::updateState(param);
+      }
+      serac::StateManager::save(time, cycle, mesh->tag());
     }
-    dc.SetCycle(cycle);
-    dc.SetTime(time);
-    dc.Save();
-    std::cout << "Step " << step << ", time = " << time << std::endl;
+    ++cycle;
     auto state_ptrs = serac::getConstFieldPointers(states);
-    serac::FiniteElementState coords_state(
-        *static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes())->ParFESpace(), "coordinates");
-    coords_state.UseDevice(true);
-    coords_state.setFromGridFunction(*static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes()));
     state_ptrs.push_back(&coords_state);
     auto new_states_and_time = advancer->advanceState(state_ptrs, getConstFieldPointers(params), time, dt);
-    cycle++;
     time = std::get<1>(new_states_and_time);
     for (size_t i = 0; i < states.size(); ++i) {
       states[i] = std::get<0>(new_states_and_time)[i];
     }
   }
+  timer.stop();
+  // copy to host
+  states[DISPLACEMENT].HostRead();
+  double max_disp = mfem::ParNormlp(states[DISPLACEMENT], 2, MPI_COMM_WORLD);
+  std::cout << "Max displacement: " << max_disp << std::endl;
+  std::cout << "Total time: " << timer.elapsedTimeInMilliSec() << " milliseconds" << std::endl;
+
+  return 0;
 }

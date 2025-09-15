@@ -106,8 +106,8 @@ struct ExplicitDynamicsFixture : public testing::Test {
     // create mesh
     constexpr double length = 1.0;
     constexpr double width = 1.0;
-    constexpr int nel_x = 1;
-    constexpr int nel_y = 1;
+    constexpr int nel_x = 4;
+    constexpr int nel_y = 5;
     mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(nel_x, nel_y, element_shape, true, length, width),
                                          MESHTAG, 0, 0);
     // shift one of the x coordinates so the mesh is not affine
@@ -138,7 +138,7 @@ struct ExplicitDynamicsFixture : public testing::Test {
     SolidMaterialDfem dfem_mat;
     dfem_mat.K = E / (3.0 * (1.0 - 2.0 * nu));  // bulk modulus
     dfem_mat.G = E / (2.0 * (1.0 + nu));        // shear modulus
-    int ir_order = 3;
+    int ir_order = 2;
     const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
     mfem::Array<int> solid_attrib({1});
     solid_dfem_weak_form->setMaterial<SolidMaterialDfem, serac::ScalarParameter<0>>(solid_attrib, dfem_mat,
@@ -183,8 +183,11 @@ struct ExplicitDynamicsFixture : public testing::Test {
   static constexpr bool quasi_static = true;
   static constexpr bool lumped_mass = false;
 
-  const double dt = 0.1;
+  const double dt = 0.001;
   const size_t num_steps = 3;
+
+  // NOTE: max_error is driven by integration error on the perturbed element
+  static constexpr double max_error = 1.0e-12;
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;
@@ -237,7 +240,7 @@ TEST_F(ExplicitDynamicsFixture, RunDfemExplicitDynamicsSim)
     // check acceleration
     auto accel_ptr = states[ACCELERATION].HostRead();
     for (int i = 0; i < states[ACCELERATION].Size(); ++i) {
-      EXPECT_NEAR(accel_ptr[i], exact_accel_ptr[i], 1.0e-14);
+      EXPECT_NEAR(accel_ptr[i], exact_accel_ptr[i], max_error);
     }
 
     // update and check velocity
@@ -248,7 +251,7 @@ TEST_F(ExplicitDynamicsFixture, RunDfemExplicitDynamicsSim)
     auto velo_ptr = states[VELOCITY].HostRead();
     auto exact_velo_ptr = exact_velo.HostRead();
     for (int i = 0; i < states[VELOCITY].Size(); ++i) {
-      EXPECT_NEAR(velo_ptr[i], exact_velo_ptr[i], 1.0e-14);
+      EXPECT_NEAR(velo_ptr[i], exact_velo_ptr[i], max_error);
     }
     exact_velo_value[1] += exact_accel_value[1] * dt;
 
@@ -260,7 +263,7 @@ TEST_F(ExplicitDynamicsFixture, RunDfemExplicitDynamicsSim)
     auto disp_ptr = states[DISPLACEMENT].HostRead();
     auto exact_disp_ptr = exact_disp.HostRead();
     for (int i = 0; i < states[DISPLACEMENT].Size(); ++i) {
-      EXPECT_NEAR(disp_ptr[i], exact_disp_ptr[i], 1.0e-14);
+      EXPECT_NEAR(disp_ptr[i], exact_disp_ptr[i], max_error);
     }
     exact_disp_value[1] += exact_velo_value[1] * dt - 0.5 * exact_accel_value[1] * dt * dt;
   }

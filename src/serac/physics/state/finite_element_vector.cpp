@@ -50,6 +50,9 @@ FiniteElementVector::FiniteElementVector(const mfem::ParFiniteElementSpace& spac
 
   // Initialize the vector to zero
   HypreParVector::operator=(0.0);
+
+  // Use device (if available)
+  UseDevice(true);
 }
 
 FiniteElementVector::FiniteElementVector(FiniteElementVector&& input_vector)
