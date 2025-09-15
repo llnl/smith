@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "serac/serac_config.hpp"
+
 #if defined(SERAC_USE_CUDA) || defined(SERAC_USE_HIP)
 /**
  * @brief Macro that evaluates to `__host__ __device__` when compiling with nvcc or amdclang and does nothing on a host
