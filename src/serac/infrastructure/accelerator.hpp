@@ -7,8 +7,8 @@
 /**
  * @file accelerator.hpp
  *
- * @brief This file contains the interface used for initializing/terminating
- * any hardware accelerator-related functionality
+ * @brief This file contains the interface used for initializing/terminating any hardware accelerator-related
+ * functionality
  */
 
 #pragma once

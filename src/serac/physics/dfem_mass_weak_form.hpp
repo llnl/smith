@@ -20,8 +20,8 @@
 namespace serac {
 
 /**
- * @brief 
- * 
+ * @brief
+ *
  */
 class LumpedMassExplicitNewmark {
  public:
