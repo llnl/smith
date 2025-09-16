@@ -21,7 +21,6 @@
 #include "serac/serac.hpp"
 
 
-auto element_shape = mfem::Element::QUADRILATERAL;
 static constexpr int dim = 3;
 static constexpr int disp_order = 1;
 
@@ -97,12 +96,12 @@ int main(int argc, char* argv[])
   // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
 
-  // NOTE: p must be equal to 1 to work with Tribol's mortar method
-  constexpr int p = 1;
-  // NOTE: dim must be equal to 3
-  constexpr int dim = 3;
+  //// NOTE: p must be equal to 1 to work with Tribol's mortar method
+  //constexpr int p = 1;
+  //// NOTE: dim must be equal to 3
+  //constexpr int dim = 3;
 
-  using VectorSpace = serac::H1<p, dim>;
+  //using VectorSpace = serac::H1<p, dim>;
 
   // Create DataStore
   std::string name = "contact_twist_example";
@@ -127,15 +126,24 @@ int main(int argc, char* argv[])
   auto contact_interaction_id = 0;
   std::set<int> surface_1_boundary_attributes({4});
   std::set<int> surface_2_boundary_attributes({5});
-  serac::ContactConstraint contact_constraint(contact_interaction_id, mesh->mfemParMesh(),
+  auto contact_constraint = std::make_shared<serac::ContactConstraint>(contact_interaction_id, mesh->mfemParMesh(),
                                               surface_1_boundary_attributes, surface_2_boundary_attributes,
                                               contact_options, contact_constraint_name);
 
   serac::FiniteElementState shape = serac::StateManager::newState(VectorSpace{}, "shape", mesh->tag());
   serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
+  serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
+  serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
+  serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
   std::vector<serac::FiniteElementState> contact_states;
+  std::vector<serac::FiniteElementState> states;
+  std::vector<serac::FiniteElementState> params;
   contact_states = {shape, disp};
+  states = {disp, velo, accel};
+  params = {density};
+  
+  
   // initialize displacement
   contact_states[serac::ContactFields::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
     auto u = 0.1 * x;
@@ -143,18 +151,56 @@ int main(int argc, char* argv[])
   });
 
   contact_states[serac::ContactFields::SHAPE] = 0.0;
+  states[FIELD::VELO] = 0.0;
+  states[FIELD::ACCEL] = 0.0;
+  params[0] = 1.0;
+  
+  std::string physics_name = "solid";
 
-  double time = 0.0, dt = 1.0;
-  int direction = serac::ContactFields::DISP;
-  auto input_states = getConstFieldPointers(contact_states);
-  auto gap = contact_constraint.evaluate(time, dt, input_states);
-  auto gap_Jacobian = contact_constraint.jacobian(time, dt, input_states, direction);
-  auto gap_Jacobian_tilde = contact_constraint.jacobian_tilde(time, dt, input_states, direction);
+  // construct residual
+  auto solid_mechanics_weak_form =
+      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), getSpaces(params));
 
-  int nPressureDofs = contact_constraint.numPressureDofs();
-  mfem::Vector multipliers(nPressureDofs);
-  multipliers = 0.0;
-  auto residual = contact_constraint.residual_contribution(time, dt, input_states, multipliers, direction);
+  SolidMaterial mat;
+  mat.K = 1.0;
+  mat.G = 0.5;
+  solid_mechanics_weak_form->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
+
+  // apply some traction boundary conditions
+  std::string surface_name = "side";
+  mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(1));
+  solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
+
+  serac::tensor<double, dim> constant_force{};
+  for (int i = 0; i < dim; i++) {
+    constant_force[i] = 1.e0;
+  }
+
+  solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
+    return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
+  });
+
+  
+  auto all_states = serac::getConstFieldPointers(states, params);
+  auto non_const_states = serac::getFieldPointers(states, params);
+  auto contact_state_ptrs = serac::getFieldPointers(contact_states);
+  TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, non_const_states, mesh, solid_mechanics_weak_form, contact_constraint);
+
+
+  //double time = 0.0, dt = 1.0;
+  //int direction = serac::ContactFields::DISP;
+  //auto input_states = getConstFieldPointers(contact_states);
+  //auto gap = contact_constraint.evaluate(time, dt, input_states);
+  //auto gap_Jacobian = contact_constraint.jacobian(time, dt, input_states, direction);
+  //auto gap_Jacobian_tilde = contact_constraint.jacobian_tilde(time, dt, input_states, direction);
+
+  //int nPressureDofs = contact_constraint.numPressureDofs();
+  //mfem::Vector multipliers(nPressureDofs);
+  //multipliers = 0.0;
+  //auto residual = contact_constraint.residual_contribution(time, dt, input_states, multipliers, direction);
+  
+  
+  
   // auto residual_Jacobian = contact_constraint.residual_contribution_jacobian(time, dt,
   //        	                                                             input_states, multipliers,
   //        								     direction);
@@ -201,8 +247,6 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   cOffsets[0] = cumulativeConstraints - numConstraints;
   cOffsets[1] = cumulativeConstraints;
   
-  int myid = mfem::Mpi::WorldRank();
-
   dimu = uOffsets[1] - uOffsets[0];
   dimc = cOffsets[1] - cOffsets[0];
   y_partition.SetSize(3);
