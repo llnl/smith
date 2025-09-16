@@ -4,9 +4,10 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if(ENZYME_FOUND)
+if(SERAC_USE_ENZYME)
     set(EXPLICIT_DYNAMICS_EXAMPLES_SOURCES
         dfem_gpu.cpp
+        dfem_force_gpu.cpp
     )
 
     foreach(filename ${EXPLICIT_DYNAMICS_EXAMPLES_SOURCES})

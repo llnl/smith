@@ -137,9 +137,10 @@ int main(int argc, char* argv[])
   serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
   serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
   serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
+  serac::FiniteElementState coords = serac::StateManager::newState(VectorSpace{}, "coordinates", mesh->tag());
   serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-  std::vector<serac::FiniteElementState> states{disp, velo, accel};
+  std::vector<serac::FiniteElementState> states{disp, velo, accel, coords};
   std::vector<serac::FiniteElementState> params{density};
 
   std::string physics_name = "solid";
@@ -176,63 +177,39 @@ int main(int argc, char* argv[])
       },
       g_inputs, g_outputs, displacement_ir, std::index_sequence<>{});
 
-  auto bc_manager = std::make_shared<serac::BoundaryConditionManager>(mesh->mfemParMesh());
-  auto zero_coeff = std::make_shared<mfem::ConstantCoefficient>(0.0);
-  bc_manager->addEssential({1}, zero_coeff, states[DISPLACEMENT].space());
-
   states[DISPLACEMENT] = 0.0;
   states[VELOCITY].setFromFieldFunction([](serac::tensor<double, dim>) {
     serac::tensor<double, dim> u({0.0, -1.0});
     return u;
   });
   states[ACCELERATION] = 0.0;
+  states[COORDINATES].setFromGridFunction(static_cast<mfem::ParGridFunction&>(*mesh->mfemParMesh().GetNodes()));
   params[DENSITY] = 1.0;
-
-  auto mass_dfem_weak_form = serac::create_solid_mass_weak_form<dim, dim>(physics_name, mesh, states[DISPLACEMENT],
-                                                                          params[0], displacement_ir);
-
-  // create time advancer
-  auto advancer =
-      std::make_shared<serac::LumpedMassExplicitNewmark>(solid_dfem_weak_form, mass_dfem_weak_form, bc_manager);
-
-  serac::FiniteElementState coords_state(
-      *static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes())->ParFESpace(), "coordinates");
-  coords_state.setFromGridFunction(*static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes()));
 
   double time = 0.0;
   constexpr double dt = 0.0001;
-  int cycle = 0;
   constexpr size_t num_steps = 5000;
+
+  const auto& u = states[DISPLACEMENT];
+  const auto& v = states[VELOCITY];
+  const auto& a = states[ACCELERATION];
+
+  auto v_pred = v;
+  v_pred.Add(0.5 * dt, a);
+  auto u_pred = u;
+  u_pred.Add(dt, v_pred);
+
+  std::vector<serac::ConstFieldPtr> pred_states = {&u_pred, &v_pred, &a, &states[COORDINATES], &params[DENSITY]};
+
   axom::utilities::Timer timer(true);
   for (size_t step = 0; step < num_steps; ++step) {
-    if (write_output && cycle % 100 == 0) {
-      for (auto& state : states) {
-        // copy to grid function
-        serac::StateManager::updateState(state);
-      }
-      for (auto& param : params) {
-        // copy to grid function
-        serac::StateManager::updateState(param);
-      }
-      serac::StateManager::save(time, cycle, mesh->tag());
-    }
-    ++cycle;
-    auto state_ptrs = serac::getConstFieldPointers(states);
-    state_ptrs.push_back(&coords_state);
-    auto new_states_and_time = advancer->advanceState(state_ptrs, getConstFieldPointers(params), time, dt);
-    time = std::get<1>(new_states_and_time);
-    for (size_t i = 0; i < states.size(); ++i) {
-      states[i] = std::get<0>(new_states_and_time)[i];
-    }
+    auto no_mass_resid = solid_dfem_weak_form->residual(time, dt, &u_pred, pred_states);
+    time += dt;
   }
   timer.stop();
-  // copy to host
-  states[DISPLACEMENT].HostRead();
-  double max_disp = mfem::ParNormlp(states[DISPLACEMENT], 2, MPI_COMM_WORLD);
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   if (rank == 0) {
-    std::cout << "Max displacement: " << max_disp << std::endl;
     std::cout << "Total time: " << timer.elapsedTimeInMilliSec() << " milliseconds" << std::endl;
   }
 
