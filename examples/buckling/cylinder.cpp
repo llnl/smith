@@ -120,7 +120,8 @@ int main(int argc, char* argv[])
 
   // Need to allow extra arguments for PETSc support
   app.set_help_flag("--help");
-  app.allow_extras()->parse(argc, argv);
+  app.allow_extras();
+  CLI11_PARSE(app, argc, argv);
 
   if (use_fast_options) {
     dt = 1;
