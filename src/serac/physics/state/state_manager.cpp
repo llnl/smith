@@ -209,6 +209,15 @@ void StateManager::save(const double t, const int cycle, const std::string& mesh
   SERAC_MARK_FUNCTION;
   SLIC_ERROR_ROOT_IF(!ds_, "Serac's data store was not initialized - call StateManager::initialize first");
   SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag '{}' not found in the data store", mesh_tag));
+
+  // copy data to host (if needed; HostRead() does nothing if host data is up-to-date)
+  for (auto& state : named_states_) {
+    state.second->HostRead();
+  }
+  for (auto& dual : named_duals_) {
+    dual.second->HostRead();
+  }
+
   auto& datacoll = datacolls_.at(mesh_tag);
   std::string file_path = axom::utilities::filesystem::joinPath(datacoll.GetPrefixPath(), datacoll.GetCollectionName());
   SLIC_INFO_ROOT(

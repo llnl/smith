@@ -29,5 +29,8 @@ add_subdirectory(contact)
 # Add the buckling examples
 add_subdirectory(buckling)
 
+# Add the explicit dynamics examples
+add_subdirectory(explicit)
+
 # Add the uniaxial examples
 add_subdirectory(uniaxial)

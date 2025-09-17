@@ -11,6 +11,7 @@
 #include <iostream>
 
 #include "mpi.h"
+#include "serac/infrastructure/accelerator.hpp"
 
 namespace serac {
 
@@ -26,8 +27,10 @@ class ApplicationManager {
    * @param argc The number of command-line arguments
    * @param argv The command-line arguments, as C-strings
    * @param comm The MPI communicator to initialize with
+   * @param exec_space The desired execution space of device-capable lambda functions
    */
-  ApplicationManager(int argc, char* argv[], MPI_Comm comm = MPI_COMM_WORLD);
+  ApplicationManager(int argc, char* argv[], MPI_Comm comm = MPI_COMM_WORLD,
+                     ExecutionSpace exec_space = ExecutionSpace::CPU);
 
   /**
    * @brief Calls serac::finalizer
