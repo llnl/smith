@@ -20,7 +20,6 @@
 
 #include "serac/serac.hpp"
 
-
 static constexpr int dim = 3;
 static constexpr int disp_order = 1;
 
@@ -57,30 +56,29 @@ enum FIELD
 template <typename SolidWeakFormType>
 class TiedContactProblem : public GeneralNLMCProblem {
  protected:
-  mfem::HypreParMatrix* dFdx;
-  mfem::HypreParMatrix* dFdy;
-  mfem::HypreParMatrix* dQdx;
-  mfem::HypreParMatrix* dQdy;
-  HYPRE_BigInt* uOffsets;
-  HYPRE_BigInt* cOffsets;
-  int dimu;
-  int dimc;
-  int dimcglb;
-  mfem::Array<int> y_partition;
-  std::vector<serac::FieldPtr> contact_states;
-  std::vector<serac::FieldPtr> all_states;
-  std::shared_ptr<SolidWeakFormType> weak_form;
-  std::unique_ptr<serac::FiniteElementState> shape_disp;
-  std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<serac::ContactConstraint> constraints;
-  double time = 0.0;
-  double dt = 0.0;
-  std::vector<double> jacobian_weights = {1.0, 0.0, 0.0, 0.0};
+  mfem::HypreParMatrix* dFdx_ = nullptr;
+  mfem::HypreParMatrix* dFdy_ = nullptr;
+  mfem::HypreParMatrix* dQdx_ = nullptr;
+  mfem::HypreParMatrix* dQdy_ = nullptr;
+  HYPRE_BigInt* uOffsets_ = nullptr;
+  HYPRE_BigInt* cOffsets_ = nullptr;
+  int dimu_;
+  int dimc_;
+  mfem::Array<int> y_partition_;
+  std::vector<serac::FieldPtr> contact_states_;
+  std::vector<serac::FieldPtr> all_states_;
+  std::shared_ptr<SolidWeakFormType> weak_form_;
+  std::unique_ptr<serac::FiniteElementState> shape_disp_;
+  std::shared_ptr<serac::Mesh> mesh_;
+  std::shared_ptr<serac::ContactConstraint> constraints_;
+  double time_ = 0.0;
+  double dt_ = 0.0;
+  std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};
 
  public:
-  TiedContactProblem(std::vector<serac::FieldPtr> contact_states_, std::vector<serac::FieldPtr> all_states_,
-                        std::shared_ptr<serac::Mesh> mesh_, std::shared_ptr<SolidWeakFormType> weak_form_,
-                        std::shared_ptr<serac::ContactConstraint> constraints_);
+  TiedContactProblem(std::vector<serac::FieldPtr> contact_states, std::vector<serac::FieldPtr> all_states,
+                     std::shared_ptr<serac::Mesh> mesh, std::shared_ptr<SolidWeakFormType> weak_form,
+                     std::shared_ptr<serac::ContactConstraint> constraints);
   void F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int& Feval_err) const;
   void Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval, int& Qeval_err) const;
   mfem::HypreParMatrix* DxF(const mfem::Vector& x, const mfem::Vector& y);
@@ -97,11 +95,11 @@ int main(int argc, char* argv[])
   serac::ApplicationManager applicationManager(argc, argv);
 
   //// NOTE: p must be equal to 1 to work with Tribol's mortar method
-  //constexpr int p = 1;
+  // constexpr int p = 1;
   //// NOTE: dim must be equal to 3
-  //constexpr int dim = 3;
+  // constexpr int dim = 3;
 
-  //using VectorSpace = serac::H1<p, dim>;
+  // using VectorSpace = serac::H1<p, dim>;
 
   // Create DataStore
   std::string name = "contact_twist_example";
@@ -126,9 +124,9 @@ int main(int argc, char* argv[])
   auto contact_interaction_id = 0;
   std::set<int> surface_1_boundary_attributes({4});
   std::set<int> surface_2_boundary_attributes({5});
-  auto contact_constraint = std::make_shared<serac::ContactConstraint>(contact_interaction_id, mesh->mfemParMesh(),
-                                              surface_1_boundary_attributes, surface_2_boundary_attributes,
-                                              contact_options, contact_constraint_name);
+  auto contact_constraint = std::make_shared<serac::ContactConstraint>(
+      contact_interaction_id, mesh->mfemParMesh(), surface_1_boundary_attributes, surface_2_boundary_attributes,
+      contact_options, contact_constraint_name);
 
   serac::FiniteElementState shape = serac::StateManager::newState(VectorSpace{}, "shape", mesh->tag());
   serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
@@ -142,8 +140,7 @@ int main(int argc, char* argv[])
   contact_states = {shape, disp};
   states = {disp, velo, accel};
   params = {density};
-  
-  
+
   // initialize displacement
   contact_states[serac::ContactFields::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
     auto u = 0.1 * x;
@@ -154,7 +151,7 @@ int main(int argc, char* argv[])
   states[FIELD::VELO] = 0.0;
   states[FIELD::ACCEL] = 0.0;
   params[0] = 1.0;
-  
+
   std::string physics_name = "solid";
 
   // construct residual
@@ -180,27 +177,24 @@ int main(int argc, char* argv[])
     return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
   });
 
-  
   auto all_states = serac::getConstFieldPointers(states, params);
   auto non_const_states = serac::getFieldPointers(states, params);
   auto contact_state_ptrs = serac::getFieldPointers(contact_states);
-  TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, non_const_states, mesh, solid_mechanics_weak_form, contact_constraint);
+  TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, non_const_states, mesh, solid_mechanics_weak_form,
+                                             contact_constraint);
 
+  // double time = 0.0, dt = 1.0;
+  // int direction = serac::ContactFields::DISP;
+  // auto input_states = getConstFieldPointers(contact_states);
+  // auto gap = contact_constraint.evaluate(time, dt, input_states);
+  // auto gap_Jacobian = contact_constraint.jacobian(time, dt, input_states, direction);
+  // auto gap_Jacobian_tilde = contact_constraint.jacobian_tilde(time, dt, input_states, direction);
 
-  //double time = 0.0, dt = 1.0;
-  //int direction = serac::ContactFields::DISP;
-  //auto input_states = getConstFieldPointers(contact_states);
-  //auto gap = contact_constraint.evaluate(time, dt, input_states);
-  //auto gap_Jacobian = contact_constraint.jacobian(time, dt, input_states, direction);
-  //auto gap_Jacobian_tilde = contact_constraint.jacobian_tilde(time, dt, input_states, direction);
+  // int nPressureDofs = contact_constraint.numPressureDofs();
+  // mfem::Vector multipliers(nPressureDofs);
+  // multipliers = 0.0;
+  // auto residual = contact_constraint.residual_contribution(time, dt, input_states, multipliers, direction);
 
-  //int nPressureDofs = contact_constraint.numPressureDofs();
-  //mfem::Vector multipliers(nPressureDofs);
-  //multipliers = 0.0;
-  //auto residual = contact_constraint.residual_contribution(time, dt, input_states, multipliers, direction);
-  
-  
-  
   // auto residual_Jacobian = contact_constraint.residual_contribution_jacobian(time, dt,
   //        	                                                             input_states, multipliers,
   //        								     direction);
@@ -209,57 +203,51 @@ int main(int argc, char* argv[])
 }
 
 template <typename SolidWeakFormType>
-TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::FiniteElementState*> contact_states_,
-                                             std::vector<serac::FiniteElementState*> all_states_,
-                                             std::shared_ptr<serac::Mesh> mesh_,
-                                             std::shared_ptr<SolidWeakFormType> weak_form_,
-                                             std::shared_ptr<serac::ContactConstraint> constraints_)
-    : GeneralNLMCProblem(),
-      dFdx(nullptr),
-      dFdy(nullptr),
-      dQdx(nullptr),
-      dQdy(nullptr),
-      uOffsets(nullptr),
-      cOffsets(nullptr)
+TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::FiniteElementState*> contact_states,
+                                                          std::vector<serac::FiniteElementState*> all_states,
+                                                          std::shared_ptr<serac::Mesh> mesh,
+                                                          std::shared_ptr<SolidWeakFormType> weak_form,
+                                                          std::shared_ptr<serac::ContactConstraint> constraints)
+    : GeneralNLMCProblem()
 {
-  weak_form = weak_form_;
-  mesh = mesh_;
-  shape_disp = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
+  weak_form_ = weak_form;
+  mesh_ = mesh;
+  shape_disp_ = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
 
-  constraints = constraints_;
+  constraints_ = constraints;
 
-  all_states.resize(all_states_.size());
-  std::copy(all_states_.begin(), all_states_.end(), all_states.begin());
+  all_states_.resize(all_states.size());
+  std::copy(all_states.begin(), all_states.end(), all_states_.begin());
 
-  contact_states.resize(contact_states_.size());
-  std::copy(contact_states_.begin(), contact_states_.end(), contact_states.begin());
+  contact_states_.resize(contact_states.size());
+  std::copy(contact_states.begin(), contact_states.end(), contact_states_.begin());
 
-  int numConstraints = constraints->numPressureDofs();
+  int numConstraints = constraints_->numPressureDofs();
 
-  uOffsets = new HYPRE_BigInt[2];
-  cOffsets = new HYPRE_BigInt[2];
+  uOffsets_ = new HYPRE_BigInt[2];
+  cOffsets_ = new HYPRE_BigInt[2];
   for (int i = 0; i < 2; i++) {
-    uOffsets[i] = all_states[FIELD::DISP]->space().GetTrueDofOffsets()[i];
+    uOffsets_[i] = all_states_[FIELD::DISP]->space().GetTrueDofOffsets()[i];
   }
 
   int cumulativeConstraints = 0;
   MPI_Scan(&numConstraints, &cumulativeConstraints, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  cOffsets[0] = cumulativeConstraints - numConstraints;
-  cOffsets[1] = cumulativeConstraints;
-  
-  dimu = uOffsets[1] - uOffsets[0];
-  dimc = cOffsets[1] - cOffsets[0];
-  y_partition.SetSize(3);
-  y_partition[0] = 0;
-  y_partition[1] = dimu;
-  y_partition[2] = dimc;
-  y_partition.PartialSum();
+  cOffsets_[0] = cumulativeConstraints - numConstraints;
+  cOffsets_[1] = cumulativeConstraints;
+
+  dimu_ = uOffsets_[1] - uOffsets_[0];
+  dimc_ = cOffsets_[1] - cOffsets_[0];
+  y_partition_.SetSize(3);
+  y_partition_[0] = 0;
+  y_partition_[1] = dimu_;
+  y_partition_[2] = dimc_;
+  y_partition_.PartialSum();
 
   {
     HYPRE_BigInt dofOffsets[2];
     HYPRE_BigInt complementarityOffsets[2];
     for (int i = 0; i < 2; i++) {
-      dofOffsets[i] = uOffsets[i] + cOffsets[i];
+      dofOffsets[i] = uOffsets_[i] + cOffsets_[i];
     }
     complementarityOffsets[0] = 0;
     complementarityOffsets[1] = 0;
@@ -270,7 +258,7 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   {
     int nentries = 0;
     auto temp = new mfem::SparseMatrix(dimx, dimxglb, nentries);
-    dFdx = GenerateHypreParMatrixFromSparseMatrix(dofOffsetsx, dofOffsetsx, temp);
+    dFdx_ = GenerateHypreParMatrixFromSparseMatrix(dofOffsetsx, dofOffsetsx, temp);
     delete temp;
   }
 
@@ -278,7 +266,7 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   {
     int nentries = 0;
     auto temp = new mfem::SparseMatrix(dimx, dimyglb, nentries);
-    dFdy = GenerateHypreParMatrixFromSparseMatrix(dofOffsetsy, dofOffsetsx, temp);
+    dFdy_ = GenerateHypreParMatrixFromSparseMatrix(dofOffsetsy, dofOffsetsx, temp);
     delete temp;
   }
 
@@ -286,13 +274,14 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   {
     int nentries = 0;
     auto temp = new mfem::SparseMatrix(dimy, dimxglb, nentries);
-    dQdx = GenerateHypreParMatrixFromSparseMatrix(dofOffsetsx, dofOffsetsy, temp);
+    dQdx_ = GenerateHypreParMatrixFromSparseMatrix(dofOffsetsx, dofOffsetsy, temp);
     delete temp;
   }
 }
 
 template <typename SolidWeakFormType>
-void TiedContactProblem<SolidWeakFormType>::F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int& Feval_err) const
+void TiedContactProblem<SolidWeakFormType>::F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval,
+                                              int& Feval_err) const
 {
   MFEM_VERIFY(x.Size() == dimx && y.Size() == dimy && feval.Size() == dimx,
               "TiedContactProblem::F -- Inconsistent dimensions");
@@ -305,28 +294,29 @@ void TiedContactProblem<SolidWeakFormType>::F(const mfem::Vector& x, const mfem:
 // dQ / dy = [ K  J^T]
 //           [-J   0 ]
 template <typename SolidWeakFormType>
-void TiedContactProblem<SolidWeakFormType>::Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval, int& Qeval_err) const
+void TiedContactProblem<SolidWeakFormType>::Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval,
+                                              int& Qeval_err) const
 {
   MFEM_VERIFY(x.Size() == dimx && y.Size() == dimy && qeval.Size() == dimy,
               "TiedContactProblem::Q -- Inconsistent dimensions");
   qeval = 0.0;
-  mfem::BlockVector yblock(y_partition);
+  mfem::BlockVector yblock(y_partition_);
   yblock.Set(1.0, y);
-  mfem::BlockVector qblock(y_partition);
+  mfem::BlockVector qblock(y_partition_);
   qblock = 0.0;
 
-  contact_states[serac::ContactFields::DISP]->Set(1.0, yblock.GetBlock(0));
-  serac::FiniteElementDual res_vector(all_states[FIELD::DISP]->space(), "tempresidual");
-  res_vector = weak_form->residual(time, dt, shape_disp.get(), serac::getConstFieldPointers(all_states));
+  contact_states_[serac::ContactFields::DISP]->Set(1.0, yblock.GetBlock(0));
+  auto res_vector = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
 
   // TODO: is this the right field pointer to pass?
-  auto res_contribution = constraints->residual_contribution(time, dt, serac::getConstFieldPointers(contact_states), yblock.GetBlock(1), serac::ContactFields::DISP);
-  auto gap = constraints->evaluate(time, dt, serac::getConstFieldPointers(contact_states));
+  auto res_contribution = constraints_->residual_contribution(time_, dt_, serac::getConstFieldPointers(contact_states_),
+                                                              yblock.GetBlock(1), serac::ContactFields::DISP);
+  auto gap = constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_));
 
   qblock.GetBlock(0).Set(1.0, res_vector);
   qblock.GetBlock(0).Add(1.0, res_contribution);
   qblock.GetBlock(1).Set(-1.0, gap);
-  
+
   qeval.Set(1.0, qblock);
 
   Qeval_err = 0;
@@ -347,13 +337,22 @@ void TiedContactProblem<SolidWeakFormType>::Q(const mfem::Vector& x, const mfem:
 }
 
 template <typename SolidWeakFormType>
-mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::DxF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdx; }
+mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::DxF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/)
+{
+  return dFdx_;
+}
 
 template <typename SolidWeakFormType>
-mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::DyF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdy; }
+mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::DyF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/)
+{
+  return dFdy_;
+}
 
 template <typename SolidWeakFormType>
-mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::DxQ(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dQdx; }
+mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::DxQ(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/)
+{
+  return dQdx_;
+}
 
 template <typename SolidWeakFormType>
 mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::DyQ(const mfem::Vector& /*x*/, const mfem::Vector& y)
@@ -362,29 +361,31 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::DyQ(const mfem::Vec
   // dQdy = [dr/du   dc/du^T]
   //        [dc/du   0  ]
   // note we are neglecting Hessian constraint terms
-  mfem::BlockVector yblock(y_partition);
+  mfem::BlockVector yblock(y_partition_);
   yblock.Set(1.0, y);
-  mfem::BlockVector qblock(y_partition);
+  mfem::BlockVector qblock(y_partition_);
   qblock = 0.0;
-  contact_states[serac::ContactFields::DISP]->Set(1.0, yblock.GetBlock(0));
-  if (dQdy) {
-    delete dQdy;
+  contact_states_[serac::ContactFields::DISP]->Set(1.0, yblock.GetBlock(0));
+  if (dQdy_) {
+    delete dQdy_;
   }
   {
     mfem::HypreParMatrix* drdu = nullptr;
     auto drdu_unique =
-        weak_form->jacobian(time, dt, shape_disp.get(), getConstFieldPointers(all_states), jacobian_weights);
-    MFEM_VERIFY(drdu_unique->Height() == dimu, "size error");
+        weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
+    MFEM_VERIFY(drdu_unique->Height() == dimu_, "size error");
 
     drdu = drdu_unique.release();
 
-    auto negdcdu_unique = constraints->jacobian(time, dt, serac::getConstFieldPointers(contact_states), serac::ContactFields::DISP);
+    auto negdcdu_unique =
+        constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP);
     auto negdcdu = negdcdu_unique.release();
-    mfem::Vector scale(dimc); 
+    mfem::Vector scale(dimc_);
     scale = -1.0;
     negdcdu->ScaleRows(scale);
 
-    auto dcdutilde_unique = constraints->jacobian_tilde(time, dt, serac::getConstFieldPointers(contact_states), serac::ContactFields::DISP);
+    auto dcdutilde_unique = constraints_->jacobian_tilde(time_, dt_, serac::getConstFieldPointers(contact_states_),
+                                                         serac::ContactFields::DISP);
     auto dcdutildeT = dcdutilde_unique->Transpose();
 
     mfem::Array2D<const mfem::HypreParMatrix*> BlockMat(2, 2);
@@ -392,22 +393,21 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::DyQ(const mfem::Vec
     BlockMat(0, 1) = dcdutildeT;
     BlockMat(1, 0) = negdcdu;
     BlockMat(1, 1) = nullptr;
-    dQdy = HypreParMatrixFromBlocks(BlockMat);
+    dQdy_ = HypreParMatrixFromBlocks(BlockMat);
     delete drdu;
     delete dcdutildeT;
     delete negdcdu;
   }
-  return dQdy;
+  return dQdy_;
 }
 
 template <typename SolidWeakFormType>
 TiedContactProblem<SolidWeakFormType>::~TiedContactProblem()
 {
-  delete[] uOffsets;
-  delete[] cOffsets;
-  delete dFdx;
-  delete dFdy;
-  delete dQdx;
-  delete dQdy;
+  delete[] uOffsets_;
+  delete[] cOffsets_;
+  delete dFdx_;
+  delete dFdy_;
+  delete dQdx_;
+  delete dQdy_;
 }
-
