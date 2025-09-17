@@ -10,6 +10,8 @@
 
 #pragma once
 
+#ifdef SERAC_USE_ENZYME
+
 #include "mfem.hpp"
 
 #include "serac/physics/dfem_weak_form.hpp"
@@ -121,3 +123,5 @@ auto create_solid_mass_weak_form(const std::string& physics_name, std::shared_pt
 }
 
 }  // namespace serac
+
+#endif

@@ -5,12 +5,14 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file solid_weak_form.hpp
+ * @file dfem_solid_weak_form.hpp
  *
  * @brief Implements the WeakForm interface for solid mechanics physics using dFEM. Derives from DfemWeakForm.
  */
 
 #pragma once
+
+#ifdef SERAC_USE_ENZYME
 
 #include "serac/physics/dfem_weak_form.hpp"
 
@@ -74,7 +76,7 @@ class DfemSolidWeakForm : public DfemWeakForm {
   };
 
   /**
-   * @brief Construct a new SolidWeakForm object
+   * @brief Construct a new DfemSolidWeakForm object
    *
    * @param physics_name A name for the physics module instance
    * @param mesh The serac Mesh
@@ -149,3 +151,5 @@ class DfemSolidWeakForm : public DfemWeakForm {
 };
 
 }  // namespace serac
+
+#endif

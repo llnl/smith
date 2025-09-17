@@ -12,6 +12,8 @@
 
 #pragma once
 
+#ifdef SERAC_USE_ENZYME
+
 #include "serac/physics/weak_form.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
@@ -333,3 +335,5 @@ class DfemWeakForm : public WeakForm {
 };
 
 }  // namespace serac
+
+#endif
