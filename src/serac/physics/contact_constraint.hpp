@@ -138,7 +138,7 @@ class ContactConstraint : public Constraint {
    * @return std::unique_ptr<mfem::HypreParMatrix> The true Jacobian
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                 [[maybe_unused]] int direction) const
+                                                 int direction) const
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
@@ -165,7 +165,7 @@ class ContactConstraint : public Constraint {
    * @return std::Vector
    */
   mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                     const mfem::Vector& multipliers, [[maybe_unused]] int direction) const
+                                     const mfem::Vector& multipliers, int direction) const
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
@@ -190,7 +190,7 @@ class ContactConstraint : public Constraint {
   std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
                                                                        const std::vector<ConstFieldPtr>& fields,
                                                                        const mfem::Vector& multipliers,
-                                                                       [[maybe_unused]] int direction) const
+                                                                       int direction) const
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
@@ -215,7 +215,7 @@ class ContactConstraint : public Constraint {
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                       [[maybe_unused]] int direction) const
+                                                       int direction) const
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
