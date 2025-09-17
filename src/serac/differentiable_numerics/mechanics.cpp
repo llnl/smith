@@ -62,9 +62,10 @@ void Mechanics::resetStates([[maybe_unused]] int cycle, [[maybe_unused]] double 
 {
   for (size_t i = 0; i < initial_field_states_.size(); ++i) {
     *initial_field_states_[i].get() = 0.0;
+    field_states_[i] = initial_field_states_[i];
   }
   milestones_.clear();
-  checkpointer_->reset();
+  checkpointer_->reset_graph();
   time_ = 0.0;
   cycle_ = 0;
 }
@@ -168,7 +169,7 @@ void Mechanics::advanceTimestep(double dt)
 
   double time_for_capture = time_;
   double target_time = time_ + dt;
-
+  
   DoubleState stable_dt = dt_estimator_->dt(*field_shape_displacement_, field_states_, field_params_);
   DoubleState time = gretl::clone_state([time_for_capture](double) { return time_for_capture; },
                                         [](double, double, double&, double) {}, stable_dt);

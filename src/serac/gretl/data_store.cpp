@@ -72,19 +72,23 @@ void DataStore::reset()
 
 void DataStore::reset_graph()
 {
+  printf("a\n");
   Int num_persistent = 0;
-  while (is_persistent(num_persistent)) {
-    duals_[num_persistent] = nullptr;
-    ++num_persistent;
+  for (size_t n = states_.size(); n > 0; --n) {
+    Int stepToClear = static_cast<Int>(n - 1);
+    if (is_persistent(stepToClear)) {
+      num_persistent++;
+    }
   }
   resize(num_persistent);
   checkpointManager_.reset();
+  stillConstructingGraph_ = true;
 }
 
 ///@ brief deallocate back down to a new, smaller, size
 void DataStore::resize(Int newSize)
 {
-  gretl_assert(newSize <= currentStep_);
+  gretl_assert_msg(newSize <= currentStep_, std::string("expecting new size to be less than or equal to max steps where are ") + std::to_string(newSize) + std::string(" ") + std::to_string(currentStep_));
   states_.resize(newSize);
   duals_.resize(newSize);
   upstreams_.resize(newSize);
