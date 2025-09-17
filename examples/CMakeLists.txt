@@ -26,6 +26,9 @@ add_subdirectory(conduction)
 # Add the contact examples
 add_subdirectory(contact)
 
+# Add the contact-homotopy examples
+add_subdirectory(contact/homotopy)
+
 # Add the buckling examples
 add_subdirectory(buckling)
 
