@@ -139,7 +139,7 @@ int main(int argc, char* argv[])
 
   auto disp = create_field_state(*graph, VectorSpace{}, "displacement", mesh->tag());
   auto velo = create_field_state(*graph, VectorSpace{}, "velocity", mesh->tag());
-  auto accel = create_field_state(*graph, VectorSpace{}, "velocity", mesh->tag());
+  auto accel = create_field_state(*graph, VectorSpace{}, "accleleration", mesh->tag());
   // strictly, we should be getting the shape displacement space from some common location
   auto coords = create_field_state(*graph, VectorSpace{}, "coords", mesh->tag());
   coords.get()->setFromGridFunction(*static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes()));
@@ -149,7 +149,7 @@ int main(int argc, char* argv[])
   auto time = graph->create_state(0.0);
   auto dt = graph->create_state(0.0001);
 
-  std::vector<serac::FieldState> states{disp, velo, accel};
+  std::vector<serac::FieldState> states{disp, velo, accel, coords};
   std::vector<serac::FieldState> params{density};
 
   std::string physics_name = "solid";
@@ -204,9 +204,6 @@ int main(int argc, char* argv[])
   // create time advancer
   auto advancer =
       std::make_shared<serac::LumpedMassExplicitNewmark>(solid_dfem_weak_form, mass_dfem_weak_form, bc_manager);
-
-
-
 
   size_t cycle = 0;
   constexpr size_t num_steps = 5000;

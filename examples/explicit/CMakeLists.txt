@@ -4,10 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-message(STATUS SERAC_USE_ENZYME="${SERAC_USE_ENZYME}")
-
 if(SERAC_USE_ENZYME)
-    message(STATUS USING_ENZYME)
     set(EXPLICIT_DYNAMICS_EXAMPLES_SOURCES
         dfem_gpu.cpp
         dfem_force_gpu.cpp
@@ -19,7 +16,7 @@ if(SERAC_USE_ENZYME)
         blt_add_executable(NAME        explicit_${example_name}
                            SOURCES     ${filename}
                            OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
-                           DEPENDS_ON  serac_physics serac_mesh_utils)
+                           DEPENDS_ON  serac_physics serac_mesh_utils serac_gretl serac_differentiable_numerics)
 
         serac_add_example_test(NAME           explicit_${example_name}
                                COMMAND        explicit_${example_name}
