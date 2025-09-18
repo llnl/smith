@@ -126,6 +126,20 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     auto residual_fn = [this](const mfem::Vector& u, mfem::Vector& r) {
       const mfem::Vector u_blk(const_cast<mfem::Vector&>(u), 0, displacement_.Size());
+
+      mesh_->mfemParMesh().GetNodes()->Add(1.0, u_blk);
+      mfem::Vector disp_temp = displacement_;
+      displacement_ = u_blk;
+      auto temp_cycle = cycle_;
+      auto temp_time = time_;
+      cycle_ = fake_cycle_++;
+      time_ = fake_time_++;
+      BasePhysics::outputStateToDisk("fake_pvd");
+      mesh_->mfemParMesh().GetNodes()->Add(-1.0, u_blk);
+      displacement_ = disp_temp;
+      cycle_ = temp_cycle;
+      time_ = temp_time;
+
       const mfem::Vector res = (*residual_)(time_, BasePhysics::shapeDisplacement(), u_blk, acceleration_,
                                             *parameters_[parameter_indices].state...);
 
@@ -493,6 +507,10 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
   /// forces for output
   FiniteElementDual forces_;
+
+  int fake_cycle_ = 0;
+
+  double fake_time_ = 0.0;
 };
 
 }  // namespace serac

@@ -6,7 +6,6 @@
 
 #include "serac/physics/solid_mechanics_contact.hpp"
 
-#include <cfenv>
 #include <fem/datacollection.hpp>
 #include <functional>
 #include <mesh/vtk.hpp>
@@ -26,8 +25,6 @@
 #include "serac/infrastructure/application_manager.hpp"
 #include <fenv.h>
 
-
-
 namespace serac {
 
 class ContactTest : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactJacobian, std::string>> {};
@@ -38,6 +35,8 @@ TEST_P(ContactTest, patch)
   constexpr int p = 1;
   constexpr int dim = 2;
 
+  feenableexcept(FE_INVALID | FE_OVERFLOW);
+
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
@@ -47,18 +46,23 @@ TEST_P(ContactTest, patch)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(1 , 1).translate({0.0, 1.0}).bdrAttribInfo()
-    .updateBdrAttrib(4, 7).updateBdrAttrib(3, 9).updateBdrAttrib(1, 6),
-    shared::MeshBuilder::SquareMesh(1, 1).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
+  auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(10, 10)
+                                                                            .translate({0.0, 1.0})
+                                                                            .bdrAttribInfo()
+                                                                            .updateBdrAttrib(4, 7)
+                                                                            .updateBdrAttrib(3, 9)
+                                                                            .updateBdrAttrib(1, 6),
+                                                                        shared::MeshBuilder::SquareMesh(8, 8)
+                                                                            .bdrAttribInfo()
+                                                                            .updateBdrAttrib(4, 7)
+                                                                            .updateBdrAttrib(1, 8)
+                                                                            .updateBdrAttrib(3, 5)}),
+                                            "patch_mesh_2D", 0, 0);
 
   mfem::VisItDataCollection visit_dc("contact_patch_visit", &mesh->mfemParMesh());
 
   visit_dc.SetPrefixPath("visit_out");
   visit_dc.Save();
-
-
-  
 
   mesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(7));
   mesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(8));
@@ -82,16 +86,17 @@ TEST_P(ContactTest, patch)
   return;
 #endif
 
-  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
                                            .relative_tol = 1.0e-13,
                                            .absolute_tol = 1.0e-13,
-                                           .max_iterations = 20,
+                                           .max_iterations = 500,
+                                           .max_line_search_iterations = 10,
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type = ContactType::Frictionless,
-                                 .penalty = 0.2,
+                                 .penalty = 10000.0,
                                  .penalty2 = 0.0,
                                  .jacobian = std::get<1>(GetParam())};
 
@@ -119,17 +124,14 @@ TEST_P(ContactTest, patch)
   solid_solver.completeSetup();
 
   std::string paraview_name = name + "_paraview";
-  solid_solver.outputStateToDisk(paraview_name);
+  // solid_solver.outputStateToDisk(paraview_name);
 
   // Perform the quasi-static solve
   double dt = 1.0;
   solid_solver.advanceTimestep(dt);
-  solid_solver.advanceTimestep(dt);
-  // solid_solver.advanceTimestep(dt);
-  // solid_solver.advanceTimestep(dt);
 
   // Output the sidre-based plot files
-  solid_solver.outputStateToDisk(paraview_name);
+  // solid_solver.outputStateToDisk(paraview_name);
 
   // Check the l2 norm of the displacement dofs
   // auto c = 1.0;
@@ -150,18 +152,15 @@ TEST_P(ContactTest, patch)
   EXPECT_NEAR(0.0, approx_error_l2, 1.0e-2);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    tribol, ContactTest,
-    testing::Values(
-                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")
-));
+INSTANTIATE_TEST_SUITE_P(tribol, ContactTest,
+                         testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact,
+                                                         "penalty_exactJ")));
 
 }  // namespace serac
 
 int main(int argc, char* argv[])
 {
-
-feenableexcept(FE_INVALID | FE_OVERFLOW);
+  feenableexcept(FE_INVALID | FE_OVERFLOW);
 
   testing::InitGoogleTest(&argc, argv);
   serac::ApplicationManager applicationManager(argc, argv);
