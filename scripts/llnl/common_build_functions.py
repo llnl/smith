@@ -208,13 +208,13 @@ def uberenv_build(prefix, spec, project_file, mirror_path, report_to_stdout = Fa
     return res
 
 
-def test_examples(host_config, build_dir, install_dir, report_to_stdout = False):
+def test_examples(host_config, build_dir, install_dir, report_to_stdout = False, job_count = ""):
     print("[starting to build examples]")
 
     # Install
     log_file =  pjoin(build_dir,"output.log.make.install.txt")
     print("[log file: %s]" % log_file)
-    res = shell_exec("cd %s && make VERBOSE=1 install " % build_dir,
+    res = shell_exec(f"cd {build_dir} && make VERBOSE=1 install -j {job_count}",
                      output_file = log_file,
                      print_output = report_to_stdout,
                      echo=True)
@@ -357,7 +357,7 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
     if skip_install:
         print("[Skipping 'make install']\n")
     else:
-        res = test_examples(host_config, build_dir, install_dir, report_to_stdout)
+        res = test_examples(host_config, build_dir, install_dir, report_to_stdout, job_count)
 
         if res != 0:
             print("[ERROR: Building examples for host-config: %s failed]\n\n" % host_config)
@@ -541,7 +541,7 @@ def build_devtools(builds_dir, timestamp, short_path, report_to_stdout = False):
     project_file = "scripts/spack/devtools.json"
 
     if "toss_4" in sys_type:
-        compiler_spec = "%gcc@10.3.1"
+        compiler_spec = "%gcc_13"
     elif "blueos" in sys_type:
         compiler_spec = "%gcc@8.3.1"
 
@@ -609,7 +609,7 @@ def get_specs_for_current_machine():
     else:
         specs = specs_json[sys_type]
 
-    specs = ['%' + spec for spec in specs]
+    specs = [spec for spec in specs]
 
     return specs
 

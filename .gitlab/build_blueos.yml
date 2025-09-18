@@ -47,7 +47,7 @@ blueos-clang_14_0_5-src:
   variables:
     COMPILER: "clang@14.0.5"
     HOST_CONFIG: "lassen-blueos_3_ppc64le_ib_p9-${COMPILER}_cuda.cmake"
-    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: [.src_build_on_blueos, .with_cuda]
@@ -65,6 +65,7 @@ blueos-clang_14_0_5-examples:
   variables:
     COMPILER: "clang@14.0.5"
     HOST_CONFIG: "lassen-blueos_3_ppc64le_ib_p9-${COMPILER}_cuda.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
     ALLOC_TIME: "60"
   extends: [.examples_build_on_blueos, .with_cuda]
