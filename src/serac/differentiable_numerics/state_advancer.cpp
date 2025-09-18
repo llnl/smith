@@ -28,7 +28,7 @@ FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryCondit
 
 std::tuple<std::vector<FieldState>, DoubleState> LumpedMassExplicitNewmark::advanceState(
     const FieldState& shape_disp, const std::vector<FieldState>& states, const std::vector<FieldState>& params,
-    DoubleState time, DoubleState dt, [[maybe_unused]] size_t cycle) const
+    DoubleState time, DoubleState dt, size_t cycle) const
 {
   TimeInfo time_info = create_time_info(time, dt, cycle);
 

@@ -192,7 +192,7 @@ FieldStateWeightedSum operator-(const FieldState& ax, const FieldStateWeightedSu
 // Utilty functions for easily getting spaces from FieldStates
 
 /// @brief Get the space from the primal field of a field states
-inline const mfem::ParFiniteElementSpace& space(FieldState field) { return field.get()->space(); }
+inline mfem::ParFiniteElementSpace& space(FieldState field) { return field.get()->space(); }
 
 /// @brief Get the spaces from the primal fields of a vector of field states
 inline std::vector<const mfem::ParFiniteElementSpace*> spaces(std::vector<FieldState> states)
@@ -203,5 +203,14 @@ inline std::vector<const mfem::ParFiniteElementSpace*> spaces(std::vector<FieldS
   }
   return spaces;
 };
+
+inline std::vector<serac::FiniteElementState*> getStatePtrs(const std::vector<serac::FieldState>& field_states)
+{
+  std::vector<serac::FiniteElementState*> pointers;
+  for (const auto& s : field_states) {
+    pointers.push_back(s.get().get());
+  }
+  return pointers;
+}
 
 }  // namespace serac

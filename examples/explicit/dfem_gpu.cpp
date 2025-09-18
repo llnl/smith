@@ -140,7 +140,14 @@ int main(int argc, char* argv[])
   auto disp = create_field_state(*graph, VectorSpace{}, "displacement", mesh->tag());
   auto velo = create_field_state(*graph, VectorSpace{}, "velocity", mesh->tag());
   auto accel = create_field_state(*graph, VectorSpace{}, "velocity", mesh->tag());
+  // strictly, we should be getting the shape displacement space from some common location
+  auto coords = create_field_state(*graph, VectorSpace{}, "coords", mesh->tag());
+  coords.get()->setFromGridFunction(*static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes()));
+
   auto density = create_field_state(*graph, DensitySpace{}, "density", mesh->tag());
+
+  auto time = graph->create_state(0.0);
+  auto dt = graph->create_state(0.0001);
 
   std::vector<serac::FieldState> states{disp, velo, accel};
   std::vector<serac::FieldState> params{density};
@@ -198,40 +205,31 @@ int main(int argc, char* argv[])
   auto advancer =
       std::make_shared<serac::LumpedMassExplicitNewmark>(solid_dfem_weak_form, mass_dfem_weak_form, bc_manager);
 
-  serac::FiniteElementState coords_state(
-      *static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes())->ParFESpace(), "coordinates");
-  coords_state.setFromGridFunction(*static_cast<mfem::ParGridFunction*>(mesh->mfemParMesh().GetNodes()));
 
-  double time = 0.0;
-  constexpr double dt = 0.0001;
-  int cycle = 0;
+
+
+  size_t cycle = 0;
   constexpr size_t num_steps = 5000;
   axom::utilities::Timer timer(true);
   for (size_t step = 0; step < num_steps; ++step) {
     if (write_output && cycle % 100 == 0) {
       for (auto& state : states) {
         // copy to grid function
-        serac::StateManager::updateState(state);
+        serac::StateManager::updateState(*state.get());
       }
       for (auto& param : params) {
         // copy to grid function
-        serac::StateManager::updateState(param);
+        serac::StateManager::updateState(*param.get());
       }
-      serac::StateManager::save(time, cycle, mesh->tag());
+      serac::StateManager::save(time.get(), static_cast<int>(cycle), mesh->tag());
     }
+    std::tie(states, time) = advancer->advanceState(states[COORDINATES], states, params, time, dt, cycle);
     ++cycle;
-    auto state_ptrs = serac::getConstFieldPointers(states);
-    state_ptrs.push_back(&coords_state);
-    auto new_states_and_time = advancer->advanceState(state_ptrs, getConstFieldPointers(params), time, dt);
-    time = std::get<1>(new_states_and_time);
-    for (size_t i = 0; i < states.size(); ++i) {
-      states[i] = std::get<0>(new_states_and_time)[i];
-    }
   }
   timer.stop();
   // copy to host
-  states[DISPLACEMENT].HostRead();
-  double max_disp = mfem::ParNormlp(states[DISPLACEMENT], 2, MPI_COMM_WORLD);
+  states[DISPLACEMENT].get()->HostRead();
+  double max_disp = mfem::ParNormlp(*states[DISPLACEMENT].get(), 2, MPI_COMM_WORLD);
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   if (rank == 0) {

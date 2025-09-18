@@ -63,15 +63,6 @@ struct NeoHookeanWithFixedDensity {
   double density0;
 };
 
-std::vector<serac::FiniteElementState*> getStatePtrs(const std::vector<serac::FieldState>& field_states)
-{
-  std::vector<serac::FiniteElementState*> pointers;
-  for (const auto& s : field_states) {
-    pointers.push_back(s.get().get());
-  }
-  return pointers;
-}
-
 struct MeshFixture : public testing::Test {
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
