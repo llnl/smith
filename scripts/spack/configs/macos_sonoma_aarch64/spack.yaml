@@ -39,23 +39,25 @@ spack:
     gcc:
       externals:
       - spec: gcc@15.1.0 languages:=fortran
-        prefix: /opt/homebrew/Cellar/gcc/15.1.0
+        prefix: /opt/homebrew/opt/gcc@15
         extra_attributes:
           compilers:
-            fortran: /opt/homebrew/Cellar/gcc/15.1.0/bin/gfortran
+            fortran: /opt/homebrew/opt/gcc@15/bin/gfortran
     llvm:
       externals:
       - spec: llvm@19.1.7+clang~lld~lldb
-        prefix: /opt/homebrew/Cellar/llvm@19/19.1.7
+        prefix: /opt/homebrew/opt/llvm@19
         extra_attributes:
           compilers:
-            c: /opt/homebrew/Cellar/llvm@19/19.1.7/bin/clang
-            cxx: /opt/homebrew/Cellar/llvm@19/19.1.7/bin/clang++
+            c: /opt/homebrew/opt/llvm@19/bin/clang
+            cxx: /opt/homebrew/opt/llvm@19/bin/clang++
           flags:
             fflags: -fPIC
+          extra_rpaths:
+          - /opt/homebrew/lib/gcc/15
       - spec: llvm+clang@14 # for clang-format
         prefix: /opt/homebrew/opt/llvm@14
-    
+
     # Providers
     mpi:
       buildable: false
@@ -109,6 +111,11 @@ spack:
       externals:
       - spec: expat@2.7.1
         prefix: /opt/homebrew
+    gcc-runtime:
+      buildable: false
+      externals:
+      - spec: gcc-runtime@15.1.0
+        prefix: /opt/homebrew/opt/gcc/lib/gcc/15
     gettext:
       buildable: false
       externals:
