@@ -32,8 +32,6 @@
 
 namespace gretl {
 
-struct Unit {};
-
 /// @brief checkpoint struct which tracks level and step per "Minimal Repetition Dynamic Checkpointing Algorithm for
 /// Unsteady Adjoint Calculation", Wang, et al. , 2009.
 struct Checkpoint {
@@ -169,7 +167,7 @@ struct CheckpointManager {
 };
 
 /// @brief interface to run forward with a linear graph, checkpoint, then automatically backpropagate the sensitivities
-/// given the reverse_callback jvp.
+/// given the reverse_callback vjp.
 /// @tparam T type of each state's data
 /// @param numSteps number of forward iterations
 /// @param storageSize maximum states to save in memory at a time
