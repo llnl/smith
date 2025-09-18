@@ -110,6 +110,7 @@ struct ExplicitDynamicsFixture : public testing::Test {
     constexpr int nel_y = 5;
     mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(nel_x, nel_y, element_shape, true, length, width),
                                          MESHTAG, 0, 0);
+                                         
     // shift one of the x coordinates so the mesh is not affine
     auto* coords = mesh->mfemParMesh().GetNodes()->ReadWrite();
     coords[6] += 0.01;

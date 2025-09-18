@@ -14,6 +14,7 @@
 
 #include "mfem.hpp"
 
+#include "serac/differentiable_numerics/state_advancer.hpp"
 #include "serac/physics/dfem_weak_form.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
@@ -25,9 +26,9 @@ namespace serac {
  * @brief
  *
  */
-class LumpedMassExplicitNewmark {
+class LumpedMassExplicitNewmarkDFEM {
  public:
-  LumpedMassExplicitNewmark(const std::shared_ptr<WeakForm>& weak_form, const std::shared_ptr<WeakForm>& mass_weak_form,
+  LumpedMassExplicitNewmarkDFEM(const std::shared_ptr<WeakForm>& weak_form, const std::shared_ptr<WeakForm>& mass_weak_form,
                             std::shared_ptr<BoundaryConditionManager> bc_manager)
       : weak_form_(weak_form), mass_weak_form_(mass_weak_form), bc_manager_(bc_manager)
   {
@@ -35,7 +36,7 @@ class LumpedMassExplicitNewmark {
 
   std::tuple<std::vector<FiniteElementState>, double> advanceState(const std::vector<ConstFieldPtr>& states,
                                                                    const std::vector<ConstFieldPtr>& params,
-                                                                   double time, double dt)
+                                                                   double time, double dt, size_t cycle)
   {
     SLIC_ERROR_ROOT_IF(states.size() != 4, "Expected 4 states: displacement, velocity, acceleration, and coordinates");
 
@@ -65,12 +66,13 @@ class LumpedMassExplicitNewmark {
       u_pred.SetSubVector(bc_manager_->allEssentialTrueDofs(), 0.0);
     }
 
-    auto m_inv = mass_weak_form_->residual(time, dt, &u, {states[COORDINATES], params[DENSITY]});
+    serac::TimeInfo time_info(time, dt, cycle);
+    auto m_inv = mass_weak_form_->residual(time_info, &u, {states[COORDINATES], params[DENSITY]});
     m_inv.Reciprocal();
 
     std::vector<ConstFieldPtr> pred_states = {&u_pred, &v_pred, &a, states[COORDINATES], params[DENSITY]};
 
-    auto zero_mass_resid = weak_form_->residual(time, dt, &u_pred, pred_states);
+    auto zero_mass_resid = weak_form_->residual(time_info, &u_pred, pred_states);
 
     FiniteElementState a_pred(a.space(), "acceleration_pred");
     auto a_pred_ptr = a_pred.Write();

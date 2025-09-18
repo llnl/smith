@@ -4,7 +4,10 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+message(STATUS SERAC_USE_ENZYME="${SERAC_USE_ENZYME}")
+
 if(SERAC_USE_ENZYME)
+    message(STATUS USING_ENZYME)
     set(EXPLICIT_DYNAMICS_EXAMPLES_SOURCES
         dfem_gpu.cpp
         dfem_force_gpu.cpp
@@ -20,7 +23,7 @@ if(SERAC_USE_ENZYME)
 
         serac_add_example_test(NAME           explicit_${example_name}
                                COMMAND        explicit_${example_name}
-                               NUM_MPI_TASKS  4)
+                               NUM_MPI_TASKS  1)
         
     endforeach()
 

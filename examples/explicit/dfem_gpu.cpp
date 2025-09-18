@@ -11,7 +11,7 @@
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
-#include "serac/physics/functional_weak_form.hpp"
+#include "serac/differentiable_numerics/state_advancer.hpp"
 #include "serac/physics/dfem_solid_weak_form.hpp"
 #include "serac/physics/dfem_mass_weak_form.hpp"
 
@@ -131,16 +131,19 @@ int main(int argc, char* argv[])
   auto mesh = std::make_shared<serac::Mesh>(
       mfem::Mesh::MakeCartesian2D(nel_x, nel_y, element_shape, true, length, width), MESHTAG, 0, 0);
 
+  auto graph = std::make_shared<gretl::DataStore>(500);
+
   // create residual evaluator
   using VectorSpace = serac::H1<disp_order, dim>;
   using DensitySpace = serac::L2<disp_order - 1>;
-  serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
-  serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
-  serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
-  serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-  std::vector<serac::FiniteElementState> states{disp, velo, accel};
-  std::vector<serac::FiniteElementState> params{density};
+  auto disp = create_field_state(*graph, VectorSpace{}, "displacement", mesh->tag());
+  auto velo = create_field_state(*graph, VectorSpace{}, "velocity", mesh->tag());
+  auto accel = create_field_state(*graph, VectorSpace{}, "velocity", mesh->tag());
+  auto density = create_field_state(*graph, DensitySpace{}, "density", mesh->tag());
+
+  std::vector<serac::FieldState> states{disp, velo, accel};
+  std::vector<serac::FieldState> params{density};
 
   std::string physics_name = "solid";
   double E = 1.0e3;
@@ -148,13 +151,13 @@ int main(int argc, char* argv[])
 
   using SolidT = serac::DfemSolidWeakForm;
   auto solid_dfem_weak_form =
-      std::make_shared<SolidT>(physics_name, mesh, states[DISPLACEMENT].space(), getSpaces(params));
+      std::make_shared<SolidT>(physics_name, mesh, space(states[DISPLACEMENT]), spaces(params));
 
   SolidMaterialDfem dfem_mat;
   dfem_mat.K = E / (3.0 * (1.0 - 2.0 * nu));  // bulk modulus
   dfem_mat.G = E / (2.0 * (1.0 + nu));        // shear modulus
   int ir_order = 3;
-  const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
+  const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(space(disp).GetFE(0)->GetGeomType(), ir_order);
   mfem::Array<int> solid_attrib({1});
   solid_dfem_weak_form->setMaterial<SolidMaterialDfem, serac::ScalarParameter<0>>(solid_attrib, dfem_mat,
                                                                                   displacement_ir);
@@ -178,18 +181,18 @@ int main(int argc, char* argv[])
 
   auto bc_manager = std::make_shared<serac::BoundaryConditionManager>(mesh->mfemParMesh());
   auto zero_coeff = std::make_shared<mfem::ConstantCoefficient>(0.0);
-  bc_manager->addEssential({1}, zero_coeff, states[DISPLACEMENT].space());
+  bc_manager->addEssential({1}, zero_coeff, space(states[DISPLACEMENT]));
 
-  states[DISPLACEMENT] = 0.0;
-  states[VELOCITY].setFromFieldFunction([](serac::tensor<double, dim>) {
+  *states[DISPLACEMENT].get() = 0.0;
+  states[VELOCITY].get()->setFromFieldFunction([](serac::tensor<double, dim>) {
     serac::tensor<double, dim> u({0.0, -1.0});
     return u;
   });
-  states[ACCELERATION] = 0.0;
-  params[DENSITY] = 1.0;
+  *states[ACCELERATION].get() = 0.0;
+  *params[DENSITY].get() = 1.0;
 
-  auto mass_dfem_weak_form = serac::create_solid_mass_weak_form<dim, dim>(physics_name, mesh, states[DISPLACEMENT],
-                                                                          params[0], displacement_ir);
+  auto mass_dfem_weak_form = serac::create_solid_mass_weak_form<dim, dim>(physics_name, mesh, *states[DISPLACEMENT].get(),
+                                                                          *params[DENSITY].get(), displacement_ir);
 
   // create time advancer
   auto advancer =

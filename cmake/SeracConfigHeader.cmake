@@ -45,7 +45,7 @@ endforeach()
 
 # Hardcode Enzyme to be off in the code for now
 # TODO: Remove this when Enzyme is enabled in Serac
-set(SERAC_USE_ENZYME FALSE)
+# set(SERAC_USE_ENZYME FALSE)
 
 
 #--------------------------------------------------------------------------

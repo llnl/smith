@@ -131,6 +131,8 @@ int main(int argc, char* argv[])
   auto mesh = std::make_shared<serac::Mesh>(
       mfem::Mesh::MakeCartesian2D(nel_x, nel_y, element_shape, true, length, width), MESHTAG, 0, 0);
 
+  std::cout << "num els = " << n_els << std::endl;
+
   // create residual evaluator
   using VectorSpace = serac::H1<disp_order, dim>;
   using DensitySpace = serac::L2<disp_order - 1>;
@@ -160,21 +162,26 @@ int main(int argc, char* argv[])
   solid_dfem_weak_form->setMaterial<SolidMaterialDfem, serac::ScalarParameter<0>>(solid_attrib, dfem_mat,
                                                                                   displacement_ir);
 
-  mfem::future::tensor<mfem::real_t, dim> g({0.0, -9.81});  // gravity vector
-  mfem::future::tuple<mfem::future::Value<SolidT::DISPLACEMENT>, mfem::future::Value<SolidT::VELOCITY>,
-                      mfem::future::Value<SolidT::ACCELERATION>, mfem::future::Gradient<SolidT::COORDINATES>,
+  
+  mfem::future::tuple<mfem::future::Gradient<SolidT::COORDINATES>,
                       mfem::future::Weight, mfem::future::Value<SolidT::NUM_STATE_VARS>>
       g_inputs{};
   mfem::future::tuple<mfem::future::Value<SolidT::NUM_STATE_VARS + 1>> g_outputs{};
   solid_dfem_weak_form->addBodyIntegral(
       solid_attrib,
-      [=] SERAC_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim>&,
-                            const mfem::future::tensor<mfem::real_t, dim>&,
-                            const mfem::future::tensor<mfem::real_t, dim>&,
-                            const mfem::future::tensor<mfem::real_t, dim, dim>& dX_dxi, mfem::real_t weight, double) {
+      [] SERAC_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim, dim>& dX_dxi, mfem::real_t weight, double) {
+        mfem::future::tensor<mfem::real_t, dim> g({0.0, -9.81});  // gravity vector
         auto J = mfem::future::det(dX_dxi) * weight;
         return mfem::future::tuple{g * J};
       },
+      // [] SERAC_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim>&,
+      //                       const mfem::future::tensor<mfem::real_t, dim>&,
+      //                       const mfem::future::tensor<mfem::real_t, dim>&,
+      //                       const mfem::future::tensor<mfem::real_t, dim, dim>& dX_dxi, mfem::real_t weight, double) {
+      //   mfem::future::tensor<mfem::real_t, dim> g({0.0, -9.81});  // gravity vector
+      //   auto J = mfem::future::det(dX_dxi) * weight;
+      //   return mfem::future::tuple{g * J};
+      // },
       g_inputs, g_outputs, displacement_ir, std::index_sequence<>{});
 
   states[DISPLACEMENT] = 0.0;
@@ -188,7 +195,7 @@ int main(int argc, char* argv[])
 
   double time = 0.0;
   constexpr double dt = 0.0001;
-  constexpr size_t num_steps = 5000;
+  constexpr size_t num_steps = 10000;
 
   const auto& u = states[DISPLACEMENT];
   const auto& v = states[VELOCITY];
@@ -201,12 +208,22 @@ int main(int argc, char* argv[])
 
   std::vector<serac::ConstFieldPtr> pred_states = {&u_pred, &v_pred, &a, &states[COORDINATES], &params[DENSITY]};
 
+  serac::TimeInfo time_info(time, dt, 0);
+  solid_dfem_weak_form->residual(time_info, &u_pred, pred_states);
+
+  mfem::Vector resid(states[DISPLACEMENT].space().GetTrueVSize());
+
   axom::utilities::Timer timer(true);
   for (size_t step = 0; step < num_steps; ++step) {
-    auto no_mass_resid = solid_dfem_weak_form->residual(time, dt, &u_pred, pred_states);
-    time += dt;
+    auto no_mass_resid = solid_dfem_weak_form->residual(time_info, &u_pred, pred_states);
+    //resid = 0.0;
+    // solid_dfem_weak_form->weak_form_.SetParameters(getLVectors(fields));
+    // solid_dfem_weak_form->weak_form_.Mult(resid, resid);
+    // return resid;
+    // time += dt;
   }
   timer.stop();
+
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   if (rank == 0) {
