@@ -182,22 +182,80 @@ int main(int argc, char* argv[])
   auto contact_state_ptrs = serac::getFieldPointers(contact_states);
   TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, non_const_states, mesh, solid_mechanics_weak_form,
                                              contact_constraint);
+  
+  //int dimx = problem.GetDimx();
+  //int dimy = problem.GetDimy();
 
-  // double time = 0.0, dt = 1.0;
-  // int direction = serac::ContactFields::DISP;
-  // auto input_states = getConstFieldPointers(contact_states);
-  // auto gap = contact_constraint.evaluate(time, dt, input_states);
-  // auto gap_Jacobian = contact_constraint.jacobian(time, dt, input_states, direction);
-  // auto gap_Jacobian_tilde = contact_constraint.jacobian_tilde(time, dt, input_states, direction);
+  //double nonlinear_absolute_tol = 1.e-4;
+  //int nonlinear_max_iterations = 30;
+  //mfem::Vector x0(dimx);
+  //x0 = 0.0;
+  //mfem::Vector y0(dimy);
+  //y0 = 0.0;
+  //mfem::Vector xf(dimx);
+  //xf = 0.0;
+  //mfem::Vector yf(dimy);
+  //yf = 0.0;
 
-  // int nPressureDofs = contact_constraint.numPressureDofs();
-  // mfem::Vector multipliers(nPressureDofs);
-  // multipliers = 0.0;
-  // auto residual = contact_constraint.residual_contribution(time, dt, input_states, multipliers, direction);
+  //mfem::Vector q0(dimy);
+  //mfem::Vector f0(dimx); 
+  //int qeval_err, feval_err;
+  //problem.Q(x0, y0, q0, qeval_err);
+  //if (qeval_err)
+  //{
+  //   std::cout << "qeval_err\n";
+  //   exit(1);
+  //}
+  //problem.F(x0, y0, f0, feval_err);
+  //if (feval_err)
+  //{
+  //   std::cout << "feval_err\n";
+  //   exit(1);
+  //}
+  //problem.Q(x0, y0, q0, qeval_err);
+  //if (qeval_err)
+  //{
+  //   std::cout << "qeval_err\n";
+  //   exit(1);
+  //}
+  //problem.F(x0, y0, f0, feval_err);
+  //if (feval_err)
+  //{
+  //   std::cout << "feval_err\n";
+  //   exit(1);
+  //}
 
-  // auto residual_Jacobian = contact_constraint.residual_contribution_jacobian(time, dt,
-  //        	                                                             input_states, multipliers,
-  //        								     direction);
+  //HomotopySolver solver(&problem);
+  //solver.SetTol(nonlinear_absolute_tol);
+  //solver.SetMaxIter(nonlinear_max_iterations);
+
+  //solver.Mult(x0, y0, xf, yf);
+  //bool converged = solver.GetConverged();
+  //int myid = mfem::Mpi::WorldRank();
+  //if (myid == 0) {
+  //  if (converged) {
+  //    std::cout << "converged!\n";
+  //  } else {
+  //    std::cout << "homotopy solver did not converge\n";
+  //  }
+  //}
+
+
+  double time = 0.0, dt = 1.0;
+  int direction = serac::ContactFields::DISP;
+  auto input_states = getConstFieldPointers(contact_states);
+  int nPressureDofs = contact_constraint->numPressureDofs();
+  mfem::Vector multipliers(nPressureDofs);
+  multipliers = 0.0;
+  auto residual = contact_constraint->residual_contribution(time, dt, input_states, multipliers, direction);
+  auto gap = contact_constraint->evaluate(time, dt, input_states);
+  auto gap_Jacobian = contact_constraint->jacobian(time, dt, input_states, direction);
+  auto gap_Jacobian_tilde = contact_constraint->jacobian_tilde(time, dt, input_states, direction);
+
+
+  //auto residual_Jacobian = contact_constraint->residual_contribution_jacobian(time, dt,
+  //       	                                                             input_states, multipliers,
+  //       								     direction);
 
   return 0;
 }
@@ -306,12 +364,17 @@ void TiedContactProblem<SolidWeakFormType>::Q(const mfem::Vector& x, const mfem:
   qblock = 0.0;
 
   contact_states_[serac::ContactFields::DISP]->Set(1.0, yblock.GetBlock(0));
+  std::cout << "updated contact state\n";
   auto res_vector = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
+  std::cout << "residual computed\n";
 
-  // TODO: is this the right field pointer to pass?
+  // TODO: why does gap need to be computed prior to residaul contributio
+  auto gap = constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_));
+
   auto res_contribution = constraints_->residual_contribution(time_, dt_, serac::getConstFieldPointers(contact_states_),
                                                               yblock.GetBlock(1), serac::ContactFields::DISP);
-  auto gap = constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_));
+  std::cout << "residual contribution computed\n";
+  std::cout << "gap computed\n";
 
   qblock.GetBlock(0).Set(1.0, res_vector);
   qblock.GetBlock(0).Add(1.0, res_contribution);
