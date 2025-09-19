@@ -44,7 +44,7 @@ foreach(dep ${TPL_DEPS})
 endforeach()
 
 # Turn off Enzyme unless it's explicitly turned on
-if (NOT SERAC_USE_ENZYME)
+if (NOT DEFINED SERAC_USE_ENZYME)
     set(SERAC_USE_ENZYME FALSE)
 endif()
 
