@@ -194,8 +194,8 @@ class ContactConstraint : public Constraint {
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    contact_.setPressures(multipliers);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
+    contact_.setPressures(multipliers);
 
     int cycle = 0;
     contact_.update(cycle, time, dt);
