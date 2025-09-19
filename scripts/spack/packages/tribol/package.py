@@ -44,7 +44,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     # SERAC EDIT START
     # Note: We add a number to the end of the real version number to indicate that we have
     #  moved forward past the release. Increment the last number when updating the commit sha.
-    version("0.1.0.19", commit="bec4e24d47ad8b712f5c32431e53919a33bf56e1", submodules=True, preferred=True)
+    version("0.1.0.20", commit="0b3bd826348701ff24a12b8b85ddaa1ddb6cdaad", submodules=True, preferred=True)
     # SERAC EDIT END
 
     # -----------------------------------------------------------------------
@@ -70,6 +70,8 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
             description="Build with portable kernel execution support")
     variant("openmp",   default=False,
             description="Build with OpenMP support")
+    variant("enzyme",   default=False,
+            description="Build with Enzyme support")
 
     # -----------------------------------------------------------------------
     # Dependencies
@@ -87,6 +89,8 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("raja@2024.02.0:", when="+raja")
     depends_on("umpire@2024.02.0:", when="+umpire")
+
+    depends_on("enzyme", when="+enzyme")
 
     depends_on("axom+raja", when="+raja")
     depends_on("axom~raja", when="~raja")
@@ -161,6 +165,8 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     conflicts("+cuda", when="+rocm")
     conflicts("+openmp", when="+rocm")
+
+    requires("%clang", when="+enzyme")
 
     def _get_sys_type(self, spec):
         sys_type = spec.architecture
