@@ -43,6 +43,10 @@ foreach(dep ${TPL_DEPS})
     endif()
 endforeach()
 
+# Turn off Enzyme unless it's explicitly turned on
+if (NOT SERAC_USE_ENZYME)
+    set(SERAC_USE_ENZYME FALSE)
+endif()
 
 #--------------------------------------------------------------------------
 # Add define we can use when debug builds are enabled
