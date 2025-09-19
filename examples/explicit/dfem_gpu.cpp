@@ -106,7 +106,7 @@ int main(int argc, char* argv[])
   // Mesh options
   app.add_option("--nels", n_els, "Number of elements in the x and y directions")->check(axom::CLI::PositiveNumber);
   // GPU options
-  app.add_flag("--gpu,!--no-gpu", use_gpu, "Execute on GPU (where available)");
+  app.add_flag("--use-gpu,!--no-gpu", use_gpu, "Execute on GPU (where available)");
   // Output options
   app.add_flag("--output,!--no-output", write_output, "Save output to disk (e.g. for debugging)");
 
