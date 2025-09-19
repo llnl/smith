@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include "serac/serac_config.hpp"
+
 #ifdef SERAC_USE_DFEM
 
 #include "serac/physics/dfem_weak_form.hpp"
