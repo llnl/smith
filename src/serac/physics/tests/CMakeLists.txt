@@ -52,7 +52,7 @@ if (TRIBOL_FOUND)
         ${physics_serial_tribol_test_sources})
 endif()
 
-if (SERAC_USE_ENZYME)
+if (SERAC_USE_DFEM)
     list(APPEND physics_serial_test_sources
                 test_dfem_explicit_dynamics.cpp)
 endif()

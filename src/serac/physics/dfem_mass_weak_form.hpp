@@ -10,7 +10,7 @@
 
 #pragma once
 
-#ifdef SERAC_USE_ENZYME
+#ifdef SERAC_USE_DFEM
 
 #include "mfem.hpp"
 
