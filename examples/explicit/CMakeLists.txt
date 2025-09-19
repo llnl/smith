@@ -7,6 +7,7 @@
 if(SERAC_USE_DFEM)
     set(EXPLICIT_DYNAMICS_EXAMPLES_SOURCES
         dfem_gpu.cpp
+        dfem_basic_gpu.cpp
         dfem_force_gpu.cpp
     )
 
