@@ -331,6 +331,8 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         if(ENZYME_DIR)
             serac_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
             set(MFEM_USE_ENZYME ON CACHE BOOL "")
+        else()
+            set(MFEM_USE_ENZYME OFF CACHE BOOL "")
         endif()
 
         #### MFEM Configuration Options
