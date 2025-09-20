@@ -37,13 +37,11 @@ set(physics_serial_test_sources
     test_kinematic_objective.cpp
     )
 
-if (TRIBOL_FOUND)
+if (SERAC_USE_TRIBOL)
     set(physics_serial_tribol_test_sources 
         test_contact_constraint.cpp
         contact_solid_adjoint.cpp)
-    # TODO: Remove the SERAC_USE_ENZYME check (and leave the ENZYME_FOUND)
-    # when Enzyme is enabled in Serac
-    if (ENZYME_FOUND AND SERAC_USE_ENZYME)
+    if (SERAC_USE_ENZYME)
         list(APPEND physics_serial_tribol_test_sources 
                     contact_finite_diff.cpp
                     tribol_finite_diff.cpp)
