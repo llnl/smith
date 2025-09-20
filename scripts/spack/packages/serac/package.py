@@ -120,6 +120,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("mfem+petsc", when="+petsc")
     depends_on("mfem+slepc", when="+slepc")
     depends_on("mfem+openmp", when="+openmp")
+    depends_on("mfem+enzyme", when="+enzyme")
 
     depends_on("netcdf-c@4.7.4")
 
