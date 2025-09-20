@@ -44,7 +44,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     # SERAC EDIT START
     # Note: We add a number to the end of the real version number to indicate that we have
     #  moved forward past the release. Increment the last number when updating the commit sha.
-    version("0.1.0.20", commit="5b6617a8e73ec24595eda8c6252602e5e9ea3ad6", submodules=True, preferred=True)
+    version("0.1.0.20", commit="fa42f657b2d2b9f0e1c3b40ce02d514941d13e66", submodules=True, preferred=True)
     # SERAC EDIT END
 
     # -----------------------------------------------------------------------
@@ -216,8 +216,6 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
                     entries.append(cmake_cache_string("BLT_EXE_LINKER_FLAGS", flags, description))
         else:
             entries.append(cmake_cache_option("ENABLE_FORTRAN", False))
-
-        entries.append(cmake_cache_string("BLT_CXX_STD", "c++14", ""))
 
         # Add optimization flag workaround for Debug builds with
         # cray compiler or newer HIP
