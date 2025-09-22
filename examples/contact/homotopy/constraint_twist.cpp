@@ -20,6 +20,8 @@
 
 #include "serac/serac.hpp"
 
+#include <fenv.h>
+
 static constexpr int dim = 3;
 static constexpr int disp_order = 1;
 
@@ -91,15 +93,10 @@ class TiedContactProblem : public GeneralNLMCProblem {
 // this example is intended to eventually replace twist.cpp
 int main(int argc, char* argv[])
 {
+  
+  feenableexcept(FE_INVALID | FE_OVERFLOW);	
   // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
-
-  //// NOTE: p must be equal to 1 to work with Tribol's mortar method
-  // constexpr int p = 1;
-  //// NOTE: dim must be equal to 3
-  // constexpr int dim = 3;
-
-  // using VectorSpace = serac::H1<p, dim>;
 
   // Create DataStore
   std::string name = "contact_twist_example";
@@ -143,7 +140,7 @@ int main(int argc, char* argv[])
 
   // initialize displacement
   contact_states[serac::ContactFields::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
-    auto u = 0.1 * x;
+    auto u = 0.0 * x;//0.1 * x;
     return u;
   });
 
@@ -182,81 +179,85 @@ int main(int argc, char* argv[])
   auto contact_state_ptrs = serac::getFieldPointers(contact_states);
   TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, non_const_states, mesh, solid_mechanics_weak_form,
                                              contact_constraint);
-  
-  //int dimx = problem.GetDimx();
-  //int dimy = problem.GetDimy();
+  if (false)
+  { 
+     int dimx = problem.GetDimx();
+     int dimy = problem.GetDimy();
 
-  //double nonlinear_absolute_tol = 1.e-4;
-  //int nonlinear_max_iterations = 30;
-  //mfem::Vector x0(dimx);
-  //x0 = 0.0;
-  //mfem::Vector y0(dimy);
-  //y0 = 0.0;
-  //mfem::Vector xf(dimx);
-  //xf = 0.0;
-  //mfem::Vector yf(dimy);
-  //yf = 0.0;
+     double nonlinear_absolute_tol = 1.e-4;
+     int nonlinear_max_iterations = 30;
+     mfem::Vector x0(dimx);
+     x0 = 0.0;
+     mfem::Vector y0(dimy);
+     y0 = 0.0;
+     mfem::Vector xf(dimx);
+     xf = 0.0;
+     mfem::Vector yf(dimy);
+     yf = 0.0;
 
-  //mfem::Vector q0(dimy);
-  //mfem::Vector f0(dimx); 
-  //int qeval_err, feval_err;
-  //problem.Q(x0, y0, q0, qeval_err);
-  //if (qeval_err)
-  //{
-  //   std::cout << "qeval_err\n";
-  //   exit(1);
-  //}
-  //problem.F(x0, y0, f0, feval_err);
-  //if (feval_err)
-  //{
-  //   std::cout << "feval_err\n";
-  //   exit(1);
-  //}
-  //problem.Q(x0, y0, q0, qeval_err);
-  //if (qeval_err)
-  //{
-  //   std::cout << "qeval_err\n";
-  //   exit(1);
-  //}
-  //problem.F(x0, y0, f0, feval_err);
-  //if (feval_err)
-  //{
-  //   std::cout << "feval_err\n";
-  //   exit(1);
-  //}
+     // x, y
+     // y = [u, multipliers], x = {}
+     // HomotopySolver:
+     // F_i(x, y) * x_i = 0, F_i, x_i >= 0
+     // Q(x, y) = 0
+     mfem::Vector q0(dimy); q0 = 0.0;
+     mfem::Vector f0(dimx); f0 = 0.0;
+     int qeval_err, feval_err;
+     qeval_err = 0;
+     feval_err = 0;
+     problem.Q(x0, y0, q0, qeval_err);
+     if (qeval_err)
+     {
+        std::cout << "qeval_err\n";
+     }
+     problem.F(x0, y0, f0, feval_err);
+     if (feval_err)
+     {
+        std::cout << "feval_err\n";
+     }
 
-  //HomotopySolver solver(&problem);
-  //solver.SetTol(nonlinear_absolute_tol);
-  //solver.SetMaxIter(nonlinear_max_iterations);
+     //HomotopySolver solver(&problem);
+     //solver.SetTol(nonlinear_absolute_tol);
+     //solver.SetMaxIter(nonlinear_max_iterations);
 
-  //solver.Mult(x0, y0, xf, yf);
-  //bool converged = solver.GetConverged();
-  //int myid = mfem::Mpi::WorldRank();
-  //if (myid == 0) {
-  //  if (converged) {
-  //    std::cout << "converged!\n";
-  //  } else {
-  //    std::cout << "homotopy solver did not converge\n";
-  //  }
-  //}
-
-
-  double time = 0.0, dt = 1.0;
-  int direction = serac::ContactFields::DISP;
-  auto input_states = getConstFieldPointers(contact_states);
-  int nPressureDofs = contact_constraint->numPressureDofs();
-  mfem::Vector multipliers(nPressureDofs);
-  multipliers = 0.0;
-  auto residual = contact_constraint->residual_contribution(time, dt, input_states, multipliers, direction);
-  auto gap = contact_constraint->evaluate(time, dt, input_states);
-  auto gap_Jacobian = contact_constraint->jacobian(time, dt, input_states, direction);
-  auto gap_Jacobian_tilde = contact_constraint->jacobian_tilde(time, dt, input_states, direction);
-
-
-  //auto residual_Jacobian = contact_constraint->residual_contribution_jacobian(time, dt,
-  //       	                                                             input_states, multipliers,
-  //       								     direction);
-
+     //solver.Mult(x0, y0, xf, yf);
+     //bool converged = solver.GetConverged();
+     //int myid = mfem::Mpi::WorldRank();
+     //if (myid == 0) {
+     //  if (converged) {
+     //    std::cout << "converged!\n";
+     //  } else {
+     //    std::cout << "homotopy solver did not converge\n";
+     //  }
+     //}
+  }
+  else
+  {
+     double time = 0.0, dt = 1.0;
+     int direction = serac::ContactFields::DISP;
+     auto input_states = getConstFieldPointers(contact_states);
+     auto gap = contact_constraint->evaluate(time, dt, input_states);
+     for (int i = 0; i < gap.Size(); i++)
+     {
+        if (std::isnan(gap(i)))
+	{
+	   std::cout << "nan entry at " << i << std::endl;
+	}
+     }
+     auto gap_Jacobian = contact_constraint->jacobian(time, dt, input_states, direction);
+     //auto gap_Jacobian_tilde = contact_constraint->jacobian_tilde(time, dt, input_states, direction);
+     //int nPressureDofs = contact_constraint->numPressureDofs();
+     //mfem::Vector multipliers(nPressureDofs);
+     //multipliers = 0.0;
+     //auto residual = contact_constraint->residual_contribution(time, dt, input_states, multipliers, direction);
+     double gnorm = mfem::GlobalLpNorm(2, gap.Norml2(), MPI_COMM_WORLD);
+     std::cout << "||g||_2 = " << gnorm << std::endl;
+     std::cout << "||dg / du||_F = " << gap_Jacobian->FNorm() << std::endl;
+     //std::cout << "||tilde(dg / du)||_F = " << gap_Jacobian_tilde->FNorm() << std::endl;
+     //auto residual_Jacobian = contact_constraint->residual_contribution_jacobian(time, dt,
+     //       	                                                             input_states, multipliers,
+     //       								     direction);
+  }
   return 0;
 }
 
@@ -364,18 +365,12 @@ void TiedContactProblem<SolidWeakFormType>::Q(const mfem::Vector& x, const mfem:
   qblock = 0.0;
 
   contact_states_[serac::ContactFields::DISP]->Set(1.0, yblock.GetBlock(0));
-  std::cout << "updated contact state\n";
   auto res_vector = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
-  std::cout << "residual computed\n";
 
-  // TODO: why does gap need to be computed prior to residaul contributio
-  auto gap = constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_));
 
   auto res_contribution = constraints_->residual_contribution(time_, dt_, serac::getConstFieldPointers(contact_states_),
                                                               yblock.GetBlock(1), serac::ContactFields::DISP);
-  std::cout << "residual contribution computed\n";
-  std::cout << "gap computed\n";
-
+  auto gap = constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_));
   qblock.GetBlock(0).Set(1.0, res_vector);
   qblock.GetBlock(0).Add(1.0, res_contribution);
   qblock.GetBlock(1).Set(-1.0, gap);

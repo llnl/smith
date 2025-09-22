@@ -169,11 +169,22 @@ class ContactConstraint : public Constraint {
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    contact_.setPressures(multipliers);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
 
     int cycle = 0;
+    // we need to call update first to update gaps
+    for (auto& interaction : contact_.getContactInteractions()) {
+      interaction.evalJacobian(false);
+    }
     contact_.update(cycle, time, dt);
+    // with updated gaps, we can update pressure for contact interactions with penalty enforcement
+    contact_.setPressures(multipliers);
+    // call update again with the right pressures
+    for (auto& interaction : contact_.getContactInteractions()) {
+      interaction.evalJacobian(true);
+    }
+    contact_.update(cycle, time, dt);
+
     return contact_.forces();
   };
 
@@ -195,10 +206,21 @@ class ContactConstraint : public Constraint {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
-    contact_.setPressures(multipliers);
 
     int cycle = 0;
+    // we need to call update first to update gaps
+    for (auto& interaction : contact_.getContactInteractions()) {
+      interaction.evalJacobian(false);
+    }
     contact_.update(cycle, time, dt);
+    // with updated gaps, we can update pressure for contact interactions with penalty enforcement
+    contact_.setPressures(multipliers);
+    // call update again with the right pressures
+    for (auto& interaction : contact_.getContactInteractions()) {
+      interaction.evalJacobian(true);
+    }
+    contact_.update(cycle, time, dt);
+
     auto J_contact = contact_.mergedJacobian();
     int iblock = 0;
     int jblock = 0;
