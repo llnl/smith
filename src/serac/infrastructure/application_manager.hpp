@@ -26,8 +26,9 @@ class ApplicationManager {
    * @param argc The number of command-line arguments
    * @param argv The command-line arguments, as C-strings
    * @param comm The MPI communicator to initialize with
+   * @param verbose Whether or not to print build information
    */
-  ApplicationManager(int argc, char* argv[], MPI_Comm comm = MPI_COMM_WORLD);
+  ApplicationManager(int argc, char* argv[], MPI_Comm comm = MPI_COMM_WORLD, bool verbose = true);
 
   /**
    * @brief Calls serac::finalizer

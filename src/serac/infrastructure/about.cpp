@@ -62,8 +62,7 @@ std::string about()
   std::string about = "\n";
 
   // Version info
-  about += format("Serac Version:   {0}\n", version(false));
-  about += format("Git Commit SHA:  {0}\n", gitSHA());
+  about += format("Serac Version:   {0}\n", version());
   about += "\n";
 
   // General configuration

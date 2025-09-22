@@ -78,7 +78,7 @@ void finalizer()
   accelerator::terminateDevice();
 }
 
-ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : comm_(comm)
+ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bool verbose) : comm_(comm)
 {
   // Initialize MPI
   if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
@@ -92,7 +92,9 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : 
     exit(1);
   }
 
-  printRunInfo();
+  if (verbose) {
+    printRunInfo();
+  }
 
   // Start the profiler (no-op if not enabled)
   profiling::initialize(comm_);
