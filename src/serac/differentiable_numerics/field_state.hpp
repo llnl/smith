@@ -204,4 +204,18 @@ inline std::vector<const mfem::ParFiniteElementSpace*> spaces(std::vector<FieldS
   return spaces;
 };
 
+/// @brief Get the spaces from the primal fields of a vector of field states
+inline std::vector<gretl::StateBase> combineAsStateBases(const FieldState& d, const std::vector<FieldState>& states,
+                                                         const std::vector<FieldState>& params = {})
+{
+  std::vector<gretl::StateBase> merged_states{d};
+  for (const auto& s : states) {
+    merged_states.push_back(s);
+  }
+  for (const auto& p : params) {
+    merged_states.push_back(p);
+  }
+  return merged_states;
+};
+
 }  // namespace serac
