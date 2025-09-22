@@ -16,25 +16,20 @@ spack:
     - ../defaults.yaml
     - ../versions.yaml
 
-  compilers::
-  - compiler:
-      environment: {}
-      extra_rpaths: []
-      flags: {}
-      modules: []
-      operating_system: rhel8
-      paths:
-        cc: /opt/rocm-6.2.1/llvm/bin/amdclang
-        cxx: /opt/rocm-6.2.1/llvm/bin/amdclang++
-        f77: /opt/rocm-6.2.1/llvm/bin/amdflang
-        fc: /opt/rocm-6.2.1/llvm/bin/amdflang
-      spec: rocmcc@=6.2.1
-      target: x86_64
+  toolchains:
+    rocm_6_2_1:
+    - spec: '%c=rocmcc'
+      when: '%c'
+    - spec: '%cxx=rocmcc'
+      when: '%cxx'
+    - spec: '%fortran=rocmcc'
+      when: '%fortran'
+    - spec: '%cray-mpich@8.1.29'
+      when: '%mpi'
 
   packages:
     all:
       target: [x86_64_v3]
-      #target: [zen2]
       providers:
         blas: [netlib-lapack]
         lapack: [netlib-lapack]
@@ -42,6 +37,16 @@ spack:
         glu: [openglu]
         zlib-api: [zlib]
         mpi: [cray-mpich]
+
+    rocmcc:
+      externals:
+      - spec: rocmcc@6.2.1
+        prefix: /opt/rocm-6.2.1/llvm
+        extra_attributes:
+          compilers:
+            c: /opt/rocm-6.2.1/llvm/bin/amdclang
+            cxx: /opt/rocm-6.2.1/llvm/bin/amdclang++
+            fortran: /opt/rocm-6.2.1/llvm/bin/amdflang
 
     # Providers
     netlib-lapack:
@@ -71,7 +76,7 @@ spack:
     cray-mpich:
       buildable: false
       externals:
-      - spec: cray-mpich@8.1.29%rocmcc@6.2.1+slurm
+      - spec: cray-mpich@8.1.29%rocmcc@6.2.1
         prefix: /usr/tce/packages/cray-mpich-tce/cray-mpich-8.1.29-rocmcc-6.2.1/
 
     # ROCm
