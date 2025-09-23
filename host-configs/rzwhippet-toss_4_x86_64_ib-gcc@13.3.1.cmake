@@ -119,7 +119,7 @@ set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.20-t4wrlww3tesef5xstjscd2stc5aw3dsa" CA
 
 set(DEVTOOLS_ROOT "/usr/WS2/smithdev/devtools/toss_4_x86_64_ib/2024_05_30_15_09_55/._view/rkqkran3ydsuprr2wip5pdnz5wh7xwnr" CACHE PATH "")
 
-set(CLANGFORMAT_EXECUTABLE "/usr/tce/packages/clang/clang-19.1.3/bin/clang-format" CACHE PATH "")
+set(CLANGFORMAT_EXECUTABLE "/usr/tce/packages/clang/clang-14.0.6/bin/clang-format" CACHE PATH "")
 
 set(CLANGTIDY_EXECUTABLE "/usr/tce/packages/clang/clang-19.1.3/bin/clang-tidy" CACHE PATH "")
 
