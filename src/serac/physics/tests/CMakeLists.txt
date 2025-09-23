@@ -37,11 +37,11 @@ set(physics_serial_test_sources
     test_kinematic_objective.cpp
     )
 
-if (SERAC_USE_TRIBOL)
+if (TRIBOL_FOUND)
     set(physics_serial_tribol_test_sources 
         test_contact_constraint.cpp
         contact_solid_adjoint.cpp)
-    if (SERAC_USE_ENZYME)
+    if (ENZYME_FOUND)
         list(APPEND physics_serial_tribol_test_sources 
                     contact_finite_diff.cpp
                     tribol_finite_diff.cpp)
