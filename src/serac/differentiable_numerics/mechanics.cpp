@@ -163,6 +163,7 @@ const FiniteElementState& Mechanics::adjoint([[maybe_unused]] const std::string&
 void Mechanics::advanceTimestep(double dt)
 {
   if (cycle_ == 0) {
+    sub_cycle_ = 0;
     field_states_ = initial_field_states_;
     milestones_.push_back(make_milestone(field_states_).step());
   }
@@ -179,7 +180,7 @@ void Mechanics::advanceTimestep(double dt)
     }
 
     std::tie(field_states_, time) = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_,
-                                                            time, stable_dt, static_cast<size_t>(cycle_));
+                                                            time, stable_dt, sub_cycle_++);
     time_ = time.get();
     if (time_ < target_time) {
       stable_dt = dt_estimator_->dt(*field_shape_displacement_, field_states_, field_params_);
