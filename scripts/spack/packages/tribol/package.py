@@ -44,7 +44,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     # SERAC EDIT START
     # Note: We add a number to the end of the real version number to indicate that we have
     #  moved forward past the release. Increment the last number when updating the commit sha.
-    version("0.1.0.19", commit="bec4e24d47ad8b712f5c32431e53919a33bf56e1", submodules=True, preferred=True)
+    version("0.1.0.20", commit="fa42f657b2d2b9f0e1c3b40ce02d514941d13e66", submodules=True, preferred=True)
     # SERAC EDIT END
 
     # -----------------------------------------------------------------------
@@ -70,6 +70,8 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
             description="Build with portable kernel execution support")
     variant("openmp",   default=False,
             description="Build with OpenMP support")
+    variant("enzyme",   default=False,
+            description="Build with Enzyme support")
 
     # -----------------------------------------------------------------------
     # Dependencies
@@ -87,6 +89,8 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("raja@2024.02.0:", when="+raja")
     depends_on("umpire@2024.02.0:", when="+umpire")
+
+    depends_on("enzyme", when="+enzyme")
 
     depends_on("axom+raja", when="+raja")
     depends_on("axom~raja", when="~raja")
@@ -162,6 +166,8 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     conflicts("+cuda", when="+rocm")
     conflicts("+openmp", when="+rocm")
 
+    requires("%clang", when="+enzyme")
+
     def _get_sys_type(self, spec):
         sys_type = spec.architecture
         # if on llnl systems, we can use the SYS_TYPE
@@ -210,8 +216,6 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
                     entries.append(cmake_cache_string("BLT_EXE_LINKER_FLAGS", flags, description))
         else:
             entries.append(cmake_cache_option("ENABLE_FORTRAN", False))
-
-        entries.append(cmake_cache_string("BLT_CXX_STD", "c++14", ""))
 
         # Add optimization flag workaround for Debug builds with
         # cray compiler or newer HIP
@@ -398,7 +402,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
                                             dep_dir))
 
         # optional tpls
-        for dep in ('raja', 'umpire'):
+        for dep in ('raja', 'umpire', 'enzyme'):
             if spec.satisfies('+{0}'.format(dep)):
                 dep_dir = get_spec_path(spec, dep, path_replacements)
                 entries.append(cmake_cache_path('%s_DIR' % dep.upper(),

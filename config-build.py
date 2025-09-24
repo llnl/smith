@@ -20,11 +20,11 @@ import platform
 import shutil
 import socket
 
-_host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-clang@19.1.3.cmake",
-                     "rzwhippet" : "rzwhippet-toss_4_x86_64_ib-clang@19.1.3.cmake",
+_host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-llvm@19.1.3.cmake",
+                     "rzwhippet" : "rzwhippet-toss_4_x86_64_ib-llvm@19.1.3.cmake",
                      "rzvernal"  : "rzvernal-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
                      "rzansel"   : "rzansel-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake",
-                     "dane"      : "dane-toss_4_x86_64_ib-clang@19.1.3.cmake",
+                     "dane"      : "dane-toss_4_x86_64_ib-llvm@19.1.3.cmake",
                      "tioga"     : "tioga-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
                      "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake"}
 

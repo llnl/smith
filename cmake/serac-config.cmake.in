@@ -163,12 +163,6 @@ if(NOT SERAC_FOUND)
     find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
   endif()
 
-  # Enzyme
-  if(SERAC_USE_ENZYME)
-    set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
-    find_dependency(Enzyme REQUIRED)
-  endif()
-
   #----------------------------------------------------------------------------
   # Load BLT and Serac targets
   #----------------------------------------------------------------------------
