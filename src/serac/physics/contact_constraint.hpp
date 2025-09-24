@@ -126,7 +126,11 @@ class ContactConstraint : public Constraint {
     // note: Tribol does not use cycle.
     int cycle = 0;
     contact_.update(cycle, time, dt);
-    return contact_.mergedGaps(false);
+    auto merged_gaps = contact_.mergedGaps(false);
+    merged_gaps.SetOwnership(false);
+    mfem::Vector merged_gaps_vector = std::move(merged_gaps);
+    merged_gaps_vector.MakeDataOwner();
+    return merged_gaps_vector;
   };
 
   /** @brief Interface for computing contact gap constraint Jacobian from a vector of serac::FiniteElementState*
