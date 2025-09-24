@@ -6,10 +6,11 @@
 
 #pragma once
 
-#include "serac/numerics/functional/element_restriction.hpp"  // for FaceType
-#include "serac/numerics/functional/finite_element.hpp"       // for Geometry
-#include "serac/numerics/functional/domain.hpp"
+#include <cstddef>
 
+#include "serac/numerics/functional/element_restriction.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/functional/domain.hpp"
 #include "mfem.hpp"
 
 namespace serac {

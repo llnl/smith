@@ -4,19 +4,21 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <cmath>
 #include <exception>
-#include <iostream>
-#include <stdlib.h>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <variant>
 
 #include "axom/core.hpp"
-#include "axom/slic/core/SimpleLogger.hpp"
-
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/serac_config.hpp"
-#include "serac/infrastructure/input.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
 
 class SlicErrorException : public std::exception {};
 

@@ -26,13 +26,14 @@
 
 #include <set>
 #include <string>
+#include <cmath>
+#include <memory>
+#include <utility>
 
 #include "axom/slic.hpp"
 #include "axom/inlet.hpp"
 #include "axom/CLI11.hpp"
-
 #include "mfem.hpp"
-
 #include "serac/serac.hpp"
 
 using namespace serac;
@@ -55,7 +56,6 @@ int main(int argc, char* argv[])
 
   // Solver options
   NonlinearSolverOptions nonlinear_options = solid_mechanics::default_nonlinear_options;
-  LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
   nonlinear_options.nonlin_solver = serac::NonlinearSolver::TrustRegion;
   nonlinear_options.relative_tol = 1e-6;
   nonlinear_options.absolute_tol = 1e-10;
@@ -63,17 +63,22 @@ int main(int argc, char* argv[])
   nonlinear_options.max_iterations = 500;
   nonlinear_options.max_line_search_iterations = 20;
   nonlinear_options.print_level = 1;
-#ifdef SERAC_USE_PETSC
-  linear_options.linear_solver = serac::LinearSolver::GMRES;
+
+  LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
+  linear_options.linear_solver = serac::LinearSolver::CG;
   linear_options.preconditioner = serac::Preconditioner::HypreAMG;
   linear_options.relative_tol = 1e-8;
   linear_options.absolute_tol = 1e-16;
   linear_options.max_iterations = 2000;
-#endif
 
   // Contact specific options
   double penalty = 1e3;
+#ifdef SERAC_USE_TRIBOL
   bool use_contact = true;
+#else
+  bool use_contact = false;
+#endif
+
   auto contact_type = serac::ContactEnforcement::Penalty;
 
   // Option for testing purposes only, to reduce runtime
@@ -115,9 +120,8 @@ int main(int argc, char* argv[])
 
   // Need to allow extra arguments for PETSc support
   app.set_help_flag("--help");
-  app.allow_extras()->parse(argc, argv);
-
-  nonlinear_options.force_monolithic = linear_options.preconditioner != Preconditioner::Petsc;
+  app.allow_extras();
+  CLI11_PARSE(app, argc, argv);
 
   if (use_fast_options) {
     dt = 1;
@@ -133,57 +137,59 @@ int main(int argc, char* argv[])
 
   // Create and refine mesh
   std::string filename = SERAC_REPO_DIR "/data/meshes/hollow-cylinder.mesh";
-  auto mesh = serac::buildMeshFromFile(filename);
-  auto refined_mesh = mesh::refineAndDistribute(std::move(mesh), serial_refinement, parallel_refinement);
-  auto& pmesh = serac::StateManager::setMesh(std::move(refined_mesh), mesh_tag);
+  auto mesh = std::make_shared<serac::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
 
   // Surfaces for boundary conditions
   constexpr int xneg_attr{2};
   constexpr int xpos_attr{3};
-  auto xneg = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(xneg_attr));
-  auto xpos = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(xpos_attr));
-  auto bottom = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(1));
-  auto top = serac::Domain::ofBoundaryElements(pmesh, serac::by_attr<dim>(4));
+  mesh->addDomainOfBoundaryElements("xneg", serac::by_attr<dim>(xneg_attr));
+  mesh->addDomainOfBoundaryElements("xpos", serac::by_attr<dim>(xpos_attr));
+  mesh->addDomainOfBoundaryElements("bottom", serac::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("top", serac::by_attr<dim>(4));
 
   // Create solver, either with or without contact
   std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
   if (use_contact) {
+#ifdef SERAC_USE_TRIBOL
     auto solid_contact_solver = std::make_unique<serac::SolidMechanicsContact<p, dim>>(
-        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag);
+        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
 
     // Add the contact interaction
     serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                           .enforcement = contact_type,
                                           .type = serac::ContactType::Frictionless,
-                                          .penalty = penalty};
+                                          .penalty = penalty,
+                                          .jacobian = serac::ContactJacobian::Exact};
     auto contact_interaction_id = 0;
     solid_contact_solver->addContactInteraction(contact_interaction_id, {xpos_attr}, {xneg_attr}, contact_options);
     solid_solver = std::move(solid_contact_solver);
+#else
+    SLIC_ERROR("serac built without tribol enabled!");
+#endif
   } else {
     solid_solver = std::make_unique<serac::SolidMechanics<p, dim>>(
-        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh_tag);
-    solid_solver->setPressure([&](auto&, double t) { return 0.01 * t; }, xpos);
+        nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
+    solid_solver->setPressure([&](auto&, double t) { return 0.01 * t; }, mesh->domain("xpos"));
   }
 
   // Define a Neo-Hookean material
   auto lambda = 1.0;
   auto G = 0.1;
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
-  Domain whole_mesh = EntireDomain(pmesh);
-  solid_solver->setMaterial(mat, whole_mesh);
+  solid_solver->setMaterial(mat, mesh->entireBody());
 
   // Set up essential boundary conditions
   // Bottom of cylinder is fixed
-  solid_solver->setFixedBCs(bottom);
+  solid_solver->setFixedBCs(mesh->domain("bottom"));
 
   // Top of cylinder has prescribed displacement of magnitude in x-z direction
   auto compress = [&](const serac::tensor<double, dim>, double t) {
     serac::tensor<double, dim> u{};
-    u[0] = u[2] = -1.5 / std::sqrt(2.0) * t;
+    u[0] = u[2] = -1.35 / std::sqrt(2.0) * t;
     return u;
   };
-  solid_solver->setDisplacementBCs(compress, top, Component::X + Component::Z);
-  solid_solver->setDisplacementBCs(compress, top,
+  solid_solver->setDisplacementBCs(compress, mesh->domain("top"), Component::X + Component::Z);
+  solid_solver->setDisplacementBCs(compress, mesh->domain("top"),
                                    Component::Y);  // BT: Would it be better to leave this component free?
 
   // Finalize the data structures

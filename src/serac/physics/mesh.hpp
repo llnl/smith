@@ -12,13 +12,24 @@
  */
 #pragma once
 
+#include <memory>
+#include <string>
+#include <functional>
+#include <map>
+#include <vector>
+
+#include "mpi.h"
+
 #include "mfem.hpp"
 #include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/domain.hpp"
 
 namespace serac {
 
 // Forward declare
 struct Domain;
+class FiniteElementState;
+class FiniteElementDual;
 
 /**
  * @brief Helper class for constructing a mesh consistent with serac
@@ -30,19 +41,23 @@ class Mesh {
   /// @param meshtag string tag name for mesh
   /// @param serial_refine number of serial refinements
   /// @param parallel_refine number of parallel refinements
-  Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0);
+  /// @param comm the communicator that the parallel form of @p mesh should be made with
+  Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0,
+       MPI_Comm comm = MPI_COMM_WORLD);
 
   /// @brief Construct from existing parallel mfem mesh
   /// @param mesh parallel mfem mesh
   /// @param meshtag string tag name for mesh
-  Mesh(mfem::ParMesh& mesh, const std::string& meshtag);
+  Mesh(mfem::ParMesh&& mesh, const std::string& meshtag);
 
   /// @brief Construct from path to mesh (typically .g or .mesh)
   /// @param meshfile path and name of mesh to read in
   /// @param meshtag string tag name for mesh
   /// @param serial_refine number of serial refinements
   /// @param parallel_refine number of parallel refinements
-  Mesh(const std::string& meshfile, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0);
+  /// @param comm the communicator that the parallel form of @p mesh should be made with
+  Mesh(const std::string& meshfile, const std::string& meshtag, int serial_refine = 0, int parallel_refine = 0,
+       MPI_Comm comm = MPI_COMM_WORLD);
 
   /// @brief Returns string tag for mesh
   const std::string& tag() const { return mesh_tag_; }
@@ -74,6 +89,9 @@ class Mesh {
   /// @brief Returns domain boundary corresponding to the internal boundary elements
   serac::Domain& internalBoundary() const;
 
+  /// @brief Insert a domain onto mesh
+  void insertDomain(const std::string& domain_name, const Domain& domain);
+
   /// @brief Returns registered domain with specified name
   serac::Domain& domain(const std::string& domain_name) const;
 
@@ -101,18 +119,30 @@ class Mesh {
   serac::Domain& addDomainOfBodyElements(const std::string& domain_name,
                                          std::function<bool(std::vector<vec2>, int)> func);
 
+  /// @brief get space associated with shape displacement
+  const mfem::ParFiniteElementSpace& shapeDisplacementSpace();
+
+  /// @brief create new shape displacement
+  serac::FiniteElementState newShapeDisplacement();
+
+  /// @brief create new shape displacement sensitivity
+  serac::FiniteElementDual newShapeDisplacementDual();
+
  private:
-  /// @brief Sets up some initial domains, for now just the 'entire_domain', but eventually we can read of
-  /// names/blocks/attributes from the mesh and create default domains
+  /// @brief Sets up some initial domains: entire domain, entire boundary, and interior faces. Eventually we can read
+  /// off names/blocks/attributes from the mesh and create default domains.
   void createDomains();
 
-  /// @brief String identifying mesh in the state manager
+  /// @brief Helper function used to check if a domain name already exists
+  void errorIfDomainExists(const std::string& domain_name) const;
+
+  /// @brief string identifying mesh in the state manager
   std::string mesh_tag_;
 
-  /// @brief Parallel mfem mesh
+  /// @brief parallel mfem mesh
   mfem::ParMesh* mfem_mesh_;
 
-  /// @brief Map from registered domain name to the domain instance
+  /// @brief map from registered domain name to the domain instance
   mutable std::map<std::string, serac::Domain> domains_;
 };
 

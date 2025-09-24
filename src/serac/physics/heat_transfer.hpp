@@ -21,6 +21,7 @@
 #include "serac/numerics/stdfunction_operator.hpp"
 #include "serac/numerics/functional/shape_aware_functional.hpp"
 #include "serac/physics/state/state_manager.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 
 namespace serac {
@@ -103,7 +104,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    * @param[in] lin_opts The linear solver options for solving the linearized Jacobian equations
    * @param[in] timestepping_opts The timestepping options for the heat transfer ordinary differential equations
    * @param[in] physics_name A name for the physics module instance
-   * @param[in] mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param[in] serac_mesh The serac mesh
    * @param[in] parameter_names A vector of the names of the requested parameter fields
    * @param[in] cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param[in] time The simulation time to initialize the physics module to
@@ -115,10 +116,10 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    */
   HeatTransfer(const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
                const serac::TimesteppingOptions timestepping_opts, const std::string& physics_name,
-               std::string mesh_tag, std::vector<std::string> parameter_names = {}, int cycle = 0, double time = 0.0,
-               bool checkpoint_to_disk = false)
-      : HeatTransfer(std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-                     timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk)
+               std::shared_ptr<serac::Mesh> serac_mesh, std::vector<std::string> parameter_names = {}, int cycle = 0,
+               double time = 0.0, bool checkpoint_to_disk = false)
+      : HeatTransfer(std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, serac_mesh->getComm()),
+                     timestepping_opts, physics_name, serac_mesh, parameter_names, cycle, time, checkpoint_to_disk)
   {
   }
 
@@ -128,7 +129,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    * @param[in] solver The nonlinear equation solver for the heat transfer equations
    * @param[in] timestepping_opts The timestepping options for the heat transfer ordinary differential equations
    * @param[in] physics_name A name for the physics module instance
-   * @param[in] mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param[in] serac_mesh Serac mesh used for physics
    * @param[in] parameter_names A vector of the names of the requested parameter fields
    * @param[in] cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param[in] time The simulation time to initialize the physics module to
@@ -139,14 +140,15 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    *       writing and reading the needed trainsient states to disk for adjoint solves
    */
   HeatTransfer(std::unique_ptr<serac::EquationSolver> solver, const serac::TimesteppingOptions timestepping_opts,
-               const std::string& physics_name, std::string mesh_tag, std::vector<std::string> parameter_names = {},
-               int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false)
-      : BasePhysics(physics_name, mesh_tag, cycle, time, checkpoint_to_disk),
-        temperature_(StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature"), mesh_tag_)),
+               const std::string& physics_name, std::shared_ptr<serac::Mesh> serac_mesh,
+               std::vector<std::string> parameter_names = {}, int cycle = 0, double time = 0.0,
+               bool checkpoint_to_disk = false)
+      : BasePhysics(physics_name, serac_mesh, cycle, time, checkpoint_to_disk),
+        temperature_(StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature"), mesh_->tag())),
         temperature_rate_(
-            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature_rate"), mesh_tag_)),
+            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "temperature_rate"), mesh_->tag())),
         adjoint_temperature_(
-            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "adjoint_temperature"), mesh_tag_)),
+            StateManager::newState(H1<order>{}, detail::addPrefix(physics_name, "adjoint_temperature"), mesh_->tag())),
         implicit_sensitivity_temperature_start_of_step_(adjoint_temperature_.space(),
                                                         detail::addPrefix(physics_name, "total_deriv_wrt_temperature")),
         temperature_adjoint_load_(temperature_.space(), detail::addPrefix(physics_name, "temperature_adjoint_load")),
@@ -159,7 +161,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
              *nonlin_solver_, bcs_)
   {
     SLIC_ERROR_ROOT_IF(
-        mesh_.Dimension() != dim,
+        mfemParMesh().Dimension() != dim,
         axom::fmt::format("Compile time class dimension template parameter and runtime mesh dimension do not match"));
 
     SLIC_ERROR_ROOT_IF(
@@ -183,8 +185,8 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
     adjoints_.push_back(&adjoint_temperature_);
 
     // Create a pack of the primal field and parameter finite element spaces
-    mfem::ParFiniteElementSpace* test_space = &temperature_.space();
-    mfem::ParFiniteElementSpace* shape_space = &shape_displacement_.space();
+    const mfem::ParFiniteElementSpace* test_space = &temperature_.space();
+    const mfem::ParFiniteElementSpace* shape_space = &mesh_->shapeDisplacementSpace();
 
     std::array<const mfem::ParFiniteElementSpace*, sizeof...(parameter_space) + NUM_STATE_VARS> trial_spaces;
     trial_spaces[0] = &temperature_.space();
@@ -198,7 +200,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
     if constexpr (sizeof...(parameter_space) > 0) {
       tuple<parameter_space...> types{};
       for_constexpr<sizeof...(parameter_space)>([&](auto i) {
-        parameters_.emplace_back(mesh_, get<i>(types), detail::addPrefix(name_, parameter_names[i]));
+        parameters_.emplace_back(mfemParMesh(), get<i>(types), detail::addPrefix(name_, parameter_names[i]));
 
         trial_spaces[i + NUM_STATE_VARS] = &(parameters_[i].state->space());
       });
@@ -214,7 +216,6 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
     u_.SetSize(true_size);
     u_predicted_.SetSize(true_size);
 
-    shape_displacement_ = 0.0;
     initializeThermalStates();
   }
 
@@ -223,14 +224,14 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    *
    * @param[in] input_options The solver information parsed from the input file
    * @param[in] physics_name A name for the physics module instance
-   * @param[in] mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param serac_mesh Serac mesh used for physics
    * @param[in] cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param[in] time The simulation time to initialize the physics module to
    */
   HeatTransfer(const HeatTransferInputOptions& input_options, const std::string& physics_name,
-               const std::string& mesh_tag, int cycle = 0, double time = 0.0)
+               std::shared_ptr<serac::Mesh> serac_mesh, int cycle = 0, double time = 0.0)
       : HeatTransfer(input_options.nonlin_solver_options, input_options.lin_solver_options,
-                     input_options.timestepping_options, physics_name, mesh_tag, {}, cycle, time)
+                     input_options.timestepping_options, physics_name, serac_mesh, {}, cycle, time)
   {
     for (const auto& mat : input_options.materials) {
       if (std::holds_alternative<serac::heat_transfer::LinearIsotropicConductor>(mat)) {
@@ -285,14 +286,6 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
     implicit_sensitivity_temperature_start_of_step_ = 0.0;
     temperature_adjoint_load_ = 0.0;
     temperature_rate_adjoint_load_ = 0.0;
-
-    if (!checkpoint_to_disk_) {
-      checkpoint_states_.clear();
-      auto state_names = stateNames();
-      for (const auto& state_name : state_names) {
-        checkpoint_states_[state_name].push_back(state(state_name));
-      }
-    }
   }
 
   /**
@@ -305,6 +298,14 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
   {
     BasePhysics::initializeBasePhysicsStates(cycle, time);
     initializeThermalStates();
+
+    if (!checkpoint_to_disk_) {
+      checkpoint_states_.clear();
+      auto state_names = stateNames();
+      for (const auto& state_name : state_names) {
+        checkpoint_states_[state_name].push_back(state(state_name));
+      }
+    }
   }
 
   /**
@@ -680,7 +681,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
           temperature_.space().TrueVSize(),
 
           [this](const mfem::Vector& u, mfem::Vector& r) {
-            const mfem::Vector res = (*residual_)(time_, shape_displacement_, u, temperature_rate_,
+            const mfem::Vector res = (*residual_)(time_, shapeDisplacement(), u, temperature_rate_,
                                                   *parameters_[parameter_indices].state...);
 
             // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
@@ -691,7 +692,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
           },
 
           [this](const mfem::Vector& u) -> mfem::Operator& {
-            auto [r, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(u), temperature_rate_,
+            auto [r, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(u), temperature_rate_,
                                           *parameters_[parameter_indices].state...);
             J_ = assemble(drdu);
             J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
@@ -704,7 +705,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
           [this](const mfem::Vector& du_dt, mfem::Vector& r) {
             add(1.0, u_, dt_, du_dt, u_predicted_);
             const mfem::Vector res =
-                (*residual_)(time_, shape_displacement_, u_predicted_, du_dt, *parameters_[parameter_indices].state...);
+                (*residual_)(time_, shapeDisplacement(), u_predicted_, du_dt, *parameters_[parameter_indices].state...);
 
             // TODO this copy is required as the sundials solvers do not allow move assignments because of their memory
             // tracking strategy
@@ -717,13 +718,13 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
             add(1.0, u_, dt_, du_dt, u_predicted_);
 
             // K := dR/du
-            auto K = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_, differentiate_wrt(u_predicted_),
+            auto K = serac::get<DERIVATIVE>((*residual_)(time_, shapeDisplacement(), differentiate_wrt(u_predicted_),
                                                          du_dt, *parameters_[parameter_indices].state...));
             std::unique_ptr<mfem::HypreParMatrix> k_mat(assemble(K));
 
             // M := dR/du_dot
             auto M =
-                serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_, u_predicted_, differentiate_wrt(du_dt),
+                serac::get<DERIVATIVE>((*residual_)(time_, shapeDisplacement(), u_predicted_, differentiate_wrt(du_dt),
                                                     *parameters_[parameter_indices].state...));
             std::unique_ptr<mfem::HypreParMatrix> m_mat(assemble(M));
 
@@ -832,7 +833,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
       // We store the previous timestep's temperature as the current temperature for use in the lambdas computing the
       // sensitivities.
 
-      auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(temperature_), temperature_rate_,
+      auto [_, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(temperature_), temperature_rate_,
                                     *parameters_[parameter_indices].state...);
       auto jacobian = assemble(drdu);
       auto J_T = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
@@ -850,12 +851,12 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
       temperature_rate_ = end_step_solution.at("temperature_rate");
 
       // K := dR/du
-      auto K = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_, differentiate_wrt(temperature_),
+      auto K = serac::get<DERIVATIVE>((*residual_)(time_, shapeDisplacement(), differentiate_wrt(temperature_),
                                                    temperature_rate_, *parameters_[parameter_indices].state...));
       std::unique_ptr<mfem::HypreParMatrix> k_mat(assemble(K));
 
       // M := dR/du_dot
-      auto M = serac::get<DERIVATIVE>((*residual_)(time_, shape_displacement_, temperature_,
+      auto M = serac::get<DERIVATIVE>((*residual_)(time_, shapeDisplacement(), temperature_,
                                                    differentiate_wrt(temperature_rate_),
                                                    *parameters_[parameter_indices].state...));
       std::unique_ptr<mfem::HypreParMatrix> m_mat(assemble(M));
@@ -900,7 +901,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    *
    * @pre `reverseAdjointTimestep` with an appropriate adjoint load must be called prior to this method.
    */
-  FiniteElementDual& computeTimestepSensitivity(size_t parameter_field) override
+  FiniteElementDual computeTimestepSensitivity(size_t parameter_field) override
   {
     // TODO: the time is likely not being handled correctly on the reverse pass, but we don't
     //       have tests to confirm.
@@ -920,17 +921,17 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
    *
    * @pre `reverseAdjointTimestep` with an appropriate adjoint load must be called prior to this method.
    */
-  FiniteElementDual& computeTimestepShapeSensitivity() override
+  const FiniteElementDual& computeTimestepShapeSensitivity() override
   {
     auto drdshape =
-        serac::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(shape_displacement_), temperature_,
+        serac::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(shapeDisplacement()), temperature_,
                                             temperature_rate_, *parameters_[parameter_indices].state...));
 
     auto drdshape_mat = assemble(drdshape);
 
-    drdshape_mat->MultTranspose(adjoint_temperature_, *shape_displacement_sensitivity_);
+    drdshape_mat->MultTranspose(adjoint_temperature_, shape_displacement_dual_);
 
-    return *shape_displacement_sensitivity_;
+    return shapeDisplacementSensitivity();
   }
 
   /**

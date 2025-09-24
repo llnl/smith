@@ -6,6 +6,9 @@
 
 #include "serac/numerics/odes.hpp"
 
+#include <utility>
+#include <vector>
+
 namespace serac::mfem_ext {
 
 SecondOrderODE::SecondOrderODE(int n, State&& state, const EquationSolver& solver, const BoundaryConditionManager& bcs)

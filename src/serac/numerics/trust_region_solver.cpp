@@ -9,6 +9,7 @@
 #ifdef SERAC_USE_SLEPC
 
 #include <iostream>
+
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/numerics/dense_petsc.hpp"
 

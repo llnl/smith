@@ -15,6 +15,10 @@
 #include <string>
 #include <variant>
 #include <optional>
+#include <functional>
+#include <memory>
+#include <set>
+#include <unordered_map>
 
 #include "mfem.hpp"
 #include "axom/inlet.hpp"

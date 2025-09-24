@@ -46,7 +46,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
    * @param lin_opts The linear solver options for solving the linearized Jacobian equations
    * @param timestepping_opts The timestepping options for the solid mechanics time evolution operator
    * @param physics_name A name for the physics module instance
-   * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param serac_mesh Serac mesh for physics
    * @param parameter_names A vector of the names of the requested parameter fields
    * @param cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param time The simulation time to initialize the physics module to
@@ -56,11 +56,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
    */
   SolidMechanicsContact(const NonlinearSolverOptions nonlinear_opts, const LinearSolverOptions lin_opts,
                         const serac::TimesteppingOptions timestepping_opts, const std::string& physics_name,
-                        std::string mesh_tag, std::vector<std::string> parameter_names = {}, int cycle = 0,
-                        double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
-      : SolidMechanicsContact(
-            std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, StateManager::mesh(mesh_tag).GetComm()),
-            timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time, checkpoint_to_disk, use_warm_start)
+                        std::shared_ptr<serac::Mesh> serac_mesh, std::vector<std::string> parameter_names = {},
+                        int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
+      : SolidMechanicsContact(std::make_unique<EquationSolver>(nonlinear_opts, lin_opts, serac_mesh->getComm()),
+                              timestepping_opts, physics_name, serac_mesh, parameter_names, cycle, time,
+                              checkpoint_to_disk, use_warm_start)
   {
   }
 
@@ -70,7 +70,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
    * @param solver The nonlinear equation solver for the implicit solid mechanics equations
    * @param timestepping_opts The timestepping options for the solid mechanics time evolution operator
    * @param physics_name A name for the physics module instance
-   * @param mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param serac_mesh Serac mesh for physics
    * @param parameter_names A vector of the names of the requested parameter fields
    * @param cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param time The simulation time to initialize the physics module to
@@ -80,11 +80,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
    */
   SolidMechanicsContact(std::unique_ptr<serac::EquationSolver> solver,
                         const serac::TimesteppingOptions timestepping_opts, const std::string& physics_name,
-                        std::string mesh_tag, std::vector<std::string> parameter_names = {}, int cycle = 0,
-                        double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
-      : SolidMechanicsBase(std::move(solver), timestepping_opts, physics_name, mesh_tag, parameter_names, cycle, time,
+                        std::shared_ptr<serac::Mesh> serac_mesh, std::vector<std::string> parameter_names = {},
+                        int cycle = 0, double time = 0.0, bool checkpoint_to_disk = false, bool use_warm_start = true)
+      : SolidMechanicsBase(std::move(solver), timestepping_opts, physics_name, serac_mesh, parameter_names, cycle, time,
                            checkpoint_to_disk, use_warm_start),
-        contact_(mesh_),
+        contact_(BasePhysics::mfemParMesh()),
         forces_(StateManager::newDual(displacement_.space(), detail::addPrefix(physics_name, "contact_forces")))
   {
     forces_ = 0;
@@ -96,14 +96,14 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
    *
    * @param[in] input_options The solver information parsed from the input file
    * @param[in] physics_name A name for the physics module instance
-   * @param[in] mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param serac_mesh Serac mesh for physics
    * @param[in] cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param[in] time The simulation time to initialize the physics module to
    */
   SolidMechanicsContact(const SolidMechanicsInputOptions& input_options, const std::string& physics_name,
-                        std::string mesh_tag, int cycle = 0, double time = 0.0)
-      : SolidMechanicsBase(input_options, physics_name, mesh_tag, cycle, time),
-        contact_(mesh_),
+                        std::shared_ptr<serac::Mesh> serac_mesh, int cycle = 0, double time = 0.0)
+      : SolidMechanicsBase(input_options, physics_name, serac_mesh, cycle, time),
+        contact_(BasePhysics::mesh()),
         forces_(StateManager::newDual(displacement_.space(), detail::addPrefix(physics_name, "contact_forces")))
   {
     forces_ = 0;
@@ -115,7 +115,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     SolidMechanicsBase::resetStates(cycle, time);
     forces_ = 0.0;
-    contact_.setDisplacements(shape_displacement_, displacement_);
+    contact_.setDisplacements(BasePhysics::shapeDisplacement(), displacement_);
     contact_.reset();
     double dt = 0.0;
     contact_.update(cycle, time, dt);
@@ -126,8 +126,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     auto residual_fn = [this](const mfem::Vector& u, mfem::Vector& r) {
       const mfem::Vector u_blk(const_cast<mfem::Vector&>(u), 0, displacement_.Size());
-      const mfem::Vector res =
-          (*residual_)(time_, shape_displacement_, u_blk, acceleration_, *parameters_[parameter_indices].state...);
+      const mfem::Vector res = (*residual_)(time_, BasePhysics::shapeDisplacement(), u_blk, acceleration_,
+                                            *parameters_[parameter_indices].state...);
 
       // NOTE this copy is required as the sundials solvers do not allow move assignments because of their memory
       // tracking strategy
@@ -135,7 +135,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       mfem::Vector r_blk(r, 0, displacement_.Size());
       r_blk = res;
 
-      contact_.residualFunction(shape_displacement_, u, r);
+      contact_.residualFunction(BasePhysics::shapeDisplacement(), u, r);
       r_blk.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
     };
     // This if-block below breaks up building the Jacobian operator depending if there is Lagrange multiplier
@@ -149,8 +149,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
           // gradient of residual function
           [this](const mfem::Vector& u) -> mfem::Operator& {
             const mfem::Vector u_blk(const_cast<mfem::Vector&>(u), 0, displacement_.Size());
-            auto [r, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(u_blk), acceleration_,
-                                          *parameters_[parameter_indices].state...);
+            auto [r, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(u_blk),
+                                          acceleration_, *parameters_[parameter_indices].state...);
             J_ = assemble(drdu);
 
             // create block operator holding jacobian contributions
@@ -185,7 +185,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       // mfem::HypreParMatrix
       return std::make_unique<mfem_ext::StdFunctionOperator>(
           displacement_.space().TrueVSize(), residual_fn, [this](const mfem::Vector& u) -> mfem::Operator& {
-            auto [r, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(u), acceleration_,
+            auto [r, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(u), acceleration_,
                                           *parameters_[parameter_indices].state...);
             J_ = assemble(drdu);
 
@@ -317,7 +317,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       // Update the system residual
       mfem::Vector augmented_residual(displacement_.Size() + contact_.numPressureDofs());
       augmented_residual = 0.0;
-      const mfem::Vector res = (*residual_)(time_ + dt, shape_displacement_, displacement_, acceleration_,
+      const mfem::Vector res = (*residual_)(time_ + dt, BasePhysics::shapeDisplacement(), displacement_, acceleration_,
                                             *parameters_[parameter_indices].state...);
 
       contact_.setPressures(mfem::Vector(augmented_residual, displacement_.Size(), contact_.numPressureDofs()));
@@ -330,12 +330,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       mfem::Vector du(augmented_solution, 0, displacement_.space().TrueVSize());
       du = displacement_;
 
-      contact_.residualFunction(shape_displacement_, augmented_solution, augmented_residual);
+      contact_.residualFunction(BasePhysics::shapeDisplacement(), augmented_solution, augmented_residual);
       r_blk.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
 
       // use the most recently evaluated Jacobian
-      auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
-                                    *parameters_[parameter_indices].previous_state...);
+      auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
+                                    acceleration_, *parameters_[parameter_indices].previous_state...);
       J_.reset();
       J_ = assemble(drdu);
 
@@ -402,8 +402,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     mfem::HypreParVector adjoint_essential(displacement_adjoint_load_);
     adjoint_essential = 0.0;
 
-    auto [_, drdu] = (*residual_)(time_, shape_displacement_, differentiate_wrt(displacement_), acceleration_,
-                                  *parameters_[parameter_indices].state...);
+    auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
+                                  acceleration_, *parameters_[parameter_indices].state...);
     auto jacobian = assemble(drdu);
 
     auto block_J = contact_.jacobianFunction(jacobian.release());
@@ -421,11 +421,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   }
 
   /// @overload
-  FiniteElementDual& computeTimestepShapeSensitivity() override
+  const FiniteElementDual& computeTimestepShapeSensitivity() override
   {
     auto drdshape =
-        serac::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(shape_displacement_), displacement_,
-                                            acceleration_, *parameters_[parameter_indices].state...));
+        serac::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(BasePhysics::shapeDisplacement()),
+                                            displacement_, acceleration_, *parameters_[parameter_indices].state...));
 
     auto drdshape_mat = assemble(drdshape);
 
@@ -433,9 +433,9 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     block_J->owns_blocks = false;
     drdshape_mat = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 
-    drdshape_mat->MultTranspose(adjoint_displacement_, *shape_displacement_sensitivity_);
+    drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_dual_);
 
-    return *shape_displacement_sensitivity_;
+    return BasePhysics::shapeDisplacementSensitivity();
   }
 
   using BasePhysics::bcs_;
@@ -445,8 +445,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   using BasePhysics::mesh_;
   using BasePhysics::name_;
   using BasePhysics::parameters_;
-  using BasePhysics::shape_displacement_;
-  using BasePhysics::shape_displacement_sensitivity_;
   using BasePhysics::states_;
   using BasePhysics::time_;
   using SolidMechanicsBase::acceleration_;
@@ -461,6 +459,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   using SolidMechanicsBase::nonlin_solver_;
   using SolidMechanicsBase::residual_;
   using SolidMechanicsBase::residual_with_bcs_;
+  using SolidMechanicsBase::shape_displacement_dual_;
   using SolidMechanicsBase::time_end_step_;
   using SolidMechanicsBase::use_warm_start_;
   using SolidMechanicsBase::warmStartDisplacement;

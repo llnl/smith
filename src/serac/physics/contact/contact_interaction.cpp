@@ -8,12 +8,15 @@
 
 #ifdef SERAC_USE_TRIBOL
 
+#include <cstddef>
+#include <algorithm>
+#include <vector>
+
 #include "axom/slic.hpp"
-
-#include "serac/physics/contact/contact_config.hpp"
-
 #include "tribol/interface/tribol.hpp"
 #include "tribol/interface/mfem_tribol.hpp"
+
+#include "serac/physics/contact/contact_config.hpp"
 
 namespace serac {
 
@@ -65,7 +68,9 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
 
   // set up Tribol to compute exact Jacobian if requested
   if (getContactOptions().jacobian == ContactJacobian::Exact) {
+#ifdef SERAC_USE_ENZYME
     tribol::enableEnzyme(interaction_id, true);
+#endif
     tribol::registerMfemReferenceCoords(interaction_id, static_cast<const mfem::ParGridFunction&>(*mesh.GetNodes()));
   }
 }

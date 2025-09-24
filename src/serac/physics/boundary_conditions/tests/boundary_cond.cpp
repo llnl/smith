@@ -5,14 +5,18 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <memory>
+#include <set>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "mpi.h"
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 
 #include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "serac/physics/boundary_conditions/boundary_condition_helper.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/functional/functional.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 namespace serac {
 

@@ -4,20 +4,29 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <fstream>
+#include <algorithm>
+#include <memory>
+#include <set>
+#include <string>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "mpi.h"
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
+
 #include "serac/physics/heat_transfer.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/materials/parameterized_thermal_material.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/common.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 namespace serac {
 
@@ -37,7 +46,7 @@ TEST(Thermal, FiniteDifference)
 
   std::string mesh_tag{"mesh"};
 
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   constexpr int p = 1;
@@ -57,9 +66,9 @@ TEST(Thermal, FiniteDifference)
   // requested parameterized fields.
   HeatTransfer<p, dim, Parameters<H1<1>>> thermal_solver(
       heat_transfer::default_nonlinear_options, heat_transfer::default_linear_options,
-      heat_transfer::default_static_options, "thermal_functional", mesh_tag, {"conductivity"});
+      heat_transfer::default_static_options, "thermal_functional", mesh, {"conductivity"});
 
-  FiniteElementState user_defined_conductivity(pmesh->mfemParMesh(), H1<1>{}, "user_defined_conductivity");
+  FiniteElementState user_defined_conductivity(mesh->mfemParMesh(), H1<1>{}, "user_defined_conductivity");
 
   double conductivity_value = 1.2;
   user_defined_conductivity = conductivity_value;
@@ -68,15 +77,15 @@ TEST(Thermal, FiniteDifference)
 
   // Construct a potentially user-defined parameterized material and send it to the thermal module
   heat_transfer::ParameterizedLinearIsotropicConductor mat;
-  thermal_solver.setMaterial(DependsOn<0>{}, mat, pmesh->entireBody());
+  thermal_solver.setMaterial(DependsOn<0>{}, mat, mesh->entireBody());
 
   // Define a constant source term
   heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source, pmesh->entireBody());
+  thermal_solver.setSource(source, mesh->entireBody());
 
   // Set the flux term to zero for testing code paths
   heat_transfer::ConstantFlux flux_bc{0.0};
-  thermal_solver.setFluxBCs(flux_bc, pmesh->entireBoundary());
+  thermal_solver.setFluxBCs(flux_bc, mesh->entireBoundary());
 
   // Define the function for the initial temperature and boundary condition
   auto bdr_temp = [](const mfem::Vector& x, double) -> double { return (x[0] < 0.5 || x[1] < 0.5) ? 1.0 : 0.0; };
@@ -112,7 +121,7 @@ TEST(Thermal, FiniteDifference)
   thermal_solver.reverseAdjointTimestep();
 
   // Compute the sensitivity (d QOI/ d state * d state/d parameter) given the current adjoint solution
-  [[maybe_unused]] auto& sensitivity = thermal_solver.computeTimestepSensitivity(conductivity_parameter_index);
+  [[maybe_unused]] auto sensitivity = thermal_solver.computeTimestepSensitivity(conductivity_parameter_index);
 
   // Perform finite difference on each conduction value
   // to check if computed qoi sensitivity is consistent
@@ -169,7 +178,7 @@ TEST(HeatTransfer, FiniteDifferenceShape)
 
   std::string mesh_tag{"mesh"};
 
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   constexpr int p = 1;
@@ -186,16 +195,16 @@ TEST(HeatTransfer, FiniteDifferenceShape)
 
   // Construct a functional-based thermal solver
   HeatTransfer<p, dim> thermal_solver(nonlin_opts, heat_transfer::direct_linear_options,
-                                      heat_transfer::default_static_options, "thermal_functional_shape", mesh_tag);
+                                      heat_transfer::default_static_options, "thermal_functional_shape", mesh);
 
   heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, 1.0);
 
-  thermal_solver.setMaterial(mat, pmesh->entireBody());
+  thermal_solver.setMaterial(mat, mesh->entireBody());
 
   heat_transfer::ConstantSource source{1.0};
-  thermal_solver.setSource(source, pmesh->entireBody());
+  thermal_solver.setSource(source, mesh->entireBody());
 
-  FiniteElementState shape_displacement(pmesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{});
+  FiniteElementState shape_displacement(mesh->mfemParMesh(), H1<SHAPE_ORDER, dim>{});
 
   shape_displacement = shape_displacement_value;
   thermal_solver.setShapeDisplacement(shape_displacement);

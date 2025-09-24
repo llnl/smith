@@ -4,19 +4,15 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/solid_mechanics.hpp"
-
 #include <algorithm>
-#include <functional>
-#include <fstream>
-#include <set>
 #include <string>
+#include <memory>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "mpi.h"
 #include "mfem.hpp"
 
-#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/physics/solid_mechanics.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
@@ -25,6 +21,13 @@
 #include "serac/physics/materials/parameterized_solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/equation_solver.hpp"
+#include "serac/numerics/functional/finite_element.hpp"  // for H1
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/common.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 namespace serac {
 
@@ -45,8 +48,7 @@ void functional_solid_test_static_J2()
   std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
   std::string mesh_tag{"mesh"};
-
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // _solver_params_start
@@ -59,7 +61,7 @@ void functional_solid_test_static_J2()
                                                   .print_level = 1};
 
   SolidMechanics<p, dim> solid_solver(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                                      "solid_mechanics", mesh_tag);
+                                      "solid_mechanics", mesh);
   // _solver_params_end
 
   using Hardening = solid_mechanics::LinearHardening;
@@ -78,11 +80,11 @@ void functional_solid_test_static_J2()
 
   auto qdata = solid_solver.createQuadratureDataBuffer(initial_state);
 
-  solid_solver.setRateDependentMaterial(mat, pmesh->entireBody(), qdata);
+  solid_solver.setRateDependentMaterial(mat, mesh->entireBody(), qdata);
 
   // prescribe zero displacement at the supported end of the beam,
-  pmesh->addDomainOfBoundaryElements("support", by_attr<dim>(1));
-  solid_solver.setFixedBCs(pmesh->domain("support"));
+  mesh->addDomainOfBoundaryElements("support", by_attr<dim>(1));
+  solid_solver.setFixedBCs(mesh->domain("support"));
 
   // apply a displacement along z to the the tip of the beam
   auto translated_in_z = [](tensor<double, dim>, double t) {
@@ -90,8 +92,8 @@ void functional_solid_test_static_J2()
     u[2] = t * (t - 1);
     return u;
   };
-  pmesh->addDomainOfBoundaryElements("tip", by_attr<dim>(2));
-  solid_solver.setDisplacementBCs(translated_in_z, pmesh->domain("tip"), Component::Z);
+  mesh->addDomainOfBoundaryElements("tip", by_attr<dim>(2));
+  solid_solver.setDisplacementBCs(translated_in_z, mesh->domain("tip"), Component::Z);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -143,28 +145,27 @@ void functional_parameterized_solid_test(double expected_disp_norm)
       (dim == 2) ? SERAC_REPO_DIR "/data/meshes/beam-quad.mesh" : SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
 
   std::string mesh_tag{"mesh"};
-
-  auto pmesh =
+  auto mesh =
       std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // Construct and initialized the user-defined moduli to be used as a differentiable parameter in
   // the solid mechanics physics module.
-  FiniteElementState user_defined_shear_modulus(pmesh->mfemParMesh(), H1<1>{}, "parameterized_shear");
+  FiniteElementState user_defined_shear_modulus(mesh->mfemParMesh(), H1<1>{}, "parameterized_shear");
 
   user_defined_shear_modulus = 1.0;
 
-  FiniteElementState user_defined_bulk_modulus(pmesh->mfemParMesh(), H1<1>{}, "parameterized_bulk");
+  FiniteElementState user_defined_bulk_modulus(mesh->mfemParMesh(), H1<1>{}, "parameterized_bulk");
 
   user_defined_bulk_modulus = 1.0;
 
   // _custom_solver_start
-  auto nonlinear_solver = std::make_unique<mfem::NewtonSolver>(pmesh->getComm());
+  auto nonlinear_solver = std::make_unique<mfem::NewtonSolver>(mesh->getComm());
   nonlinear_solver->SetPrintLevel(1);
   nonlinear_solver->SetMaxIter(30);
   nonlinear_solver->SetAbsTol(1.0e-12);
   nonlinear_solver->SetRelTol(1.0e-10);
 
-  auto linear_solver = std::make_unique<mfem::HypreGMRES>(pmesh->getComm());
+  auto linear_solver = std::make_unique<mfem::HypreGMRES>(mesh->getComm());
   linear_solver->SetPrintLevel(1);
   linear_solver->SetMaxIter(500);
   linear_solver->SetTol(1.0e-6);
@@ -177,19 +178,19 @@ void functional_parameterized_solid_test(double expected_disp_norm)
 
   SolidMechanics<p, dim, Parameters<H1<1>, H1<1>>> solid_solver(std::move(equation_solver),
                                                                 solid_mechanics::default_quasistatic_options,
-                                                                "parameterized_solid", mesh_tag, {"shear", "bulk"});
+                                                                "parameterized_solid", mesh, {"shear", "bulk"});
   // _custom_solver_end
 
   solid_solver.setParameter(0, user_defined_bulk_modulus);
   solid_solver.setParameter(1, user_defined_shear_modulus);
 
   solid_mechanics::ParameterizedLinearIsotropicSolid mat{1.0, 0.0, 0.0};
-  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, pmesh->entireBody());
+  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, mesh->entireBody());
 
   // Specify initial / boundary conditions
-  pmesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(1));
 
-  solid_solver.setFixedBCs(pmesh->domain("essential_boundary"));
+  solid_solver.setFixedBCs(mesh->domain("essential_boundary"));
 
   tensor<double, dim> constant_force;
 
@@ -201,16 +202,16 @@ void functional_parameterized_solid_test(double expected_disp_norm)
   }
 
   solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-  solid_solver.addBodyForce(force, pmesh->entireBody());
+  solid_solver.addBodyForce(force, mesh->entireBody());
 
   // add some nonexistent body forces / tractions to check that
   // these parameterized versions compile and run without error
   solid_solver.addBodyForce(
-      DependsOn<0>{}, [](const auto& x, double /*t*/, auto /* bulk */) { return x * 0.0; }, pmesh->entireBody());
+      DependsOn<0>{}, [](const auto& x, double /*t*/, auto /* bulk */) { return x * 0.0; }, mesh->entireBody());
   solid_solver.addBodyForce(DependsOn<1>{}, ParameterizedBodyForce{[](const auto& x) { return 0.0 * x; }},
-                            pmesh->entireBody());
+                            mesh->entireBody());
   solid_solver.setTraction(
-      DependsOn<1>{}, [](const auto& x, auto...) { return 0 * x; }, pmesh->entireBoundary());
+      DependsOn<1>{}, [](const auto& x, auto...) { return 0 * x; }, mesh->entireBoundary());
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -279,7 +280,7 @@ TEST(SolidMechanics, TDofBoundaryCondition)
   // GENERATE REFERENCE SOLUTION
   // Make a solid mechanics module, specify the disp BCs by domain (ie, the standard method)
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                               "solid_mechanics", mesh_tag);
+                               "solid_mechanics", pmesh);
   solid.setMaterial(mat, pmesh->entireBody());
   solid.setDisplacementBCs(displacement_bc_function, pmesh->domain("essential_boundary_x"), Component::X);
   solid.setDisplacementBCs(displacement_bc_function, pmesh->domain("essential_boundary_y"), Component::Y);
@@ -305,7 +306,7 @@ TEST(SolidMechanics, TDofBoundaryCondition)
 
   // make another solver and set bcs by tdof
   SolidMechanics<p, dim> solid_by_tdof(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                                       "solid_mechanics_by_tdof", mesh_tag);
+                                       "solid_mechanics_by_tdof", pmesh);
 
   solid_by_tdof.setMaterial(mat, pmesh->entireBody());
   solid_by_tdof.setDisplacementBCsByDofList(displacement_bc_function, true_dofs);

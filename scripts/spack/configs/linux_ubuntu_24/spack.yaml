@@ -1,40 +1,25 @@
-# This is a Spack Environment file.
-#
-# It describes a set of packages to be installed, along with
-# configuration settings.
 spack:
-  # add package specs to the `specs` list
-  specs: []
-  view: true
-  concretizer:
-    unify: true
-  compilers:
+  compilers::
   - compiler:
-      spec: clang@=14.0.6
+      spec: clang@=19.1.1
       paths:
         cc: /usr/bin/clang
         cxx: /usr/bin/clang++
         f77: /usr/bin/gfortran
         fc: /usr/bin/gfortran
-      flags: {}
+      flags:
+        cflags: -fPIC
+        cxxflags: -fPIC
+        fflags: -fPIC
       operating_system: ubuntu24.04
       target: x86_64
       modules: []
       environment: {}
       extra_rpaths: []
-  - compiler:
-      spec: gcc@=13.3.0
-      paths:
-        cc: /usr/bin/gcc
-        cxx: /usr/bin/g++
-        f77: /usr/bin/gfortran
-        fc: /usr/bin/gfortran
-      flags: {}
-      operating_system: ubuntu24.04
-      target: x86_64
-      modules: []
-      environment: {}
-      extra_rpaths: []
+
+  # Regular TPLs do not need views
+  view: false
+
   packages:
     awk:
       buildable: false
@@ -163,12 +148,8 @@ spack:
       buildable: false
     llvm:
       externals:
-      - spec: llvm@14.0.6+clang~lld~lldb
+      - spec: llvm@19.1.1+clang~lld~lldb
         prefix: /usr
-        extra_attributes:
-          compilers:
-            c: /usr/bin/clang
-            cxx: /usr/bin/clang++
       buildable: false
     bzip2:
       externals:
@@ -182,7 +163,7 @@ spack:
       buildable: false
     llvm-doe:
       externals:
-      - spec: llvm-doe@14.0.6+clang~lld~lldb
+      - spec: llvm-doe@19.1.1+clang~lld~lldb
         prefix: /usr
         extra_attributes:
           compilers:

@@ -6,9 +6,9 @@
 
 #include "serac/infrastructure/accelerator.hpp"
 
-#include <memory>
-
 #include "mfem.hpp"
+
+#include <memory>
 
 #include "serac/infrastructure/logger.hpp"
 

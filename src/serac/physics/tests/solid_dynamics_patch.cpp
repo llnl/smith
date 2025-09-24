@@ -4,23 +4,27 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/solid_mechanics.hpp"
-
-#include <functional>
 #include <set>
 #include <string>
+#include <memory>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "mpi.h"
 #include "mfem.hpp"
 
-#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/physics/solid_mechanics.hpp"
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"  // for H1
+#include "serac/numerics/functional/geometry.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/functional/tuple.hpp"
+#include "serac/numerics/solver_config.hpp"
 
 namespace serac {
 
@@ -154,8 +158,7 @@ class AffineSolution {
       tensor<double, dim, dim> P = material(state, H);
       return dot(P, n0);
     };
-    Domain entire_boundary = EntireBoundary(solid.mesh());
-    solid.setTraction(traction, entire_boundary);
+    solid.setTraction(traction, solid.mesh().entireBoundary());
   }
 
  private:
@@ -288,25 +291,26 @@ double solution_error(solution_type exact_solution, PatchBoundaryCondition bc)
   }
 
   std::string mesh_tag{"mesh"};
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
+  auto mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
 
   // Construct a functional-based solid mechanics solver
   serac::NonlinearSolverOptions nonlin_opts{.relative_tol = 1.0e-13, .absolute_tol = 1.0e-13};
 
   SolidMechanics<p, dim> solid(nonlin_opts, serac::solid_mechanics::default_linear_options,
                                TimesteppingOptions{TimestepMethod::Newmark, DirichletEnforcementMethod::DirectControl},
-                               "solid_dynamics", mesh_tag);
+                               "solid_dynamics", mesh);
 
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = 1.0, .G = 1.0};
-  solid.setMaterial(mat, pmesh->entireBody());
+  solid.setMaterial(mat, mesh->entireBody());
 
   // initial conditions
   solid.setVelocity([&exact_solution](tensor<double, dim> X) { return exact_solution.velocity(X, 0.0); });
   solid.setDisplacement([&exact_solution](tensor<double, dim> X) { return exact_solution.displacement(X, 0.0); });
 
   // forcing terms
-  pmesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
-  exact_solution.applyLoads(mat, solid, pmesh->domain("essential_boundary"), pmesh->entireBody());
+  auto essBC = Domain::ofBoundaryElements(mesh->mfemParMesh(), by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
+  mesh->insertDomain("essential_boundary", essBC);
+  exact_solution.applyLoads(mat, solid, mesh->domain("essential_boundary"), mesh->entireBody());
 
   // Finalize the data structures
   solid.completeSetup();

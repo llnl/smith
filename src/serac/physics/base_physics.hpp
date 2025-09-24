@@ -14,9 +14,17 @@
 
 #include <functional>
 #include <memory>
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
+#include "mpi.h"
 #include "mfem.hpp"
 #include "axom/sidre.hpp"
+#include "axom/fmt.hpp"
+#include "axom/slic.hpp"
 
 #include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "serac/numerics/equation_solver.hpp"
@@ -26,6 +34,8 @@
 #include "serac/physics/common.hpp"
 
 namespace serac {
+
+class Mesh;
 
 namespace detail {
 /**
@@ -53,13 +63,13 @@ class BasePhysics {
   /**
    * @brief Empty constructor
    * @param[in] physics_name Name of the physics module instance
-   * @param[in] mesh_tag The tag for the mesh in the StateManager to construct the physics module on
+   * @param[in] mesh The mesh used to construct the physics on
    * @param[in] cycle The simulation cycle (i.e. timestep iteration) to intialize the physics module to
    * @param[in] time The simulation time to initialize the physics module to
    * @param[in] checkpoint_to_disk A flag to save the transient states on disk instead of memory for the transient
    * adjoint solves
    */
-  BasePhysics(std::string physics_name, std::string mesh_tag, int cycle = 0, double time = 0.0,
+  BasePhysics(std::string physics_name, std::shared_ptr<serac::Mesh> mesh, int cycle = 0, double time = 0.0,
               bool checkpoint_to_disk = false);
 
   /**
@@ -226,7 +236,7 @@ class BasePhysics {
    *
    * @return The shape displacement finite element state
    */
-  virtual const FiniteElementState& shapeDisplacement() const { return shape_displacement_; }
+  virtual const FiniteElementState& shapeDisplacement() const;
 
   /**
    * @brief Accessor for getting named finite element state parameter fields from the physics modules
@@ -318,11 +328,7 @@ class BasePhysics {
    *
    * @pre completeSetup(), advanceTimestep(), and reverseAdjointTimestep() must be called prior to this method.
    */
-  virtual const FiniteElementDual& computeTimestepSensitivity(size_t parameter_index)
-  {
-    SLIC_ERROR_ROOT(axom::fmt::format("Parameter sensitivities not enabled in physics module {}", name_));
-    return *parameters_[parameter_index].sensitivity;
-  }
+  virtual FiniteElementDual computeTimestepSensitivity(size_t parameter_index);
 
   /**
    * @brief Compute the implicit sensitivity of the quantity of interest used in defining the adjoint load with respect
@@ -332,11 +338,7 @@ class BasePhysics {
    *
    * @pre completeSetup(), advanceTimestep(), and reverseAdjointTimestep() must be called prior to this method.
    */
-  virtual const FiniteElementDual& computeTimestepShapeSensitivity()
-  {
-    SLIC_ERROR_ROOT(axom::fmt::format("Shape sensitivities not enabled in physics module {}", name_));
-    return *shape_displacement_sensitivity_;
-  }
+  virtual const FiniteElementDual& computeTimestepShapeSensitivity();
 
   /**
    * @brief Compute the implicit sensitivity of the quantity of interest with respect to the initial condition fields
@@ -481,10 +483,17 @@ class BasePhysics {
   /**
    * @brief Returns a reference to the mesh object
    */
-  const mfem::ParMesh& mesh() const { return mesh_; }
+  const serac::Mesh& mesh() const;
 
-  /// @overload
-  mfem::ParMesh& mesh() { return mesh_; }
+  /**
+   * @brief Returns a reference to the mfem ParMesh object
+   */
+  const mfem::ParMesh& mfemParMesh() const;
+
+  /**
+   * @brief Returns a reference to the mfem ParMesh object
+   */
+  mfem::ParMesh& mfemParMesh();
 
   /**
    * @brief Return the name of the physics
@@ -492,6 +501,13 @@ class BasePhysics {
   std::string name() const { return name_; }
 
  protected:
+  /**
+   * @brief Internally used accessor for getting the shape displacement sensitivity from the physics modules
+   *
+   * @return The shape displacement sensitivity dual
+   */
+  const FiniteElementDual& shapeDisplacementSensitivity() const;
+
   /**
    * @brief Create a paraview data collection for the physics package if requested
    */
@@ -525,13 +541,10 @@ class BasePhysics {
   /// @brief Name of the physics module
   std::string name_ = {};
 
-  /// @brief ID of the corresponding MFEMSidreDataCollection (denoting a mesh)
-  std::string mesh_tag_ = {};
-
   /**
    * @brief The primary mesh
    */
-  mfem::ParMesh& mesh_;
+  std::shared_ptr<serac::Mesh> mesh_;
 
   /**
    * @brief The MPI communicator
@@ -594,16 +607,6 @@ class BasePhysics {
 
   /// @brief A vector of the parameters associated with this physics module
   std::vector<ParameterInfo> parameters_;
-
-  /// @brief The parameter info associated with the shape displacement field
-  /// @note This is owned by the State Manager since it is associated with the mesh
-  FiniteElementState& shape_displacement_;
-
-  /// @brief Sensitivity with respect to the shape displacement field
-  /// @note This quantity is also called the vector-Jacobian product during back propagation in data science.
-  /// @note This is owned by the physics instance as the sensitivity is with respect to a certain PDE residual (i.e.
-  /// physics module)
-  std::unique_ptr<FiniteElementDual> shape_displacement_sensitivity_;
 
   /// @brief A map containing optionally in-memory checkpointed primal states for transient adjoint solvers
   mutable std::unordered_map<std::string, std::vector<serac::FiniteElementState>> checkpoint_states_;
@@ -699,6 +702,16 @@ class BasePhysics {
    * @brief A optional view of the shape sensitivity in grid function form for paraview output
    */
   mutable std::unique_ptr<mfem::ParGridFunction> shape_sensitivity_grid_function_;
+
+  /**
+   * @brief The shape displacement field
+   */
+  serac::FiniteElementState shape_displacement_;
+
+  /**
+   * @brief The shape displacement field sensitivity
+   */
+  serac::FiniteElementDual shape_displacement_dual_;
 
   /**
    * @brief Boundary condition manager instance

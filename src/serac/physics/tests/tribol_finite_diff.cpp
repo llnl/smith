@@ -12,9 +12,15 @@
 #include <string>
 
 #include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 #include "mfem.hpp"
 #include "shared/mesh/MeshBuilder.hpp"
+
+#include "serac/serac_config.hpp"
+
+#ifndef SERAC_USE_ENZYME
+#error "This file requires Enzyme to be enabled
+#endif
 
 #include "serac/numerics/functional/domain.hpp"
 #include "serac/mesh_utils/mesh_utils.hpp"

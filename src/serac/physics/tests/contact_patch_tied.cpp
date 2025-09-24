@@ -4,23 +4,26 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/solid_mechanics_contact.hpp"
-
-#include <functional>
-#include <set>
 #include <string>
+#include <memory>
+#include <utility>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "mpi.h"
 #include "mfem.hpp"
 
+#include "serac/physics/solid_mechanics_contact.hpp"
 #include "serac/numerics/functional/domain.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/boundary_conditions/components.hpp"
+#include "serac/physics/contact/contact_config.hpp"
+#include "serac/physics/solid_mechanics.hpp"
 
 namespace serac {
 
@@ -42,12 +45,12 @@ TEST_P(ContactPatchTied, patch)
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
 
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), "patch_mesh", 3, 0);
+  auto mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), "patch_mesh", 3, 0);
 
-  pmesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(1));
-  pmesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(2));
-  pmesh->addDomainOfBoundaryElements("z0_face", serac::by_attr<dim>(3));
-  pmesh->addDomainOfBoundaryElements("zmax_face", serac::by_attr<dim>(6));
+  mesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("z0_face", serac::by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("zmax_face", serac::by_attr<dim>(6));
 
 // TODO: investigate performance with Petsc
 // #ifdef SERAC_USE_PETSC
@@ -80,22 +83,22 @@ TEST_P(ContactPatchTied, patch)
                                  .jacobian = ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
-                                             solid_mechanics::default_quasistatic_options, name, "patch_mesh");
+                                             solid_mechanics::default_quasistatic_options, name, mesh);
 
   double K = 10.0;
   double G = 0.25;
   solid_mechanics::NeoHookean mat{1.0, K, G};
-  solid_solver.setMaterial(mat, pmesh->entireBody());
+  solid_solver.setMaterial(mat, mesh->entireBody());
 
   // NOTE: Tribol will miss this contact if warm start doesn't account for contact
   constexpr double max_disp = 0.2;
   auto nonzero_disp_bc = [](vec3, double t) { return vec3{{0.0, 0.0, -max_disp * t}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
-  solid_solver.setFixedBCs(pmesh->domain("x0_faces"), Component::X);
-  solid_solver.setFixedBCs(pmesh->domain("y0_faces"), Component::Y);
-  solid_solver.setFixedBCs(pmesh->domain("z0_face"), Component::Z);
-  solid_solver.setDisplacementBCs(nonzero_disp_bc, pmesh->domain("zmax_face"), Component::Z);
+  solid_solver.setFixedBCs(mesh->domain("x0_faces"), Component::X);
+  solid_solver.setFixedBCs(mesh->domain("y0_faces"), Component::Y);
+  solid_solver.setFixedBCs(mesh->domain("z0_face"), Component::Z);
+  solid_solver.setDisplacementBCs(nonzero_disp_bc, mesh->domain("zmax_face"), Component::Z);
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {4}, {5}, contact_options);

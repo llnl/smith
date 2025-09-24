@@ -3,23 +3,31 @@
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
-#include "serac/physics/heat_transfer.hpp"
 
-#include <functional>
-#include <set>
+#include <cmath>
 #include <string>
+#include <memory>
+#include <tuple>
+#include <utility>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "mpi.h"
 #include "mfem.hpp"
 
-#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/physics/heat_transfer.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/physics/materials/parameterized_thermal_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/base_physics.hpp"
+#include "serac/physics/common.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 namespace serac {
 
@@ -52,16 +60,17 @@ void computeStepAdjointLoad(const FiniteElementState& temperature, FiniteElement
 static int iter = 0;
 
 std::unique_ptr<HeatTransfer<p, dim>> createNonlinearHeatTransfer(
-    axom::sidre::DataStore& /*data_store*/, const NonlinearSolverOptions& nonlinear_opts,
+    std::shared_ptr<serac::Mesh> mesh, const NonlinearSolverOptions& nonlinear_opts,
     const TimesteppingOptions& dyn_opts,
-    const heat_transfer::IsotropicConductorWithLinearConductivityVsTemperature& mat, Domain& whole_domain)
+    const heat_transfer::IsotropicConductorWithLinearConductivityVsTemperature& mat)
 {
   // Note that we are testing the non-default checkpoint to disk capability here
   auto thermal = std::make_unique<HeatTransfer<p, dim>>(nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts,
-                                                        thermal_prefix + std::to_string(iter++), mesh_tag,
+                                                        thermal_prefix + std::to_string(iter++), mesh,
                                                         std::vector<std::string>{}, 0, 0.0);
-  thermal->setMaterial(mat, whole_domain);
-  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; }, whole_domain);
+  thermal->setMaterial(mat, mesh->entireBody());
+  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; },
+                     mesh->entireBody());
 
   thermal->setTemperature([](const mfem::Vector&, double) { return 0.0; });
   thermal->setTemperatureBCs({1}, [](const mfem::Vector&, double) { return 0.0; });
@@ -72,21 +81,21 @@ std::unique_ptr<HeatTransfer<p, dim>> createNonlinearHeatTransfer(
 using ParametrizedHeatTransferT = HeatTransfer<p, dim, Parameters<H1<p>>, std::integer_sequence<int, 0>>;
 
 std::unique_ptr<ParametrizedHeatTransferT> createParameterizedHeatTransfer(
-    axom::sidre::DataStore& /*data_store*/, const NonlinearSolverOptions& nonlinear_opts,
-    const TimesteppingOptions& dyn_opts, const heat_transfer::ParameterizedLinearIsotropicConductor& mat,
-    Domain& whole_domain)
+    std::shared_ptr<serac::Mesh> mesh, const NonlinearSolverOptions& nonlinear_opts,
+    const TimesteppingOptions& dyn_opts, const heat_transfer::ParameterizedLinearIsotropicConductor& mat)
 {
   std::vector<std::string> names{"conductivity"};
 
-  auto thermal = std::make_unique<ParametrizedHeatTransferT>(
-      nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts,
-      parametrized_thermal_prefix + std::to_string(iter++), mesh_tag, names);
+  auto thermal =
+      std::make_unique<ParametrizedHeatTransferT>(nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts,
+                                                  parametrized_thermal_prefix + std::to_string(iter++), mesh, names);
 
-  FiniteElementState user_defined_conductivity(StateManager::mesh(mesh_tag), H1<p>{}, "user_defined_conductivity");
+  FiniteElementState user_defined_conductivity(mesh->mfemParMesh(), H1<p>{}, "user_defined_conductivity");
   user_defined_conductivity = 1.1;
   thermal->setParameter(0, user_defined_conductivity);
-  thermal->setMaterial(DependsOn<0>{}, mat, whole_domain);
-  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; }, whole_domain);
+  thermal->setMaterial(DependsOn<0>{}, mat, mesh->entireBody());
+  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; },
+                     mesh->entireBody());
   thermal->setTemperature([](const mfem::Vector&, double) { return 0.0; });
   thermal->setTemperatureBCs({1}, [](const mfem::Vector&, double) { return 0.0; });
   thermal->completeSetup();
@@ -94,22 +103,23 @@ std::unique_ptr<ParametrizedHeatTransferT> createParameterizedHeatTransfer(
 }
 
 std::unique_ptr<ParametrizedHeatTransferT> createParameterizedNonlinearHeatTransfer(
-    axom::sidre::DataStore& /*data_store*/, const NonlinearSolverOptions& nonlinear_opts,
+    std::shared_ptr<serac::Mesh> mesh, const NonlinearSolverOptions& nonlinear_opts,
     const TimesteppingOptions& dyn_opts,
-    const heat_transfer::ParameterizedIsotropicConductorWithLinearConductivityVsTemperature& mat, Domain& whole_domain)
+    const heat_transfer::ParameterizedIsotropicConductorWithLinearConductivityVsTemperature& mat)
 {
   std::vector<std::string> names{"conductivity"};
 
-  auto thermal = std::make_unique<ParametrizedHeatTransferT>(
-      nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts,
-      parametrized_thermal_prefix + std::to_string(iter++), mesh_tag, names);
+  auto thermal =
+      std::make_unique<ParametrizedHeatTransferT>(nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts,
+                                                  parametrized_thermal_prefix + std::to_string(iter++), mesh, names);
 
-  FiniteElementState user_defined_conductivity(StateManager::mesh(mesh_tag), H1<p>{}, "user_defined_conductivity");
+  FiniteElementState user_defined_conductivity(mesh->mfemParMesh(), H1<p>{}, "user_defined_conductivity");
   user_defined_conductivity = 1.1;
   thermal->setParameter(0, user_defined_conductivity);
 
-  thermal->setMaterial(DependsOn<0>{}, mat, whole_domain);
-  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; }, whole_domain);
+  thermal->setMaterial(DependsOn<0>{}, mat, mesh->entireBody());
+  thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; },
+                     mesh->entireBody());
 
   thermal->setTemperature([](const mfem::Vector&, double) { return 0.0; });
   thermal->setTemperatureBCs({1}, [](const mfem::Vector&, double) { return 0.0; });
@@ -266,8 +276,7 @@ struct HeatTransferSensitivityFixture : public ::testing::Test {
 
 TEST_F(HeatTransferSensitivityFixture, InitialTemperatureSensitivities)
 {
-  auto thermal_solver =
-      createNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, nonlinearMat, mesh->entireBody());
+  auto thermal_solver = createNonlinearHeatTransfer(mesh, nonlinear_opts, dyn_opts, nonlinearMat);
 
   auto [qoi_base, temperature_sensitivity, _] =
       computeThermalQoiAndInitialTemperatureAndShapeSensitivity(*thermal_solver, tsInfo);
@@ -285,8 +294,7 @@ TEST_F(HeatTransferSensitivityFixture, InitialTemperatureSensitivities)
 
 TEST_F(HeatTransferSensitivityFixture, ShapeSensitivities)
 {
-  auto thermal_solver =
-      createNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts, nonlinearMat, mesh->entireBody());
+  auto thermal_solver = createNonlinearHeatTransfer(mesh, nonlinear_opts, dyn_opts, nonlinearMat);
 
   auto [qoi_base, _, shape_sensitivity] =
       computeThermalQoiAndInitialTemperatureAndShapeSensitivity(*thermal_solver, tsInfo);
@@ -303,8 +311,7 @@ TEST_F(HeatTransferSensitivityFixture, ShapeSensitivities)
 
 TEST_F(HeatTransferSensitivityFixture, ConductivityParameterSensitivities)
 {
-  auto thermal_solver =
-      createParameterizedHeatTransfer(data_store, nonlinear_opts, dyn_opts, parameterizedMat, mesh->entireBody());
+  auto thermal_solver = createParameterizedHeatTransfer(mesh, nonlinear_opts, dyn_opts, parameterizedMat);
   auto [qoi_base, conductivity_sensitivity] = computeThermalConductivitySensitivity(*thermal_solver, tsInfo);
 
   thermal_solver->resetStates();
@@ -319,8 +326,8 @@ TEST_F(HeatTransferSensitivityFixture, ConductivityParameterSensitivities)
 
 TEST_F(HeatTransferSensitivityFixture, NonlinearConductivityParameterSensitivities)
 {
-  auto thermal_solver = createParameterizedNonlinearHeatTransfer(data_store, nonlinear_opts, dyn_opts,
-                                                                 parameterizedNonlinearMat, mesh->entireBody());
+  auto thermal_solver =
+      createParameterizedNonlinearHeatTransfer(mesh, nonlinear_opts, dyn_opts, parameterizedNonlinearMat);
   auto [qoi_base, conductivity_sensitivity] = computeThermalConductivitySensitivity(*thermal_solver, tsInfo);
 
   thermal_solver->resetStates();

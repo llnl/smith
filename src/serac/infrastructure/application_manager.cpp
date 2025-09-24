@@ -13,20 +13,23 @@
 #include <unistd.h>
 #include <limits.h>
 #endif
+
 #include <string.h>
 #include <csignal>
 #include <cstdlib>
 
+#include "mfem.hpp"
+
+#include "serac/serac_config.hpp"
+
+#ifdef SERAC_USE_PETSC
+#include "petsc.h"  // for PetscPopSignalHandler
+#endif
+
 #include "serac/infrastructure/accelerator.hpp"
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/profiling.hpp"
-#include "serac/serac_config.hpp"
-
-#include "mfem.hpp"
-
-#ifdef SERAC_USE_PETSC
-#include "petsc.h"
-#endif
+#include "serac/infrastructure/about.hpp"
 
 namespace serac {
 /**
@@ -75,7 +78,7 @@ void finalizer()
   accelerator::terminateDevice();
 }
 
-ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : comm_(comm)
+ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bool doesPrintRunInfo) : comm_(comm)
 {
   // Initialize MPI
   if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
@@ -89,6 +92,10 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : 
     exit(1);
   }
 
+  if (doesPrintRunInfo) {
+    printRunInfo();
+  }
+
   // Start the profiler (no-op if not enabled)
   profiling::initialize(comm_);
 
@@ -99,6 +106,11 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm) : 
 #endif
 
 #ifdef SERAC_USE_PETSC
+  // PETSc tries to parse all command line options, but Serac applications
+  // may have others intended for MPI or the application itself.
+  // Silence the PETSc warning that there are leftover options it doesn't
+  // know.
+  PetscOptionsSetValue(NULL, "-options_left", "no");
 #ifdef SERAC_USE_SLEPC
   mfem::MFEMInitializeSlepc(&argc, &argv);
 #else

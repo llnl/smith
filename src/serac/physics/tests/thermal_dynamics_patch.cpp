@@ -4,22 +4,23 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/heat_transfer.hpp"
-
-#include <functional>
 #include <set>
 #include <string>
+#include <memory>
 
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "mpi.h"
 #include "mfem.hpp"
 
-#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/physics/heat_transfer.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/thermal_material.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/solver_config.hpp"
 
 namespace serac {
 
@@ -103,7 +104,7 @@ double dynamic_solution_error(const ExactSolution& exact_solution, PatchBoundary
 
   std::string mesh_tag{"mesh"};
   std::string filename = std::string(SERAC_REPO_DIR) + "/data/meshes/patch" + std::to_string(dim) + "D.mesh";
-  auto pmesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
+  auto mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), mesh_tag);
 
   // Construct a heat transfer solver
   NonlinearSolverOptions nonlinear_opts{.relative_tol = 5.0e-13, .absolute_tol = 5.0e-13};
@@ -111,16 +112,16 @@ double dynamic_solution_error(const ExactSolution& exact_solution, PatchBoundary
   TimesteppingOptions dyn_opts{.timestepper = TimestepMethod::BackwardEuler,
                                .enforcement_method = DirichletEnforcementMethod::DirectControl};
 
-  HeatTransfer<p, dim> thermal(nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts, "thermal", mesh_tag);
+  HeatTransfer<p, dim> thermal(nonlinear_opts, heat_transfer::direct_linear_options, dyn_opts, "thermal", mesh);
 
   heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, 1.0);
-  thermal.setMaterial(mat, pmesh->entireBody());
+  thermal.setMaterial(mat, mesh->entireBody());
 
   // initial conditions
   thermal.setTemperature([exact_solution](const mfem::Vector& x, double) { return exact_solution(x, 0.0); });
 
   // forcing terms
-  exact_solution.applyLoads(mat, thermal, pmesh->entireBody(), pmesh->entireBoundary(),
+  exact_solution.applyLoads(mat, thermal, mesh->entireBody(), mesh->entireBoundary(),
                             essentialBoundaryAttributes<dim>(bc));
 
   // Finalize the data structures

@@ -6,11 +6,10 @@
 
 #include <set>
 #include <string>
+#include <memory>
 
 #include "axom/slic.hpp"
-
 #include "mfem.hpp"
-
 #include "serac/serac.hpp"
 
 int main(int argc, char* argv[])
@@ -30,7 +29,6 @@ int main(int argc, char* argv[])
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SERAC_REPO_DIR "/data/meshes/ironing.mesh";
-
   std::shared_ptr<serac::Mesh> mesh = std::make_shared<serac::Mesh>(filename, "ironing_mesh", 2, 0);
 
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
@@ -53,7 +51,7 @@ int main(int argc, char* argv[])
                                         .jacobian = serac::ContactJacobian::Exact};
 
   serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
-      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh->tag(),
+      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh,
       {"bulk_mod", "shear_mod"});
 
   serac::FiniteElementState K_field(serac::StateManager::newState(serac::L2<0>{}, "bulk_mod", mesh->tag()));

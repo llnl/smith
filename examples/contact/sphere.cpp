@@ -5,15 +5,13 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <cmath>
-
 #include <set>
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "axom/slic.hpp"
-
 #include "mfem.hpp"
-
 #include "serac/serac.hpp"
 
 int main(int argc, char* argv[])
@@ -47,11 +45,11 @@ int main(int argc, char* argv[])
   cube_mesh.SetCurvature(p);
 
   std::vector<mfem::Mesh*> mesh_ptrs{&ball_mesh, &cube_mesh};
-  auto pmesh = std::make_shared<serac::Mesh>(mfem::Mesh(mesh_ptrs.data(), static_cast<int>(mesh_ptrs.size())),
-                                             "sphere_mesh", 0, 0);
+  auto mesh = std::make_shared<serac::Mesh>(mfem::Mesh(mesh_ptrs.data(), static_cast<int>(mesh_ptrs.size())),
+                                            "sphere_mesh", 0, 0);
 
-  pmesh->addDomainOfBoundaryElements("fixed_boundary", serac::by_attr<dim>(3));
-  pmesh->addDomainOfBoundaryElements("driven_surface", serac::by_attr<dim>(12));
+  mesh->addDomainOfBoundaryElements("fixed_boundary", serac::by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("driven_surface", serac::by_attr<dim>(12));
 
   serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
 #ifndef MFEM_USE_STRUMPACK
@@ -71,14 +69,14 @@ int main(int argc, char* argv[])
                                         .penalty = 1.0e4,
                                         .jacobian = serac::ContactJacobian::Exact};
 
-  serac::SolidMechanicsContact<p, dim> solid_solver(
-      nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, "sphere_mesh");
+  serac::SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
+                                                    serac::solid_mechanics::default_quasistatic_options, name, mesh);
 
   serac::solid_mechanics::NeoHookean mat{1.0, 10.0, 0.25};
-  solid_solver.setMaterial(mat, pmesh->entireBody());
+  solid_solver.setMaterial(mat, mesh->entireBody());
 
   // Pass the BC information to the solver object
-  solid_solver.setFixedBCs(pmesh->domain("fixed_boundary"));
+  solid_solver.setFixedBCs(mesh->domain("fixed_boundary"));
 
   auto applied_displacement = [](serac::tensor<double, dim> x, double t) {
     serac::tensor<double, dim> u{};
@@ -94,7 +92,7 @@ int main(int argc, char* argv[])
     return u;
   };
 
-  solid_solver.setDisplacementBCs(applied_displacement, pmesh->domain("driven_surface"));
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("driven_surface"));
 
   // Add the contact interaction
   auto contact_interaction_id = 0;

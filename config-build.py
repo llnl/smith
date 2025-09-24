@@ -20,11 +20,11 @@ import platform
 import shutil
 import socket
 
-_host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmake",
-                     "rzwhippet" : "rzwhippet-toss_4_x86_64_ib-clang@14.0.6.cmake",
+_host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-clang@19.1.3.cmake",
+                     "rzwhippet" : "rzwhippet-toss_4_x86_64_ib-clang@19.1.3.cmake",
                      "rzvernal"  : "rzvernal-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
                      "rzansel"   : "rzansel-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake",
-                     "ruby"      : "ruby-toss_4_x86_64_ib-clang@14.0.6.cmake",
+                     "dane"      : "dane-toss_4_x86_64_ib-clang@19.1.3.cmake",
                      "tioga"     : "tioga-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
                      "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake"}
 
@@ -74,7 +74,7 @@ def parse_arguments():
                         "--buildtype",
                         type=str,
                         choices=["Release", "Debug", "RelWithDebInfo", "MinSizeRel"],
-                        help="build type. defaults to Debug")
+                        help="build type. defaults to Release")
 
     parser.add_argument("-e",
                         "--eclipse",
@@ -294,10 +294,10 @@ def main():
        else:
           return False
 
-    # CMake build type is Debug by default, but if CMAKE_BUILD_TYPE is an unknown argument (i.e. a CMake argument), then
-    # use that option instead.
     if args.buildtype == None:
-        args.buildtype = "Debug"
+        # Set default CMake build type
+        args.buildtype = "Release"
+        # If CMAKE_BUILD_TYPE was passed in as an argument, use that option instead
         for unknown_arg in unknown_args:
             if "-DCMAKE_BUILD_TYPE" in unknown_arg:
                 args.buildtype = unknown_arg.split("=")[1]

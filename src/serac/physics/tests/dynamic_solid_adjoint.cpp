@@ -3,24 +3,34 @@
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
-#include <functional>
-#include <set>
+
+#include <cstddef>
 #include <string>
+#include <cmath>
+#include <memory>
+#include <tuple>
+#include <vector>
+
+#include "gtest/gtest.h"
+#include "mpi.h"
+#include "mfem.hpp"
 
 #include "serac/physics/solid_mechanics.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/materials/parameterized_solid_material.hpp"
-
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
-#include "mfem.hpp"
-
 #include "serac/numerics/functional/domain.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/serac_config.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/mesh_utils/mesh_utils.hpp"
+#include "serac/numerics/functional/finite_element.hpp"
+#include "serac/numerics/functional/tensor.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/base_physics.hpp"
+#include "serac/physics/common.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 namespace serac {
 
@@ -317,7 +327,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
 
     bool checkpoint_to_disk = true;
     auto solid = std::make_unique<SolidMechanics<p, dim>>(
-        nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh_tag,
+        nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh,
         std::vector<std::string>{}, 0, 0.0, checkpoint_to_disk, false);
     solid->setMaterial(mat, mesh->entireBody());
 
@@ -325,7 +335,7 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
       auto u = make_tensor<dim>([t](int) { return (1.0 + 10 * t) * boundary_disp; });
       return u;
     };
-    auto applied_displacement_surface = Domain::ofBoundaryElements(solid->mesh(), by_attr<dim>(1));
+    auto applied_displacement_surface = Domain::ofBoundaryElements(solid->mfemParMesh(), by_attr<dim>(1));
     solid->setDisplacementBCs(applied_displacement, applied_displacement_surface);
     solid->addBodyForce(
         [](auto X, auto t) {
@@ -490,7 +500,7 @@ struct BucklingSensitivityFixture : public ::testing::Test {
 
     bool checkpoint_to_disk = false;
     auto solid = std::make_unique<SolidMechanics<p, dim, Parameters<DensitySpace, DensitySpace>>>(
-        nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh_tag,
+        nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh,
         std::vector<std::string>{kname, gname}, 0, 0.0, checkpoint_to_disk, false);
 
     solid->setMaterial(serac::DependsOn<0, 1>{}, mat, mesh->entireBody());
@@ -506,8 +516,8 @@ TEST_F(BucklingSensitivityFixture, QuasiStaticShapeSensitivities)
 
   auto solid_solver = createBucklingSolidMechanicsSolver<DensitySpace>();
 
-  auto applied_displacement_surface = Domain::ofBoundaryElements(solid_solver->mesh(), by_attr<dim>(1));
-  auto applied_traction_surface = Domain::ofBoundaryElements(solid_solver->mesh(), by_attr<dim>(3));
+  auto applied_displacement_surface = Domain::ofBoundaryElements(solid_solver->mfemParMesh(), by_attr<dim>(1));
+  auto applied_traction_surface = Domain::ofBoundaryElements(solid_solver->mfemParMesh(), by_attr<dim>(3));
   double load = 0.1;
 
   solid_solver->setTraction([&](auto, auto n, auto t) { return -load * t * n; }, applied_traction_surface);

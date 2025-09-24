@@ -4,19 +4,28 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <fstream>
+#include <cmath>
+#include <memory>
+#include <string>
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
+#include "axom/fmt.hpp"
+#include "mpi.h"
 #include "mfem.hpp"
 
 #include "serac/serac_config.hpp"
 #include "serac/numerics/functional/domain.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/state/state_manager.hpp"
 #include "serac/physics/solid_mechanics.hpp"
+#include "serac/physics/mesh.hpp"
 #include "serac/physics/materials/liquid_crystal_elastomer.hpp"
 #include "serac/infrastructure/application_manager.hpp"
+#include "serac/numerics/functional/finite_element.hpp"  // for H1
+#include "serac/numerics/functional/functional.hpp"
+#include "serac/numerics/solver_config.hpp"
+#include "serac/physics/common.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 
 using namespace serac;
 
@@ -29,25 +38,21 @@ TEST(LiquidCrystalElastomer, Brighenti)
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "lce_tensile_test_load");
 
-  // Construct the appropriate dimension mesh and give it to the data store
+  // Construct the appropriate dimension mesh
   int nElem = 2;
   double lx = 2.5e-3, ly = 30.0e-3, lz = 30.0e-3;
-  mfem::Mesh cuboid =
-      mfem::Mesh(mfem::Mesh::MakeCartesian3D(nElem, 2 * nElem, 2 * nElem, mfem::Element::HEXAHEDRON, lx, ly, lz));
-  auto mesh = std::make_unique<mfem::ParMesh>(MPI_COMM_WORLD, cuboid);
-  mesh->EnsureNodes();
-  mesh->ExchangeFaceNbrData();
 
   std::string mesh_tag{"mesh"};
+  auto mesh = std::make_shared<serac::Mesh>(
+      mfem::Mesh(mfem::Mesh::MakeCartesian3D(nElem, 2 * nElem, 2 * nElem, mfem::Element::HEXAHEDRON, lx, ly, lz)),
+      mesh_tag);
 
-  auto& pmesh = serac::StateManager::setMesh(std::move(mesh), mesh_tag);
-
-  auto xmin_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(5));
-  auto ymin_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(2));
-  auto zmin_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(1));
-  auto xmax_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(3));
-  auto ymax_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(4));
-  auto zmax_face = Domain::ofBoundaryElements(pmesh, by_attr<dim>(6));
+  mesh->addDomainOfBoundaryElements("xmin_face", by_attr<dim>(5));
+  mesh->addDomainOfBoundaryElements("ymin_face", by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("zmin_face", by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("xmax_face", by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("ymax_face", by_attr<dim>(4));
+  mesh->addDomainOfBoundaryElements("zmax_face", by_attr<dim>(6));
 
   double initial_temperature = 25 + 273;
   double final_temperature = 430.0;
@@ -104,7 +109,7 @@ TEST(LiquidCrystalElastomer, Brighenti)
 #endif
 
   SolidMechanics<p, dim, Parameters<H1<p>, L2<p> > > solid_solver(
-      nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options, "lce_solid_functional", mesh_tag,
+      nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options, "lce_solid_functional", mesh,
       {"temperature", "gamma"});
 
   constexpr int TEMPERATURE_INDEX = 0;
@@ -128,18 +133,17 @@ TEST(LiquidCrystalElastomer, Brighenti)
 
   LiquidCrystElastomerBrighenti::State initial_state{};
   auto qdata = solid_solver.createQuadratureDataBuffer(initial_state);
-  Domain whole_mesh = EntireDomain(pmesh);
-  solid_solver.setMaterial(DependsOn<TEMPERATURE_INDEX, GAMMA_INDEX>{}, mat, whole_mesh, qdata);
+  solid_solver.setMaterial(DependsOn<TEMPERATURE_INDEX, GAMMA_INDEX>{}, mat, mesh->entireBody(), qdata);
 
   // prescribe symmetry conditions
-  solid_solver.setFixedBCs(xmin_face, Component::X);
-  solid_solver.setFixedBCs(ymin_face, Component::Y);
-  solid_solver.setFixedBCs(zmin_face, Component::Z);
+  solid_solver.setFixedBCs(mesh->domain("xmin_face"), Component::X);
+  solid_solver.setFixedBCs(mesh->domain("ymin_face"), Component::Y);
+  solid_solver.setFixedBCs(mesh->domain("zmin_face"), Component::Z);
 
   double iniLoadVal = 1.0e0;
   double maxLoadVal = 4 * 1.3e0 / lx / lz;
   double loadVal = iniLoadVal + 0.0 * maxLoadVal;
-  solid_solver.setTraction([&loadVal](auto, auto n, auto) { return loadVal * n; }, ymax_face);
+  solid_solver.setTraction([&loadVal](auto, auto n, auto) { return loadVal * n; }, mesh->domain("ymax_face"));
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -158,11 +162,11 @@ TEST(LiquidCrystalElastomer, Brighenti)
         auto n = normalize(cross(dX_dxi));
         return dot(u, n);
       },
-      ymax_face);
+      mesh->domain("ymax_face"));
 
   Functional<double(H1<p, dim>)> area({&solid_solver.displacement().space()});
   area.AddSurfaceIntegral(
-      DependsOn<>{}, [=](double /*t*/, auto /*position*/) { return 1.0; }, ymax_face);
+      DependsOn<>{}, [=](double /*t*/, auto /*position*/) { return 1.0; }, mesh->domain("ymax_face"));
 
   double t = 0.0;
   double initial_area = area(t, solid_solver.displacement());

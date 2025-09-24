@@ -18,6 +18,7 @@ set(physics_test_depends serac_physics serac_physics_test_utils gtest)
 set(physics_serial_test_sources
     beam_bending.cpp
     fit_test.cpp
+    test_mesh_wrapper.cpp
     thermal_finite_diff.cpp
     thermal_statics_patch.cpp
     thermal_dynamics_patch.cpp
@@ -28,13 +29,13 @@ set(physics_serial_test_sources
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
-    test_solid_residual.cpp
+    test_solid_weak_form.cpp
     test_dfem_explicit_dynamics.cpp
     test_dfem_lumped_mass.cpp
     test_dfem_vs_functional.cpp
     test_dfem_residual.cpp
-    test_heat_residual.cpp
-    test_functional_residual.cpp
+    test_heat_weak_form.cpp
+    test_functional_weak_form.cpp
     thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
     test_kinematic_objective.cpp
@@ -42,8 +43,11 @@ set(physics_serial_test_sources
 
 if (TRIBOL_FOUND)
     set(physics_serial_tribol_test_sources 
+        test_contact_constraint.cpp
         contact_solid_adjoint.cpp)
-    if (ENZYME_FOUND)
+    # TODO: Remove the SERAC_USE_ENZYME check (and leave the ENZYME_FOUND)
+    # when Enzyme is enabled in Serac
+    if (ENZYME_FOUND AND SERAC_USE_ENZYME)
         list(APPEND physics_serial_tribol_test_sources 
                     contact_finite_diff.cpp
                     tribol_finite_diff.cpp)

@@ -11,6 +11,10 @@
  * the C++ API to configure the simulation
  */
 
+#include <memory>
+#include <set>
+#include <string>
+
 // _serac_include_header_start
 #include "serac/serac.hpp"
 // _serac_include_header_end
@@ -29,8 +33,7 @@ int main(int argc, char* argv[])
 
   // _create_mesh_start
   std::string mesh_tag{"mesh"};
-
-  auto pmesh = std::make_shared<serac::Mesh>(serac::buildRectangleMesh(10, 10), mesh_tag);
+  auto mesh = std::make_shared<serac::Mesh>(serac::buildRectangleMesh(10, 10), mesh_tag);
   // _create_mesh_end
 
   // _create_module_start
@@ -38,18 +41,18 @@ int main(int argc, char* argv[])
   constexpr int order = 1;
   constexpr int dim = 2;
 
-  serac::HeatTransfer<order, dim> heat_transfer(
-      serac::heat_transfer::default_nonlinear_options, serac::heat_transfer::default_linear_options,
-      serac::heat_transfer::default_static_options, "thermal_solver", mesh_tag);
+  serac::HeatTransfer<order, dim> heat_transfer(serac::heat_transfer::default_nonlinear_options,
+                                                serac::heat_transfer::default_linear_options,
+                                                serac::heat_transfer::default_static_options, "thermal_solver", mesh);
   // _create_module_end
 
   // _conductivity_start
   constexpr double kappa = 0.5;
   serac::heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, kappa);
 
-  heat_transfer.setMaterial(mat, pmesh->entireBody());
-
+  heat_transfer.setMaterial(mat, mesh->entireBody());
   // _conductivity_end
+
   // _bc_start
   const std::set<int> boundary_constant_attributes = {1};
   constexpr double boundary_constant = 1.0;

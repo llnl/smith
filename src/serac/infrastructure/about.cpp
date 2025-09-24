@@ -5,9 +5,12 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "serac/infrastructure/about.hpp"
-
 #include "serac/serac_config.hpp"
 
+#include <string_view>
+#include <vector>
+
+#include "mpi.h"
 #include "axom/config.hpp"
 #include "axom/core.hpp"
 #include "axom/fmt.hpp"
@@ -44,6 +47,7 @@
 #include "tribol/config.hpp"
 #endif
 
+#include "serac/serac_config.hpp"
 #include "serac/infrastructure/git_sha.hpp"
 #include "serac/infrastructure/logger.hpp"
 
@@ -58,8 +62,7 @@ std::string about()
   std::string about = "\n";
 
   // Version info
-  about += format("Serac Version:   {0}\n", version(false));
-  about += format("Git Commit SHA:  {0}\n", gitSHA());
+  about += format("Serac Version:   {0}\n", version());
   about += "\n";
 
   // General configuration
@@ -191,9 +194,10 @@ std::string gitSHA() { return SERAC_GIT_SHA; }
 void printRunInfo()
 {
   // Add header
-  std::string infoMsg = axom::fmt::format("\n{:*^80}\n", "Run Information");
+  std::string infoMsg = axom::fmt::format("\n{:*^80}\n", " Serac Run Information ");
 
   infoMsg += axom::fmt::format("{0}: {1}\n", "Version", version());
+  infoMsg += axom::fmt::format("{0}: {1}\n", "Build Type", buildType());
   infoMsg += axom::fmt::format("{0}: {1}\n", "User Name", axom::utilities::getUserName());
   infoMsg += axom::fmt::format("{0}: {1}\n", "Host Name", axom::utilities::getHostName());
 
@@ -221,6 +225,15 @@ std::string version(bool add_SHA)
 }
 
 std::string compiler() { return axom::fmt::format("{0} version {1}", SERAC_COMPILER_NAME, SERAC_COMPILER_VERSION); }
+
+std::string buildType()
+{
+#ifdef SERAC_DEBUG
+  return "Debug";
+#else
+  return "Release";
+#endif
+}
 
 std::pair<int, int> getMPIInfo(MPI_Comm comm)
 {

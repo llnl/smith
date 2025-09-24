@@ -14,6 +14,8 @@
 #pragma once
 
 #include <string>
+#include <utility>
+
 #include "mpi.h"
 
 namespace serac {
@@ -53,9 +55,16 @@ std::string version(bool add_SHA = true);
 /**
  * @brief Returns a string for the current compiler name and version
  *
- * @return string value of the the current compiler name and version
+ * @return string value of the current compiler name and version
  */
 std::string compiler();
+
+/**
+ * @brief Returns a string for the current CMake build type (e.g. Debug, Release)
+ *
+ * @return string value of the build type
+ */
+std::string buildType();
 
 /**
  * @brief Get MPI Info
