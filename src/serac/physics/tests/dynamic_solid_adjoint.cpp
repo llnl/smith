@@ -302,7 +302,11 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
   std::shared_ptr<serac::Mesh> mesh;
 
   NonlinearSolverOptions nonlinear_opts{
-      .nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1.0e-15, .absolute_tol = 1.0e-14};
+      // .nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1.0e-15, .absolute_tol = 1.0e-14};
+      .nonlin_solver = NonlinearSolver::Newton,
+      .relative_tol = 1.0e-15,
+      .absolute_tol = 1.0e-14,
+      .print_level = 0};
 
   LinearSolverOptions linear_opts = {.linear_solver = LinearSolver::CG,
                                      .preconditioner = Preconditioner::HypreJacobi,
@@ -466,7 +470,8 @@ struct BucklingSensitivityFixture : public ::testing::Test {
   axom::sidre::DataStore dataStore;
   std::shared_ptr<serac::Mesh> mesh;
 
-  NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
+  // NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
+  NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::Newton,
                                         .relative_tol = 1.0e-15,
                                         .absolute_tol = 1.0e-13,
                                         .max_iterations = 200,
