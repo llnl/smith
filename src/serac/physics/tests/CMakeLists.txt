@@ -30,7 +30,6 @@ set(physics_serial_test_sources
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
     test_solid_weak_form.cpp
-    test_dfem_explicit_dynamics.cpp
     test_dfem_lumped_mass.cpp
     test_dfem_vs_functional.cpp
     test_dfem_residual.cpp

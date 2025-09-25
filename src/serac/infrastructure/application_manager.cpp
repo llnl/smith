@@ -77,7 +77,9 @@ void finalizer()
   accelerator::terminateDevice();
 }
 
-ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bool doesPrintRunInfo, ExecutionSpace exec_space) : comm_(comm)
+ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bool doesPrintRunInfo,
+                                       ExecutionSpace exec_space)
+    : comm_(comm)
 {
   // Initialize MPI
   if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
