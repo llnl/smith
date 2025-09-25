@@ -863,10 +863,11 @@ class TrustRegion : public mfem::NewtonSolver {
     final_norm = norm;
 
     if (print_level == 1) {
-      mfem::out << "Newton iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm << '\n';
+      mfem::out << "TrustRegion iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm
+                << '\n';
     }
     if (!converged && print_level >= 1) {  // (print_options.summary || print_options.warnings)) {
-      mfem::out << "Newton: No convergence!\n";
+      mfem::out << "TrustRegion: No convergence!\n";
     }
 
     if (false && print_level == 2) {
