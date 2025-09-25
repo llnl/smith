@@ -26,7 +26,6 @@
 #include "petsc.h"  // for PetscPopSignalHandler
 #endif
 
-#include "serac/infrastructure/accelerator.hpp"
 #include "serac/infrastructure/logger.hpp"
 #include "serac/infrastructure/profiling.hpp"
 #include "serac/infrastructure/about.hpp"
@@ -78,7 +77,7 @@ void finalizer()
   accelerator::terminateDevice();
 }
 
-ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bool doesPrintRunInfo) : comm_(comm)
+ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bool doesPrintRunInfo, ExecutionSpace exec_space) : comm_(comm)
 {
   // Initialize MPI
   if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
@@ -120,7 +119,7 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bo
 #endif
 
   // Initialize GPU (no-op if not enabled/available)
-  accelerator::initializeDevice();
+  accelerator::initializeDevice(exec_space);
 
   // Register signal handlers
   std::signal(SIGABRT, signalHandler);

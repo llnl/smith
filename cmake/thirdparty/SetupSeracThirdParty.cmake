@@ -206,12 +206,23 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
         find_dependency(Enzyme REQUIRED)
 
         serac_assert_find_succeeded(PROJECT_NAME Enzyme
-                                    TARGET       LLDEnzymeFlags
-                                    DIR_VARIABLE ENZYME_DIR)
-
-        serac_assert_find_succeeded(PROJECT_NAME Enzyme
                                     TARGET       ClangEnzymeFlags
                                     DIR_VARIABLE ENZYME_DIR)
+
+        message(STATUS "Checking for Target 'ClangEnzymeFlags' plugin target exists..")
+        get_target_property(_clangenzyme_opts ClangEnzymeFlags INTERFACE_COMPILE_OPTIONS)
+        if("${_clangenzyme_opts}" MATCHES "\\$<TARGET_FILE:([^>]+)>")
+            set(_enzyme_target "${CMAKE_MATCH_1}")
+
+            # Check if the extracted target exists
+            if(TARGET "${_enzyme_target}")
+                message(STATUS "Found 'ClangEnzymeFlags' plugin target: ${_enzyme_target}")
+            else()
+                message(FATAL_ERROR "'ClangEnzymeFlags' plugin target '${_enzyme_target}' referenced in INTERFACE_COMPILE_OPTIONS does not exist.")
+            endif()
+        else()
+            message(STATUS "Skipped check. `ClangEnzymeFlags` target does not reference another target")
+        endif()
 
         message(STATUS "Enzyme support is ON")
         set(ENZYME_FOUND TRUE)
