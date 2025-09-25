@@ -28,9 +28,11 @@ class NewtonSolver : public mfem::NewtonSolver {
  protected:
   /// initial solution vector to do line-search off of
   mutable mfem::Vector x0;
+
   /// nonlinear solver options
   NonlinearSolverOptions nonlinear_options;
 
+  /// reconstructed serac print level
   mutable size_t print_level = 0;
 
  public:
@@ -327,6 +329,7 @@ class TrustRegion : public mfem::NewtonSolver {
   NonlinearSolverOptions nonlinear_options;
   /// linear solution options
   LinearSolverOptions linear_options;
+
   /// handle to the preconditioner used by the trust region, it ignores the linear solver as a SPD preconditioner is
   /// currently required
   Solver& tr_precond;
