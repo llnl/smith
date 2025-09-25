@@ -312,6 +312,7 @@ int main(int argc, char* argv[])
     writer.write(0, 0.0, objective_states);
   }
   auto non_const_states = getFieldPointers(states, params);
+  // create an inertial relief problem
   InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]}, non_const_states, mesh,
                                 solid_mechanics_weak_form, constraints);
   int dimx = problem.GetDimx();
