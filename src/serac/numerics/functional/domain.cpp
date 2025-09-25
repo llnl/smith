@@ -707,4 +707,78 @@ Domain operator|(const Domain& a, const Domain& b) { return set_operation(SET_OP
 Domain operator&(const Domain& a, const Domain& b) { return set_operation(SET_OPERATION::INTERSECTION, a, b); }
 Domain operator-(const Domain& a, const Domain& b) { return set_operation(SET_OPERATION::DIFFERENCE, a, b); }
 
+mfem::Array<int>
+union_dofs(const Domain& a, const Domain& b, const mfem::FiniteElementSpace* fes)
+{
+  auto a_dofs = a.dof_list(fes);
+  auto b_dofs = b.dof_list(fes);
+
+  std::vector<int> avec(a_dofs.begin(), a_dofs.end());
+  std::vector<int> bvec(b_dofs.begin(), b_dofs.end());
+
+  std::sort(avec.begin(), avec.end());
+  std::sort(bvec.begin(), bvec.end());
+
+  std::vector<int> uni;
+  std::set_union(avec.begin(), avec.end(),
+                 bvec.begin(), bvec.end(),
+                 std::back_inserter(uni));
+
+  mfem::Array<int> result(static_cast<int>(uni.size()));
+  for (int i = 0; i < static_cast<int>(uni.size()); i++) {
+    result[i] = uni[static_cast<size_t>(i)];
+  }
+  return result;
+}
+
+/// @brief Return DOFs in `a ∩ b` with respect to `fes`.
+mfem::Array<int>
+intersect_dofs(const Domain& a, const Domain& b, const mfem::FiniteElementSpace* fes)
+{
+  auto a_dofs = a.dof_list(fes);
+  auto b_dofs = b.dof_list(fes);
+
+  std::vector<int> avec(a_dofs.begin(), a_dofs.end());
+  std::vector<int> bvec(b_dofs.begin(), b_dofs.end());
+
+  std::sort(avec.begin(), avec.end());
+  std::sort(bvec.begin(), bvec.end());
+
+  std::vector<int> inter;
+  std::set_intersection(avec.begin(), avec.end(),
+                        bvec.begin(), bvec.end(),
+                        std::back_inserter(inter));
+
+  mfem::Array<int> result(static_cast<int>(inter.size()));
+  for (int i = 0; i < static_cast<int>(inter.size()); i++) {
+    result[i] = inter[static_cast<size_t>(i)];
+  }
+  return result;
+}
+
+/// @brief Return DOFs in `a \ b` with respect to `fes`.
+mfem::Array<int>
+subtract_dofs(const Domain& a, const Domain& b, const mfem::FiniteElementSpace* fes)
+{
+  auto a_dofs = a.dof_list(fes);
+  auto b_dofs = b.dof_list(fes);
+
+  std::vector<int> avec(a_dofs.begin(), a_dofs.end());
+  std::vector<int> bvec(b_dofs.begin(), b_dofs.end());
+
+  std::sort(avec.begin(), avec.end());
+  std::sort(bvec.begin(), bvec.end());
+
+  std::vector<int> diff;
+  std::set_difference(avec.begin(), avec.end(),
+                      bvec.begin(), bvec.end(),
+                      std::back_inserter(diff));
+
+  mfem::Array<int> result(static_cast<int>(diff.size()));
+  for (int i = 0; i < static_cast<int>(diff.size()); i++) {
+    result[i] = diff[static_cast<size_t>(i)];
+  }
+  return result;
+}
+
 }  // namespace serac
