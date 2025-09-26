@@ -30,6 +30,14 @@ struct ScalarParameter {
   using QFunctionFieldOp = mfem::future::Value<FieldId>;
 };
 
+template <int Idx, int NumVars>
+struct InternalVariableParameter {
+  static constexpr int index = Idx;
+  using QFunctionInput = mfem::future::tensor<mfem::real_t, NumVars>;
+  template <int FieldId>
+  using QFunctionFieldOp = mfem::future::Identity<FieldId>;
+};
+
 template <typename Material, typename... Parameters>
 struct StressDivQFunction {
   SERAC_HOST_DEVICE inline auto operator()(
@@ -52,20 +60,36 @@ struct StressDivQFunction {
   Material material;  ///< the material model to use for computing the stress
 };
 
+template <typename Material, typename... Parameters>
+struct AccelerationQFunction {
+  SERAC_HOST_DEVICE inline auto operator()(
+      // mfem::real_t dt, // TODO: figure out how to pass this in
+      const mfem::future::tensor<mfem::real_t, Material::dim>&,
+      const mfem::future::tensor<mfem::real_t, Material::dim>&,
+      const mfem::future::tensor<mfem::real_t, Material::dim>& a,
+      const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dX_dxi, mfem::real_t weight,
+      Parameters::QFunctionInput... params) const
+  {
+    auto rho = material.density(params...);
+    auto J = mfem::future::det(dX_dxi) * weight;
+    return mfem::future::tuple{-rho * a * J};
+  }
+
+  Material material;  ///< the material model to use for computing the density
+};
+
 /**
  * @brief The weak form for solid mechanics
  *
  * This uses dFEM to compute the solid mechanics residuals and tangent stiffness matrices.
  */
+template <bool IsQuasiStatic = false, bool UseLumpedMass = false>
 class DfemSolidWeakForm : public DfemWeakForm {
  public:
   /// @brief a container holding quadrature point data of the specified type
   /// @tparam T the type of data to store at each quadrature point
   template <typename T>
   using qdata_type = std::shared_ptr<QuadratureData<T>>;
-
-  /// @brief disp, velo, accel
-  static constexpr int NUM_STATE_VARS = 4;
 
   /// @brief enumeration of the required states
   enum STATE
@@ -124,9 +148,63 @@ class DfemSolidWeakForm : public DfemWeakForm {
     DfemWeakForm::addBodyIntegral(domain_attributes, stress_div_integral, stress_div_integral_inputs,
                                   stress_div_integral_outputs, displacement_ir,
                                   std::index_sequence<DISPLACEMENT, NUM_STATE_VARS + ParameterTypes::index...>{});
+
+    if constexpr (!IsQuasiStatic) {
+      auto acceleration_integral = AccelerationQFunction<MaterialType, ParameterTypes...>{.material = material};
+      mfem::future::tuple<mfem::future::Value<DISP>, mfem::future::Value<VELO>, mfem::future::Value<ACCEL>,
+                          mfem::future::Gradient<COORD>, mfem::future::Weight,
+                          typename ParameterTypes::template QFunctionFieldOp<NUM_STATE_VARS + ParameterTypes::index>...>
+          acceleration_integral_inputs{};
+      mfem::future::tuple<mfem::future::Value<NUM_STATE_VARS + sizeof...(ParameterTypes)>>
+          acceleration_integral_outputs{};
+      if constexpr (UseLumpedMass) {
+        SLIC_ERROR_IF(DfemResidual::input_mfem_spaces_[DISP]->IsVariableOrder(),
+                      "Lumped mass matrix is not supported for variable order finite element spaces.");
+        auto& mesh = DfemResidual::mesh_->mfemParMesh();
+        SLIC_ERROR_IF(mesh.GetNumGeometries(mesh.Dimension()) != 1 ||
+                          !(mesh.HasGeometry(mfem::Geometry::SQUARE) || mesh.HasGeometry(mfem::Geometry::CUBE)),
+                      "Lumped mass matrix is only supported for 2D and 3D meshes with square or cubic elements.");
+        // use lumped mass matrix via integration rule at nodes
+        auto& fe_coll = *DfemResidual::input_mfem_spaces_[DISP]->FEColl();
+        mfem::IntegrationRule rule_1d;
+        mfem::QuadratureFunctions1D::GaussLobatto(fe_coll.GetOrder() + 1, &rule_1d);
+        auto spatial_dim = DfemResidual::input_mfem_spaces_[DISP]->GetVDim();
+        switch (spatial_dim) {
+          case 1:
+            nodal_ir_ = std::make_unique<mfem::IntegrationRule>(rule_1d);
+            break;
+          case 2:
+            nodal_ir_ = std::make_unique<mfem::IntegrationRule>(rule_1d, rule_1d);
+            break;
+          case 3:
+            nodal_ir_ = std::make_unique<mfem::IntegrationRule>(rule_1d, rule_1d, rule_1d);
+            break;
+          default:
+            SLIC_ERROR_ROOT("Unsupported number of dimensions for nodal integration rule.");
+        }
+        DfemResidual::addBodyIntegral(domain_attributes, acceleration_integral, acceleration_integral_inputs,
+                                      acceleration_integral_outputs, *nodal_ir_, std::index_sequence<ACCEL>{});
+      } else {
+        // use consistent mass matrix
+        DfemResidual::addBodyIntegral(domain_attributes, acceleration_integral, acceleration_integral_inputs,
+                                      acceleration_integral_outputs, displacement_ir, std::index_sequence<ACCEL>{});
+      }
+    }
+  }
+
+  void massMatrix(const std::vector<ConstFieldPtr>& fields, const mfem::Vector& direction_t,
+                  mfem::Vector& result_t) const
+  {
+    static_assert(!IsQuasiStatic, "Mass matrix is not defined for quasi-static solid mechanics problems.");
+    auto deriv_op =
+        DfemResidual::residual_.GetDerivative(ACCEL, {&fields[0]->gridFunction()}, DfemResidual::getLVectors(fields));
+    deriv_op->Mult(direction_t, result_t);
   }
 
  protected:
+  std::unique_ptr<mfem::IntegrationRule> nodal_ir_;
+
+ private:
   /**
    * @brief Creates a list of MFEM input spaces compatible with dFEM
    *

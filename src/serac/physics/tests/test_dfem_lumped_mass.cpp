@@ -11,9 +11,8 @@
 #include "serac/physics/state/state_manager.hpp"
 
 #include "serac/physics/tests/physics_test_utils.hpp"
-#include "serac/physics/solid_residual.hpp"
-#include "serac/physics/solid_dfem_residual.hpp"
-#include "serac/physics/dfem_mass_residual.hpp"
+#include "serac/physics/dfem_solid_weak_form.hpp"
+#include "serac/physics/dfem_mass_weak_form.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
@@ -115,7 +114,7 @@ struct LumpedMassFixture : public testing::Test {
     double E = 1.0e3;
     double nu = 0.3;
 
-    using SolidT = serac::SolidDfemResidual<quasi_static, lumped_mass>;
+    using SolidT = serac::DfemSolidWeakForm<quasi_static, lumped_mass>;
     auto solid_dfem_residual =
         std::make_shared<SolidT>(physics_name, mesh, states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
     SolidMaterialDfem dfem_mat;
