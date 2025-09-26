@@ -120,6 +120,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("mfem+petsc", when="+petsc")
     depends_on("mfem+slepc", when="+slepc")
     depends_on("mfem+openmp", when="+openmp")
+    depends_on("mfem+enzyme", when="+enzyme")
 
     depends_on("netcdf-c@4.7.4")
 
@@ -137,6 +138,8 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("tribol~raja", when="~raja")
     depends_on("tribol+umpire", when="+umpire")
     depends_on("tribol~umpire", when="~umpire")
+    depends_on("tribol+enzyme", when="+enzyme")
+    depends_on("tribol~enzyme", when="~enzyme")
 
     # Needs to be first due to a bug with the Spack concretizer
     # Note: Certain combinations of CMake and Conduit do not like +mpi

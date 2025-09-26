@@ -29,7 +29,7 @@ class ApplicationManager {
    * @param comm The MPI communicator to initialize with
    * @param exec_space The desired execution space of device-capable lambda functions
    */
-  ApplicationManager(int argc, char* argv[], MPI_Comm comm = MPI_COMM_WORLD,
+  ApplicationManager(int argc, char* argv[], MPI_Comm comm = MPI_COMM_WORLD, bool doesPrintRunInfo = true,
                      ExecutionSpace exec_space = ExecutionSpace::CPU);
 
   /**

@@ -4,13 +4,13 @@
 # CMake executable path: /usr/tce/bin/cmake
 #------------------------------------------------------------------------------
 
-set(CMAKE_PREFIX_PATH "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/caliper-2.12.1-nnegy5dckpkmcjxr2d7p3bxftxnp7ugy;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/tribol-0.1.0.19-s27sxpcq3wpunhf3hat37pcgfaopsofg;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/adiak-0.4.1-vcebqioolx5swnh5jh3vofbc7gwxbjnz;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/axom-0.10.1.1-rneru4giv2ewylgebtcf3uk6c37uvd7m;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/conduit-0.9.2-3zjitqyjo5hywwgvoiksoah3vo3xoxpo;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/mfem-4.8.0.1-daspwjx4rrms5tvvurhw44s7ndacpwdq;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/raja-2024.07.0-xgktxoswgbbqcqkrxl5nrfhabqjb7nqi;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/umpire-2024.07.0-2lgp2wihiz7gghci2euzhvj65xbfrgo3;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/netcdf-c-4.7.4-bp24ixl6szluqobec5eicnqm5df6wfmo;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/slepc-3.21.2-6l55bgc7rljc3rgaei5j34ajc6wjstyl;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/sundials-6.7.0-pegrbubvgbbnxgklabb3hq4yeb7jfabc;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/camp-2024.07.0-5hekan5rpn3dzadr3gucz7u5q4cglwwz;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/fmt-11.0.2-usm3fj6qxr75ga5p2ydlhearxsbtpckd;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/hdf5-1.8.23-a5aevsftdqt4quek6v6eluljsazqs6ww;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/arpack-ng-3.9.0-h7azneakjc2bas5pmvzxurdb2zxibeqc;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/petsc-3.21.6-kc675eyn4s5ldwml6rygmvwjmipr5xw7;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/hypre-2.26.0-fip3pi45ru7ao6y4rcjwlrrtmyz56gd2;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/strumpack-8.0.0-nikoevilkmzfxtoywzljgbcpgtpx2s62;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/superlu-dist-8.1.2-l5xmnfrhhqqa7z5hnibp522ceevfibup;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/netlib-scalapack-2.2.2-exloohmk6uv52js7hiy74dkuzdaxgzho;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/parmetis-4.0.3-q4uej3qoobfln5vpx55kpxprhwfxahgz;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/metis-5.1.0-nbxqo5m7iy3uyjd32skqzpa4d5cev2dt;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/none-none/gcc-runtime-13.3.1-uv6f6pcmzth37hskwtrhtbmbujh53k6y;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/none-none/compiler-wrapper-1.0-hxzxhboumtniaqs7qivgliluv4h2lbxt;/usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.11.7;/usr/tce;/usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/cppcheck-2.9;/usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/doxygen-1.9.8;/usr/tce/packages/gcc/gcc-13.3.1;/usr/tce/packages/clang/clang-19.1.3;/usr/tce/packages/mvapich2/mvapich2-2.3.7-gcc-13.3.1-magic;/usr/tce/packages/python/python-3.9.12" CACHE STRING "")
+set(CMAKE_PREFIX_PATH "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/caliper-2.12.1-nnegy5dckpkmcjxr2d7p3bxftxnp7ugy;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/tribol-0.1.0.21-yxlr52ve2o2wtqrlhh5qitztwdsey4jq;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/adiak-0.4.1-vcebqioolx5swnh5jh3vofbc7gwxbjnz;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/axom-0.11.0.1-dfenolqzwiv5tihipn24dy4owcpqirx4;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/conduit-0.9.2-3zjitqyjo5hywwgvoiksoah3vo3xoxpo;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/mfem-4.9.0.1-j57zj7s43k757edvfjmhckira4ijyzxw;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/raja-2024.07.0-xgktxoswgbbqcqkrxl5nrfhabqjb7nqi;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/umpire-2024.07.0-2lgp2wihiz7gghci2euzhvj65xbfrgo3;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/netcdf-c-4.7.4-bp24ixl6szluqobec5eicnqm5df6wfmo;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/slepc-3.21.2-p3fl3xkwq3dszpyazj3uxjxwmu6upv4y;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/sundials-6.7.0-pegrbubvgbbnxgklabb3hq4yeb7jfabc;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/camp-2024.07.0-5hekan5rpn3dzadr3gucz7u5q4cglwwz;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/fmt-11.0.2-usm3fj6qxr75ga5p2ydlhearxsbtpckd;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/hdf5-1.8.23-a5aevsftdqt4quek6v6eluljsazqs6ww;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/arpack-ng-3.9.1-dmayqpcvmr6cb5lilfwbygkec2fmshj6;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/petsc-3.21.6-kc675eyn4s5ldwml6rygmvwjmipr5xw7;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/hypre-2.26.0-fip3pi45ru7ao6y4rcjwlrrtmyz56gd2;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/strumpack-8.0.0-nikoevilkmzfxtoywzljgbcpgtpx2s62;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/superlu-dist-8.1.2-l5xmnfrhhqqa7z5hnibp522ceevfibup;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/netlib-scalapack-2.2.2-exloohmk6uv52js7hiy74dkuzdaxgzho;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/parmetis-4.0.3-q4uej3qoobfln5vpx55kpxprhwfxahgz;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/metis-5.1.0-nbxqo5m7iy3uyjd32skqzpa4d5cev2dt;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/none-none/gcc-runtime-13.3.1-uv6f6pcmzth37hskwtrhtbmbujh53k6y;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/none-none/compiler-wrapper-1.0-hxzxhboumtniaqs7qivgliluv4h2lbxt;/usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.11.7;/usr/tce;/usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/cppcheck-2.9;/usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/doxygen-1.9.8;/usr/tce/packages/gcc/gcc-13.3.1;/usr/tce/packages/clang/clang-19.1.3;/usr/tce/packages/mvapich2/mvapich2-2.3.7-gcc-13.3.1-magic;/usr/tce/packages/python/python-3.9.12" CACHE STRING "")
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH "ON" CACHE STRING "")
 
-set(CMAKE_BUILD_RPATH "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/serac-develop-li5aqawkgqnsoolyrhohbjb3ohy66oza/lib;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/serac-develop-li5aqawkgqnsoolyrhohbjb3ohy66oza/lib64;;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
+set(CMAKE_BUILD_RPATH "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/serac-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/serac-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib64;;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
 
-set(CMAKE_INSTALL_RPATH "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/serac-develop-li5aqawkgqnsoolyrhohbjb3ohy66oza/lib;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1/serac-develop-li5aqawkgqnsoolyrhohbjb3ohy66oza/lib64;;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
+set(CMAKE_INSTALL_RPATH "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/serac-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib;/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1/serac-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib64;;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
 
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 
@@ -21,11 +21,11 @@ set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 #------------------------------------------------------------------------------
 if(DEFINED ENV{SPACK_CC})
 
-  set(CMAKE_C_COMPILER "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/none-none/compiler-wrapper-1.0-hxzxhboumtniaqs7qivgliluv4h2lbxt/libexec/spack/gcc/gcc" CACHE PATH "")
+  set(CMAKE_C_COMPILER "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/none-none/compiler-wrapper-1.0-hxzxhboumtniaqs7qivgliluv4h2lbxt/libexec/spack/gcc/gcc" CACHE PATH "")
 
-  set(CMAKE_CXX_COMPILER "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/none-none/compiler-wrapper-1.0-hxzxhboumtniaqs7qivgliluv4h2lbxt/libexec/spack/gcc/g++" CACHE PATH "")
+  set(CMAKE_CXX_COMPILER "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/none-none/compiler-wrapper-1.0-hxzxhboumtniaqs7qivgliluv4h2lbxt/libexec/spack/gcc/g++" CACHE PATH "")
 
-  set(CMAKE_Fortran_COMPILER "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/none-none/compiler-wrapper-1.0-hxzxhboumtniaqs7qivgliluv4h2lbxt/libexec/spack/gcc/gfortran" CACHE PATH "")
+  set(CMAKE_Fortran_COMPILER "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/none-none/compiler-wrapper-1.0-hxzxhboumtniaqs7qivgliluv4h2lbxt/libexec/spack/gcc/gfortran" CACHE PATH "")
 
 else()
 
@@ -65,9 +65,9 @@ set(ENABLE_OPENMP ON CACHE BOOL "")
 # TPLs
 #------------------------------------------------------------------------------
 
-set(TPL_ROOT "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_08_28_07_48_43/gcc-13.3.1" CACHE PATH "")
+set(TPL_ROOT "/usr/WS2/smithdev/libs/serac/toss_4_x86_64_ib/2025_09_25_10_10_47/gcc-13.3.1" CACHE PATH "")
 
-set(AXOM_DIR "${TPL_ROOT}/axom-0.10.1.1-rneru4giv2ewylgebtcf3uk6c37uvd7m" CACHE PATH "")
+set(AXOM_DIR "${TPL_ROOT}/axom-0.11.0.1-dfenolqzwiv5tihipn24dy4owcpqirx4" CACHE PATH "")
 
 set(CAMP_DIR "${TPL_ROOT}/camp-2024.07.0-5hekan5rpn3dzadr3gucz7u5q4cglwwz" CACHE PATH "")
 
@@ -75,7 +75,7 @@ set(CONDUIT_DIR "${TPL_ROOT}/conduit-0.9.2-3zjitqyjo5hywwgvoiksoah3vo3xoxpo" CAC
 
 set(LUA_DIR "/usr" CACHE PATH "")
 
-set(MFEM_DIR "${TPL_ROOT}/mfem-4.8.0.1-daspwjx4rrms5tvvurhw44s7ndacpwdq" CACHE PATH "")
+set(MFEM_DIR "${TPL_ROOT}/mfem-4.9.0.1-j57zj7s43k757edvfjmhckira4ijyzxw" CACHE PATH "")
 
 set(HDF5_DIR "${TPL_ROOT}/hdf5-1.8.23-a5aevsftdqt4quek6v6eluljsazqs6ww" CACHE PATH "")
 
@@ -89,7 +89,7 @@ set(NETCDF_DIR "${TPL_ROOT}/netcdf-c-4.7.4-bp24ixl6szluqobec5eicnqm5df6wfmo" CAC
 
 set(SUPERLUDIST_DIR "${TPL_ROOT}/superlu-dist-8.1.2-l5xmnfrhhqqa7z5hnibp522ceevfibup" CACHE PATH "")
 
-set(ARPACK_DIR "${TPL_ROOT}/arpack-ng-3.9.0-h7azneakjc2bas5pmvzxurdb2zxibeqc" CACHE PATH "")
+set(ARPACK_DIR "${TPL_ROOT}/arpack-ng-3.9.1-dmayqpcvmr6cb5lilfwbygkec2fmshj6" CACHE PATH "")
 
 set(ADIAK_DIR "${TPL_ROOT}/adiak-0.4.1-vcebqioolx5swnh5jh3vofbc7gwxbjnz" CACHE PATH "")
 
@@ -103,7 +103,7 @@ set(PETSC_DIR "${TPL_ROOT}/petsc-3.21.6-kc675eyn4s5ldwml6rygmvwjmipr5xw7" CACHE 
 
 set(RAJA_DIR "${TPL_ROOT}/raja-2024.07.0-xgktxoswgbbqcqkrxl5nrfhabqjb7nqi" CACHE PATH "")
 
-set(SLEPC_DIR "${TPL_ROOT}/slepc-3.21.2-6l55bgc7rljc3rgaei5j34ajc6wjstyl" CACHE PATH "")
+set(SLEPC_DIR "${TPL_ROOT}/slepc-3.21.2-p3fl3xkwq3dszpyazj3uxjxwmu6upv4y" CACHE PATH "")
 
 set(STRUMPACK_DIR "${TPL_ROOT}/strumpack-8.0.0-nikoevilkmzfxtoywzljgbcpgtpx2s62" CACHE PATH "")
 
@@ -111,7 +111,7 @@ set(SUNDIALS_DIR "${TPL_ROOT}/sundials-6.7.0-pegrbubvgbbnxgklabb3hq4yeb7jfabc" C
 
 set(UMPIRE_DIR "${TPL_ROOT}/umpire-2024.07.0-2lgp2wihiz7gghci2euzhvj65xbfrgo3" CACHE PATH "")
 
-set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.19-s27sxpcq3wpunhf3hat37pcgfaopsofg" CACHE PATH "")
+set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.21-yxlr52ve2o2wtqrlhh5qitztwdsey4jq" CACHE PATH "")
 
 #------------------------------------------------------------------------------
 # Devtools

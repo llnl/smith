@@ -34,3 +34,6 @@ add_subdirectory(explicit)
 
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
+
+# Add the inertia relief example
+add_subdirectory(inertia_relief)
