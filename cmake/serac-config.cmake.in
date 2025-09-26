@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 @PACKAGE_INIT@
 
@@ -161,6 +161,12 @@ if(NOT SERAC_FOUND)
   # Tribol
   if(SERAC_USE_TRIBOL)
     find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
+  endif()
+
+  # Enzyme
+  if(SERAC_USE_ENZYME)
+    set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
+    find_dependency(Enzyme REQUIRED)
   endif()
 
   #----------------------------------------------------------------------------
