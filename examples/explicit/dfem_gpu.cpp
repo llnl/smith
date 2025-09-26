@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
 
   auto exec_space = use_gpu ? serac::ExecutionSpace::GPU : serac::ExecutionSpace::CPU;
 
-  serac::ApplicationManager applicationManager(argc, argv, MPI_COMM_WORLD, exec_space);
+  serac::ApplicationManager applicationManager(argc, argv, MPI_COMM_WORLD, true, exec_space);
 
   MPI_Barrier(MPI_COMM_WORLD);
 
