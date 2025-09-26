@@ -128,7 +128,7 @@ class Mechanics : public BasePhysics {
                                         ///< back-propagating to allow users of reverseAdjointTimestep to specify
                                         ///< adjoint loads and to retrieve timestep sensitivity information.
 
-  size_t sub_cycle_; ///< counts all calls to state advancer's advance step (on the forward pass)
+  size_t sub_cycle_;  ///< counts all calls to state advancer's advance step (on the forward pass)
 };
 
 }  // namespace serac
