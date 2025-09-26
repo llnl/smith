@@ -154,10 +154,10 @@ class InertialReliefProblem : public GeneralNLMCProblem {
                         std::vector<std::shared_ptr<serac::ScalarObjective>> constraints);
   void F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int& Feval_err) const;
   void Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval, int& Qeval_err) const;
-  mfem::HypreParMatrix* DxF(const mfem::Vector& x, const mfem::Vector& y);
-  mfem::HypreParMatrix* DyF(const mfem::Vector& x, const mfem::Vector& y);
-  mfem::HypreParMatrix* DxQ(const mfem::Vector& x, const mfem::Vector& y);
-  mfem::HypreParMatrix* DyQ(const mfem::Vector& x, const mfem::Vector& y);
+  mfem::Operator* DxF(const mfem::Vector& x, const mfem::Vector& y);
+  mfem::Operator* DyF(const mfem::Vector& x, const mfem::Vector& y);
+  mfem::Operator* DxQ(const mfem::Vector& x, const mfem::Vector& y);
+  mfem::Operator* DyQ(const mfem::Vector& x, const mfem::Vector& y);
   virtual ~InertialReliefProblem();
 };
 
@@ -496,13 +496,13 @@ void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem
   }
 }
 
-mfem::HypreParMatrix* InertialReliefProblem::DxF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdx_; }
+mfem::Operator* InertialReliefProblem::DxF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdx_; }
 
-mfem::HypreParMatrix* InertialReliefProblem::DyF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdy_; }
+mfem::Operator* InertialReliefProblem::DyF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdy_; }
 
-mfem::HypreParMatrix* InertialReliefProblem::DxQ(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dQdx_; }
+mfem::Operator* InertialReliefProblem::DxQ(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dQdx_; }
 
-mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, const mfem::Vector& y)
+mfem::Operator* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, const mfem::Vector& y)
 {
   MFEM_VERIFY(y.Size() == dimy, "InertialReliefProblem::DyQ -- Inconsistent dimensions");
   // dQdy = [dr/du   dc/du^T]
