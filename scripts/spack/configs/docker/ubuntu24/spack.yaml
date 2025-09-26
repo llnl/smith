@@ -9,53 +9,25 @@ spack:
     build_stage::
     - $spack/../build_stage
 
-  compilers::
-  - compiler:
-      environment: {}
-      extra_rpaths: []
-      # Axom example sidre_shocktube_F_ex doesn't link otherwise
-      flags:
-        cflags: -fPIC -pthread
-        cxxflags: -fPIC -pthread
-      modules: []
-      operating_system: ubuntu22.04
-      paths:
-        cc: /usr/bin/clang
-        cxx: /usr/bin/clang++
-        f77: /usr/bin/gfortran-11
-        fc: /usr/bin/gfortran-11
-      spec: clang@14.0.0
-      target: x86_64
-  - compiler:
-      environment: {}
-      extra_rpaths: []
-      flags:
-        cflags: -fPIC -pthread
-        cxxflags: -fPIC -pthread
-      modules: []
-      operating_system: ubuntu22.04
-      paths:
-        cc: /usr/bin/gcc
-        cxx: /usr/bin/g++
-        f77: /usr/bin/gfortran-13
-        fc: /usr/bin/gfortran-13
-      spec: gcc@13.1.0
-      target: x86_64
-  - compiler:
-      environment: {}
-      extra_rpaths: []
-      flags:
-        cflags: -fPIC -pthread
-        cxxflags: -fPIC -pthread
-      modules: []
-      operating_system: ubuntu22.04
-      paths:
-        cc: /usr/bin/gcc
-        cxx: /usr/bin/g++
-        f77: /usr/bin/gfortran-12
-        fc: /usr/bin/gfortran-12
-      spec: gcc@12.3.0
-      target: x86_64
+  toolchains:
+    clang_19:
+    - spec: '%c=llvm'
+      when: '%c'
+    - spec: '%cxx=llvm'
+      when: '%cxx'
+    - spec: '%fortran=gcc'
+      when: '%fortran'
+    - spec: '%mpich@4.0.clang_19'
+      when: '%mpi'
+    gcc_13:
+    - spec: '%c=gcc'
+      when: '%c'
+    - spec: '%cxx=gcc'
+      when: '%cxx'
+    - spec: '%fortran=gcc'
+      when: '%fortran'
+    - spec: '%mpich@4.0.gcc_13'
+      when: '%mpi'
 
   # Regular TPLs do not need views
   view: false
@@ -88,39 +60,71 @@ spack:
         tbb: [intel-tbb]
         jpeg: [libjpeg-turbo, libjpeg]
 
+    #Compiler packages
+    gcc:
+      externals:
+      - spec: gcc@13.3.0 languages:=c,c++,fortran
+        prefix: /usr/bin
+        extra_attributes:
+          compilers:
+            c: /usr/bin/gcc
+            cxx: /usr/bin/g++
+            fortran: /usr/bin/gfortran
+          flags:
+            # Axom example sidre_shocktube_F_ex doesn't link otherwise
+            cflags: -fPIC -pthread
+            cxxflags: -fPIC -pthread
+            fflags: -fPIC -pthread
+    llvm:
+      externals:
+      - spec: llvm@19.1.1+clang~lld~lldb
+        prefix: /usr/bin
+        extra_attributes:
+          compilers:
+            c: /usr/bin/clang
+            cxx: /usr/bin/clang++
+          flags:
+            # Axom example sidre_shocktube_F_ex doesn't link otherwise
+            cflags: -fPIC -pthread
+            cxxflags: -fPIC -pthread
+            fflags: -fPIC -pthread
+
     # Spack may grab for mpi & we don't want to use them
     mpi:
       buildable: false
     mpich:
       externals:
-      - spec: mpich@4.0
+      - spec: mpich@4.0.clang_19
+        prefix: /usr
+      - spec: mpich@4.0.gcc_13
         prefix: /usr
 
     # System level packages to not build
     autotools:
       buildable: false
       externals:
-      - spec: autotools@20220109.1
+      - spec: autotools@2.71
         prefix: /usr
     bzip2:
       buildable: false
       externals:
       - spec: bzip2@1.0.8
         prefix: /usr
-    cuda:
-      externals:
-        - spec: cuda@12.3.0
-          prefix: /usr/local/cuda-12.3
-      buildable: false
+    # TODO Update CUDA and add HIP versions
+    # cuda:
+    #   buildable: false
+    #   externals:
+    #     - spec: cuda@12.3.0
+    #       prefix: /usr/local/cuda-12.3
     curl:
       buildable: false
       externals:
-      - spec: curl@7.81.0
+      - spec: curl@8.5.0
         prefix: /usr
     diffutils:
       buildable: false
       externals:
-      - spec: diffutils@3.8
+      - spec: diffutils@3.10
         prefix: /usr
     gettext:
       buildable: false
@@ -135,32 +139,32 @@ spack:
     m4:
       buildable: false
       externals:
-      - spec: m4@1.4.18
+      - spec: m4@1.4.19
         prefix: /usr
     perl:
       buildable: false
       externals:
-      - spec: perl@5.34.0
+      - spec: perl@5.38.2
         prefix: /usr
     pkg-config:
       buildable: false
       externals:
-      - spec: pkg-config@0.29.2
+      - spec: pkg-config@1.8.1
         prefix: /usr
     tar:
       buildable: false
       externals:
-      - spec: tar@1.34
+      - spec: tar@1.35
         prefix: /usr
     graphviz:
       buildable: false
       externals:
-      - spec: graphviz@2.42.2
+      - spec: graphviz@2.43.0
         prefix: /usr
     openblas:
       buildable: false
       externals:
-      - spec: openblas@0.3.20
+      - spec: openblas@0.3.26
         prefix: /usr
 
     # Globally lock in version of CMake
@@ -171,16 +175,10 @@ spack:
       - spec: cmake@3.23.1
         prefix: /usr/local
     doxygen:
-      version: [1.9.1]
+      version: [1.9.8]
       buildable: false
       externals:
-      - spec: doxygen@1.9.1
-        prefix: /usr
-    llvm:
-      version: [14.0.0]
-      buildable: false
-      externals:
-      - spec: llvm@14.0.0+clang
+      - spec: doxygen@1.9.8
         prefix: /usr
     py-sphinx:
       version: [4.3.2]

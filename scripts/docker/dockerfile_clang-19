@@ -4,7 +4,7 @@ ARG branch=develop
 
 SHELL ["/bin/bash", "-c"]
 RUN sudo apt-get update -y
-RUN sudo apt-get install gettext gfortran-$(gcc -dumpversion) graphviz libopenblas-dev \
+RUN sudo apt-get install gettext gfortran-$(gcc -dumpversion) graphviz libomp-14-dev libopenblas-dev \
                          lsb-release lua5.2 lua5.2-dev mpich python3-sphinx ssh texlive-full -fy
 RUN sudo useradd -m -s /bin/bash -G sudo serac
 
@@ -31,7 +31,7 @@ RUN git clone --recursive --branch $branch --single-branch --depth 1 https://git
 # Build/install TPLs via spack and then remove the temporary build directory on success
 RUN cd serac_repo && python3 ./scripts/uberenv/uberenv.py --spack-env-file=./scripts/spack/configs/docker/ubuntu22/spack.yaml \
                                                           --project-json=.uberenv_config.json \
-                                                          --spec="+shared%clang_19" --prefix=/home/serac/serac_tpls -k \
+                                                          --spec="%clang@14.0.0+shared" --prefix=/home/serac/serac_tpls -k \
                   && rm -rf /home/serac/serac_tpls/build_stage /home/serac/serac_tpls/spack
 
 RUN mkdir -p /home/serac/export_hostconfig
