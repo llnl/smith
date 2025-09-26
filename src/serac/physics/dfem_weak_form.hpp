@@ -12,7 +12,9 @@
 
 #pragma once
 
-#ifdef SERAC_USE_ENZYME
+#include "serac/serac_config.hpp"
+
+#ifdef SERAC_USE_DFEM
 
 #include "serac/physics/weak_form.hpp"
 #include "serac/physics/mesh.hpp"

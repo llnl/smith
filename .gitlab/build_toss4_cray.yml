@@ -33,23 +33,24 @@
 # Build jobs
 
 toss4_cray-rocmcc_6_2_1-src:
- variables:
-   COMPILER: "rocmcc@6.2.1"
-   HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
-   EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug"
-   ALLOC_NODES: "1"
-   ALLOC_TIME: "30"
- extends: .src_build_on_toss4_cray
+  variables:
+    COMPILER: "rocmcc@6.2.1"
+    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "30"
+  extends: .src_build_on_toss4_cray
  
 toss4_cray-rocmcc_6_2_1-src-codevelop:
- variables:
-   COMPILER: "rocmcc@6.2.1"
-   HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
-   EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug -DSERAC_ENABLE_CODEVELOP=ON"
-   EXTRA_BUILD_OPTIONS: "--skip-install"
-   ALLOC_NODES: "1"
-   ALLOC_TIME: "30"
- extends: .src_build_on_toss4_cray
+  variables:
+    COMPILER: "rocmcc@6.2.1"
+    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
+    # TODO: Add -DSERAC_USE_DFEM=ON when TPLs are updated
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug -DSERAC_ENABLE_CODEVELOP=ON"
+    EXTRA_BUILD_OPTIONS: "--skip-install"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "30"
+  extends: .src_build_on_toss4_cray
 
 # NOTE: SPEC should matches specs.json, but devtools and profiling variants removed
 toss4_cray-rocmcc_6_2_1-tpl:
