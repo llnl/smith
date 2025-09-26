@@ -551,58 +551,56 @@ if (NOT SERAC_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # Tribol
     #------------------------------------------------------------------------------
-    if (NOT SERAC_DISABLE_TRIBOL)
-        if (NOT SERAC_ENABLE_CODEVELOP)
-            if(TRIBOL_DIR)
-                serac_assert_is_directory(DIR_VARIABLE TRIBOL_DIR)
+    if (NOT SERAC_ENABLE_CODEVELOP)
+        if(TRIBOL_DIR)
+            serac_assert_is_directory(DIR_VARIABLE TRIBOL_DIR)
 
-                find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
+            find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
 
-                serac_assert_find_succeeded(PROJECT_NAME Tribol
-                                            TARGET       tribol
-                                            DIR_VARIABLE TRIBOL_DIR)
-                blt_convert_to_system_includes(TARGET tribol)
-                set(TRIBOL_FOUND ON)
-            else()
-                set(TRIBOL_FOUND OFF)
-            endif()
-            
-            message(STATUS "Tribol support is " ${TRIBOL_FOUND})
+            serac_assert_find_succeeded(PROJECT_NAME Tribol
+                                        TARGET       tribol
+                                        DIR_VARIABLE TRIBOL_DIR)
+            blt_convert_to_system_includes(TARGET tribol)
+            set(TRIBOL_FOUND ON)
         else()
-            set(ENABLE_FORTRAN OFF CACHE BOOL "" FORCE)
-            # Otherwise we use the submodule
-            message(STATUS "Using Tribol submodule")
-            set(BUILD_REDECOMP ${SERAC_ENABLE_MPI} CACHE BOOL "")
-            set(TRIBOL_USE_MPI ${SERAC_ENABLE_MPI} CACHE BOOL "")
-            set(TRIBOL_ENABLE_TESTS OFF CACHE BOOL "")
-            set(TRIBOL_ENABLE_EXAMPLES OFF CACHE BOOL "")
-            set(TRIBOL_ENABLE_DOCS OFF CACHE BOOL "")
-
-            if(${PROJECT_NAME} STREQUAL "smith")
-                set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/serac/tribol")
-            else()
-                set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/tribol")
-            endif()
-
-            add_subdirectory(${tribol_repo_dir}  ${CMAKE_BINARY_DIR}/tribol)
-            
-            target_include_directories(redecomp PUBLIC
-                $<BUILD_INTERFACE:${tribol_repo_dir}/src>
-            )
-            target_include_directories(tribol PUBLIC
-                $<BUILD_INTERFACE:${tribol_repo_dir}/src>
-                $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
-                $<INSTALL_INTERFACE:include>
-            )
-            target_include_directories(tribol_shared PUBLIC
-                $<BUILD_INTERFACE:${tribol_repo_dir}/src>
-                $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
-                $<INSTALL_INTERFACE:include>
-            )
-            
-            set(TRIBOL_FOUND TRUE CACHE BOOL "" FORCE)
-            set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
+            set(TRIBOL_FOUND OFF)
         endif()
+        
+        message(STATUS "Tribol support is " ${TRIBOL_FOUND})
+    else()
+        set(ENABLE_FORTRAN OFF CACHE BOOL "" FORCE)
+        # Otherwise we use the submodule
+        message(STATUS "Using Tribol submodule")
+        set(BUILD_REDECOMP ${SERAC_ENABLE_MPI} CACHE BOOL "")
+        set(TRIBOL_USE_MPI ${SERAC_ENABLE_MPI} CACHE BOOL "")
+        set(TRIBOL_ENABLE_TESTS OFF CACHE BOOL "")
+        set(TRIBOL_ENABLE_EXAMPLES OFF CACHE BOOL "")
+        set(TRIBOL_ENABLE_DOCS OFF CACHE BOOL "")
+
+        if(${PROJECT_NAME} STREQUAL "smith")
+            set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/serac/tribol")
+        else()
+            set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/tribol")
+        endif()
+
+        add_subdirectory(${tribol_repo_dir}  ${CMAKE_BINARY_DIR}/tribol)
+        
+        target_include_directories(redecomp PUBLIC
+            $<BUILD_INTERFACE:${tribol_repo_dir}/src>
+        )
+        target_include_directories(tribol PUBLIC
+            $<BUILD_INTERFACE:${tribol_repo_dir}/src>
+            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
+            $<INSTALL_INTERFACE:include>
+        )
+        target_include_directories(tribol_shared PUBLIC
+            $<BUILD_INTERFACE:${tribol_repo_dir}/src>
+            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
+            $<INSTALL_INTERFACE:include>
+        )
+        
+        set(TRIBOL_FOUND ON CACHE BOOL "" FORCE)
+        set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
     endif()
 
     #---------------------------------------------------------------------------
