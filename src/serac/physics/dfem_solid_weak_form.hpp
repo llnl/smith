@@ -141,34 +141,32 @@ class DfemSolidWeakForm : public DfemWeakForm {
     auto stress_div_integral = StressDivQFunction<MaterialType, ParameterTypes...>{.material = material};
     mfem::future::tuple<mfem::future::Gradient<DISPLACEMENT>, mfem::future::Gradient<VELOCITY>,
                         mfem::future::Gradient<ACCELERATION>, mfem::future::Gradient<COORDINATES>, mfem::future::Weight,
-                        typename ParameterTypes::template QFunctionFieldOp<NUM_STATE_VARS + ParameterTypes::index>...>
+                        typename ParameterTypes::template QFunctionFieldOp<NUM_STATES + ParameterTypes::index>...>
         stress_div_integral_inputs{};
-    mfem::future::tuple<mfem::future::Gradient<NUM_STATE_VARS + sizeof...(ParameterTypes)>>
-        stress_div_integral_outputs{};
+    mfem::future::tuple<mfem::future::Gradient<NUM_STATES + sizeof...(ParameterTypes)>> stress_div_integral_outputs{};
     DfemWeakForm::addBodyIntegral(domain_attributes, stress_div_integral, stress_div_integral_inputs,
                                   stress_div_integral_outputs, displacement_ir,
-                                  std::index_sequence<DISPLACEMENT, NUM_STATE_VARS + ParameterTypes::index...>{});
+                                  std::index_sequence<DISPLACEMENT, NUM_STATES + ParameterTypes::index...>{});
 
     if constexpr (!IsQuasiStatic) {
       auto acceleration_integral = AccelerationQFunction<MaterialType, ParameterTypes...>{.material = material};
-      mfem::future::tuple<mfem::future::Value<DISP>, mfem::future::Value<VELO>, mfem::future::Value<ACCEL>,
-                          mfem::future::Gradient<COORD>, mfem::future::Weight,
-                          typename ParameterTypes::template QFunctionFieldOp<NUM_STATE_VARS + ParameterTypes::index>...>
+      mfem::future::tuple<mfem::future::Value<DISPLACEMENT>, mfem::future::Value<VELOCITY>,
+                          mfem::future::Value<ACCELERATION>, mfem::future::Gradient<COORDINATES>, mfem::future::Weight,
+                          typename ParameterTypes::template QFunctionFieldOp<NUM_STATES + ParameterTypes::index>...>
           acceleration_integral_inputs{};
-      mfem::future::tuple<mfem::future::Value<NUM_STATE_VARS + sizeof...(ParameterTypes)>>
-          acceleration_integral_outputs{};
+      mfem::future::tuple<mfem::future::Value<NUM_STATES + sizeof...(ParameterTypes)>> acceleration_integral_outputs{};
       if constexpr (UseLumpedMass) {
-        SLIC_ERROR_IF(DfemResidual::input_mfem_spaces_[DISP]->IsVariableOrder(),
+        SLIC_ERROR_IF(DfemWeakForm::input_mfem_spaces_[DISPLACEMENT]->IsVariableOrder(),
                       "Lumped mass matrix is not supported for variable order finite element spaces.");
-        auto& mesh = DfemResidual::mesh_->mfemParMesh();
+        auto& mesh = DfemWeakForm::mesh_->mfemParMesh();
         SLIC_ERROR_IF(mesh.GetNumGeometries(mesh.Dimension()) != 1 ||
                           !(mesh.HasGeometry(mfem::Geometry::SQUARE) || mesh.HasGeometry(mfem::Geometry::CUBE)),
                       "Lumped mass matrix is only supported for 2D and 3D meshes with square or cubic elements.");
         // use lumped mass matrix via integration rule at nodes
-        auto& fe_coll = *DfemResidual::input_mfem_spaces_[DISP]->FEColl();
+        auto& fe_coll = *DfemWeakForm::input_mfem_spaces_[DISPLACEMENT]->FEColl();
         mfem::IntegrationRule rule_1d;
         mfem::QuadratureFunctions1D::GaussLobatto(fe_coll.GetOrder() + 1, &rule_1d);
-        auto spatial_dim = DfemResidual::input_mfem_spaces_[DISP]->GetVDim();
+        auto spatial_dim = DfemWeakForm::input_mfem_spaces_[DISPLACEMENT]->GetVDim();
         switch (spatial_dim) {
           case 1:
             nodal_ir_ = std::make_unique<mfem::IntegrationRule>(rule_1d);
@@ -182,12 +180,13 @@ class DfemSolidWeakForm : public DfemWeakForm {
           default:
             SLIC_ERROR_ROOT("Unsupported number of dimensions for nodal integration rule.");
         }
-        DfemResidual::addBodyIntegral(domain_attributes, acceleration_integral, acceleration_integral_inputs,
-                                      acceleration_integral_outputs, *nodal_ir_, std::index_sequence<ACCEL>{});
+        DfemWeakForm::addBodyIntegral(domain_attributes, acceleration_integral, acceleration_integral_inputs,
+                                      acceleration_integral_outputs, *nodal_ir_, std::index_sequence<ACCELERATION>{});
       } else {
         // use consistent mass matrix
-        DfemResidual::addBodyIntegral(domain_attributes, acceleration_integral, acceleration_integral_inputs,
-                                      acceleration_integral_outputs, displacement_ir, std::index_sequence<ACCEL>{});
+        DfemWeakForm::addBodyIntegral(domain_attributes, acceleration_integral, acceleration_integral_inputs,
+                                      acceleration_integral_outputs, displacement_ir,
+                                      std::index_sequence<ACCELERATION>{});
       }
     }
   }
@@ -196,8 +195,8 @@ class DfemSolidWeakForm : public DfemWeakForm {
                   mfem::Vector& result_t) const
   {
     static_assert(!IsQuasiStatic, "Mass matrix is not defined for quasi-static solid mechanics problems.");
-    auto deriv_op =
-        DfemResidual::residual_.GetDerivative(ACCEL, {&fields[0]->gridFunction()}, DfemResidual::getLVectors(fields));
+    auto deriv_op = DfemWeakForm::weak_form_.GetDerivative(ACCELERATION, {&fields[0]->gridFunction()},
+                                                           DfemWeakForm::getLVectors(fields));
     deriv_op->Mult(direction_t, result_t);
   }
 

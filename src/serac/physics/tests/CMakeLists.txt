@@ -32,7 +32,7 @@ set(physics_serial_test_sources
     test_solid_weak_form.cpp
     test_dfem_lumped_mass.cpp
     test_dfem_vs_functional.cpp
-    test_dfem_residual.cpp
+    test_dfem_weak_form.cpp
     test_heat_weak_form.cpp
     test_functional_weak_form.cpp
     thermomech_finite_diff.cpp

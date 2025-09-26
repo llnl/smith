@@ -13,6 +13,7 @@
 #include "serac/physics/tests/physics_test_utils.hpp"
 #include "serac/physics/dfem_solid_weak_form.hpp"
 #include "serac/physics/dfem_mass_weak_form.hpp"
+#include "serac/physics/functional_weak_form.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
@@ -37,9 +38,9 @@ struct NeoHookeanWithFieldDensityDfem {
     using std::log1p;
     auto I = mfem::future::IdentityMatrix<dim>();
     auto lambda = K - (2.0 / 3.0) * G;
-    auto B_minus_I = mfem::future::dot(du_dX, transpose(du_dX)) + mfem::future::transpose(du_dX) + du_dX;
+    auto B_minus_I = mfem::future::dot(du_dX, mfem::future::transpose(du_dX)) + mfem::future::transpose(du_dX) + du_dX;
 
-    auto logJ = log1p(detApIm1(du_dX));
+    auto logJ = log1p(mfem::future::detApIm1(du_dX));
     // Kirchoff stress, in form that avoids cancellation error when F is near I
     auto TK = lambda * logJ * I + G * B_minus_I;
 
@@ -114,9 +115,8 @@ struct LumpedMassFixture : public testing::Test {
     double E = 1.0e3;
     double nu = 0.3;
 
-    using SolidT = serac::DfemSolidWeakForm<quasi_static, lumped_mass>;
     auto solid_dfem_residual =
-        std::make_shared<SolidT>(physics_name, mesh, states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
+        std::make_shared<SolidT>(physics_name, mesh, states[SolidT::DISPLACEMENT].space(), getSpaces(params));
     SolidMaterialDfem dfem_mat;
     dfem_mat.K = E / (3.0 * (1.0 - 2.0 * nu));  // bulk modulus
     dfem_mat.G = E / (2.0 * (1.0 + nu));        // shear modulus
@@ -129,11 +129,11 @@ struct LumpedMassFixture : public testing::Test {
                                                                                    displacement_ir);
 
     mfem::future::tensor<mfem::real_t, dim> g({0.0, -9.81});  // gravity vector
-    mfem::future::tuple<mfem::future::Value<SolidT::DISP>, mfem::future::Value<SolidT::VELO>,
-                        mfem::future::Value<SolidT::ACCEL>, mfem::future::Gradient<SolidT::COORD>, mfem::future::Weight,
-                        mfem::future::Value<SolidT::NUM_STATE_VARS>>
+    mfem::future::tuple<mfem::future::Value<SolidT::DISPLACEMENT>, mfem::future::Value<SolidT::VELOCITY>,
+                        mfem::future::Value<SolidT::ACCELERATION>, mfem::future::Gradient<SolidT::COORDINATES>,
+                        mfem::future::Weight, mfem::future::Value<SolidT::NUM_STATES>>
         g_inputs{};
-    mfem::future::tuple<mfem::future::Value<SolidT::NUM_STATE_VARS + 1>> g_outputs{};
+    mfem::future::tuple<mfem::future::Value<SolidT::NUM_STATES + 1>> g_outputs{};
     solid_dfem_residual->addBodyIntegral(
         solid_attrib,
         [=] SERAC_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim>&,
@@ -155,18 +155,15 @@ struct LumpedMassFixture : public testing::Test {
 
     state_duals[0] = 1.0;  // used to test that vjp acts via +=, add initial value to shape displacement dual
 
-    // states[SolidResidualT::DISPLACEMENT] = 0.0;
-    states[SolidResidualT::DISPLACEMENT].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[SolidT::DISPLACEMENT].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = 0.1 * x;
       return u;
     });
-    states[SolidResidualT::VELOCITY] = 0.0;
-    // states[SolidResidualT::ACCELERATION] = 0.0;
-    states[SolidResidualT::ACCELERATION].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[SolidT::VELOCITY] = 0.0;
+    states[SolidT::ACCELERATION].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = -0.01 * x;
       return u;
     });
-    states[SolidResidualT::SHAPE_DISPLACEMENT] = 0.0;
     params[0] = 1.0;
 
     dfem_residual = solid_dfem_residual;
@@ -174,14 +171,15 @@ struct LumpedMassFixture : public testing::Test {
     // mfem::IntegrationRule rule_1d;
     // mfem::QuadratureFunctions1D::GaussLobatto(2, &rule_1d);
     // nodal_ir_2d = mfem::IntegrationRule(rule_1d, rule_1d);
-    auto mass_dfem_residual = serac::create_solid_mass_residual<2, 2>(
-        physics_name, mesh, states[SolidResidualT::DISPLACEMENT], params[0], displacement_ir);  // nodal_ir_2d);
+    auto mass_dfem_residual = serac::create_solid_mass_weak_form<2, 2>(physics_name, mesh, states[SolidT::DISPLACEMENT],
+                                                                       params[0], displacement_ir);  // nodal_ir_2d);
     mass_residual = mass_dfem_residual;
   }
 
-  using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
   static constexpr bool quasi_static = false;
   static constexpr bool lumped_mass = false;
+
+  using SolidT = serac::DfemSolidWeakForm<quasi_static, lumped_mass>;
 
   const double time = 0.0;
   const double dt = 1.0;
@@ -190,9 +188,9 @@ struct LumpedMassFixture : public testing::Test {
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<serac::SolidDfemResidual<quasi_static, lumped_mass>> dfem_residual;
+  std::shared_ptr<serac::DfemSolidWeakForm<quasi_static, lumped_mass>> dfem_residual;
 
-  std::shared_ptr<serac::DfemResidual> mass_residual;
+  std::shared_ptr<serac::DfemWeakForm> mass_residual;
 
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
@@ -218,13 +216,13 @@ TEST_F(LumpedMassFixture, CheckDfemVsFunctionalResidual)
        functional_input_fields[4]});
 
   std::vector<const serac::FiniteElementState*> mass_input_fields = {&coords, &params[0]};
-  auto lumped_mass_vector = mass_residual->residual(time, dt, mass_input_fields);
+  auto lumped_mass_vector = mass_residual->residual(time, dt, nullptr, mass_input_fields);
   // std::cout << "lumped mass vector = " << std::endl;
   // lumped_mass_vector.Print();
 
-  serac::FiniteElementDual ones_vector(states[SolidResidualT::DISPLACEMENT].space(), "ones_vector");
+  serac::FiniteElementDual ones_vector(states[SolidT::DISPLACEMENT].space(), "ones_vector");
   ones_vector = 1.0;
-  serac::FiniteElementDual full_mass_vector(states[SolidResidualT::DISPLACEMENT].space(), "full_mass_vector");
+  serac::FiniteElementDual full_mass_vector(states[SolidT::DISPLACEMENT].space(), "full_mass_vector");
   full_mass_vector = 0.0;
   dfem_residual->massMatrix(dfem_input_fields, ones_vector, full_mass_vector);
   for (int i = 0; i < lumped_mass_vector.Size(); ++i) {

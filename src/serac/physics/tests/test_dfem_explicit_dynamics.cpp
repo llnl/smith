@@ -131,7 +131,7 @@ struct ExplicitDynamicsFixture : public testing::Test {
     double E = 1.0e3;
     double nu = 0.3;
 
-    using SolidT = serac::DfemSolidWeakForm;
+    using SolidT = serac::DfemSolidWeakForm<true, false>;
     auto solid_dfem_weak_form =
         std::make_shared<SolidT>(physics_name, mesh, states[DISPLACEMENT].space(), getSpaces(params));
 
@@ -147,9 +147,9 @@ struct ExplicitDynamicsFixture : public testing::Test {
     mfem::future::tensor<mfem::real_t, dim> g({0.0, -9.81});  // gravity vector
     mfem::future::tuple<mfem::future::Value<SolidT::DISPLACEMENT>, mfem::future::Value<SolidT::VELOCITY>,
                         mfem::future::Value<SolidT::ACCELERATION>, mfem::future::Gradient<SolidT::COORDINATES>,
-                        mfem::future::Weight, mfem::future::Value<SolidT::NUM_STATE_VARS>>
+                        mfem::future::Weight, mfem::future::Value<SolidT::NUM_STATES>>
         g_inputs{};
-    mfem::future::tuple<mfem::future::Value<SolidT::NUM_STATE_VARS + 1>> g_outputs{};
+    mfem::future::tuple<mfem::future::Value<SolidT::NUM_STATES + 1>> g_outputs{};
     solid_dfem_weak_form->addBodyIntegral(
         solid_attrib,
         [=] SERAC_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim>&,
@@ -191,7 +191,7 @@ struct ExplicitDynamicsFixture : public testing::Test {
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<serac::DfemSolidWeakForm> dfem_weak_form;
+  std::shared_ptr<serac::DfemSolidWeakForm<true, false>> dfem_weak_form;
 
   std::shared_ptr<serac::DfemWeakForm> mass_weak_form;
 

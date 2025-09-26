@@ -7,14 +7,13 @@
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 #include "serac/infrastructure/application_manager.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
 #include "serac/physics/tests/physics_test_utils.hpp"
-#include "serac/physics/solid_residual.hpp"
-#include "serac/physics/solid_dfem_residual.hpp"
+#include "serac/physics/solid_weak_form.hpp"
+#include "serac/physics/dfem_solid_weak_form.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
@@ -39,9 +38,9 @@ struct NeoHookeanWithFieldDensityDfem {
     using std::log1p;
     auto I = mfem::future::IdentityMatrix<dim>();
     auto lambda = K - (2.0 / 3.0) * G;
-    auto B_minus_I = mfem::future::dot(du_dX, transpose(du_dX)) + mfem::future::transpose(du_dX) + du_dX;
+    auto B_minus_I = mfem::future::dot(du_dX, mfem::future::transpose(du_dX)) + mfem::future::transpose(du_dX) + du_dX;
 
-    auto logJ = log1p(detApIm1(du_dX));
+    auto logJ = log1p(mfem::future::detApIm1(du_dX));
     // Kirchoff stress, in form that avoids cancellation error when F is near I
     auto TK = lambda * logJ * I + G * B_minus_I;
 
@@ -158,7 +157,8 @@ struct DfemVsFunctionalFixture : public testing::Test {
         serac::StateManager::newState(VectorSpace{}, "shape_displacement", mesh->tag());
     serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-    states = {shape_disp, disp, velo, accel};
+    shape_disp_ptr = std::make_unique<serac::FiniteElementState>(std::move(shape_disp));
+    states = {disp, velo, accel};
     params = {density};
 
     for (auto s : states) {
@@ -173,9 +173,8 @@ struct DfemVsFunctionalFixture : public testing::Test {
 
     std::string physics_name = "solid";
 
-    auto solid_mechanics_residual =
-        std::make_shared<SolidResidualT>(physics_name, mesh, states[SolidResidualT::SHAPE_DISPLACEMENT].space(),
-                                         states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
+    auto functional_solid_weak_form = std::make_shared<SolidFunctionalT>(
+        physics_name, mesh, states[SolidFunctionalT::DISPLACEMENT].space(), getSpaces(params));
     SolidMaterialFunctional mat;
     double E = 1.0e3;
     double nu = 0.3;
@@ -186,11 +185,11 @@ struct DfemVsFunctionalFixture : public testing::Test {
     // rate_mat.G = 0.5;
     // rate_mat.Rho = 1.5;
 
-    solid_mechanics_residual->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
+    functional_solid_weak_form->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
     // solid_mechanics_residual->setRateMaterial(serac::DependsOn<>{}, mesh->entireBodyName(), rate_mat);
 
-    auto solid_dfem_residual = std::make_shared<SolidDfemT>(
-        physics_name, mesh, states[SolidResidualT::DISPLACEMENT].space(), getSpaces(params));
+    auto dfem_solid_weak_form =
+        std::make_shared<SolidDfemT>(physics_name, mesh, states[SolidDfemT::DISPLACEMENT].space(), getSpaces(params));
     SolidMaterialDfem dfem_mat;
     dfem_mat.K = mat.K;
     dfem_mat.G = mat.G;
@@ -203,8 +202,8 @@ struct DfemVsFunctionalFixture : public testing::Test {
     const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
     mfem::Array<int> solid_attrib({1});
 
-    solid_dfem_residual->setMaterial<SolidMaterialDfem, serac::ScalarParameter<0>>(solid_attrib, dfem_mat,
-                                                                                   displacement_ir);
+    dfem_solid_weak_form->setMaterial<SolidMaterialDfem, serac::ScalarParameter<0>>(solid_attrib, dfem_mat,
+                                                                                    displacement_ir);
 
     // // apply traction boundary conditions
     // std::string surface_name = "side";
@@ -222,27 +221,26 @@ struct DfemVsFunctionalFixture : public testing::Test {
 
     state_duals[0] = 1.0;  // used to test that vjp acts via +=, add initial value to shape displacement dual
 
-    // states[SolidResidualT::DISPLACEMENT] = 0.0;
-    states[SolidResidualT::DISPLACEMENT].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[SolidFunctionalT::DISPLACEMENT].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = 0.1 * x;
       return u;
     });
-    states[SolidResidualT::VELOCITY] = 0.0;
-    // states[SolidResidualT::ACCELERATION] = 0.0;
-    states[SolidResidualT::ACCELERATION].setFromFieldFunction([](serac::tensor<double, dim> x) {
+    states[SolidFunctionalT::VELOCITY] = 0.0;
+    // states[SolidFunctionalT::ACCELERATION] = 0.0;
+    states[SolidFunctionalT::ACCELERATION].setFromFieldFunction([](serac::tensor<double, dim> x) {
       auto u = -0.01 * x;
       return u;
     });
-    states[SolidResidualT::SHAPE_DISPLACEMENT] = 0.0;
+    (*shape_disp_ptr) = 0.0;
     params[0] = 1.2;
 
-    // residual is abstract Residual class to ensure usage only through BasePhysics interface
-    functional_residual = solid_mechanics_residual;
-    dfem_residual = solid_dfem_residual;
+    // *_weak_form is abstract WeakForm class to ensure usage only through BasePhysics interface
+    functional_weak_form = functional_solid_weak_form;
+    dfem_weak_form = dfem_solid_weak_form;
   }
 
-  using SolidResidualT = serac::SolidResidual<disp_order, dim, serac::Parameters<DensitySpace>>;
-  using SolidDfemT = serac::SolidDfemResidual<false, false>;
+  using SolidFunctionalT = serac::SolidWeakForm<disp_order, dim, serac::Parameters<DensitySpace>>;
+  using SolidDfemT = serac::DfemSolidWeakForm<false, false>;
 
   const double time = 0.0;
   const double dt = 1.0;
@@ -251,11 +249,13 @@ struct DfemVsFunctionalFixture : public testing::Test {
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<serac::Residual> functional_residual;
-  std::shared_ptr<serac::Residual> dfem_residual;
+  std::shared_ptr<serac::WeakForm> functional_weak_form;
+  std::shared_ptr<serac::WeakForm> dfem_weak_form;
 
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
+
+  std::unique_ptr<serac::FiniteElementState> shape_disp_ptr;
 
   std::vector<serac::FiniteElementDual> state_duals;
   std::vector<serac::FiniteElementDual> state_params;
@@ -275,12 +275,12 @@ TEST_F(DfemVsFunctionalFixture, CheckDfemVsFunctionalResidual)
       {functional_input_fields[1], functional_input_fields[2], functional_input_fields[3], &coords,
        functional_input_fields[4]});
 
-  serac::FiniteElementDual functional_res_vector(states[SolidResidualT::DISPLACEMENT].space(), "functional_residual");
-  functional_res_vector = functional_residual->residual(time, dt, functional_input_fields);
-  serac::FiniteElementDual dfem_vs_functional_vector(states[SolidResidualT::DISPLACEMENT].space(), "dfem_residual");
+  serac::FiniteElementDual functional_res_vector(states[SolidFunctionalT::DISPLACEMENT].space(), "functional_residual");
+  functional_res_vector = functional_weak_form->residual(time, dt, shape_disp_ptr.get(), functional_input_fields);
+  serac::FiniteElementDual dfem_vs_functional_vector(states[SolidDfemT::DISPLACEMENT].space(), "dfem_residual");
   // set nodes at current coords for dfem
   //(*mesh->mfemParMesh().GetNodes()) += states[1].gridFunction();
-  dfem_vs_functional_vector = dfem_residual->residual(time, dt, dfem_input_fields);
+  dfem_vs_functional_vector = dfem_weak_form->residual(time, dt, shape_disp_ptr.get(), dfem_input_fields);
   dfem_vs_functional_vector -= functional_res_vector;
   ASSERT_NEAR(0.0, dfem_vs_functional_vector.Norml2(), 1.0e-12) << "Functional and DFEM residuals do not match!";
 }

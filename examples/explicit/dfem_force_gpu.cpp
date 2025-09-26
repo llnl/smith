@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
 
   auto exec_space = use_gpu ? serac::ExecutionSpace::GPU : serac::ExecutionSpace::CPU;
 
-  serac::ApplicationManager applicationManager(argc, argv, MPI_COMM_WORLD, exec_space);
+  serac::ApplicationManager applicationManager(argc, argv, MPI_COMM_WORLD, true, exec_space);
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -147,7 +147,7 @@ int main(int argc, char* argv[])
   double E = 1.0e3;
   double nu = 0.3;
 
-  using SolidT = serac::DfemSolidWeakForm;
+  using SolidT = serac::DfemSolidWeakForm<true, false>;
   auto solid_dfem_weak_form =
       std::make_shared<SolidT>(physics_name, mesh, states[DISPLACEMENT].space(), getSpaces(params));
 
@@ -163,9 +163,9 @@ int main(int argc, char* argv[])
   mfem::future::tensor<mfem::real_t, dim> g({0.0, -9.81});  // gravity vector
   mfem::future::tuple<mfem::future::Value<SolidT::DISPLACEMENT>, mfem::future::Value<SolidT::VELOCITY>,
                       mfem::future::Value<SolidT::ACCELERATION>, mfem::future::Gradient<SolidT::COORDINATES>,
-                      mfem::future::Weight, mfem::future::Value<SolidT::NUM_STATE_VARS>>
+                      mfem::future::Weight, mfem::future::Value<SolidT::NUM_STATES>>
       g_inputs{};
-  mfem::future::tuple<mfem::future::Value<SolidT::NUM_STATE_VARS + 1>> g_outputs{};
+  mfem::future::tuple<mfem::future::Value<SolidT::NUM_STATES + 1>> g_outputs{};
   solid_dfem_weak_form->addBodyIntegral(
       solid_attrib,
       [=] SERAC_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim>&,

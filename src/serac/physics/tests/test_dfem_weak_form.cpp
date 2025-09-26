@@ -11,11 +11,11 @@
 #include "serac/physics/state/state_manager.hpp"
 
 #include "serac/physics/tests/physics_test_utils.hpp"
-#include "serac/physics/dfem_residual.hpp"
+#include "serac/physics/dfem_weak_form.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
-struct DfemResidualFixture : public testing::Test {
+struct DfemWeakFormFixture : public testing::Test {
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
 
@@ -62,12 +62,12 @@ struct DfemResidualFixture : public testing::Test {
 
     std::string physics_name = "fake_physics";
 
-    using ResidualT = serac::DfemResidual;
+    using WeakFormT = serac::DfemWeakForm;
 
     std::vector<const mfem::ParFiniteElementSpace*> inputs{&states[STATE::DISP].space(), &states[STATE::VELO].space(),
                                                            &params[PAR::DENSITY].space()};
 
-    auto f_residual = std::make_shared<ResidualT>(physics_name, mesh, states[STATE::DISP].space(), inputs);
+    auto d_weak_form = std::make_shared<WeakFormT>(physics_name, mesh, states[STATE::DISP].space(), inputs);
 
     // apply some traction boundary conditions
 
@@ -78,14 +78,14 @@ struct DfemResidualFixture : public testing::Test {
     int ir_order = 2;
     const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
 
-    f_residual->addBodyIntegral(
+    d_weak_form->addBodyIntegral(
         body_attribs,
         [](const mfem::future::tensor<mfem::real_t, 2>& u, const mfem::future::tensor<mfem::real_t, 2>& /*v*/,
            double /*rho*/) { return mfem::future::tuple{u}; },
         mfem::future::tuple{mfem::future::Value<0>{}, mfem::future::Value<1>{}, mfem::future::Value<2>{}},
         mfem::future::tuple{mfem::future::Value<3>{}}, displacement_ir, std::index_sequence<0, 1, 2>{});
 
-    f_residual->addBodyIntegral(
+    d_weak_form->addBodyIntegral(
         body_attribs,
         [](const mfem::future::tensor<mfem::real_t, 2>& /*u*/, const mfem::future::tensor<mfem::real_t, 2>& v,
            double /*rho*/) { return mfem::future::tuple{0.5 * v}; },
@@ -117,8 +117,8 @@ struct DfemResidualFixture : public testing::Test {
 
     params[DENSITY] = 1.2;
 
-    // residual is abstract Residual class to ensure usage only through BasePhysics interface
-    residual = f_residual;
+    // weak_form is abstract WeakForm class to ensure usage only through BasePhysics interface
+    weak_form = d_weak_form;
   }
 
   const double time = 0.0;
@@ -128,7 +128,7 @@ struct DfemResidualFixture : public testing::Test {
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<serac::Residual> residual;
+  std::shared_ptr<serac::WeakForm> weak_form;
 
   std::vector<serac::FiniteElementState> states;
   std::vector<serac::FiniteElementState> params;
@@ -140,14 +140,14 @@ struct DfemResidualFixture : public testing::Test {
   std::vector<serac::FiniteElementState> param_tangents;
 };
 
-TEST_F(DfemResidualFixture, VjpConsistency)
+TEST_F(DfemWeakFormFixture, VjpConsistency)
 {
   // initialize the displacement and acceleration to a non-trivial field
   auto input_fields = getConstFieldPointers(states, params);
+  serac::ConstFieldPtr shape_disp = nullptr;
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-
-  res_vector = residual->residual(time, dt, input_fields);
+  res_vector = weak_form->residual(time, dt, shape_disp, input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   // auto jacobian_weights = [&](size_t i) {
@@ -171,7 +171,9 @@ TEST_F(DfemResidualFixture, VjpConsistency)
   //   auto J = residual->jacobian(time, dt, input_fields, jacobian_weights(i));
   //   J->AddMultTranspose(v, vjp);
   // }
-  residual->vjp(time, dt, input_fields, getConstFieldPointers(v), field_vjps);
+  serac::DualFieldPtr vjp_shape_disp_sensitivity = nullptr;
+  weak_form->vjp(time, dt, shape_disp, input_fields, {}, getConstFieldPointers(v), vjp_shape_disp_sensitivity,
+                 field_vjps, {});
 
   // for (size_t i = 0; i < input_fields.size(); ++i) {
   //   EXPECT_NEAR(field_vjps_slow[i].Norml2(), field_vjps[i]->Norml2(), 1e-12)
@@ -179,13 +181,14 @@ TEST_F(DfemResidualFixture, VjpConsistency)
   // }
 }
 
-TEST_F(DfemResidualFixture, JvpConsistency)
+TEST_F(DfemWeakFormFixture, JvpConsistency)
 {
   // initialize the displacement and acceleration to a non-trivial field
   auto input_fields = getConstFieldPointers(states, params);
+  serac::ConstFieldPtr shape_disp = nullptr;
 
   serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = residual->residual(time, dt, input_fields);
+  res_vector = weak_form->residual(time, dt, shape_disp, input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   // auto jacobianWeights = [&](size_t i) {
@@ -210,11 +213,12 @@ TEST_F(DfemResidualFixture, JvpConsistency)
   auto jvps = getFieldPointers(jvp);
 
   auto field_tangents = getConstFieldPointers(state_tangents, param_tangents);
+  serac::ConstFieldPtr v_shape_disp = nullptr;
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
     // auto J = residual->jacobian(time, dt, input_fields, jacobianWeights(i));
     // J->Mult(*field_tangents[i], jvp_slow);
-    residual->jvp(time, dt, input_fields, selectStates(i), jvps);
+    weak_form->jvp(time, dt, shape_disp, input_fields, {}, v_shape_disp, selectStates(i), {}, jvps);
     // EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 
@@ -229,7 +233,7 @@ TEST_F(DfemResidualFixture, JvpConsistency)
     // J->Mult(*field_tangents[DISP], jvp_slow);
 
     state_tangents[VELO] *= velo_factor;
-    residual->jvp(time, dt, input_fields, field_tangents, jvps);
+    weak_form->jvp(time, dt, shape_disp, input_fields, {}, v_shape_disp, field_tangents, {}, jvps);
     // EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 }
