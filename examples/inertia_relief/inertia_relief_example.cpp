@@ -174,7 +174,7 @@ int main(int argc, char* argv[])
 
   // Solver options
   double nonlinear_absolute_tol = 1e-6;
-  int nonlinear_max_iterations = 100;
+  int nonlinear_max_iterations = 2;
   // Handle command line arguments
   axom::CLI::App app{"Inertial relief."};
   // Mesh options
@@ -323,10 +323,6 @@ int main(int argc, char* argv[])
   mfem::Vector yf(dimy);
   yf = 0.0;
 
-  // mfem::Vector q0(dimy);
-  // int Qerr;
-  // problem.Q(x0, y0, q0, Qerr);
-  // auto dqdy = problem.DyQ(x0, y0);
   HomotopySolver solver(&problem);
   solver.SetTol(nonlinear_absolute_tol);
   solver.SetMaxIter(nonlinear_max_iterations);
@@ -383,7 +379,7 @@ mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
 mfem::Vector InertialReliefProblem::jTvp(const mfem::Vector& u, const mfem::Vector& l) const
 {
   obj_states_[DISP]->Set(1.0, u);
-  double* multipliers = new double[constraints_.size()];
+  double multipliers[constraints_.size()];
   for (int i = 0; i < dimc_; i++) {
     multipliers[i] = l(i);
   }
@@ -442,9 +438,6 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
   return output_vec;
 }
 
-// TODO: this should be a unique pointer?
-//       that way the user does not need to manage
-//       memory
 mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u)
 {
   obj_states_[DISP]->Set(1.0, u);
@@ -454,7 +447,7 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
   if (myid > 0) {
     nentries = 0;
   }
-  mfem::SparseMatrix* dcdumat = new mfem::SparseMatrix(dimc_, dimuglb_, nentries);
+  mfem::SparseMatrix dcdumat(dimc_, dimuglb_, nentries);
   mfem::Array<int> cols;
   cols.SetSize(dimuglb_);
   for (int i = 0; i < dimuglb_; i++) {
@@ -471,15 +464,15 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
     globalGradVector = 0.0;
     globalGradVector.Add(1.0, *gradVector.GlobalVector());
     if (myid == 0) {
-      dcdumat->SetRow(idx, cols, globalGradVector);
+      dcdumat.SetRow(idx, cols, globalGradVector);
     }
   }
-  dcdumat->Threshold(1.e-20);
-  dcdumat->Finalize();
+  dcdumat.Threshold(1.e-20);
+  dcdumat.Finalize();
   if (dcdu) {
     delete dcdu;
   }
-  dcdu = GenerateHypreParMatrixFromSparseMatrix(uOffsets_, cOffsets_, dcdumat);
+  dcdu = GenerateHypreParMatrixFromSparseMatrix(uOffsets_, cOffsets_, &dcdumat);
   return dcdu;
 }
 
