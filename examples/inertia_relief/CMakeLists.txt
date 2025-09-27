@@ -10,6 +10,12 @@ if (SERAC_ENABLE_CONTINUATION AND STRUMPACK_DIR)
                         OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                         DEPENDS_ON  serac_physics continuation_solver
                         )
+    
+    blt_add_executable( NAME        inertia_relief_example2
+                        SOURCES     inertia_relief_example2.cpp
+                        OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                        DEPENDS_ON  serac_physics continuation_solver
+                        )
 
     serac_add_example_test(NAME            inertia_relief
                            COMMAND         inertia_relief_example
@@ -18,6 +24,7 @@ if (SERAC_ENABLE_CONTINUATION AND STRUMPACK_DIR)
     install(
         FILES
             inertia_relief_example.cpp
+	    inertia_relief_example2.cpp
         DESTINATION
             examples/serac/inertia_relief
     )
