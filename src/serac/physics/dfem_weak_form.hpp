@@ -145,10 +145,12 @@ class DfemWeakForm : public WeakForm {
         weak_form_(makeFieldDescriptors({&output_mfem_space}, input_mfem_spaces.size()),
                    makeFieldDescriptors(input_mfem_spaces), mesh->mfemParMesh()),
         v_dot_weak_form_residual_(makeFieldDescriptors({&output_mfem_space}, input_mfem_spaces.size()),
-                                  makeFieldDescriptors(input_mfem_spaces), mesh->mfemParMesh())
+                                  makeFieldDescriptors(input_mfem_spaces), mesh->mfemParMesh()),
+        residual_vector_(output_mfem_space.GetTrueVSize())
   {
     // sum field operator doesn't work with sum factorization
     v_dot_weak_form_residual_.DisableTensorProductStructure();
+    residual_vector_.UseDevice(true);
   }
 
   /**
@@ -196,11 +198,9 @@ class DfemWeakForm : public WeakForm {
 
     dt_ = dt;
 
-    mfem::Vector resid(output_mfem_space_.GetTrueVSize());
-    resid = 0.0;
     weak_form_.SetParameters(getLVectors(fields));
-    weak_form_.Mult(resid, resid);
-    return resid;
+    weak_form_.Mult(residual_vector_, residual_vector_);
+    return residual_vector_;
   }
 
   /// @overload
@@ -327,6 +327,9 @@ class DfemWeakForm : public WeakForm {
 
   /// @brief dfem residual times an arbitrary vector v (same space as residual) evaluator
   mutable mfem::future::DifferentiableOperator v_dot_weak_form_residual_;
+
+  /// @brief residual vector
+  mutable mfem::Vector residual_vector_;
 };
 
 }  // namespace serac
