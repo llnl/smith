@@ -150,7 +150,7 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
                         std::shared_ptr<serac::Mesh> mesh, std::shared_ptr<SolidWeakFormT> weak_form,
                         std::vector<std::shared_ptr<serac::ScalarObjective>> constraints);
   mfem::Vector residual(const mfem::Vector& u) const;
-  mfem::Vector jTvp(const mfem::Vector& u, const mfem::Vector& l) const;
+  mfem::Vector constraintJacobainvp(const mfem::Vector& u, const mfem::Vector& l) const;
   mfem::Vector constraint(const mfem::Vector& u) const;
   mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u);
   mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u);
@@ -376,7 +376,7 @@ mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
   return res_vector;
 }
 
-mfem::Vector InertialReliefProblem::jTvp(const mfem::Vector& u, const mfem::Vector& l) const
+mfem::Vector InertialReliefProblem::constraintJacobainvp(const mfem::Vector& u, const mfem::Vector& l) const
 {
   obj_states_[DISP]->Set(1.0, u);
   double multipliers[constraints_.size()];
@@ -460,12 +460,11 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
     mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
     gradVector.Set(
         1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP));
-    mfem::Vector globalGradVector(dimuglb_);
-    globalGradVector = 0.0;
-    globalGradVector.Add(1.0, *gradVector.GlobalVector());
+    mfem::Vector * globalGradVector = gradVector.GlobalVector();
     if (myid == 0) {
-      dcdumat.SetRow(idx, cols, globalGradVector);
+      dcdumat.SetRow(idx, cols, *globalGradVector);
     }
+    delete globalGradVector;
   }
   dcdumat.Threshold(1.e-20);
   dcdumat.Finalize();
