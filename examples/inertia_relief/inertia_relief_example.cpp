@@ -150,7 +150,7 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
                         std::shared_ptr<serac::Mesh> mesh, std::shared_ptr<SolidWeakFormT> weak_form,
                         std::vector<std::shared_ptr<serac::ScalarObjective>> constraints);
   mfem::Vector residual(const mfem::Vector& u) const;
-  mfem::Vector constraintJacobainvp(const mfem::Vector& u, const mfem::Vector& l) const;
+  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const;
   mfem::Vector constraint(const mfem::Vector& u) const;
   mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u);
   mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u);
@@ -376,7 +376,7 @@ mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
   return res_vector;
 }
 
-mfem::Vector InertialReliefProblem::constraintJacobainvp(const mfem::Vector& u, const mfem::Vector& l) const
+mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const
 {
   obj_states_[DISP]->Set(1.0, u);
   double multipliers[constraints_.size()];
