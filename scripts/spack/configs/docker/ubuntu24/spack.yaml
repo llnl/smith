@@ -19,14 +19,14 @@ spack:
       when: '%fortran'
     - spec: '%mpich@4.0.clang_19'
       when: '%mpi'
-    gcc_13:
+    gcc_14:
     - spec: '%c=gcc'
       when: '%c'
     - spec: '%cxx=gcc'
       when: '%cxx'
     - spec: '%fortran=gcc'
       when: '%fortran'
-    - spec: '%mpich@4.0.gcc_13'
+    - spec: '%mpich@4.0.gcc_14'
       when: '%mpi'
 
   # Regular TPLs do not need views
@@ -96,7 +96,7 @@ spack:
       externals:
       - spec: mpich@4.0.clang_19
         prefix: /usr
-      - spec: mpich@4.0.gcc_13
+      - spec: mpich@4.0.gcc_14
         prefix: /usr
 
     # System level packages to not build

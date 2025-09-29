@@ -4,7 +4,7 @@ ARG branch=develop
 
 SHELL ["/bin/bash", "-c"]
 RUN sudo apt-get update -y
-RUN sudo apt-get install gettext gfortran-$(gcc -dumpversion) graphviz libomp-<MAJ_VER>-dev libopenblas-dev \
+RUN sudo apt-get install gettext gfortran-$(gcc -dumpversion) graphviz libomp-dev libopenblas-dev \
                          lsb-release lua5.2 lua5.2-dev mpich python3-sphinx ssh texlive-full -fy
 RUN sudo useradd -m -s /bin/bash -G sudo serac
 

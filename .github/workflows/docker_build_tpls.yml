@@ -11,7 +11,7 @@ jobs:
     name: Builds a docker image and extracts generated hostconfigs
     strategy:
       matrix:
-        dockerfile_suffix: [clang-14, gcc-13, cuda-12]
+        dockerfile_suffix: [clang-19, gcc-14, cuda-12]
     env:
       REPO: seracllnl/tpls
       HOSTCONFIG_LOC: /home/serac/export_hostconfig
