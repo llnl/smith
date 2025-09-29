@@ -2,6 +2,12 @@ FROM ghcr.io/llnl/radiuss:clang-19-ubuntu-24.04
 LABEL maintainer="bramwell1@llnl.gov"
 ARG branch=develop
 
-USER serac
+ENV spec="%clang_19"
+
 COPY ./scripts/docker /home/scripts
-RUN /home/scripts/setup-docker.sh "+shared %clang_19"
+RUN /home/scripts/setup-docker.sh
+
+USER serac
+WORKDIR /home/serac
+RUN git clone --recursive --branch $branch --single-branch --depth 1 https://github.com/LLNL/serac.git serac_repo
+RUN ./serac_repo/scripts/docker/setup-serac.sh

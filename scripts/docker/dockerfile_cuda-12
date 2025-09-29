@@ -2,6 +2,12 @@ FROM ghcr.io/llnl/radiuss:cuda-12-8-ubuntu-24.04
 LABEL maintainer="bramwell1@llnl.gov"
 ARG branch=develop
 
-USER serac
+ENV spec="~devtools+cuda cuda_arch=70 %gcc_14"
+
 COPY ./scripts/docker /home/scripts
-RUN /home/scripts/setup-docker.sh "+cuda+shared cuda_arch=70 %gcc_14"
+RUN /home/scripts/setup-docker.sh 1
+
+USER serac
+WORKDIR /home/serac
+RUN git clone --recursive --branch $branch --single-branch --depth 1 https://github.com/LLNL/serac.git serac_repo
+RUN ./serac_repo/scripts/docker/setup-serac.sh
