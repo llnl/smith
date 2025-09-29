@@ -30,9 +30,6 @@ set(physics_serial_test_sources
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
     test_solid_weak_form.cpp
-    test_dfem_lumped_mass.cpp
-    test_dfem_vs_functional.cpp
-    test_dfem_weak_form.cpp
     test_heat_weak_form.cpp
     test_functional_weak_form.cpp
     thermomech_finite_diff.cpp
@@ -55,7 +52,10 @@ endif()
 
 if (SERAC_USE_DFEM)
     list(APPEND physics_serial_test_sources
-                test_dfem_explicit_dynamics.cpp)
+                test_dfem_explicit_dynamics.cpp
+                test_dfem_lumped_mass.cpp
+                test_dfem_vs_functional.cpp
+                test_dfem_weak_form.cpp)
 endif()
 
 serac_add_tests(SOURCES       ${physics_serial_test_sources}
