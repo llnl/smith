@@ -128,8 +128,8 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<serac::Fi
  */
 class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
  protected:
-  mfem::HypreParMatrix* drdu = nullptr;
-  mfem::HypreParMatrix* dcdu = nullptr;
+  mfem::HypreParMatrix* drdu_ = nullptr;
+  mfem::HypreParMatrix* dcdu_ = nullptr;
   int dimu_;
   int dimc_;
   int dimuglb_;
@@ -174,7 +174,7 @@ int main(int argc, char* argv[])
 
   // Solver options
   double nonlinear_absolute_tol = 1e-6;
-  int nonlinear_max_iterations = 2;
+  int nonlinear_max_iterations = 50;
   // Handle command line arguments
   axom::CLI::App app{"Inertial relief."};
   // Mesh options
@@ -362,6 +362,10 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   std::copy(obj_states.begin(), obj_states.end(), obj_states_.begin());
 
   dimc_ = static_cast<int>(constraints_.size());
+  int myid = mfem::Mpi::WorldRank();
+  if (myid > 0) {
+    dimc_ = 0;
+  }
   dimu_ = all_states_[FIELD::DISP]->space().GetTrueVSize();
   MPI_Allreduce(&dimc_, &dimcglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&dimu_, &dimuglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
@@ -411,11 +415,11 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
       weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
   MFEM_VERIFY(drdu_unique->Height() == dimu_, "size error");
 
-  if (drdu) {
-    delete drdu;
+  if (drdu_) {
+    delete drdu_;
   }
-  drdu = drdu_unique.release();
-  return drdu;
+  drdu_ = drdu_unique.release();
+  return drdu_;
 }
 
 mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
@@ -460,7 +464,7 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
     mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
     gradVector.Set(
         1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP));
-    mfem::Vector * globalGradVector = gradVector.GlobalVector();
+    mfem::Vector* globalGradVector = gradVector.GlobalVector();
     if (myid == 0) {
       dcdumat.SetRow(idx, cols, *globalGradVector);
     }
@@ -468,19 +472,19 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
   }
   dcdumat.Threshold(1.e-20);
   dcdumat.Finalize();
-  if (dcdu) {
-    delete dcdu;
+  if (dcdu_) {
+    delete dcdu_;
   }
-  dcdu = GenerateHypreParMatrixFromSparseMatrix(uOffsets_, cOffsets_, &dcdumat);
-  return dcdu;
+  dcdu_ = GenerateHypreParMatrixFromSparseMatrix(uOffsets_, cOffsets_, &dcdumat);
+  return dcdu_;
 }
 
 InertialReliefProblem::~InertialReliefProblem()
 {
-  if (drdu) {
-    delete drdu;
+  if (drdu_) {
+    delete drdu_;
   }
-  if (dcdu) {
-    delete dcdu;
+  if (dcdu_) {
+    delete dcdu_;
   }
 }
