@@ -17,3 +17,9 @@ view
 build-linux-*-*-*
 build-darwin-*-*-*
 *.core
+radiuss
+.cache
+.dotnet
+.vscode-server
+.gitconfig
+.bash_history

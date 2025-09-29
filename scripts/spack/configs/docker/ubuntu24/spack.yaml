@@ -28,6 +28,15 @@ spack:
       when: '%fortran'
     - spec: '%mpich@4.0.gcc_14'
       when: '%mpi'
+    gcc_13:
+    - spec: '%c=gcc'
+      when: '%c'
+    - spec: '%cxx=gcc'
+      when: '%cxx'
+    - spec: '%fortran=gcc'
+      when: '%fortran'
+    - spec: '%mpich@4.0.gcc_13'
+      when: '%mpi'
 
   # Regular TPLs do not need views
   view: false
@@ -75,6 +84,18 @@ spack:
             cflags: -fPIC -pthread
             cxxflags: -fPIC -pthread
             fflags: -fPIC -pthread
+      - spec: gcc@14.2.0 languages:=c,c++,fortran
+        prefix: /usr/bin
+        extra_attributes:
+          compilers:
+            c: /usr/bin/gcc
+            cxx: /usr/bin/g++
+            fortran: /usr/bin/gfortran
+          flags:
+            # Axom example sidre_shocktube_F_ex doesn't link otherwise
+            cflags: -fPIC -pthread
+            cxxflags: -fPIC -pthread
+            fflags: -fPIC -pthread
     llvm:
       externals:
       - spec: llvm@19.1.1+clang~lld~lldb
@@ -98,6 +119,8 @@ spack:
         prefix: /usr
       - spec: mpich@4.0.gcc_14
         prefix: /usr
+      - spec: mpich@4.0.gcc_13
+        prefix: /usr
 
     # System level packages to not build
     autotools:
@@ -110,12 +133,12 @@ spack:
       externals:
       - spec: bzip2@1.0.8
         prefix: /usr
-    # TODO Update CUDA and add HIP versions
-    # cuda:
-    #   buildable: false
-    #   externals:
-    #     - spec: cuda@12.3.0
-    #       prefix: /usr/local/cuda-12.3
+    # TODO add HIP version
+    cuda:
+      buildable: false
+      externals:
+        - spec: cuda@12.8.0
+          prefix: /usr/local/cuda-12.8
     curl:
       buildable: false
       externals:

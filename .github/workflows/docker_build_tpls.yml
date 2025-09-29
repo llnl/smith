@@ -8,7 +8,7 @@ on:
 jobs:
   build_images:
     runs-on: ubuntu-latest
-    name: Builds a docker image and extracts generated hostconfigs
+    name: Docker TPL build
     strategy:
       matrix:
         dockerfile_suffix: [clang-19, gcc-14, cuda-12]
