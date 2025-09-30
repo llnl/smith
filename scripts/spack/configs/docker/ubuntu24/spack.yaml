@@ -17,7 +17,7 @@ spack:
       when: '%cxx'
     - spec: '%fortran=gcc'
       when: '%fortran'
-    - spec: '%mpich@4.0.clang_19'
+    - spec: '%mpich'
       when: '%mpi'
     gcc_14:
     - spec: '%c=gcc'
@@ -26,16 +26,7 @@ spack:
       when: '%cxx'
     - spec: '%fortran=gcc'
       when: '%fortran'
-    - spec: '%mpich@4.0.gcc_14'
-      when: '%mpi'
-    gcc_13:
-    - spec: '%c=gcc'
-      when: '%c'
-    - spec: '%cxx=gcc'
-      when: '%cxx'
-    - spec: '%fortran=gcc'
-      when: '%fortran'
-    - spec: '%mpich@4.0.gcc_13'
+    - spec: '%mpich'
       when: '%mpi'
 
   # Regular TPLs do not need views
@@ -48,7 +39,6 @@ spack:
   packages:
     all:
       target: [x86_64]
-      compiler: [gcc, intel, pgi, clang, xl, nag]
       providers:
         awk: [gawk]
         blas: [openblas]
@@ -110,11 +100,7 @@ spack:
       buildable: false
     mpich:
       externals:
-      - spec: mpich@4.0.clang_19
-        prefix: /usr
-      - spec: mpich@4.0.gcc_14
-        prefix: /usr
-      - spec: mpich@4.0.gcc_13
+      - spec: mpich@4.0
         prefix: /usr
 
     # System level packages to not build
@@ -144,10 +130,20 @@ spack:
       externals:
       - spec: diffutils@3.10
         prefix: /usr
+    expat:
+      buildable: false
+      externals:
+      - spec: expat@2.6.1
+        prefix: /usr
     gettext:
       buildable: false
       externals:
       - spec: gettext@0.21
+        prefix: /usr
+    gmake:
+      buildable: false
+      externals:
+      - spec: gmake@4.3
         prefix: /usr
     lua:
       buildable: false
@@ -169,6 +165,11 @@ spack:
       externals:
       - spec: pkg-config@1.8.1
         prefix: /usr
+    python:
+      buildable: false
+      externals:
+      - spec: python@3.12.3
+        prefix: /usr
     tar:
       buildable: false
       externals:
@@ -183,6 +184,11 @@ spack:
       buildable: false
       externals:
       - spec: openblas@0.3.26
+        prefix: /usr
+    zlib:
+      buildable: false
+      externals:
+      - spec: zlib@1.3
         prefix: /usr
 
     # Globally lock in version of CMake
