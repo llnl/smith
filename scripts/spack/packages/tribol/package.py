@@ -166,7 +166,8 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     conflicts("+cuda", when="+rocm")
     conflicts("+openmp", when="+rocm")
 
-    requires("%clang", when="+enzyme")
+    for compiler_ in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
+        conflicts("+enzyme", when=f"%[virtuals=c,cxx] {compiler_}")
 
     def _get_sys_type(self, spec):
         sys_type = spec.architecture
