@@ -250,8 +250,8 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     #
 
     # Enzyme required an LLVM-based compiler
-    for compiler in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
-        conflicts("+enzyme", when=f"%[virtuals=c,cxx] {compiler}")
+    for compiler_ in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
+        conflicts("+enzyme", when=f"%[virtuals=c,cxx] {compiler_}")
 
     conflicts("+openmp", when="+rocm")
     conflicts("+cuda", when="+rocm")
