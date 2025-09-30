@@ -4,8 +4,9 @@ ARG branch=develop
 
 ENV spec="~devtools+cuda cuda_arch=70 %gcc_14"
 
-COPY ./scripts/docker /home/scripts
-RUN /home/scripts/setup-docker.sh 1
+WORKDIR /opt
+COPY ./scripts/docker/setup-ubuntu.sh /opt/scripts
+RUN ./scripts/setup-docker.sh 1
 
 USER serac
 WORKDIR /home/serac

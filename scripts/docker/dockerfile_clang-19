@@ -4,8 +4,9 @@ ARG branch=develop
 
 ENV spec="%clang_19"
 
-COPY ./scripts/docker /home/scripts
-RUN /home/scripts/setup-docker.sh
+WORKDIR /opt
+COPY ./scripts/docker/setup-ubuntu.sh /opt/scripts
+RUN ./scripts/setup-docker.sh
 
 USER serac
 WORKDIR /home/serac
