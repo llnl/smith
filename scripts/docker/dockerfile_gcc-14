@@ -1,12 +1,17 @@
 FROM ghcr.io/llnl/radiuss:gcc-14-ubuntu-24.04
 LABEL maintainer="bramwell1@llnl.gov"
 ARG branch=develop
-ENV spec="%gcc_14"
+ENV spec="~enzyme %gcc_14"
 
 SHELL ["/bin/bash", "-c"]
 RUN sudo apt-get update -y
-RUN sudo apt-get install gettext gfortran-$(gcc -dumpversion) libomp-dev libopenblas-dev \
+RUN sudo apt-get install gettext gfortran-$(gcc -dumpversion) libopenblas-dev \
                          lsb-release lua5.2 lua5.2-dev mpich ssh -fy
+
+# Install enzyme-related packages
+RUN if [[ "$spec" != *~enzyme* ]]; then \
+      sudo apt-get install llvm-19-dev libzstd-dev; \
+    fi
 
 # Install devtool-related packages
 # NOTE: Skipping this can significantly save disk space

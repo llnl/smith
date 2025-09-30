@@ -15,7 +15,7 @@ spack:
       when: '%c'
     - spec: '%cxx=llvm'
       when: '%cxx'
-    - spec: '%fortran=gcc'
+    - spec: '%fortran=gcc@13.3.0'
       when: '%fortran'
     - spec: '%mpich'
       when: '%mpi'
@@ -72,6 +72,7 @@ spack:
           flags:
             cflags: -pthread
             cxxflags: -pthread
+            fflags: -pthread
       - spec: gcc@14.2.0 languages:=c,c++,fortran
         prefix: /usr/bin
         extra_attributes:
@@ -82,18 +83,20 @@ spack:
           flags:
             cflags: -pthread
             cxxflags: -pthread
+            fflags: -pthread
     llvm:
       externals:
       - spec: llvm@19.1.1+clang~lld~lldb
-        prefix: /usr/bin
+        prefix: /usr/lib/llvm-19
         extra_attributes:
           compilers:
-            c: /usr/bin/clang
-            cxx: /usr/bin/clang++
+            c: /usr/lib/llvm-19/bin/clang
+            cxx: /usr/lib/llvm-19/bin/clang++
           flags:
             # Axom example sidre_shocktube_F_ex doesn't link otherwise
             cflags: -fPIC -pthread
             cxxflags: -fPIC -pthread
+            fflags: -fPIC -pthread
 
     # Spack may grab for mpi & we don't want to use them
     mpi:
