@@ -361,16 +361,26 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   obj_states_.resize(obj_states.size());
   std::copy(obj_states.begin(), obj_states.end(), obj_states_.begin());
 
+  HYPRE_BigInt uOffsets[2];
+  HYPRE_BigInt cOffsets[2];
+
+  for (int i = 0; i < 2; i++) {
+    uOffsets[i] = all_states_[FIELD::DISP]->space().GetTrueDofOffsets()[i];
+  }
   dimc_ = static_cast<int>(constraints_.size());
   int myid = mfem::Mpi::WorldRank();
+  cOffsets[0] = 0;
+  cOffsets[1] = dimc_;
   if (myid > 0) {
+    cOffsets[0] = dimc_;
     dimc_ = 0;
   }
+
   dimu_ = all_states_[FIELD::DISP]->space().GetTrueVSize();
   MPI_Allreduce(&dimc_, &dimcglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&dimu_, &dimuglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-  SetSizes(dimu_, dimc_);
+  SetSizes(uOffsets, cOffsets);
 }
 
 mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
@@ -406,7 +416,7 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
     output_vec.Add(multipliers[idx], constraint_gradient);
   }
   return output_vec;
-};
+}
 
 mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u)
 {
