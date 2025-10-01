@@ -392,12 +392,12 @@ mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
 mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const
 {
   obj_states_[DISP]->Set(1.0, u);
-  double* multipliers = new double[constraints_.size()];
+  std::vector<double> multipliers(constraints_.size());
   for (int i = 0; i < dimc_; i++) {
-    multipliers[i] = l(i);
+    multipliers[static_cast<size_t>(i)] = l(i);
   }
   const int nconstraints = static_cast<int>(constraints_.size());
-  MPI_Bcast(multipliers, nconstraints, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Bcast(multipliers.data(), nconstraints, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
   mfem::Vector constraint_gradient(dimu_);
   constraint_gradient = 0.0;
@@ -405,16 +405,11 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
   output_vec = 0.0;
 
   for (size_t i = 0; i < constraints_.size(); i++) {
-    const int idx = static_cast<int>(i);
-    const size_t i2 = static_cast<size_t>(idx);
-    SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
-    // gradc = 0.0;
     mfem::Vector grad_temp =
         constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP);
     constraint_gradient.Set(1.0, grad_temp);
-    output_vec.Add(multipliers[idx], constraint_gradient);
+    output_vec.Add(multipliers[i], constraint_gradient);
   }
-  delete[] multipliers;
   return output_vec;
 }
 
@@ -424,7 +419,7 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
   obj_states_[DISP]->Set(1.0, u);
   auto drdu_unique =
       weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
-  MFEM_VERIFY(drdu_unique->Height() == dimu_, "size error");
+  SLIC_ERROR_ROOT_IF(drdu_unique->Height() != dimu_, "size error");
 
   if (drdu_) {
     delete drdu_;
@@ -448,7 +443,7 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
     double constraint_i =
         constraints_[i]->evaluate(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_));
     if (dimc_ > 0) {
-      output_vec(idx) = -1.0 * constraint_i;
+      output_vec(idx) = constraint_i;
     }
   }
   return output_vec;
