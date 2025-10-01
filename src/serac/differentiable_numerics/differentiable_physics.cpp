@@ -63,16 +63,16 @@ void DifferentiablePhysics::completeSetup()
   SLIC_ERROR_IF(field_states_.empty(), "Empty field state during completeSetup()");
 }
 
-void DifferentiablePhysics::resetStates([[maybe_unused]] int cycle, [[maybe_unused]] double time)
+void DifferentiablePhysics::resetStates(int cycle, double time)
 {
   for (size_t i = 0; i < initial_field_states_.size(); ++i) {
-    *initial_field_states_[i].get() = 0.0;
+    // *initial_field_states_[i].get() = 0.0;
     field_states_[i] = initial_field_states_[i];
   }
   milestones_.clear();
   checkpointer_->reset_graph();
-  time_ = 0.0;
-  cycle_ = 0;
+  time_ = time;
+  cycle_ = cycle;
 }
 
 void DifferentiablePhysics::resetAdjointStates()
