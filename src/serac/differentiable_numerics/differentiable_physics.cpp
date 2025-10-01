@@ -28,10 +28,11 @@ gretl::State<int> make_milestone(const std::vector<FieldState>& states)
 }
 
 // mesh, equation, fields, parameters, state advancer, solver
-DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, const FieldState& shape_disp,
-                     const std::vector<FieldState>& states, const std::vector<FieldState>& params,
-                     std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate,
-                     std::string mech_name)
+DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
+                                             const FieldState& shape_disp, const std::vector<FieldState>& states,
+                                             const std::vector<FieldState>& params,
+                                             std::shared_ptr<StateAdvancer> advancer,
+                                             std::shared_ptr<TimestepEstimator> dt_estimate, std::string mech_name)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
       advancer_(advancer),
@@ -57,7 +58,10 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
   completeSetup();
 }
 
-void DifferentiablePhysics::completeSetup() { SLIC_ERROR_IF(field_states_.empty(), "Empty field state during completeSetup()"); }
+void DifferentiablePhysics::completeSetup()
+{
+  SLIC_ERROR_IF(field_states_.empty(), "Empty field state during completeSetup()");
+}
 
 void DifferentiablePhysics::resetStates([[maybe_unused]] int cycle, [[maybe_unused]] double time)
 {
@@ -131,7 +135,8 @@ void DifferentiablePhysics::setParameter(const size_t parameter_index, const Fin
 
 void DifferentiablePhysics::setShapeDisplacement(const FiniteElementState& s) { *field_shape_displacement_->get() = s; }
 
-void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_name, [[maybe_unused]] const FiniteElementState& s)
+void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_name,
+                                     [[maybe_unused]] const FiniteElementState& s)
 {
   SLIC_ERROR_IF(
       state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
@@ -141,7 +146,8 @@ void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_n
   *initial_field_states_[state_index].get() = s;
 }
 
-void DifferentiablePhysics::setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&> string_to_dual)
+void DifferentiablePhysics::setAdjointLoad(
+    std::unordered_map<std::string, const serac::FiniteElementDual&> string_to_dual)
 {
   for (auto string_dual_pair : string_to_dual) {
     std::string field_name = string_dual_pair.first;
@@ -224,10 +230,13 @@ FiniteElementDual DifferentiablePhysics::computeTimestepSensitivity(size_t param
   return *field_params_[parameter_index].get_dual();
 }
 
-const FiniteElementDual& DifferentiablePhysics::computeTimestepShapeSensitivity() { return *field_shape_displacement_->get_dual(); }
+const FiniteElementDual& DifferentiablePhysics::computeTimestepShapeSensitivity()
+{
+  return *field_shape_displacement_->get_dual();
+}
 
-const std::unordered_map<std::string, const serac::FiniteElementDual&> DifferentiablePhysics::computeInitialConditionSensitivity()
-    const
+const std::unordered_map<std::string, const serac::FiniteElementDual&>
+DifferentiablePhysics::computeInitialConditionSensitivity() const
 {
   std::unordered_map<std::string, const serac::FiniteElementDual&> map;
   for (auto& name : stateNames()) {

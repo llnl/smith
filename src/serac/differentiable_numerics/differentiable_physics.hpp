@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file mechanics.hpp
+ * @file differentiable_physics.hpp
  *
  * @brief Implementation of BasePhysics which uses FieldStates and gretl to track the computational graph, dynamically
  * checkpoint, and backpropagate sensitivities.
@@ -32,10 +32,10 @@ class TimestepEstimator;
 class DifferentiablePhysics : public BasePhysics {
  public:
   /// @brief constructor
-  DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, const FieldState& shape_disp,
-                        const std::vector<FieldState>& states, const std::vector<FieldState>& params,
-                        std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate,
-                        std::string mech_name);
+  DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
+                        const FieldState& shape_disp, const std::vector<FieldState>& states,
+                        const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer,
+                        std::shared_ptr<TimestepEstimator> dt_estimate, std::string mech_name);
   /// @brief destructor
   ~DifferentiablePhysics() {}
 

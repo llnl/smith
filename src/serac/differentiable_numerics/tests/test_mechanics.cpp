@@ -161,8 +161,8 @@ struct MeshFixture : public testing::Test {
     auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(fixed_dt);
 
     // construct mechanics
-    mechanics = std::make_shared<serac::DifferentiablePhysics>(mesh, checkpointer, *shape_disp, states, params, time_integrator,
-                                                   dt_estimator, "mechanics");
+    mechanics = std::make_shared<serac::DifferentiablePhysics>(mesh, checkpointer, *shape_disp, states, params,
+                                                               time_integrator, dt_estimator, "mechanics");
     physics = mechanics;
 
     // kinetic energy integrator for qoi
