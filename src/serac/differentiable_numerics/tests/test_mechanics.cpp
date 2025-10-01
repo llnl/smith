@@ -4,7 +4,6 @@
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/physics/mesh.hpp"
 
-#include "serac/differentiable_numerics/mechanics.hpp"
 #include "serac/gretl/data_store.hpp"
 #include "serac/physics/solid_weak_form.hpp"
 
@@ -12,6 +11,8 @@
 #include "serac/differentiable_numerics/lumped_mass_weak_form.hpp"
 #include "serac/differentiable_numerics/tests/paraview_helper.hpp"
 #include "serac/differentiable_numerics/differentiable_utils.hpp"
+#include "serac/differentiable_numerics/timestep_estimator.hpp"
+#include "serac/differentiable_numerics/differentiable_physics.hpp"
 
 // This tests the interface between the new serac::WeakForm with gretl and its conformity to the existing base_physics
 // interface
@@ -160,8 +161,8 @@ struct MeshFixture : public testing::Test {
     auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(fixed_dt);
 
     // construct mechanics
-    mechanics = std::make_shared<serac::Mechanics>(mesh, checkpointer, *shape_disp, states, params, time_integrator,
-                                                   dt_estimator);
+    mechanics = std::make_shared<serac::DifferentiablePhysics>(mesh, checkpointer, *shape_disp, states, params, time_integrator,
+                                                   dt_estimator, "mechanics");
     physics = mechanics;
 
     // kinetic energy integrator for qoi
@@ -249,7 +250,7 @@ struct MeshFixture : public testing::Test {
   std::vector<serac::FieldState> initial_states;
   std::vector<serac::FieldState> params;
 
-  std::shared_ptr<serac::Mechanics> mechanics;
+  std::shared_ptr<serac::DifferentiablePhysics> mechanics;
   std::shared_ptr<serac::BasePhysics> physics;
 
   std::shared_ptr<serac::Functional<double(VectorSpace, VectorSpace, DensitySpace)>> kinetic_energy_integrator;
