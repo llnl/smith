@@ -312,14 +312,19 @@ int main(int argc, char* argv[])
   InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]}, non_const_states, mesh,
                                 solid_mechanics_weak_form, constraints);
 
+  // optimization variables
   auto X0 = problem.GetOptimizationVariable();
   auto Xf = problem.GetOptimizationVariable();
 
+  // define a homotopy solver for the inertia relief problem
   HomotopySolver solver(&problem);
+  // set solver options
   solver.SetTol(nonlinear_absolute_tol);
   solver.SetMaxIter(nonlinear_max_iterations);
 
+  // solve the inertia relief problem
   solver.Mult(X0, Xf);
+  // extract displacement and Lagrange multipliers
   mfem::Vector displacement_sol = problem.GetDisplacement(Xf);
   mfem::Vector multiplier_sol = problem.GetLagrangeMultiplier(Xf);
   bool converged = solver.GetConverged();
@@ -375,6 +380,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   SetSizes(uOffsets, cOffsets);
 }
 
+// residual callback
 mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
 {
   obj_states_[DISP]->Set(1.0, u);
@@ -382,6 +388,7 @@ mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
   return res_vector;
 }
 
+// constraint Jacobian transpose vector product
 mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const
 {
   obj_states_[DISP]->Set(1.0, u);
@@ -410,6 +417,7 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
   return output_vec;
 }
 
+// Jacobian of the residual
 mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u)
 {
   obj_states_[DISP]->Set(1.0, u);
@@ -424,6 +432,7 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
   return drdu_;
 }
 
+// constraint callback
 mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
 {
   obj_states_[DISP]->Set(1.0, u);
@@ -444,6 +453,7 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
   return output_vec;
 }
 
+// Jacobian of the constraint
 mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u)
 {
   obj_states_[DISP]->Set(1.0, u);
