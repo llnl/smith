@@ -24,7 +24,7 @@ spack:
       when: '%c'
     - spec: '%cxx=gcc'
       when: '%cxx'
-    - spec: '%fortran=gcc'
+    - spec: '%fortran=gcc@14.2.0'
       when: '%fortran'
     - spec: '%mpich'
       when: '%mpi'
@@ -68,7 +68,7 @@ spack:
           compilers:
             c: /usr/bin/gcc
             cxx: /usr/bin/g++
-            fortran: /usr/bin/gfortran
+            fortran: /usr/bin/gfortran-13
           flags:
             cflags: -pthread
             cxxflags: -pthread
@@ -79,7 +79,7 @@ spack:
           compilers:
             c: /usr/bin/gcc
             cxx: /usr/bin/g++
-            fortran: /usr/bin/gfortran
+            fortran: /usr/bin/gfortran-14
           flags:
             cflags: -pthread
             cxxflags: -pthread

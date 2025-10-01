@@ -16,6 +16,5 @@ class Amgx(BuiltinAmgx):
     preconditioners."""
 
     # white238: CUSPARSE_CSRMV_ALG2 undefined error in 2.3.0
-   
-    version("2.3.0.1", commit="d2344958f43c103893c4400fe8ad42d02ac773f5", submodules=True,
-        git = "https://github.com/NVIDIA/AMGX.git")
+    git = "https://github.com/NVIDIA/AMGX.git"
+    version("2.3.0.1", commit="d2344958f43c103893c4400fe8ad42d02ac773f5", submodules=True)
