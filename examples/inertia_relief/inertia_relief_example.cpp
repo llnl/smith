@@ -392,7 +392,7 @@ mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
 mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const
 {
   obj_states_[DISP]->Set(1.0, u);
-  double multipliers[constraints_.size()];
+  double * multipliers = new double[constraints_.size()];
   for (int i = 0; i < dimc_; i++) {
     multipliers[i] = l(i);
   }
@@ -414,6 +414,7 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
     constraint_gradient.Set(1.0, grad_temp);
     output_vec.Add(multipliers[idx], constraint_gradient);
   }
+  delete[] multipliers;
   return output_vec;
 }
 
