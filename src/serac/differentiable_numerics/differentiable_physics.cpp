@@ -1,7 +1,8 @@
-#include "serac/differentiable_numerics/mechanics.hpp"
+#include "serac/differentiable_numerics/differentiable_physics.hpp"
 #include "serac/physics/weak_form.hpp"
 #include "serac/physics/mesh.hpp"
 #include "serac/differentiable_numerics/state_advancer.hpp"
+#include "serac/differentiable_numerics/timestep_estimator.hpp"
 #include "serac/gretl/data_store.hpp"
 
 namespace serac {
@@ -27,7 +28,7 @@ gretl::State<int> make_milestone(const std::vector<FieldState>& states)
 }
 
 // mesh, equation, fields, parameters, state advancer, solver
-Mechanics::Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, const FieldState& shape_disp,
+DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, const FieldState& shape_disp,
                      const std::vector<FieldState>& states, const std::vector<FieldState>& params,
                      std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate,
                      std::string mech_name)
@@ -56,9 +57,9 @@ Mechanics::Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStor
   completeSetup();
 }
 
-void Mechanics::completeSetup() { SLIC_ERROR_IF(field_states_.empty(), "Empty field state during completeSetup()"); }
+void DifferentiablePhysics::completeSetup() { SLIC_ERROR_IF(field_states_.empty(), "Empty field state during completeSetup()"); }
 
-void Mechanics::resetStates([[maybe_unused]] int cycle, [[maybe_unused]] double time)
+void DifferentiablePhysics::resetStates([[maybe_unused]] int cycle, [[maybe_unused]] double time)
 {
   for (size_t i = 0; i < initial_field_states_.size(); ++i) {
     *initial_field_states_[i].get() = 0.0;
@@ -70,18 +71,18 @@ void Mechanics::resetStates([[maybe_unused]] int cycle, [[maybe_unused]] double 
   cycle_ = 0;
 }
 
-void Mechanics::resetAdjointStates()
+void DifferentiablePhysics::resetAdjointStates()
 {
   checkpointer_->finalize_graph();
   checkpointer_->reset_for_backprop();
   gretl_assert(checkpointer_->check_validity());
 }
 
-std::vector<std::string> Mechanics::stateNames() const { return state_names; }
+std::vector<std::string> DifferentiablePhysics::stateNames() const { return state_names; }
 
-std::vector<std::string> Mechanics::parameterNames() const { return param_names; }
+std::vector<std::string> DifferentiablePhysics::parameterNames() const { return param_names; }
 
-const FiniteElementState& Mechanics::state([[maybe_unused]] const std::string& field_name) const
+const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const std::string& field_name) const
 {
   SLIC_ERROR_IF(
       state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
@@ -92,7 +93,7 @@ const FiniteElementState& Mechanics::state([[maybe_unused]] const std::string& f
   return *field_states_[state_index].get();
 }
 
-FiniteElementState Mechanics::loadCheckpointedState(const std::string& state_name, int cycle)
+FiniteElementState DifferentiablePhysics::loadCheckpointedState(const std::string& state_name, int cycle)
 {
   SLIC_ERROR_IF(cycle != cycle_,
                 axom::fmt::format("Due to checkpointing restrictions in serac::Mechanics, cannot ask for an arbitrary "
@@ -101,9 +102,9 @@ FiniteElementState Mechanics::loadCheckpointedState(const std::string& state_nam
   return state(state_name);
 }
 
-const FiniteElementState& Mechanics::shapeDisplacement() const { return *field_shape_displacement_->get(); }
+const FiniteElementState& DifferentiablePhysics::shapeDisplacement() const { return *field_shape_displacement_->get(); }
 
-const FiniteElementState& Mechanics::parameter(std::size_t parameter_index) const
+const FiniteElementState& DifferentiablePhysics::parameter(std::size_t parameter_index) const
 {
   SLIC_ERROR_IF(parameter_index >= field_params_.size(),
                 axom::fmt::format("Parameter index {} requested, but only {} parameters exist in physics module {}.",
@@ -111,7 +112,7 @@ const FiniteElementState& Mechanics::parameter(std::size_t parameter_index) cons
   return *field_params_[parameter_index].get();
 }
 
-const FiniteElementState& Mechanics::parameter(const std::string& parameter_name) const
+const FiniteElementState& DifferentiablePhysics::parameter(const std::string& parameter_name) const
 {
   SLIC_ERROR_IF(param_name_to_field_index_.find(parameter_name) == param_name_to_field_index_.end(),
                 axom::fmt::format("Could not find parameter named {0} in mesh with tag \"{1}\" to get", parameter_name,
@@ -120,7 +121,7 @@ const FiniteElementState& Mechanics::parameter(const std::string& parameter_name
   return parameter(param_index);
 }
 
-void Mechanics::setParameter(const size_t parameter_index, const FiniteElementState& parameter_state)
+void DifferentiablePhysics::setParameter(const size_t parameter_index, const FiniteElementState& parameter_state)
 {
   SLIC_ERROR_IF(parameter_index >= field_params_.size(),
                 axom::fmt::format("Parameter '{}' requested when only '{}' parameters exist in physics module '{}'",
@@ -128,9 +129,9 @@ void Mechanics::setParameter(const size_t parameter_index, const FiniteElementSt
   *field_params_[parameter_index].get() = parameter_state;
 }
 
-void Mechanics::setShapeDisplacement(const FiniteElementState& s) { *field_shape_displacement_->get() = s; }
+void DifferentiablePhysics::setShapeDisplacement(const FiniteElementState& s) { *field_shape_displacement_->get() = s; }
 
-void Mechanics::setState([[maybe_unused]] const std::string& field_name, [[maybe_unused]] const FiniteElementState& s)
+void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_name, [[maybe_unused]] const FiniteElementState& s)
 {
   SLIC_ERROR_IF(
       state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
@@ -140,7 +141,7 @@ void Mechanics::setState([[maybe_unused]] const std::string& field_name, [[maybe
   *initial_field_states_[state_index].get() = s;
 }
 
-void Mechanics::setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&> string_to_dual)
+void DifferentiablePhysics::setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&> string_to_dual)
 {
   for (auto string_dual_pair : string_to_dual) {
     std::string field_name = string_dual_pair.first;
@@ -153,14 +154,14 @@ void Mechanics::setAdjointLoad(std::unordered_map<std::string, const serac::Fini
   }
 }
 
-const FiniteElementState& Mechanics::adjoint([[maybe_unused]] const std::string& adjoint_name) const
+const FiniteElementState& DifferentiablePhysics::adjoint([[maybe_unused]] const std::string& adjoint_name) const
 {
   // MRT, not implemented
   SLIC_ERROR("What is the use case for asking for the adjoint solution field directly?");
   return *adjoints_[0];
 }
 
-void Mechanics::advanceTimestep(double dt)
+void DifferentiablePhysics::advanceTimestep(double dt)
 {
   if (cycle_ == 0) {
     sub_cycle_ = 0;
@@ -191,7 +192,7 @@ void Mechanics::advanceTimestep(double dt)
   milestones_.push_back(make_milestone(field_states_).step());
 }
 
-void Mechanics::reverseAdjointTimestep()
+void DifferentiablePhysics::reverseAdjointTimestep()
 {
   --cycle_;
   const gretl::Int milestone = milestones_[static_cast<size_t>(cycle_)];
@@ -218,14 +219,14 @@ void Mechanics::reverseAdjointTimestep()
   }
 }
 
-FiniteElementDual Mechanics::computeTimestepSensitivity(size_t parameter_index)
+FiniteElementDual DifferentiablePhysics::computeTimestepSensitivity(size_t parameter_index)
 {
   return *field_params_[parameter_index].get_dual();
 }
 
-const FiniteElementDual& Mechanics::computeTimestepShapeSensitivity() { return *field_shape_displacement_->get_dual(); }
+const FiniteElementDual& DifferentiablePhysics::computeTimestepShapeSensitivity() { return *field_shape_displacement_->get_dual(); }
 
-const std::unordered_map<std::string, const serac::FiniteElementDual&> Mechanics::computeInitialConditionSensitivity()
+const std::unordered_map<std::string, const serac::FiniteElementDual&> DifferentiablePhysics::computeInitialConditionSensitivity()
     const
 {
   std::unordered_map<std::string, const serac::FiniteElementDual&> map;
@@ -236,7 +237,7 @@ const std::unordered_map<std::string, const serac::FiniteElementDual&> Mechanics
   return map;
 }
 
-std::vector<FieldState> Mechanics::getAllFieldStates() const
+std::vector<FieldState> DifferentiablePhysics::getAllFieldStates() const
 {
   std::vector<FieldState> fields;
   fields.insert(fields.end(), field_states_.begin(), field_states_.end());
@@ -244,6 +245,6 @@ std::vector<FieldState> Mechanics::getAllFieldStates() const
   return fields;
 }
 
-FieldState Mechanics::getShapeDispFieldState() const { return *field_shape_displacement_; }
+FieldState DifferentiablePhysics::getShapeDispFieldState() const { return *field_shape_displacement_; }
 
 }  // namespace serac

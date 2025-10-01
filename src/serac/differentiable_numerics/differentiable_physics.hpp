@@ -16,7 +16,6 @@
 #include "serac/physics/base_physics.hpp"
 #include "serac/gretl/data_store.hpp"
 #include "serac/differentiable_numerics/field_state.hpp"
-#include "serac/differentiable_numerics/timestep_estimator.hpp"
 #include <vector>
 #include <map>
 
@@ -26,18 +25,19 @@ class Mesh;
 class WeakForm;
 class DifferentiableSolver;
 class StateAdvancer;
+class TimestepEstimator;
 
 /// @brief Implementation of BasePhysics which uses FieldStates and gretl to track the computational graph, dynamically
 /// checkpoint, and back-propagate sensitivities.
-class Mechanics : public BasePhysics {
+class DifferentiablePhysics : public BasePhysics {
  public:
   /// @brief constructor
-  Mechanics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, const FieldState& shape_disp,
-            const std::vector<FieldState>& states, const std::vector<FieldState>& params,
-            std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate,
-            std::string mech_name = "mechanics");
+  DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph, const FieldState& shape_disp,
+                        const std::vector<FieldState>& states, const std::vector<FieldState>& params,
+                        std::shared_ptr<StateAdvancer> advancer, std::shared_ptr<TimestepEstimator> dt_estimate,
+                        std::string mech_name);
   /// @brief destructor
-  ~Mechanics() {}
+  ~DifferentiablePhysics() {}
 
   /// overload
   void resetStates(int cycle = 0, double time = 0.0) override;
