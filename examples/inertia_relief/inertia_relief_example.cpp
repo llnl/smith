@@ -311,29 +311,25 @@ int main(int argc, char* argv[])
   // create an inertial relief problem
   InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]}, non_const_states, mesh,
                                 solid_mechanics_weak_form, constraints);
-  int dimx = problem.GetDimx();
-  int dimy = problem.GetDimy();
 
-  mfem::Vector x0(dimx);
-  x0 = 0.0;
-  mfem::Vector y0(dimy);
-  y0 = 0.0;
-  mfem::Vector xf(dimx);
-  xf = 0.0;
-  mfem::Vector yf(dimy);
-  yf = 0.0;
+  auto X0 = problem.GetOptimizationVariable();
+  auto Xf = problem.GetOptimizationVariable();
 
   HomotopySolver solver(&problem);
   solver.SetTol(nonlinear_absolute_tol);
   solver.SetMaxIter(nonlinear_max_iterations);
 
-  solver.Mult(x0, y0, xf, yf);
+  solver.Mult(X0, Xf);
+  mfem::Vector displacement_sol = problem.GetDisplacement(Xf);
+  mfem::Vector multiplier_sol = problem.GetLagrangeMultiplier(Xf);
   bool converged = solver.GetConverged();
   if (myid == 0) {
     if (converged) {
-      std::cout << "converged!\n";
+      std::cout << "Converged!\n";
+      std::cout << "||displacement|| = " << displacement_sol.Norml2() << std::endl;
+      std::cout << "||multiplier|| = " << multiplier_sol.Norml2() << std::endl;
     } else {
-      std::cout << "homotopy solver did not converge\n";
+      std::cout << "Homotopy solver did not converge\n";
     }
   }
   if (visualize) {
@@ -361,19 +357,15 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   obj_states_.resize(obj_states.size());
   std::copy(obj_states.begin(), obj_states.end(), obj_states_.begin());
 
-  HYPRE_BigInt uOffsets[2];
   HYPRE_BigInt cOffsets[2];
-
-  for (int i = 0; i < 2; i++) {
-    uOffsets[i] = all_states_[FIELD::DISP]->space().GetTrueDofOffsets()[i];
-  }
+  HYPRE_BigInt* uOffsets = all_states[FIELD::DISP]->space().GetTrueDofOffsets();
   dimc_ = static_cast<int>(constraints_.size());
   int myid = mfem::Mpi::WorldRank();
   cOffsets[0] = 0;
   cOffsets[1] = dimc_;
   if (myid > 0) {
-    cOffsets[0] = dimc_;
     dimc_ = 0;
+    cOffsets[0] = cOffsets[1];
   }
 
   dimu_ = all_states_[FIELD::DISP]->space().GetTrueVSize();
@@ -455,7 +447,6 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
 mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u)
 {
   obj_states_[DISP]->Set(1.0, u);
-  // TODO: add in constraint Jacobian
   int myid = mfem::Mpi::WorldRank();
   int nentries = dimuglb_;
   if (myid > 0) {
