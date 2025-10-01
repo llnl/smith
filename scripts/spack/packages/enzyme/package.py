@@ -53,7 +53,7 @@ class Enzyme(CMakePackage):
     depends_on("cmake@3.13:", type="build")
 
     for compiler_ in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
-        conflicts("+enzyme", when=f"%[virtuals=c,cxx] {compiler_}")
+        conflicts(f"%[virtuals=c,cxx] {compiler_}")
 
     def cmake_args(self):
         spec = self.spec
