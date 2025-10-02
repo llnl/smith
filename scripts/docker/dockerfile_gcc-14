@@ -38,16 +38,4 @@ USER serac
 
 RUN git clone --recursive --branch $branch --single-branch --depth 1 https://github.com/LLNL/serac.git serac_repo
 
-# Build/install TPLs via spack and then remove the temporary build directory on success
-WORKDIR "/home/serac/serac_repo"
-RUN python3 ./scripts/uberenv/uberenv.py --spack-env-file=./scripts/spack/configs/docker/ubuntu24/spack.yaml \
-                                                          --project-json=.uberenv_config.json \
-                                                          --spec="$spec" --prefix=../serac_tpls -k -j4 \
-    && rm -rf ../serac_tpls/build_stage ../serac_tpls/spack
-
-RUN mkdir -p ../export_hostconfig
-RUN cp *.cmake ../export_hostconfig
-
-# Make sure the new hostconfig worked
-# Note: having high job slots causes build log to disappear and job to fail
-RUN python3 config-build.py -hc *.cmake -bp build -DBUILD_SHARED_LIBS=ON && cd build && make -j4 VERBOSE=1 && make -j4 test && cd /home/serac && rm -rf serac_repo
+RUN ./serac_repo/scripts/docker/setup-serac.sh
