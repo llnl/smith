@@ -8,11 +8,11 @@ set(functional_test_depends gtest serac_functional ${functional_depends})
 
 # This test is all constexpr-evaluated, so it doesn't
 # actually need to run, if it compiles without error, the tests have passed
-blt_add_executable(NAME        tensor_unit_tests
-                   SOURCES     tensor_unit_tests.cpp
-                   OUTPUT_DIR  ${TEST_OUTPUT_DIRECTORY}
-                   DEPENDS_ON  ${functional_test_depends}
-                   FOLDER      serac/tests)
+serac_add_executable(NAME        tensor_unit_tests
+                     SOURCES     tensor_unit_tests.cpp
+                     OUTPUT_DIR  ${TEST_OUTPUT_DIRECTORY}
+                     DEPENDS_ON  ${functional_test_depends}
+                     FOLDER      serac/tests)
 
 # Then add the examples/tests
 set(functional_serial_test_sources

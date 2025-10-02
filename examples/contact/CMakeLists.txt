@@ -16,10 +16,10 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
     foreach(filename ${CONTACT_EXAMPLES_SOURCES})
         get_filename_component(example_name ${filename} NAME_WE)
 
-        blt_add_executable(NAME        contact_${example_name}
-                           SOURCES     ${filename}
-                           OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
-                           DEPENDS_ON  serac_physics serac_mesh_utils)
+        serac_add_executable(NAME        contact_${example_name}
+                             SOURCES     ${filename}
+                             OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
+                             DEPENDS_ON  serac_physics serac_mesh_utils)
 
         serac_add_example_test(NAME           contact_${example_name}
                                COMMAND        contact_${example_name}

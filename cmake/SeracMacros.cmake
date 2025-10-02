@@ -5,6 +5,42 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 ##------------------------------------------------------------------------------
+## serac_add_executable(
+##                     NAME        <name>
+##                     SOURCES     [source1 [source2 ...]]
+##                     HEADERS     [header1 [header2 ...]]
+##                     INCLUDES    [dir1 [dir2 ...]]
+##                     DEFINES     [define1 [define2 ...]]
+##                     DEPENDS_ON  [dep1 [dep2 ...]]
+##                     OUTPUT_DIR  [dir]
+##                     OUTPUT_NAME [name]
+##                     FOLDER      [name])
+##
+## Wrapper around blt_add_executable
+##------------------------------------------------------------------------------
+macro(serac_add_executable)
+
+    set(options )
+    set(singleValueArgs NAME OUTPUT_DIR OUTPUT_NAME FOLDER)
+    set(multiValueArgs HEADERS SOURCES INCLUDES DEFINES DEPENDS_ON)
+
+    # Parse the arguments to the macro
+    cmake_parse_arguments(arg
+        "${options}" "${singleValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    blt_add_executable(NAME        ${arg_NAME}
+                       SOURCES     ${arg_SOURCES}
+                       HEADERS     ${arg_HEADERS}
+                       INCLUDES    ${arg_INCLUDES}
+                       DEFINES     ${arg_DEFINES}
+                       DEPENDS_ON  ${arg_DEPENDS_ON} ${serac_device_depends}
+                       OUTPUT_DIR  ${arg_OUTPUT_DIR}
+                       OUTPUT_NAME ${arg_OUTPUT_NAME}
+                       FOLDER      ${arg_FOLDER})
+
+endmacro(serac_add_executable)
+
+##------------------------------------------------------------------------------
 ## serac_add_library(
 ##                  NAME         <libname>
 ##                  SOURCES      [source1 [source2 ...]]
@@ -279,11 +315,11 @@ macro(serac_add_tests)
             set(test_name "${test_name}_cuda")
         endif()
 
-        blt_add_executable(NAME        ${test_name}
-                           SOURCES     ${filename}
-                           OUTPUT_DIR  ${TEST_OUTPUT_DIRECTORY}
-                           DEPENDS_ON  ${arg_DEPENDS_ON}
-                           FOLDER      serac/tests )
+        serac_add_executable(NAME        ${test_name}
+                             SOURCES     ${filename}
+                             OUTPUT_DIR  ${TEST_OUTPUT_DIRECTORY}
+                             DEPENDS_ON  ${arg_DEPENDS_ON}
+                             FOLDER      serac/tests )
 
         if (DEFINED arg_USE_CUDA)
             target_compile_definitions(${test_name} PUBLIC SERAC_USE_CUDA_KERNEL_EVALUATION)
