@@ -18,6 +18,8 @@
 
 namespace serac {
 
+/// Evaluates a DoubleState using a provided ScalarObjective instance, and the input arguments to that objective. This
+/// operation is tracked on the gretl graph.
 DoubleState evaluate_objective(const TimeInfo& time_info, const FieldState& shape_disp,
                                const std::vector<FieldState>& inputs, const ScalarObjective* objective);
 
