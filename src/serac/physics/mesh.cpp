@@ -49,7 +49,7 @@ Mesh::Mesh(mfem::ParMesh&& mesh, const std::string& meshtag) : mesh_tag_(meshtag
 
 Mesh::errorIfRankHasNoElements() const
 {
-  SLIC_ERROR_IF(mfem_mesh_.GetNE() == 0, "Local size of mesh is 0 which will cause out-of-range error");
+  SLIC_ERROR_IF(mfem_mesh_->GetNE() == 0, "Local size of mesh is 0 which will cause out-of-range error");
 }
 
 MPI_Comm Mesh::getComm() const { return mfem_mesh_->GetComm(); }
