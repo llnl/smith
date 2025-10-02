@@ -37,7 +37,7 @@ endif()
 #
 
 if(SERAC_ENABLE_CUDA)
-    blt_add_library( NAME       cuda_smoketest_kernel
+    serac_add_library( NAME       cuda_smoketest_kernel
                      SOURCES    cuda_smoketest_kernel.cpp
                      DEPENDS_ON ${serac_device_depends})
 

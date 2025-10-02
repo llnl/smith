@@ -28,7 +28,7 @@ set(materials_depends
     serac_functional
     )
 
-blt_add_library(
+serac_add_library(
    NAME        serac_physics_materials
    SOURCES     ${materials_sources}
    HEADERS     ${materials_headers}

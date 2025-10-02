@@ -21,7 +21,7 @@ if (TRIBOL_FOUND AND SERAC_ENABLE_MPI)
     list(APPEND contact_depends redecomp)
 endif()
 
-blt_add_library(
+serac_add_library(
     NAME        serac_contact
     HEADERS     ${contact_headers}
     SOURCES     ${contact_sources}

@@ -17,7 +17,7 @@ set(mesh_utils_sources
 
 set(mesh_utils_depends serac_infrastructure)
 
-blt_add_library(
+serac_add_library(
     NAME        serac_mesh_utils
     HEADERS     ${mesh_utils_headers}
     SOURCES     ${mesh_utils_sources}

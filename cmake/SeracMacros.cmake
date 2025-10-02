@@ -4,6 +4,51 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+##------------------------------------------------------------------------------
+## serac_add_library(
+##                  NAME         <libname>
+##                  SOURCES      [source1 [source2 ...]]
+##                  HEADERS      [header1 [header2 ...]]
+##                  INCLUDES     [dir1 [dir2 ...]]
+##                  DEFINES      [define1 [define2 ...]]
+##                  DEPENDS_ON   [dep1 ...]
+##                  OUTPUT_NAME  [name]
+##                  OUTPUT_DIR   [dir]
+##                  SHARED       [TRUE | FALSE]
+##                  OBJECT       [TRUE | FALSE]
+##                  CLEAR_PREFIX [TRUE | FALSE]
+##                  FOLDER       [name])
+##
+## Wrapper around blt_add_library, to conveniently add device dependencies.
+##------------------------------------------------------------------------------
+macro(serac_add_library)
+
+  set(options)
+  set(singleValueArgs
+      NAME
+      OUTPUT_NAME
+      OUTPUT_DIR
+      SHARED
+      OBJECT
+      CLEAR_PREFIX
+      FOLDER)
+  set(multiValueArgs SOURCES HEADERS INCLUDES DEFINES DEPENDS_ON)
+
+  cmake_parse_arguments(arg "${options}" "${singleValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  blt_add_library(
+    NAME ${arg_NAME}
+    SOURCES ${arg_SOURCES}
+    HEADERS ${arg_HEADERS}
+    INCLUDES ${arg_INCLUDES}
+    DEFINES ${arg_DEFINES}
+    DEPENDS_ON ${arg_DEPENDS_ON} ${serac_device_depends}
+    OUTPUT_DIR ${arg_OUTPUT_DIR}
+    OUTPUT_NAME ${arg_OUTPUT_NAME}
+    FOLDER ${arg_FOLDER})
+
+endmacro(serac_add_library)
+
 #------------------------------------------------------------------------------
 # serac_add_example_test(NAME              [name]
 #                        COMMAND           [command]

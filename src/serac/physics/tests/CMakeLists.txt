@@ -8,7 +8,7 @@ set(physics_test_headers
     physics_test_utils.hpp
     )
     
-blt_add_library(
+serac_add_library(
     NAME        serac_physics_test_utils
     HEADERS     ${physics_test_headers}
     )

@@ -50,7 +50,7 @@ set(physics_depends
     serac_physics_materials
     )
 
-blt_add_library(
+serac_add_library(
     NAME        serac_physics
     SOURCES     ${physics_sources}
     HEADERS     ${physics_headers}
