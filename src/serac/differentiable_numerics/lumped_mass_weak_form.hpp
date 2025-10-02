@@ -14,7 +14,6 @@
 
 #include "serac/physics/functional_weak_form.hpp"
 #include "serac/physics/mesh.hpp"
-#include "serac/differentiable_numerics/field_state.hpp"
 
 namespace serac {
 

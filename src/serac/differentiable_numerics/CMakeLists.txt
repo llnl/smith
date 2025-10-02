@@ -7,6 +7,7 @@
 set(differentiable_numerics_sources
     state_advancer.cpp
     field_state.cpp
+    differentiable_utils.cpp
     differentiable_physics.cpp
     )
 
@@ -14,10 +15,10 @@ set(differentiable_numerics_headers
     field_state.hpp
     state_advancer.hpp
     timestep_estimator.hpp
-    differentiable_physics.hpp
     explicit_dynamic_solve.hpp
     lumped_mass_weak_form.hpp
     differentiable_utils.hpp
+    differentiable_physics.hpp
     )
 
 set(differentiable_numerics_depends

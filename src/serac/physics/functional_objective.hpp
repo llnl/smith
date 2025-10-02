@@ -88,14 +88,14 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
 
   /// @overload
   virtual mfem::Vector gradient(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
-                                int field_ordinal) const override
+                                size_t field_ordinal) const override
   {
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
 
     auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time_info.time(),
                                     shape_disp, fields);
-    auto g = serac::get<DERIVATIVE>(grads[static_cast<size_t>(field_ordinal)](time_info.time(), shape_disp, fields));
+    auto g = serac::get<DERIVATIVE>(grads[field_ordinal](time_info.time(), shape_disp, fields));
     return *assemble(g);
   }
 

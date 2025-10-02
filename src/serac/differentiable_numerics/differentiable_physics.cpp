@@ -66,7 +66,6 @@ void DifferentiablePhysics::completeSetup()
 void DifferentiablePhysics::resetStates(int cycle, double time)
 {
   for (size_t i = 0; i < initial_field_states_.size(); ++i) {
-    // *initial_field_states_[i].get() = 0.0;
     field_states_[i] = initial_field_states_[i];
   }
   milestones_.clear();
