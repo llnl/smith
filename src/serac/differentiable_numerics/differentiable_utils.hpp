@@ -19,7 +19,7 @@
 namespace serac {
 
 DoubleState evaluate_objective(const TimeInfo& time_info, const FieldState& shape_disp,
-                               const std::vector<FieldState>& inputs, std::shared_ptr<ScalarObjective> objective);
+                               const std::vector<FieldState>& inputs, const ScalarObjective* objective);
 
 /// @brief Utility function to construct a serac::functional which evaluates the total kinetic energy
 template <typename DispSpace, typename DensitySpace>
