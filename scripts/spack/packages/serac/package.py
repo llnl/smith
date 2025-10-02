@@ -109,7 +109,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
         # NOTE: Sundials must be built static to prevent the following runtime error:
         # "error while loading shared libraries: libsundials_nvecserial.so.6:
         # cannot open shared object file: No such file or directory"
-        depends_on("sundials+hypre~monitoring~examples~examples-install+static~shared")
+        depends_on("sundials+hypre~trilinos~monitoring~examples~examples-install+static~shared")
         depends_on("sundials+asan", when="+asan")
 
     depends_on("mfem+netcdf+metis+superlu-dist+lapack+mpi")
@@ -126,7 +126,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("hypre@2.26.0:~superlu-dist+mpi")
 
-    depends_on("petsc", when="+petsc")
+    depends_on("petsc~mmg", when="+petsc")
     depends_on("petsc+strumpack", when="+petsc+strumpack")
     depends_on("petsc~strumpack", when="+petsc~strumpack")
     depends_on("petsc+openmp", when="+petsc+openmp")
@@ -145,7 +145,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     # Note: Certain combinations of CMake and Conduit do not like +mpi
     #  and cause FindHDF5.cmake to fail and only return mpi information
     #  (includes, libs, etc) instead of hdf5 info
-    depends_on("hdf5@1.8.21:+hl~mpi")
+    depends_on("hdf5@1.8.21:+hl~mpi cflags=-Wno-int-conversion")
 
     depends_on("camp@2024.02.0:")
 
@@ -157,7 +157,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("umpire~openmp", when="+umpire~openmp")
     depends_on("umpire+openmp", when="+umpire+openmp")
 
-    depends_on("axom@0.9:~fortran~tools~examples+mfem+lua")
+    depends_on("axom@0.9:~fortran+mfem+lua")
     depends_on("axom+raja", when="+raja")
     depends_on("axom~raja", when="~raja")
     depends_on("axom+umpire", when="+umpire")
@@ -168,7 +168,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("metis@5.1.0")
     depends_on("parmetis@4.0.3")
 
-    depends_on("conduit~python~test")
+    depends_on("conduit~python~test~silo")
 
     depends_on("adiak+mpi", when="+profiling")
     depends_on("caliper+mpi+adiak~papi", when="+profiling")

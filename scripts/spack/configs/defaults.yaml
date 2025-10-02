@@ -1,5 +1,8 @@
 # Globally lock variants of third party libraries
 packages:
+  axom:
+    require:
+    - spec: "~tools~examples~opencascade"
   caliper:
     require:
     - spec: "~kokkos"
