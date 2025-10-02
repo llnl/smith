@@ -129,6 +129,9 @@ class Mesh {
   serac::FiniteElementDual newShapeDisplacementDual();
 
  private:
+  /// @brief Helper function used to throw exception if the size of the mesh on the local rank is 0
+  void errorIfRankHasNoElements() const;
+
   /// @brief Sets up some initial domains: entire domain, entire boundary, and interior faces. Eventually we can read
   /// off names/blocks/attributes from the mesh and create default domains.
   void createDomains();

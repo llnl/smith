@@ -24,6 +24,7 @@ Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_s
 {
   auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel, comm);
   mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
+  errorIfRankHasNoElements();
   createDomains();
 }
 
@@ -32,6 +33,7 @@ Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int
 {
   auto meshtmp = serac::mesh::refineAndDistribute(std::move(mesh), refine_serial, refine_parallel, comm);
   mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
+  errorIfRankHasNoElements();
   createDomains();
 }
 
@@ -41,7 +43,13 @@ Mesh::Mesh(mfem::ParMesh&& mesh, const std::string& meshtag) : mesh_tag_(meshtag
   meshtmp->EnsureNodes();
   meshtmp->ExchangeFaceNbrData();
   mfem_mesh_ = &serac::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
+  errorIfRankHasNoElements();
   createDomains();
+}
+
+Mesh::errorIfRankHasNoElements() const
+{
+  SLIC_ERROR_IF(mfem_mesh_.GetNE() == 0, "Local size of mesh is 0 which will cause out-of-range error");
 }
 
 MPI_Comm Mesh::getComm() const { return mfem_mesh_->GetComm(); }
