@@ -11,6 +11,8 @@
  * zero-, first-, or second-order extrapolation.
  */
 
+#pragma once
+
 #include "serac/infrastructure/logger.hpp"
 
 namespace serac {

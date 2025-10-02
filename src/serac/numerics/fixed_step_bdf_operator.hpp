@@ -11,6 +11,8 @@
  * operator with fixed timestep and dynamic order selection.
  */
 
+#pragma once
+
 #include "serac/infrastructure/logger.hpp"
 
 namespace serac {

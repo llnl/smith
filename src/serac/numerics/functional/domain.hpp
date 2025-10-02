@@ -264,18 +264,6 @@ Domain operator&(const Domain& a, const Domain& b);
 /// @brief create a new domain that is the set difference of `a` and `b`
 Domain operator-(const Domain& a, const Domain& b);
 
-/// @brief Return DOFs in `a ∪ b` with respect to `fes`.
-inline mfem::Array<int>
-union_dofs(const Domain& a, const Domain& b, const mfem::FiniteElementSpace* fes);
-
-/// @brief Return DOFs in `a ∩ b` with respect to `fes`.
-inline mfem::Array<int>
-intersect_dofs(const Domain& a, const Domain& b, const mfem::FiniteElementSpace* fes);
-
-/// @brief Return DOFs in `a \ b` with respect to `fes`.
-inline mfem::Array<int>
-subtract_dofs(const Domain& a, const Domain& b, const mfem::FiniteElementSpace* fes);
-
 /// @brief convenience predicate for creating domains by attribute
 template <int dim>
 inline auto by_attr(int value)
