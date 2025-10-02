@@ -192,7 +192,7 @@ FieldStateWeightedSum operator-(const FieldState& ax, const FieldStateWeightedSu
 // Utilty functions for easily getting spaces from FieldStates
 
 /// @brief Get the space from the primal field of a field states
-inline const mfem::ParFiniteElementSpace& space(FieldState field) { return field.get()->space(); }
+inline mfem::ParFiniteElementSpace& space(FieldState field) { return field.get()->space(); }
 
 /// @brief Get the spaces from the primal fields of a vector of field states
 inline std::vector<const mfem::ParFiniteElementSpace*> spaces(const std::vector<FieldState>& states,
