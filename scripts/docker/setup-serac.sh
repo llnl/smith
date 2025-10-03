@@ -12,7 +12,6 @@ echo "spec: $spec"
 echo "=============================="
 
 # Build/install TPLs via spack 
-cd /home/serac/serac_repo
 python3 ./scripts/uberenv/uberenv.py --spack-env-file=./scripts/spack/configs/docker/ubuntu24/spack.yaml \
                                      --project-json=.uberenv_config.json --spec="$spec" --prefix=../serac_tpls -k -j4
 
