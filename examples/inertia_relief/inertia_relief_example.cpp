@@ -328,15 +328,11 @@ int main(int argc, char* argv[])
   mfem::Vector displacement_sol = problem.GetDisplacement(Xf);
   mfem::Vector multiplier_sol = problem.GetLagrangeMultiplier(Xf);
   bool converged = solver.GetConverged();
-  if (myid == 0) {
-    if (converged) {
-      std::cout << "Converged!\n";
-      std::cout << "||displacement|| = " << displacement_sol.Norml2() << std::endl;
-      std::cout << "||multiplier|| = " << multiplier_sol.Norml2() << std::endl;
-    } else {
-      std::cout << "Homotopy solver did not converge\n";
-    }
-  }
+  SLIC_ERROR_ROOT_IF(!converged, "Homotopy solver did not converge");
+  double displacement_norm = mfem::GlobalLpNorm(2, displacement_sol.Norml2(), MPI_COMM_WORLD);
+  double multiplier_norm = mfem::GlobalLpNorm(2, multiplier_sol.Norml2(), MPI_COMM_WORLD);
+  SLIC_INFO_ROOT(axom::fmt::format("||displacement|| = {}", displacement_norm));
+  SLIC_INFO_ROOT(axom::fmt::format("||multiplier|| = {}", multiplier_norm));
   if (visualize) {
     writer.write(1, 1.0, objective_states);
   }
