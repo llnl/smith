@@ -4,6 +4,8 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+set -e
+
 echo "=============================="
 echo "setup-serac.sh script env vars"
 echo "spec: $spec"
