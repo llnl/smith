@@ -415,12 +415,12 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
   obj_states_[DISP]->Set(1.0, u);
   auto drdu_unique =
       weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
-  SLIC_ERROR_ROOT_IF(drdu_unique->Height() != dimu_, "size error");
 
   if (drdu_) {
     delete drdu_;
   }
   drdu_ = drdu_unique.release();
+  SLIC_ERROR_ROOT_IF(drdu_->Height() != dimu_ || drdu_->Width() != dimu_, "residual Jacobian of an unexpected shape");
   return drdu_;
 }
 
