@@ -467,7 +467,7 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
   for (size_t i = 0; i < constraints_.size(); i++) {
     const int idx = static_cast<int>(i);
     const size_t i2 = static_cast<size_t>(idx);
-    SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
+    SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
     mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
     gradVector.Set(
         1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP));
