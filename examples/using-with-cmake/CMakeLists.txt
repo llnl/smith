@@ -44,7 +44,7 @@ foreach(_target ${_imported_targets})
 endforeach()
 
 add_executable(serac_example serac_example.cpp)
-target_link_libraries(serac_example serac::serac axom mfem)
+target_link_libraries(serac_example serac::serac)
 
 enable_testing()
 add_test(NAME    serac_example 

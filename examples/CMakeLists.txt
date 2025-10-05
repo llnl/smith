@@ -32,4 +32,8 @@ add_subdirectory(buckling)
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
 
+# Add the inertia relief example
+add_subdirectory(inertia_relief)
+
+# Add bistable curved beam example
 add_subdirectory(bistable_beam)
