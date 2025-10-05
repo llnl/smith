@@ -129,17 +129,12 @@ int main(int argc, char* argv[])
   mesh->addDomainOfBoundaryElements("right", serac::by_attr<dim>(2));
   mesh->addDomainOfBoundaryElements("load_surface", serac::by_attr<dim>(3));
 
-  SLIC_INFO_ROOT(axom::fmt::format("edges in domain left: {}", mesh->domain("left").total_elements()));
-  SLIC_INFO_ROOT(axom::fmt::format("edges in domain right: {}", mesh->domain("right").total_elements()));
-  SLIC_INFO_ROOT(axom::fmt::format("edges in domain load_surface: {}", mesh->domain("load_surface").total_elements()));
-
   // Create solver
   auto solid_solver = std::make_unique<serac::SolidMechanics<p, dim>>(
         nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh);
 
   // Define the time-dependent load
   //  Compute the area of the surface over which the traction is applied
-  //double peak_traction = 0.03;
   using DisplacementSpace = serac::H1<p, dim>;
   auto compute_load_surface_area = serac::Functional<double(DisplacementSpace)>({&solid_solver->displacement().space()});
   compute_load_surface_area.AddBoundaryIntegral(
@@ -149,7 +144,7 @@ int main(int argc, char* argv[])
     },
     mesh->domain("load_surface"));
   double area = compute_load_surface_area(solid_solver->time(), solid_solver->displacement());
-  std::cout << "area = " << area << std::endl;
+  std::cout << "load patch area = " << area << std::endl;
 
   // Set traction function to apply load cycle over time
   const double peak_traction = max_load/area;
@@ -157,8 +152,7 @@ int main(int argc, char* argv[])
     return serac::tensor<double, dim> {0.0, -peak_traction*std::sin(M_PI*t)};
   };
 
-  solid_solver->setTraction(traction,
-                            mesh->domain("load_surface"));
+  solid_solver->setTraction(traction, mesh->domain("load_surface"));
 
   // Define the material
   serac::solid_mechanics::NeoHookean mat{.density = 1.0, .K = E / 3 / (1 - 2*nu), .G = 0.5*E/(1 + nu)};
@@ -205,7 +199,7 @@ int main(int argc, char* argv[])
   // Perform the quasi-static solve
   SLIC_INFO_ROOT(axom::fmt::format("Running curved bistable beam example with {} displacement dofs",
                                    solid_solver->displacement().GlobalSize()));
-  SLIC_INFO_ROOT("Starting pseudo-timestepping.");
+  SLIC_INFO_ROOT("Starting timestepping.");
   serac::logger::flush();
   for (int time_step = 0; time_step < steps; ++time_step) {
     SLIC_INFO_ROOT("----------------------------------------");
