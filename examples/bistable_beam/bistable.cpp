@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
 
   // Command line arguments
   // Mesh options
-  std::string filename;
+  std::string filename = SERAC_REPO_DIR "/data/meshes/sinusoidal_beam.g";
   int serial_refinement = 0;
   int parallel_refinement = 0;
 
@@ -70,7 +70,6 @@ int main(int argc, char* argv[])
 
   // Mesh options
   app.add_option("-m,--mesh", filename, "Name of mesh file")
-    ->required()
     ->check(axom::CLI::ExistingFile)
     ->capture_default_str();
   app.add_option("--serial-refinement", serial_refinement, "Serial mesh refinements")
