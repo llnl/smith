@@ -60,9 +60,9 @@ TEST_P(ContactTest, patch)
   // Construct the appropriate dimension mesh and give it to the data store
 
   auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(100,100 ).translate({0.0,  1.0}).bdrAttribInfo()
+    shared::MeshBuilder::SquareMesh(50,50 ).translate({0.0,  1.0}).bdrAttribInfo()
     .updateBdrAttrib(4, 7).updateBdrAttrib(3, 9).updateBdrAttrib(1, 6),
-    shared::MeshBuilder::SquareMesh(80, 80).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
+    shared::MeshBuilder::SquareMesh(50, 50).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
 
   mfem::VisItDataCollection visit_dc("contact_patch_visit", &mesh->mfemParMesh());
 
@@ -94,7 +94,7 @@ TEST_P(ContactTest, patch)
   return;
 #endif
 
-  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
+  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::TrustRegion,
                                            .relative_tol = 1.0e-13,
                                            .absolute_tol = 1.0e-13,
                                            .max_iterations = 20,
@@ -104,7 +104,7 @@ TEST_P(ContactTest, patch)
   ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
                                  .enforcement =serac::ContactEnforcement::Penalty,
                                  .type = ContactType::Frictionless,
-                                 .penalty = 10000000,
+                                 .penalty = 10000,
                                  .penalty2 = 0,
                                  .jacobian = serac::ContactJacobian::Exact};
 

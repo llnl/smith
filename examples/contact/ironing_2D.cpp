@@ -64,8 +64,8 @@ int main(int argc, char* argv[])
     // std::shared_ptr<serac::Mesh> mesh = std::make_shared<serac::Mesh>(filename, "ironing_2D_mesh", 2, 0);
 
     auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-        shared::MeshBuilder::SquareMesh(4, 4).updateBdrAttrib(1, 6).updateBdrAttrib(3, 9).bdrAttribInfo().scale({1.0, 0.5}), 
-        shared::MeshBuilder::SquareMesh(1, 1).scale({0.25, 0.25}).translate({0.0, 0.5}).updateBdrAttrib(3, 5).updateBdrAttrib(1,8).updateAttrib(1, 2)}), "iroing_2D_mesh", 0, 0);
+        shared::MeshBuilder::SquareMesh(4, 4).updateBdrAttrib(1, 6).updateBdrAttrib(3, 9).bdrAttribInfo().scale({1, 0.5}), 
+        shared::MeshBuilder::SquareMesh(2, 2).scale({0.25, 0.25}).translate({0.0, 0.5}).updateBdrAttrib(3, 5).updateBdrAttrib(1,8).updateAttrib(1, 2)}), "iroing_2D_mesh", 0, 0);
 
     serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level=0};
 
@@ -82,13 +82,13 @@ int main(int argc, char* argv[])
         serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::TrustRegion,
                                                         .relative_tol = 1.0e-8, 
                                                         .absolute_tol = 1.0e-10,
-                                                        .max_iterations = 50,
+                                                        .max_iterations = 20,
                                                         .print_level = 1};
 
         serac::ContactOptions contact_options{.method = serac::ContactMethod::SmoothMortar,
                                               .enforcement = serac::ContactEnforcement::Penalty,
                                               .type = serac::ContactType::Frictionless,
-                                              .penalty = 100,
+                                              .penalty = 2000,
                                               .penalty2 = 0.0, 
                                               .jacobian = serac::ContactJacobian::Exact};
 
@@ -120,7 +120,7 @@ int main(int argc, char* argv[])
 
         mesh->addDomainOfBoundaryElements("top of indenter", serac::by_attr<dim>(5));
         auto applied_displacement = [](serac::tensor<double, dim>, double t) {
-            constexpr double init_steps = 50.0;
+            constexpr double init_steps = 10.0;
             serac::tensor<double, dim> u{};
             // std::cout << "T ========= " << t << std::endl;
             if (t <= init_steps + 1.0e-12) {
@@ -141,8 +141,8 @@ int main(int argc, char* argv[])
 
         //Add the contact interaction
         auto contact_interaction_id = 0;
-        std::set<int> surface_1_boundary_attributes({8});
-        std::set<int> surface_2_boundary_attributes({9});
+        std::set<int> surface_1_boundary_attributes({9});
+        std::set<int> surface_2_boundary_attributes({8});
         solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes, surface_2_boundary_attributes, contact_options);
 
         //Finalize the data structures
@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
         //Perform the quasi-static solve
         double dt = 1.0;
 
-        for (int i{0}; i < 200; ++i) {
+        for (int i{0}; i < 100; ++i) {
             solid_solver.advanceTimestep(dt);
             visit_dc.SetCycle(i);
             visit_dc.SetTime((i+1)*dt);

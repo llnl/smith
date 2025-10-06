@@ -663,6 +663,7 @@ class TrustRegion : public mfem::NewtonSolver {
 
     int it = 0;
     for (; true; it++) {
+      std::cout << "NORM: " << norm << std::endl;
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
       if (print_options.iterations) {
         mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;

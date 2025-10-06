@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
 
 
     auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
-        shared::MeshBuilder::SquareMesh(32, 32).updateBdrAttrib(1, 6).updateBdrAttrib(3, 9).scale({1.0, 0.5}),
+        shared::MeshBuilder::SquareMesh(32,32).updateBdrAttrib(1, 6).updateBdrAttrib(3, 9).scale({1.0, 0.5}),
         shared::MeshBuilder::SquareMesh(8, 8).scale({0.25, 0.25}).translate({0.0, 0.5}).updateBdrAttrib(3, 5).updateBdrAttrib(1, 8).updateBdrAttrib(2, 8).updateBdrAttrib(4, 8).updateAttrib(1, 2)}), "ironing_2D_mesh", 0, 0);
 
         serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level=0};
@@ -86,8 +86,8 @@ int main(int argc, char* argv[])
         
         serac::ContactOptions contact_options{.method = serac::ContactMethod::SmoothMortar,
                                               .enforcement = serac::ContactEnforcement::Penalty,
-                                              .penalty = 750,
-                                              .penalty2 = 0.0,
+                                              .penalty = 4000,
+                                              .penalty2 = 0,
                                               .jacobian = serac::ContactJacobian::Exact};
         
         serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
@@ -122,7 +122,7 @@ int main(int argc, char* argv[])
             constexpr double theta_max   = 80.0 * M_PI / 180.0; 
             serac::tensor<double, dim> u{};
             if (t <= init_steps + 1.0e-12) {
-                u[1] = -t * 0.03 / init_steps;
+                u[1] = -t * 0.05 / init_steps;
             }
             else { 
                 double hm = (t - init_steps) * 0.01; //horizontal movement
@@ -135,7 +135,7 @@ int main(int argc, char* argv[])
                 serac::tensor<double, dim> y_rot {{cos_theta*y[0] - sin_theta*y[1], sin_theta*y[0] + cos_theta*y[1]}};
 
                 u[0] = (y_rot[0] - y[0]) + 0.01 * (t - init_steps);
-                u[1] = (y_rot[1] - y[1]) - 0.03;  
+                u[1] = (y_rot[1] - y[1]) - 0.05;  
             }
             return u;
         };
