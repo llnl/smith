@@ -57,8 +57,6 @@ spack:
             fflags: -fPIC
           extra_rpaths:
           - /opt/homebrew/lib/gcc/15
-      - spec: llvm+clang@14 # for clang-format
-        prefix: /opt/homebrew/opt/llvm@14
 
     # Providers
     mpi:
@@ -113,11 +111,6 @@ spack:
       externals:
       - spec: expat@2.7.1
         prefix: /opt/homebrew
-    gcc-runtime:
-      buildable: false
-      externals:
-      - spec: gcc-runtime@15.1.0
-        prefix: /opt/homebrew/opt/gcc/lib/gcc/15
     gettext:
       buildable: false
       externals:

@@ -134,7 +134,7 @@ This is also useful for a few additional packages:
 
     We provide a basic MacOS Spack environment file that
     may work for most people. If you want to try using that, skip to :ref:`building_tpls-label`
-    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/macos_sonoma_aarch64/spack.yaml``. You will likely
+    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/darwin/spack.yaml``. You will likely
     need to update the versions of packages to match the versions installed by Homebrew. The versions for all installed packages can be listed via
     the command ``brew list --versions``.
 
