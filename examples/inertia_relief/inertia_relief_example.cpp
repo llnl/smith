@@ -141,7 +141,8 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   std::unique_ptr<serac::FiniteElementState> shape_disp_;
   std::shared_ptr<serac::Mesh> mesh_;
   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_;
-  serac::TimeInfo time_info_;
+  double time_ = 0.0;
+  double dt_ = 0.0;
   std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};
 
  public:
@@ -254,7 +255,8 @@ int main(int argc, char* argv[])
       serac::FunctionalObjective<dim, serac::Parameters<VectorSpace, DensitySpace>>;  // functional objective on
                                                                                       // displacement/density
 
-  serac::TimeInfo time_info(0.0, 0.0, 0);
+  double time = 0.0;
+  double dt = 1.0;
   auto all_states = getConstFieldPointers(states, params);
   auto objective_states = {all_states[DISP], all_states[DENSITY]};
 
@@ -264,7 +266,7 @@ int main(int argc, char* argv[])
 
   mass_objective.addBodyIntegral(serac::DependsOn<1>{}, mesh->entireBodyName(),
                                  [](double /*t*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
-  double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
+  double mass = mass_objective.evaluate(time, dt, shape_disp.get(), objective_states);
 
   serac::tensor<double, dim> initial_cg;
 
@@ -276,7 +278,7 @@ int main(int argc, char* argv[])
                                       auto X, auto U, auto RHO) {
                                     return (get<serac::VALUE>(X)[i] + get<serac::VALUE>(U)[i]) * get<serac::VALUE>(RHO);
                                   });
-    initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
+    initial_cg[i] = cg_objective->evaluate(time, dt, shape_disp.get(), objective_states) / mass;
 
     constraints.push_back(cg_objective);
   }
@@ -435,7 +437,7 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
     SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
 
     double constraint_i =
-        constraints_[i]->evaluate(time_info_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_));
+        constraints_[i]->evaluate(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_));
     if (dimc_ > 0) {
       output_vec(idx) = constraint_i;
     }
