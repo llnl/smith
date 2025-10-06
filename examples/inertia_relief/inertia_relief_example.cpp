@@ -126,16 +126,13 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<serac::Fi
  * as  the approximate Jacobian is positive semi-definite when dr/du is
  * and thus the NLMC problem is guaranteed to be semi-monotone.
  */
-class InertialReliefProblem : public GeneralNLMCProblem {
+class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
  protected:
-  mfem::HypreParMatrix* dFdx_ = nullptr;
-  mfem::HypreParMatrix* dFdy_ = nullptr;
-  mfem::HypreParMatrix* dQdx_ = nullptr;
-  mfem::HypreParMatrix* dQdy_ = nullptr;
-  HYPRE_BigInt* uOffsets_ = nullptr;
-  HYPRE_BigInt* cOffsets_ = nullptr;
+  mfem::HypreParMatrix* drdu_ = nullptr;
+  mfem::HypreParMatrix* dcdu_ = nullptr;
   int dimu_;
   int dimc_;
+  int dimuglb_;
   int dimcglb_;
   mfem::Array<int> y_partition_;
   std::vector<serac::FieldPtr> obj_states_;
@@ -151,12 +148,11 @@ class InertialReliefProblem : public GeneralNLMCProblem {
   InertialReliefProblem(std::vector<serac::FieldPtr> obj_states, std::vector<serac::FieldPtr> all_states,
                         std::shared_ptr<serac::Mesh> mesh, std::shared_ptr<SolidWeakFormT> weak_form,
                         std::vector<std::shared_ptr<serac::ScalarObjective>> constraints);
-  void F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int& Feval_err) const;
-  void Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval, int& Qeval_err) const;
-  mfem::HypreParMatrix* DxF(const mfem::Vector& x, const mfem::Vector& y);
-  mfem::HypreParMatrix* DyF(const mfem::Vector& x, const mfem::Vector& y);
-  mfem::HypreParMatrix* DxQ(const mfem::Vector& x, const mfem::Vector& y);
-  mfem::HypreParMatrix* DyQ(const mfem::Vector& x, const mfem::Vector& y);
+  mfem::Vector residual(const mfem::Vector& u) const;
+  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const;
+  mfem::Vector constraint(const mfem::Vector& u) const;
+  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u);
+  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u);
   virtual ~InertialReliefProblem();
 };
 
@@ -177,7 +173,7 @@ int main(int argc, char* argv[])
 
   // Solver options
   double nonlinear_absolute_tol = 1e-6;
-  int nonlinear_max_iterations = 100;
+  int nonlinear_max_iterations = 50;
   // Handle command line arguments
   axom::CLI::App app{"Inertial relief."};
   // Mesh options
@@ -310,33 +306,31 @@ int main(int argc, char* argv[])
     writer.write(0, 0.0, objective_states);
   }
   auto non_const_states = getFieldPointers(states, params);
+  // create an inertial relief problem
   InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]}, non_const_states, mesh,
                                 solid_mechanics_weak_form, constraints);
-  int dimx = problem.GetDimx();
-  int dimy = problem.GetDimy();
 
-  mfem::Vector x0(dimx);
-  x0 = 0.0;
-  mfem::Vector y0(dimy);
-  y0 = 0.0;
-  mfem::Vector xf(dimx);
-  xf = 0.0;
-  mfem::Vector yf(dimy);
-  yf = 0.0;
+  // optimization variables
+  auto X0 = problem.GetOptimizationVariable();
+  auto Xf = problem.GetOptimizationVariable();
 
+  // define a homotopy solver for the inertia relief problem
   HomotopySolver solver(&problem);
+  // set solver options
   solver.SetTol(nonlinear_absolute_tol);
   solver.SetMaxIter(nonlinear_max_iterations);
 
-  solver.Mult(x0, y0, xf, yf);
+  // solve the inertia relief problem
+  solver.Mult(X0, Xf);
+  // extract displacement and Lagrange multipliers
+  mfem::Vector displacement_sol = problem.GetDisplacement(Xf);
+  mfem::Vector multiplier_sol = problem.GetLagrangeMultiplier(Xf);
   bool converged = solver.GetConverged();
-  if (myid == 0) {
-    if (converged) {
-      std::cout << "converged!\n";
-    } else {
-      std::cout << "homotopy solver did not converge\n";
-    }
-  }
+  SLIC_ERROR_ROOT_IF(!converged, "Homotopy solver did not converge");
+  double displacement_norm = mfem::GlobalLpNorm(2, displacement_sol.Norml2(), MPI_COMM_WORLD);
+  double multiplier_norm = mfem::GlobalLpNorm(2, multiplier_sol.Norml2(), MPI_COMM_WORLD);
+  SLIC_INFO_ROOT(axom::fmt::format("||displacement|| = {}", displacement_norm));
+  SLIC_INFO_ROOT(axom::fmt::format("||multiplier|| = {}", multiplier_norm));
   if (visualize) {
     writer.write(1, 1.0, objective_states);
   }
@@ -347,7 +341,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
                                              std::shared_ptr<serac::Mesh> mesh,
                                              std::shared_ptr<SolidWeakFormT> weak_form,
                                              std::vector<std::shared_ptr<serac::ScalarObjective>> constraints)
-    : GeneralNLMCProblem(), time_info_(0.0, 0.0, 0)
+    : EqualityConstrainedHomotopyProblem()
 {
   weak_form_ = weak_form;
   mesh_ = mesh;
@@ -362,222 +356,136 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   obj_states_.resize(obj_states.size());
   std::copy(obj_states.begin(), obj_states.end(), obj_states_.begin());
 
-  int numConstraints = static_cast<int>(constraints_.size());
-  uOffsets_ = new HYPRE_BigInt[2];
-  cOffsets_ = new HYPRE_BigInt[2];
-  for (int i = 0; i < 2; i++) {
-    uOffsets_[i] = all_states_[FIELD::DISP]->space().GetTrueDofOffsets()[i];
-  }
-
+  HYPRE_BigInt cOffsets[2];
+  HYPRE_BigInt* uOffsets = all_states[FIELD::DISP]->space().GetTrueDofOffsets();
+  dimc_ = static_cast<int>(constraints_.size());
   int myid = mfem::Mpi::WorldRank();
-  if (myid == 0) {
-    cOffsets_[0] = 0;
-  } else {
-    cOffsets_[0] = numConstraints;
-  }
-  cOffsets_[1] = numConstraints;
-
-  dimu_ = uOffsets_[1] - uOffsets_[0];
-  dimc_ = cOffsets_[1] - cOffsets_[0];
-  y_partition_.SetSize(3);
-  y_partition_[0] = 0;
-  y_partition_[1] = dimu_;
-  y_partition_[2] = dimc_;
-  y_partition_.PartialSum();
-
-  {
-    HYPRE_BigInt dofOffsets[2];
-    HYPRE_BigInt complementarityOffsets[2];
-    for (int i = 0; i < 2; i++) {
-      dofOffsets[i] = uOffsets_[i] + cOffsets_[i];
-    }
-    complementarityOffsets[0] = 0;
-    complementarityOffsets[1] = 0;
-    Init(complementarityOffsets, dofOffsets);
+  cOffsets[0] = 0;
+  cOffsets[1] = dimc_;
+  if (myid > 0) {
+    dimc_ = 0;
+    cOffsets[0] = cOffsets[1];
   }
 
-  // dF / dx 0 x 0 matrix
-  {
-    int nentries = 0;
-    auto temp = new mfem::SparseMatrix(dimx, dimxglb, nentries);
-    dFdx_ = GenerateHypreParMatrixFromSparseMatrix(dofOffsetsx, dofOffsetsx, temp);
-    delete temp;
-  }
+  dimu_ = all_states_[FIELD::DISP]->space().GetTrueVSize();
+  MPI_Allreduce(&dimc_, &dimcglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&dimu_, &dimuglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-  // dF / dy 0 x dimy matrix
-  {
-    int nentries = 0;
-    auto temp = new mfem::SparseMatrix(dimx, dimyglb, nentries);
-    dFdy_ = GenerateHypreParMatrixFromSparseMatrix(dofOffsetsy, dofOffsetsx, temp);
-    delete temp;
-  }
-
-  // dQ / dx dimy x 0 matrix
-  {
-    int nentries = 0;
-    auto temp = new mfem::SparseMatrix(dimy, dimxglb, nentries);
-    dQdx_ = GenerateHypreParMatrixFromSparseMatrix(dofOffsetsx, dofOffsetsy, temp);
-    delete temp;
-  }
+  SetSizes(uOffsets, cOffsets);
 }
 
-void InertialReliefProblem::F(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& feval, int& Feval_err) const
+// residual callback
+mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
 {
-  MFEM_VERIFY(x.Size() == dimx && y.Size() == dimy && feval.Size() == dimx,
-              "InertialReliefProblem::F -- Inconsistent dimensions");
-  feval = 0.0;
-  Feval_err = 0;
+  obj_states_[DISP]->Set(1.0, u);
+  auto res_vector = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
+  return res_vector;
 }
 
-// Q = [  r + J^T l]
-//     [ -c ]
-// dQ / dy = [ K  J^T]
-//           [-J   0 ]
-void InertialReliefProblem::Q(const mfem::Vector& x, const mfem::Vector& y, mfem::Vector& qeval, int& Qeval_err) const
+// constraint Jacobian transpose vector product
+mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const
 {
-  MFEM_VERIFY(x.Size() == dimx && y.Size() == dimy && qeval.Size() == dimy,
-              "InertialReliefProblem::Q -- Inconsistent dimensions");
-  qeval = 0.0;
-  mfem::BlockVector yblock(y_partition_);
-  yblock.Set(1.0, y);
-  mfem::BlockVector qblock(y_partition_);
-  qblock = 0.0;
-
-  obj_states_[DISP]->Set(1.0, yblock.GetBlock(0));
-  auto res_vector = weak_form_->residual(time_info_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
-  qblock.GetBlock(0).Set(1.0, res_vector);
-
-  double* multipliers = new double[constraints_.size()];
+  obj_states_[DISP]->Set(1.0, u);
+  std::vector<double> multipliers(constraints_.size());
   for (int i = 0; i < dimc_; i++) {
-    multipliers[i] = yblock.GetBlock(1)(i);
+    multipliers[static_cast<size_t>(i)] = l(i);
   }
   const int nconstraints = static_cast<int>(constraints_.size());
-  MPI_Bcast(multipliers, nconstraints, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Bcast(multipliers.data(), nconstraints, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-  mfem::Vector gradc(dimu_);
-  gradc = 0.0;
+  mfem::Vector constraint_gradient(dimu_);
+  constraint_gradient = 0.0;
+  mfem::Vector output_vec(dimu_);
+  output_vec = 0.0;
+
+  for (size_t i = 0; i < constraints_.size(); i++) {
+    mfem::Vector grad_temp =
+        constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP);
+    constraint_gradient.Set(1.0, grad_temp);
+    output_vec.Add(multipliers[i], constraint_gradient);
+  }
+  return output_vec;
+}
+
+// Jacobian of the residual
+mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u)
+{
+  obj_states_[DISP]->Set(1.0, u);
+  auto drdu_unique =
+      weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
+
+  if (drdu_) {
+    delete drdu_;
+  }
+  drdu_ = drdu_unique.release();
+  SLIC_ERROR_ROOT_IF(drdu_->Height() != dimu_ || drdu_->Width() != dimu_, "residual Jacobian of an unexpected shape");
+  return drdu_;
+}
+
+// constraint callback
+mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
+{
+  obj_states_[DISP]->Set(1.0, u);
+  mfem::Vector output_vec(dimc_);
+  output_vec = 0.0;
 
   for (size_t i = 0; i < constraints_.size(); i++) {
     const int idx = static_cast<int>(i);
     const size_t i2 = static_cast<size_t>(idx);
-    SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
-    gradc = 0.0;
-    mfem::Vector grad_temp =
-        constraints_[i]->gradient(time_info_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP);
-    gradc.Set(1.0, grad_temp);
-    qblock.GetBlock(0).Add(multipliers[idx], gradc);
+    SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
 
     double constraint_i =
         constraints_[i]->evaluate(time_info_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_));
     if (dimc_ > 0) {
-      qblock.GetBlock(1)(idx) = -1.0 * constraint_i;
+      output_vec(idx) = constraint_i;
     }
   }
-
-  qeval.Set(1.0, qblock);
-
-  Qeval_err = 0;
-  int Qeval_err_loc = 0;
-  for (int i = 0; i < qeval.Size(); i++) {
-    if (std::isnan(qeval(i))) {
-      Qeval_err_loc = 1;
-      break;
-    }
-  }
-  MPI_Allreduce(&Qeval_err_loc, &Qeval_err, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  if (Qeval_err > 0) {
-    Qeval_err = 1;
-  }
-  if (Qeval_err > 0 && mfem::Mpi::WorldRank() == 0) {
-    std::cout << "at least one nan entry\n";
-  }
+  return output_vec;
 }
 
-mfem::HypreParMatrix* InertialReliefProblem::DxF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdx_; }
-
-mfem::HypreParMatrix* InertialReliefProblem::DyF(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dFdy_; }
-
-mfem::HypreParMatrix* InertialReliefProblem::DxQ(const mfem::Vector& /*x*/, const mfem::Vector& /*y*/) { return dQdx_; }
-
-mfem::HypreParMatrix* InertialReliefProblem::DyQ(const mfem::Vector& /*x*/, const mfem::Vector& y)
+// Jacobian of the constraint
+mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u)
 {
-  MFEM_VERIFY(y.Size() == dimy, "InertialReliefProblem::DyQ -- Inconsistent dimensions");
-  // dQdy = [dr/du   dc/du^T]
-  //        [dc/du   0  ]
-  // note we are neglecting Hessian constraint terms
-  mfem::BlockVector yblock(y_partition_);
-  yblock.Set(1.0, y);
-  mfem::BlockVector qblock(y_partition_);
-  qblock = 0.0;
-  obj_states_[DISP]->Set(1.0, yblock.GetBlock(0));
-  if (dQdy_) {
-    delete dQdy_;
+  obj_states_[DISP]->Set(1.0, u);
+  int myid = mfem::Mpi::WorldRank();
+  int nentries = dimuglb_;
+  if (myid > 0) {
+    nentries = 0;
   }
-  {
-    mfem::HypreParMatrix* drdu = nullptr;
-    auto drdu_unique =
-        weak_form_->jacobian(time_info_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
-    MFEM_VERIFY(drdu_unique->Height() == dimu_, "size error");
-
-    drdu = drdu_unique.release();
-
-    mfem::HypreParMatrix* negdcdu = nullptr;
-    mfem::SparseMatrix* dcdumat = nullptr;
-    int myid = mfem::Mpi::WorldRank();
-    int dimuglb = drdu->GetGlobalNumCols();
-    int nentries = dimuglb;
-    if (myid > 0) {
-      nentries = 0;
-    }
-    dcdumat = new mfem::SparseMatrix(dimc_, dimuglb, nentries);
-
-    mfem::Array<int> cols;
-    cols.SetSize(dimuglb);
-    for (int i = 0; i < dimuglb; i++) {
-      cols[i] = i;
-    }
-    for (size_t i = 0; i < constraints_.size(); i++) {
-      const int idx = static_cast<int>(i);
-      const size_t i2 = static_cast<size_t>(idx);
-      SLIC_ERROR_ROOT_IF(i2 != i, axom::fmt::format("Constraint index is out of range, bad cast from size_t to int"));
-      mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb, uOffsets_);
-      gradVector.Set(1.0, constraints_[i]->gradient(time_info_, shape_disp_.get(),
-                                                    serac::getConstFieldPointers(obj_states_), DISP));
-      mfem::Vector globalGradVector(dimuglb);
-      globalGradVector = 0.0;
-      globalGradVector.Add(1.0, *gradVector.GlobalVector());
-      if (myid == 0) {
-        dcdumat->SetRow(idx, cols, globalGradVector);
-      }
-    }
-
-    dcdumat->Threshold(1.e-20);
-    dcdumat->Finalize();
-    negdcdu = GenerateHypreParMatrixFromSparseMatrix(uOffsets_, cOffsets_, dcdumat);
-    mfem::HypreParMatrix* dcduT = negdcdu->Transpose();
-    mfem::Vector scale(dimc_);
-    scale = -1.0;
-    negdcdu->ScaleRows(scale);
-
-    mfem::Array2D<const mfem::HypreParMatrix*> BlockMat(2, 2);
-    BlockMat(0, 0) = drdu;
-    BlockMat(0, 1) = dcduT;
-    BlockMat(1, 0) = negdcdu;
-    BlockMat(1, 1) = nullptr;
-    dQdy_ = HypreParMatrixFromBlocks(BlockMat);
-    delete drdu;
-    delete dcduT;
-    delete negdcdu;
+  mfem::SparseMatrix dcdumat(dimc_, dimuglb_, nentries);
+  mfem::Array<int> cols;
+  cols.SetSize(dimuglb_);
+  for (int i = 0; i < dimuglb_; i++) {
+    cols[i] = i;
   }
-  return dQdy_;
+  for (size_t i = 0; i < constraints_.size(); i++) {
+    const int idx = static_cast<int>(i);
+    const size_t i2 = static_cast<size_t>(idx);
+    SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
+    mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
+    gradVector.Set(
+        1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP));
+    mfem::Vector* globalGradVector = gradVector.GlobalVector();
+    if (myid == 0) {
+      dcdumat.SetRow(idx, cols, *globalGradVector);
+    }
+    delete globalGradVector;
+  }
+  dcdumat.Threshold(1.e-20);
+  dcdumat.Finalize();
+  if (dcdu_) {
+    delete dcdu_;
+  }
+  dcdu_ = GenerateHypreParMatrixFromSparseMatrix(uOffsets_, cOffsets_, &dcdumat);
+  return dcdu_;
 }
 
 InertialReliefProblem::~InertialReliefProblem()
 {
-  delete[] uOffsets_;
-  delete[] cOffsets_;
-  delete dFdx_;
-  delete dFdy_;
-  delete dQdx_;
-  delete dQdy_;
+  if (drdu_) {
+    delete drdu_;
+  }
+  if (dcdu_) {
+    delete dcdu_;
+  }
 }
