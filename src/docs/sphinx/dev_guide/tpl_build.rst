@@ -186,7 +186,7 @@ Versions and prefixes may vary.
     # NOTE: This section needs to be appended to `llvm:externals:` section above
     llvm:
       externals:
-      - spec: llvm+clang@14
+      - spec: llvm@14+clang
         prefix: /opt/homebrew/opt/llvm@14
 
 
