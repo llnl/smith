@@ -11,20 +11,29 @@ spack:
 
   toolchains:
     clang_19:
-    - spec: '%c=llvm'
+    - spec: '%c=llvm@19.1.1'
       when: '%c'
-    - spec: '%cxx=llvm'
+    - spec: '%cxx=llvm@19.1.1'
       when: '%cxx'
     - spec: '%fortran=gcc@13.3.0'
       when: '%fortran'
     - spec: '%mpich'
       when: '%mpi'
     gcc_14:
-    - spec: '%c=gcc'
+    - spec: '%c=gcc@14.2.0'
       when: '%c'
-    - spec: '%cxx=gcc'
+    - spec: '%cxx=gcc@14.2.0'
       when: '%cxx'
     - spec: '%fortran=gcc@14.2.0'
+      when: '%fortran'
+    - spec: '%mpich'
+      when: '%mpi'
+    gcc_13:
+    - spec: '%c=gcc@13.3.0'
+      when: '%c'
+    - spec: '%cxx=gcc@13.3.0'
+      when: '%cxx'
+    - spec: '%fortran=gcc@13.3.0'
       when: '%fortran'
     - spec: '%mpich'
       when: '%mpi'
@@ -66,8 +75,8 @@ spack:
         prefix: /usr/bin
         extra_attributes:
           compilers:
-            c: /usr/bin/gcc
-            cxx: /usr/bin/g++
+            c: /usr/bin/gcc-13
+            cxx: /usr/bin/g++-13
             fortran: /usr/bin/gfortran-13
           flags:
             cflags: -fPIC -pthread
@@ -77,8 +86,8 @@ spack:
         prefix: /usr/bin
         extra_attributes:
           compilers:
-            c: /usr/bin/gcc
-            cxx: /usr/bin/g++
+            c: /usr/bin/gcc-14
+            cxx: /usr/bin/g++-14
             fortran: /usr/bin/gfortran-14
           flags:
             cflags: -fPIC -pthread
@@ -120,8 +129,8 @@ spack:
     cuda:
       buildable: false
       externals:
-        - spec: cuda@12.8.0
-          prefix: /usr/local/cuda-12.8
+        - spec: cuda@12.5.82
+          prefix: /usr/local/cuda-12.5
     curl:
       buildable: false
       externals:
