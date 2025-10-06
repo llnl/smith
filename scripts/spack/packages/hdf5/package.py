@@ -10,5 +10,5 @@ class Hdf5(BuiltinHDF5):
     """HDF5 (Hierarchical Data Format 5) is a data format for HPC"""
 
     # Fixes incompatible pointer type error
-    patch("hdf5_patch_fc41.txt", when="@1.8.23+tools%gcc@14")
-    patch("hdf5_patch_fc41.txt", when="@1.8.23+tools%clang@19")
+    patch("hdf5_patch_fc41.txt", when="@1.8.23+tools%gcc@13:")
+    patch("hdf5_patch_fc41.txt", when="@1.8.23+tools%clang@19:")
