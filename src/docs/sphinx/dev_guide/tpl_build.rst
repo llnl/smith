@@ -144,6 +144,19 @@ This is also useful for a few additional packages:
     should be ``--spec="^openmpi@5 %clang@19"`` and to build with devtools and profiling enabled,
     change the spec to ``"+devtools+profiling ^openmpi@5 %clang@19"``
 
+Given that Homebrew can only install CMake version 4.0 and it breaks some TPL builds (e.g. metis), its recommended to install an older version of CMake
+manually. You can do this by downloading from `CMake's official archive <https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg>`_. After installing
+CMake 3.23, you will need to specify the path in the Spack environment like so:
+
+.. code-block:: yaml
+
+    cmake:
+      version: [3.23.5]
+      buildable: false
+      externals:
+      - spec: cmake@3.23.5
+        prefix: /Applications/CMake.app/Contents
+
 Optionally, you can install the developer tools via ``pip``. This step is only required if you wish to use Serac's developer tools.
 In order to use Python devtools, you will need to create a Python venv. This is much more reliable than having Spack install 20+ Python packages.
 In this example, we are using the builtin Python in ``/usr/bin``, but it is possible to use a version installed from Homebrew or elsewhere.
@@ -188,7 +201,6 @@ Versions and prefixes may vary.
       externals:
       - spec: llvm+clang@14
         prefix: /opt/homebrew/opt/llvm@14
-
 
 Livermore Computing (LC)
 ^^^^^^^^^^^^^^^^^^^^^^^^
