@@ -127,6 +127,7 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<serac::Fi
  * and thus the NLMC problem is guaranteed to be semi-monotone.
  */
 class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
+  InertialReliefProblem() : time_info_(0.0, 0.0, 0) {}
  protected:
   mfem::HypreParMatrix* drdu_ = nullptr;
   mfem::HypreParMatrix* dcdu_ = nullptr;
@@ -141,8 +142,7 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   std::unique_ptr<serac::FiniteElementState> shape_disp_;
   std::shared_ptr<serac::Mesh> mesh_;
   std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_;
-  double time_ = 0.0;
-  double dt_ = 0.0;
+  serac::TimeInfo time_info_;
   std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};
 
  public:
@@ -257,6 +257,7 @@ int main(int argc, char* argv[])
 
   double time = 0.0;
   double dt = 1.0;
+  serac::TimeInfo time_info(time, dt, 0);
   auto all_states = getConstFieldPointers(states, params);
   auto objective_states = {all_states[DISP], all_states[DENSITY]};
 
@@ -266,7 +267,7 @@ int main(int argc, char* argv[])
 
   mass_objective.addBodyIntegral(serac::DependsOn<1>{}, mesh->entireBodyName(),
                                  [](double /*t*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
-  double mass = mass_objective.evaluate(time, dt, shape_disp.get(), objective_states);
+  double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
   serac::tensor<double, dim> initial_cg;
 
@@ -278,7 +279,7 @@ int main(int argc, char* argv[])
                                       auto X, auto U, auto RHO) {
                                     return (get<serac::VALUE>(X)[i] + get<serac::VALUE>(U)[i]) * get<serac::VALUE>(RHO);
                                   });
-    initial_cg[i] = cg_objective->evaluate(time, dt, shape_disp.get(), objective_states) / mass;
+    initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
 
     constraints.push_back(cg_objective);
   }
@@ -343,7 +344,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
                                              std::shared_ptr<serac::Mesh> mesh,
                                              std::shared_ptr<SolidWeakFormT> weak_form,
                                              std::vector<std::shared_ptr<serac::ScalarObjective>> constraints)
-    : EqualityConstrainedHomotopyProblem()
+    : EqualityConstrainedHomotopyProblem(), time_info_(0.0, 0.0, 0)
 {
   weak_form_ = weak_form;
   mesh_ = mesh;
@@ -380,7 +381,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
 mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
 {
   obj_states_[DISP]->Set(1.0, u);
-  auto res_vector = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
+  auto res_vector = weak_form_->residual(time_info_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
   return res_vector;
 }
 
@@ -402,7 +403,7 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
 
   for (size_t i = 0; i < constraints_.size(); i++) {
     mfem::Vector grad_temp =
-        constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP);
+        constraints_[i]->gradient(time_info_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP);
     constraint_gradient.Set(1.0, grad_temp);
     output_vec.Add(multipliers[i], constraint_gradient);
   }
@@ -414,7 +415,7 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
 {
   obj_states_[DISP]->Set(1.0, u);
   auto drdu_unique =
-      weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
+      weak_form_->jacobian(time_info_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
 
   if (drdu_) {
     delete drdu_;
@@ -437,7 +438,7 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
     SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
 
     double constraint_i =
-        constraints_[i]->evaluate(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_));
+        constraints_[i]->evaluate(time_info_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_));
     if (dimc_ > 0) {
       output_vec(idx) = constraint_i;
     }
@@ -466,7 +467,7 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
     SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
     mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
     gradVector.Set(
-        1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP));
+        1.0, constraints_[i]->gradient(time_info_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP));
     mfem::Vector* globalGradVector = gradVector.GlobalVector();
     if (myid == 0) {
       dcdumat.SetRow(idx, cols, *globalGradVector);
