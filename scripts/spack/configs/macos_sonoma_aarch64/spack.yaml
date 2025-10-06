@@ -38,10 +38,12 @@ spack:
     #Compiler packages
     gcc:
       externals:
-      - spec: gcc@15.1.0 languages:=fortran
+      - spec: gcc@15.1.0 languages:=c,c++,fortran
         prefix: /opt/homebrew/opt/gcc@15
         extra_attributes:
           compilers:
+            c: /opt/homebrew/opt/gcc@15/bin/gcc-15
+            cxx: /opt/homebrew/opt/gcc@15/bin/g++-15
             fortran: /opt/homebrew/opt/gcc@15/bin/gfortran
     llvm:
       externals:
@@ -94,7 +96,7 @@ spack:
       - spec: bzip2@1.0.8
         prefix: /opt/homebrew/opt/bzip2
     # NOTE: CMake v4.0 causes metis and other package to fail. Brew doesn't allow older versions
-    # of CMake to be installed, so I installed CMake manually https://cmake.org/files/v3.23/
+    # of CMake to be installed, so I installed CMake manually https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg
     cmake:
       version: [3.23.5]
       buildable: false
