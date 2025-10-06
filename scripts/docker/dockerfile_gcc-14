@@ -39,4 +39,4 @@ USER serac
 RUN git clone --recursive --branch $branch --single-branch --depth 1 https://github.com/LLNL/serac.git serac_repo
 
 WORKDIR "/home/serac/serac_repo"
-RUN ./serac_repo/scripts/docker/setup-serac.sh
+RUN ./scripts/docker/setup-serac.sh

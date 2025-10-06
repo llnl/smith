@@ -1,7 +1,7 @@
-FROM ghcr.io/llnl/radiuss:cuda-13-0-ubuntu-24.04
+FROM ghcr.io/llnl/radiuss:cuda-12-5-ubuntu-24.04
 LABEL maintainer="bramwell1@llnl.gov"
 ARG branch=develop
-ENV spec="~devtools~enzyme+cuda cuda_arch=70 %gcc_14"
+ENV spec="~devtools~enzyme+cuda cuda_arch=70 %gcc_13"
 
 SHELL ["/bin/bash", "-c"]
 RUN sudo apt-get update -y
@@ -39,4 +39,4 @@ USER serac
 RUN git clone --recursive --branch $branch --single-branch --depth 1 https://github.com/LLNL/serac.git serac_repo
 
 WORKDIR "/home/serac/serac_repo"
-RUN ./serac_repo/scripts/docker/setup-serac.sh
+RUN ./scripts/docker/setup-serac.sh
