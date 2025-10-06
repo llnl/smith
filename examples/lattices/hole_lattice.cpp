@@ -15,6 +15,7 @@
 #include "mfem.hpp"
 #include "serac/physics/boundary_conditions/components.hpp"
 #include "serac/physics/materials/solid_material.hpp"
+#include "serac/physics/solid_mechanics.hpp"
 #include "serac/serac.hpp"
 #include <filesystem>
 #include "../lua_loader/lua_loader.hpp"
@@ -24,6 +25,24 @@ constexpr int p = 1;
 std::function<std::string(const std::string&)> petscPCTypeValidator = [](const std::string& in) -> std::string {
   return std::to_string(static_cast<int>(serac::mfem_ext::stringToPetscPCType(in)));
 };
+
+serac::FiniteElementState createReactionDirection(const serac::BasePhysics& solid_solver, int direction,
+                                                  std::shared_ptr<serac::Mesh> mesh, std::string side_set_name)
+{
+  const serac::FiniteElementDual& reactions = solid_solver.dual("reactions");
+
+  serac::FiniteElementState reactionDirections(reactions.space(), "reaction_directions");
+  reactionDirections = 0.0;
+
+  mfem::VectorFunctionCoefficient func(dim, [direction](const mfem::Vector& /*x*/, mfem::Vector& u) {
+    u = 0.0;
+    u[direction] = 1.0;
+  });
+
+  reactionDirections.project(func, mesh->domain(side_set_name));
+
+  return reactionDirections;
+}
 
 struct solve_options {
   std::string simulation_tag = "ring_pull";
@@ -50,7 +69,9 @@ struct solve_options {
 void lattice_squish(solve_options& so)
 {
   bool lua_verbose = true;
-  std::filesystem::path script_path = SERAC_REPO_DIR "/examples/lattices/mylua.lua";
+  std::filesystem::path script_path = SERAC_REPO_DIR "/examples/lattices/holelattice.lua";
+
+  SLIC_INFO_ROOT("Loading Lua Parameters");
 
   // Loading Parameters/Functions From Lua Tables
   LuaLoader::LuaLoader lua_loader(script_path, lua_verbose);  // maintain this for the lifetime of the simulation
@@ -67,6 +88,8 @@ void lattice_squish(solve_options& so)
   } else {
     MFEM_ABORT("Error wrong problem type specified");
   }
+
+  so.enable_contact = lua_loader.ExtractLuaParameter<bool>("use_contact", false);
 
   std::function<serac::vec3(const serac::vec3&, const double)> default_func =
       [](const serac::vec3&, const double) -> serac::vec3 { return serac::vec3{0.0, 0.0, 0.0}; };
@@ -104,19 +127,22 @@ void lattice_squish(solve_options& so)
   } else {
     output_directory = simulation_tag;
   }
+
+  SLIC_INFO_ROOT("Initializing System");
   serac::StateManager::initialize(datastore, output_directory + "_data");
 
   // Loading Mesh
+  SLIC_INFO_ROOT("Loading Mesh");
   auto pmesh = std::make_shared<serac::Mesh>(serac::buildMeshFromFile(so.mesh_location), mesh_tag, so.serial_refinement,
                                              so.parallel_refinement);
 
   // Extracting boundary domains for boundary conditions
   pmesh->addDomainOfBoundaryElements("fix_bottom", serac::by_attr<dim>(2));
   pmesh->addDomainOfBoundaryElements("fix_top", serac::by_attr<dim>(3));
-  constexpr int sideset1{1};
 
   // Setting up Solid Mechanics Problem
 
+  SLIC_INFO_ROOT("Initializing Solid Mechanics");
   serac::SolidMechanicsContact<p, dim> solid_solver(so.nonlinear_options, so.linear_options,
                                                     serac::solid_mechanics::default_quasistatic_options, "name", pmesh,
                                                     {}, 0, 0.0, false, false);
@@ -127,14 +153,17 @@ void lattice_squish(solve_options& so)
   // auto lambda = 1.0;
   // auto G = 0.1;
   // serac::solid_mechanics::LinearIsotropic mat{.density = 1.0, .K = (3.0 * lambda + 2.0 * G) / 3.0, .G = G};
-  using MyMat = serac::solid_mechanics::LinearIsotropic;
+
+  SLIC_INFO_ROOT("Initializing Material");
+  using MyMat = serac::solid_mechanics::NeoHookean;
+  // using MyMat = serac::solid_mechanics::LinearIsotropic;
   MyMat mat{.density = material_params[0], .K = material_params[1], .G = material_params[2]};
 
-  // Defining Boundary Conditions
-
   solid_solver.setMaterial(mat, pmesh->entireBody());
-  solid_solver.setFixedBCs(pmesh->domain("fix_bottom"), serac::Component::Y);
-  solid_solver.setFixedBCs(pmesh->domain("fix_bottom"), serac::Component::X);
+  // Defining Boundary Conditions
+  SLIC_INFO_ROOT("Setting Boundary Conditions");
+  solid_solver.setFixedBCs(pmesh->domain("fix_bottom"));
+  // solid_solver.setFixedBCs(pmesh->domain("fix_bottom"), serac::Component::X);
   // auto strain_rate = so.strain_rate;
   // auto applied_displacement = [strain_rate](serac::vec3, double t) {
 
@@ -142,21 +171,16 @@ void lattice_squish(solve_options& so)
   // };
 
   solid_solver.setDisplacementBCs(applied_displacement_func, pmesh->domain("fix_top"));
-  solid_solver.setFixedBCs(pmesh->entireBody(), serac::Component::Z);
+  // solid_solver.setFixedBCs(pmesh->entireBody(), serac::Component::Z);
 
   // Adding Contact Interactions
   if (so.enable_contact) {
-    bool self_contact = true;
-    if (self_contact) {
-      auto self_contact_interaction_id_1 = 1;
-      solid_solver.addContactInteraction(self_contact_interaction_id_1, {sideset1}, {sideset1}, so.contact_options);
-    }
+    SLIC_INFO_ROOT("Initializing Contact Interactions");
+    auto self_contact_interaction_id_1 = 0;
+    solid_solver.addContactInteraction(self_contact_interaction_id_1, {1}, {1}, so.contact_options);
   }
-  // auto contact_interaction_id_top = 1;
-  // solid_solver->addContactInteraction(contact_interaction_id_top, {top_contact1}, {top_contact2},
-  // so.contact_options);
-
   // Completing Setup
+  SLIC_INFO_ROOT("Completing Setup");
   solid_solver.completeSetup();
 
   // Running Quasistatics
@@ -165,7 +189,18 @@ void lattice_squish(solve_options& so)
   // Save Initial State
   std::string paraview_tag = output_directory + "_paraview";
   solid_solver.outputStateToDisk(paraview_tag);
+  std::ofstream reaction_log;
+  if (mfem::Mpi::Root()) {
+    std::string log_name;
+    if (use_custom_location) {
+      log_name = output_directory + "/reaction_log.csv";
+    } else {
+      log_name = "reaction_log.csv";
+    }
+    reaction_log.open(log_name);
+  }
 
+  auto reactiondirection = createReactionDirection(solid_solver, 1, pmesh, "fix_top");
   for (int i = 1; i < so.N_Steps; ++i) {
     SLIC_INFO_ROOT("------------------------------------------");
     SLIC_INFO_ROOT(axom::fmt::format("TIME STEP {}", i));
@@ -173,6 +208,18 @@ void lattice_squish(solve_options& so)
     serac::logger::flush();
     solid_solver.advanceTimestep(dt);
     solid_solver.outputStateToDisk(paraview_tag);
+
+    auto reactions = solid_solver.reactions();
+    double val = serac::innerProduct(reactions, reactiondirection);
+    if (mfem::Mpi::Root()) {
+      std::cout << "---------------------------------" << std::endl;
+      std::cout << "val: " << val << std::endl;
+      std::cout << "---------------------------------" << std::endl;
+      reaction_log << solid_solver.time() << "," << val << std::endl;
+    }
+  }
+  if (mfem::Mpi::Root()) {
+    reaction_log.close();
   }
 }
 
@@ -190,11 +237,11 @@ int main(int argc, char* argv[])
   so.serial_refinement = 1;
   so.parallel_refinement = 0;
 
-  so.strain_rate = -5.0e0;
-  so.linear_options = serac::LinearSolverOptions{.linear_solver = serac::LinearSolver::Strumpack,
+  so.strain_rate = -1.0e0;
+  so.linear_options = serac::LinearSolverOptions{// .linear_solver = serac::LinearSolver::Strumpack,
                                                  //  .linear_solver = serac::LinearSolver::CG,
                                                  // .linear_solver  = serac::LinearSolver::SuperLU,
-                                                 //.linear_solver  = serac::LinearSolver::GMRES,
+                                                 .linear_solver = serac::LinearSolver::GMRES,
                                                  .preconditioner = serac::Preconditioner::HypreJacobi,
                                                  //  .preconditioner = serac::Preconditioner::HypreAMG,
                                                  .relative_tol = 0.7 * 1.0e-8,
@@ -213,7 +260,7 @@ int main(int argc, char* argv[])
   so.contact_options = serac::ContactOptions{.method = serac::ContactMethod::SingleMortar,
                                              .enforcement = serac::ContactEnforcement::Penalty,
                                              .type = serac::ContactType::Frictionless,
-                                             .penalty = 1.0e3,
+                                             .penalty = 1.0e-1,
                                              .jacobian = serac::ContactJacobian::Exact};
 
   lattice_squish(so);

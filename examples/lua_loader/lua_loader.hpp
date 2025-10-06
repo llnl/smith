@@ -53,12 +53,13 @@ class LuaLoader {
    * @return The extracted function as xtfunc, or the default function if not found.
    */
   xtfunc ExtractLuaSpaceTimeFunction(std::string parameter_name, xtfunc default_value);
+  std::function<double(double)> ExtractLuaScalarFunction(std::string parameter_name, std::function<double(double)>);
 
  private:
-  sol::state lua;                   ///< The Lua state/context
-  std::filesystem::path script_path;///< Path to the Lua script
-  std::string script_dir;           ///< Directory containing the script
-  bool verbose = false;             ///< Verbosity flag for logging
+  sol::state lua;                     ///< The Lua state/context
+  std::filesystem::path script_path;  ///< Path to the Lua script
+  std::string script_dir;             ///< Directory containing the script
+  bool verbose = false;               ///< Verbosity flag for logging
 };
 
 // Function definitions with Doxygen comments
@@ -105,7 +106,8 @@ T LuaLoader::ExtractLuaParameter(std::string parameter_name, T default_value)
 }
 
 template <typename T>
-std::vector<T> LuaLoader::ExtractLuaTable(std::string parameter_name, std::string sub_name, std::vector<T> default_value)
+std::vector<T> LuaLoader::ExtractLuaTable(std::string parameter_name, std::string sub_name,
+                                          std::vector<T> default_value)
 {
   sol::optional<sol::table> lua_val = lua[parameter_name];
   if (lua_val.has_value()) {
@@ -137,6 +139,29 @@ std::vector<T> LuaLoader::ExtractLuaTable(std::string parameter_name, std::strin
     return default_value;
   }
 }
+inline std::function<double(double)> LuaLoader::ExtractLuaScalarFunction(
+    std::string parameter_name, std::function<double(const double)> default_value)
+{
+  sol::optional<sol::function> lua_val = lua[parameter_name];
+  if (lua_val.has_value()) {
+    sol::function lua_func = lua_val.value();
+    std::function<double(const double)> myfunc = [lua_func](const double t) -> double {
+      sol::protected_function_result r = lua_func(t);
+      if (!r.valid()) {
+        // Handle error if Lua function call fails
+        sol::error err = r;
+        throw std::runtime_error("Lua function call failed: " + std::string(err.what()));
+      }
+      // Extract the double value from the result
+      double value = r;
+      return value;
+    };
+
+    return myfunc;
+  } else {
+    return default_value;
+  }
+};
 
 inline LuaLoader::xtfunc LuaLoader::ExtractLuaSpaceTimeFunction(std::string parameter_name, xtfunc default_value)
 {

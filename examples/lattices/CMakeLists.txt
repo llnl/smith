@@ -91,6 +91,9 @@ endfunction(create_symlinks)
 if(TRIBOL_FOUND)
                     set(SourceFiles
             hole_lattice
+            plastic_hole_lattice
+	    # thermomech
+            thermomech_test
             )
             foreach (source IN LISTS SourceFiles)
 

@@ -17,6 +17,7 @@ namespace serac::thermomechanics {
  * @brief Green-Saint Venant isotropic thermoelastic material model
  *
  */
+
 struct ParameterizedThermoelasticMaterial {
   double density;    ///< density
   double E0;         ///< Young's modulus

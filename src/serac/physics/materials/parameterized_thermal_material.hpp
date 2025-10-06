@@ -128,6 +128,7 @@ struct ParameterizedIsotropicConductorWithLinearConductivityVsTemperature {
     SLIC_ERROR_ROOT_IF(
         serac::get_value(currentConductivity) < 0.0,
         "Conductivity in the IsotropicConductorWithLinearConductivityVsTemperature model has gone negative.");
+
     return serac::tuple{density_ * specific_heat_capacity_, -1.0 * currentConductivity * temperature_gradient};
   }
 
