@@ -94,7 +94,11 @@ class ContactConstraint : public Constraint {
     // note: Tribol does not use cycle.
     int cycle = 0;
     contact_.update(cycle, time, dt);
-    return contact_.mergedGaps(false);
+    auto gaps_hpv = contact_.mergedGaps(false);
+    // TODO: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
+    // https://github.com/mfem/mfem/issues/5029
+    mfem::Vector gaps = gaps_hpv;
+    return gaps;
   };
 
   /** @brief Interface for computing contact gap constraint Jacobian from a vector of serac::FiniteElementState*
