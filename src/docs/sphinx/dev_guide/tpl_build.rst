@@ -96,7 +96,7 @@ macOS
    These instructions are in development, but have been tested for M2 MacBooks. They also need to be tested with Enzyme.
 
 .. note::
-   View an example host-config for MacOS in ``host-configs/other/firion-darwin-sequoia-m2-clang@14.0.6.cmake``.
+   View an example host-config for MacOS in ``host-configs/other/firion-macos_sonoma_aarch64-llvm@19.1.7.cmake``.
 
 Homebrew is recommended to install base dependencies due to it's stability. Relying on pure Spack historically leads to more failed builds.
 
