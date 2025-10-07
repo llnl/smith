@@ -15,9 +15,3 @@ set(material_test_sources
 
 serac_add_tests( SOURCES    ${material_test_sources}
                  DEPENDS_ON ${material_test_depends})
-
-# Set file back to C++ due to nvcc compiler error
-if(NOT SERAC_ENABLE_HIP)
-    set_source_files_properties(${material_test_sources} PROPERTIES LANGUAGE CXX)
-endif()
-
