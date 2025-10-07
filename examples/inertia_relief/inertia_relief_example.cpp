@@ -128,6 +128,7 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<serac::Fi
  */
 class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   InertialReliefProblem() : time_info_(0.0, 0.0, 0) {}
+
  protected:
   mfem::HypreParMatrix* drdu_ = nullptr;
   mfem::HypreParMatrix* dcdu_ = nullptr;
