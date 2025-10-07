@@ -28,7 +28,7 @@ python3 config-build.py -hc *.cmake -bp build -DBUILD_SHARED_LIBS=ON
 cd build
 make -j4 VERBOSE=1
 if [[ "$spec" != *+cuda* ]] || [[ "$spec" != *+rocm* ]]; then
-  make -j4 test
+  make test ARGS="-VV" -j4
 fi
 
 # Remove repo to save space
