@@ -95,7 +95,7 @@ class ContactConstraint : public Constraint {
     int cycle = 0;
     contact_.update(cycle, time, dt);
     auto gaps_hpv = contact_.mergedGaps(false);
-    // TODO: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
+    // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
     // https://github.com/mfem/mfem/issues/5029
     mfem::Vector gaps = gaps_hpv;
     return gaps;
