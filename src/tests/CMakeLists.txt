@@ -62,9 +62,18 @@ if(PETSC_FOUND)
                     DEPENDS_ON    gtest serac_infrastructure
                     NUM_MPI_TASKS 4)
 
+    # Set file back to C++ due to nvcc compiler error
+    # fmt/format-inl.h:157:8: error: expected primary-expression before ‘class’
+    if(NOT SERAC_ENABLE_HIP)
+        set_source_files_properties(mfem_petsc_smoketest.cpp PROPERTIES LANGUAGE CXX)
+    endif()
+
     if(SLEPC_FOUND)
         serac_add_tests(SOURCES       mfem_slepc_smoketest.cpp
                         DEPENDS_ON    gtest serac_infrastructure
                         NUM_MPI_TASKS 4)
+        if(NOT SERAC_ENABLE_HIP)
+            set_source_files_properties(mfem_slepc_smoketest.cpp PROPERTIES LANGUAGE CXX)
+        endif()
     endif()
 endif()

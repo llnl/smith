@@ -103,7 +103,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   SolidMechanicsContact(const SolidMechanicsInputOptions& input_options, const std::string& physics_name,
                         std::shared_ptr<serac::Mesh> serac_mesh, int cycle = 0, double time = 0.0)
       : SolidMechanicsBase(input_options, physics_name, serac_mesh, cycle, time),
-        contact_(BasePhysics::mesh()),
+        contact_(BasePhysics::mfemParMesh()),
         forces_(StateManager::newDual(displacement_.space(), detail::addPrefix(physics_name, "contact_forces")))
   {
     forces_ = 0;

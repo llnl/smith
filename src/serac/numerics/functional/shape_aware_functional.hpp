@@ -373,9 +373,12 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
      * @return Shape aware qf value
      */
     template <typename PositionType, typename ShapeValueType, typename... QFuncArgs>
-    SERAC_HOST_DEVICE auto operator()(double time, PositionType x, ShapeValueType shape_val,
+    /* SERAC_HOST_DEVICE */ auto operator()(double time, PositionType x, ShapeValueType shape_val,
                                       QFuncArgs... qfunc_args) const
     {
+      // TODO re-enable host device macro after fixing the following error:
+      // `"trial_spaces" is undefined in device code`
+      // https://github.com/LLNL/serac/issues/1479
       auto qfunc_tuple = make_tuple(qfunc_args...);
       auto reduced_trial_space_tuple = make_tuple(get<args>(trial_spaces)...);
 
@@ -414,9 +417,12 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
      * @return shape aware integrand value
      */
     template <typename PositionType, typename StateType, typename ShapeValueType, typename... QFuncArgs>
-    SERAC_HOST_DEVICE auto operator()(double time, PositionType x, StateType& state, ShapeValueType shape_val,
+    /* SERAC_HOST_DEVICE */ auto operator()(double time, PositionType x, StateType& state, ShapeValueType shape_val,
                                       QFuncArgs... qfunc_args) const
     {
+      // TODO re-enable host device macro after fixing the following error:
+      // `"trial_spaces" is undefined in device code`
+      // https://github.com/LLNL/serac/issues/1479
       auto qfunc_tuple = make_tuple(qfunc_args...);
       auto reduced_trial_space_tuple = make_tuple(get<args>(trial_spaces)...);
 
