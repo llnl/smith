@@ -25,11 +25,11 @@ using namespace serac;
  *
  *  solution u = max{0, ul} (component-wise)
  */
-class QPTestProblem : public ParOptProblem {
+class QPTestProblem : public OptProblem {
  protected:
   mfem::Vector ul_;
-  mfem::HypreParMatrix* dgdu_;
-  mfem::HypreParMatrix* d2Edu2_;
+  mfem::HypreParMatrix* dgdu_ = nullptr;
+  mfem::HypreParMatrix* d2Edu2_ = nullptr;
 
  public:
   QPTestProblem(int n);
@@ -37,11 +37,11 @@ class QPTestProblem : public ParOptProblem {
 
   void DdE(const mfem::Vector& u, mfem::Vector& gradE);
 
-  mfem::HypreParMatrix* DddE(const mfem::Vector& u);
+  mfem::Operator* DddE(const mfem::Vector& u);
 
   void g(const mfem::Vector& u, mfem::Vector& gu, int& eval_err);
 
-  mfem::HypreParMatrix* Ddg(const mfem::Vector&);
+  mfem::Operator* Ddg(const mfem::Vector&);
 
   virtual ~QPTestProblem();
 };
@@ -55,7 +55,7 @@ TEST(InteriorPointMethod, QuadraticProgramming)
 
   QPTestProblem opt_problem(n);
 
-  ParInteriorPointSolver solver(&opt_problem);
+  InteriorPointSolver solver(&opt_problem);
   mfem::GMRESSolver linSolver(MPI_COMM_WORLD);
   linSolver.SetRelTol(linSolveTol);
   linSolver.SetMaxIter(1000);
@@ -113,7 +113,7 @@ TEST(HomotopyMethod, QuadraticProgramming)
 }
 
 // Ex1Problem
-QPTestProblem::QPTestProblem(int n) : ParOptProblem(), dgdu_(nullptr), d2Edu2_(nullptr)
+QPTestProblem::QPTestProblem(int n) : OptProblem()
 {
   MFEM_VERIFY(n >= 1, "QPTestProblem::QPTestProblem -- problem must have nontrivial size");
 
@@ -160,7 +160,7 @@ double QPTestProblem::E(const mfem::Vector& u, int& eval_err)
 
 void QPTestProblem::DdE(const mfem::Vector& u, mfem::Vector& gradE) { gradE.Set(1.0, u); }
 
-mfem::HypreParMatrix* QPTestProblem::DddE(const mfem::Vector& /*u*/) { return d2Edu2_; }
+mfem::Operator* QPTestProblem::DddE(const mfem::Vector& /*u*/) { return d2Edu2_; }
 
 void QPTestProblem::g(const mfem::Vector& u, mfem::Vector& gu, int& eval_err)
 {
@@ -170,7 +170,7 @@ void QPTestProblem::g(const mfem::Vector& u, mfem::Vector& gu, int& eval_err)
   gu.Add(-1.0, ul_);
 }
 
-mfem::HypreParMatrix* QPTestProblem::Ddg(const mfem::Vector& /*u*/) { return dgdu_; }
+mfem::Operator* QPTestProblem::Ddg(const mfem::Vector& /*u*/) { return dgdu_; }
 
 QPTestProblem::~QPTestProblem()
 {
