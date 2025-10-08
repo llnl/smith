@@ -27,3 +27,9 @@ blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS DEFAULT ${_extra_flags
 # This can be added to the GCC flags when C++20 is available
 # This should be compatible with Clang 8 through Clang 12
 blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS CLANG "-Wpedantic -Wno-c++2a-extensions -Wunused-private-field")
+
+# Fixes "Thread not found" error
+# source: https://github.com/alicevision/geogram/issues/2#issuecomment-536835320
+if(ENABLE_COVERAGE)
+    set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+endif()
