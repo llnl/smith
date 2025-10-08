@@ -63,7 +63,6 @@ jobs:
       image: ${{ matrix.config.compiler_image }}
       volumes:
       - /home/serac/serac
-      options: --user serac
     steps:
       - name: Checkout Serac
         uses: actions/checkout@v4
@@ -104,7 +103,6 @@ jobs:
       image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
       volumes:
       - /home/serac/serac
-      options: --user serac
       env:
         CHECK_TYPE: ${{ matrix.check_type }}
         HOST_CONFIG: clang@19.1.1.cmake
