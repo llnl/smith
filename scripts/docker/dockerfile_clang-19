@@ -13,7 +13,7 @@ RUN sudo apt-get install llvm-19-dev libzstd-dev libclang-19-dev -fy;
 
 # Install devtool-related packages
 # NOTE: Skipping this can significantly save disk space
-RUN sudo apt-get install cppcheck graphviz python3-sphinx texlive-full -fy; \
+RUN sudo apt-get install clang-tidy-19 cppcheck graphviz python3-sphinx texlive-full -fy; \
     sudo wget https://github.com/doxygen/doxygen/releases/download/Release_1_9_8/doxygen-1.9.8.linux.bin.tar.gz; \
     sudo tar -xf doxygen-1.9.8.linux.bin.tar.gz; \
     cd doxygen-1.9.8 && sudo make && sudo make install && doxygen --version;
