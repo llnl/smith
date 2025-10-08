@@ -1,7 +1,7 @@
 FROM ghcr.io/llnl/radiuss:clang-19-ubuntu-24.04
 LABEL maintainer="bramwell1@llnl.gov"
 ARG branch=develop
-ENV spec="%clang_19"
+ENV spec="+devtools+enzyme %clang_19"
 
 SHELL ["/bin/bash", "-c"]
 RUN sudo apt-get update -y
@@ -15,7 +15,7 @@ RUN if [[ "$spec" != *~enzyme* ]]; then \
 
 # Install devtool-related packages
 # NOTE: Skipping this can significantly save disk space
-RUN if [[ "$spec" != *~devtools* ]]; then \
+RUN if [[ "$spec" == *+devtools* ]]; then \
       sudo apt-get install graphviz python3-sphinx texlive-full -fy; \
       sudo wget https://github.com/doxygen/doxygen/releases/download/Release_1_9_8/doxygen-1.9.8.linux.bin.tar.gz; \
       sudo tar -xf doxygen-1.9.8.linux.bin.tar.gz; \
