@@ -36,13 +36,12 @@ if(PETSC_FOUND)
 
 endif()
 
-# TODO re-add this test, appears to fail randomly
-# if(CONTINUATION_FOUND)
-#     set(continuation_solver_qp_test_sources
-#         qp_test_continuation_solver.cpp
-#         )
+if(CONTINUATION_FOUND)
+    set(continuation_solver_qp_test_sources
+        qp_test_continuation_solver.cpp
+        )
     
-#     serac_add_tests(SOURCES       ${continuation_solver_qp_test_sources}
-#                     DEPENDS_ON    ${numerics_test_dependencies} continuation_solver
-#                     NUM_MPI_TASKS 4 )
-# endif()
+    serac_add_tests(SOURCES       ${continuation_solver_qp_test_sources}
+                    DEPENDS_ON    ${numerics_test_dependencies} continuation_solver
+                    NUM_MPI_TASKS 4 )
+endif()

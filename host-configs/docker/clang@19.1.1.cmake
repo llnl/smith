@@ -8,9 +8,9 @@ set(CMAKE_PREFIX_PATH "/home/serac/serac_tpls/llvm-19.1.1/tribol-0.1.0.21-wok4ml
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH "ON" CACHE STRING "")
 
-set(CMAKE_BUILD_RPATH "/home/serac/serac_tpls/llvm-19.1.1/serac-develop-e6bpcrrsxr43gk564vbp6vut5gjka6ja/lib;/home/serac/serac_tpls/llvm-19.1.1/serac-develop-e6bpcrrsxr43gk564vbp6vut5gjka6ja/lib64;;" CACHE STRING "")
+set(CMAKE_BUILD_RPATH "/home/serac/serac_tpls/llvm-19.1.1/serac-develop-v54wwqdiraebczrxz34wbq64rlajmawv/lib;/home/serac/serac_tpls/llvm-19.1.1/serac-develop-v54wwqdiraebczrxz34wbq64rlajmawv/lib64;;" CACHE STRING "")
 
-set(CMAKE_INSTALL_RPATH "/home/serac/serac_tpls/llvm-19.1.1/serac-develop-e6bpcrrsxr43gk564vbp6vut5gjka6ja/lib;/home/serac/serac_tpls/llvm-19.1.1/serac-develop-e6bpcrrsxr43gk564vbp6vut5gjka6ja/lib64;;" CACHE STRING "")
+set(CMAKE_INSTALL_RPATH "/home/serac/serac_tpls/llvm-19.1.1/serac-develop-v54wwqdiraebczrxz34wbq64rlajmawv/lib;/home/serac/serac_tpls/llvm-19.1.1/serac-develop-v54wwqdiraebczrxz34wbq64rlajmawv/lib64;;" CACHE STRING "")
 
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 
@@ -121,14 +121,18 @@ set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.21-wok4mlejt6ejilghgj5rcptuumpg23vh" CA
 # Devtools
 #------------------------------------------------------------------------------
 
-# Code checks disabled due to disabled devtools
+set(DEVTOOLS_ROOT "/usr" CACHE PATH "")
 
-set(SERAC_ENABLE_CODE_CHECKS OFF CACHE BOOL "")
+set(CLANGFORMAT_EXECUTABLE "${DEVTOOLS_ROOT}/lib/llvm-19/bin/clang-format" CACHE PATH "")
 
-set(ENABLE_CLANGFORMAT OFF CACHE BOOL "")
+set(CLANGTIDY_EXECUTABLE "${DEVTOOLS_ROOT}/lib/llvm-19/bin/clang-tidy" CACHE PATH "")
 
-set(ENABLE_CLANGTIDY OFF CACHE BOOL "")
+set(ENABLE_DOCS ON CACHE BOOL "")
 
-set(ENABLE_DOCS OFF CACHE BOOL "")
+set(SPHINX_EXECUTABLE "${DEVTOOLS_ROOT}/bin/sphinx-build" CACHE PATH "")
+
+set(CPPCHECK_EXECUTABLE "${DEVTOOLS_ROOT}/bin/cppcheck" CACHE PATH "")
+
+set(DOXYGEN_EXECUTABLE "${DEVTOOLS_ROOT}/local/bin/doxygen" CACHE PATH "")
 
 
