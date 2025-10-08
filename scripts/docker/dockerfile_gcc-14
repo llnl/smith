@@ -8,19 +8,12 @@ RUN sudo apt-get update -y
 RUN sudo apt-get install gettext gfortran-$(gcc -dumpversion) libopenblas-dev \
                          lsb-release lua5.2 lua5.2-dev mpich ssh -fy
 
-# Install enzyme-related packages
-RUN if [[ "$spec" != *~enzyme* ]]; then \
-      sudo apt-get install llvm-19-dev libzstd-dev libclang-19-dev -fy; \
-    fi
-
 # Install devtool-related packages
 # NOTE: Skipping this can significantly save disk space
-RUN if [[ "$spec" == *+devtools* ]]; then \
-      sudo apt-get install graphviz python3-sphinx texlive-full -fy; \
-      sudo wget https://github.com/doxygen/doxygen/releases/download/Release_1_9_8/doxygen-1.9.8.linux.bin.tar.gz; \
-      sudo tar -xf doxygen-1.9.8.linux.bin.tar.gz; \
-      cd doxygen-1.9.8 && sudo make && sudo make install && doxygen --version; \
-    fi
+RUN sudo apt-get install graphviz python3-sphinx texlive-full -fy; \
+    sudo wget https://github.com/doxygen/doxygen/releases/download/Release_1_9_8/doxygen-1.9.8.linux.bin.tar.gz; \
+    sudo tar -xf doxygen-1.9.8.linux.bin.tar.gz; \
+    cd doxygen-1.9.8 && sudo make && sudo make install && doxygen --version;
 
 # Remove flags from mpich
 RUN sudo sed -i "s/ -flto=auto//g" /usr/bin/mpicxx.mpich
