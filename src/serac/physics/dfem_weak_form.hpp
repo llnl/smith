@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <mfem/fem/dfem/parameterspace.hpp>
 #include "serac/serac_config.hpp"
 
 #ifdef SERAC_USE_DFEM
@@ -136,17 +137,20 @@ class DfemWeakForm : public WeakForm {
    * @param output_mfem_space Test space
    * @param input_mfem_spaces Vector of finite element spaces which are arguments to the residual
    */
-  DfemWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
-               const mfem::ParFiniteElementSpace& output_mfem_space, const SpacesT& input_mfem_spaces)
+  DfemWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh, const mfem::ParFiniteElementSpace& output_fe_space,
+               const SpacesT& input_fe_spaces,
+               const std::vector<const mfem::future::ParameterSpace*>& input_quadrature_spaces = {})
       : WeakForm(physics_name),
         mesh_(mesh),
-        output_mfem_space_(output_mfem_space),
-        input_mfem_spaces_(input_mfem_spaces),
-        weak_form_(makeFieldDescriptors({&output_mfem_space}, input_mfem_spaces.size()),
-                   makeFieldDescriptors(input_mfem_spaces), mesh->mfemParMesh()),
-        v_dot_weak_form_residual_(makeFieldDescriptors({&output_mfem_space}, input_mfem_spaces.size()),
-                                  makeFieldDescriptors(input_mfem_spaces), mesh->mfemParMesh()),
-        residual_vector_(output_mfem_space.GetTrueVSize())
+        output_mfem_space_(output_fe_space),
+        input_mfem_spaces_(input_fe_spaces),
+        weak_form_(
+            makeFieldDescriptors({&output_fe_space}, {}, input_fe_spaces.size() + input_quadrature_spaces.size()),
+            makeFieldDescriptors(input_fe_spaces, input_quadrature_spaces), mesh->mfemParMesh()),
+        v_dot_weak_form_residual_(
+            makeFieldDescriptors({&output_fe_space}, {}, input_fe_spaces.size() + input_quadrature_spaces.size()),
+            makeFieldDescriptors(input_fe_spaces, input_quadrature_spaces), mesh->mfemParMesh()),
+        residual_vector_(output_fe_space.GetTrueVSize())
   {
     // sum field operator doesn't work with sum factorization
     v_dot_weak_form_residual_.DisableTensorProductStructure();
@@ -191,14 +195,13 @@ class DfemWeakForm : public WeakForm {
   /// @overload
   mfem::Vector residual(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
                         const std::vector<ConstFieldPtr>& fields,
-                        const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {},
-                        int block_row = 0) const override
+                        const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}, int block_row = 0) const override
   {
     SLIC_ERROR_ROOT_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for DfemWeakForm");
 
     dt_ = dt;
 
-    weak_form_.SetParameters(getLVectors(fields));
+    weak_form_.SetParameters(getLVectors(fields, quad_fields));
     weak_form_.Mult(residual_vector_, residual_vector_);
     return residual_vector_;
   }
@@ -277,22 +280,31 @@ class DfemWeakForm : public WeakForm {
 
  protected:
   static std::vector<mfem::future::FieldDescriptor> makeFieldDescriptors(
-      const std::vector<const mfem::ParFiniteElementSpace*>& spaces, size_t offset = 0)
+      const std::vector<const mfem::ParFiniteElementSpace*>& fe_spaces,
+      const std::vector<const mfem::future::ParameterSpace*>& quad_spaces, size_t offset = 0)
   {
     std::vector<mfem::future::FieldDescriptor> field_descriptors;
-    field_descriptors.reserve(spaces.size());
-    for (size_t i = 0; i < spaces.size(); ++i) {
-      field_descriptors.emplace_back(i + offset, spaces[i]);
+    field_descriptors.reserve(fe_spaces.size() + quad_spaces.size());
+    for (size_t i = 0; i < fe_spaces.size(); ++i) {
+      field_descriptors.emplace_back(i + offset, fe_spaces[i]);
+    }
+    for (size_t i = 0; i < quad_spaces.size(); ++i) {
+      field_descriptors.emplace_back(i + offset + fe_spaces.size(), quad_spaces[i]);
     }
     return field_descriptors;
   }
 
-  std::vector<mfem::Vector*> getLVectors(const std::vector<ConstFieldPtr>& fields) const
+  std::vector<mfem::Vector*> getLVectors(const std::vector<ConstFieldPtr>& fields,
+                                         const std::vector<ConstQuadratureFieldPtr>& quad_fields) const
   {
     std::vector<mfem::Vector*> fields_l;
-    fields_l.reserve(fields.size());
+    fields_l.reserve(fields.size() + quad_fields.size());
     for (size_t i = 0; i < fields.size(); ++i) {
       fields_l.push_back(&fields[i]->gridFunction());
+    }
+    for (size_t i = 0; i < quad_fields.size(); ++i) {
+      // dfem interface wants non-const vectors, but it should not modify them
+      fields_l.push_back(const_cast<QuadratureFieldPtr>(quad_fields[i]));
     }
     return fields_l;
   }

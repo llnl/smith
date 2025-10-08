@@ -54,6 +54,7 @@ if (SERAC_USE_DFEM)
     list(APPEND physics_serial_test_sources
                 test_dfem_explicit_dynamics.cpp
                 test_dfem_lumped_mass.cpp
+                test_dfem_plasticity.cpp
                 test_dfem_vs_functional.cpp
                 test_dfem_weak_form.cpp)
 endif()
