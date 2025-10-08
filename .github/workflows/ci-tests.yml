@@ -56,7 +56,7 @@ jobs:
             job_name: clang@19.1.1, shared, codevelop
             host_config: clang@19.1.1.cmake
             compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
-            cmake_opts: "-DENABLE_DOCS=OFF -DSERAC_ENABLE_CODEVELOP=ON"
+            cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF -DSERAC_ENABLE_CODEVELOP=ON"
             build_src_opts: "--skip-install"
     name: ${{ matrix.build_type }} - ${{ matrix.config.job_name }}
     container:
