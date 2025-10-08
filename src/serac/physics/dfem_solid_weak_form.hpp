@@ -86,11 +86,6 @@ struct AccelerationQFunction {
 template <bool IsQuasiStatic = false, bool UseLumpedMass = false>
 class DfemSolidWeakForm : public DfemWeakForm {
  public:
-  /// @brief a container holding quadrature point data of the specified type
-  /// @tparam T the type of data to store at each quadrature point
-  template <typename T>
-  using qdata_type = std::shared_ptr<QuadratureData<T>>;
-
   /// @brief enumeration of the required states
   enum STATE
   {
@@ -107,11 +102,14 @@ class DfemSolidWeakForm : public DfemWeakForm {
    * @param physics_name A name for the physics module instance
    * @param mesh The serac Mesh
    * @param test_space Test space
-   * @param parameter_fe_spaces Vector of parameters spaces
+   * @param parameter_fe_spaces Vector of parameter finite element spaces
+   * @param parameter_quadrature_spaces Vector of parameter quadrature spaces
    */
   DfemSolidWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh, const mfem::ParFiniteElementSpace& test_space,
-                    std::vector<const mfem::ParFiniteElementSpace*> parameter_fe_spaces = {})
-      : DfemWeakForm(physics_name, mesh, test_space, makeInputSpaces(test_space, mesh, parameter_fe_spaces))
+                    const std::vector<const mfem::ParFiniteElementSpace*>& parameter_fe_spaces = {},
+                    const std::vector<const mfem::future::ParameterSpace*> parameter_quadrature_spaces = {})
+      : DfemWeakForm(physics_name, mesh, test_space, makeInputSpaces(test_space, mesh, parameter_fe_spaces),
+                     parameter_quadrature_spaces)
   {
   }
 

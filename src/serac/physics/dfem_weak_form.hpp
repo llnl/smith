@@ -222,7 +222,7 @@ class DfemWeakForm : public WeakForm {
 
   /// @overload
   void jvp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& fields,
-           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, ConstFieldPtr /*v_shape_disp*/,
+           const std::vector<ConstQuadratureFieldPtr>& quad_fields, ConstFieldPtr /*v_shape_disp*/,
            const std::vector<ConstFieldPtr>& v_fields, const std::vector<ConstQuadratureFieldPtr>& /*v_quad_fields*/,
            const std::vector<DualFieldPtr>& jvp_reactions) const override
   {
@@ -233,7 +233,7 @@ class DfemWeakForm : public WeakForm {
     dt_ = dt;
 
     std::vector<mfem::Vector*> test_par_gf({&fields[0]->gridFunction()});
-    std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
+    std::vector<mfem::Vector*> field_par_gf = getLVectors(fields, quad_fields);
 
     *jvp_reactions[0] = 0.0;
 
@@ -247,7 +247,7 @@ class DfemWeakForm : public WeakForm {
 
   /// @overload
   void vjp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& fields,
-           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, const std::vector<ConstFieldPtr>& v_fields,
+           const std::vector<ConstQuadratureFieldPtr>& quad_fields, const std::vector<ConstFieldPtr>& v_fields,
            DualFieldPtr /*vjp_shape_disp_sensitivity*/, const std::vector<DualFieldPtr>& vjp_sensitivities,
            const std::vector<QuadratureFieldPtr>& /*vjp_quad_field_sensitivities*/) const override
   {
@@ -258,7 +258,7 @@ class DfemWeakForm : public WeakForm {
     dt_ = dt;
 
     std::vector<mfem::Vector*> test_par_gf({&v_fields[0]->gridFunction()});
-    std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
+    std::vector<mfem::Vector*> field_par_gf = getLVectors(fields, quad_fields);
     // field_par_gf.push_back(&v_fields[0]->gridFunction());
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
@@ -303,7 +303,8 @@ class DfemWeakForm : public WeakForm {
       fields_l.push_back(&fields[i]->gridFunction());
     }
     for (size_t i = 0; i < quad_fields.size(); ++i) {
-      // dfem interface wants non-const vectors, but it should not modify them
+      // dfem interface wants non-const vectors (but it should not modify them)
+      // TODO (EBC): fix this in dfem interface
       fields_l.push_back(const_cast<QuadratureFieldPtr>(quad_fields[i]));
     }
     return fields_l;
