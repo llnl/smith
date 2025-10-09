@@ -79,8 +79,8 @@ spack:
             cxx: /usr/bin/g++-13
             fortran: /usr/bin/gfortran-13
           flags:
-            cflags: -pthread
-            cxxflags: -pthread
+            cflags: -fPIC -pthread
+            cxxflags: -fPIC -pthread
       - spec: gcc@14.2.0 languages:=c,c++,fortran
         prefix: /usr/bin
         extra_attributes:
@@ -89,8 +89,8 @@ spack:
             cxx: /usr/bin/g++-14
             fortran: /usr/bin/gfortran-14
           flags:
-            cflags: -pthread
-            cxxflags: -pthread
+            cflags: -fPIC -pthread
+            cxxflags: -fPIC -pthread
     llvm:
       externals:
       - spec: llvm@19.1.1+clang~lld~lldb
@@ -99,7 +99,6 @@ spack:
           compilers:
             c: /usr/lib/llvm-19/bin/clang
             cxx: /usr/lib/llvm-19/bin/clang++
-          # Axom example sidre_shocktube_F_ex doesn't link otherwise
           flags:
             cflags: -fPIC -pthread
             cxxflags: -fPIC -pthread
