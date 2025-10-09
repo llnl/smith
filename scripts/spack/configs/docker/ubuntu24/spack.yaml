@@ -68,7 +68,7 @@ spack:
         tbb: [intel-tbb]
         jpeg: [libjpeg-turbo, libjpeg]
 
-    #Compiler packages
+    # Compiler packages
     gcc:
       externals:
       - spec: gcc@13.3.0 languages:=c,c++,fortran
