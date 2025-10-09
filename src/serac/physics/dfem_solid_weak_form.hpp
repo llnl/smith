@@ -189,12 +189,13 @@ class DfemSolidWeakForm : public DfemWeakForm {
     }
   }
 
-  void massMatrix(const std::vector<ConstFieldPtr>& fields, const mfem::Vector& direction_t,
-                  mfem::Vector& result_t) const
+  void massMatrix(const std::vector<ConstFieldPtr>& fields,
+    const mfem::Vector& direction_t, mfem::Vector& result_t) const
   {
     static_assert(!IsQuasiStatic, "Mass matrix is not defined for quasi-static solid mechanics problems.");
+    // Pass empty quad field vector, assuming mass matrix cannot depend on internal state variables
     auto deriv_op = DfemWeakForm::weak_form_.GetDerivative(ACCELERATION, {&fields[0]->gridFunction()},
-                                                           DfemWeakForm::getLVectors(fields));
+                                                           DfemWeakForm::getLVectors(fields, {}));
     deriv_op->Mult(direction_t, result_t);
   }
 
