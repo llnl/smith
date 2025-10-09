@@ -24,12 +24,12 @@ echo HOST_CONFIG
 echo $HOST_CONFIG
 
 echo "~~~~~~ RUNNING CMAKE ~~~~~~~~"
-cmake_args="-DENABLE_CLANGTIDY=OFF -DSERAC_ENABLE_CODE_CHECKS=ON"
+cmake_args="-DBUILD_SHARED_LIBS=ON -DENABLE_CLANGTIDY=OFF -DSERAC_ENABLE_CODE_CHECKS=ON"
 
 if [[ "$CHECK_TYPE" == "coverage" ]] ; then
     # Alias llvm-cov to gcov so it acts like gcov
     ln -s `which llvm-cov` /home/serac/gcov
-    cmake_args="$cmake_args -DENABLE_COVERAGE=ON -DGCOV_EXECUTABLE=/home/serac/gcov"
+    cmake_args="$cmake_args -DENABLE_COVERAGE=ON -DGCOV_EXECUTABLE=/home/serac/gcov -UENZYME_DIR"
 fi
 
 if [[ "$CHECK_TYPE" == "docs" ]] ; then
