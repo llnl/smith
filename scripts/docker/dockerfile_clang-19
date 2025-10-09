@@ -7,7 +7,7 @@ ENV spec="+devtools+enzyme %clang_${llvm_version}"
 SHELL ["/bin/bash", "-c"]
 RUN sudo apt-get update -y
 RUN sudo apt-get install gettext gfortran-$(gcc -dumpversion) libopenblas-dev \
-                         lsb-release lua5.2 lua5.2-dev mpich ssh -fy
+                         lsb-release lua5.2 lua5.2-dev ssh -fy
 
 # Install enzyme-related packages
 RUN sudo apt-get install llvm-${llvm_version}-dev libzstd-dev libclang-${llvm_version}-dev -fy;
@@ -18,16 +18,6 @@ RUN sudo apt-get install libclang-rt-${llvm_version}-dev clang-tidy-${llvm_versi
     sudo wget https://github.com/doxygen/doxygen/releases/download/Release_1_9_8/doxygen-1.9.8.linux.bin.tar.gz; \
     sudo tar -xf doxygen-1.9.8.linux.bin.tar.gz; \
     cd doxygen-1.9.8 && sudo make && sudo make install && doxygen --version;
-
-# Remove flags from mpich
-RUN sudo sed -i "s/ -flto=auto//g" /usr/bin/mpicxx.mpich
-RUN sudo sed -i "s/ -flto=auto//g" /usr/bin/mpicc.mpich
-RUN sudo sed -i "s/ -flto=auto//g" /usr/bin/mpifort.mpich
-RUN sudo sed -i "s/ -ffat-lto-objects//g" /usr/bin/mpicxx.mpich
-RUN sudo sed -i "s/ -ffat-lto-objects//g" /usr/bin/mpicc.mpich
-RUN sudo sed -i "s/ -ffat-lto-objects//g" /usr/bin/mpifort.mpich
-RUN sudo sed -i "s/ -fallow-invalid-boz//g" /usr/bin/mpifort.mpich
-RUN sudo sed -i "s/ -fallow-argument-mismatch//g" /usr/bin/mpifort.mpich
 
 RUN sudo useradd -m -s /bin/bash -G sudo serac
 WORKDIR "/home/serac"
