@@ -17,9 +17,6 @@ function or_die () {
     fi
 }
 
-# TODO remove this
-sudo apt-get install libclang-rt-19-dev -y
-
 echo HOST_CONFIG
 echo $HOST_CONFIG
 
