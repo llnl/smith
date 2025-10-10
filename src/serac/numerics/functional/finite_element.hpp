@@ -41,8 +41,7 @@ struct TensorProductQuadratureRule {
 };
 
 template <auto val>
-struct CompileTimeValue {
-};
+struct CompileTimeValue {};
 
 /**
  * @brief this struct is used to look up mfem's memory layout of

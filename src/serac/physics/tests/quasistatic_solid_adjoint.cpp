@@ -187,11 +187,8 @@ TEST(quasistatic, finiteDifference)
   seracSolid->setFixedBCs(mesh->domain(ymax_face_domain_name), Component::Y);
   seracSolid->setFixedBCs(mesh->domain(zmin_face_domain_name), Component::Z);
 
-  seracSolid->setDisplacementBCs(
-      [](vec3, double time) {
-        return vec3{{0.0, 0.0, time}};
-      },
-      mesh->domain(zmax_face_domain_name), Component::Z);
+  seracSolid->setDisplacementBCs([](vec3, double time) { return vec3{{0.0, 0.0, time}}; },
+                                 mesh->domain(zmax_face_domain_name), Component::Z);
 
   double E0 = 1.0;
   double v0 = 0.3;

@@ -43,8 +43,7 @@ constexpr int DERIVATIVE = 1;
 /// @endcond
 
 template <int... i>
-struct DependsOn {
-};
+struct DependsOn {};
 
 /**
  * @brief given a list of types, this function returns the index that corresponds to the type `dual_vector`.

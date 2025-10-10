@@ -56,8 +56,7 @@ void test(int dof)
       serac::Dimension<1>{}, serac::DependsOn<>{}, [](auto...) { return 1.0; }, *undeformed_pmesh);
 
   serac::Functional<double(shape_space)> qoi({fes.get()});
-  qoi.AddBoundaryIntegral(
-      serac::Dimension<1>{}, serac::DependsOn<0>{}, [](auto...) { return 1.0; }, *deformed_pmesh);
+  qoi.AddBoundaryIntegral(serac::Dimension<1>{}, serac::DependsOn<0>{}, [](auto...) { return 1.0; }, *deformed_pmesh);
 
   std::unique_ptr<mfem::HypreParVector> u(fes->NewTrueDofVector());
   *u = 0.0;

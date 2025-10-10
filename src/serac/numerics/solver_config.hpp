@@ -455,21 +455,17 @@ struct NonlinearSolverOptions {
 // fmt support for serac::NonlinearSolver
 namespace axom::fmt {
 template <>
-struct formatter<serac::NonlinearSolver> : ostream_formatter {
-};
+struct formatter<serac::NonlinearSolver> : ostream_formatter {};
 
 // fmt support for serac::LinearSolver
 template <>
-struct formatter<serac::LinearSolver> : ostream_formatter {
-};
+struct formatter<serac::LinearSolver> : ostream_formatter {};
 
 // fmt support for serac::Preconditioner
 template <>
-struct formatter<serac::Preconditioner> : ostream_formatter {
-};
+struct formatter<serac::Preconditioner> : ostream_formatter {};
 
 // fmt support for serac::PetscPCType
 template <>
-struct formatter<serac::PetscPCType> : ostream_formatter {
-};
+struct formatter<serac::PetscPCType> : ostream_formatter {};
 }  // namespace axom::fmt

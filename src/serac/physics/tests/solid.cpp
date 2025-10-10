@@ -210,8 +210,7 @@ void functional_parameterized_solid_test(double expected_disp_norm)
       DependsOn<0>{}, [](const auto& x, double /*t*/, auto /* bulk */) { return x * 0.0; }, mesh->entireBody());
   solid_solver.addBodyForce(DependsOn<1>{}, ParameterizedBodyForce{[](const auto& x) { return 0.0 * x; }},
                             mesh->entireBody());
-  solid_solver.setTraction(
-      DependsOn<1>{}, [](const auto& x, auto...) { return 0 * x; }, mesh->entireBoundary());
+  solid_solver.setTraction(DependsOn<1>{}, [](const auto& x, auto...) { return 0 * x; }, mesh->entireBoundary());
 
   // Finalize the data structures
   solid_solver.completeSetup();

@@ -245,11 +245,8 @@ void finite_difference_shape_test(LoadingType load)
   } else if (load == LoadingType::Pressure) {
     solid_solver.setPressure([](auto /*X*/, double /*t*/) { return 0.1; }, mesh->domain("top_face"));
   } else if (load == LoadingType::Traction) {
-    solid_solver.setTraction(
-        [](auto /*X*/, auto /*n*/, double /*t*/) {
-          return vec2{0.01, 0.01};
-        },
-        mesh->domain("top_face"));
+    solid_solver.setTraction([](auto /*X*/, auto /*n*/, double /*t*/) { return vec2{0.01, 0.01}; },
+                             mesh->domain("top_face"));
   }
 
   // Finalize the data structures

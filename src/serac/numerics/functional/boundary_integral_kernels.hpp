@@ -184,8 +184,9 @@ void evaluation_kernel_impl(trial_element_type trial_elements, test_element, dou
     auto x_e = x[e];
 
     // batch-calculate values / derivatives of each trial space, at each quadrature point
-    [[maybe_unused]] tuple qf_inputs = {promote_each_to_dual_when<indices == differentiation_index>(
-        get<indices>(trial_elements).interpolate(get<indices>(u)[e], rule))...};
+    [[maybe_unused]] tuple qf_inputs = {promote_each_to_dual_when < indices ==
+                                        differentiation_index >
+                                            (get<indices>(trial_elements).interpolate(get<indices>(u)[e], rule))...};
 
     // (batch) evalute the q-function at each quadrature point
     auto qf_outputs = batch_apply_qf(qf, t, x_e, J_e, get<indices>(qf_inputs)...);

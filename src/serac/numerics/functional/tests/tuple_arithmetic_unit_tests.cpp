@@ -120,8 +120,7 @@ TEST(TupleArithmeticUnitTests, ReadTheDocsExample)
 
   // verify that the derivative types are what we expect
   [[maybe_unused]] tuple<tuple<tensor<double, 3, 3>, zero, tensor<double, 3, 3, 3, 3> >,
-                         tuple<zero, tensor<double, 3>, zero> >
-      gradients = get_gradient(outputs);
+                         tuple<zero, tensor<double, 3>, zero> > gradients = get_gradient(outputs);
 }
 
 int main(int argc, char* argv[])
