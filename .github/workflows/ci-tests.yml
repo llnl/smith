@@ -41,6 +41,7 @@ jobs:
           compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
           cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF"
         # TODO re-add cuda testing
+        # https://github.com/LLNL/serac/issues/1479
         # - job_name: gcc@12.3.0, shared, cuda, no tests/install/warnings as errors
         #   host_config: gcc@12.3.0_cuda.cmake
         #   compiler_image: ${{ needs.set_image_vars.outputs.cuda_docker_image }}
@@ -57,6 +58,7 @@ jobs:
             host_config: clang@19.1.1.cmake
             compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
             cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF -DSERAC_ENABLE_CODEVELOP=ON"
+            build_src_opts: "--skip-install"
     name: ${{ matrix.build_type }} - ${{ matrix.config.job_name }}
     container:
       image: ${{ matrix.config.compiler_image }}
@@ -99,8 +101,8 @@ jobs:
       # If any of checks (e.g. style) fail, allow other jobs to continue running.
       fail-fast: false
       matrix:
-        # TODO: re-enable style in follow-up pr
-        check_type: [coverage, header, docs] #[coverage, docs, style, header]
+        # TODO re-enable coverage https://github.com/LLNL/serac/issues/1481
+        check_type: [style, header, docs] #[coverage, docs, style, header]
     container:
       image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
       volumes:
