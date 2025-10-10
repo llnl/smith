@@ -52,9 +52,8 @@ class Enzyme(CMakePackage):
     depends_on("llvm@15:19", when="@0.0.149:")
     depends_on("cmake@3.13:", type="build")
 
-    # TODO: Comment out when after Spack 1.0 and push to Spack's builtin repo, this may not be enough
-    # You can end up compiling with gcc but linking to llvm in certain cases
-    #conflicts("%cxx=gcc")
+    for compiler_ in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
+        conflicts(f"%[virtuals=c,cxx] {compiler_}")
 
     def cmake_args(self):
         spec = self.spec

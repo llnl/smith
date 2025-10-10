@@ -126,11 +126,11 @@ class ContactConstraint : public Constraint {
     // note: Tribol does not use cycle.
     int cycle = 0;
     contact_.update(cycle, time, dt);
-    auto merged_gaps = contact_.mergedGaps(false);
-    merged_gaps.SetOwnership(false);
-    mfem::Vector merged_gaps_vector = std::move(merged_gaps);
-    merged_gaps_vector.MakeDataOwner();
-    return merged_gaps_vector;
+    auto gaps_hpv = contact_.mergedGaps(false);
+    // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
+    // https://github.com/mfem/mfem/issues/5029
+    mfem::Vector gaps = gaps_hpv;
+    return gaps;
   };
 
   /** @brief Interface for computing contact gap constraint Jacobian from a vector of serac::FiniteElementState*

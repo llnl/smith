@@ -10,7 +10,7 @@
 
 # Do not bump this over 3.14 due to it changing CMake policies and breaking
 # the CUDA build. We check the required version specifically for this below
-cmake_minimum_required(VERSION 3.14) 
+cmake_minimum_required(VERSION 3.14)
 
 # Check for minimum CMake version required w/o changing policies like cmake_minimum_required
 if(ENABLE_CUDA AND ${CMAKE_VERSION} VERSION_LESS 3.18.0)
