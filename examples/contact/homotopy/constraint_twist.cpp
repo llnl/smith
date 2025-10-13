@@ -262,8 +262,7 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(co
 {
   contact_states_[serac::ContactFields::DISP]->Set(1.0, u);
   drdu_.reset();
-  drdu_ = std::move(
-      weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_));
+  drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
   MFEM_VERIFY(drdu_->Height() == dimu_, "weak form Jacobian/TiedContactProblem displacement dofs inconsistent sizes");
   return drdu_.get();
 }
