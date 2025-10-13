@@ -285,11 +285,11 @@ class DfemWeakForm : public WeakForm {
   {
     std::vector<mfem::future::FieldDescriptor> field_descriptors;
     field_descriptors.reserve(fe_spaces.size() + quad_spaces.size());
-    for (size_t i = 0; i < fe_spaces.size(); ++i) {
-      field_descriptors.emplace_back(i + offset, fe_spaces[i]);
-    }
     for (size_t i = 0; i < quad_spaces.size(); ++i) {
-      field_descriptors.emplace_back(i + offset + fe_spaces.size(), quad_spaces[i]);
+      field_descriptors.emplace_back(i + offset, quad_spaces[i]);
+    }
+    for (size_t i = 0; i < fe_spaces.size(); ++i) {
+      field_descriptors.emplace_back(i + offset + quad_spaces.size(), fe_spaces[i]);
     }
     return field_descriptors;
   }

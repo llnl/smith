@@ -12,7 +12,9 @@
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh_utils/mesh_utils_base.hpp"
 #include "serac/physics/dfem_solid_weak_form.hpp"
+#include "serac/physics/field_types.hpp"
 #include "serac/physics/mesh.hpp"
+#include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
@@ -21,7 +23,7 @@ namespace serac {
 
 struct SmoothJ2 {
   static constexpr int dim = 3;  ///< spatial dimension
-  static constexpr int n_internal_states = 10;
+  static constexpr int N_INTERNAL_STATES = 10;
   static constexpr double tol = 1e-10;  ///< relative tolerance on residual mag to judge convergence of return map
 
   double E;        ///< Young's modulus
@@ -37,32 +39,32 @@ struct SmoothJ2 {
   };
 
   MFEM_HOST_DEVICE inline InternalState unpack_internal_state(
-      const mfem::future::tensor<double, n_internal_states>& packed_state) const
+      const mfem::future::tensor<double, N_INTERNAL_STATES>& packed_state) const
   {
     // we could use type punning here to avoid copies
     auto plastic_strain =
         mfem::future::make_tensor<dim, dim>([&packed_state](int i, int j) { return packed_state[dim * i + j]; });
-    double accumulated_plastic_strain = packed_state[n_internal_states - 1];
+    double accumulated_plastic_strain = packed_state[N_INTERNAL_STATES - 1];
     return {plastic_strain, accumulated_plastic_strain};
   }
 
-  MFEM_HOST_DEVICE inline mfem::future::tensor<double, n_internal_states> pack_internal_state(
+  MFEM_HOST_DEVICE inline mfem::future::tensor<double, N_INTERNAL_STATES> pack_internal_state(
       const mfem::future::tensor<double, dim, dim>& plastic_strain, double accumulated_plastic_strain) const
   {
-    mfem::future::tensor<double, n_internal_states> packed_state{};
+    mfem::future::tensor<double, N_INTERNAL_STATES> packed_state{};
     for (int i = 0, ij = 0; i < dim; i++) {
       for (int j = 0; j < dim; j++, ij++) {
         packed_state[ij] = plastic_strain[i][j];
       }
     }
-    packed_state[n_internal_states - 1] = accumulated_plastic_strain;
+    packed_state[N_INTERNAL_STATES - 1] = accumulated_plastic_strain;
     return packed_state;
   }
 
   MFEM_HOST_DEVICE inline mfem::future::tuple<mfem::future::tensor<double, dim, dim>,
-                                              mfem::future::tensor<double, n_internal_states>>
+                                              mfem::future::tensor<double, N_INTERNAL_STATES>>
   update(double /* dt */, const mfem::future::tensor<double, dim, dim>& dudX,
-         const mfem::future::tensor<double, n_internal_states>& internal_state) const
+         const mfem::future::tensor<double, N_INTERNAL_STATES>& internal_state) const
   {
     auto I = mfem::future::IdentityMatrix<dim>();
     const double K = E / (3.0 * (1.0 - 2.0 * nu));
@@ -94,7 +96,7 @@ struct SmoothJ2 {
 
   SERAC_HOST_DEVICE auto pkStress(double, const mfem::future::tensor<double, dim, dim>& du_dX,
                                   const mfem::future::tensor<double, dim, dim>&,
-                                  const mfem::future::tensor<double, n_internal_states>& internal_state) const
+                                  const mfem::future::tensor<double, N_INTERNAL_STATES>& internal_state) const
   {
     const double dt = 1.0;
     auto [stress, internal_state_new] = update(dt, du_dX, internal_state);
@@ -103,7 +105,7 @@ struct SmoothJ2 {
 
   SERAC_HOST_DEVICE auto internalStateNew(double, const mfem::future::tensor<double, dim, dim>& du_dX,
                                           const mfem::future::tensor<double, dim, dim>&,
-                                          const mfem::future::tensor<double, n_internal_states>& internal_state) const
+                                          const mfem::future::tensor<double, N_INTERNAL_STATES>& internal_state) const
   {
     const double dt = 1.0;
     auto [stress, internal_state_new] = update(dt, du_dX, internal_state);
@@ -117,10 +119,12 @@ TEST(Dfem, Plasticity)
 {
   constexpr int dim = 3;
   constexpr int disp_order = 1;
-  const std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
+  std::string filename = SERAC_REPO_DIR "/data/meshes/beam-hex.mesh";
   axom::sidre::DataStore datastore;
   serac::StateManager::initialize(datastore, "dfem_plasticity");
-  auto mesh = std::make_shared<serac::Mesh>(buildMeshFromFile(filename), "this_mesh_name", 0, 0);
+  auto mfem_mesh = buildMeshFromFile(filename);
+  auto mesh = std::make_shared<serac::Mesh>(std::move(mfem_mesh), "amesh", 0, 0);
+  mfem::out << "Constructed mesh" << std::endl;
 
   // TODO: add these when we have a solver
   // LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG, .print_level = 0};
@@ -140,31 +144,59 @@ TEST(Dfem, Plasticity)
   //   COORDINATES
   // };
 
-  // enum PARAMS
-  // {
-  //   // none for now
-  // };
+  enum PARAMS
+  {
+    J2_INTERNAL_STATE
+  };
 
-  using VectorSpace = serac::H1<disp_order, dim>;
 
-  serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
-  serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
-  serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
+  using KinematicSpace = H1<disp_order, dim>;
+  FiniteElementState disp = StateManager::newState(KinematicSpace{}, "displacement", mesh->tag());
+  FiniteElementState velo = StateManager::newState(KinematicSpace{}, "velocity", mesh->tag());
+  FiniteElementState accel = StateManager::newState(KinematicSpace{}, "acceleration", mesh->tag());
 
-  using Material = SmoothJ2;
-  auto mat = Material{.E = 1000.0, .nu = 0.25, .sigma_y = 0.53333, .Hi = 40.0, .rho = 1.0};
+  FiniteElementState coords = StateManager::newState(KinematicSpace{}, "coordinates", mesh->tag());
+  coords.setFromGridFunction(static_cast<mfem::ParGridFunction&>(*mesh->mfemParMesh().GetNodes()));
 
+  mfem::out << "Checkpoint A" << std::endl;
   int ir_order = 2;
   const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
   bool use_tensor_product = false;
-  mfem::future::UniformParameterSpace internal_state_space(mesh->mfemParMesh(), displacement_ir, mat.n_internal_states,
+  using Material = SmoothJ2;
+  auto mat = Material{.E = 1000.0, .nu = 0.25, .sigma_y = 0.53333, .Hi = 40.0, .rho = 1.0};
+  mfem::future::UniformParameterSpace internal_state_space(mesh->mfemParMesh(), displacement_ir, mat.N_INTERNAL_STATES,
                                                            use_tensor_product);
   mfem::future::ParameterFunction internal_state(internal_state_space);
+  internal_state = 0.0;
+
+  mfem::out << "Checkpoint B" << std::endl;
 
   constexpr bool is_quasi_static = true;
   constexpr bool use_lumped_mass = false;
   using SolidT = DfemSolidWeakForm<is_quasi_static, use_lumped_mass>;
-  auto physics = SolidT("plasticity", mesh, disp.space(), {}, {&internal_state_space});
+  auto physics = SolidT("plasticity", mesh, disp.space(), {&internal_state_space}, {});
+  mfem::out << "Checkpoint C" << std::endl;
+  mfem::Array<int> entire_domain;
+  entire_domain.Append(1);
+  physics.setMaterial<Material, InternalVariableParameter<J2_INTERNAL_STATE, Material::N_INTERNAL_STATES>>(
+    entire_domain, mat, displacement_ir);
+
+  double t = 0.0;
+  double dt = 1.0;
+  auto input_fields = getConstFieldPointers<FiniteElementState>({disp, velo, accel, coords}, {});
+  auto r = physics.residual(t, dt, &disp, input_fields, {&internal_state});
+  r.Print();
+  
+  // physics.residual()
+  // implement physics.vjp()
+
+  // set loads
+
+  // advance
+  //  solve for u
+  //    residual and jvp
+  //  use u to update internal
+
 }
 
 }  // namespace serac

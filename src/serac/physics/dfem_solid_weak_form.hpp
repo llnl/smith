@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include <memory>
+#include <mfem/fem/dfem/fieldoperator.hpp>
 #include "serac/serac_config.hpp"
 
 #ifdef SERAC_USE_DFEM
@@ -52,7 +54,7 @@ struct StressDivQFunction {
     auto du_dX = mfem::future::dot(du_dxi, dxi_dX);
     auto dv_dX = mfem::future::dot(dv_dxi, dxi_dX);
     double dt = 1.0;  // TODO: figure out how to pass this in to the qfunction
-    auto P = mfem::future::get<0>(material.pkStress(dt, du_dX, dv_dX, params...));
+    auto P = material.pkStress(dt, du_dX, dv_dX, params...);
     auto JxW = mfem::future::det(dX_dxi) * weight * mfem::future::transpose(dxi_dX);
     return mfem::future::tuple{-P * JxW};
   }
@@ -106,8 +108,9 @@ class DfemSolidWeakForm : public DfemWeakForm {
    * @param parameter_quadrature_spaces Vector of parameter quadrature spaces
    */
   DfemSolidWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh, const mfem::ParFiniteElementSpace& test_space,
-                    const std::vector<const mfem::ParFiniteElementSpace*>& parameter_fe_spaces = {},
-                    const std::vector<const mfem::future::ParameterSpace*> parameter_quadrature_spaces = {})
+                    const std::vector<const mfem::future::ParameterSpace*> parameter_quadrature_spaces = {},
+                    const std::vector<const mfem::ParFiniteElementSpace*>& parameter_fe_spaces = {}
+                    )
       : DfemWeakForm(physics_name, mesh, test_space, makeInputSpaces(test_space, mesh, parameter_fe_spaces),
                      parameter_quadrature_spaces)
   {
@@ -136,12 +139,17 @@ class DfemSolidWeakForm : public DfemWeakForm {
   {
     SLIC_ERROR_IF(material.dim != DfemWeakForm::mesh_->mfemParMesh().Dimension(),
                   "Material model dimension does not match mesh dimension.");
+
     auto stress_div_integral = StressDivQFunction<MaterialType, ParameterTypes...>{.material = material};
     mfem::future::tuple<mfem::future::Gradient<DISPLACEMENT>, mfem::future::Gradient<VELOCITY>,
-                        mfem::future::Gradient<ACCELERATION>, mfem::future::Gradient<COORDINATES>, mfem::future::Weight,
+                        mfem::future::Gradient<ACCELERATION>, mfem::future::Gradient<COORDINATES>,
+                        mfem::future::Weight,
                         typename ParameterTypes::template QFunctionFieldOp<NUM_STATES + ParameterTypes::index>...>
         stress_div_integral_inputs{};
+
+    // BT Why is this not Gradient<DISPLACEMENT> ?
     mfem::future::tuple<mfem::future::Gradient<NUM_STATES + sizeof...(ParameterTypes)>> stress_div_integral_outputs{};
+
     DfemWeakForm::addBodyIntegral(domain_attributes, stress_div_integral, stress_div_integral_inputs,
                                   stress_div_integral_outputs, displacement_ir,
                                   std::index_sequence<DISPLACEMENT, NUM_STATES + ParameterTypes::index...>{});
