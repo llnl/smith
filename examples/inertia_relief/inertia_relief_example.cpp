@@ -128,8 +128,8 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<serac::Fi
  */
 class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
  protected:
-  mfem::HypreParMatrix* drdu_ = nullptr;
-  mfem::HypreParMatrix* dcdu_ = nullptr;
+  std::unique_ptr<mfem::HypreParMatrix> drdu_;
+  std::unique_ptr<mfem::HypreParMatrix> dcdu_;
   int dimu_;
   int dimc_;
   int dimuglb_;
@@ -413,15 +413,11 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
 mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u)
 {
   obj_states_[DISP]->Set(1.0, u);
-  auto drdu_unique =
-      weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
+  drdu_.reset();
+  drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
 
-  if (drdu_) {
-    delete drdu_;
-  }
-  drdu_ = drdu_unique.release();
   SLIC_ERROR_ROOT_IF(drdu_->Height() != dimu_ || drdu_->Width() != dimu_, "residual Jacobian of an unexpected shape");
-  return drdu_;
+  return drdu_.get();
 }
 
 // constraint callback
@@ -460,6 +456,7 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
   for (int i = 0; i < dimuglb_; i++) {
     cols[i] = i;
   }
+  std::unique_ptr<mfem::Vector> globalGradVector;
   for (size_t i = 0; i < constraints_.size(); i++) {
     const int idx = static_cast<int>(i);
     const size_t i2 = static_cast<size_t>(idx);
@@ -467,27 +464,15 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
     mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
     gradVector.Set(
         1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP));
-    mfem::Vector* globalGradVector = gradVector.GlobalVector();
+    globalGradVector.reset(gradVector.GlobalVector());
     if (myid == 0) {
-      dcdumat.SetRow(idx, cols, *globalGradVector);
+      dcdumat.SetRow(idx, cols, *globalGradVector.get());
     }
-    delete globalGradVector;
   }
   dcdumat.Threshold(1.e-20);
   dcdumat.Finalize();
-  if (dcdu_) {
-    delete dcdu_;
-  }
-  dcdu_ = GenerateHypreParMatrixFromSparseMatrix(uOffsets_, cOffsets_, &dcdumat);
-  return dcdu_;
+  dcdu_.reset(GenerateHypreParMatrixFromSparseMatrix(uOffsets_, cOffsets_, &dcdumat));
+  return dcdu_.get();
 }
 
-InertialReliefProblem::~InertialReliefProblem()
-{
-  if (drdu_) {
-    delete drdu_;
-  }
-  if (dcdu_) {
-    delete dcdu_;
-  }
-}
+InertialReliefProblem::~InertialReliefProblem() {}
