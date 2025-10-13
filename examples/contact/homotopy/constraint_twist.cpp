@@ -188,28 +188,18 @@ int main(int argc, char* argv[])
     bool converged = solver.GetConverged();
     SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
   } else {
-    // double time = 0.0, dt = 1.0;
-    // int direction = serac::ContactFields::DISP;
-    // auto input_states = serac::getConstFieldPointers(contact_states);
-    // auto gap = contact_constraint->evaluate(time, dt, input_states);
-    // for (int i = 0; i < gap.Size(); i++) {
-    //   if (std::isnan(gap(i))) {
-    //     std::cout << "nan entry at " << i << std::endl;
-    //   }
-    // }
-    // auto gap_Jacobian = contact_constraint->jacobian(time, dt, input_states, direction);
-    // auto gap_Jacobian_tilde = contact_constraint->jacobian_tilde(time, dt, input_states, direction);
-    // int nPressureDofs = contact_constraint->numPressureDofs();
-    // mfem::Vector multipliers(nPressureDofs);
-    // multipliers = 0.0;
-    // auto residual = contact_constraint->residual_contribution(time, dt, input_states, multipliers, direction);
-    // double gnorm = mfem::GlobalLpNorm(2, gap.Norml2(), MPI_COMM_WORLD);
-    // std::cout << "||g||_2 = " << gnorm << std::endl;
-    // std::cout << "||dg / du||_F = " << gap_Jacobian->FNorm() << std::endl;
-    //  std::cout << "||tilde(dg / du)||_F = " << gap_Jacobian_tilde->FNorm() << std::endl;
-    //  auto residual_Jacobian = contact_constraint->residual_contribution_jacobian(time, dt,
-    //         	                                                             input_states, multipliers,
-    //         								     direction);
+    auto dimu = problem.GetDisplacementDim();
+    mfem::Vector u(dimu);
+    u = 0.0;
+    auto gap = problem.constraint(u);
+    auto gapJacobian = problem.constraintJacobian(u);
+    double gapJacobianFNorm = gapJacobian->FNorm();
+    if (gapJacobianFNorm > 1.e-12) {
+      auto adjoint = problem.GetOptimizationVariable();
+      auto adjoint_load = problem.GetOptimizationVariable();
+      adjoint_load = 1.0;
+      problem.AdjointSolve(u, adjoint_load, adjoint);
+    }
   }
   return 0;
 }
