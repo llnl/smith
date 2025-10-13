@@ -280,8 +280,7 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(
 {
   contact_states_[serac::ContactFields::DISP]->Set(1.0, u);
   dcdu_.reset();
-  dcdu_ = std::move(
-      constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP));
+  dcdu_ = constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP);
   return dcdu_.get();
 }
 
