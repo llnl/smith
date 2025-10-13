@@ -93,10 +93,10 @@ macOS
 ^^^^^
 
 .. warning::
-   These instructions are in development, but have been tested for M2 MacBooks. They also need to be tested with Enzyme.
+   These instructions are in development, but have been tested for M2 MacBooks.
 
 .. note::
-   View an example host-config for MacOS in ``host-configs/other/firion-macos_sonoma_aarch64-llvm@19.1.7.cmake``.
+   View an example host-config for MacOS in ``host-configs/other/firion-macos_sonoma_aarch64-<compiler>.cmake``.
 
 Homebrew is recommended to install base dependencies due to it's stability. Relying on pure Spack historically leads to more failed builds.
 
@@ -110,11 +110,8 @@ If you plan to install the developer tools, you should also run:
 
 .. code-block:: bash
 
-   $ brew install llvm@14 cppcheck doxygen
-   $ ln -fs /opt/homebrew/opt/llvm@14/bin/clang-format /opt/homebrew/bin/clang-format
-
-.. note::
-  We build TPLs with clang 19. However, the clang-format version we use is 14, which is why if you're using devtools ``llvm@14`` must also be installed.
+   $ brew install cppcheck doxygen
+   $ ln -fs /opt/homebrew/opt/llvm@19/bin/clang-format /opt/homebrew/bin/clang-format
 
 If you have installed Homebrew using the default installation prefix, most packages will be accessible through the prefix ``/opt/homebrew``.
 Note for Intel-based Macs, the installation prefix is ``/usr/local``. If you set a custom prefix or aren't sure what the prefix is, run ``brew --prefix``.
@@ -160,15 +157,14 @@ CMake 3.23, you will need to specify the path in the Spack environment like so:
 Optionally, you can install the developer tools via ``pip``. This step is only required if you wish to use Serac's developer tools.
 In order to use Python devtools, you will need to create a Python venv. This is much more reliable than having Spack install 20+ Python packages.
 In this example, we are using the builtin Python in ``/usr/bin``, but it is possible to use a version installed from Homebrew or elsewhere.
-
-Next, you will need to install wheel and Sphinx:
+Install wheel and Sphinx:
 
 .. code-block:: bash
 
-   python3 -m venv --system-site-packages venv
+   python3 -m venv venv
    source venv/bin/activate
-   pip install wheel
-   pip install sphinx
+   pip install wheel sphinx
+   sphinx-build --version
 
 Keep track of the Sphinx version while installing, since you'll need it for the next step.
 
@@ -195,12 +191,6 @@ Versions and prefixes may vary.
       externals:
       - spec: py-sphinx@7.4.7
         prefix: /path/to/venv
-    
-    # NOTE: This section needs to be appended to `llvm:externals:` section above
-    llvm:
-      externals:
-      - spec: llvm@14+clang
-        prefix: /opt/homebrew/opt/llvm@14
 
 Livermore Computing (LC)
 ^^^^^^^^^^^^^^^^^^^^^^^^
