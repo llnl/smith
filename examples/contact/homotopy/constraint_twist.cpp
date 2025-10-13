@@ -60,8 +60,8 @@ enum FIELD
 template <typename SolidWeakFormType>
 class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
  protected:
-  mfem::HypreParMatrix* drdu_ = nullptr;
-  mfem::HypreParMatrix* dcdu_ = nullptr;
+  std::unique_ptr<mfem::HypreParMatrix> drdu_;
+  std::unique_ptr<mfem::HypreParMatrix> dcdu_;
   int dimu_;
   int dimc_;
   mfem::Array<int> y_partition_;
@@ -261,16 +261,11 @@ template <typename SolidWeakFormType>
 mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(const mfem::Vector& u)
 {
   contact_states_[serac::ContactFields::DISP]->Set(1.0, u);
-  auto drdu_unique =
-      weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
-  MFEM_VERIFY(drdu_unique->Height() == dimu_,
-              "weak form Jacobian/TiedContactProblem displacement dofs inconsistent sizes");
-
-  if (drdu_) {
-    delete drdu_;
-  }
-  drdu_ = drdu_unique.release();
-  return drdu_;
+  drdu_.reset();
+  drdu_ = std::move(
+      weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_));
+  MFEM_VERIFY(drdu_->Height() == dimu_, "weak form Jacobian/TiedContactProblem displacement dofs inconsistent sizes");
+  return drdu_.get();
 }
 
 template <typename SolidWeakFormType>
@@ -285,13 +280,10 @@ template <typename SolidWeakFormType>
 mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(const mfem::Vector& u)
 {
   contact_states_[serac::ContactFields::DISP]->Set(1.0, u);
-  auto dcdu_unique =
-      constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP);
-  if (dcdu_) {
-    delete dcdu_;
-  }
-  dcdu_ = dcdu_unique.release();
-  return dcdu_;
+  dcdu_.reset();
+  dcdu_ = std::move(
+      constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP));
+  return dcdu_.get();
 }
 
 template <typename SolidWeakFormType>
@@ -307,6 +299,4 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
 template <typename SolidWeakFormType>
 TiedContactProblem<SolidWeakFormType>::~TiedContactProblem()
 {
-  delete dcdu_;
-  delete drdu_;
 }
