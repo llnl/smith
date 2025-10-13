@@ -12,7 +12,7 @@ class Mfem(BuiltinMfem):
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
     # Note: MFEM is not at 4.9, but 4.9 is required to enable enzyme in the spack package
-    version("4.9.0.1", commit="fb7466c81925eb9a7b5614fa54d5a8bd9395ee36")
+    version("4.9.0.2", commit="563cd25971f1f86e72168fdc022a2472d08b4661")
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 
