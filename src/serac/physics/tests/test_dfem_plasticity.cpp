@@ -149,44 +149,47 @@ TEST(Dfem, Plasticity)
     J2_INTERNAL_STATE
   };
 
+  // create material
+  using Material = SmoothJ2;
+  auto mat = Material{.E = 1000.0, .nu = 0.25, .sigma_y = 0.53333, .Hi = 40.0, .rho = 1.0};
 
+  // create fields
   using KinematicSpace = H1<disp_order, dim>;
   FiniteElementState disp = StateManager::newState(KinematicSpace{}, "displacement", mesh->tag());
   FiniteElementState velo = StateManager::newState(KinematicSpace{}, "velocity", mesh->tag());
   FiniteElementState accel = StateManager::newState(KinematicSpace{}, "acceleration", mesh->tag());
-
   FiniteElementState coords = StateManager::newState(KinematicSpace{}, "coordinates", mesh->tag());
-  coords.setFromGridFunction(static_cast<mfem::ParGridFunction&>(*mesh->mfemParMesh().GetNodes()));
 
-  mfem::out << "Checkpoint A" << std::endl;
   int ir_order = 2;
   const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
   bool use_tensor_product = false;
-  using Material = SmoothJ2;
-  auto mat = Material{.E = 1000.0, .nu = 0.25, .sigma_y = 0.53333, .Hi = 40.0, .rho = 1.0};
   mfem::future::UniformParameterSpace internal_state_space(mesh->mfemParMesh(), displacement_ir, mat.N_INTERNAL_STATES,
                                                            use_tensor_product);
   mfem::future::ParameterFunction internal_state(internal_state_space);
+
+  // initialize fields
+  disp = 0.0;
+  disp[1] = 0.1;  // something to get nonzero forces somewhere
+  velo = 0.0;
+  accel = 0.0;
+  coords.setFromGridFunction(static_cast<mfem::ParGridFunction&>(*mesh->mfemParMesh().GetNodes()));
   internal_state = 0.0;
 
-  mfem::out << "Checkpoint B" << std::endl;
-
+  // set up physics
   constexpr bool is_quasi_static = true;
   constexpr bool use_lumped_mass = false;
   using SolidT = DfemSolidWeakForm<is_quasi_static, use_lumped_mass>;
   auto physics = SolidT("plasticity", mesh, disp.space(), {&internal_state_space}, {});
-  mfem::out << "Checkpoint C" << std::endl;
   mfem::Array<int> entire_domain;
   entire_domain.Append(1);
   physics.setMaterial<Material, InternalVariableParameter<J2_INTERNAL_STATE, Material::N_INTERNAL_STATES>>(
-    entire_domain, mat, displacement_ir);
+      entire_domain, mat, displacement_ir);
 
   double t = 0.0;
   double dt = 1.0;
-  auto input_fields = getConstFieldPointers<FiniteElementState>({disp, velo, accel, coords}, {});
-  auto r = physics.residual(t, dt, &disp, input_fields, {&internal_state});
+  auto r = physics.residual(t, dt, &disp, {&disp, &velo, &accel, &coords}, {&internal_state});
   r.Print();
-  
+
   // physics.residual()
   // implement physics.vjp()
 
@@ -196,7 +199,6 @@ TEST(Dfem, Plasticity)
   //  solve for u
   //    residual and jvp
   //  use u to update internal
-
 }
 
 }  // namespace serac
