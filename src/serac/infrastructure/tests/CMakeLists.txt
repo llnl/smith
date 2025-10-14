@@ -7,6 +7,7 @@
 set(infrastructure_test_depends serac_physics gtest)
 
 set(infrastructure_test_sources
+    application_manager.cpp
     debug_print.cpp
     error_handling.cpp
     input.cpp
