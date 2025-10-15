@@ -7,6 +7,10 @@ from spack.package import *
 from spack.spec import UnsupportedCompilerError
 from spack.util.executable import which_string
 
+from spack_repo.builtin.build_systems.cached_cmake import CachedCMakePackage
+from spack_repo.builtin.build_systems.cuda import CudaPackage
+from spack_repo.builtin.build_systems.rocm import ROCmPackage
+
 import os
 import socket
 from os.path import join as pjoin
@@ -93,7 +97,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("lua")
 
-    depends_on('enzyme@0.0.180', when="+enzyme")
+    depends_on("enzyme@0.0.180", when="+enzyme")
 
     # Devtool dependencies these need to match serac_devtools/package.py
     depends_on("cppcheck", when="+devtools")
@@ -109,16 +113,19 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
         # NOTE: Sundials must be built static to prevent the following runtime error:
         # "error while loading shared libraries: libsundials_nvecserial.so.6:
         # cannot open shared object file: No such file or directory"
-        depends_on("sundials+hypre~trilinos~monitoring~examples~examples-install+static~shared")
+        depends_on("sundials+hypre~trilinos~monitoring~examples~examples-install+static~shared~petsc")
         depends_on("sundials+asan", when="+asan")
 
     depends_on("mfem+netcdf+metis+superlu-dist+lapack+mpi")
     depends_on("mfem+sundials", when="+sundials")
+    depends_on("mfem~sundials", when="~sundials")
     depends_on("mfem+amgx", when="+cuda")
     depends_on("mfem+asan", when="+asan")
     depends_on("mfem+strumpack", when="+strumpack")
     depends_on("mfem+petsc", when="+petsc")
+    depends_on("mfem~petsc", when="~petsc")
     depends_on("mfem+slepc", when="+slepc")
+    depends_on("mfem~slepc", when="~slepc")
     depends_on("mfem+openmp", when="+openmp")
     depends_on("mfem+enzyme", when="+enzyme")
 
@@ -126,20 +133,22 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("hypre@2.26.0:~superlu-dist+mpi")
 
-    depends_on("petsc~mmg", when="+petsc")
-    depends_on("petsc+strumpack", when="+petsc+strumpack")
-    depends_on("petsc~strumpack", when="+petsc~strumpack")
-    depends_on("petsc+openmp", when="+petsc+openmp")
-    depends_on("petsc~openmp", when="+petsc~openmp")
-    depends_on("slepc+arpack", when="+slepc")
+    with when("+petsc"):
+        depends_on("petsc~mmg")
+        depends_on("petsc+strumpack", when="+strumpack")
+        depends_on("petsc~strumpack", when="~strumpack")
+        depends_on("petsc+openmp", when="+openmp")
+        depends_on("petsc~openmp", when="~openmp")
+        depends_on("slepc+arpack", when="+slepc")
 
-    depends_on("tribol", when="+tribol")
-    depends_on("tribol+raja", when="+raja")
-    depends_on("tribol~raja", when="~raja")
-    depends_on("tribol+umpire", when="+umpire")
-    depends_on("tribol~umpire", when="~umpire")
-    depends_on("tribol+enzyme", when="+enzyme")
-    depends_on("tribol~enzyme", when="~enzyme")
+    with when("+tribol"):
+        depends_on("tribol")
+        depends_on("tribol+raja", when="+raja")
+        depends_on("tribol~raja", when="~raja")
+        depends_on("tribol+umpire", when="+umpire")
+        depends_on("tribol~umpire", when="~umpire")
+        depends_on("tribol+enzyme", when="+enzyme")
+        depends_on("tribol~enzyme", when="~enzyme")
 
     # Needs to be first due to a bug with the Spack concretizer
     # Note: Certain combinations of CMake and Conduit do not like +mpi
@@ -176,9 +185,10 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("superlu-dist@8.1.2")
 
     # The optional slate dependency is not handled in the MFEM spack package
-    depends_on("strumpack~slate~butterflypack~zfp", when="+strumpack")
-    depends_on("strumpack+openmp", when="+strumpack+openmp")
-    depends_on("strumpack~openmp", when="+strumpack~openmp")
+    with when("+strumpack"):
+        depends_on("strumpack~slate~butterflypack~zfp")
+        depends_on("strumpack+openmp", when="+openmp")
+        depends_on("strumpack~openmp", when="~openmp")
 
     #
     # Forward variants
@@ -242,8 +252,8 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on("{0}~shared".format(dep), when="~shared")
 
     # MFEM has a static variant
-    depends_on("{0}+static".format("mfem"), when="~shared")
-    depends_on("{0}~static".format("mfem"), when="+shared")
+    depends_on("mfem+static", when="~shared")
+    depends_on("mfem~static", when="+shared")
 
     #
     # Conflicts

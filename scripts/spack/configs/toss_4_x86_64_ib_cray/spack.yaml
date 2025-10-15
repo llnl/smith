@@ -29,12 +29,9 @@ spack:
 
   packages:
     all:
-      target: [x86_64_v3]
       providers:
         blas: [netlib-lapack]
         lapack: [netlib-lapack]
-        gl: [opengl]
-        glu: [openglu]
         zlib-api: [zlib]
         mpi: [cray-mpich]
 
@@ -54,16 +51,6 @@ spack:
       buildable: false
       externals:
       - spec: netlib-lapack@3.6.1
-        prefix: /usr
-    opengl:
-      buildable: false
-      externals:
-      - spec: opengl@1.7.0
-        prefix: /usr
-    openglu:
-      buildable: false
-      externals:
-      - spec: openglu@1.3.1
         prefix: /usr
     zlib:
       buildable: false
@@ -345,5 +332,5 @@ spack:
 
     # Platform-specific defaults and versions
     caliper:
-      require: 
-      - spec: "+shared"
+      require:
+      - spec: +shared
