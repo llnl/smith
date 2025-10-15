@@ -176,7 +176,8 @@ int main(int argc, char* argv[])
                                              contact_constraint);
   if (true) {
     double nonlinear_absolute_tol = 1.e-4;
-    int nonlinear_max_iterations = 2;
+    int nonlinear_max_iterations = 30;
+    int nonlinear_print_level = 1;
     // optimization variables
     auto X0 = problem.GetOptimizationVariable();
     auto Xf = problem.GetOptimizationVariable();
@@ -184,6 +185,7 @@ int main(int argc, char* argv[])
     HomotopySolver solver(&problem);
     solver.SetTol(nonlinear_absolute_tol);
     solver.SetMaxIter(nonlinear_max_iterations);
+    solver.SetPrintLevel(nonlinear_print_level);
     solver.Mult(X0, Xf);
     bool converged = solver.GetConverged();
     SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
