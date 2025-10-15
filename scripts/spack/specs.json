@@ -18,7 +18,7 @@
       "+devtools+profiling~enzyme %gcc_13" ],
 
     "toss_4_x86_64_ib_cray":
-    [ "~devtools+profiling~openmp+rocm~petsc~slepc+enzyme amdgpu_target=gfx942,gfx90a %rocm_6_4_2 ^hip@6.4.2 ^rocprim@6.4.2 ^hsa-rocr-dev@6.4.2 ^llvm-amdgpu@6.4.2"],
+    [ "~devtools+profiling~openmp+rocm~petsc~slepc+enzyme amdgpu_target=gfx942,gfx90a %rocm_6_4_2 ^hip@6.4.2 ^hipblas@6.4.2 ^hipsparse@6.4.2 ^hsa-rocr-dev@6.4.2 ^rocprim@6.4.2 ^llvm-amdgpu@6.4.2"],
 
     "blueos_3_ppc64le_ib_p9":
     [ "+devtools+cuda+profiling~strumpack %clang_gfortran cuda_arch=70" ]

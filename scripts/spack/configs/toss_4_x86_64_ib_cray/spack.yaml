@@ -18,13 +18,13 @@ spack:
 
   toolchains:
     rocm_6_4_2:
-    - spec: '%c=llvm-amdgpu'
+    - spec: '%c=llvm-amdgpu@6.4.2'
       when: '%c'
-    - spec: '%cxx=llvm-amdgpu'
+    - spec: '%cxx=llvm-amdgpu@6.4.2'
       when: '%cxx'
-    - spec: '%fortran=llvm-amdgpu'
+    - spec: '%fortran=llvm-amdgpu@6.4.2'
       when: '%fortran'
-    - spec: '%cray-mpich@8.1.29'
+    - spec: '%cray-mpich@8.1.29.rocm_6_4_2'
       when: '%mpi'
 
   packages:
