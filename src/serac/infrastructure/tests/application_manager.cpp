@@ -27,7 +27,7 @@ TEST(ApplicationManager, Lifetime)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);  // removes --gtest_* flags
-  g_argc = argc;                            // store leftovers for tests
+  g_argc = argc;                           // store leftovers for tests
   g_argv = argv;
   return RUN_ALL_TESTS();
 }
