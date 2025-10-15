@@ -19,6 +19,8 @@ namespace serac {
 
 TEST(ApplicationManager, Lifetime)
 {
+  // This test is useful for showing problems with the RAII nature of this class
+  // Specifically anyone calling MPI after we call MPI_finalize
   serac::ApplicationManager applicationManager(g_argc, g_argv);
 }
 
