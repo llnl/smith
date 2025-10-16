@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -25,7 +25,7 @@ SLIC has a concept of logging streams.  Logging streams controls the following:
  * Where each messages are output, such as ``std::cout``, ``std::cerr``, or to a file stream.
  * Logic for handling and filtering of messages, based on message level or content.
 
-Serac creates the following logging streams under different conditions:
+Smith creates the following logging streams under different conditions:
 
 
    * GenericOutputStream

@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -46,7 +46,7 @@ Class design
 
 `EquationSolver <../../doxygen/html/classserac_1_1EquationSolver.html>`__ provides an interface to the associated nonlinear and linear solver
 algorithms needed to solve these systems of equations. Note that while some nonlinear solvers do not depend on an embedded linear solver (e.g. L-BFGS), we require a linear 
-solver to be specified as it is used to compute reasonable initial guesses and perform adjoint solves within Serac. 
+solver to be specified as it is used to compute reasonable initial guesses and perform adjoint solves within Smith. 
 
 The key methods provided by this class are:
 

@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -7,7 +7,7 @@
 Frequently Used Modern C++ Features
 ===================================
 
-Serac currently uses C++17.  Several modern C++ features and library components are used heavily throughout Serac.
+Smith currently uses C++17.  Several modern C++ features and library components are used heavily throughout Smith.
 
 Smart pointers are used to avoid directly using ``operator new`` and ``operator delete`` except when absolutely necessary.
 ``std::unique_ptr<T>`` is used to denote **exclusive** ownership of a pointer to ``T`` - see `this article <https://www.drdobbs.com/cpp/c11-uniqueptr/240002708>`__ for more info.

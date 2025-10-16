@@ -1,10 +1,10 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
 =======================================
-Profiling Serac using Adiak and Caliper
+Profiling Smith using Adiak and Caliper
 =======================================
 
 Introduction to Adiak
@@ -12,7 +12,7 @@ Introduction to Adiak
 
 `Adiak <https://github.com/LLNL/Adiak>`_ is a library developed at LLNL for collecting
 metadata that can be used to compare multiple runs across programs.  For more information,
-read `Adiak's documentation <https://github.com/LLNL/Adiak/blob/master/docs/Adiak%20API.docx>`_. Note that Serac provides some wrapper functions to initialize and finalize Adiak
+read `Adiak's documentation <https://github.com/LLNL/Adiak/blob/master/docs/Adiak%20API.docx>`_. Note that Smith provides some wrapper functions to initialize and finalize Adiak
 metadata collection.
 
 Introduction to Caliper
@@ -20,7 +20,7 @@ Introduction to Caliper
 
 `Caliper <https://github.com/LLNL/Caliper>`_ is a framework developed at LLNL for
 measuring the performance of programs.  To find out more, read `Caliper's documentation 
-<https://software.llnl.gov/Caliper>`_. Serac also provides convenient macros
+<https://software.llnl.gov/Caliper>`_. Smith also provides convenient macros
 that make it easy to instrument and assess the performance of simulation code.
 
 Introduction to SPOT
@@ -28,12 +28,12 @@ Introduction to SPOT
 
 `SPOT <https://software.llnl.gov/news/2021/01/07/spot-new>`_ is a framework developed at
 LLNL for visualizing performance data.  SPOT is an external tool and does not need to be
-linked into Serac.
+linked into Smith.
 
 TPL Build Instructions
 ----------------------
 
-To use Adiak and Caliper with Serac, install the ``profiling`` variant of ``serac``
+To use Adiak and Caliper with Smith, install the ``profiling`` variant of ``serac``
 with Spack, i.e., ``serac+profiling``. Note that these libraries are pre-built as
 part of the installed set of libraries on LC.
 
@@ -111,10 +111,10 @@ To view this data with SPOT, open a browser, navigate to the SPOT server (e.g. `
 
 .. _benchmarking-label:
 
-Benchmarking Serac
+Benchmarking Smith
 ------------------
 
-To run all of Serac's benchmarks in one command, first make sure Serac is configured
+To run all of Smith's benchmarks in one command, first make sure Smith is configured
 with benchmarking enabled (off by default). Then, run the build target ``run_benchmarks``.
 Make sure benchmarks are enabled and the build type is release.
 
@@ -126,7 +126,7 @@ Make sure benchmarks are enabled and the build type is release.
   make run_benchmarks
   pwd
 
-This will run all of Serac's benchmarks multiple times with varying MPI task counts, and generate a Caliper file for
+This will run all of Smith's benchmarks multiple times with varying MPI task counts, and generate a Caliper file for
 each benchmark run at ``PROJECT_BINARY_DIR``. Now, you can visualize the results with SPOT, entering the path printed
 from ``pwd``.
 
@@ -139,7 +139,7 @@ files:
 - `SPOT CZ <https://lc.llnl.gov/spot2>`_
 - `SPOT RZ <https://rzlc.llnl.gov/spot2>`_
 
-Serac benchmarks are run weekly to track changes over time. The following are steps to visualize this data in a meaningful
+Smith benchmarks are run weekly to track changes over time. The following are steps to visualize this data in a meaningful
 way:
 
 - Go to https://lc.llnl.gov/spot2/?sf=/usr/workspace/smithdev/califiles/serac
@@ -172,7 +172,7 @@ It's possible to perform this comparison locally. Since baseline benchmarks are 
 compilers, a single build won't compare against all baselines. The benchmarks can be compared using ruby-gcc,
 ruby-clang, and lassen-clang builds.
 
-1. Run benchmarks (see :ref:`Benchmarking Serac <benchmarking-label>` above)
+1. Run benchmarks (see :ref:`Benchmarking Smith <benchmarking-label>` above)
 2. ``../scripts/llnl/compare_benchmarks.py --current-cali-dir /path/to/caliper/files``
 
 The script generates Hatchet graph frames by calculating the difference between each associated baseline and local

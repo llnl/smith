@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -12,7 +12,7 @@ Using a Docker Image for Development
 If you haven't used Docker before, it is recommended that you check out the 
 `Docker tutorial <https://docs.docker.com/get-started/>`_ before proceeding.
 
-1. Clone a copy of the Serac repo to your computer: ``git clone --recursive https://github.com/LLNL/serac.git``
+1. Clone a copy of the Smith repo to your computer: ``git clone --recursive https://github.com/LLNL/serac.git``
 
 #. Once you've installed ``docker``, navigate to our `Dockerhub page <https://hub.docker.com/r/seracllnl/tpls/tags?page=1&ordering=last_updated>`_
    and select the most recent image corresponding to the compiler you'd like to use.  Clang 14 and GCC 13 images are currently offered.
@@ -28,11 +28,11 @@ If you haven't used Docker before, it is recommended that you check out the
 
 5. You can now run the image.  Run ``docker run -it -u serac -v /your/serac/repo:/home/serac/serac seracllnl/tpls:clang-14_latest /bin/bash``,
    replacing the tag (the compiler name following the ``tpls:``) with the tag you used in the ``docker pull`` command and
-   replacing ``/your/serac/repo`` with the path to the Serac repo you cloned in the first step.  This will open a terminal into the image.
+   replacing ``/your/serac/repo`` with the path to the Smith repo you cloned in the first step.  This will open a terminal into the image.
 
 .. note::
    The ``-v`` option to ``docker run`` mounts a `Docker volume <https://docs.docker.com/storage/volumes/>`_ into the container.
-   This means that part of your filesystem (in this case, your copy of the Serac repo) will be accessible from the container.
+   This means that part of your filesystem (in this case, your copy of the Smith repo) will be accessible from the container.
 
 6. Follow the build instructions detailed in the :ref:`quickstart guide <build-label>`, using the host-config in ``host-configs/docker`` that
    corresponds to the compiler you've selected.  These commands should be run using the terminal you opened in the previous step. Due to issues
