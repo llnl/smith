@@ -10,19 +10,14 @@
 #include "serac/infrastructure/application_manager.hpp"
 
 namespace {
-  // Stash copies that tests can read (after gtest strips its flags)
-  int    g_argc = 0;
-  char** g_argv = nullptr;
-}
+// Stash copies that tests can read (after gtest strips its flags)
+int g_argc = 0;
+char** g_argv = nullptr;
+}  // namespace
 
 namespace serac {
 
-TEST(ApplicationManager, Lifetime)
-{
-  // This test is useful for showing problems with the RAII nature of this class
-  // Specifically anyone calling MPI after we call MPI_finalize
-  serac::ApplicationManager applicationManager(g_argc, g_argv);
-}
+TEST(ApplicationManager, Lifetime) { serac::ApplicationManager applicationManager(g_argc, g_argv); }
 
 }  // namespace serac
 
