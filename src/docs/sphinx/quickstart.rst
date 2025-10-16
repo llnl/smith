@@ -18,11 +18,11 @@ recursively. Use either of the following commands to pull Smith's repository:
 .. code-block:: bash
 
    # Using SSH keys setup with GitHub
-   $ git clone --recursive git@github.com:LLNL/serac.git
+   $ git clone --recursive git@github.com:LLNL/smith.git
 
    # Using HTTPS which works for everyone but is slightly slower and will require username/password
    # for some commands
-   $ git clone --recursive https://github.com/LLNL/serac.git
+   $ git clone --recursive https://github.com/LLNL/smith.git
 
 Overview of the Smith build process
 ------------------------------------
@@ -73,7 +73,7 @@ For example on **Ubuntu 24.04**:
    python3 scripts/uberenv/uberenv.py --project-json=scripts/spack/devtools.json --spack-env-file=scripts/spack/configs/linux_ubuntu_24/spack.yaml --prefix=../path/to/install
 
 Unlike Smith's library dependencies, our developer tools can be built with any compiler because
-they are not linked into the serac executable.  We recommend Clang 19 because we have tested that they all
+they are not linked into the smith executable.  We recommend Clang 19 because we have tested that they all
 build with that compiler.
 
 Building Smith's Dependencies via Spack/uberenv
