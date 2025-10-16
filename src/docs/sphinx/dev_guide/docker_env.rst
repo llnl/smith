@@ -12,7 +12,7 @@ Using a Docker Image for Development
 If you haven't used Docker before, it is recommended that you check out the 
 `Docker tutorial <https://docs.docker.com/get-started/>`_ before proceeding.
 
-1. Clone a copy of the Smith repo to your computer: ``git clone --recursive https://github.com/LLNL/serac.git``
+1. Clone a copy of the Smith repo to your computer: ``git clone --recursive https://github.com/LLNL/smith.git``
 
 #. Once you've installed ``docker``, navigate to our `Dockerhub page <https://hub.docker.com/r/seracllnl/tpls/tags?page=1&ordering=last_updated>`_
    and select the most recent image corresponding to the compiler you'd like to use.  Clang 14 and GCC 13 images are currently offered.
