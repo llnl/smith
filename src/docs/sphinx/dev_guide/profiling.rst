@@ -169,8 +169,7 @@ on LC, since the baseline benchmarks are generated on LC systems.
 3. Under variables, add ``SERAC_CI_WORKFLOW_TYPE`` and ``comparison`` for the key and value, respectively
 
 It's possible to perform this comparison locally. Since baseline benchmarks are generated across different machines and
-compilers, a single build won't compare against all baselines. The benchmarks can be compared using ruby-gcc,
-ruby-clang, and lassen-clang builds.
+compilers, a single build won't compare against all baselines. The benchmarks can be compared using dane-gcc and dane-clang builds.
 
 1. Run benchmarks (see :ref:`Benchmarking Smith <benchmarking-label>` above)
 2. ``../scripts/llnl/compare_benchmarks.py --current-cali-dir /path/to/caliper/files``
