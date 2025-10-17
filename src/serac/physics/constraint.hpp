@@ -41,9 +41,11 @@ class Constraint {
    * @param time time
    * @param dt time step
    * @param fields vector of serac::FiniteElementState*
+   * @param new_point boolean indicating if this is a new point or not
    * @return mfem::Vector which is the constraint evaluation
    */
-  virtual mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields) const = 0;
+  virtual mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                bool new_point = true) const = 0;
 
   /** @brief Virtual interface for computing constraint Jacobian from a vector of serac::FiniteElementState*
    *
@@ -51,11 +53,12 @@ class Constraint {
    * @param dt time step
    * @param fields vector of serac::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
+   * @param new_point boolean indicating if this is a new point or not
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt,
-                                                         const std::vector<ConstFieldPtr>& fields,
-                                                         int direction) const = 0;
+                                                         const std::vector<ConstFieldPtr>& fields, int direction,
+                                                         bool new_point = true) const = 0;
 
   /** @brief Virtual interface for computing constraint Jacobian_tilde from a vector of serac::FiniteElementState*
    *         Jacobian_tilde is an optional approximation of the true Jacobian
@@ -64,13 +67,14 @@ class Constraint {
    * @param dt time step
    * @param fields vector of serac::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
+   * @param new_point boolean indicating if this is a new point or not
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   virtual std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt,
-                                                               const std::vector<ConstFieldPtr>& fields,
-                                                               int direction) const
+                                                               const std::vector<ConstFieldPtr>& fields, int direction,
+                                                               bool new_point = true) const
   {
-    return jacobian(time, dt, fields, direction);
+    return jacobian(time, dt, fields, direction, new_point);
   };
 
   /** @brief Virtual interface for computing residual contribution Jacobian_tilde^T multiplier from a vector of
@@ -81,12 +85,14 @@ class Constraint {
    * @param fields vector of serac::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
+   * @param new_point boolean indicating if this is a new point or not
    * @return std::Vector
    */
   virtual mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                             const mfem::Vector& multipliers, int direction) const
+                                             const mfem::Vector& multipliers, int direction,
+                                             bool new_point = true) const
   {
-    std::unique_ptr<mfem::HypreParMatrix> jac = jacobian_tilde(time, dt, fields, direction);
+    std::unique_ptr<mfem::HypreParMatrix> jac = jacobian_tilde(time, dt, fields, direction, new_point);
     mfem::Vector y(jac->Width());
     y = 0.0;
     SLIC_ERROR_ROOT_IF(jac->Height() != multipliers.Size(), "Incompatible matrix and vector sizes.");
@@ -102,12 +108,13 @@ class Constraint {
    * @param fields vector of serac::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
+   * @param new_point boolean indicating if this is a new point or not
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   virtual std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(
       [[maybe_unused]] double time, [[maybe_unused]] double dt,
       [[maybe_unused]] const std::vector<ConstFieldPtr>& fields, [[maybe_unused]] const mfem::Vector& multipliers,
-      [[maybe_unused]] int direction) const
+      [[maybe_unused]] int direction, [[maybe_unused]] bool new_point = true) const
   {
     SLIC_ERROR_ROOT(axom::fmt::format("Base class must override residual_contribution_jacobian before usage"));
     std::unique_ptr<mfem::HypreParMatrix> res_contr_jacobian = nullptr;

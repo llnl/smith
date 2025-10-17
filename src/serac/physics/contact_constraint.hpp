@@ -70,7 +70,7 @@ static std::unique_ptr<mfem::HypreParMatrix> safelyObtainBlock(mfem::BlockOperat
     }
   }
   auto Ablk = dynamic_cast<mfem::HypreParMatrix*>(&block_operator->GetBlock(iblock, jblock));
-  SLIC_ERROR_IF(!Ablk, "failed cast to mfem::HypreParMatrix");
+  SLIC_ERROR_IF(!Ablk, "failed cast block to mfem::HypreParMatrix");
   std::unique_ptr<mfem::HypreParMatrix> Ablk_unique(Ablk);
   return Ablk_unique;
 };
@@ -80,7 +80,7 @@ class FiniteElementState;
 /**
  * @brief A ContactConstraint defines a gap constraint associated to contact problem
  *
- * This class stores the details of a single contact interaction between two surfaces. It also interfaces provides a
+ * This class stores the details of a single contact interaction between two surfaces. It also provides a
  * description of a contact constraint given by a single contact interaction. A ContactConstraint can have a single
  * ContactInteraction and will default to LagrangeMultiplier as it will be up to the solver that takes this
  * ContactConstraint to determine how it will enforce the constraint.
@@ -116,9 +116,11 @@ class ContactConstraint : public Constraint {
    * @param time time
    * @param dt time step
    * @param fields vector of serac::FiniteElementState*
+   * @param new_point boolean indicating if this is a new point or not
    * @return mfem::Vector which is the constraint evaluation
    */
-  mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields) const
+  mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                        [[maybe_unused]] bool new_point = true) const override
   {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
@@ -139,10 +141,11 @@ class ContactConstraint : public Constraint {
    * @param dt time step
    * @param fields vector of serac::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
+   * @param new_point boolean indicating if this is a new point or not
    * @return std::unique_ptr<mfem::HypreParMatrix> The true Jacobian
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                 int direction) const
+                                                 int direction, [[maybe_unused]] bool new_point = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
@@ -166,10 +169,12 @@ class ContactConstraint : public Constraint {
    * @param fields vector of serac::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
+   * @param new_point boolean indicating if this is a new point or not
    * @return std::Vector
    */
   mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                     const mfem::Vector& multipliers, int direction) const
+                                     const mfem::Vector& multipliers, int direction,
+                                     [[maybe_unused]] bool new_point = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
@@ -200,12 +205,12 @@ class ContactConstraint : public Constraint {
    * @param fields vector of serac::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
+   * @param new_point boolean indicating if this is a new point or not
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
-                                                                       const std::vector<ConstFieldPtr>& fields,
-                                                                       const mfem::Vector& multipliers,
-                                                                       int direction) const
+  std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(
+      double time, double dt, const std::vector<ConstFieldPtr>& fields, const mfem::Vector& multipliers, int direction,
+      [[maybe_unused]] bool new_point = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
@@ -238,10 +243,12 @@ class ContactConstraint : public Constraint {
    * @param dt time step
    * @param fields vector of serac::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
+   * @param new_point boolean indicating if this is a new point or not
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                       int direction) const
+                                                       int direction,
+                                                       [[maybe_unused]] bool new_point = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
