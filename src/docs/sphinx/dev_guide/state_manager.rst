@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -31,7 +31,7 @@ Axom's ``axom::sidre::MFEMSidreDataCollection``, whose user documentation is ava
 ``MFEMSidreDataCollection`` is an implementation of
 MFEM's `DataCollection interface <https://mfem.github.io/doxygen/html/classmfem_1_1DataCollection.html>`_,
 which allows for instances of ``mfem::GridFunction`` and ``mfem::QuadratureFunction`` to be associated
-with a single instance of ``mfem::Mesh``.  Because Serac supports multiple meshes within a given simulation,
+with a single instance of ``mfem::Mesh``.  Because Smith supports multiple meshes within a given simulation,
 ``StateManager`` acts as an abstraction over multiple ``MFEMSidreDataCollection`` instances.
 
 
@@ -44,7 +44,7 @@ contained data can be accessed from physics modules anywhere in the simulation. 
 is initialized with a non-owning reference to an ``axom::sidre::DataStore`` and an output directory
 to which data will be saved.
 
-.. note:: ``StateManager`` does not own its ``DataStore`` because Serac uses a single datastore to
+.. note:: ``StateManager`` does not own its ``DataStore`` because Smith uses a single datastore to
   store different kinds of data - that is, data unrelated to the state defined above.  In particular,
   input file data is also stored in the per-simulation ``DataStore`` instance.
 
@@ -111,7 +111,7 @@ requested name and use that instead of constructing a new field via the process 
 QuadratureData
 --------------
 
-Serac's ``QuadratureData`` template is an abstraction over ``mfem::QuadratureFunction``, the type used to store per-quadrature-point
+Smith's ``QuadratureData`` template is an abstraction over ``mfem::QuadratureFunction``, the type used to store per-quadrature-point
 data.  We implement this functionality in terms of ``mfem::QuadratureFunction`` so that we can store this data in ``MFEMSidreDataCollection``,
 which implements ``mfem::DataCollection::RegisterQField`` (which accepts a ``QuadratureFunction`` ).
 

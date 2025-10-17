@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -15,20 +15,20 @@ User Guide
   command_line_options
   input_schema
 
-Serac can be used either by providing input files to the main executable or through a C++ API. Example lua input files are located in the `data 
+Smith can be used either by providing input files to the main executable or through a C++ API. Example lua input files are located in the `data 
 directory <https://github.com/LLNL/serac/tree/develop/data/input_files>`_ and examples of how to use the C++ API are located in the `tests directory 
 <https://github.com/LLNL/serac/tree/develop/tests>`_.
 
 Physics Module C++ Interface
 ----------------------------
 
-A fundamental data structure in Serac is `BasePhysics <../../doxygen/html/classserac_1_1BasePhysics.html>`_. Classes derived from ``BasePhysics`` are expected to encapsulate a specific partial differential equation and all of the state data and parameters associated with it. Currently, Serac contains the following physics modules:
+A fundamental data structure in Smith is `BasePhysics <../../doxygen/html/classserac_1_1BasePhysics.html>`_. Classes derived from ``BasePhysics`` are expected to encapsulate a specific partial differential equation and all of the state data and parameters associated with it. Currently, Smith contains the following physics modules:
 
 * `Solid mechanics <../../doxygen/html/classserac_1_1SolidMechanics.html>`_
 * `Heat transfer <../../doxygen/html/classserac_1_1HeatTransfer.html>`_
 * `Thermal solid mechanics <../../doxygen/html/classserac_1_1Thermomechanics.html>`_
 
-If you would like to include Serac's simulation capabilities in your software project, these are the classes to include. To set up and use a physics module:
+If you would like to include Smith's simulation capabilities in your software project, these are the classes to include. To set up and use a physics module:
 
 1. Construct the appropriate physics module class using a ``mfem::ParMesh`` and a polynomial order of approximation.
 #. Set the material properties via ``mfem::Coefficients``.
