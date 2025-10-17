@@ -111,20 +111,23 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<serac::Fi
   return ParaviewWriter(std::move(paraview_dc), output_states, {});
 }
 
-/* NLMCP of the form
- * 0 <= x \perp F(x, y) >= 0
- *              Q(x, y)  = 0
- * Here, F and x are both 0-dimensional
- * and   Q(x, y) = [ r(u) + (dc/du)^T l]
- *                 [-c(u)]
- *            y  = [ u ]
- *                 [ l ]
+/* Nonlinear problem of the form
+ * F(X) = [ r(u) + (dc/du)^T l ] = [ 0 ]
+ *        [ -c(u)              ]   [ 0 ]
+ *   X  = [ u ]
+ *        [ l ]
+ *
+ * wherein r(u) is the elasticity nonlinear residual
+ *         c(u) are the tied gap contacts
+ *            u are the displacement dofs
+ *            l are the Lagrange multipliers
+ *
  * we use the approximate Jacobian
- *       dQ/dy \approx [ dr/du     (dc/du)^T]
+ *       dF/dX \approx [ dr/du     (dc/du)^T]
  *                     [-dc/du        0 ]
- * we note that the sign-convention with regard to "c" is important
- * as  the approximate Jacobian is positive semi-definite when dr/du is
- * and thus the NLMC problem is guaranteed to be semi-monotone.
+ *
+ * This problem inherits from EqualityConstrainedHomotopyProblem
+ * for compatibility with the HomotopySolver.
  */
 class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
  protected:
@@ -149,11 +152,11 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   InertialReliefProblem(std::vector<serac::FieldPtr> obj_states, std::vector<serac::FieldPtr> all_states,
                         std::shared_ptr<serac::Mesh> mesh, std::shared_ptr<SolidWeakFormT> weak_form,
                         std::vector<std::shared_ptr<serac::ScalarObjective>> constraints);
-  mfem::Vector residual(const mfem::Vector& u) const;
-  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const;
-  mfem::Vector constraint(const mfem::Vector& u) const;
-  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u);
-  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u);
+  mfem::Vector residual(const mfem::Vector& u, bool new_point) const;
+  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool new_point) const;
+  mfem::Vector constraint(const mfem::Vector& u, bool new_point) const;
+  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool new_point);
+  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool new_point);
   virtual ~InertialReliefProblem();
 };
 
@@ -333,6 +336,12 @@ int main(int argc, char* argv[])
   double multiplier_norm = mfem::GlobalLpNorm(2, multiplier_sol.Norml2(), MPI_COMM_WORLD);
   SLIC_INFO_ROOT(axom::fmt::format("||displacement|| = {}", displacement_norm));
   SLIC_INFO_ROOT(axom::fmt::format("||multiplier|| = {}", multiplier_norm));
+  auto adjoint = problem.GetOptimizationVariable();
+  auto adjoint_load = problem.GetOptimizationVariable();
+  adjoint = 0.0;
+  adjoint_load = 1.0;
+  problem.AdjointSolve(displacement_sol, adjoint_load, adjoint);
+
   if (visualize) {
     writer.write(1, 1.0, objective_states);
   }
@@ -377,7 +386,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
 }
 
 // residual callback
-mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
+mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u, bool /*new_point*/) const
 {
   obj_states_[DISP]->Set(1.0, u);
   auto res_vector = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
@@ -385,7 +394,8 @@ mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
 }
 
 // constraint Jacobian transpose vector product
-mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const
+mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l,
+                                                          bool /*new_point*/) const
 {
   obj_states_[DISP]->Set(1.0, u);
   std::vector<double> multipliers(constraints_.size());
@@ -410,7 +420,7 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
 }
 
 // Jacobian of the residual
-mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u)
+mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u, bool /*new_point*/)
 {
   obj_states_[DISP]->Set(1.0, u);
   drdu_.reset();
@@ -421,7 +431,7 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
 }
 
 // constraint callback
-mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
+mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool /*new_point*/) const
 {
   obj_states_[DISP]->Set(1.0, u);
   mfem::Vector output_vec(dimc_);
@@ -442,8 +452,11 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
 }
 
 // Jacobian of the constraint
-mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u)
+mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u, bool new_pt)
 {
+  if (!new_pt) {
+    return dcdu_.get();
+  }
   obj_states_[DISP]->Set(1.0, u);
   int myid = mfem::Mpi::WorldRank();
   int nentries = dimuglb_;

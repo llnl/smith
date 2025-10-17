@@ -38,15 +38,11 @@ enum FIELD
   DENSITY = SolidWeakFormT::NUM_STATES
 };
 
-/* Nonlinear mixed complementarity problem (NLMCP)
- * of the form
- * 0 <= x \perp F(x, y) >= 0
- *              Q(x, y)  = 0
- * Here, F and x are both 0-dimensional
- * and   Q(x, y) = [ r(u) + (dc/du)^T l]
- *                 [-c(u)]
- *            y  = [ u ]
- *                 [ l ]
+/* Nonlinear problem of the form
+ * F(X) = [ r(u) + (dc/du)^T l ] = [ 0 ]
+ *        [ -c(u)              ]   [ 0 ]
+ *   X  = [ u ]
+ *        [ l ]
  *
  * wherein r(u) is the elasticity nonlinear residual
  *         c(u) are the tied gap contacts
@@ -54,8 +50,11 @@ enum FIELD
  *            l are the Lagrange multipliers
  *
  * we use the approximate Jacobian
- *       dQ/dy \approx [ dr/du     (dc/du)^T]
+ *       dF/dX \approx [ dr/du     (dc/du)^T]
  *                     [-dc/du        0 ]
+ *
+ * This problem inherits from EqualityConstrainedHomotopyProblem
+ * for compatibility with the HomotopySolver.
  */
 template <typename SolidWeakFormType>
 class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
@@ -79,11 +78,11 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   TiedContactProblem(std::vector<serac::FieldPtr> contact_states, std::vector<serac::FieldPtr> all_states,
                      std::shared_ptr<serac::Mesh> mesh, std::shared_ptr<SolidWeakFormType> weak_form,
                      std::shared_ptr<serac::ContactConstraint> constraints);
-  mfem::Vector residual(const mfem::Vector& u) const;
-  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u);
-  mfem::Vector constraint(const mfem::Vector& u) const;
-  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u);
-  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const;
+  mfem::Vector residual(const mfem::Vector& u, bool new_point) const;
+  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool new_point);
+  mfem::Vector constraint(const mfem::Vector& u, bool new_point) const;
+  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool new_point);
+  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool new_point) const;
   virtual ~TiedContactProblem();
 };
 
@@ -193,8 +192,9 @@ int main(int argc, char* argv[])
     auto dimu = problem.GetDisplacementDim();
     mfem::Vector u(dimu);
     u = 0.0;
-    auto gap = problem.constraint(u);
-    auto gapJacobian = problem.constraintJacobian(u);
+    bool new_point = true;
+    auto gap = problem.constraint(u, new_point);
+    auto gapJacobian = problem.constraintJacobian(u, new_point);
     double gapJacobianFNorm = gapJacobian->FNorm();
     if (gapJacobianFNorm > 1.e-12) {
       auto adjoint = problem.GetOptimizationVariable();
@@ -242,7 +242,7 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
 }
 
 template <typename SolidWeakFormType>
-mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector& u) const
+mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector& u, bool /*new_point*/) const
 {
   contact_states_[serac::ContactFields::DISP]->Set(1.0, u);
   auto res_vector = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
@@ -250,8 +250,11 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector&
 }
 
 template <typename SolidWeakFormType>
-mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(const mfem::Vector& u)
+mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(const mfem::Vector& u, bool new_point)
 {
+  if (!new_point) {
+    return drdu_.get();
+  }
   contact_states_[serac::ContactFields::DISP]->Set(1.0, u);
   drdu_.reset();
   drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
@@ -260,29 +263,33 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(co
 }
 
 template <typename SolidWeakFormType>
-mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vector& u) const
+mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vector& u, bool new_point) const
 {
   contact_states_[serac::ContactFields::DISP]->Set(1.0, u);
-  auto gap = constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_));
+  auto gap = constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_), new_point);
   return gap;
 }
 
 template <typename SolidWeakFormType>
-mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(const mfem::Vector& u)
+mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(const mfem::Vector& u, bool new_point)
 {
+  if (!new_point) {
+    return dcdu_.get();
+  }
   contact_states_[serac::ContactFields::DISP]->Set(1.0, u);
   dcdu_.reset();
-  dcdu_ = constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP);
+  dcdu_ = constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP,
+                                 new_point);
   return dcdu_.get();
 }
 
 template <typename SolidWeakFormType>
-mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const mfem::Vector& u,
-                                                                          const mfem::Vector& l) const
+mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l,
+                                                                          bool new_point) const
 {
   contact_states_[serac::ContactFields::DISP]->Set(1.0, u);
   auto res_contribution = constraints_->residual_contribution(time_, dt_, serac::getConstFieldPointers(contact_states_),
-                                                              l, serac::ContactFields::DISP);
+                                                              l, serac::ContactFields::DISP, new_point);
   return res_contribution;
 }
 
