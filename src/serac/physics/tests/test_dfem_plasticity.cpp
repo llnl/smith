@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <mfem/fem/pgridfunc.hpp>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -11,9 +12,11 @@
 
 #include "serac/infrastructure/application_manager.hpp"
 #include "serac/mesh_utils/mesh_utils_base.hpp"
+#include "serac/numerics/functional/tensor.hpp"
 #include "serac/physics/dfem_solid_weak_form.hpp"
 #include "serac/physics/field_types.hpp"
 #include "serac/physics/mesh.hpp"
+#include "serac/physics/state/finite_element_dual.hpp"
 #include "serac/physics/state/finite_element_state.hpp"
 #include "serac/physics/state/state_manager.hpp"
 
@@ -151,7 +154,10 @@ TEST(Dfem, Plasticity)
 
   // create material
   using Material = SmoothJ2;
-  auto mat = Material{.E = 1000.0, .nu = 0.25, .sigma_y = 0.53333, .Hi = 40.0, .rho = 1.0};
+  const double E = 1.0e3;
+  const double nu = 0.25;
+  const double sigma_y = 0.53333*1000;
+  auto mat = Material{.E = E, .nu = nu, .sigma_y = sigma_y, .Hi = 40.0, .rho = 1.0};
 
   // create fields
   using KinematicSpace = H1<disp_order, dim>;
@@ -168,8 +174,27 @@ TEST(Dfem, Plasticity)
   mfem::future::ParameterFunction internal_state(internal_state_space);
 
   // initialize fields
-  disp = 0.0;
-  disp[1] = 0.1;  // something to get nonzero forces somewhere
+
+  /* Get boundary dofs for applying forcing, don't need this until we have a solver
+  mfem::Array<int> bdr_attr_is_ess(mesh->mfemParMesh().bdr_attributes.Max());
+  mfem::Array<int> displacement_ess_tdof;
+  mfem::Array<int> bc_tdof;
+  bdr_attr_is_ess = 0; // reset
+  bdr_attr_is_ess[0] = 1; // flag boundary 0 (1 in mesh)
+  disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, bc_tdof, 0); // get x-dir dofs
+  for (auto td : bc_tdof) { displacement_ess_tdof.Append(td); };
+
+  bdr_attr_is_ess = 0; // reset
+  bdr_attr_is_ess[1] = 1; // flag boundary 1 (2 in mesh)
+  disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, bc_tdof, 0); // get x-dir dofs
+  for (auto td : bc_tdof) { displacement_ess_tdof.Append(td); };
+  */
+
+  // set displacement to uniaxial stress solution
+  auto applied_displacement = [nu](tensor<double, dim> X) {
+    double strain = 0.01;
+    return tensor<double, dim>{strain*X[0], -nu*strain*X[1], -nu*strain*X[2]}; };
+  disp.setFromFieldFunction(applied_displacement);
   velo = 0.0;
   accel = 0.0;
   coords.setFromGridFunction(static_cast<mfem::ParGridFunction&>(*mesh->mfemParMesh().GetNodes()));
@@ -187,8 +212,24 @@ TEST(Dfem, Plasticity)
 
   double t = 0.0;
   double dt = 1.0;
-  auto r = physics.residual(t, dt, &disp, {&disp, &velo, &accel, &coords}, {&internal_state});
-  r.Print();
+  FiniteElementDual reaction = StateManager::newDual(KinematicSpace{}, "reactions", mesh->tag());
+  reaction = physics.residual(t, dt, &disp, {&disp, &velo, &accel, &coords}, {&internal_state});
+  mfem::out << "reaction = \n";
+  reaction.Print();
+
+  // make a gridFunction of the reactions for plotting
+  mfem::ParGridFunction reaction_gf(&reaction.space());
+  reaction.linearForm().ParallelAssemble(reaction_gf.GetTrueVector());
+  reaction_gf.SetFromTrueVector();
+
+  mfem::ParaViewDataCollection dc("dfem_plasticity_pv", &(mesh->mfemParMesh()));
+  dc.SetHighOrderOutput(true);
+  dc.SetLevelsOfDetail(1);
+  dc.RegisterField("displacement", &disp.gridFunction());
+  dc.RegisterField("reaction", &reaction_gf);
+  //dc.RegisterQField("internal_state", &output_internal_state);
+  dc.SetCycle(0);
+  dc.Save();
 
   // physics.residual()
   // implement physics.vjp()
