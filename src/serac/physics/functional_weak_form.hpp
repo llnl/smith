@@ -204,6 +204,48 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /**
+   * @brief Add a interior boundary integral term to the weak form
+   *
+   * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
+   * @tparam InteriorIntegrandType The type of the interior boundary integral function.
+   * @param interior_name The name of the registered domain over which the interior boundary integral is applied.
+   * @param integrand A function describing the interior boundary integral term to include in the weak form.
+   * @pre integrand must be a object that can be called with the following arguments:
+   *    1. `double t` the time
+   *    2. `tuple{tensor<T,dim>, surface isoparametric derivative} X` the spatial coordinates for the quadrature point
+   *    3. `tuple{value, surface isoparametric derivative}`, a variadic list of tuples (each with a values and
+   * derivative), one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
+   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
+   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
+   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
+   * 3>`)
+   *
+   */
+  template <int... active_parameters, typename InteriorIntegrandType>
+  void addInteriorBoundaryIntegral(DependsOn<active_parameters...>, std::string interior_name, InteriorIntegrandType integrand)
+  {
+    weak_form_->AddInteriorFaceIntegral(Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{}, integrand,
+                                        mesh_->domain(interior_name));
+
+    v_dot_weak_form_residual_->AddInteriorFaceIntegral(
+        Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
+        [integrand](double t, auto X, auto V, auto... params) {
+          auto [V1, V2] = V;
+          auto orig_surface_flux = integrand(t, X, params...);
+          auto [flux_pos, flux_neg] = orig_surface_flux;
+          return serac::inner(V1, flux_pos) + serac::inner(V2, flux_neg);
+        },
+        mesh_->domain(interior_name));
+  }
+
+  /// @overload
+  template <typename InteriorIntegrandType>
+  void addInteriorBoundaryIntegral(std::string interior_name, const InteriorIntegrandType& integrand)
+  {
+    addInteriorBoundaryIntegral(DependsOn<>{}, interior_name, integrand);
+  }
+
+  /**
    * @brief Add a boundary flux term to the weak form
    *
    * @tparam active_parameters Type for indices into fields which the body integral may depend on

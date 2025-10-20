@@ -93,17 +93,7 @@ class HeatTransferWeakForm<order, dim, Parameters<InputSpaces...>>
   void setMaterial(DependsOn<active_parameters...>, std::string body_name, const MaterialType& material)
   {
     ThermalMaterialFunctor<MaterialType> material_functor(material);
-    BaseWeakFormT::weak_form_->AddDomainIntegral(Dimension<dim>{},
-                                                 DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
-                                                 std::move(material_functor), BaseWeakFormT::mesh_->domain(body_name));
-    BaseWeakFormT::v_dot_weak_form_residual_->AddDomainIntegral(
-        Dimension<dim>{}, DependsOn<0, 1, 2, active_parameters + 1 + NUM_STATE_VARS...>{},
-        [material_functor](double t, auto X, auto V, auto... params) {
-          auto flux = material_functor(t, X, params...);
-          return serac::inner(get<VALUE>(V), get<VALUE>(flux)) +
-                 serac::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(flux));
-        },
-        BaseWeakFormT::mesh_->domain(body_name));
+    this->addBodyIntegral(DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{}, body_name, std::move(material_functor));
   }
 
   /// @overload
