@@ -11,6 +11,7 @@
 //#include <mfem/fem/pgridfunc.hpp>
 //#include <mfem/linalg/tensor.hpp>
 #include <mfem/linalg/vector.hpp>
+#include <ostream>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -264,6 +265,27 @@ TEST(Dfem, Plasticity)
   update_internal_state.Mult({}, internal_state);
   mfem::out << "internal state = \n";
   internal_state.Print();
+
+  // try to take a derivative of the internal state update
+  // gulp
+  std::vector<FiniteElementState*> fields{&disp, &velo, &coords};
+  std::vector<mfem::Vector*> fields_l;
+  fields_l.reserve(fields.size() + 1);
+  for (size_t i = 0; i < fields.size(); ++i) {
+    fields_l.push_back(&fields[i]->gridFunction());
+  }
+  fields_l.push_back(&internal_state);
+  auto derivative_taker = update_internal_state.GetDerivative(0, {}, fields_l);
+  FiniteElementState du = StateManager::newState(KinematicSpace{}, "tangent_disp", mesh->tag());
+  du.Randomize(0);
+  mfem::out << "du = " << std::endl;
+  du.Print();
+  mfem::future::ParameterFunction d_internal_state(internal_state_space);
+  derivative_taker->Mult(du, d_internal_state);
+  mfem::out << "height = " << derivative_taker->Height() << " width = " << derivative_taker->Width() << std::endl;
+  mfem::out << "dQ = \n";
+  d_internal_state.Print();
+
 
   // make a gridFunction of the reactions for plotting
   mfem::ParGridFunction reaction_gf(&reaction.space());
