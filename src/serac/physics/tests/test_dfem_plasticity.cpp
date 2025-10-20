@@ -4,7 +4,13 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <mfem/fem/pgridfunc.hpp>
+#include <mfem/fem/dfem/fieldoperator.hpp>
+#include <mfem/fem/dfem/parameterspace.hpp>
+#include <mfem/fem/dfem/tuple.hpp>
+#include <mfem/fem/dfem/util.hpp>
+//#include <mfem/fem/pgridfunc.hpp>
+//#include <mfem/linalg/tensor.hpp>
+#include <mfem/linalg/vector.hpp>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -118,6 +124,27 @@ struct SmoothJ2 {
   SERAC_HOST_DEVICE double density() const { return rho; }
 };
 
+
+template <typename Material, typename... Parameters>
+struct InternalStateQFunction {
+SERAC_HOST_DEVICE inline auto operator()(
+  // mfem::real_t dt, // TODO: figure out how to pass this in
+  const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& du_dxi,
+  const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dv_dxi,
+  const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dX_dxi,
+  Parameters::QFunctionInput... params) const
+{
+  auto dxi_dX = mfem::future::inv(dX_dxi);
+  auto du_dX = mfem::future::dot(du_dxi, dxi_dX);
+  auto dv_dX = mfem::future::dot(dv_dxi, dxi_dX);
+  double dt = 1.0;  // TODO: figure out how to pass this in to the qfunction
+  return mfem::future::make_tuple(material.internalStateNew(dt, du_dX, dv_dX, params...));
+}
+
+Material material;  ///< the material model to use for computing the stress
+};
+
+
 TEST(Dfem, Plasticity)
 {
   constexpr int dim = 3;
@@ -156,7 +183,7 @@ TEST(Dfem, Plasticity)
   using Material = SmoothJ2;
   const double E = 1.0e3;
   const double nu = 0.25;
-  const double sigma_y = 0.53333*1000;
+  const double sigma_y = 9.0;
   auto mat = Material{.E = E, .nu = nu, .sigma_y = sigma_y, .Hi = 40.0, .rho = 1.0};
 
   // create fields
@@ -215,6 +242,28 @@ TEST(Dfem, Plasticity)
   reaction = physics.residual(t, dt, &disp, {&disp, &velo, &accel, &coords}, {&internal_state});
   mfem::out << "reaction = \n";
   reaction.Print();
+
+  mfem::future::DifferentiableOperator update_internal_state(
+    {},
+    {mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::DISPLACEMENT, &disp.space()),
+     mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::VELOCITY, &velo.space()),
+     mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::COORDINATES, &coords.space()),
+     mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::NUM_STATES, &internal_state_space)
+    },
+     mesh->mfemParMesh());
+  
+  mfem::future::tuple<mfem::future::Gradient<DfemSolidWeakForm<>::STATE::DISPLACEMENT>, 
+                      mfem::future::Gradient<DfemSolidWeakForm<>::STATE::VELOCITY>, 
+                      mfem::future::Gradient<DfemSolidWeakForm<>::STATE::COORDINATES>,
+                      mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>> internal_state_qf_inputs{};
+  mfem::future::tuple<mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>> internal_state_qf_outputs{};
+  
+  InternalStateQFunction<Material, InternalVariableParameter<4, Material::N_INTERNAL_STATES>> update_internal_state_qf {.material = mat};
+  update_internal_state.AddDomainIntegrator(update_internal_state_qf, internal_state_qf_inputs, internal_state_qf_outputs, displacement_ir, entire_domain, std::index_sequence<0, 4>{});
+  update_internal_state.SetParameters({&disp, &velo, &coords, &internal_state});
+  update_internal_state.Mult({}, internal_state);
+  mfem::out << "internal state = \n";
+  internal_state.Print();
 
   // make a gridFunction of the reactions for plotting
   mfem::ParGridFunction reaction_gf(&reaction.space());
