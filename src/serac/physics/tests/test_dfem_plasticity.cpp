@@ -205,8 +205,7 @@ TEST(Dfem, Plasticity)
   constexpr bool use_lumped_mass = false;
   using SolidT = DfemSolidWeakForm<is_quasi_static, use_lumped_mass>;
   auto physics = SolidT("plasticity", mesh, disp.space(), {&internal_state_space}, {});
-  mfem::Array<int> entire_domain;
-  entire_domain.Append(1);
+  mfem::Array<int> entire_domain{1, 2};
   physics.setMaterial<Material, InternalVariableParameter<J2_INTERNAL_STATE, Material::N_INTERNAL_STATES>>(
       entire_domain, mat, displacement_ir);
 
