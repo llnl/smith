@@ -484,7 +484,7 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
   }
   dcdumat.Threshold(1.e-20);
   dcdumat.Finalize();
-  dcdu_.reset(GenerateHypreParMatrixFromSparseMatrix2(cOffsets_, uOffsets_, &dcdumat));
+  dcdu_.reset(GenerateHypreParMatrixFromSparseMatrix(cOffsets_, uOffsets_, &dcdumat));
   return dcdu_.get();
 }
 
