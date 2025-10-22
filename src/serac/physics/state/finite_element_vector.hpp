@@ -239,4 +239,16 @@ double min(const FiniteElementVector& fe_vector);
  */
 double innerProduct(const FiniteElementVector& vec1, const FiniteElementVector& vec2);
 
+/**
+ * @brief Compute the global L2 norm of a distributed finite element vector.
+ *
+ * This function collects the distributed entries of an mfem::HypreParVector
+ * into a single global mfem::Vector on the root processor, then computes its
+ * Euclidean (L2) norm.
+ *
+ * @param fe_vector The distributed finite element vector (HypreParVector).
+ * @return The global L2 norm (sqrt of sum of squares) of the vector.
+ */
+double norml2(const mfem::HypreParVector& fe_vector);
+
 }  // namespace serac

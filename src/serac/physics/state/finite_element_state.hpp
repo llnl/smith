@@ -83,7 +83,10 @@ using first_argument = std::decay_t<decltype(first_argument_helper(std::declval<
 template <typename Callable>
 auto evaluateTensorFunctionOnMfemVector(const mfem::Vector& X_mfem, Callable&& f)
 {
-  first_argument<Callable> X;
+  using Arg = first_argument<Callable>;
+  using Bare = std::decay_t<Arg>; // strip const&
+
+  Bare X{};
   SLIC_ERROR_IF(X_mfem.Size() != size(X),
                 "Size of tensor in callable does not match spatial dimension of MFEM Vector.");
   for (int i = 0; i < X_mfem.Size(); i++) X[i] = X_mfem[i];
