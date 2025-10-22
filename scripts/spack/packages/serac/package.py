@@ -104,9 +104,8 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on("py-sphinx")
 
     with when("+sundials"):
-        # Going to sundials@7: causes 80%+ test failures
-        depends_on("sundials@:6.999")
         # MFEM is deprecating the monitoring support with sundials v6.0 and later
+        depends_on("sundials@6:")
         # NOTE: Sundials must be built static to prevent the following runtime error:
         # "error while loading shared libraries: libsundials_nvecserial.so.6:
         # cannot open shared object file: No such file or directory"

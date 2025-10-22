@@ -29,7 +29,7 @@ packages:
     - spec: "@2024.07.0"
   sundials:
     require:
-    - spec: "@6.7.0"
+    - spec: "@7.4.0"
   tribol:
     require:
     - spec: "@0.1.0.21"
