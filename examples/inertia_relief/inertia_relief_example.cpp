@@ -326,6 +326,7 @@ int main(int argc, char* argv[])
   solver.SetMaxIter(nonlinear_max_iterations);
 
   // solve the inertia relief problem
+  solver.SetPrintLevel(2);
   solver.Mult(X0, Xf);
   // extract displacement and Lagrange multipliers
   mfem::Vector displacement_sol = problem.GetDisplacement(Xf);
@@ -420,12 +421,13 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
 }
 
 // Jacobian of the residual
-mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u, bool /*new_point*/)
+mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u, bool new_point)
 {
-  obj_states_[DISP]->Set(1.0, u);
-  drdu_.reset();
-  drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
-
+  if (new_point) {
+    obj_states_[DISP]->Set(1.0, u);
+    drdu_.reset();
+    drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
+  }
   SLIC_ERROR_ROOT_IF(drdu_->Height() != dimu_ || drdu_->Width() != dimu_, "residual Jacobian of an unexpected shape");
   return drdu_.get();
 }
@@ -452,39 +454,38 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool /*new
 }
 
 // Jacobian of the constraint
-mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u, bool new_pt)
+mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u, bool new_point)
 {
-  if (!new_pt) {
-    return dcdu_.get();
-  }
-  obj_states_[DISP]->Set(1.0, u);
-  int myid = mfem::Mpi::WorldRank();
-  int nentries = dimuglb_;
-  if (myid > 0) {
-    nentries = 0;
-  }
-  mfem::SparseMatrix dcdumat(dimc_, dimuglb_, nentries);
-  mfem::Array<int> cols;
-  cols.SetSize(dimuglb_);
-  for (int i = 0; i < dimuglb_; i++) {
-    cols[i] = i;
-  }
-  std::unique_ptr<mfem::Vector> globalGradVector;
-  for (size_t i = 0; i < constraints_.size(); i++) {
-    const int idx = static_cast<int>(i);
-    const size_t i2 = static_cast<size_t>(idx);
-    SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
-    mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
-    gradVector.Set(
-        1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP));
-    globalGradVector.reset(gradVector.GlobalVector());
-    if (myid == 0) {
-      dcdumat.SetRow(idx, cols, *globalGradVector.get());
+  if (new_point) {
+    obj_states_[DISP]->Set(1.0, u);
+    int myid = mfem::Mpi::WorldRank();
+    int nentries = dimuglb_;
+    if (myid > 0) {
+      nentries = 0;
     }
+    mfem::SparseMatrix dcdumat(dimc_, dimuglb_, nentries);
+    mfem::Array<int> cols;
+    cols.SetSize(dimuglb_);
+    for (int i = 0; i < dimuglb_; i++) {
+      cols[i] = i;
+    }
+    std::unique_ptr<mfem::Vector> globalGradVector;
+    for (size_t i = 0; i < constraints_.size(); i++) {
+      const int idx = static_cast<int>(i);
+      const size_t i2 = static_cast<size_t>(idx);
+      SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
+      mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
+      gradVector.Set(1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(),
+                                                    serac::getConstFieldPointers(obj_states_), DISP));
+      globalGradVector.reset(gradVector.GlobalVector());
+      if (myid == 0) {
+        dcdumat.SetRow(idx, cols, *globalGradVector.get());
+      }
+    }
+    dcdumat.Threshold(1.e-20);
+    dcdumat.Finalize();
+    dcdu_.reset(GenerateHypreParMatrixFromSparseMatrix(cOffsets_, uOffsets_, &dcdumat));
   }
-  dcdumat.Threshold(1.e-20);
-  dcdumat.Finalize();
-  dcdu_.reset(GenerateHypreParMatrixFromSparseMatrix(cOffsets_, uOffsets_, &dcdumat));
   return dcdu_.get();
 }
 
