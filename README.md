@@ -1,13 +1,13 @@
-# <img src="/share/serac/logo/serac-logo-blue.png?raw=true" width="150" alt="Serac"/>
+# <img src="/share/smith/logo/smith-logo-orange.png?raw=true" width="150" alt="Smith"/>
 
-[![Build Status](https://github.com/LLNL/serac/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/LLNL/serac/actions/workflows/unit-tests.yml)
+[![Build Status](https://github.com/LLNL/smith/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/LLNL/smith/actions/workflows/unit-tests.yml)
 [![Documentation Status](https://readthedocs.org/projects/serac/badge/?version=latest)](https://serac.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/LLNL/serac/branch/develop/graph/badge.svg?token=DO4KFMPNM0)](https://codecov.io/gh/LLNL/serac)
 [![License](https://img.shields.io/badge/license-BSD%203--Clause-blue.svg)](./LICENSE)
 
-Serac is a 3D implicit nonlinear thermal-structural simulation code. Its primary purpose is to investigate multiphysics 
+Smith is a 3D implicit nonlinear thermal-structural simulation code. Its primary purpose is to investigate 
 abstraction strategies and implicit finite element-based algorithm development for emerging computing architectures. 
-It also serves as a proxy-app for LLNL's Smith code and heavily leverages the [MFEM finite element library](https://mfem.org/).
+It also heavily leverages the [MFEM finite element library](https://mfem.org/).
 
 > This project is under heavy development and is currently a pre-alpha release. Functionality and interfaces may change rapidly
 > as development progresses.
@@ -32,8 +32,8 @@ License
 Copyright (c) Lawrence Livermore National Security, LLC. 
 Produced at the Lawrence Livermore National Laboratory.
 
-Copyrights and patents in the Serac project are retained by contributors.
-No copyright assignment is required to contribute to Serac.
+Copyrights and patents in the Smith project are retained by contributors.
+No copyright assignment is required to contribute to Smith.
 
 See [LICENSE](./LICENSE) for details.
 
@@ -55,7 +55,7 @@ text in the license header:
 External Packages
 -----------------
 
-Serac bundles some of its external dependencies in its repository.  These
+Smith bundles some of its external dependencies in its repository.  These
 packages are covered by various permissive licenses.  A summary listing
 follows.  See the license included with each package for full details.
 
