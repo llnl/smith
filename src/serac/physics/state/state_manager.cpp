@@ -212,7 +212,7 @@ void StateManager::save(const double t, const int cycle, const std::string& mesh
   auto& datacoll = datacolls_.at(mesh_tag);
   std::string file_path = axom::utilities::filesystem::joinPath(datacoll.GetPrefixPath(), datacoll.GetCollectionName());
   SLIC_INFO_ROOT(
-      axom::fmt::format("Saving data collection at time: '{}' and cycle: '{}' to path: '{}'", t, cycle, file_path));
+      axom::fmt::format("Saving data collection at time: '{:.9e}' and cycle: '{:06d}' to path: '{}'", t, cycle, file_path));
 
   datacoll.SetTime(t);
   datacoll.SetCycle(cycle);

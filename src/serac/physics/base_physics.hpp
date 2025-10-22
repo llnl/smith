@@ -500,6 +500,15 @@ class BasePhysics {
    */
   std::string name() const { return name_; }
 
+  /**
+   * @brief Accessor for getting all of the primal solutions from the physics modules at a given
+   * checkpointed cycle index
+   *
+   * @param cycle The cycle to retrieve state from
+   * @return A map containing the primal field names and their associated FiniteElementStates at the requested cycle
+   */
+  std::unordered_map<std::string, FiniteElementState> getCheckpointedStates(int cycle);
+
  protected:
   /**
    * @brief Internally used accessor for getting the shape displacement sensitivity from the physics modules
@@ -528,15 +537,6 @@ class BasePhysics {
    * @param[in] time The simulation time to initialize the physics module to
    */
   void initializeBasePhysicsStates(int cycle, double time);
-
-  /**
-   * @brief Accessor for getting all of the primal solutions from the physics modules at a given
-   * checkpointed cycle index
-   *
-   * @param cycle The cycle to retrieve state from
-   * @return A map containing the primal field names and their associated FiniteElementStates at the requested cycle
-   */
-  std::unordered_map<std::string, FiniteElementState> getCheckpointedStates(int cycle);
 
   /// @brief Name of the physics module
   std::string name_ = {};
