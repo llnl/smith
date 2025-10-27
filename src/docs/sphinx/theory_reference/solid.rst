@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -102,7 +102,7 @@ virtual power*.
 Material Models
 ===============
 
-Serac has a small but growing library of material models, which currently includes
+Smith has a small but growing library of material models, which currently includes
 
 - Linear elasticity
 - Neo-Hookean and Green-St. Venant hyperelastic models
@@ -392,7 +392,7 @@ Mortar Contact
 
 While notionally straightforward, the complexity (both in mathematical derivation and computation) of accurately
 computing the variation of the contact energy leads to many different simplifications and approximations in actual
-contact algorithms. Serac uses the mortar contact method in the `Tribol <https://github.com/LLNL/Tribol>`_ interface
+contact algorithms. Smith uses the mortar contact method in the `Tribol <https://github.com/LLNL/Tribol>`_ interface
 physics library for contact enforcement. In Tribol, mortar contact enforcement is implemented following `Puso and
 Laursen (2004) <https://doi.org/10.1016/j.cma.2003.10.010>`_. Therein, contact constraints are only satisfied in the
 normal direction, enabling constraints that enforce either frictionless contact (inequality constraints) or tied contact
@@ -466,7 +466,7 @@ are
 where :math:`\mathbf{f}_I^a` is the force vector on node :math:`a` of surface :math:`\Gamma_C^I` for :math:`I=1,2` and
 :math:`N_I^a(\bar{\mathbf{x}})` is the basis function associated with node :math:`a` of surface :math:`\Gamma_C^I` for
 :math:`I=1,2`.  In the above equation, :math:`\int_{\Gamma_C} N_1^b(\bar{\mathbf{x}}) N_I^a(\bar{\mathbf{x}}) \, dA` is
-usually referred to as the *mortar matrix*. In Serac, the pressure degrees-of-freedom can be determined by one of two
+usually referred to as the *mortar matrix*. In Smith, the pressure degrees-of-freedom can be determined by one of two
 ways:
 
 #. by introducing Lagrange multipliers as unknowns and explicitly solving for them or

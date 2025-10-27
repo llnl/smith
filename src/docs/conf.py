@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Serac documentation build configuration file, created by
+# Smith documentation build configuration file, created by
 # sphinx-quickstart on Thu Jan 30 10:05:07 2020.
 #
 # This file is execfile()d with the current directory set to its containing dir.
@@ -73,7 +73,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'Serac'
+project = u'Smith'
 copyright = u'Lawrence Livermore National Security, LLNS'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -155,7 +155,7 @@ else:
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = "../../share/serac/logo/serac-logo-dark.png"
+html_logo = "../../share/smith/logo/smith-logo-dark.png"
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
@@ -213,7 +213,7 @@ smartquotes = False
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'Seracdoc'
+htmlhelp_basename = 'Smithdoc'
 
 
 # -- Options for LaTeX output --------------------------------------------------
@@ -232,7 +232,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'Serac.tex', u'Serac Documentation',
+  ('index', 'Smith.tex', u'Smith Documentation',
    u'Lawrence Livermore National Security, LLNS', 'manual'),
 ]
 
@@ -262,7 +262,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'serac', u'Serac Documentation',
+    ('index', 'smith', u'Smith Documentation',
      [u'Lawrence Livermore National Security, LLNS'], 1)
 ]
 
@@ -276,8 +276,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'Serac', u'Serac Documentation',
-   u'Lawrence Livermore National Security, LLNS', 'Serac', 'One line description of project.',
+  ('index', 'Smith', u'Smith Documentation',
+   u'Lawrence Livermore National Security, LLNS', 'Smith', 'One line description of project.',
    'Miscellaneous'),
 ]
 
