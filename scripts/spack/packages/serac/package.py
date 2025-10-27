@@ -100,15 +100,16 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("enzyme@0.0.180", when="+enzyme")
 
     # Devtool dependencies these need to match serac_devtools/package.py
-    depends_on("cppcheck", when="+devtools")
-    depends_on("doxygen", when="+devtools")
-    depends_on("llvm@19+clang", when="+devtools")
-    depends_on("python", when="+devtools")
-    depends_on("py-sphinx", when="+devtools")
+    with when("+devtools"):
+        depends_on("cppcheck")
+        depends_on("doxygen")
+        depends_on("llvm@19+clang")
+        depends_on("python")
+        depends_on("py-sphinx")
 
     with when("+sundials"):
         # Going to sundials@7: causes 80%+ test failures
-        depends_on("sundials@:6.999", when="+sundials")
+        depends_on("sundials@:6.999")
         # MFEM is deprecating the monitoring support with sundials v6.0 and later
         # NOTE: Sundials must be built static to prevent the following runtime error:
         # "error while loading shared libraries: libsundials_nvecserial.so.6:
@@ -158,15 +159,17 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("camp@2024.02.0:")
 
-    depends_on("raja@2024.02.0:~examples~exercises", when="+raja")
-    depends_on("raja~openmp", when="+raja~openmp")
-    depends_on("raja+openmp", when="+raja+openmp")
+    with when("+raja"): 
+        depends_on("raja@2024.02.0:~examples~exercises")
+        depends_on("raja+openmp", when="+openmp")
+        depends_on("raja~openmp", when="~openmp")
 
-    depends_on("umpire@2024.02.0:~examples~device_alloc", when="+umpire")
-    depends_on("umpire~openmp", when="+umpire~openmp")
-    depends_on("umpire+openmp", when="+umpire+openmp")
+    with when("+umpire"):
+        depends_on("umpire@2024.02.0:~examples~device_alloc")
+        depends_on("umpire+openmp", when="+openmp")
+        depends_on("umpire~openmp", when="~openmp")
 
-    depends_on("axom@0.9:~fortran+mfem+lua")
+    depends_on("axom@0.10:~fortran~tools~examples+mfem+lua")
     depends_on("axom+raja", when="+raja")
     depends_on("axom~raja", when="~raja")
     depends_on("axom+umpire", when="+umpire")
@@ -179,8 +182,9 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("conduit~python~test~silo")
 
-    depends_on("adiak+mpi", when="+profiling")
-    depends_on("caliper+mpi+adiak~papi", when="+profiling")
+    with when("+profiling"):
+        depends_on("adiak+mpi")
+        depends_on("caliper+mpi+adiak~papi")
 
     depends_on("superlu-dist@8.1.2")
 
@@ -270,9 +274,6 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
     conflicts("%intel", msg="Intel has a bug with C++17 support as of May 2020")
 
     conflicts("~petsc", when="+slepc", msg="PETSc must be built when building with SLEPc!")
-
-    conflicts("sundials@:6.0.0", when="+sundials",
-              msg="Sundials needs to be greater than 6.0.0")
 
     conflicts("sundials+shared", when="+sundials",
               msg="Sundials causes runtime errors if shared!")

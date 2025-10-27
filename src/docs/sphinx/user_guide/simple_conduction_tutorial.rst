@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -7,7 +7,7 @@
 Simple Heat Transfer Tutorial
 #############################
 
-This tutorial provides an introduction to running simulations with Serac and demonstrates
+This tutorial provides an introduction to running simulations with Smith and demonstrates
 the setup of a simple steady-state heat transfer problem.
 
 The full source code for this tutorial is available in ``examples/conduction/simple_conduction.cpp``, =
@@ -18,7 +18,7 @@ The heat transfer modeled in this section is based on the formulation discussed 
 Setting Up Includes and Initializing
 ------------------------------------
 
-Serac provides a single unified header for all classes and functions needed by users. Shown here:
+Smith provides a single unified header for all classes and functions needed by users. Shown here:
 
 .. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _serac_include_header_start
@@ -31,9 +31,9 @@ Serac provides a single unified header for all classes and functions needed by u
     we encourage you to use the single header which will bring in all you need.
 
 
-We're now ready to start our ``main()`` function. Serac's ``ApplicationManager`` class automatically,
+We're now ready to start our ``main()`` function. Smith's ``ApplicationManager`` class automatically,
 through RAII, initializes and finalizes much of the boilerplate setup required for each simulation,
-e.g., MPI, logging. All you need to do is instantiate the class before other Serac functionality:
+e.g., MPI, logging. All you need to do is instantiate the class before other Smith functionality:
 
 .. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
    :start-after: _main_init_start
@@ -41,9 +41,9 @@ e.g., MPI, logging. All you need to do is instantiate the class before other Ser
    :language: C++
 
 .. warning::
-  Since Serac's initialization helper initializes MPI, you should not call ``MPI_Init`` directly.
+  Since Smith's initialization helper initializes MPI, you should not call ``MPI_Init`` directly.
 
-To simplify saving to an output file and restarting a simulation, Serac stores critical state information, like
+To simplify saving to an output file and restarting a simulation, Smith stores critical state information, like
 the mesh, fields, and individual finite element states, in a single ``StateManager`` object. 
 
 .. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
@@ -55,9 +55,9 @@ the mesh, fields, and individual finite element states, in a single ``StateManag
 Constructing the Mesh
 ---------------------
 
-Serac's mesh utilities include support for reading meshes from a file and for generating meshes of common solids,
+Smith's mesh utilities include support for reading meshes from a file and for generating meshes of common solids,
 like cuboids, rectangles, disks, and cylinders. In this introductory example, we will use a simple square 
-mesh with 10 quadrilateral elements in each space dimension for 100 elements total. Serac's mesh class,
+mesh with 10 quadrilateral elements in each space dimension for 100 elements total. Smith's mesh class,
 ``serac::Mesh``, takes in one of these meshes and automatically adds it to the ``StateManager``. Once created, the
 primary mesh will be registered with the ``StateManager``: 
 
@@ -71,9 +71,9 @@ After constructing the serial mesh, we call ``refineAndDistribute`` to distribut
 Constructing the Physics Module
 -------------------------------
 
-The most important parts of Serac are its physics modules, each of which corresponds to a particular discretization
+The most important parts of Smith are its physics modules, each of which corresponds to a particular discretization
 of a partial differential equation (e.g., continuous Galerkin finite element method for heat transfer).
-In this example, we are building a heat transfer simulation, so we include Serac's ``HeatTransfer`` module and
+In this example, we are building a heat transfer simulation, so we include Smith's ``HeatTransfer`` module and
 thermal material models:
 
 .. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
@@ -147,7 +147,7 @@ The end result is not particularly impressive, but should be fairly intuitive.
 Cleaning Up
 -----------
 
-Serac's ``ApplicationManager`` class will automatically finalize it's previously mentioned initialized classes
+Smith's ``ApplicationManager`` class will automatically finalize it's previously mentioned initialized classes
 through RAII when it falls out of scope. To end your simulation simply ``return`` from the ``main`` like any
 other C++ program:
 
