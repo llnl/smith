@@ -21,7 +21,7 @@ Livermore National Security, LLC, and shall not be used for advertising
 or product endorsement purposes.
 
 Inclusion of external source:
-- Serac project contains a hard copy of Uberenv project with added modifications. Uberenv is distributed under BSD license, details can be found in script/uberenv, and on https://github.com/LLNL/uberenv.
-- Serac also contains its own Spack package in the repository. Spack packages belong to Spack project, and thus fall under Spack MIT/Apache2 licensing model. Details can be found on https://github.com/spack/spack.
-- Serac also includes example meshes (data/) copied from the MFEM projects.
+- Smith project contains a hard copy of Uberenv project with added modifications. Uberenv is distributed under BSD license, details can be found in script/uberenv, and on https://github.com/LLNL/uberenv.
+- Smith also contains its own Spack package in the repository. Spack packages belong to Spack project, and thus fall under Spack MIT/Apache2 licensing model. Details can be found on https://github.com/spack/spack.
+- Smith also includes example meshes (data/) copied from the MFEM projects.
 
