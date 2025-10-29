@@ -222,7 +222,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    */
   template <int... active_parameters, typename InteriorIntegrandType>
-  void addInteriorBoundaryIntegral(DependsOn<active_parameters...>, std::string interior_name, InteriorIntegrandType integrand)
+  void addInteriorBoundaryIntegral(DependsOn<active_parameters...>, std::string interior_name,
+                                   InteriorIntegrandType integrand)
   {
     weak_form_->AddInteriorFaceIntegral(Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{}, integrand,
                                         mesh_->domain(interior_name));

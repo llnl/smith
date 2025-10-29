@@ -93,7 +93,8 @@ class HeatTransferWeakForm<order, dim, Parameters<InputSpaces...>>
   void setMaterial(DependsOn<active_parameters...>, std::string body_name, const MaterialType& material)
   {
     ThermalMaterialFunctor<MaterialType> material_functor(material);
-    this->addBodyIntegral(DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{}, body_name, std::move(material_functor));
+    this->addBodyIntegral(DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{}, body_name,
+                          std::move(material_functor));
   }
 
   /// @overload
