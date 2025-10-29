@@ -122,31 +122,26 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<serac::Fi
  *            u are the displacement dofs
  *            l are the Lagrange multipliers
  *
- * we use the approximate Jacobian
- *       dF/dX \approx [ dr/du     (dc/du)^T]
- *                     [-dc/du        0 ]
- *
  * This problem inherits from EqualityConstrainedHomotopyProblem
  * for compatibility with the HomotopySolver.
  */
 class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
  protected:
-  std::unique_ptr<mfem::HypreParMatrix> drdu_;
-  std::unique_ptr<mfem::HypreParMatrix> dcdu_;
-  int dimu_;
-  int dimc_;
-  int dimuglb_;
-  int dimcglb_;
-  mfem::Array<int> y_partition_;
-  std::vector<serac::FieldPtr> obj_states_;
-  std::vector<serac::FieldPtr> all_states_;
-  std::shared_ptr<SolidWeakFormT> weak_form_;
-  std::unique_ptr<serac::FiniteElementState> shape_disp_;
+  std::unique_ptr<mfem::HypreParMatrix> drdu_;             // Jacobian of residual
+  std::unique_ptr<mfem::HypreParMatrix> dcdu_;             // Jacobian of constraint
+  int dimu_;                                               // dimension of displacement
+  int dimc_;                                               // dimension of constraints
+  int dimuglb_;                                            // global dimension of displacement
+  int dimcglb_;                                            // global dimension of constraints
+  std::vector<serac::FieldPtr> obj_states_;                // states for objective evaluation
+  std::vector<serac::FieldPtr> all_states_;                // states for weak_form evaluation
+  std::shared_ptr<SolidWeakFormT> weak_form_;              // weak_form
+  std::unique_ptr<serac::FiniteElementState> shape_disp_;  // shape displacement
   std::shared_ptr<serac::Mesh> mesh_;
-  std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_;
-  double time_ = 0.0;
-  double dt_ = 0.0;
-  std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};
+  std::vector<std::shared_ptr<serac::ScalarObjective>> constraints_;  // vector of constraints
+  double time_ = 0.0;  // parameter for constraint and weak_form member function calls
+  double dt_ = 0.0;    // parameter for constraint and weak_form member function calls
+  std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};  // weights for weak_form_->jacobian calls
 
  public:
   InertialReliefProblem(std::vector<serac::FieldPtr> obj_states, std::vector<serac::FieldPtr> all_states,
@@ -271,7 +266,7 @@ int main(int argc, char* argv[])
                                  [](double /*t*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
   double mass = mass_objective.evaluate(time, dt, shape_disp.get(), objective_states);
 
-  serac::tensor<double, dim> initial_cg; // center of gravity
+  serac::tensor<double, dim> initial_cg;  // center of gravity
 
   for (int i = 0; i < dim; ++i) {
     auto cg_objective = std::make_shared<ObjectiveT>("translation " + std::to_string(i), mesh, param_space_ptrs);
@@ -312,8 +307,8 @@ int main(int argc, char* argv[])
   }
   auto non_const_states = getFieldPointers(states, params);
   // create an inertial relief problem
-  InertialReliefProblem problem({non_const_states[FIELD::DISP], non_const_states[FIELD::DENSITY]}, non_const_states, mesh,
-                                solid_mechanics_weak_form, constraints);
+  InertialReliefProblem problem({non_const_states[FIELD::DISP], non_const_states[FIELD::DENSITY]}, non_const_states,
+                                mesh, solid_mechanics_weak_form, constraints);
 
   // optimization variables
   auto X0 = problem.GetOptimizationVariable();
@@ -412,8 +407,8 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
   output_vec = 0.0;
 
   for (size_t i = 0; i < constraints_.size(); i++) {
-    mfem::Vector grad_temp =
-        constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), FIELD::DISP);
+    mfem::Vector grad_temp = constraints_[i]->gradient(time_, dt_, shape_disp_.get(),
+                                                       serac::getConstFieldPointers(obj_states_), FIELD::DISP);
     constraint_gradient.Set(1.0, grad_temp);
     output_vec.Add(multipliers[i], constraint_gradient);
   }
@@ -458,9 +453,8 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
 {
   if (new_point) {
     obj_states_[FIELD::DISP]->Set(1.0, u);
-    int myid = mfem::Mpi::WorldRank();
     int nentries = dimuglb_;
-    if (myid > 0) {
+    if (dimc_ == 0) {
       nentries = 0;
     }
     mfem::SparseMatrix dcdumat(dimc_, dimuglb_, nentries);
@@ -478,7 +472,7 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
       gradVector.Set(1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(),
                                                     serac::getConstFieldPointers(obj_states_), FIELD::DISP));
       globalGradVector.reset(gradVector.GlobalVector());
-      if (myid == 0) {
+      if (dimc_ > 0) {
         dcdumat.SetRow(idx, cols, *globalGradVector.get());
       }
     }
