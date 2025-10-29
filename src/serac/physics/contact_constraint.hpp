@@ -52,7 +52,7 @@ enum ContactFields
  * @return std::unique_ptr<mfem::HypreParMatrix> The requested block of block_operator
  */
 static std::unique_ptr<mfem::HypreParMatrix> safelyObtainBlock(mfem::BlockOperator* block_operator, int iblock,
-                                                               int jblock)
+                                                               int jblock, bool own_blocks = false)
 {
   SLIC_ERROR_IF(iblock < 0 || jblock < 0, "block indicies must be non-negative");
   SLIC_ERROR_IF(iblock > block_operator->NumRowBlocks() || jblock > block_operator->NumColBlocks(),
@@ -64,15 +64,21 @@ static std::unique_ptr<mfem::HypreParMatrix> safelyObtainBlock(mfem::BlockOperat
       if (i == iblock && j == jblock) {
         continue;
       }
-      if (!block_operator->IsZeroBlock(i, j)) {
+      if (!block_operator->IsZeroBlock(i, j) && !own_blocks) {
         delete &block_operator->GetBlock(i, j);
       }
     }
   }
   auto Ablk = dynamic_cast<mfem::HypreParMatrix*>(&block_operator->GetBlock(iblock, jblock));
   SLIC_ERROR_IF(!Ablk, "failed cast block to mfem::HypreParMatrix");
-  std::unique_ptr<mfem::HypreParMatrix> Ablk_unique(Ablk);
-  return Ablk_unique;
+  if (own_blocks) {
+    // deep copy --> unique_ptr
+    auto Ablk_unique = std::make_unique<mfem::HypreParMatrix>(*Ablk);
+    return Ablk_unique;
+  } else {
+    std::unique_ptr<mfem::HypreParMatrix> Ablk_unique(Ablk);
+    return Ablk_unique;
+  }
 };
 
 class FiniteElementState;
@@ -120,14 +126,16 @@ class ContactConstraint : public Constraint {
    * @return mfem::Vector which is the constraint evaluation
    */
   mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                        [[maybe_unused]] bool new_point = true) const override
+                        bool new_point = true) const override
   {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
 
-    // note: Tribol does not use cycle.
-    int cycle = 0;
-    contact_.update(cycle, time, dt);
+    if (new_point) {
+      // note: Tribol does not use cycle.
+      int cycle = 0;
+      contact_.update(cycle, time, dt);
+    }
     auto gaps_hpv = contact_.mergedGaps(false);
     // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
     // https://github.com/mfem/mfem/issues/5029
@@ -145,19 +153,20 @@ class ContactConstraint : public Constraint {
    * @return std::unique_ptr<mfem::HypreParMatrix> The true Jacobian
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                 int direction, [[maybe_unused]] bool new_point = true) const override
+                                                 int direction, bool new_point = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
-    int cycle = 0;
-    contact_.update(cycle, time, dt);
-    auto J_contact = contact_.mergedJacobian();
-
+    if (new_point) {
+      int cycle = 0;
+      contact_.update(cycle, time, dt);
+      J_contact_ = contact_.mergedJacobian();
+    }
     int iblock = 1;
     int jblock = 0;
-    auto dgdu = safelyObtainBlock(J_contact.get(), iblock, jblock);
+    auto dgdu = safelyObtainBlock(J_contact_.get(), iblock, jblock, own_blocks_);
     return dgdu;
   };
 
@@ -174,25 +183,27 @@ class ContactConstraint : public Constraint {
    */
   mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                      const mfem::Vector& multipliers, int direction,
-                                     [[maybe_unused]] bool new_point = true) const override
+                                     bool new_point = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
 
-    int cycle = 0;
-    // we need to call update first to update gaps
-    for (auto& interaction : contact_.getContactInteractions()) {
-      interaction.evalJacobian(false);
+    if (new_point) {
+      int cycle = 0;
+      // we need to call update first to update gaps
+      for (auto& interaction : contact_.getContactInteractions()) {
+        interaction.evalJacobian(false);
+      }
+      contact_.update(cycle, time, dt);
+      // with updated gaps, we can update pressure for contact interactions with penalty enforcement
+      contact_.setPressures(multipliers);
+      // call update again with the right pressures
+      for (auto& interaction : contact_.getContactInteractions()) {
+        interaction.evalJacobian(true);
+      }
+      contact_.update(cycle, time, dt);
     }
-    contact_.update(cycle, time, dt);
-    // with updated gaps, we can update pressure for contact interactions with penalty enforcement
-    contact_.setPressures(multipliers);
-    // call update again with the right pressures
-    for (auto& interaction : contact_.getContactInteractions()) {
-      interaction.evalJacobian(true);
-    }
-    contact_.update(cycle, time, dt);
 
     return contact_.forces();
   };
@@ -208,32 +219,35 @@ class ContactConstraint : public Constraint {
    * @param new_point boolean indicating if this is a new point or not
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(
-      double time, double dt, const std::vector<ConstFieldPtr>& fields, const mfem::Vector& multipliers, int direction,
-      [[maybe_unused]] bool new_point = true) const override
+  std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
+                                                                       const std::vector<ConstFieldPtr>& fields,
+                                                                       const mfem::Vector& multipliers, int direction,
+                                                                       bool new_point = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
-    int cycle = 0;
-    // we need to call update first to update gaps
-    for (auto& interaction : contact_.getContactInteractions()) {
-      interaction.evalJacobian(false);
-    }
-    contact_.update(cycle, time, dt);
-    // with updated gaps, we can update pressure for contact interactions with penalty enforcement
-    contact_.setPressures(multipliers);
-    // call update again with the right pressures
-    for (auto& interaction : contact_.getContactInteractions()) {
-      interaction.evalJacobian(true);
-    }
-    contact_.update(cycle, time, dt);
+    if (new_point) {
+      int cycle = 0;
+      // we need to call update first to update gaps
+      for (auto& interaction : contact_.getContactInteractions()) {
+        interaction.evalJacobian(false);
+      }
+      contact_.update(cycle, time, dt);
+      // with updated gaps, we can update pressure for contact interactions with penalty enforcement
+      contact_.setPressures(multipliers);
+      // call update again with the right pressures
+      for (auto& interaction : contact_.getContactInteractions()) {
+        interaction.evalJacobian(true);
+      }
+      contact_.update(cycle, time, dt);
 
-    auto J_contact = contact_.mergedJacobian();
+      J_contact_ = contact_.mergedJacobian();
+    }
     int iblock = 0;
     int jblock = 0;
-    auto Hessian = safelyObtainBlock(J_contact.get(), iblock, jblock);
+    auto Hessian = safelyObtainBlock(J_contact_.get(), iblock, jblock, own_blocks_);
     return Hessian;
   };
 
@@ -247,19 +261,21 @@ class ContactConstraint : public Constraint {
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                       int direction,
-                                                       [[maybe_unused]] bool new_point = true) const override
+                                                       int direction, bool new_point = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
-    int cycle = 0;
-    contact_.update(cycle, time, dt);
-    auto J_contact = contact_.mergedJacobian();
+    if (new_point) {
+      int cycle = 0;
+      contact_.update(cycle, time, dt);
+      J_contact_.reset();
+      J_contact_ = contact_.mergedJacobian();
+    }
     int iblock = 0;
     int jblock = 1;
-    auto dgduT = safelyObtainBlock(J_contact.get(), iblock, jblock);
+    auto dgduT = safelyObtainBlock(J_contact_.get(), iblock, jblock, own_blocks_);
     std::unique_ptr<mfem::HypreParMatrix> dgdu(dgduT->Transpose());
     return dgdu;
   };
@@ -281,6 +297,16 @@ class ContactConstraint : public Constraint {
    * @brief interaction_id Unique identifier for the ContactInteraction (used in Tribol)
    */
   int interaction_id_;
+
+  /**
+   * @brief J_contact_ to hold contact derivatives
+   */
+  mutable std::unique_ptr<mfem::BlockOperator> J_contact_;
+
+  /**
+   * @brief bool
+   */
+  const bool own_blocks_ = true;
 };
 
 }  // namespace serac
