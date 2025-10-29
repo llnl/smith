@@ -4,12 +4,14 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <mfem/config/config.hpp>
 #include <mfem/fem/dfem/fieldoperator.hpp>
 #include <mfem/fem/dfem/parameterspace.hpp>
 #include <mfem/fem/dfem/tuple.hpp>
 #include <mfem/fem/dfem/util.hpp>
 //#include <mfem/fem/pgridfunc.hpp>
 //#include <mfem/linalg/tensor.hpp>
+#include <mfem/linalg/tensor.hpp>
 #include <mfem/linalg/vector.hpp>
 #include <ostream>
 #include <string>
@@ -125,7 +127,8 @@ struct SmoothJ2 {
   SERAC_HOST_DEVICE double density() const { return rho; }
 };
 
-
+/* q-function for internal state update. Located here in the test for development.
+   This should be moved inside a weak form class. */
 template <typename Material, typename... Parameters>
 struct InternalStateQFunction {
 SERAC_HOST_DEVICE inline auto operator()(
@@ -140,6 +143,27 @@ SERAC_HOST_DEVICE inline auto operator()(
   auto dv_dX = mfem::future::dot(dv_dxi, dxi_dX);
   double dt = 1.0;  // TODO: figure out how to pass this in to the qfunction
   return mfem::future::make_tuple(material.internalStateNew(dt, du_dX, dv_dX, params...));
+}
+
+Material material;  ///< the material model to use for computing the stress
+};
+
+template <typename Material, typename... Parameters>
+struct InternalStateVirtualWorkQFunction {
+SERAC_HOST_DEVICE inline auto operator()(
+  const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& du_dxi,
+  const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dv_dxi,
+  const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dX_dxi,
+  const mfem::future::tensor<mfem::real_t, 10>& Q, 
+  const mfem::future::tensor<mfem::real_t, 10>& Q_bar
+) const
+{
+  auto dxi_dX = mfem::future::inv(dX_dxi);
+  auto du_dX = mfem::future::dot(du_dxi, dxi_dX);
+  auto dv_dX = mfem::future::dot(dv_dxi, dxi_dX);
+  double dt = 1.0;  // TODO: figure out how to pass this in to the qfunction
+  auto Q_new = material.internalStateNew(dt, du_dX, dv_dX, Q);
+  return mfem::future::make_tuple(mfem::future::inner(Q_new, Q_bar));
 }
 
 Material material;  ///< the material model to use for computing the stress
@@ -260,32 +284,12 @@ TEST(Dfem, Plasticity)
   mfem::future::tuple<mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>> internal_state_qf_outputs{};
   
   InternalStateQFunction<Material, InternalVariableParameter<4, Material::N_INTERNAL_STATES>> update_internal_state_qf {.material = mat};
-  update_internal_state.AddDomainIntegrator(update_internal_state_qf, internal_state_qf_inputs, internal_state_qf_outputs, displacement_ir, entire_domain, std::index_sequence<0, 4>{});
+  update_internal_state.AddDomainIntegrator(update_internal_state_qf, internal_state_qf_inputs, internal_state_qf_outputs, displacement_ir, entire_domain, std::index_sequence<0, 3>{});
   update_internal_state.SetParameters({&disp, &velo, &coords, &internal_state});
-  update_internal_state.Mult({}, internal_state);
-  mfem::out << "internal state = \n";
-  internal_state.Print();
-
-  // try to take a derivative of the internal state update
-  // gulp
-  std::vector<FiniteElementState*> fields{&disp, &velo, &coords};
-  std::vector<mfem::Vector*> fields_l;
-  fields_l.reserve(fields.size() + 1);
-  for (size_t i = 0; i < fields.size(); ++i) {
-    fields_l.push_back(&fields[i]->gridFunction());
-  }
-  fields_l.push_back(&internal_state);
-  auto derivative_taker = update_internal_state.GetDerivative(0, {}, fields_l);
-  FiniteElementState du = StateManager::newState(KinematicSpace{}, "tangent_disp", mesh->tag());
-  du.Randomize(0);
-  mfem::out << "du = " << std::endl;
-  du.Print();
-  mfem::future::ParameterFunction d_internal_state(internal_state_space);
-  derivative_taker->Mult(du, d_internal_state);
-  mfem::out << "height = " << derivative_taker->Height() << " width = " << derivative_taker->Width() << std::endl;
-  mfem::out << "dQ = \n";
-  d_internal_state.Print();
-
+  mfem::future::ParameterFunction internal_state_new(internal_state_space);
+  update_internal_state.Mult({}, internal_state_new);
+  mfem::out << "internal state new = \n";
+  internal_state_new.Print();
 
   // make a gridFunction of the reactions for plotting
   mfem::ParGridFunction reaction_gf(&reaction.space());
@@ -301,7 +305,79 @@ TEST(Dfem, Plasticity)
   dc.SetCycle(0);
   dc.Save();
 
-  // physics.residual()
+  // try to take a derivative of the internal state update
+  std::vector<FiniteElementState*> fields{&disp, &velo, &coords};
+  std::vector<mfem::Vector*> fields_l;
+  fields_l.reserve(fields.size() + 1);
+  for (size_t i = 0; i < fields.size(); ++i) {
+    fields_l.push_back(&fields[i]->gridFunction());
+  }
+  fields_l.push_back(&internal_state);
+  auto derivative_taker = update_internal_state.GetDerivative(0, {}, fields_l);
+  FiniteElementState du = StateManager::newState(KinematicSpace{}, "tangent_disp", mesh->tag());
+  du.Randomize(0);
+  du *= 0.001;
+  mfem::out << "du = " << std::endl;
+  du.Print();
+  mfem::future::ParameterFunction dQ(internal_state_space);
+  derivative_taker->Mult(du, dQ);
+  mfem::out << "dQ = " << std::endl;
+  dQ.Print();
+
+  // check with directional finite difference
+  double fd_eps = 1e-5;
+  disp.Add(fd_eps, du);
+  // after changing the parameter values, we apparently need to set
+  // them again in Differentiable Operator.
+  // Is it caching the E-vectors or quad point interpolations?
+  update_internal_state.SetParameters({&disp, &velo, &coords, &internal_state});
+  mfem::future::ParameterFunction dQ_h(internal_state_space);
+  update_internal_state.Mult({}, dQ_h);
+  dQ_h.Add(-1.0, internal_state_new);
+  dQ_h *= 1.0/fd_eps;
+  mfem::out << "FD " << std::endl;
+  dQ_h.Print();
+
+  mfem::future::ParameterFunction error(internal_state_space);
+  error.Set(1.0, dQ_h);
+  error.Add(-1.0, dQ);
+  mfem::out << "error = " << std::endl;
+  error.Print();
+  mfem::out << "error norm = " << error.Norml2() << std::endl;
+
+  // functional for VJP of internal state update
+  mfem::future::DifferentiableOperator update_internal_state_virtual_work(
+    {},
+    {mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::DISPLACEMENT, &disp.space()),
+     mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::VELOCITY, &velo.space()),
+     mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::COORDINATES, &coords.space()),
+     mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::NUM_STATES, &internal_state_space),
+     mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::NUM_STATES + 1, &internal_state_space)
+    },
+     mesh->mfemParMesh());
+  update_internal_state_virtual_work.DisableTensorProductStructure();
+  
+  mfem::future::tuple<mfem::future::Gradient<DfemSolidWeakForm<>::STATE::DISPLACEMENT>, 
+                      mfem::future::Gradient<DfemSolidWeakForm<>::STATE::VELOCITY>, 
+                      mfem::future::Gradient<DfemSolidWeakForm<>::STATE::COORDINATES>,
+                      mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>,
+                      mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES + 1>> update_internal_state_virtual_work_qf_inputs{};
+  mfem::future::tuple<mfem::future::Sum<DfemSolidWeakForm<>::STATE::NUM_STATES + 1>> update_internal_state_virtual_work_outputs{};
+  InternalStateVirtualWorkQFunction<Material, InternalVariableParameter<4, Material::N_INTERNAL_STATES>> update_internal_state_virtual_work_qf {.material = mat};
+  update_internal_state_virtual_work.AddDomainIntegrator(update_internal_state_virtual_work_qf, update_internal_state_virtual_work_qf_inputs, update_internal_state_virtual_work_outputs, displacement_ir, entire_domain, std::index_sequence<0, 3>{});
+  mfem::future::ParameterFunction adjoint_internal_state(internal_state_space);
+  adjoint_internal_state = 0.05;
+  update_internal_state_virtual_work.SetParameters({&disp, &velo, &coords, &internal_state, &adjoint_internal_state});
+
+  fields_l.push_back(&adjoint_internal_state);
+  auto derivative_taker2 = update_internal_state_virtual_work.GetDerivative(0, {}, fields_l);
+  FiniteElementState u_bar = StateManager::newState(KinematicSpace{}, "u_bar", mesh->tag());
+  mfem::Vector seed(1);
+  seed = 1.0;
+  derivative_taker2->Mult(seed, u_bar);
+  mfem::out << "u_bar = " << std::endl;
+  u_bar.Print();
+
   // implement physics.vjp()
 
   // set loads
