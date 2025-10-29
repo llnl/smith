@@ -230,7 +230,7 @@ int main(int argc, char* argv[])
 
   // construct residual
   auto solid_mechanics_weak_form =
-      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
+      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), getSpaces(params));
 
   SolidMaterial mat;
   mat.K = 1.0;
@@ -261,9 +261,9 @@ int main(int argc, char* argv[])
   double time = 0.0;
   double dt = 1.0;
   auto all_states = getConstFieldPointers(states, params);
-  auto objective_states = {all_states[DISP], all_states[DENSITY]};
+  auto objective_states = {all_states[FIELD::DISP], all_states[FIELD::DENSITY]};
 
-  ObjectiveT::SpacesT param_space_ptrs{&all_states[DISP]->space(), &all_states[DENSITY]->space()};
+  ObjectiveT::SpacesT param_space_ptrs{&all_states[FIELD::DISP]->space(), &all_states[FIELD::DENSITY]->space()};
 
   ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
 
@@ -271,7 +271,7 @@ int main(int argc, char* argv[])
                                  [](double /*t*/, auto /*X*/, auto RHO) { return get<serac::VALUE>(RHO); });
   double mass = mass_objective.evaluate(time, dt, shape_disp.get(), objective_states);
 
-  serac::tensor<double, dim> initial_cg;
+  serac::tensor<double, dim> initial_cg; // center of gravity
 
   for (int i = 0; i < dim; ++i) {
     auto cg_objective = std::make_shared<ObjectiveT>("translation " + std::to_string(i), mesh, param_space_ptrs);
@@ -312,7 +312,7 @@ int main(int argc, char* argv[])
   }
   auto non_const_states = getFieldPointers(states, params);
   // create an inertial relief problem
-  InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]}, non_const_states, mesh,
+  InertialReliefProblem problem({non_const_states[FIELD::DISP], non_const_states[FIELD::DENSITY]}, non_const_states, mesh,
                                 solid_mechanics_weak_form, constraints);
 
   // optimization variables
@@ -389,7 +389,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
 // residual callback
 mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u, bool /*new_point*/) const
 {
-  obj_states_[DISP]->Set(1.0, u);
+  obj_states_[FIELD::DISP]->Set(1.0, u);
   auto res_vector = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
   return res_vector;
 }
@@ -398,7 +398,7 @@ mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u, bool /*new_p
 mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l,
                                                           bool /*new_point*/) const
 {
-  obj_states_[DISP]->Set(1.0, u);
+  obj_states_[FIELD::DISP]->Set(1.0, u);
   std::vector<double> multipliers(constraints_.size());
   for (int i = 0; i < dimc_; i++) {
     multipliers[static_cast<size_t>(i)] = l(i);
@@ -413,7 +413,7 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
 
   for (size_t i = 0; i < constraints_.size(); i++) {
     mfem::Vector grad_temp =
-        constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), DISP);
+        constraints_[i]->gradient(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_), FIELD::DISP);
     constraint_gradient.Set(1.0, grad_temp);
     output_vec.Add(multipliers[i], constraint_gradient);
   }
@@ -424,7 +424,7 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
 mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u, bool new_point)
 {
   if (new_point) {
-    obj_states_[DISP]->Set(1.0, u);
+    obj_states_[FIELD::DISP]->Set(1.0, u);
     drdu_.reset();
     drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
   }
@@ -435,7 +435,7 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
 // constraint callback
 mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool /*new_point*/) const
 {
-  obj_states_[DISP]->Set(1.0, u);
+  obj_states_[FIELD::DISP]->Set(1.0, u);
   mfem::Vector output_vec(dimc_);
   output_vec = 0.0;
 
@@ -457,7 +457,7 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool /*new
 mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u, bool new_point)
 {
   if (new_point) {
-    obj_states_[DISP]->Set(1.0, u);
+    obj_states_[FIELD::DISP]->Set(1.0, u);
     int myid = mfem::Mpi::WorldRank();
     int nentries = dimuglb_;
     if (myid > 0) {
@@ -476,7 +476,7 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
       SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
       mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
       gradVector.Set(1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(),
-                                                    serac::getConstFieldPointers(obj_states_), DISP));
+                                                    serac::getConstFieldPointers(obj_states_), FIELD::DISP));
       globalGradVector.reset(gradVector.GlobalVector());
       if (myid == 0) {
         dcdumat.SetRow(idx, cols, *globalGradVector.get());
