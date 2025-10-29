@@ -132,6 +132,7 @@ class Serac(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("netcdf-c@4.7.4")
 
+    # TODO propagate rocm and cuda to hypre
     depends_on("hypre@2.26.0:~superlu-dist+mpi")
 
     with when("+petsc"):
