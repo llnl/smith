@@ -28,8 +28,12 @@ class NewtonSolver : public mfem::NewtonSolver {
  protected:
   /// initial solution vector to do line-search off of
   mutable mfem::Vector x0;
+
   /// nonlinear solver options
   NonlinearSolverOptions nonlinear_options;
+
+  /// reconstructed serac print level
+  mutable size_t print_level = 0;
 
  public:
   /// constructor
@@ -88,13 +92,16 @@ class NewtonSolver : public mfem::NewtonSolver {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
 
+    print_level = print_options.iterations ? 1 : print_level;
+    print_level = print_options.summary ? 2 : print_level;
+
     using real_t = mfem::real_t;
 
     real_t norm, norm_goal = 0;
     norm = initial_norm = evaluateNorm(x, r);
 
-    if (print_options.first_and_last && !print_options.iterations) {
-      mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "...\n";
+    if (print_level == 1) {
+      mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
     }
 
     norm_goal = std::max(rel_tol * initial_norm, abs_tol);
@@ -103,7 +110,7 @@ class NewtonSolver : public mfem::NewtonSolver {
     int it = 0;
     for (; true; it++) {
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
-      if (print_options.iterations) {
+      if (print_level == 2) {
         mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
         if (it > 0) {
           mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
@@ -111,7 +118,7 @@ class NewtonSolver : public mfem::NewtonSolver {
         mfem::out << '\n';
       }
 
-      if (norm != norm) {
+      if ((print_level >= 1) && (norm != norm)) {
         mfem::out << "Initial residual for Newton iteration is undefined/nan.\n";
         mfem::out << "Newton: No convergence!\n";
         return;
@@ -183,10 +190,10 @@ class NewtonSolver : public mfem::NewtonSolver {
       }
 
       if (ls_iter_sum) {
-        if (print_options.iterations) {
+        if (print_level == 2) {
           mfem::out << "Number of line search steps taken = " << ls_iter_sum << std::endl;
         }
-        if (print_options.warnings && (ls_iter_sum == 2 * max_ls_iters + 1)) {
+        if (print_level == 2 && (ls_iter_sum == 2 * max_ls_iters + 1)) {
           mfem::out << "The maximum number of line search cut back have occurred, the resulting residual may not have "
                        "decreased. "
                     << std::endl;
@@ -197,10 +204,10 @@ class NewtonSolver : public mfem::NewtonSolver {
     final_iter = it;
     final_norm = norm;
 
-    if (print_options.summary || (!converged && print_options.warnings) || print_options.first_and_last) {
-      mfem::out << "Newton: Number of iterations: " << final_iter << '\n' << "   ||r|| = " << final_norm << '\n';
+    if (print_level == 1) {
+      mfem::out << "Newton iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm << '\n';
     }
-    if (!converged && (print_options.summary || print_options.warnings)) {
+    if (!converged && print_level >= 1) {  // (print_options.summary || print_options.warnings)) {
       mfem::out << "Newton: No convergence!\n";
     }
   }
@@ -322,9 +329,13 @@ class TrustRegion : public mfem::NewtonSolver {
   NonlinearSolverOptions nonlinear_options;
   /// linear solution options
   LinearSolverOptions linear_options;
+
   /// handle to the preconditioner used by the trust region, it ignores the linear solver as a SPD preconditioner is
   /// currently required
   Solver& tr_precond;
+
+  /// reconstructed serac print level
+  mutable size_t print_level = 0;
 
  public:
   /// internal counter for hess-vecs
@@ -389,7 +400,7 @@ class TrustRegion : public mfem::NewtonSolver {
     try {
       std::tie(directions, H_directions) = removeDependentDirections(directions, H_directions);
     } catch (const std::exception& e) {
-      if (print_options.warnings) {
+      if (print_level == 2) {
         mfem::out << "remove dependent directions failed with " << e.what() << std::endl;
       }
       return;
@@ -407,7 +418,7 @@ class TrustRegion : public mfem::NewtonSolver {
       std::tie(sol, leftvecs, leftvals, energy_change) =
           solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost);
     } catch (const std::exception& e) {
-      if (print_options.warnings) {
+      if (print_level == 1) {
         mfem::out << "subspace solve failed with " << e.what() << std::endl;
       }
       return;
@@ -421,7 +432,7 @@ class TrustRegion : public mfem::NewtonSolver {
     double base_energy = computeEnergy(g, hess_vec_func, z);
     double subspace_energy = computeEnergy(g, hess_vec_func, sol);
 
-    if (print_options.iterations || print_options.warnings) {
+    if (print_level == 2) {
       double leftval = leftvals.size() ? leftvals[0] : 1.0;
       mfem::out << "Energy using subspace solver from: " << base_energy << ", to: " << subspace_energy << " / "
                 << energy_change << ".  Min eig: " << leftval << std::endl;
@@ -457,7 +468,7 @@ class TrustRegion : public mfem::NewtonSolver {
     if (cc >= tt) {
       add(s, std::sqrt(tt / cc), cp, s);
     } else if (cc > nn) {
-      if (print_options.warnings) {
+      if (print_level == 2) {
         mfem::out << "cp outside newton, preconditioner likely inaccurate\n";
       }
       add(s, 1.0, cp, s);
@@ -502,8 +513,10 @@ class TrustRegion : public mfem::NewtonSolver {
     const double cg_tol_squared = settings.cg_tol * settings.cg_tol;
 
     if (Dot(r0, r0) <= cg_tol_squared && settings.min_cg_iterations == 0) {
-      mfem::out << "Trust region solution state within tolerance on first iteration."
-                << "\n";
+      if (print_level == 2) {
+        mfem::out << "Trust region solution state within tolerance on first iteration."
+                  << "\n";
+      }
       return;
     }
 
@@ -553,7 +566,7 @@ class TrustRegion : public mfem::NewtonSolver {
       z = zPred;
 
       if (results.interior_status == TrustRegionResults::Status::NonDescentDirection) {
-        if (print_options.iterations || print_options.warnings) {
+        if (print_level == 2) {
           mfem::out << "Found a non descent direction\n";
         }
         return;
@@ -633,9 +646,11 @@ class TrustRegion : public mfem::NewtonSolver {
     real_t norm, norm_goal = 0.0;
     norm = initial_norm = computeResidual(X, r);
     norm_goal = std::max(rel_tol * initial_norm, abs_tol);
-    if (print_options.first_and_last && !print_options.iterations) {
-      mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "...\n";
+
+    if (print_level == 1) {
+      mfem::out << "TrustRegion iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
     }
+
     prec->iterative_mode = false;
     tr_precond.iterative_mode = false;
 
@@ -663,8 +678,8 @@ class TrustRegion : public mfem::NewtonSolver {
     int it = 0;
     for (; true; it++) {
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
-      if (print_options.iterations) {
-        mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
+      if (print_level == 2) {
+        mfem::out << "TrustRegion iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
         if (it > 0) {
           mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
           mfem::out << ", x_incr = " << std::setw(13) << trResults.d.Norml2();
@@ -674,9 +689,9 @@ class TrustRegion : public mfem::NewtonSolver {
         mfem::out << '\n';
       }
 
-      if (norm != norm) {
+      if (print_level >= 1 && (norm != norm)) {
         mfem::out << "Initial residual for trust-region iteration is undefined/nan." << std::endl;
-        mfem::out << "Newton: No convergence!\n";
+        mfem::out << "TrustRegion: No convergence!\n";
         return;
       }
 
@@ -711,14 +726,14 @@ class TrustRegion : public mfem::NewtonSolver {
       } else {
         const double alphaTr = -tr_size / std::sqrt(Dot(r, r));
         add(trResults.cauchy_point, alphaTr, r, trResults.cauchy_point);
-        if (print_options.iterations) {
+        if (print_level == 2) {
           mfem::out << "Negative curvature un-preconditioned cauchy point direction found."
                     << "\n";
         }
       }
 
       if (cauchyPointNormSquared >= tr_size * tr_size) {
-        if (print_options.iterations) {
+        if (print_level == 2) {
           mfem::out << "Un-preconditioned gradient cauchy point outside trust region, step size = "
                     << std::sqrt(cauchyPointNormSquared) << "\n";
         }
@@ -804,7 +819,7 @@ class TrustRegion : public mfem::NewtonSolver {
 
         double rho = realImprove / modelImprove;
         if (modelObjective > 0) {
-          if (print_options.iterations || print_options.warnings) {
+          if (print_level == 2) {
             mfem::out << "Found a positive model objective increase.  Debug if you see this.\n";
           }
           rho = realImprove / -modelImprove;
@@ -850,14 +865,15 @@ class TrustRegion : public mfem::NewtonSolver {
     final_iter = it;
     final_norm = norm;
 
-    if (print_options.summary || (!converged && print_options.warnings) || print_options.first_and_last) {
-      mfem::out << "Newton: Number of iterations: " << final_iter << '\n' << "   ||r|| = " << final_norm << '\n';
+    if (print_level == 1) {
+      mfem::out << "TrustRegion iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm
+                << '\n';
     }
-    if (!converged && (print_options.summary || print_options.warnings)) {
-      mfem::out << "Newton: No convergence!\n";
+    if (!converged && print_level >= 1) {  // (print_options.summary || print_options.warnings)) {
+      mfem::out << "TrustRegion: No convergence!\n";
     }
 
-    if (false && (print_options.summary || print_options.warnings)) {
+    if (false && print_level == 2) {
       mfem::out << "num hess vecs = " << num_hess_vecs << "\n";
       mfem::out << "num preconds = " << num_preconds << "\n";
       mfem::out << "num residuals = " << num_residuals << "\n";
