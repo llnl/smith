@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -7,7 +7,7 @@
 Memory Checking
 ===============
 
-There are two commonly available memory checkers available to use with Serac on LC:
+There are two commonly available memory checkers available to use with Smith on LC:
 `AddressSanitizer <https://github.com/google/sanitizers/wiki/AddressSanitizer>`_
 and `Valgrind <https://valgrind.org/>`_.
 
