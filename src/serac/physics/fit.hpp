@@ -42,10 +42,7 @@ FiniteElementState fit(std::integer_sequence<int, i...>, func f, mfem::ParMesh& 
   Domain whole_domain = EntireDomain(pmesh);
   serac::Functional<output_space(output_space)> phi_phi(&fitted_field.space(), {&fitted_field.space()});
   phi_phi.AddDomainIntegral(
-      Dimension<dim>{}, DependsOn<0>{},
-      [](double /*t*/, auto /*x*/, auto u) {
-        return tuple{get<0>(u), zero{}};
-      },
+      Dimension<dim>{}, DependsOn<0>{}, [](double /*t*/, auto /*x*/, auto u) { return tuple{get<0>(u), zero{}}; },
       whole_domain);
   auto M = get<1>(phi_phi(DifferentiateWRT<0>{}, 0.0 /* t */, fitted_field));
 

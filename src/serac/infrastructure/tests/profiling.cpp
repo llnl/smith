@@ -30,7 +30,7 @@ TEST(Profiling, MeshRefinement)
   MPI_Barrier(MPI_COMM_WORLD);
   serac::profiling::initialize();
 
-  std::string mesh_file = std::string(SERAC_REPO_DIR) + "/data/meshes/star.mesh";
+  std::string mesh_file = std::string(SERAC_REPO_DIR) + "/data/meshes/bortel_echem.e";
 
   // the following string is a proxy for templated test names
   std::string test_name = "_profiling";

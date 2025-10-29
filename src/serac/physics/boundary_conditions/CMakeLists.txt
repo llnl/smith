@@ -19,7 +19,7 @@ set(boundary_conditions_sources
 
 set(boundary_conditions_depends serac_infrastructure serac_state)
 
-blt_add_library(
+serac_add_library(
     NAME        serac_boundary_conditions
     HEADERS     ${boundary_conditions_headers}
     SOURCES     ${boundary_conditions_sources}

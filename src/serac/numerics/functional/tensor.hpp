@@ -147,13 +147,11 @@ struct zero {
 
 /** @brief checks if a type is `zero` */
 template <typename T>
-struct is_zero : std::false_type {
-};
+struct is_zero : std::false_type {};
 
 /** @overload */
 template <>
-struct is_zero<zero> : std::true_type {
-};
+struct is_zero<zero> : std::true_type {};
 
 /** @brief the sum of two `zero`s is `zero` */
 SERAC_HOST_DEVICE constexpr auto operator+(zero, zero) { return zero{}; }

@@ -112,8 +112,7 @@ struct one_hot_helper<i, std::integer_sequence<int, I...>, T> {
 };
 
 template <int i, int n, typename T>
-struct one_hot : public one_hot_helper<i, std::make_integer_sequence<int, n>, T> {
-};
+struct one_hot : public one_hot_helper<i, std::make_integer_sequence<int, n>, T> {};
 /// @endcond
 
 /**
@@ -261,7 +260,7 @@ SERAC_HOST_DEVICE constexpr auto make_dual_helper(const serac::tuple<T...>& args
   // instead of `serac::tuple< serac::tuple < T ... > >`
   //
   // but serac::make_tuple(serac::get<i>(args)...) will never accidentally trigger the copy ctor
-  return serac::make_tuple(promote_to_dual_when<i == n>(serac::get<i>(args))...);
+  return serac::make_tuple(promote_to_dual_when < i == n > (serac::get<i>(args))...);
 }
 
 /**
@@ -1021,8 +1020,7 @@ auto log_symm(tensor<T, 3, 3> A)
       return (std::log(y) / (y - 1.0)) / lam2;
     }
   };
-  return symmetric_mat3_function(
-      A, [](double x) { return std::log(x); }, g);
+  return symmetric_mat3_function(A, [](double x) { return std::log(x); }, g);
 }
 
 /**
@@ -1042,8 +1040,7 @@ auto exp_symm(tensor<T, 3, 3> A)
       return std::exp(lam2) * std::expm1(arg) / arg;
     }
   };
-  return symmetric_mat3_function(
-      A, [](double x) { return std::exp(x); }, g);
+  return symmetric_mat3_function(A, [](double x) { return std::exp(x); }, g);
 }
 
 /**
@@ -1056,8 +1053,7 @@ template <typename T>
 auto sqrt_symm(tensor<T, 3, 3> A)
 {
   auto g = [](double lam1, double lam2) { return 1.0 / (std::sqrt(lam1) + std::sqrt(lam2)); };
-  return symmetric_mat3_function(
-      A, [](double x) { return std::sqrt(x); }, g);
+  return symmetric_mat3_function(A, [](double x) { return std::sqrt(x); }, g);
 }
 
 }  // namespace serac

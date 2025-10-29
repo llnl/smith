@@ -4,6 +4,6 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-blt_add_executable(NAME       partitioner
-                   SOURCES    partitioner.cpp
-                   DEPENDS_ON serac_mesh_utils)
+serac_add_executable(NAME       partitioner
+                     SOURCES    partitioner.cpp
+                     DEPENDS_ON serac_mesh_utils)

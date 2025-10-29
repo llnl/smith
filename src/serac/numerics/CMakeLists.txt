@@ -25,7 +25,7 @@ set(numerics_sources
 
 set(numerics_depends serac_infrastructure serac_functional serac_boundary_conditions)
 
-blt_add_library(
+serac_add_library(
     NAME        serac_numerics
     HEADERS     ${numerics_headers}
     SOURCES     ${numerics_sources}

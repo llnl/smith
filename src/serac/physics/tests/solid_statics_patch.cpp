@@ -47,7 +47,7 @@ class AffineSolution {
  public:
   AffineSolution()
       : A(make_tensor<dim, dim>([](int i, int j) { return A3D[i][j]; })),
-        b(make_tensor<dim>([](int i) { return B3D[i]; })){};
+        b(make_tensor<dim>([](int i) { return B3D[i]; })) {};
 
   tensor<double, dim> eval(tensor<double, dim> X) const { return A * X + b; };
 

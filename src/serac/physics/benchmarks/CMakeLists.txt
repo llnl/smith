@@ -14,12 +14,12 @@ set(physics_benchmarks
 
 # Create executable for each benchmark
 foreach(physics_benchmark_exec ${physics_benchmarks})
-    blt_add_executable(NAME ${physics_benchmark_exec}
-                       SOURCES ${physics_benchmark_exec}.cpp
-                       DEPENDS_ON ${physics_benchmark_depends}
-                       OUTPUT_DIR ${PROJECT_BINARY_DIR}/benchmarks
-                       FOLDER serac/benchmarks
-                       )
+    serac_add_executable(NAME ${physics_benchmark_exec}
+                         SOURCES ${physics_benchmark_exec}.cpp
+                         DEPENDS_ON ${physics_benchmark_depends}
+                         OUTPUT_DIR ${PROJECT_BINARY_DIR}/benchmarks
+                         FOLDER serac/benchmarks
+                         )
 
     # Add benchmarks with various task counts
     foreach(task_count 1 4 16)

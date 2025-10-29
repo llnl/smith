@@ -21,7 +21,7 @@ echo HOST_CONFIG
 echo $HOST_CONFIG
 
 echo "~~~~~~ RUNNING CMAKE ~~~~~~~~"
-cmake_args="-DENABLE_CLANGTIDY=OFF -DSERAC_ENABLE_CODE_CHECKS=ON"
+cmake_args="-DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=ON -DENABLE_CLANGTIDY=OFF -DSERAC_ENABLE_CODE_CHECKS=ON"
 
 if [[ "$CHECK_TYPE" == "coverage" ]] ; then
     # Alias llvm-cov to gcov so it acts like gcov

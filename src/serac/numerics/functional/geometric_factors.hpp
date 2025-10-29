@@ -22,7 +22,7 @@ namespace serac {
  */
 struct GeometricFactors {
   /// @brief default ctor, leaving this object uninitialized
-  GeometricFactors(){};
+  GeometricFactors() {};
 
   /**
    * @brief calculate positions and jacobians for quadrature points belonging to
