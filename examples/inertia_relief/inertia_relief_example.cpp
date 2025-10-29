@@ -142,6 +142,9 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   double time_ = 0.0;  // parameter for constraint and weak_form member function calls
   double dt_ = 0.0;    // parameter for constraint and weak_form member function calls
   std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};  // weights for weak_form_->jacobian calls
+  mutable mfem::Vector constraint_cached_;
+  mutable mfem::Vector residual_cached_;
+  mutable mfem::Vector JTvp_cached_;
 
  public:
   InertialReliefProblem(std::vector<serac::FieldPtr> obj_states, std::vector<serac::FieldPtr> all_states,
@@ -378,41 +381,50 @@ InertialReliefProblem::InertialReliefProblem(std::vector<serac::FiniteElementSta
   MPI_Allreduce(&dimc_, &dimcglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&dimu_, &dimuglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
+  constraint_cached_.SetSize(dimc_);
+  constraint_cached_ = 0.0;
+  residual_cached_.SetSize(dimu_);
+  residual_cached_ = 0.0;
+  JTvp_cached_.SetSize(dimu_);
+  JTvp_cached_ = 0.0;
   SetSizes(uOffsets, cOffsets);
 }
 
 // residual callback
-mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u, bool /*new_point*/) const
+mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u, bool new_point) const
 {
-  obj_states_[FIELD::DISP]->Set(1.0, u);
-  auto res_vector = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
-  return res_vector;
+  if (new_point) {
+    obj_states_[FIELD::DISP]->Set(1.0, u);
+    residual_cached_.Set(
+        1.0, weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_)));
+  }
+  return residual_cached_;
 }
 
 // constraint Jacobian transpose vector product
 mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l,
-                                                          bool /*new_point*/) const
+                                                          bool new_point) const
 {
-  obj_states_[FIELD::DISP]->Set(1.0, u);
-  std::vector<double> multipliers(constraints_.size());
-  for (int i = 0; i < dimc_; i++) {
-    multipliers[static_cast<size_t>(i)] = l(i);
-  }
-  const int nconstraints = static_cast<int>(constraints_.size());
-  MPI_Bcast(multipliers.data(), nconstraints, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  if (new_point) {
+    obj_states_[FIELD::DISP]->Set(1.0, u);
+    std::vector<double> multipliers(constraints_.size());
+    for (int i = 0; i < dimc_; i++) {
+      multipliers[static_cast<size_t>(i)] = l(i);
+    }
+    const int nconstraints = static_cast<int>(constraints_.size());
+    MPI_Bcast(multipliers.data(), nconstraints, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-  mfem::Vector constraint_gradient(dimu_);
-  constraint_gradient = 0.0;
-  mfem::Vector output_vec(dimu_);
-  output_vec = 0.0;
-
-  for (size_t i = 0; i < constraints_.size(); i++) {
-    mfem::Vector grad_temp = constraints_[i]->gradient(time_, dt_, shape_disp_.get(),
-                                                       serac::getConstFieldPointers(obj_states_), FIELD::DISP);
-    constraint_gradient.Set(1.0, grad_temp);
-    output_vec.Add(multipliers[i], constraint_gradient);
+    mfem::Vector constraint_gradient(dimu_);
+    constraint_gradient = 0.0;
+    JTvp_cached_ = 0.0;
+    for (size_t i = 0; i < constraints_.size(); i++) {
+      mfem::Vector grad_temp = constraints_[i]->gradient(time_, dt_, shape_disp_.get(),
+                                                         serac::getConstFieldPointers(obj_states_), FIELD::DISP);
+      constraint_gradient.Set(1.0, grad_temp);
+      JTvp_cached_.Add(multipliers[i], constraint_gradient);
+    }
   }
-  return output_vec;
+  return JTvp_cached_;
 }
 
 // Jacobian of the residual
@@ -428,24 +440,24 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
 }
 
 // constraint callback
-mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool /*new_point*/) const
+mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool new_point) const
 {
-  obj_states_[FIELD::DISP]->Set(1.0, u);
-  mfem::Vector output_vec(dimc_);
-  output_vec = 0.0;
+  if (new_point) {
+    obj_states_[FIELD::DISP]->Set(1.0, u);
 
-  for (size_t i = 0; i < constraints_.size(); i++) {
-    const int idx = static_cast<int>(i);
-    const size_t i2 = static_cast<size_t>(idx);
-    SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
+    for (size_t i = 0; i < constraints_.size(); i++) {
+      const int idx = static_cast<int>(i);
+      const size_t i2 = static_cast<size_t>(idx);
+      SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
 
-    double constraint_i =
-        constraints_[i]->evaluate(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_));
-    if (dimc_ > 0) {
-      output_vec(idx) = constraint_i;
+      double constraint_i =
+          constraints_[i]->evaluate(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(obj_states_));
+      if (dimc_ > 0) {
+        constraint_cached_(idx) = constraint_i;
+      }
     }
   }
-  return output_vec;
+  return constraint_cached_;
 }
 
 // Jacobian of the constraint
