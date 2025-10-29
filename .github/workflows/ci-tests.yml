@@ -85,7 +85,7 @@ jobs:
             --verbose \
             --host-config ${{ matrix.config.host_config }} \
             --extra-cmake-options "${{ matrix.config.cmake_opts }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}" \
-            --jobs 2
+            --jobs 4
       - name: Upload Test Results
         # CUDA containers do not run tests, because runners don't have GPUs, so skip upload in that case
         if: ${{ matrix.config.compiler_image != needs.set_image_vars.outputs.cuda_docker_image }}
