@@ -1,0 +1,33 @@
+--- spack-src/tools/h5copy/h5copy.c~	2023-01-30 06:52:51.000000000 -0800
++++ spack-src/tools/h5copy/h5copy.c	2025-04-22 07:41:36.786220881 -0700
+@@ -244,7 +244,7 @@
+     } /* end if */
+ 
+     /* parse command line options */
+-    while ((opt = get_option(argc, argv, s_opts, l_opts)) != EOF) {
++    while ((opt = get_option(argc, (const char * const *)argv, s_opts, l_opts)) != EOF) {
+         switch ((char)opt) {
+             case 'd':
+                 oname_dst = HDstrdup(opt_arg);
+--- spack-src/tools/lib/h5tools_utils.c~	2023-01-30 06:52:52.000000000 -0800
++++ spack-src/tools/lib/h5tools_utils.c	2025-04-22 07:37:06.374058635 -0700
+@@ -176,7 +176,7 @@
+  *-------------------------------------------------------------------------
+  */
+ int
+-get_option(int argc, char **argv, const char *opts, const struct long_options *l_opts)
++get_option(int argc, const char * const *argv, const char *opts, const struct long_options *l_opts)
+ {
+     static int sp      = 1;   /* character index in current token */
+     int        opt_opt = '?'; /* option character passed back to user */
+--- spack-src/tools/lib/h5tools_utils.h~	2023-01-30 06:52:52.000000000 -0800
++++ spack-src/tools/lib/h5tools_utils.h	2025-04-22 07:40:31.694419145 -0700
+@@ -88,7 +88,7 @@
+                            * this gets returned from get_option   */
+ } long_options;
+ 
+-H5TOOLS_DLL int get_option(int argc, char **argv, const char *opt, const struct long_options *l_opt);
++H5TOOLS_DLL int get_option(int argc, const char * const *argv, const char *opt, const struct long_options *l_opt);
+ /*
+  * end get_option section
+  */

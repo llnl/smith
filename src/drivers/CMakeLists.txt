@@ -1,14 +1,14 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-#blt_add_executable( NAME        serac_driver
-#                    SOURCES     serac.cpp
-#                    DEPENDS_ON  serac_physics
-#                    OUTPUT_NAME serac
-#                    )
+#serac_add_executable( NAME        serac_driver
+#                      SOURCES     serac.cpp
+#                      DEPENDS_ON  serac_physics
+#                      OUTPUT_NAME serac
+#                      )
 #
 #if (SERAC_ENABLE_TESTS)
 #    set(input_files_dir ${CMAKE_CURRENT_SOURCE_DIR}/../../data/input_files/tests)

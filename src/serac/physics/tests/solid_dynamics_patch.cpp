@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -96,7 +96,7 @@ class AffineSolution {
  public:
   AffineSolution()
       : disp_grad_rate(make_tensor<dim, dim>([](int i, int j) { return A_3d[i][j]; })),
-        initial_displacement(make_tensor<dim>([](int i) { return b_3d[i]; })){};
+        initial_displacement(make_tensor<dim>([](int i) { return b_3d[i]; })) {};
 
   /// exact solution for displacement field
   tensor<double, dim> displacement(tensor<double, dim> X, double t) const
@@ -178,7 +178,7 @@ constexpr tensor<double, 3> a_3d{{0.1, -0.2, 0.25}};
 template <int dim>
 class ConstantAccelerationSolution {
  public:
-  ConstantAccelerationSolution() : acceleration(make_tensor<dim>([](int i) { return a_3d[i]; })){};
+  ConstantAccelerationSolution() : acceleration(make_tensor<dim>([](int i) { return a_3d[i]; })) {};
 
   tensor<double, dim> displacement(tensor<double, dim>, double t) const { return 0.5 * t * t * acceleration; };
 

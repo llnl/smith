@@ -1,5 +1,5 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -112,7 +112,7 @@ foreach(_tool ${_used_blt_tools})
     endif()
 endforeach()
 
-set(BLT_REQUIRED_CLANGFORMAT_VERSION  "14" CACHE STRING "")
+set(BLT_REQUIRED_CLANGFORMAT_VERSION  "19" CACHE STRING "")
 
 set(ENABLE_ALL_WARNINGS ON CACHE BOOL "")
 set(ENABLE_WARNINGS_AS_ERRORS ON CACHE BOOL "")

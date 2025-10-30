@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -41,8 +41,7 @@ struct TensorProductQuadratureRule {
 };
 
 template <auto val>
-struct CompileTimeValue {
-};
+struct CompileTimeValue {};
 
 /**
  * @brief this struct is used to look up mfem's memory layout of

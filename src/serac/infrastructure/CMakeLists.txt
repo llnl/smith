@@ -1,5 +1,5 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -40,7 +40,7 @@ set(infrastructure_sources
     profiling.cpp
     )
 
-set(infrastructure_depends axom::inlet axom::fmt axom::cli11 camp mfem ${serac_device_depends})
+set(infrastructure_depends axom::inlet axom::fmt axom::cli11 camp mfem)
 blt_list_append(TO infrastructure_depends ELEMENTS tribol IF TRIBOL_FOUND)
 blt_list_append(TO infrastructure_depends ELEMENTS caliper adiak::adiak IF SERAC_ENABLE_PROFILING)
 # TODO (EBC): mfem's openmp dependency isn't being picked up on ubuntu + clang 16.0.6.  
@@ -48,7 +48,7 @@ blt_list_append(TO infrastructure_depends ELEMENTS caliper adiak::adiak IF SERAC
 blt_list_append(TO infrastructure_depends ELEMENTS blt::openmp IF SERAC_ENABLE_OPENMP)
 list(APPEND infrastructure_depends blt::mpi)
 
-blt_add_library(
+serac_add_library(
     NAME        serac_infrastructure
     HEADERS     ${infrastructure_headers}
     SOURCES     ${infrastructure_sources}

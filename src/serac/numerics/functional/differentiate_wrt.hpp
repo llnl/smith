@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -12,8 +12,7 @@ namespace serac {
 static constexpr uint32_t NO_DIFFERENTIATION = uint32_t(1) << 31;
 
 template <uint32_t i>
-struct DifferentiateWRT {
-};
+struct DifferentiateWRT {};
 
 /**
  * @brief this type exists solely as a way to signal to `serac::Functional` that the function
