@@ -14,10 +14,10 @@ configure_file(
 install(
     FILES
         using-with-cmake/CMakeLists.txt
-        using-with-cmake/serac_example.cpp
+        using-with-cmake/smith_example.cpp
         ${PROJECT_BINARY_DIR}/examples/using-with-cmake/host-config.cmake
     DESTINATION
-        examples/serac/using-with-cmake
+        examples/smith/using-with-cmake
 )
 
 # Add the conduction examples

@@ -10,7 +10,7 @@
  file: build_devtools.py
 
  description: 
-  Builds all Serac Devtools
+  Builds all Smith Devtools
 
 """
 

@@ -35,17 +35,17 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     homepage = "https://github.com/LLNL/Tribol"
     git      = "https://github.com/LLNL/Tribol.git"
 
-    # SERAC EDIT START
+    # SMITH EDIT START
     #version("develop", branch="develop", submodules=True, preferred=True)
     version("develop", branch="develop", submodules=True)
-    # SERAC EDIT END
+    # SMITH EDIT END
 
 
-    # SERAC EDIT START
+    # SMITH EDIT START
     # Note: We add a number to the end of the real version number to indicate that we have
     #  moved forward past the release. Increment the last number when updating the commit sha.
     version("0.1.0.22", commit="a445892205b31b9505d9427dd9a04f6d5714bcad", submodules=True, preferred=True)
-    # SERAC EDIT END
+    # SMITH EDIT END
 
     # -----------------------------------------------------------------------
     # Variants
@@ -60,10 +60,10 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
             description="Build examples")
     variant("devtools", default=False, 
             description="Build development tools (Sphinx, Doxygen, Shroud, clang-format)")
-    # SERAC EDIT START
+    # SMITH EDIT START
     variant("asan", default=False,
             description="Build with address sanitizer flags")
-    # SERAC EDIT END
+    # SMITH EDIT END
     variant("umpire",   default=False,
             description="Build with portable memory access support")
     variant("raja",     default=False,
@@ -138,7 +138,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     for dep in ["hypre", "mfem"]:
         depends_on("{0}+debug".format(dep), when="build_type=Debug")
 
-    # SERAC EDIT START
+    # SMITH EDIT START
     # ASan is only supported by GCC and (some) LLVM-derived
     # compilers.
     asan_compiler_denylist = {"aocc", "arm", "cce", "fj", "intel", "nag",
@@ -154,7 +154,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
             when="+asan",
             msg="{0} compilers do not support Address Sanitizer".format(compiler_)
         )
-    # SERAC EDIT END
+    # SMITH EDIT END
 
     # Devtool dependencies these need to match tribol_devtools/package.py
     depends_on("doxygen", when="+devtools")
@@ -443,14 +443,14 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
 
 
     def cmake_args(self):
-        # SERAC EDIT START
+        # SMITH EDIT START
         is_asan_compiler = self.compiler.name in self.asan_compiler_allowlist
         if self.spec.satisfies("+asan") and not is_asan_compiler:
             raise UnsupportedCompilerError(
                 "Tribol cannot be built with Address Sanitizer flags "
                 "using {0} compilers".format(self.compiler.name)
             )
-        # SERAC EDIT END
+        # SMITH EDIT END
 
         options = []
 
@@ -460,10 +460,10 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
             "TRIBOL_ENABLE_EXAMPLES", "examples"))
         options.append(self.define_from_variant(
             "TRIBOL_ENABLE_TESTS", "tests"))
-        # SERAC EDIT START
+        # SMITH EDIT START
         options.append(self.define_from_variant(
             "TRIBOL_ENABLE_ASAN", "asan"))
-        # SERAC EDIT END
+        # SMITH EDIT END
 
 
         return options

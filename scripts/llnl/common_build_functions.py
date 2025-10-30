@@ -291,7 +291,7 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
         print("[ERROR: Build for host-config: %s failed]\n" % host_config)
         return res
     end_time = time.time()
-    print("[serac build time: {0}]\n".format(convertSecondsToReadableTime(end_time - start_time)))
+    print("[Smith build time: {0}]\n".format(convertSecondsToReadableTime(end_time - start_time)))
 
     # test the code
     start_time = time.time()
@@ -636,7 +636,7 @@ def get_blt_dir():
     _path = "cmake/blt"
     if os.path.exists(_path):
         return _path
-    _path = pjoin("serac", _path)
+    _path = pjoin("smith", _path)
     return _path
 
 

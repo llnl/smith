@@ -28,7 +28,7 @@
 -mg_levels_pc_type jacobi
 -prefix_pop
 
-# SERAC_EDIT_START
+# SMITH_EDIT_START
 # Disable "gpu aware mpi" to avoid PETSc runtime errors
 -use_gpu_aware_mpi 0
-# SERAC_EDIT_END
+# SMITH_EDIT_END
