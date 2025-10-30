@@ -8,9 +8,9 @@ set(CMAKE_PREFIX_PATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/2025_09_25_
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH "ON" CACHE STRING "")
 
-set(CMAKE_BUILD_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/2025_09_25_10_50_56/gcc-13.3.1/smith-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/2025_09_25_10_50_56/gcc-13.3.1/smith-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib64;;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
+set(CMAKE_BUILD_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/2025_09_25_10_50_56/gcc-13.3.1/serac-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/2025_09_25_10_50_56/gcc-13.3.1/serac-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib64;;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
 
-set(CMAKE_INSTALL_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/2025_09_25_10_50_56/gcc-13.3.1/smith-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/2025_09_25_10_50_56/gcc-13.3.1/smith-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib64;;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
+set(CMAKE_INSTALL_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/2025_09_25_10_50_56/gcc-13.3.1/serac-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/2025_09_25_10_50_56/gcc-13.3.1/serac-develop-z4njobo5mgy5du53ckmdif5iinxriidw/lib64;;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
 
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 
