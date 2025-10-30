@@ -1,5 +1,5 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause) 
@@ -37,9 +37,9 @@ endif()
 #
 
 if(SERAC_ENABLE_CUDA)
-    blt_add_library( NAME       cuda_smoketest_kernel
-                     SOURCES    cuda_smoketest_kernel.cpp
-                     DEPENDS_ON ${serac_device_depends})
+    serac_add_library( NAME       cuda_smoketest_kernel
+                       SOURCES    cuda_smoketest_kernel.cpp
+                       DEPENDS_ON ${serac_device_depends})
 
     serac_add_tests( SOURCES    cuda_smoketest.cpp
                      DEPENDS_ON cuda_smoketest_kernel gtest)

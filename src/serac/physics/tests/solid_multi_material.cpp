@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -102,8 +102,7 @@ TEST(Solid, MultiMaterial)
   solid.setMaterial(mat_right, mesh->domain("right"));
 
   constexpr double stress = 1.0;
-  solid.setTraction(
-      DependsOn<>{}, [stress](auto, auto n, auto) { return stress * n; }, mesh->domain("end_face"));
+  solid.setTraction(DependsOn<>{}, [stress](auto, auto n, auto) { return stress * n; }, mesh->domain("end_face"));
 
   solid.setFixedBCs(mesh->domain("x_min"), Component::X);
   solid.setFixedBCs(mesh->domain("y_min"), Component::Y);

@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -32,8 +32,7 @@ constexpr auto get(std::integer_sequence<int, n...>)
 namespace detail {
 
 template <typename T>
-struct always_false : std::false_type {
-};
+struct always_false : std::false_type {};
 
 /**
  * @brief unfortunately std::integral_constant doesn't have __host__ __device__ annotations

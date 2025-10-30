@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -181,8 +181,9 @@ void evaluation_kernel_impl(trial_element_tuple trial_elements, test_element, do
 
     //[[maybe_unused]] static constexpr trial_element_tuple trial_element_tuple{};
     // batch-calculate values / derivatives of each trial space, at each quadrature point
-    [[maybe_unused]] tuple qf_inputs = {promote_each_to_dual_when<indices == differentiation_index>(
-        get<indices>(trial_elements).interpolate(get<indices>(u)[e], rule))...};
+    [[maybe_unused]] tuple qf_inputs = {promote_each_to_dual_when < indices ==
+                                        differentiation_index >
+                                            (get<indices>(trial_elements).interpolate(get<indices>(u)[e], rule))...};
 
     // use J_e to transform values / derivatives on the parent element
     // to the to the corresponding values / derivatives on the physical element

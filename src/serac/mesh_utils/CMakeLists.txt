@@ -1,5 +1,5 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -17,7 +17,7 @@ set(mesh_utils_sources
 
 set(mesh_utils_depends serac_infrastructure)
 
-blt_add_library(
+serac_add_library(
     NAME        serac_mesh_utils
     HEADERS     ${mesh_utils_headers}
     SOURCES     ${mesh_utils_sources}

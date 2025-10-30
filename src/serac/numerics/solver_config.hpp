@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -455,21 +455,17 @@ struct NonlinearSolverOptions {
 // fmt support for serac::NonlinearSolver
 namespace axom::fmt {
 template <>
-struct formatter<serac::NonlinearSolver> : ostream_formatter {
-};
+struct formatter<serac::NonlinearSolver> : ostream_formatter {};
 
 // fmt support for serac::LinearSolver
 template <>
-struct formatter<serac::LinearSolver> : ostream_formatter {
-};
+struct formatter<serac::LinearSolver> : ostream_formatter {};
 
 // fmt support for serac::Preconditioner
 template <>
-struct formatter<serac::Preconditioner> : ostream_formatter {
-};
+struct formatter<serac::Preconditioner> : ostream_formatter {};
 
 // fmt support for serac::PetscPCType
 template <>
-struct formatter<serac::PetscPCType> : ostream_formatter {
-};
+struct formatter<serac::PetscPCType> : ostream_formatter {};
 }  // namespace axom::fmt

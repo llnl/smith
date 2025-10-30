@@ -1,14 +1,14 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-blt_add_executable( NAME        buckling_cylinder
-                    SOURCES     cylinder.cpp
-                    OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                    DEPENDS_ON  serac_physics
-                    )
+serac_add_executable( NAME        buckling_cylinder
+                      SOURCES     cylinder.cpp
+                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                      DEPENDS_ON  serac_physics
+                      )
 
 if(SERAC_ENABLE_HIP)
     blt_add_target_compile_flags(TO buckling_cylinder FLAGS "-fgpu-rdc")

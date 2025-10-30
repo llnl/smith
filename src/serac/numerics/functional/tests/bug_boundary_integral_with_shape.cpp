@@ -1,5 +1,5 @@
 // Copyright Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -56,8 +56,7 @@ void test(int dof)
       serac::Dimension<1>{}, serac::DependsOn<>{}, [](auto...) { return 1.0; }, *undeformed_pmesh);
 
   serac::Functional<double(shape_space)> qoi({fes.get()});
-  qoi.AddBoundaryIntegral(
-      serac::Dimension<1>{}, serac::DependsOn<0>{}, [](auto...) { return 1.0; }, *deformed_pmesh);
+  qoi.AddBoundaryIntegral(serac::Dimension<1>{}, serac::DependsOn<0>{}, [](auto...) { return 1.0; }, *deformed_pmesh);
 
   std::unique_ptr<mfem::HypreParVector> u(fes->NewTrueDofVector());
   *u = 0.0;

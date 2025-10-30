@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -47,7 +47,7 @@ class AffineSolution {
  public:
   AffineSolution()
       : A(make_tensor<dim, dim>([](int i, int j) { return A3D[i][j]; })),
-        b(make_tensor<dim>([](int i) { return B3D[i]; })){};
+        b(make_tensor<dim>([](int i) { return B3D[i]; })) {};
 
   tensor<double, dim> eval(tensor<double, dim> X) const { return A * X + b; };
 

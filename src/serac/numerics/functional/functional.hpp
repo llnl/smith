@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -43,8 +43,7 @@ constexpr int DERIVATIVE = 1;
 /// @endcond
 
 template <int... i>
-struct DependsOn {
-};
+struct DependsOn {};
 
 /**
  * @brief given a list of types, this function returns the index that corresponds to the type `dual_vector`.

@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -25,8 +25,7 @@ namespace serac {
  * see https://en.cppreference.com/w/cpp/utility/tuple for more information about std::tuple
  */
 template <typename... T>
-struct tuple {
-};
+struct tuple {};
 
 /**
  * @brief Type that mimics std::tuple
@@ -270,12 +269,10 @@ SERAC_HOST_DEVICE tuple<T...> make_tuple(const T&... args)
 }
 
 template <class... Types>
-struct tuple_size {
-};
+struct tuple_size {};
 
 template <class... Types>
-struct tuple_size<serac::tuple<Types...>> : std::integral_constant<std::size_t, sizeof...(Types)> {
-};
+struct tuple_size<serac::tuple<Types...>> : std::integral_constant<std::size_t, sizeof...(Types)> {};
 
 /**
  * @tparam i the tuple index to access
@@ -822,8 +819,7 @@ struct tuple_element;
 // recursive case
 /// @overload
 template <size_t I, class Head, class... Tail>
-struct tuple_element<I, tuple<Head, Tail...>> : tuple_element<I - 1, tuple<Tail...>> {
-};
+struct tuple_element<I, tuple<Head, Tail...>> : tuple_element<I - 1, tuple<Tail...>> {};
 
 // base case
 /// @overload
@@ -836,20 +832,17 @@ struct tuple_element<0, tuple<Head, Tail...>> {
  * @brief Trait for checking if a type is a @p serac::tuple
  */
 template <typename T>
-struct is_tuple : std::false_type {
-};
+struct is_tuple : std::false_type {};
 
 /// @overload
 template <typename... T>
-struct is_tuple<serac::tuple<T...>> : std::true_type {
-};
+struct is_tuple<serac::tuple<T...>> : std::true_type {};
 
 /**
  * @brief Trait for checking if a type if a @p serac::tuple containing only @p serac::tuple
  */
 template <typename T>
-struct is_tuple_of_tuples : std::false_type {
-};
+struct is_tuple_of_tuples : std::false_type {};
 
 /**
  * @brief Trait for checking if a type if a @p serac::tuple containing only @p serac::tuple

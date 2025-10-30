@@ -1,5 +1,5 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -21,7 +21,7 @@ if (TRIBOL_FOUND AND SERAC_ENABLE_MPI)
     list(APPEND contact_depends redecomp)
 endif()
 
-blt_add_library(
+serac_add_library(
     NAME        serac_contact
     HEADERS     ${contact_headers}
     SOURCES     ${contact_sources}

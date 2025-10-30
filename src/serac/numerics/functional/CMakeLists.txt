@@ -1,5 +1,5 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -64,7 +64,7 @@ set(functional_cuda_headers
 
 blt_list_append(TO functional_headers ELEMENTS ${functional_cuda_headers} IF SERAC_ENABLE_CUDA)
 
-blt_add_library(
+serac_add_library(
       NAME        serac_functional
       HEADERS     ${functional_headers} ${functional_detail_headers} 
       SOURCES     ${functional_sources}

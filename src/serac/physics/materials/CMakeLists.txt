@@ -1,5 +1,5 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -28,7 +28,7 @@ set(materials_depends
     serac_functional
     )
 
-blt_add_library(
+serac_add_library(
    NAME        serac_physics_materials
    SOURCES     ${materials_sources}
    HEADERS     ${materials_headers}
