@@ -11,7 +11,7 @@
 #include "axom/inlet.hpp"
 #include "axom/slic.hpp"
 #include "mfem.hpp"
-#include "serac/serac.hpp"
+#include "smith/smith.hpp"
 
 template <class Physics>
 void output(double u, double f, const Physics& solid, const std::string& paraview_tag, std::ofstream& file)
@@ -23,7 +23,7 @@ void output(double u, double f, const Physics& solid, const std::string& paravie
 int main(int argc, char* argv[])
 {
   // Initialize and automatically finalize MPI and other libraries
-  serac::ApplicationManager applicationManager(argc, argv);
+  smith::ApplicationManager applicationManager(argc, argv);
 
   constexpr int p = 2;
   constexpr int dim = 3;
@@ -81,31 +81,31 @@ int main(int argc, char* argv[])
   const std::string simulation_tag = "uniaxial";
   const std::string mesh_tag = simulation_tag + "mesh";
   axom::sidre::DataStore datastore;
-  serac::StateManager::initialize(datastore, simulation_tag + "_data");
+  smith::StateManager::initialize(datastore, simulation_tag + "_data");
 
-  auto mesh = std::make_shared<serac::Mesh>(
-      serac::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length), mesh_tag,
+  auto mesh = std::make_shared<smith::Mesh>(
+      smith::buildCuboidMesh(elements_in_x, elements_in_y, elements_in_z, x_length, y_length, z_length), mesh_tag,
       serial_refinement, parallel_refinement);
 
   // create boundary domains for boundary conditions
-  mesh->addDomainOfBoundaryElements("fix_x", serac::by_attr<dim>(5));
-  mesh->addDomainOfBoundaryElements("fix_y", serac::by_attr<dim>(2));
-  mesh->addDomainOfBoundaryElements("fix_z", serac::by_attr<dim>(1));
-  mesh->addDomainOfBoundaryElements("apply_displacement", serac::by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("fix_x", smith::by_attr<dim>(5));
+  mesh->addDomainOfBoundaryElements("fix_y", smith::by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("fix_z", smith::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("apply_displacement", smith::by_attr<dim>(3));
 
-  serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level = 0};
+  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::Strumpack, .print_level = 0};
 
-  serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::Newton,
+  smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-10,
                                                   .absolute_tol = 1.0e-12,
                                                   .max_iterations = 200,
                                                   .print_level = 1};
 
-  serac::SolidMechanics<p, dim> solid_solver(nonlinear_options, linear_options,
-                                             serac::solid_mechanics::default_quasistatic_options, simulation_tag, mesh);
+  smith::SolidMechanics<p, dim> solid_solver(nonlinear_options, linear_options,
+                                             smith::solid_mechanics::default_quasistatic_options, simulation_tag, mesh);
 
-  using Hardening = serac::solid_mechanics::VoceHardening;
-  using Material = serac::solid_mechanics::J2<Hardening>;
+  using Hardening = smith::solid_mechanics::VoceHardening;
+  using Material = smith::solid_mechanics::J2<Hardening>;
 
   Hardening hardening{sigma_y, sigma_sat, strain_constant, eta};
   Material material{E, nu, hardening, density};
@@ -114,13 +114,13 @@ int main(int argc, char* argv[])
 
   solid_solver.setRateDependentMaterial(material, mesh->entireBody(), internal_states);
 
-  solid_solver.setFixedBCs(mesh->domain("fix_x"), serac::Component::X);
-  solid_solver.setFixedBCs(mesh->domain("fix_y"), serac::Component::Y);
-  solid_solver.setFixedBCs(mesh->domain("fix_z"), serac::Component::Z);
-  auto applied_displacement = [strain_rate](serac::vec3, double t) {
-    return serac::vec3{strain_rate * x_length * t, 0., 0.};
+  solid_solver.setFixedBCs(mesh->domain("fix_x"), smith::Component::X);
+  solid_solver.setFixedBCs(mesh->domain("fix_y"), smith::Component::Y);
+  solid_solver.setFixedBCs(mesh->domain("fix_z"), smith::Component::Z);
+  auto applied_displacement = [strain_rate](smith::vec3, double t) {
+    return smith::vec3{strain_rate * x_length * t, 0., 0.};
   };
-  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("apply_displacement"), serac::Component::X);
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("apply_displacement"), smith::Component::X);
 
   solid_solver.completeSetup();
 
@@ -130,7 +130,7 @@ int main(int argc, char* argv[])
   mfem::Array<int> dof_list = mesh->domain("apply_displacement").dof_list(&solid_solver.displacement().space());
   solid_solver.displacement().space().DofsToVDofs(0, dof_list);
 
-  auto compute_net_force = [&dof_list](const serac::FiniteElementDual& reaction) -> double {
+  auto compute_net_force = [&dof_list](const smith::FiniteElementDual& reaction) -> double {
     double R{};
     for (int i = 0; i < dof_list.Size(); i++) {
       R += reaction(dof_list[i]);
@@ -142,7 +142,7 @@ int main(int argc, char* argv[])
   std::ofstream file(output_filename);
   file << "# time displacement force" << std::endl;
   {
-    double u = applied_displacement(serac::vec3{}, solid_solver.time())[0];
+    double u = applied_displacement(smith::vec3{}, solid_solver.time())[0];
     double f = compute_net_force(solid_solver.dual("reactions"));
     output(u, f, solid_solver, paraview_tag, file);
   }
@@ -151,11 +151,11 @@ int main(int argc, char* argv[])
     SLIC_INFO_ROOT("------------------------------------------");
     SLIC_INFO_ROOT(axom::fmt::format("TIME STEP {}", i));
     SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of {})", solid_solver.time() + dt, max_time));
-    serac::logger::flush();
+    smith::logger::flush();
 
     solid_solver.advanceTimestep(dt);
 
-    double u = applied_displacement(serac::vec3{}, solid_solver.time())[0];
+    double u = applied_displacement(smith::vec3{}, solid_solver.time())[0];
     double f = compute_net_force(solid_solver.dual("reactions"));
     output(u, f, solid_solver, paraview_tag, file);
   }

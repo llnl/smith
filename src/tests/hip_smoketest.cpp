@@ -1,4 +1,4 @@
-// SERAC EDIT START
+// SMITH EDIT START
 // Original Source: https://github.com/ROCm/HIP-Examples/blob/master/vectorAdd/vectoradd_hip.cpp
 // clang-format off
 #pragma GCC diagnostic push
@@ -6,7 +6,7 @@
 #pragma GCC diagnostic ignored "-Wshorten-64-to-32"
 #pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
 #pragma GCC diagnostic ignored "-Wunused-result"
-// SERAC EDIT END
+// SMITH EDIT END
 
 /*
 Copyright (c) 2015-2016 Advanced Micro Devices, Inc. All rights reserved.
@@ -60,10 +60,10 @@ vectoradd_float(float* __restrict__ a, const float* __restrict__ b, const float*
 
   {
  
-      // SERAC EDIT START
+      // SMITH EDIT START
       int x = static_cast<int>(hipBlockDim_x * hipBlockIdx_x + hipThreadIdx_x);
       int y = static_cast<int>(hipBlockDim_y * hipBlockIdx_y + hipThreadIdx_y);
-      // SERAC EDIT END
+      // SMITH EDIT END
 
       int i = y * width + x;
       if ( i < (width * height)) {
@@ -90,10 +90,10 @@ __kernel__ void vectoradd_float(float* a, const float* b, const float* c, int wi
 
 using namespace std;
 
-// SERAC EDIT START
+// SMITH EDIT START
 TEST(HipSmoketest, VecAdd)
 {
-// SERAC EDIT END
+// SMITH EDIT END
   float* hostA;
   float* hostB;
   float* hostC;
@@ -166,11 +166,11 @@ TEST(HipSmoketest, VecAdd)
 
   //hipResetDefaultAccelerator();
 
-  // SERAC EDIT START
+  // SMITH EDIT START
   EXPECT_EQ(errors, 0);
-  // SERAC EDIT END
+  // SMITH EDIT END
 }
 
-// SERAC EDIT START
+// SMITH EDIT START
 #pragma GCC diagnostic pop
-// SERAC EDIT END
+// SMITH EDIT END

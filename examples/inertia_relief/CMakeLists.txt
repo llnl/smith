@@ -4,13 +4,13 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if (SERAC_ENABLE_CONTINUATION AND STRUMPACK_DIR)
-    serac_add_executable( NAME        inertia_relief_example
+if (SMITH_ENABLE_CONTINUATION AND STRUMPACK_DIR)
+    smith_add_executable( NAME        inertia_relief_example
                           SOURCES     inertia_relief_example.cpp
                           OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                          DEPENDS_ON  serac_physics continuation_solver
+                          DEPENDS_ON  smith_physics continuation_solver
                           )
-    serac_add_example_test(NAME            inertia_relief
+    smith_add_example_test(NAME            inertia_relief
                            COMMAND         inertia_relief_example
                            NUM_MPI_TASKS   4)
 
@@ -18,6 +18,6 @@ if (SERAC_ENABLE_CONTINUATION AND STRUMPACK_DIR)
         FILES
             inertia_relief_example.cpp
         DESTINATION
-            examples/serac/inertia_relief
+            examples/smith/inertia_relief
     )
 endif()

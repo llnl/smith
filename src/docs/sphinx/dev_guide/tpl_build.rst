@@ -13,7 +13,7 @@ Third-party Library (TPL) Build
 Spack and Uberenv
 -----------------
 
-Serac uses `Spack <https://github.com/spack/spack>`_ to build it's TPLs.
+Smith uses `Spack <https://github.com/spack/spack>`_ to build it's TPLs.
 This has been encapsulated using `Uberenv <https://github.com/LLNL/uberenv>`_.
 Uberenv helps by doing the following:
 
@@ -23,16 +23,16 @@ Uberenv helps by doing the following:
 * Installs our Spack packages into the local Spack Environment
 * Simplifies whole dependency build into one command
 
-Uberenv will create a directory containing a Spack instance with the required Serac
+Uberenv will create a directory containing a Spack instance with the required Smith
 TPLs installed.
 
 .. note::
-   This directory **must not** be within the Serac repo - the example below
+   This directory **must not** be within the Smith repo - the example below
    controls this with the ``--prefix`` command line argument which is required.
 
 It also generates a host-config file (``<config_dependent_name>.cmake``)
-at the root of Serac repository. This host-config defines all the required information for building
-Serac.
+at the root of Smith repository. This host-config defines all the required information for building
+Smith.
 
 ------------------
 Basic System Setup
@@ -49,7 +49,7 @@ The following page provides basic guidance on the following platforms:
 
 .. note::
 
-   Serac uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
+   Smith uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
    automatic differentiation. Due to this you have to compile with an LLVM-based compiler.
    We recommend ``clang``.
 
@@ -141,7 +141,7 @@ This is also useful for a few additional packages:
     should be ``--spec="^openmpi@5 %clang@19"`` and to build with devtools and profiling enabled,
     change the spec to ``"+devtools+profiling ^openmpi@5 %clang@19"``
 
-Optionally, you can install the developer tools via ``pip``. This step is only required if you wish to use Serac's developer tools.
+Optionally, you can install the developer tools via ``pip``. This step is only required if you wish to use Smith's developer tools.
 In order to use Python devtools, you will need to create a Python venv. This is much more reliable than having Spack install 20+ Python packages.
 In this example, we are using the builtin Python in ``/usr/bin``, but it is possible to use a version installed from Homebrew or elsewhere.
 
@@ -261,7 +261,7 @@ The above spack command will output a concretization that looks like the followi
 .. code-block:: shell
 
     ==> Concretized 1 spec:
-     -   uu3sgzv  serac@develop cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~asan~cuda~devtools+enzyme~ipo+openmp+petsc~profiling+raja~rocm~shared+slepc+strumpack+sundials+tribol+umpire build_system=cmake build_type=Release dev_path=/home/white238/projects/serac/repo generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   uu3sgzv  smith@develop cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~asan~cuda~devtools+enzyme~ipo+openmp+petsc~profiling+raja~rocm~shared+slepc+strumpack+sundials+tribol+umpire build_system=cmake build_type=Release dev_path=/home/white238/projects/smith/repo generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
      -   x77izrn      ^axom@0.10.1.1 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC +cpp14~cuda~devtools~examples~fortran+hdf5~ipo+lua+mfem+mpi~opencascade+openmp~python+raja~rocm~scr~shared~tools+umpire build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
      -   prysqkw          ^blt@0.6.2 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC  build_system=generic arch=linux-ubuntu24.04-skylake %clang@19.1.1
      -   6vi46wm      ^camp@2024.07.0 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~cuda~ipo~omptarget+openmp~rocm~sycl~tests build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
@@ -319,10 +319,10 @@ by another package, so you can also add it with this yaml section:
 .. _building_tpls-label:
 
 --------------------------------------
-Building Serac's Third-party Libraries
+Building Smith's Third-party Libraries
 --------------------------------------
 
-It is now time to build Serac's Third-party Libraries (TPLs). Run the command with the compiler
+It is now time to build Smith's Third-party Libraries (TPLs). Run the command with the compiler
 that you want to develop with:
 
 .. code-block:: bash
@@ -336,26 +336,26 @@ Some helpful uberenv options include :
 * ``--spec=+devtools`` (also build the devtools with one command)
 * ``--spec=%clang@19.1.1`` (build with a specific compiler as defined in the ``spack.yaml`` file)
 * ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
-* ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Serac repository
+* ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Smith repository
 
 The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang@19.1.1'``.
 
 
 If successful, you will see two things. The first is what we call a host-config. It is all the CMake
-inputs you need to build Serac. This file will be a new CMake file in the current directory with your machine
+inputs you need to build Smith. This file will be a new CMake file in the current directory with your machine
 name, system type, and compiler, for example ``mycomputerlinux-ubuntu24.04-skylake-clang@19.1.1.cmake``.
 The second will be output from Spack that ends in this:
 
 .. code-block:: bash
 
-    ==> serac: Executing phase: 'initconfig'
+    ==> smith: Executing phase: 'initconfig'
     ==> Updating view at /my/prefix/spack_env/.spack-env/view
 
 --------------
-Building Serac
+Building Smith
 --------------
 
-Finally, with the TPL's built and the host-config file, you can build Serac with the following
+Finally, with the TPL's built and the host-config file, you can build Smith with the following
 command:
 
 .. code-block:: bash
@@ -365,7 +365,7 @@ command:
     make -j
     make -j8 test
 
-For more detail instructions on how to build Serac, see :ref:`build-label`.
+For more detail instructions on how to build Smith, see :ref:`build-label`.
 
 
 

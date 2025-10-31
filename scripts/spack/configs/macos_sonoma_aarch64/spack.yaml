@@ -209,9 +209,9 @@ spack:
       buildable: false
       externals:
       - spec: py-sphinx@7.4.7
-        prefix: /Users/chapman39/dev/serac/venv
+        prefix: /Users/chapman39/dev/smith/venv
     py-ats:
       buildable: false
       externals:
       - spec: py-ats@7.0.105
-        prefix: /Users/chapman39/dev/serac/venv
+        prefix: /Users/chapman39/dev/smith/venv
