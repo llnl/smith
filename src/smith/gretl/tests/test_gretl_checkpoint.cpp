@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -8,9 +8,9 @@
 #include <cmath>
 #include <iostream>
 #include "gtest/gtest.h"
-#include "serac/gretl/checkpoint.hpp"
-#include "serac/gretl/state.hpp"
-#include "serac/gretl/data_store.hpp"
+#include "smith/gretl/checkpoint.hpp"
+#include "smith/gretl/state.hpp"
+#include "smith/gretl/data_store.hpp"
 
 static size_t count = 0;
 

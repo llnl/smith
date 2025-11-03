@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -8,9 +8,9 @@
 #include <cmath>
 #include <stdio.h>
 #include <iostream>
-#include "serac/gretl/vector_state.hpp"
-#include "serac/gretl/data_store.hpp"
-#include "serac/gretl/test_utils.hpp"
+#include "smith/gretl/vector_state.hpp"
+#include "smith/gretl/data_store.hpp"
+#include "smith/gretl/test_utils.hpp"
 #include "gtest/gtest.h"
 
 using gretl::print;
