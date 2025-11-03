@@ -13,13 +13,13 @@
 
 #pragma once
 
-#include "serac/physics/base_physics.hpp"
-#include "serac/gretl/data_store.hpp"
-#include "serac/differentiable_numerics/field_state.hpp"
+#include "smith/physics/base_physics.hpp"
+#include "smith/gretl/data_store.hpp"
+#include "smith/differentiable_numerics/field_state.hpp"
 #include <vector>
 #include <map>
 
-namespace serac {
+namespace smith {
 
 class Mesh;
 class WeakForm;
@@ -79,7 +79,7 @@ class DifferentiablePhysics : public BasePhysics {
   void setParameter(const size_t parameter_index, const FiniteElementState& parameter_state) override;
 
   /// @overload
-  void setAdjointLoad(std::unordered_map<std::string, const serac::FiniteElementDual&> string_to_dual) override;
+  void setAdjointLoad(std::unordered_map<std::string, const smith::FiniteElementDual&> string_to_dual) override;
 
   /// @overload
   const FiniteElementState& adjoint(const std::string& adjoint_name) const override;
@@ -97,7 +97,7 @@ class DifferentiablePhysics : public BasePhysics {
   const FiniteElementDual& computeTimestepShapeSensitivity() override;
 
   /// @overload
-  const std::unordered_map<std::string, const serac::FiniteElementDual&> computeInitialConditionSensitivity()
+  const std::unordered_map<std::string, const smith::FiniteElementDual&> computeInitialConditionSensitivity()
       const override;
 
   /// @brief Get all the FieldStates... states first, parameters next
@@ -131,4 +131,4 @@ class DifferentiablePhysics : public BasePhysics {
   size_t sub_cycle_;  ///< counts all calls to state advancer's advance step (on the forward pass)
 };
 
-}  // namespace serac
+}  // namespace smith

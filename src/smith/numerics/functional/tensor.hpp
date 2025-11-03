@@ -1113,7 +1113,7 @@ SMITH_HOST_DEVICE constexpr auto norm(zero) { return zero{}; }
  * @param[in] epsilon A small perturbation to avoid dividing by zero and to smooth the normalize function
  */
 template <typename T, int... n>
-SERAC_HOST_DEVICE auto normalize(const tensor<T, n...>& A, double const& epsilon = 0.0)
+SMITH_HOST_DEVICE auto normalize(const tensor<T, n...>& A, double const& epsilon = 0.0)
 {
   return A / (norm(A) + epsilon);
 }

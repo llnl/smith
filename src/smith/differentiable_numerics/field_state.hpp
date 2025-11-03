@@ -10,12 +10,12 @@
 
 #pragma once
 
-#include "serac/gretl/data_store.hpp"
-#include "serac/gretl/state.hpp"
-#include "serac/gretl/create_state.hpp"
-#include "serac/physics/state/state_manager.hpp"
+#include "smith/gretl/data_store.hpp"
+#include "smith/gretl/state.hpp"
+#include "smith/gretl/create_state.hpp"
+#include "smith/physics/state/state_manager.hpp"
 
-namespace serac {
+namespace smith {
 
 using FEFieldPtr = std::shared_ptr<FiniteElementState>;                               ///< typedef
 using FEDualPtr = std::shared_ptr<FiniteElementDual>;                                 ///< typedef
@@ -28,9 +28,9 @@ using DoubleState = gretl::State<double, double>;                               
 /// std::shared_ptr<FiniteElementDual> with the same space
 struct zero_dual_from_state {
   /// @brief functor operator
-  auto operator()(const serac::FEFieldPtr& f) const
+  auto operator()(const smith::FEFieldPtr& f) const
   {
-    return std::make_shared<serac::FiniteElementDual>(f->space(), f->name() + "_dual");
+    return std::make_shared<smith::FiniteElementDual>(f->space(), f->name() + "_dual");
   };
 };
 
@@ -38,16 +38,16 @@ struct zero_dual_from_state {
 /// std::shared_ptr<FiniteElementState> with the same space
 struct zero_state_from_dual {
   /// @brief functor operator
-  auto operator()(const serac::FEDualPtr& f) const
+  auto operator()(const smith::FEDualPtr& f) const
   {
-    return std::make_shared<serac::FiniteElementState>(f->space(), f->name() + "_undual");
+    return std::make_shared<smith::FiniteElementState>(f->space(), f->name() + "_undual");
   };
 };
 
 /// @brief initialize on the gretl::DataStore a FieldState with values from s
-inline FieldState create_field_state(gretl::DataStore& dataStore, const serac::FEFieldPtr& s)
+inline FieldState create_field_state(gretl::DataStore& dataStore, const smith::FEFieldPtr& s)
 {
-  return dataStore.create_state<serac::FEFieldPtr, serac::FEDualPtr>(s, zero_dual_from_state());
+  return dataStore.create_state<smith::FEFieldPtr, smith::FEDualPtr>(s, zero_dual_from_state());
 }
 
 /// @brief initialize on the gretl::DataStore a FieldState from a FiniteElementState of given space, name and mesh.
@@ -60,9 +60,9 @@ FieldState create_field_state(gretl::DataStore& dataStore, function_space space,
 }
 
 /// @brief initialize on the gretl::DataStore a ResultantState with values from s
-inline ResultantState create_field_resultant(gretl::DataStore& dataStore, const serac::FEDualPtr& s)
+inline ResultantState create_field_resultant(gretl::DataStore& dataStore, const smith::FEDualPtr& s)
 {
-  return dataStore.create_state<serac::FEDualPtr, serac::FEFieldPtr>(s, zero_state_from_dual());
+  return dataStore.create_state<smith::FEDualPtr, smith::FEFieldPtr>(s, zero_state_from_dual());
 }
 
 /// @brief initialize on the gretl::DataStore a ResultantState from a FiniteElementDual of given space, name and mesh.
@@ -222,4 +222,4 @@ inline std::vector<gretl::StateBase> combineAsStateBases(const FieldState& d, co
   return merged_states;
 };
 
-}  // namespace serac
+}  // namespace smith

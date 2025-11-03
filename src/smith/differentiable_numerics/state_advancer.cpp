@@ -1,10 +1,10 @@
-#include "serac/differentiable_numerics/state_advancer.hpp"
-#include "serac/physics/weak_form.hpp"
-#include "serac/differentiable_numerics/field_state.hpp"
-#include "serac/differentiable_numerics/explicit_dynamic_solve.hpp"
-#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "smith/differentiable_numerics/state_advancer.hpp"
+#include "smith/physics/weak_form.hpp"
+#include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/differentiable_numerics/explicit_dynamic_solve.hpp"
+#include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 
-namespace serac {
+namespace smith {
 
 /// @brief uses the constrained docs on the bc_manager to zero the corresponding dofs in FieldState s.
 FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryConditionManager* bc_manager)
@@ -32,7 +32,7 @@ std::tuple<std::vector<FieldState>, DoubleState> LumpedMassExplicitNewmark::adva
 {
   TimeInfo time_info = create_time_info(time, dt, cycle);
 
-  SERAC_MARK_FUNCTION;
+  SMITH_MARK_FUNCTION;
   SLIC_ERROR_IF(states.size() != 3, "ExplicitNewmark is a 2nd order time integrator requiring 3 states.");
 
   enum STATES
@@ -83,4 +83,4 @@ std::tuple<std::vector<FieldState>, DoubleState> LumpedMassExplicitNewmark::adva
   return std::make_tuple(new_states, time_new);  // return the new states output along with the new time
 }
 
-}  // namespace serac
+}  // namespace smith

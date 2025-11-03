@@ -71,7 +71,7 @@ struct ConstrainedWeakFormFixture : public testing::Test {
 
     using ObjectiveT = smith::FunctionalObjective<dim, smith::Parameters<VectorSpace, DensitySpace>>;
 
-    serac::TimeInfo time_info(0.0, 0.0);
+    smith::TimeInfo time_info(0.0, 0.0);
     auto input_fields = getConstFieldPointers(states, params);
     auto objective_states = {input_fields[DISP], input_fields[DENSITY]};
 
@@ -159,16 +159,11 @@ struct ConstrainedWeakFormFixture : public testing::Test {
 
 TEST_F(ConstrainedWeakFormFixture, CanComputeObjectivesAndTheirGradients)
 {
-  serac::TimeInfo time_info(0.0, 1.0);
+  smith::TimeInfo time_info(0.0, 1.0);
   auto input_fields = getConstFieldPointers(states, params);
 
-<<<<<<< HEAD:src/serac/physics/tests/test_kinematic_objective.cpp
-  serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
-=======
   smith::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
->>>>>>> develop:src/smith/physics/tests/test_kinematic_objective.cpp
+  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto objective_states = {input_fields[DISP], input_fields[DENSITY]};

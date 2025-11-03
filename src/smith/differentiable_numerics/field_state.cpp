@@ -1,6 +1,6 @@
-#include "serac/differentiable_numerics/field_state.hpp"
+#include "smith/differentiable_numerics/field_state.hpp"
 
-namespace serac {
+namespace smith {
 
 FieldState square(const FieldState& state)
 {
@@ -24,7 +24,7 @@ gretl::State<double> inner_product(const FieldState& a, const FieldState& b)
 {
   return gretl::create_state<double, double>(
       gretl::defaultInitializeZeroDual<double, double>(),
-      [](FEFieldPtr A, FEFieldPtr B) { return serac::innerProduct(*A, *B); },
+      [](FEFieldPtr A, FEFieldPtr B) { return smith::innerProduct(*A, *B); },
       [](FEFieldPtr A, FEFieldPtr B, double, FEDualPtr& A_, FEDualPtr& B_, double product_) {
         A_->Add(product_, *B);
         B_->Add(product_, *A);
@@ -74,8 +74,8 @@ FieldState axpby(const gretl::State<double>& a, const FieldState& x, const gretl
          double& B_, const FEDualPtr& Z_) {
         add(*X_, A, *Z_, *X_);
         add(*Y_, B, *Z_, *Y_);
-        A_ += serac::innerProduct(*Z_, *X);
-        B_ += serac::innerProduct(*Z_, *Y);
+        A_ += smith::innerProduct(*Z_, *X);
+        B_ += smith::innerProduct(*Z_, *Y);
       },
       x, y, a, b);
 }
@@ -176,7 +176,7 @@ FieldState weighted_sum(const std::vector<double>& weights, const std::vector<Fi
       double weight = scale * upstreams[num_weights + i].get<double>();
       FEFieldPtr V = upstreams[num_weights + num_diffable_weights + i].get<FEFieldPtr>();
       add(*V_dual, weight, *Z_dual, *V_dual);
-      weight_dual += scale * serac::innerProduct(*Z_dual, *V);
+      weight_dual += scale * smith::innerProduct(*Z_dual, *V);
     }
   });
 
@@ -313,4 +313,4 @@ FieldStateWeightedSum operator-(const FieldState& x, const FieldStateWeightedSum
   return z += FieldStateWeightedSum({1.0}, {x});
 }
 
-}  // namespace serac
+}  // namespace smith

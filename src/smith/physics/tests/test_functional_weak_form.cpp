@@ -134,7 +134,7 @@ struct WeakFormFixture : public testing::Test {
 
   const double time = 0.0;
   const double dt = 1.0;
-  serac::TimeInfo time_info;
+  smith::TimeInfo time_info;
 
   std::string velo_name = "solid_velocity";
 
@@ -160,13 +160,8 @@ TEST_F(WeakFormFixture, VjpConsistency)
   // initialize the displacement and acceleration to a non-trivial field
   auto input_fields = getConstFieldPointers(states, params);
 
-<<<<<<< HEAD:src/serac/physics/tests/test_functional_weak_form.cpp
-  serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
-=======
   smith::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
->>>>>>> develop:src/smith/physics/tests/test_functional_weak_form.cpp
+  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {
@@ -186,13 +181,8 @@ TEST_F(WeakFormFixture, VjpConsistency)
   }
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
-<<<<<<< HEAD:src/serac/physics/tests/test_functional_weak_form.cpp
-    serac::FiniteElementDual& vjp = field_vjps_slow[i];
-    auto J = weak_form->jacobian(time_info, shape_disp.get(), input_fields, jacobian_weights(i));
-=======
     smith::FiniteElementDual& vjp = field_vjps_slow[i];
-    auto J = weak_form->jacobian(time, dt, shape_disp.get(), input_fields, jacobian_weights(i));
->>>>>>> develop:src/smith/physics/tests/test_functional_weak_form.cpp
+    auto J = weak_form->jacobian(time_info, shape_disp.get(), input_fields, jacobian_weights(i));
     J->AddMultTranspose(v, vjp);
   }
   weak_form->vjp(time_info, shape_disp.get(), input_fields, {}, getConstFieldPointers(v), shape_disp_dual.get(),
@@ -209,13 +199,8 @@ TEST_F(WeakFormFixture, JvpConsistency)
   // initialize the displacement and acceleration to a non-trivial field
   auto input_fields = getConstFieldPointers(states, params);
 
-<<<<<<< HEAD:src/serac/physics/tests/test_functional_weak_form.cpp
-  serac::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
-=======
   smith::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
->>>>>>> develop:src/smith/physics/tests/test_functional_weak_form.cpp
+  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobianWeights = [&](size_t i) {

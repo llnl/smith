@@ -14,10 +14,10 @@
 
 #include <string>
 #include "mfem.hpp"
-#include "serac/physics/mesh.hpp"
-#include "serac/differentiable_numerics/field_state.hpp"
+#include "smith/physics/mesh.hpp"
+#include "smith/differentiable_numerics/field_state.hpp"
 
-namespace serac {
+namespace smith {
 
 class ParaviewWriter {
  public:
@@ -36,7 +36,7 @@ class ParaviewWriter {
 
   void write(size_t step, double time, const std::vector<const FiniteElementState*>& current_states)
   {
-    SERAC_MARK_FUNCTION;
+    SMITH_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
 
     for (size_t n = 0; n < states.size(); ++n) {
@@ -52,7 +52,7 @@ class ParaviewWriter {
 
   void write(size_t step, double time, const std::vector<const FiniteElementDual*>& current_duals)
   {
-    SERAC_MARK_FUNCTION;
+    SMITH_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_duals.size() != dual_states.size(), "wrong number of output states to write");
 
     for (size_t n = 0; n < dual_states.size(); ++n) {
@@ -68,7 +68,7 @@ class ParaviewWriter {
 
   void write(int step, double time, const std::vector<FieldState>& current_fields)
   {
-    SERAC_MARK_FUNCTION;
+    SMITH_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_fields.size() != states.size(), "wrong number of output states to write");
 
     for (size_t n = 0; n < states.size(); ++n) {
@@ -92,7 +92,7 @@ class ParaviewWriter {
   StateVecs dual_states;
 };
 
-inline auto createParaviewOutput(const serac::Mesh& mesh, const std::vector<FieldState>& states,
+inline auto createParaviewOutput(const smith::Mesh& mesh, const std::vector<FieldState>& states,
                                  std::string output_name)
 {
   if (output_name == "") {
@@ -109,12 +109,12 @@ inline auto createParaviewOutput(const serac::Mesh& mesh, const std::vector<Fiel
   // Find the maximum polynomial order in the physics module's states
   for (const auto& fstate : states) {
     const auto& state = fstate.get();
-    output_states.push_back(std::make_shared<serac::FiniteElementState>(state->space(), state->name()));
+    output_states.push_back(std::make_shared<smith::FiniteElementState>(state->space(), state->name()));
     paraview_dc->RegisterField(state->name(), &output_states.back()->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
 
     const auto& dual = fstate.get();  // not getting the dual, as it may not exist on the graph!
-    output_duals.push_back(std::make_shared<serac::FiniteElementState>(dual->space(), dual->name()));
+    output_duals.push_back(std::make_shared<smith::FiniteElementState>(dual->space(), dual->name()));
     paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
   }
@@ -137,7 +137,7 @@ inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<co
 
   ParaviewWriter::StateVecs output_states;
   for (const auto& s : states) {
-    output_states.push_back(std::make_shared<serac::FiniteElementState>(s->space(), s->name()));
+    output_states.push_back(std::make_shared<smith::FiniteElementState>(s->space(), s->name()));
   }
 
   auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
@@ -173,7 +173,7 @@ inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<co
   ParaviewWriter::StateVecs output_duals;
   // Find the maximum polynomial order in the physics module's states
   for (const auto& dual : duals) {
-    output_duals.push_back(std::make_shared<serac::FiniteElementState>(dual->space(), dual->name()));
+    output_duals.push_back(std::make_shared<smith::FiniteElementState>(dual->space(), dual->name()));
     paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
   }
@@ -187,11 +187,11 @@ inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<co
   return ParaviewWriter(std::move(paraview_dc), {}, output_duals);
 }
 
-inline std::vector<const serac::FiniteElementState*> get_field_ptrs_for_output(
-    serac::FieldState shape_disp, const std::vector<serac::FieldState>& states_in,
-    std::vector<serac::FieldState> other_fields = {})
+inline std::vector<const smith::FiniteElementState*> get_field_ptrs_for_output(
+    smith::FieldState shape_disp, const std::vector<smith::FieldState>& states_in,
+    std::vector<smith::FieldState> other_fields = {})
 {
-  std::vector<const serac::FiniteElementState*> states_out{shape_disp.get().get()};
+  std::vector<const smith::FiniteElementState*> states_out{shape_disp.get().get()};
   for (auto& s : states_in) {
     states_out.push_back(s.get().get());
   }
@@ -201,12 +201,12 @@ inline std::vector<const serac::FiniteElementState*> get_field_ptrs_for_output(
   return states_out;
 };
 
-inline std::vector<const serac::FiniteElementDual*> get_dual_ptrs_for_output(
-    serac::FieldState shape_disp, const std::vector<serac::FieldState>& states_in,
-    std::vector<serac::FieldState> other_fields = {})
+inline std::vector<const smith::FiniteElementDual*> get_dual_ptrs_for_output(
+    smith::FieldState shape_disp, const std::vector<smith::FieldState>& states_in,
+    std::vector<smith::FieldState> other_fields = {})
 {
   exit(1);
-  std::vector<const serac::FiniteElementDual*> duals_out{shape_disp.get_dual().get()};
+  std::vector<const smith::FiniteElementDual*> duals_out{shape_disp.get_dual().get()};
   for (auto& s : states_in) {
     duals_out.push_back(s.get_dual().get());
   }
@@ -216,4 +216,4 @@ inline std::vector<const serac::FiniteElementDual*> get_dual_ptrs_for_output(
   return duals_out;
 };
 
-}  // namespace serac
+}  // namespace smith

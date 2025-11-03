@@ -1,5 +1,5 @@
 // Copyright (c), Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -12,10 +12,10 @@
 
 #pragma once
 
-#include "serac/differentiable_numerics/field_state.hpp"
-#include "serac/gretl/double_state.hpp"
+#include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/gretl/double_state.hpp"
 
-namespace serac {
+namespace smith {
 
 /// @brief Base class interface for estimating the stable timestep given the current state and parameters
 class TimestepEstimator {
@@ -45,4 +45,4 @@ class ConstantTimeStepEstimator : public TimestepEstimator {
   DoubleState dt_;  ///< fixed timestep
 };
 
-}  // namespace serac
+}  // namespace smith

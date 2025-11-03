@@ -13,11 +13,11 @@
 #pragma once
 
 #include <vector>
-#include "serac/differentiable_numerics/field_state.hpp"
-#include "serac/gretl/double_state.hpp"
-#include "serac/physics/common.hpp"
+#include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/gretl/double_state.hpp"
+#include "smith/physics/common.hpp"
 
-namespace serac {
+namespace smith {
 
 class DifferentiableSolver;
 class WeakForm;
@@ -74,4 +74,4 @@ inline TimeInfo create_time_info(DoubleState t, DoubleState dt, size_t cycle)
   return TimeInfo(t.get(), dt.get(), cycle);
 }
 
-}  // namespace serac
+}  // namespace smith

@@ -164,7 +164,7 @@ struct WeakFormFixture : public testing::Test {
 
   const double time = 0.0;
   const double dt = 1.0;
-  serac::TimeInfo time_info;
+  smith::TimeInfo time_info;
 
   std::string velo_name = "solid_velocity";
 
@@ -223,13 +223,8 @@ TEST_F(WeakFormFixture, JvpConsistency)
   // initialize the displacement and acceleration to a non-trivial field
   auto input_fields = getConstFieldPointers(states, params);
 
-<<<<<<< HEAD:src/serac/physics/tests/test_solid_weak_form.cpp
-  serac::FiniteElementDual res_vector(states[SolidWeakFormT::DISPLACEMENT].space(), "residual");
-  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
-=======
   smith::FiniteElementDual res_vector(states[SolidWeakFormT::DISPLACEMENT].space(), "residual");
-  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
->>>>>>> develop:src/smith/physics/tests/test_solid_weak_form.cpp
+  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobianWeights = [&](size_t i) {

@@ -109,7 +109,7 @@ struct WeakFormFixture : public testing::Test {
 
   const double time = 0.0;
   const double dt = 1.0;
-  serac::TimeInfo time_info;
+  smith::TimeInfo time_info;
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<smith::Mesh> mesh;
@@ -132,13 +132,8 @@ TEST_F(WeakFormFixture, VjpConsistency)
 {
   auto input_fields = getConstFieldPointers(states, params);
 
-<<<<<<< HEAD:src/serac/physics/tests/test_heat_weak_form.cpp
-  serac::FiniteElementDual res_vector(states[HeatWeakFormT::TEMPERATURE].space(), "residual");
-  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
-=======
   smith::FiniteElementDual res_vector(states[HeatWeakFormT::TEMPERATURE].space(), "residual");
-  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
->>>>>>> develop:src/smith/physics/tests/test_heat_weak_form.cpp
+  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {
@@ -169,13 +164,8 @@ TEST_F(WeakFormFixture, JvpConsistency)
 {
   auto input_fields = getConstFieldPointers(states, params);
 
-<<<<<<< HEAD:src/serac/physics/tests/test_heat_weak_form.cpp
-  serac::FiniteElementDual res_vector(states[HeatWeakFormT::TEMPERATURE].space(), "residual");
-  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
-=======
   smith::FiniteElementDual res_vector(states[HeatWeakFormT::TEMPERATURE].space(), "residual");
-  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
->>>>>>> develop:src/smith/physics/tests/test_heat_weak_form.cpp
+  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto jacobian_weights = [&](size_t i) {

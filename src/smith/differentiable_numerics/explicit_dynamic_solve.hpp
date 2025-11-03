@@ -10,12 +10,12 @@
 
 #pragma once
 
-#include "serac/physics/weak_form.hpp"
-#include "serac/differentiable_numerics/field_state.hpp"
-#include "serac/differentiable_numerics/lumped_mass_weak_form.hpp"
-#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "smith/physics/weak_form.hpp"
+#include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/differentiable_numerics/lumped_mass_weak_form.hpp"
+#include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 
-namespace serac {
+namespace smith {
 
 /// @brief  gretl-function implementation to compute lumped mass vectors from shape_displacements FieldState and a
 /// density field FieldState.  A lumped_field is also passed to communicate the intended dimension of the lumped mass.
@@ -107,7 +107,7 @@ inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_d
   auto z = states[inertial_index].clone(allStateBases);
 
   z.set_eval([=](const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) {
-    SERAC_MARK_FUNCTION;
+    SMITH_MARK_FUNCTION;
 
     size_t num_fields = inputs.size() - 1;          // get the number of non-shapedisp input fields
     std::vector<ConstFieldPtr> fields(num_fields);  // set up fields vector
@@ -133,7 +133,7 @@ inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_d
   });
 
   z.set_vjp([=](gretl::UpstreamStates& inputs, const gretl::DownstreamState& output) {
-    SERAC_MARK_FUNCTION;
+    SMITH_MARK_FUNCTION;
 
     const FEFieldPtr Z = output.get<FEFieldPtr>();
     const FEDualPtr Z_dual = output.get_dual<FEDualPtr, FEFieldPtr>();
@@ -276,4 +276,4 @@ inline FieldState negativeComponentWiseMult(const FieldState& x, const FieldStat
   return z.finalize();
 }
 
-}  // namespace serac
+}  // namespace smith

@@ -1,7 +1,7 @@
-#include "serac/differentiable_numerics/differentiable_utils.hpp"
-#include "serac/gretl/data_store.hpp"
+#include "smith/differentiable_numerics/differentiable_utils.hpp"
+#include "smith/gretl/data_store.hpp"
 
-namespace serac {
+namespace smith {
 
 DoubleState evaluate_objective(const TimeInfo& time_info, const FieldState& shape_disp,
                                const std::vector<FieldState>& inputs, const ScalarObjective* objective)
@@ -40,4 +40,4 @@ DoubleState evaluate_objective(const TimeInfo& time_info, const FieldState& shap
   return value.finalize();
 }
 
-}  // namespace serac
+}  // namespace smith

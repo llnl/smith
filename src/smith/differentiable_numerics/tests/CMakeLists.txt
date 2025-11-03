@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-set(differentiable_numerics_test_depends serac_physics serac_gretl serac_differentiable_numerics gtest)
+set(differentiable_numerics_test_depends smith_physics smith_gretl smith_differentiable_numerics gtest)
 
 set(differentiable_numerics_tests
     test_mechanics.cpp
@@ -12,7 +12,7 @@ set(differentiable_numerics_tests
     paraview_helper.hpp
     )
 
-serac_add_tests( SOURCES       ${differentiable_numerics_tests}
+smith_add_tests( SOURCES       ${differentiable_numerics_tests}
                  DEPENDS_ON    ${differentiable_numerics_test_depends}
                  NUM_MPI_TASKS 1)
 

@@ -12,24 +12,24 @@
 
 #pragma once
 
-#include "serac/gretl/double_state.hpp"
-#include "serac/differentiable_numerics/field_state.hpp"
-#include "serac/physics/scalar_objective.hpp"
+#include "smith/gretl/double_state.hpp"
+#include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/physics/scalar_objective.hpp"
 
-namespace serac {
+namespace smith {
 
 /// Evaluates a DoubleState using a provided ScalarObjective instance, and the input arguments to that objective. This
 /// operation is tracked on the gretl graph.
 DoubleState evaluate_objective(const TimeInfo& time_info, const FieldState& shape_disp,
                                const std::vector<FieldState>& inputs, const ScalarObjective* objective);
 
-/// @brief Utility function to construct a serac::functional which evaluates the total kinetic energy
+/// @brief Utility function to construct a smith::functional which evaluates the total kinetic energy
 template <typename DispSpace, typename DensitySpace>
-auto create_kinetic_energy_integrator(serac::Domain& domain, const mfem::ParFiniteElementSpace& velocity_space,
+auto create_kinetic_energy_integrator(smith::Domain& domain, const mfem::ParFiniteElementSpace& velocity_space,
                                       const mfem::ParFiniteElementSpace& density_space)
 {
   static constexpr int dim = DispSpace::components;
-  auto ke_integrator = std::make_shared<serac::Functional<double(DispSpace, DispSpace, DensitySpace)>>(
+  auto ke_integrator = std::make_shared<smith::Functional<double(DispSpace, DispSpace, DensitySpace)>>(
       std::array<const mfem::ParFiniteElementSpace*, 3>{&velocity_space, &velocity_space, &density_space});
   ke_integrator->AddDomainIntegral(
       Dimension<dim>{}, DependsOn<0, 1, 2>{},
@@ -48,28 +48,28 @@ auto create_kinetic_energy_integrator(serac::Domain& domain, const mfem::ParFini
 /// @brief Utility function which computes the kinetic energy and returns it as a gretl state (with its vjp defined)
 template <typename DispSpace, typename DensitySpace>
 gretl::State<double> compute_kinetic_energy(
-    const std::shared_ptr<serac::Functional<double(DispSpace, DispSpace, DensitySpace)>>& energy_func,
-    serac::FieldState disp, serac::FieldState velo, serac::FieldState density, double scaling)
+    const std::shared_ptr<smith::Functional<double(DispSpace, DispSpace, DensitySpace)>>& energy_func,
+    smith::FieldState disp, smith::FieldState velo, smith::FieldState density, double scaling)
 {
   return gretl::create_state<double, double>(
       // specify how to zero the dual
       [](double forwardVal) { return 0 * forwardVal; },
       // define how to (re)evaluate the output
-      [=](const serac::FEFieldPtr& Disp, const serac::FEFieldPtr& Velo, const serac::FEFieldPtr& Density) -> double {
+      [=](const smith::FEFieldPtr& Disp, const smith::FEFieldPtr& Velo, const smith::FEFieldPtr& Density) -> double {
         return (*energy_func)(0.0, *Disp, *Velo, *Density) * scaling;
       },
       // define how to backpropagate the vjp
-      [=](const serac::FEFieldPtr& Disp, const serac::FEFieldPtr& Velo, const serac::FEFieldPtr& Density,
-          const double& /*ke*/, serac::FEDualPtr& Disp_dual, serac::FEDualPtr& Velo_dual,
-          serac::FEDualPtr& Density_dual, const double& ke_dual) -> void {
-        auto ddisp = (*energy_func)(0.0, serac::differentiate_wrt(*Disp), *Velo, *Density);
-        auto de_ddisp = assemble(serac::get<serac::DERIVATIVE>(ddisp));
+      [=](const smith::FEFieldPtr& Disp, const smith::FEFieldPtr& Velo, const smith::FEFieldPtr& Density,
+          const double& /*ke*/, smith::FEDualPtr& Disp_dual, smith::FEDualPtr& Velo_dual,
+          smith::FEDualPtr& Density_dual, const double& ke_dual) -> void {
+        auto ddisp = (*energy_func)(0.0, smith::differentiate_wrt(*Disp), *Velo, *Density);
+        auto de_ddisp = assemble(smith::get<smith::DERIVATIVE>(ddisp));
 
-        auto dvelo = (*energy_func)(0.0, *Disp, serac::differentiate_wrt(*Velo), *Density);
-        auto de_dvelo = assemble(serac::get<serac::DERIVATIVE>(dvelo));
+        auto dvelo = (*energy_func)(0.0, *Disp, smith::differentiate_wrt(*Velo), *Density);
+        auto de_dvelo = assemble(smith::get<smith::DERIVATIVE>(dvelo));
 
-        auto ddens = (*energy_func)(0.0, *Disp, *Velo, serac::differentiate_wrt(*Density));
-        auto de_ddensity = assemble(serac::get<serac::DERIVATIVE>(ddens));
+        auto ddens = (*energy_func)(0.0, *Disp, *Velo, smith::differentiate_wrt(*Density));
+        auto de_ddensity = assemble(smith::get<smith::DERIVATIVE>(ddens));
 
         Disp_dual->Add(scaling * ke_dual, *de_ddisp);
         Velo_dual->Add(scaling * ke_dual, *de_dvelo);
@@ -83,10 +83,10 @@ gretl::State<double> compute_kinetic_energy(
 inline auto check_gradients(const gretl::State<double>& objectiveState, FieldState& inputState,
                             FiniteElementDual& inputDual, double objectiveBase, gretl::DataStore& dataStore, double eps)
 {
-  serac::FiniteElementState inputSave(*inputState.get());
+  smith::FiniteElementState inputSave(*inputState.get());
   dataStore.reset();
-  serac::FiniteElementState& input = *inputState.get();
-  serac::FiniteElementState pert(input.space(), input.name() + "_pert");
+  smith::FiniteElementState& input = *inputState.get();
+  smith::FiniteElementState pert(input.space(), input.name() + "_pert");
 
   int sz = pert.Size();
   for (int i = 0; i < sz; ++i) {
@@ -121,7 +121,7 @@ inline auto check_gradients(const gretl::State<double>& objectiveState, gretl::S
 /// @brief Testing utility function which runs a gretl graph num_fd_steps (with increasingly smaller finite difference
 /// steps) to check if the computed graph gradients are converging to the finite differenced gradients at the expected
 /// rate
-inline double check_grad_wrt(const gretl::State<double>& objective, serac::FieldState& input, gretl::DataStore& graph,
+inline double check_grad_wrt(const gretl::State<double>& objective, smith::FieldState& input, gretl::DataStore& graph,
                              double eps, size_t num_fd_steps = 4, bool printmore = false)
 {
   // reset each time, just to be sure
@@ -198,4 +198,4 @@ inline double check_grad_wrt(const gretl::State<double>& objective, gretl::State
   return 0;
 };
 
-}  // namespace serac
+}  // namespace smith

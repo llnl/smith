@@ -1,7 +1,7 @@
 #pragma once
 
 #include "vector_state.hpp"
-#include "serac/gretl/create_state.hpp"
+#include "smith/gretl/create_state.hpp"
 
 namespace gretl {
 

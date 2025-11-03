@@ -55,7 +55,7 @@ class ScalarObjective {
   virtual mfem::Vector gradient(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
                                 size_t field_ordinal) const = 0;
 
-  /** @brief Compute objective gradient from a vector of serac::FiniteElementState*, using int for index
+  /** @brief Compute objective gradient from a vector of FiniteElementState*, using int for index
    *
    * @param time_info time and timestep information
    * @param shape_disp shape displacement

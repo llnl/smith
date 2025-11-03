@@ -4,13 +4,13 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-set(serac_gretl_sources
+set(smith_gretl_sources
       data_store.cpp
       state_base.cpp
       vector_state.cpp
     )
 
-set(serac_gretl_headers
+set(smith_gretl_headers
       checkpoint.hpp
       data_store.hpp
       test_utils.hpp
@@ -24,20 +24,20 @@ set(serac_gretl_headers
     )
 
 blt_add_library(
-    NAME        serac_gretl
-    SOURCES     ${serac_gretl_sources}
-    HEADERS     ${serac_gretl_headers}
+    NAME        smith_gretl
+    SOURCES     ${smith_gretl_sources}
+    HEADERS     ${smith_gretl_headers}
     )
 
-target_include_directories(serac_gretl PUBLIC 
+target_include_directories(smith_gretl PUBLIC 
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
     $<INSTALL_INTERFACE:include>
     )
 
-install(FILES ${serac_gretl_headers} DESTINATION include/serac/gretl )
+install(FILES ${smith_gretl_headers} DESTINATION include/smith/gretl )
 
-install(TARGETS              serac_gretl
-        EXPORT               serac-targets
+install(TARGETS              smith_gretl
+        EXPORT               smith-targets
         DESTINATION          lib
         )
 

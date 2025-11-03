@@ -234,7 +234,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
           auto [V1, V2] = V;
           auto orig_surface_flux = integrand(t, X, params...);
           auto [flux_pos, flux_neg] = orig_surface_flux;
-          return serac::inner(V1, flux_pos) + serac::inner(V2, flux_neg);
+          return smith::inner(V1, flux_pos) + smith::inner(V2, flux_neg);
         },
         mesh_->domain(interior_name));
   }
@@ -327,11 +327,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
     for (size_t input_col = 0; input_col < jacobian_weights.size(); ++input_col) {
       if (jacobian_weights[input_col] != 0.0) {
-<<<<<<< HEAD:src/serac/physics/functional_weak_form.hpp
-        auto K = serac::get<DERIVATIVE>(jacs[input_col](time_info.time(), shape_disp, fields));
-=======
-        auto K = smith::get<DERIVATIVE>(jacs[input_col](time, shape_disp, fields));
->>>>>>> develop:src/smith/physics/functional_weak_form.hpp
+        auto K = smith::get<DERIVATIVE>(jacs[input_col](time_info.time(), shape_disp, fields));
         addToJ(jacobian_weights[input_col], assemble(K));
       }
     }
@@ -360,11 +356,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (v_fields[input_col] != nullptr) {
-<<<<<<< HEAD:src/serac/physics/functional_weak_form.hpp
-        auto K = serac::get<DERIVATIVE>(jacs[input_col](time_info.time(), shape_disp, fields));
-=======
-        auto K = smith::get<DERIVATIVE>(jacs[input_col](time, shape_disp, fields));
->>>>>>> develop:src/smith/physics/functional_weak_form.hpp
+        auto K = smith::get<DERIVATIVE>(jacs[input_col](time_info.time(), shape_disp, fields));
         K.AddMult(*v_fields[input_col], *jvp_reactions[0]);
       }
     }
@@ -386,24 +378,15 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{},
                                            time_info.time(), shape_disp, v_fields[0], fields);
     {
-<<<<<<< HEAD:src/serac/physics/functional_weak_form.hpp
-      auto shape_vjp = serac::get<DERIVATIVE>((*v_dot_weak_form_residual_)(
+      auto shape_vjp = smith::get<DERIVATIVE>((*v_dot_weak_form_residual_)(
           DifferentiateWRT<0>{}, time_info.time(), *shape_disp, *v_fields[0], *fields[input_indices]...));
-=======
-      auto shape_vjp = smith::get<DERIVATIVE>((*v_dot_weak_form_residual_)(DifferentiateWRT<0>{}, time, *shape_disp,
-                                                                           *v_fields[0], *fields[input_indices]...));
->>>>>>> develop:src/smith/physics/functional_weak_form.hpp
       auto shape_vjp_vector = assemble(shape_vjp);
       *vjp_shape_disp_sensitivity += *shape_vjp_vector;
     }
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-<<<<<<< HEAD:src/serac/physics/functional_weak_form.hpp
-        auto vec_jac = serac::get<DERIVATIVE>(vecJacs[input_col](time_info.time(), shape_disp, v_fields[0], fields));
-=======
-        auto vec_jac = smith::get<DERIVATIVE>(vecJacs[input_col](time, shape_disp, v_fields[0], fields));
->>>>>>> develop:src/smith/physics/functional_weak_form.hpp
+        auto vec_jac = smith::get<DERIVATIVE>(vecJacs[input_col](time_info.time(), shape_disp, v_fields[0], fields));
         auto vec_jac_mfem_vector = assemble(vec_jac);
         *vjp_sensitivities[input_col] += *vec_jac_mfem_vector;
       }

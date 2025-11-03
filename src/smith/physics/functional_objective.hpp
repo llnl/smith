@@ -103,17 +103,11 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
   virtual mfem::Vector mesh_coordinate_gradient(TimeInfo time_info, ConstFieldPtr shape_disp,
                                                 const std::vector<ConstFieldPtr>& fields) const override
   {
-<<<<<<< HEAD:src/serac/physics/functional_objective.hpp
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
 
-    auto g = serac::get<DERIVATIVE>(
+    auto g = smith::get<DERIVATIVE>(
         (*objective_)(DifferentiateWRT<0>{}, time_info.time(), *shape_disp, *fields[parameter_indices]...));
-=======
-    dt_ = dt;
-    auto g =
-        smith::get<DERIVATIVE>((*objective_)(DifferentiateWRT<0>{}, time, *shape_disp, *fields[parameter_indices]...));
->>>>>>> develop:src/smith/physics/functional_objective.hpp
     return *assemble(g);
   }
 

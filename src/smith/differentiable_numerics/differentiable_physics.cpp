@@ -1,11 +1,11 @@
-#include "serac/differentiable_numerics/differentiable_physics.hpp"
-#include "serac/physics/weak_form.hpp"
-#include "serac/physics/mesh.hpp"
-#include "serac/differentiable_numerics/state_advancer.hpp"
-#include "serac/differentiable_numerics/timestep_estimator.hpp"
-#include "serac/gretl/data_store.hpp"
+#include "smith/differentiable_numerics/differentiable_physics.hpp"
+#include "smith/physics/weak_form.hpp"
+#include "smith/physics/mesh.hpp"
+#include "smith/differentiable_numerics/state_advancer.hpp"
+#include "smith/differentiable_numerics/timestep_estimator.hpp"
+#include "smith/gretl/data_store.hpp"
 
-namespace serac {
+namespace smith {
 
 /// @brief gretl-function to create a dummy-state which records all states and params of interest to the mechanics. This
 /// is used to inject additional adjoint loads and evaluate individual timestep sensitivities for the BasePhysics
@@ -99,7 +99,7 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
 FiniteElementState DifferentiablePhysics::loadCheckpointedState(const std::string& state_name, int cycle)
 {
   SLIC_ERROR_IF(cycle != cycle_,
-                axom::fmt::format("Due to checkpointing restrictions in serac::Mechanics, cannot ask for an arbitrary "
+                axom::fmt::format("Due to checkpointing restrictions in smith::Mechanics, cannot ask for an arbitrary "
                                   "checkpointed cycle, asking for cycle {}, but physics is at cycle {}",
                                   cycle, cycle_));
   return state(state_name);
@@ -146,11 +146,11 @@ void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_n
 }
 
 void DifferentiablePhysics::setAdjointLoad(
-    std::unordered_map<std::string, const serac::FiniteElementDual&> string_to_dual)
+    std::unordered_map<std::string, const smith::FiniteElementDual&> string_to_dual)
 {
   for (auto string_dual_pair : string_to_dual) {
     std::string field_name = string_dual_pair.first;
-    const serac::FiniteElementDual& dual = string_dual_pair.second;
+    const smith::FiniteElementDual& dual = string_dual_pair.second;
     SLIC_ERROR_IF(
         state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
         axom::fmt::format("Could not find dual named {0} in mesh with tag {1} to set", field_name, mesh_->tag()));
@@ -234,10 +234,10 @@ const FiniteElementDual& DifferentiablePhysics::computeTimestepShapeSensitivity(
   return *field_shape_displacement_->get_dual();
 }
 
-const std::unordered_map<std::string, const serac::FiniteElementDual&>
+const std::unordered_map<std::string, const smith::FiniteElementDual&>
 DifferentiablePhysics::computeInitialConditionSensitivity() const
 {
-  std::unordered_map<std::string, const serac::FiniteElementDual&> map;
+  std::unordered_map<std::string, const smith::FiniteElementDual&> map;
   for (auto& name : stateNames()) {
     auto state_index = state_name_to_field_index_.at(name);
     map.insert({name, *initial_field_states_[state_index].get_dual()});
@@ -255,4 +255,4 @@ std::vector<FieldState> DifferentiablePhysics::getAllFieldStates() const
 
 FieldState DifferentiablePhysics::getShapeDispFieldState() const { return *field_shape_displacement_; }
 
-}  // namespace serac
+}  // namespace smith
