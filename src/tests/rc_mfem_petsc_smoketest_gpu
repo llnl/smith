@@ -13,16 +13,16 @@
 -pc_gamg_threshold 0.0
 -mg_levels_ksp_max_it 2
 -mg_levels_ksp_type chebyshev
-# SERAC_EDIT_START
+# SMITH_EDIT_START
 # -mg_levels_esteig_ksp_type cg
 # -mg_levels_esteig_ksp_max_it 10
-# SERAC_EDIT_END
+# SMITH_EDIT_END
 -mg_levels_ksp_chebyshev_esteig 0,0.05,0,1.05
 #sor is not implemented for GPU, use jacobi
 -mg_levels_pc_type jacobi
 
 
-# SERAC_EDIT_START
+# SMITH_EDIT_START
 # Disable "gpu aware mpi" to avoid PETSc runtime errors
 -use_gpu_aware_mpi 0
-# SERAC_EDIT_END
+# SMITH_EDIT_END

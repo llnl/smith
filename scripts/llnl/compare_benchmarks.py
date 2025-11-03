@@ -2,7 +2,7 @@
 "exec" "python3" "-u" "-B" "$0" "$@"
 
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for details.
+# other Smith Project Developers. See the top-level LICENSE file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 #
@@ -65,13 +65,13 @@ def parse_args():
 
 def get_gf_configuration(gf):
     """Get configuration string (compiler and cluster) of a given graph frame"""
-    return f"{gf.metadata.get('serac_compiler')} {gf.metadata.get('cluster')}"
+    return f"{gf.metadata.get('smith_compiler')} {gf.metadata.get('cluster')}"
 
 
 def get_benchmark_id(gf):
     """Get unique benchmark id from a graph frame"""
     cluster = str(gf.metadata.get("cluster", 1))
-    compiler = str(gf.metadata.get("serac_compiler", 1)).replace(" version ", "_")
+    compiler = str(gf.metadata.get("smith_compiler", 1)).replace(" version ", "_")
     executable = str(gf.metadata.get("executable", 1))
     job_size = int(gf.metadata.get("jobsize", 1)) 
     return "{0}_{1}_{2}_{3}".format(cluster, compiler, executable, job_size)

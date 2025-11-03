@@ -2,7 +2,7 @@
 "exec" "python3" "-u" "-B" "$0" "$@"
 
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for details.
+# other Smith Project Developers. See the top-level LICENSE file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -10,7 +10,7 @@
  file: run_examples.py
 
  description: 
-  Build Serac and run examples.
+  Build Smith and run examples.
 
 """
 
@@ -67,7 +67,7 @@ def main():
     examples_output_file = os.path.join(test_root, "output.log.%s.examples.txt" % host_config_root)
     build_dir = os.path.join(test_root, "build-%s" % host_config_root)
 
-    # Build Serac
+    # Build Smith
     os.chdir(repo_dir)
     os.makedirs(test_root, exist_ok=True)
     build_and_test_host_config(test_root=test_root, host_config=host_config_path,

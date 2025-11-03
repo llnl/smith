@@ -1,21 +1,21 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-blt_add_executable( NAME        buckling_cylinder
-                    SOURCES     cylinder.cpp
-                    OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                    DEPENDS_ON  serac_physics
-                    )
+smith_add_executable( NAME        buckling_cylinder
+                      SOURCES     cylinder.cpp
+                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                      DEPENDS_ON  smith_physics
+                      )
 
-if(SERAC_ENABLE_HIP)
+if(SMITH_ENABLE_HIP)
     blt_add_target_compile_flags(TO buckling_cylinder FLAGS "-fgpu-rdc")
     blt_add_target_link_flags(TO buckling_cylinder FLAGS "-fgpu-rdc")
 endif()
 
-serac_add_example_test(NAME           buckling_cylinder_no_contact
+smith_add_example_test(NAME           buckling_cylinder_no_contact
                        COMMAND        buckling_cylinder --no-contact
                        NUM_MPI_TASKS  4)
 
@@ -24,7 +24,7 @@ if(TRIBOL_FOUND)
                  COMMAND        buckling_cylinder --fast
                  NUM_MPI_TASKS  4)
 
-    serac_add_example_test(NAME           buckling_cylinder
+    smith_add_example_test(NAME           buckling_cylinder
                            COMMAND        buckling_cylinder
                            NUM_MPI_TASKS  4)
 endif()
@@ -33,5 +33,5 @@ install(
     FILES
         cylinder.cpp
     DESTINATION
-        examples/serac/buckling
+        examples/smith/buckling
 )

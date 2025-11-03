@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -103,7 +103,7 @@ def parse_arguments():
     parser.add_argument("-n", 
                         "--ninja",
                         action='store_true',
-                        help="use ninja generator to build serac instead of make")
+                        help="use ninja generator to build Smith instead of make")
 
     args, unknown_args = parser.parse_known_args()
     if unknown_args:
