@@ -256,11 +256,12 @@ spack:
     #   externals:
     #   - spec: libunwind@1.3.1
     #     prefix: /usr
-    # libx11:
-    #   buildable: false
-    #   externals:
-    #   - spec: libx11@1.6.8
-    #     prefix: /usr
+    libx11:
+      buildable: false
+      externals:
+      - spec: libx11@1.6.8
+        prefix: /usr
+    lua:
       buildable: false
       externals:
       - spec: lua@5.3.4
