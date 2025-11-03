@@ -221,4 +221,4 @@ spack:
       buildable: false
       externals:
       - spec: py-sphinx@7.4.7
-        prefix: /Users/chapman39/dev/serac/venv
+        prefix: /Users/chapman39/dev/smith/venv

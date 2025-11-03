@@ -41,7 +41,7 @@ jobs:
           compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
           cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF"
         # TODO re-add cuda testing
-        # https://github.com/LLNL/serac/issues/1479
+        # https://github.com/LLNL/smith/issues/1479
         # - job_name: gcc@12.3.0, shared, cuda, no tests/install/warnings as errors
         #   host_config: gcc@12.3.0_cuda.cmake
         #   compiler_image: ${{ needs.set_image_vars.outputs.cuda_docker_image }}
@@ -57,7 +57,7 @@ jobs:
             job_name: llvm@19.1.1, shared, codevelop
             host_config: llvm@19.1.1.cmake
             compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
-            cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF -DSERAC_ENABLE_CODEVELOP=ON"
+            cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF -DSMITH_ENABLE_CODEVELOP=ON"
             build_src_opts: "--skip-install"
     name: ${{ matrix.build_type }} - ${{ matrix.config.job_name }}
     container:
@@ -67,7 +67,7 @@ jobs:
       # Required - default is set to user "serac"
       options: --user root
     steps:
-      - name: Checkout Serac
+      - name: Checkout Smith
         uses: actions/checkout@v4
         with: 
           submodules: recursive
@@ -101,7 +101,7 @@ jobs:
       # If any of checks (e.g. style) fail, allow other jobs to continue running.
       fail-fast: false
       matrix:
-        # TODO re-enable coverage https://github.com/LLNL/serac/issues/1481
+        # TODO re-enable coverage https://github.com/LLNL/smith/issues/1481
         check_type: [style, header, docs] #[coverage, docs, style, header]
     container:
       image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
@@ -113,7 +113,7 @@ jobs:
         CHECK_TYPE: ${{ matrix.check_type }}
         HOST_CONFIG: llvm@19.1.1.cmake
     steps:
-    - name: Checkout Serac
+    - name: Checkout Smith
       uses: actions/checkout@v4
       with:
         submodules: recursive
@@ -124,7 +124,7 @@ jobs:
       uses: codecov/codecov-action@v4
       with:
         fail_ci_if_error: true
-        files: serac_coverage.info.cleaned
+        files: smith_coverage.info.cleaned
         flags: unittests
         verbose: true
       env:

@@ -72,7 +72,7 @@ def main():
     benchmarks_output_file = os.path.join(test_root, "output.log.%s.benchmarks.txt" % host_config_root)
     build_dir = os.path.join(test_root, "build-%s" % host_config_root)
 
-    # Build Serac
+    # Build Smith
     os.chdir(repo_dir)
     os.makedirs(test_root, exist_ok=True)
     build_and_test_host_config(test_root=test_root, host_config=host_config_path,

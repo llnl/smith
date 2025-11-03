@@ -1,11 +1,11 @@
-// SERAC_EDIT_START
+// SMITH_EDIT_START
 // Source: https://github.com/mfem/mfem/blob/1cb8697ad14ae16ac58755b7bf7c7169f02221e4/examples/petsc/ex1p.cpp
 // clang-format off
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
-// SERAC_EDIT_END
+// SMITH_EDIT_END
 //                       MFEM Example 1 - Parallel Version
 //                              PETSc Modification
 //
@@ -41,11 +41,11 @@
 #include <fstream>
 #include <iostream>
 
-// SERAC_EDIT_START
+// SMITH_EDIT_START
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/serac_config.hpp"
+#include "smith/smith_config.hpp"
 #include "gtest/gtest.h"
-// SERAC_EDIT_END
+// SMITH_EDIT_END
 
 
 #ifndef MFEM_USE_PETSC
@@ -87,13 +87,13 @@ public:
                << "window_title 'Iteration no " << it << "'" << flush;
    }
 };
-// SERAC_EDIT_START
+// SMITH_EDIT_START
 //int main(int argc, char *argv[])
 int ex1_main(int argc, char *argv[])
 {
    // 1. Initialize MPI and HYPRE.
    //Mpi::Init(argc, argv);
-// SERAC_EDIT_END
+// SMITH_EDIT_END
    int num_procs = Mpi::WorldSize();
    int myid = Mpi::WorldRank();
    Hypre::Init();
@@ -137,11 +137,11 @@ int ex1_main(int argc, char *argv[])
    args.AddOption(&forcewrap, "-forcewrap", "--forcewrap",
                   "-noforce-wrap", "--noforce-wrap",
                   "Force matrix-free.");
-   // SERAC_EDIT_START
+   // SMITH_EDIT_START
    // args.AddOption(&useh2, "-useh2", "--useh2", "-no-h2",
    //                "--no-h2",
    //                "Use or not the H2 matrix solver.");
-   // SERAC_EDIT_END
+   // SMITH_EDIT_END
    args.Parse();
    if (!args.Good())
    {
@@ -401,24 +401,24 @@ int ex1_main(int argc, char *argv[])
    return 0;
 }
 
-// SERAC_EDIT_START
+// SMITH_EDIT_START
 // clang-format on
 
 TEST(MfemPetscSmoketest, MfemPetscEx1)
 {
   ::testing::internal::CaptureStdout();
-#ifdef SERAC_USE_CUDA
+#ifdef SMITH_USE_CUDA
   const char* fake_argv[] = {"ex1",
                              "-m",
-                             SERAC_REPO_DIR "/mfem/data/star.mesh",
+                             SMITH_REPO_DIR "/mfem/data/star.mesh",
                              "--usepetsc",
                              "--device",
                              "cuda",
                              "--petscopts",
-                             SERAC_REPO_DIR "/src/tests/rc_mfem_petsc_smoketest_gpu"};
+                             SMITH_REPO_DIR "/src/tests/rc_mfem_petsc_smoketest_gpu"};
 #else
-  const char* fake_argv[] = {"ex1",        "-m",          SERAC_REPO_DIR "/mfem/data/amr-quad.mesh",
-                             "--usepetsc", "--petscopts", SERAC_REPO_DIR "/src/tests/rc_mfem_petsc_smoketest"};
+  const char* fake_argv[] = {"ex1",        "-m",          SMITH_REPO_DIR "/mfem/data/amr-quad.mesh",
+                             "--usepetsc", "--petscopts", SMITH_REPO_DIR "/src/tests/rc_mfem_petsc_smoketest"};
 #endif
   int fake_argc = sizeof(fake_argv) / sizeof(fake_argv[0]);
   ex1_main(fake_argc, const_cast<char**>(fake_argv));
@@ -434,8 +434,8 @@ TEST(MfemPetscSmoketest, MfemPetscEx1)
 
 int main(int argc, char* argv[])
 {
-  // NOTE: This test does not use Serac's ApplicationManager, because
-  // it does not use Serac!
+  // NOTE: This test does not use Smith's ApplicationManager, because
+  // it does not use Smith!
   int result = 0;
 
   ::testing::InitGoogleTest(&argc, argv);
@@ -452,4 +452,4 @@ int main(int argc, char* argv[])
 }
 
 #pragma GCC diagnostic pop
-// SERAC_EDIT_END
+// SMITH_EDIT_END

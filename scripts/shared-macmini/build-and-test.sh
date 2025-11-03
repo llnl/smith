@@ -40,10 +40,9 @@ print_run_log git pull
 print_run_log git submodule update --init --recursive
 
 # Clear previous build(s)
-print_run_log rm -rf _serac_build_and_test*
 print_run_log rm -rf _smith_build_and_test*
 
-# Build and test
+# Build and test project
 print_run_log python3 ./scripts/llnl/build_src.py --host-config $HOST_CONFIG -v -j16
 
 # Update email subject to indicate success and send

@@ -159,7 +159,7 @@ This discrete nonlinear second order ODE system can now be solved using the sele
 Material Parameters
 ===================
 
-Material models in serac may use different parameters for describing elastic properties. Specifying
+Material models in Smith may use different parameters for describing elastic properties. Specifying
 any two of these parameters lets you calculate the rest. The tool below can be used to 
 perform these conversion calculations (assuming 3D):
 

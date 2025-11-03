@@ -10,7 +10,7 @@
  file: build_src.py
 
  description: 
-  Builds Serac with the host-configs for the current machine.
+  Builds Smith with the host-configs for the current machine.
 
 """
 

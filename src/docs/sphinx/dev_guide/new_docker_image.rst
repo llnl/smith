@@ -15,7 +15,7 @@ Create New Docker File
 
 .. note:: If a Dockerfile for the desired compiler already exists, you can skip this section and go to `update-docker-image-label`_ .
 
-#. Start by cloning the ``serac`` repository and creating a branch off ``develop``.  
+#. Start by cloning the ``smith`` repository and creating a branch off ``develop``.  
 #. Ensure that an image exists on Dockerhub for the desired compiler.
    If no corresponding compiler image exists, it should be 
    created before proceeding. Here is the `RADIUSS Docker repository images <https://github.com/LLNL/radiuss-docker/pkgs/container/radiuss>`_.

@@ -123,7 +123,7 @@ set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.22-wazfmdbkalzczo7r5y2utwnimbwjkhnx" CA
 
 # Code checks disabled due to disabled devtools
 
-set(SERAC_ENABLE_CODE_CHECKS OFF CACHE BOOL "")
+set(SMITH_ENABLE_CODE_CHECKS OFF CACHE BOOL "")
 
 set(ENABLE_CLANGFORMAT OFF CACHE BOOL "")
 
