@@ -103,7 +103,7 @@ def parse_arguments():
     parser.add_argument("-n", 
                         "--ninja",
                         action='store_true',
-                        help="use ninja generator to build serac instead of make")
+                        help="use ninja generator to build Smith instead of make")
 
     args, unknown_args = parser.parse_known_args()
     if unknown_args:

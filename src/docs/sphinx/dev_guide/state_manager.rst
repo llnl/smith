@@ -13,9 +13,9 @@ StateManager is a global interface for (as the name suggests) managing state -
 specifically, the following core components of a simulation:
 
   1. Meshes - instances of ``mfem::ParMesh``
-  #. Fields - instances of ``serac::FiniteElementState``
-  #. Duals - instances of ``serac::FiniteElementDual``
-  #. Material state - instances of ``serac::QuadratureData<T>``
+  #. Fields - instances of ``smith::FiniteElementState``
+  #. Duals - instances of ``smith::FiniteElementDual``
+  #. Material state - instances of ``smith::QuadratureData<T>``
 
 
 ``StateManager`` acts as both a factory for creating the latter three kinds of state and a means
@@ -52,7 +52,7 @@ Before any other kinds of state can be created, a mesh must be registered via ``
 In order for a restart to work properly, all state data must be owned by the underlying
 ``StateManager``, so ownership of the mesh is transferred via a ``unique_ptr``.  In the case of multi-mesh
 simulations, a name or "tag" should also be used to uniquely identify the mesh. This is done automatically via
-the ``serac::Mesh`` class.
+the ``smith::Mesh`` class.
 
 Individual physics modules - that are of course based on these kinds of state - can now be constructed.
 In general, this process looks something like the following:
@@ -64,7 +64,7 @@ In general, this process looks something like the following:
      Specifically, the meaning of a mesh parameter is much easier to discern than a string parameter.
 
   #. The physics module creates its fields (e.g., temperature for a heat transfer module) via
-     calls to ``StateManager::newState()``.  In addition to the ``serac::FiniteElementState`` constructor
+     calls to ``StateManager::newState()``.  In addition to the ``smith::FiniteElementState`` constructor
      arguments, this method also accepts a string-valued tag for the mesh with which the field is
      associated.  The appropriate tag is a member of ``BasePhysics`` and initialized in the previous step.
      FIXME: Should we provide a protected helper method in ``BasePhysics`` so derived modules don't need
@@ -82,7 +82,7 @@ In general, this process looks something like the following:
      data associated with a particular mesh. In particular we wouldn't want users to save twice if they have two
      physics modules on the same mesh (by calling ``outputState`` on each).
 
-The use of ``serac::QuadratureData<T>`` for material state data is discussed :ref:`here <quadraturedata-label>`.
+The use of ``smith::QuadratureData<T>`` for material state data is discussed :ref:`here <quadraturedata-label>`.
 
 Restart Workflow
 ----------------
@@ -117,7 +117,7 @@ which implements ``mfem::DataCollection::RegisterQField`` (which accepts a ``Qua
 
 Because ``QuadratureFunction`` only allows for floating-point data (as either scalars or vectors), ``QuadratureData<T>`` allows
 for the storage of arbitrary (user-defined) types via a double-buffer approach.  That is, data is stored in a buffer of type ``T[]``
-for easy access within the ``serac::Functional`` ecosystem (which natively supports ``QuadratureData`` instances) and then copied
+for easy access within the ``smith::Functional`` ecosystem (which natively supports ``QuadratureData`` instances) and then copied
 (via a bit_cast) to the ``double[]`` buffer encapsulated by an ``mfem::QuadratureFunction`` when we wish to save state to disk.  In the case of a
 restart the process works in reverse - data is ``bit_cast`` 'ed from the ``double[]`` buffer to the ``T[]`` buffer.
 

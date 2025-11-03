@@ -12,7 +12,7 @@ EquationSolver
 Mathematical description
 ========================
 
-`EquationSolver <../../doxygen/html/classserac_1_1EquationSolver.html>`__ is an object used for solving nonlinear systems of equations of the form
+`EquationSolver <../../doxygen/html/classsmith_1_1EquationSolver.html>`__ is an object used for solving nonlinear systems of equations of the form
 
 .. math::
 
@@ -44,7 +44,7 @@ for the linear part, we also may need to configure a preconditioner for the syst
 Class design
 ============
 
-`EquationSolver <../../doxygen/html/classserac_1_1EquationSolver.html>`__ provides an interface to the associated nonlinear and linear solver
+`EquationSolver <../../doxygen/html/classsmith_1_1EquationSolver.html>`__ provides an interface to the associated nonlinear and linear solver
 algorithms needed to solve these systems of equations. Note that while some nonlinear solvers do not depend on an embedded linear solver (e.g. L-BFGS), we require a linear 
 solver to be specified as it is used to compute reasonable initial guesses and perform adjoint solves within Smith. 
 
@@ -63,42 +63,42 @@ Common configurations via option structs
 The easist way to build an equation solver is by providing structs containing parameters for common configurations of the linear and nonlinear solvers. They can also
 be passed directly to physics module constructors.
 
-.. literalinclude:: ../../../../src/serac/numerics/equation_solver.hpp
+.. literalinclude:: ../../../../src/smith/numerics/equation_solver.hpp
    :start-after: _build_equationsolver_start
    :end-before: _build_equationsolver_end
    :language: C++
 
 The nonlinear solver configuration options are provided by the ``NonlinearSolverOptions`` struct:
 
-.. literalinclude:: ../../../../src/serac/numerics/solver_config.hpp
+.. literalinclude:: ../../../../src/smith/numerics/solver_config.hpp
    :start-after: _nonlinear_options_start
    :end-before: _nonlinear_options_end
    :language: C++
 
 The current possible nonlinear solution algorithms are:
 
-.. literalinclude:: ../../../../src/serac/numerics/solver_config.hpp
+.. literalinclude:: ../../../../src/smith/numerics/solver_config.hpp
    :start-after: _nonlinear_solvers_start
    :end-before: _nonlinear_solvers_end
    :language: C++
 
 The linear solver configuration options are provided by the ``LinearSolverOptions`` struct:
 
-.. literalinclude:: ../../../../src/serac/numerics/solver_config.hpp
+.. literalinclude:: ../../../../src/smith/numerics/solver_config.hpp
    :start-after: _linear_options_start
    :end-before: _linear_options_end
    :language: C++
 
 The current possible linear solution algorithms are:
 
-.. literalinclude:: ../../../../src/serac/numerics/solver_config.hpp
+.. literalinclude:: ../../../../src/smith/numerics/solver_config.hpp
    :start-after: _linear_solvers_start
    :end-before: _linear_solvers_end
    :language: C++
 
 The current possible preconditioners for iterative linear solvers are:
 
-.. literalinclude:: ../../../../src/serac/numerics/solver_config.hpp
+.. literalinclude:: ../../../../src/smith/numerics/solver_config.hpp
    :start-after: _preconditioners_start
    :end-before: _preconditioners_end
    :language: C++
@@ -109,7 +109,7 @@ Custom configuration via pointers
 If the nonlinear and linear solvers provided by the above options are not sufficient for your application, custom solvers can be written for both the nonlinear
 and linear solver objects. For this approach, the direct constructor for ``EquationSolver`` is used:
 
-.. literalinclude:: ../../../../src/serac/numerics/equation_solver.hpp
+.. literalinclude:: ../../../../src/smith/numerics/equation_solver.hpp
    :start-after: _equationsolver_constructor_start
    :end-before: _equationsolver_constructor_end
    :language: C++
@@ -125,7 +125,7 @@ Use within physics modules
 
 An example of configuring a ``SolidMechanics`` simulation module via options stucts is below:
 
-.. literalinclude:: ../../../../src/serac/physics/tests/solid.cpp
+.. literalinclude:: ../../../../src/smith/physics/tests/solid.cpp
    :start-after: _solver_params_start
    :end-before: _solver_params_end
    :language: C++
@@ -134,7 +134,7 @@ Alternatively, you can build an ``EquationSolver`` using custom nonlinear and li
 by your application. An example of a parameterized ``SolidMechanics`` module that uses a custom ``EquationSolver`` 
 is below:
 
-.. literalinclude:: ../../../../src/serac/physics/tests/solid.cpp
+.. literalinclude:: ../../../../src/smith/physics/tests/solid.cpp
    :start-after: _custom_solver_start
    :end-before: _custom_solver_end
    :language: C++
