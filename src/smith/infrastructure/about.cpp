@@ -196,7 +196,7 @@ void printRunInfo()
   // Add header
   std::string infoMsg = axom::fmt::format("{:*^80}\n", "*");
 
-  infoMsg += axom::fmt::format("{0}: {1}\n", "Serac Version", version());
+  infoMsg += axom::fmt::format("{0}: {1}\n", "Smith Version", version());
   infoMsg += axom::fmt::format("{0}: {1}\n", "Build Type", buildType());
   infoMsg += axom::fmt::format("{0}: {1}\n", "User Name", axom::utilities::getUserName());
   infoMsg += axom::fmt::format("{0}: {1}\n", "Host Name", axom::utilities::getHostName());
