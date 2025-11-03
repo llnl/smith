@@ -66,7 +66,7 @@ std::string about()
   about += "\n";
 
   // General configuration
-#ifdef SERAC_DEBUG
+#ifdef SMITH_DEBUG
   about += format("Debug Build:      {0}\n", on);
 #else
   about += format("Debug Build:      {0}\n", off);
