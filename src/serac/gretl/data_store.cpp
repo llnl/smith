@@ -38,7 +38,6 @@ void for_each_active_upstream(const DataStore* dataStore, size_t step, const Fun
 
 void DataStore::clear_usage(Int step)
 {
-  duals_[step] = nullptr;
   states_[step]->primal() = nullptr;
   active_[step] = false;
   usageCount_[step] = 0;
@@ -63,8 +62,8 @@ void DataStore::reset()
       clear_usage(stepToClear);
     } else {
       num_persistent++;
-      duals_[stepToClear] = nullptr;
     }
+    duals_[stepToClear] = nullptr;
   }
   checkpointManager_.reset();
   currentStep_ = num_persistent;
@@ -157,6 +156,7 @@ void DataStore::try_to_free(Int step)
   if (states_[step] && states_[step]->data_) {
     if (usageCount_[step] == 0 && !active_[step] && states_[step]->data_.use_count() <= 1) {
       states_[step]->primal() = nullptr;
+      duals_[step] = nullptr;
     }
   }
 }
