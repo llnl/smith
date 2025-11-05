@@ -15,43 +15,61 @@ spack:
     - ../defaults.yaml
     - ../versions.yaml
 
-  compilers::
-  - compiler:
-      spec: clang@=14.0.6
-      paths:
-        cc: /opt/homebrew/opt/llvm@14/bin/clang
-        cxx: /opt/homebrew/opt/llvm@14/bin/clang++
-        f77: /opt/homebrew/bin/gfortran-14
-        fc: /opt/homebrew/bin/gfortran-14
-      flags: {}
-      operating_system: sequoia
-      target: aarch64
-      modules: []
-      environment: {}
-      extra_rpaths:
-      - /opt/homebrew/lib/gcc/14
+  toolchains:
+    clang_19:
+    - spec: '%c=llvm'
+      when: '%c'
+    - spec: '%cxx=llvm'
+      when: '%cxx'
+    - spec: '%fortran=gcc'
+      when: '%fortran'
+    - spec: '%openmpi@5.0.8.clang_19'
+      when: '%mpi'
 
   packages:
     all:
-      compiler: [clang, gcc]
+      target: [aarch64]
       providers:
         blas: [openblas]
         lapack: [netlib-lapack]
         mpi: [openmpi]
         zlib-api: [zlib]
-    
+
+    #Compiler packages
+    gcc:
+      externals:
+      - spec: gcc@15.1.0 languages:=c,c++,fortran
+        prefix: /opt/homebrew/opt/gcc@15
+        extra_attributes:
+          compilers:
+            c: /opt/homebrew/opt/gcc@15/bin/gcc-15
+            cxx: /opt/homebrew/opt/gcc@15/bin/g++-15
+            fortran: /opt/homebrew/opt/gcc@15/bin/gfortran
+    llvm:
+      externals:
+      - spec: llvm@19.1.7+clang~lld~lldb
+        prefix: /opt/homebrew/opt/llvm@19
+        extra_attributes:
+          compilers:
+            c: /opt/homebrew/opt/llvm@19/bin/clang
+            cxx: /opt/homebrew/opt/llvm@19/bin/clang++
+          flags:
+            fflags: -fPIC
+          extra_rpaths:
+          - /opt/homebrew/lib/gcc/15
+
     # Providers
     mpi:
       buildable: false
     openmpi:
       buildable: false
       externals:
-      - spec: openmpi@5.0.3_1
+      - spec: openmpi@5.0.8.clang_19
         prefix: /opt/homebrew
     openblas:
       buildable: false
       externals:
-      - spec: openblas@0.3.29
+      - spec: openblas@0.3.30
         prefix: /opt/homebrew
     netlib-lapack:
       buildable: false
@@ -76,7 +94,7 @@ spack:
       - spec: bzip2@1.0.8
         prefix: /opt/homebrew/opt/bzip2
     # NOTE: CMake v4.0 causes metis and other package to fail. Brew doesn't allow older versions
-    # of CMake to be installed, so I installed CMake manually https://cmake.org/files/v3.23/
+    # of CMake to be installed, so I installed CMake manually https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg
     cmake:
       version: [3.23.5]
       buildable: false
@@ -199,19 +217,8 @@ spack:
       externals:
       - spec: doxygen@1.13.2
         prefix: /opt/homebrew
-    llvm:
-      version: [14.0.6]
-      buildable: false
-      externals:
-      - spec: llvm+clang@14.0.6
-        prefix: /opt/homebrew/opt/llvm@14
     py-sphinx:
       buildable: false
       externals:
       - spec: py-sphinx@7.4.7
-        prefix: /Users/chapman39/dev/smith/venv
-    py-ats:
-      buildable: false
-      externals:
-      - spec: py-ats@7.0.105
         prefix: /Users/chapman39/dev/smith/venv

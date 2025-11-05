@@ -93,10 +93,10 @@ macOS
 ^^^^^
 
 .. warning::
-   These instructions are in development, but have been tested for M2 MacBooks. They also need to be tested with Enzyme.
+   These instructions are in development, but have been tested for M2 MacBooks.
 
 .. note::
-   View an example host-config for MacOS in ``host-configs/other/firion-darwin-sequoia-m2-clang@14.0.6.cmake``.
+   View an example host-config for MacOS in ``host-configs/other/firion-macos_sonoma_aarch64-<compiler>.cmake``.
 
 Homebrew is recommended to install base dependencies due to it's stability. Relying on pure Spack historically leads to more failed builds.
 
@@ -111,7 +111,7 @@ If you plan to install the developer tools, you should also run:
 .. code-block:: bash
 
    $ brew install cppcheck doxygen
-   $ ln -s /opt/homebrew/opt/llvm@19/bin/clang-format /opt/homebrew/bin/clang-format
+   $ ln -fs /opt/homebrew/opt/llvm@19/bin/clang-format /opt/homebrew/bin/clang-format
 
 If you have installed Homebrew using the default installation prefix, most packages will be accessible through the prefix ``/opt/homebrew``.
 Note for Intel-based Macs, the installation prefix is ``/usr/local``. If you set a custom prefix or aren't sure what the prefix is, run ``brew --prefix``.
@@ -131,7 +131,7 @@ This is also useful for a few additional packages:
 
     We provide a basic MacOS Spack environment file that
     may work for most people. If you want to try using that, skip to :ref:`building_tpls-label`
-    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/macos_sonoma_aarch64/spack.yaml``. You will likely
+    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/darwin/spack.yaml``. You will likely
     need to update the versions of packages to match the versions installed by Homebrew. The versions for all installed packages can be listed via
     the command ``brew list --versions``.
 
@@ -141,18 +141,30 @@ This is also useful for a few additional packages:
     should be ``--spec="^openmpi@5 %clang@19"`` and to build with devtools and profiling enabled,
     change the spec to ``"+devtools+profiling ^openmpi@5 %clang@19"``
 
+Given that Homebrew can only install CMake version 4.0 and it breaks some TPL builds (e.g. metis), its recommended to install an older version of CMake
+manually. You can do this by downloading from `CMake's official archive <https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg>`_. After installing
+CMake 3.23, you will need to specify the path in the Spack environment like so:
+
+.. code-block:: yaml
+
+    cmake:
+      version: [3.23.5]
+      buildable: false
+      externals:
+      - spec: cmake@3.23.5
+        prefix: /Applications/CMake.app/Contents
+
 Optionally, you can install the developer tools via ``pip``. This step is only required if you wish to use Smith's developer tools.
 In order to use Python devtools, you will need to create a Python venv. This is much more reliable than having Spack install 20+ Python packages.
 In this example, we are using the builtin Python in ``/usr/bin``, but it is possible to use a version installed from Homebrew or elsewhere.
-
-Next, you will need to install wheel and Sphinx:
+Install wheel and Sphinx:
 
 .. code-block:: bash
 
-   python3 -m venv --system-site-packages venv
+   python3 -m venv venv
    source venv/bin/activate
-   pip install wheel
-   pip install sphinx
+   pip install wheel sphinx
+   sphinx-build --version
 
 Keep track of the Sphinx version while installing, since you'll need it for the next step.
 
@@ -174,18 +186,11 @@ Versions and prefixes may vary.
       externals:
       - spec: doxygen@1.12.0
         prefix: /opt/homebrew
-    llvm:
-      version: [19.1.1]
-      buildable: false
-      externals:
-      - spec: llvm+clang@19.1.1
-        prefix: /opt/homebrew/opt/llvm@19
     py-sphinx:
       buildable: false
       externals:
       - spec: py-sphinx@7.4.7
         prefix: /path/to/venv
-
 
 Livermore Computing (LC)
 ^^^^^^^^^^^^^^^^^^^^^^^^
