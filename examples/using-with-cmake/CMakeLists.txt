@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.14)
 
-project(serac_example LANGUAGES C CXX)
+project(smith_example LANGUAGES C CXX)
 
 message(STATUS "CMake Version: ${CMAKE_VERSION}")
 
 include(CMakeFindDependencyMacro)
-find_dependency(serac REQUIRED NO_DEFAULT_PATH PATHS "${SERAC_DIR}/lib/cmake")
+find_dependency(smith REQUIRED NO_DEFAULT_PATH PATHS "${SMITH_DIR}/lib/cmake")
 
 #---------------------------------------------------------------------------
 # Remove non-existant INTERFACE_INCLUDE_DIRECTORIES from imported targets
@@ -22,7 +22,7 @@ set(_imported_targets
    conduit_blueprint
    conduit_blueprint_mpi
    tribol::mfem
-   serac::mfem
+   smith::mfem
    mfem)
 
 foreach(_target ${_imported_targets})
@@ -43,9 +43,9 @@ foreach(_target ${_imported_targets})
    endif()
 endforeach()
 
-add_executable(serac_example serac_example.cpp)
-target_link_libraries(serac_example serac::serac)
+add_executable(smith_example smith_example.cpp)
+target_link_libraries(smith_example smith::smith)
 
 enable_testing()
-add_test(NAME    serac_example 
-         COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1 ./serac_example)
+add_test(NAME    smith_example 
+         COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1 ./smith_example)

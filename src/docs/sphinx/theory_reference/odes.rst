@@ -86,7 +86,7 @@ consistent with the initial conditions):
 At the end of the day, we are solving for a single acceleration vector,
 :math:`\ddot{\textbf{x}}(t+\Delta t)`, and as a result, we cannot hope to
 simultaneously satisfy more than one interpretation of these
-constraints. The different Dirichlet Enforcement Methods in serac relate
+constraints. The different Dirichlet Enforcement Methods in Smith relate
 to the following different interpretations of the constraint equations.
 
 .. _header-n97:

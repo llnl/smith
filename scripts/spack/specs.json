@@ -21,5 +21,8 @@
     [ "~devtools+profiling~openmp+rocm~petsc~slepc+enzyme amdgpu_target=gfx942,gfx90a %rocm_6_4_2"],
 
     "blueos_3_ppc64le_ib_p9":
-    [ "+devtools+cuda+profiling~strumpack %clang_gfortran cuda_arch=70" ]
+    [ "+devtools+cuda+profiling~strumpack %clang_gfortran cuda_arch=70" ],
+
+    "macos_sonoma_aarch64":
+    [ "+devtools+profiling+enzyme~openmp %clang_19" ]
 }

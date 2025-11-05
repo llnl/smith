@@ -18,7 +18,7 @@
     # like we do in config-build
     - module load cmake/3.23.1
     # Workaround for multiple before_scripts - see https://gitlab.com/gitlab-org/gitlab-runner/-/issues/2301
-    # See also https://github.com/LLNL/serac/pull/417#discussion_r631194968
+    # See also https://github.com/LLNL/smith/pull/417#discussion_r631194968
     - if [[ $CUDA_BUILD == "ON" ]]; then module load cuda/11.8.0; fi
 
 ####
