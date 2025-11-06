@@ -62,20 +62,20 @@ std::string about()
   std::string about = "\n";
 
   // Version info
-  about += format("Smith Version:   {0}\n", version());
+  about += format("Smith Version:    {0}\n", version());
   about += "\n";
 
   // General configuration
 #ifdef SMITH_DEBUG
-  about += format("Debug Build:     {0}\n", on);
+  about += format("Debug Build:      {0}\n", on);
 #else
-  about += format("Debug Build:     {0}\n", off);
+  about += format("Debug Build:      {0}\n", off);
 #endif
 
 #ifdef SMITH_USE_CUDA
-  about += format("CUDA:            {0}\n", on);
+  about += format("CUDA:             {0}\n", on);
 #else
-  about += format("CUDA:            {0}\n", off);
+  about += format("CUDA:             {0}\n", off);
 #endif
 
   about += "\n";
@@ -91,21 +91,21 @@ std::string about()
   about += "Enabled Libraries:\n";
 
   // Axom
-  about += format("Axom Version:    {0}\n", axom::getVersion());
+  about += format("Axom Version:     {0}\n", axom::getVersion());
 
   // Camp
-  about += format("Camp Version:    {0}\n", CAMP_VERSION);
+  about += format("Camp Version:     {0}\n", CAMP_VERSION);
 
   // Caliper
 #ifdef SMITH_USE_CALIPER
-  about += format("Caliper Version: {0}\n", CALIPER_VERSION);
+  about += format("Caliper Version:  {0}\n", CALIPER_VERSION);
 #else
   disabled_libs.push_back("Caliper");
 #endif
 
   // Conduit
 #ifdef SMITH_USE_CONDUIT
-  about += format("Conduit Version: {0}\n", CONDUIT_VERSION);
+  about += format("Conduit Version:  {0}\n", CONDUIT_VERSION);
 #else
   disabled_libs.push_back("Conduit");
 #endif
@@ -119,7 +119,7 @@ std::string about()
   } else {
     h5_version = format("{0}.{1}.{2}", h5_maj, h5_min, h5_rel);
   }
-  about += format("HDF5 Version:    {0}\n", h5_version);
+  about += format("HDF5 Version:     {0}\n", h5_version);
 #else
   disabled_libs.push_back("HDF5");
 #endif
@@ -130,7 +130,7 @@ std::string about()
   if (axom::utilities::string::startsWith(lua_version, "Lua ")) {
     lua_version.erase(0, 4);
   }
-  about += format("Lua Version:     {0}\n", lua_version);
+  about += format("Lua Version:      {0}\n", lua_version);
 #else
   disabled_libs.push_back("Lua");
 #endif
@@ -151,25 +151,25 @@ std::string about()
   if (mfem_sha[0] != '\0') {
     mfem_full_version += format(" (Git SHA: {0})", mfem_sha);
   }
-  about += format("MFEM Version:    {0}\n", mfem_full_version);
+  about += format("MFEM Version:     {0}\n", mfem_full_version);
 
   // RAJA
 #ifdef SMITH_USE_RAJA
-  about += format("RAJA Version:    {0}.{1}.{2}\n", RAJA_VERSION_MAJOR, RAJA_VERSION_MINOR, RAJA_VERSION_PATCHLEVEL);
+  about += format("RAJA Version:     {0}.{1}.{2}\n", RAJA_VERSION_MAJOR, RAJA_VERSION_MINOR, RAJA_VERSION_PATCHLEVEL);
 #else
   disabled_libs.push_back("RAJA");
 #endif
 
   // Tribol
 #ifdef SMITH_USE_TRIBOL
-  about += format("Tribol Version:    {0}\n", TRIBOL_VERSION_FULL);
+  about += format("Tribol Version:     {0}\n", TRIBOL_VERSION_FULL);
 #else
   disabled_libs.push_back("Tribol");
 #endif
 
   // Umpire
 #ifdef SMITH_USE_UMPIRE
-  about += format("Umpire Version:  {0}.{1}.{2}\n", umpire::get_major_version(), umpire::get_minor_version(),
+  about += format("Umpire Version:   {0}.{1}.{2}\n", umpire::get_major_version(), umpire::get_minor_version(),
                   umpire::get_patch_version());
 #else
   disabled_libs.push_back("Umpire");
@@ -194,9 +194,9 @@ std::string gitSHA() { return SMITH_GIT_SHA; }
 void printRunInfo()
 {
   // Add header
-  std::string infoMsg = axom::fmt::format("\n{:*^80}\n", " Smith Run Information ");
+  std::string infoMsg = axom::fmt::format("{:*^80}\n", "*");
 
-  infoMsg += axom::fmt::format("{0}: {1}\n", "Version", version());
+  infoMsg += axom::fmt::format("{0}: {1}\n", "Smith Version", version());
   infoMsg += axom::fmt::format("{0}: {1}\n", "Build Type", buildType());
   infoMsg += axom::fmt::format("{0}: {1}\n", "User Name", axom::utilities::getUserName());
   infoMsg += axom::fmt::format("{0}: {1}\n", "Host Name", axom::utilities::getHostName());
