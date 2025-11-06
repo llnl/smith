@@ -138,8 +138,8 @@ This is also useful for a few additional packages:
 .. note::
     The invocation of ``uberenv.py`` is slightly modified from the standard instructions below
     in order to force the use of the Homebrew-installed MPI and compilers. The spec command line option
-    should be ``--spec="^openmpi@5 %clang@19"`` and to build with devtools and profiling enabled,
-    change the spec to ``"+devtools+profiling ^openmpi@5 %clang@19"``
+    should be ``--spec="^openmpi@5 %clang_19"`` and to build with devtools and profiling enabled,
+    change the spec to ``"+devtools+profiling ^openmpi@5 %clang_19"``
 
 Given that Homebrew can only install CMake version 4.0 and it breaks some TPL builds (e.g. metis), its recommended to install an older version of CMake
 manually. You can do this by downloading from `CMake's official archive <https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg>`_. After installing
@@ -206,7 +206,7 @@ developing large codes. To specify which compiler to use add the compiler specif
 command line option. We provide recommended Spack specs for LC in ``scripts/spack/specs.json``.
 
 You can use these directly in the ``uberenv.py`` command in the :ref:`building_tpls-label`
-section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang@=19.1.1"``.
+section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang_19.1.1"``.
 
 .. note::
   On LC machines, it is good practice to do the build step in parallel on a compute node.
@@ -332,18 +332,18 @@ that you want to develop with:
 
 .. code-block:: bash
 
-    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=<path/to/spack.yaml> --spec="%clang@=19.1.1"
+    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=<path/to/spack.yaml> --spec="%clang_19"
 
 Some helpful uberenv options include :
 
 * ``--spec=" build_type=Debug"`` (build core TPLs, such as MFEM and Hypre, with debug symbols)
 * ``--spec=+profiling`` (build the Adiak and Caliper libraries)
 * ``--spec=+devtools`` (also build the devtools with one command)
-* ``--spec=%clang@19.1.1`` (build with a specific compiler as defined in the ``spack.yaml`` file)
+* ``--spec=%clang_19`` (build with a specific compiler as defined in the ``spack.yaml`` file)
 * ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
 * ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Smith repository
 
-The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang@19.1.1'``.
+The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang_19'``.
 
 
 If successful, you will see two things. The first is what we call a host-config. It is all the CMake
