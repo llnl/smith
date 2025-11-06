@@ -206,7 +206,7 @@ developing large codes. To specify which compiler to use add the compiler specif
 command line option. We provide recommended Spack specs for LC in ``scripts/spack/specs.json``.
 
 You can use these directly in the ``uberenv.py`` command in the :ref:`building_tpls-label`
-section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang_19.1.1"``.
+section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang_19"``.
 
 .. note::
   On LC machines, it is good practice to do the build step in parallel on a compute node.
