@@ -276,6 +276,42 @@ class StateManager {
   static FiniteElementDual newDual(const mfem::ParFiniteElementSpace& space, const std::string& dual_name);
 
   /**
+   * @brief Factory method for creating an array of new FEDual objects.
+   *
+   * @tparam N             The number of duals to create.
+   * @tparam FunctionSpace The function space (e.g. H1<1>) to build the finite element duals on.
+   *
+   * @param space       The function space used to build the finite element duals.
+   * @param full_prefix A common string prefix for naming the duals (each dual will be named as
+   *                    "<full_prefix>_<index>", where <index> runs from 0 to N-1).
+   * @param mesh_tag    The tag for the stored mesh used to construct the finite element duals.
+   *
+   * @return An std::array of N constructed finite element duals.
+   *
+   * @see StateManager::newDual
+   * @note If this is a restart then the options (except for the names) will be ignored.
+   */
+  template <int N, typename FunctionSpace>
+  static std::array<FiniteElementDual, N>
+  newDualArray(
+    FunctionSpace space,
+    std::string const &full_prefix,
+    std::string const &mesh_tag
+  ) {
+
+    return [&]<size_t... I>(std::index_sequence<I...>) {
+      return std::array<FiniteElementDual, N>{
+        StateManager::newDual<FunctionSpace>(
+          space,
+          full_prefix + "_" + std::to_string(I),  // Just append index.
+          mesh_tag
+        )...
+      };
+    }(std::make_index_sequence<N>{});
+
+  }
+
+  /**
    * @brief Store a pre-constructed finite element dual in the state manager
    *
    * @param dual The finite element dual to store

@@ -155,4 +155,17 @@ double innerProduct(const FiniteElementVector& v1, const FiniteElementVector& v2
   return global_ip;
 }
 
+double norml2(const mfem::HypreParVector& fe_vector)
+{
+  // GlobalVector() allocates a new mfem::Vector on the heap containing all entries
+  // from the parallel vector, and transfers ownership of it to the caller. To
+  // avoid confusion and ensure this memory is released automatically when we exit
+  // this scope, we wrap it in a std::unique_ptr.
+  std::unique_ptr<mfem::Vector> global_vec(fe_vector.GlobalVector());
+
+  // Compute and return the Euclidean L2 norm of the fully assembled global vector.
+  // Norml2() computes sqrt(sum_i v_i^2) over all entries.
+  return global_vec->Norml2();
+}
+
 }  // namespace serac

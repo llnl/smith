@@ -65,6 +65,67 @@ struct LinearIsotropicConductor {
   double conductivity_;
 };
 
+struct ConstantIsotropicDiffuser {
+
+  /**
+   * @brief Construct a new Linear Isotropic Diffuser object
+   *
+   * @param density     Density of the carrier fluid/material (mass/volume).
+   * @param diffusivity Mass diffusivity (length^2 / time).
+   */
+  ConstantIsotropicDiffuser(
+    double density = 1.0,
+    double diffusivity = 1.0
+  ) : density_(density)
+    , diffusivity_(diffusivity) {
+
+    SLIC_ERROR_ROOT_IF(
+      density_ < 0.0,
+      "Density must be positive in the linear isotropic diffuser model."
+    );
+
+    SLIC_ERROR_ROOT_IF(
+      diffusivity_ < 0.0,
+      "Diffusivity must be positive in the linear isotropic diffuser model."
+    );
+
+  }
+
+  /**
+   * @brief Material response call for a linear isotropic diffusion material.
+   *
+   * @tparam T1 Spatial position type.
+   * @tparam T2 Scalar field type (e.g., species mass fraction Y).
+   * @tparam T3 Scalar gradient type.
+
+   * @param[in] gradient_y Gradient of the transported scalar Y.
+
+   * @return The material response (tuple of capacity and diffusive flux).
+   */
+  template <typename T1, typename T2, typename T3>
+  SERAC_HOST_DEVICE auto
+  operator()(
+    T1 const& /* x */,
+    T2 const& /* Y */,
+    T3 const& gradient_Y
+  ) const {
+
+    // Capacity = ρ * C (with C = 1 for species)
+    // Flux = -ρ D ∇Y
+    return serac::tuple{density_, 1.0, -1.0 * density_ * diffusivity_ * gradient_Y};
+
+  }
+
+ private:
+
+  /// Constant density.
+  double density_;
+
+  /// Constant isotropic mass diffusivity.
+  double diffusivity_;
+
+};
+
 /// Nonlinear isotropic heat transfer material model
 struct IsotropicConductorWithLinearConductivityVsTemperature {
   /**

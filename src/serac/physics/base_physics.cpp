@@ -390,6 +390,88 @@ std::unordered_map<std::string, FiniteElementState> BasePhysics::getCheckpointed
   return previous_states_map;
 }
 
+std::vector<serac::FiniteElementState>
+BasePhysics::getPreviousStates(
+  int const &cycle,
+  int const &num_requested_states,
+  std::string const &field_name
+) {
+
+  int const num_available = std::min(num_requested_states, cycle);
+  std::vector<::serac::FiniteElementState> previous_states;
+
+  for (int i = 0; i < num_available; ++i) {
+
+      int checkpoint_step = cycle - 1 - i;
+
+      SLIC_ERROR_ROOT_IF(
+        checkpoint_step < 0,
+        axom::fmt::format("Invalid checkpoint step: {} (cycle = {})", checkpoint_step, cycle)
+      );
+
+      // First check: Does the field exist in the overall checkpoint map?
+      SLIC_ERROR_ROOT_IF(
+        checkpoint_states_.find(field_name) == checkpoint_states_.end(),
+        axom::fmt::format("Field '{}' was never registered in the checkpoint history.", field_name)
+      );
+
+      // Second check: Is the checkpoint step valid for this field?
+      SLIC_ERROR_ROOT_IF(
+        checkpoint_step >= static_cast<int>(checkpoint_states_.at(field_name).size()),
+        axom::fmt::format("Checkpoint step {} exceeds stored checkpoints for field '{}'.", checkpoint_step, field_name)
+      );
+
+      // Now we can safely fetch that particular timestep and check the field within it.
+      auto const &checkpointed = this->getCheckpointedStates(checkpoint_step);
+
+      previous_states.push_back(checkpointed.at(field_name));
+
+  }
+
+  return previous_states;
+
+}
+
+double
+BasePhysics::getAbsoluteChangeState(
+  int const &cycle,
+  std::string const &state_name
+) {
+
+  SLIC_ERROR_ROOT_IF(
+    cycle < 1,
+    axom::fmt::format(
+      "Cannot compute absolute change for state '{}': invalid cycle {} (must be >= 1).",
+      state_name,
+      cycle
+    )
+  );
+
+  auto current_state  = this->getCheckpointedStates(cycle).at(state_name);
+  auto previous_state = this->getCheckpointedStates(cycle - 1).at(state_name);
+
+  auto diff(current_state);
+  diff.Add(-1.0, previous_state);
+
+  return norm(diff);
+
+}
+
+double
+BasePhysics::getRelativeChangeState(
+  int const &cycle,
+  std::string const &state_name
+) {
+
+  double norm_diff = this->getAbsoluteChangeState(cycle, state_name);
+
+  auto current_state = this->getCheckpointedStates(cycle).at(state_name);
+  double norm_curr = norm(current_state);
+
+  return norm_diff / (norm_curr + 1.0e-12);  // Prevent division by zero.
+
+}
+
 double BasePhysics::getCheckpointedTimestep(int cycle) const
 {
   SLIC_ERROR_ROOT_IF(cycle < 0, axom::fmt::format("Negative cycle number requested for physics module {}.", name_));
@@ -397,6 +479,20 @@ double BasePhysics::getCheckpointedTimestep(int cycle) const
                      axom::fmt::format("Timestep for cycle {} requested, but physics module has only reached cycle {}.",
                                        cycle, timesteps_.size()));
   return cycle < static_cast<int>(timesteps_.size()) ? timesteps_[static_cast<size_t>(cycle)] : 0.0;
+}
+
+double BasePhysics::getCheckpointedTime(int cycle) const
+{
+  SLIC_ERROR_ROOT_IF(cycle < 0, axom::fmt::format("Negative cycle number requested for physics module {}.", name_));
+  SLIC_ERROR_ROOT_IF(cycle > static_cast<int>(timesteps_.size()),
+                     axom::fmt::format("Time for cycle {} requested, but physics module has only reached cycle {}.",
+                                       cycle, timesteps_.size()));
+
+  double time = 0.0;
+  for (int i = 0; i < cycle; ++i) {
+    time += timesteps_[static_cast<size_t>(i)];
+  }
+  return time;
 }
 
 namespace detail {

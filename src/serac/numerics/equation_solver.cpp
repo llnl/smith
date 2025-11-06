@@ -110,10 +110,13 @@ class NewtonSolver : public mfem::NewtonSolver {
     int it = 0;
     for (; true; it++) {
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
+
       if (print_level == 2) {
         mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
         if (it > 0) {
-          mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
+          mfem::out << ", ||r||/||r_0|| = "
+          << std::scientific << std::setw(12) << std::setprecision(6)
+          << (initial_norm != 0.0 ? norm / initial_norm : norm);
         }
         mfem::out << '\n';
       }
@@ -678,11 +681,18 @@ class TrustRegion : public mfem::NewtonSolver {
     int it = 0;
     for (; true; it++) {
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
+
       if (print_level == 2) {
         mfem::out << "TrustRegion iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
+
         if (it > 0) {
-          mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
-          mfem::out << ", x_incr = " << std::setw(13) << trResults.d.Norml2();
+          mfem::out << ", ||r||/||r_0|| = " << std::scientific << std::setw(12)
+            << std::setprecision(6)
+            << (initial_norm != 0.0 ? norm / initial_norm : norm);
+
+          mfem::out << ", x_incr = "
+          << std::scientific << std::setw(12) << std::setprecision(6)
+          << trResults.d.Norml2();
         } else {
           mfem::out << ", norm goal = " << std::setw(13) << norm_goal;
         }

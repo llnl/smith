@@ -84,6 +84,14 @@ struct tensor<T, m> {
     return data[0];
   }
 
+  SERAC_HOST_DEVICE constexpr tensor& operator=(const T& scalar)
+  {
+    for (int i = 0; i < m; ++i) {
+      data[i] = scalar;
+    }
+    return *this;
+  }
+
   T data[m];
 };
 /// @endcond
@@ -1945,6 +1953,38 @@ SERAC_HOST_DEVICE constexpr int size(const double&) { return 1; }
 
 /// @overload
 SERAC_HOST_DEVICE constexpr int size(zero) { return 0; }
+
+/**
+ * @brief Returns the rank (number of dimensions) of a tensor.
+ *
+ * @tparam T The datatype stored in the tensor.
+ * @tparam n The extents of each dimension.
+ *
+ * @return The number of dimensions (rank) of the tensor.
+ */
+template <typename T, int... n>
+SERAC_HOST_DEVICE int constexpr
+rank(
+  ::serac::tensor<T, n...> const &
+) {
+  return sizeof...(n);
+}
+
+/**
+ * @brief Returns the shape (extents of each dimension) of a tensor.
+ *
+ * @tparam T The datatype stored in the tensor.
+ * @tparam n The extents of each dimension.
+ *
+ * @return A ::std::array of extents representing the tensor shape.
+ */
+template <typename T, int... n>
+SERAC_HOST_DEVICE ::std::array<int, sizeof...(n)> constexpr
+shape(
+  ::serac::tensor<T, n...> const &
+) {
+  return {n...};
+}
 
 /**
  * @brief a function for querying the ith dimension of a tensor
