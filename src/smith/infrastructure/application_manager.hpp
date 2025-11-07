@@ -11,7 +11,7 @@
 #include <iostream>
 
 #include "mpi.h"
-#include "serac/infrastructure/accelerator.hpp"
+#include "smith/infrastructure/accelerator.hpp"
 
 namespace smith {
 
