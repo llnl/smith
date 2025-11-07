@@ -135,6 +135,7 @@ class ContactConstraint : public Constraint {
       // note: Tribol does not use cycle.
       int cycle = 0;
       contact_.update(cycle, time, dt);
+      pressures_set_ = false;
     }
     auto gaps_hpv = contact_.mergedGaps(false);
     // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
@@ -163,6 +164,7 @@ class ContactConstraint : public Constraint {
       int cycle = 0;
       contact_.update(cycle, time, dt);
       J_contact_ = contact_.mergedJacobian();
+      pressures_set_ = false;
     }
     int iblock = 1;
     int jblock = 0;
@@ -189,13 +191,17 @@ class ContactConstraint : public Constraint {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
 
+    int cycle = 0;
     if (new_point) {
-      int cycle = 0;
       // we need to call update first to update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
         interaction.evalJacobian(false);
       }
       contact_.update(cycle, time, dt);
+      pressures_set_ = false;
+    }
+    if (!pressures_set_)
+    {
       // with updated gaps, we can update pressure for contact interactions with penalty enforcement
       contact_.setPressures(multipliers);
       // call update again with the right pressures
@@ -203,6 +209,7 @@ class ContactConstraint : public Constraint {
         interaction.evalJacobian(true);
       }
       contact_.update(cycle, time, dt);
+      pressures_set_ = true;
     }
 
     return contact_.forces();
@@ -228,13 +235,17 @@ class ContactConstraint : public Constraint {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
+    int cycle = 0;
     if (new_point) {
-      int cycle = 0;
       // we need to call update first to update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
         interaction.evalJacobian(false);
       }
       contact_.update(cycle, time, dt);
+      pressures_set_ = false;
+    }
+    if (!pressures_set_)
+    {
       // with updated gaps, we can update pressure for contact interactions with penalty enforcement
       contact_.setPressures(multipliers);
       // call update again with the right pressures
@@ -242,8 +253,8 @@ class ContactConstraint : public Constraint {
         interaction.evalJacobian(true);
       }
       contact_.update(cycle, time, dt);
-
       J_contact_ = contact_.mergedJacobian();
+      pressures_set_ = true;
     }
     int iblock = 0;
     int jblock = 0;
@@ -267,11 +278,12 @@ class ContactConstraint : public Constraint {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
+    int cycle = 0;
     if (new_point) {
-      int cycle = 0;
       contact_.update(cycle, time, dt);
       J_contact_.reset();
       J_contact_ = contact_.mergedJacobian();
+      pressures_set_ = false;
     }
     int iblock = 0;
     int jblock = 1;
@@ -304,9 +316,16 @@ class ContactConstraint : public Constraint {
   mutable std::unique_ptr<mfem::BlockOperator> J_contact_;
 
   /**
-   * @brief bool
+   * @brief own_blocks_ temporary boolean 
    */
   const bool own_blocks_ = true;
+
+  /**
+   * @brief pressures_set_ are the Lagrange multipliers set
+   */
+  mutable bool pressures_set_ = false;
+
+
 };
 
 }  // namespace serac
