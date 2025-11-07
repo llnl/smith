@@ -1,7 +1,7 @@
 {
     "__comment__":"##############################################################################",
     "__comment__":"# Copyright (c) Lawrence Livermore National Security, LLC and      ",
-    "__comment__":"# other Serac Project Developers. See the top-level COPYRIGHT file for details.",
+    "__comment__":"# other Smith Project Developers. See the top-level COPYRIGHT file for details.",
     "__comment__":"#                                                                             ",
     "__comment__":"# SPDX-License-Identifier: (BSD-3-Clause)                                     ",
     "__comment__":"##############################################################################",
@@ -21,5 +21,8 @@
     [ "~openmp+profiling+rocm+raja+umpire+strumpack~petsc %rocmcc@6.2.1 amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion"],
 
     "blueos_3_ppc64le_ib_p9":
-    [ "+devtools+cuda+raja+umpire+profiling~strumpack %clang_gfortran cuda_arch=70" ]
+    [ "+devtools+cuda+raja+umpire+profiling~strumpack %clang_gfortran cuda_arch=70" ],
+
+    "macos_sonoma_aarch64":
+    [ "+devtools+profiling+enzyme~openmp %clang_19" ]
 }

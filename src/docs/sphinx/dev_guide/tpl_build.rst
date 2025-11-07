@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -13,7 +13,7 @@ Third-party Library (TPL) Build
 Spack and Uberenv
 -----------------
 
-Serac uses `Spack <https://github.com/spack/spack>`_ to build it's TPLs.
+Smith uses `Spack <https://github.com/spack/spack>`_ to build it's TPLs.
 This has been encapsulated using `Uberenv <https://github.com/LLNL/uberenv>`_.
 Uberenv helps by doing the following:
 
@@ -23,16 +23,16 @@ Uberenv helps by doing the following:
 * Installs our Spack packages into the local Spack Environment
 * Simplifies whole dependency build into one command
 
-Uberenv will create a directory containing a Spack instance with the required Serac
+Uberenv will create a directory containing a Spack instance with the required Smith
 TPLs installed.
 
 .. note::
-   This directory **must not** be within the Serac repo - the example below
+   This directory **must not** be within the Smith repo - the example below
    controls this with the ``--prefix`` command line argument which is required.
 
 It also generates a host-config file (``<config_dependent_name>.cmake``)
-at the root of Serac repository. This host-config defines all the required information for building
-Serac.
+at the root of Smith repository. This host-config defines all the required information for building
+Smith.
 
 ------------------
 Basic System Setup
@@ -49,7 +49,7 @@ The following page provides basic guidance on the following platforms:
 
 .. note::
 
-   Serac uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
+   Smith uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
    automatic differentiation. Due to this you have to compile with an LLVM-based compiler.
    We recommend ``clang``.
 
@@ -93,10 +93,10 @@ macOS
 ^^^^^
 
 .. warning::
-   These instructions are in development, but have been tested for M2 MacBooks. They also need to be tested with Enzyme.
+   These instructions are in development, but have been tested for M2 MacBooks.
 
 .. note::
-   View an example host-config for MacOS in ``host-configs/other/firion-darwin-sequoia-m2-clang@14.0.6.cmake``.
+   View an example host-config for MacOS in ``host-configs/other/firion-macos_sonoma_aarch64-<compiler>.cmake``.
 
 Homebrew is recommended to install base dependencies due to it's stability. Relying on pure Spack historically leads to more failed builds.
 
@@ -111,7 +111,7 @@ If you plan to install the developer tools, you should also run:
 .. code-block:: bash
 
    $ brew install cppcheck doxygen
-   $ ln -s /opt/homebrew/opt/llvm@19/bin/clang-format /opt/homebrew/bin/clang-format
+   $ ln -fs /opt/homebrew/opt/llvm@19/bin/clang-format /opt/homebrew/bin/clang-format
 
 If you have installed Homebrew using the default installation prefix, most packages will be accessible through the prefix ``/opt/homebrew``.
 Note for Intel-based Macs, the installation prefix is ``/usr/local``. If you set a custom prefix or aren't sure what the prefix is, run ``brew --prefix``.
@@ -131,28 +131,40 @@ This is also useful for a few additional packages:
 
     We provide a basic MacOS Spack environment file that
     may work for most people. If you want to try using that, skip to :ref:`building_tpls-label`
-    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/macos_sonoma_aarch64/spack.yaml``. You will likely
+    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/darwin/spack.yaml``. You will likely
     need to update the versions of packages to match the versions installed by Homebrew. The versions for all installed packages can be listed via
     the command ``brew list --versions``.
 
 .. note::
     The invocation of ``uberenv.py`` is slightly modified from the standard instructions below
     in order to force the use of the Homebrew-installed MPI and compilers. The spec command line option
-    should be ``--spec="^openmpi@5 %clang@19"`` and to build with devtools and profiling enabled,
-    change the spec to ``"+devtools+profiling ^openmpi@5 %clang@19"``
+    should be ``--spec="^openmpi@5 %clang_19"`` and to build with devtools and profiling enabled,
+    change the spec to ``"+devtools+profiling ^openmpi@5 %clang_19"``
 
-Optionally, you can install the developer tools via ``pip``. This step is only required if you wish to use Serac's developer tools.
+Given that Homebrew can only install CMake version 4.0 and it breaks some TPL builds (e.g. metis), its recommended to install an older version of CMake
+manually. You can do this by downloading from `CMake's official archive <https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg>`_. After installing
+CMake 3.23, you will need to specify the path in the Spack environment like so:
+
+.. code-block:: yaml
+
+    cmake:
+      version: [3.23.5]
+      buildable: false
+      externals:
+      - spec: cmake@3.23.5
+        prefix: /Applications/CMake.app/Contents
+
+Optionally, you can install the developer tools via ``pip``. This step is only required if you wish to use Smith's developer tools.
 In order to use Python devtools, you will need to create a Python venv. This is much more reliable than having Spack install 20+ Python packages.
 In this example, we are using the builtin Python in ``/usr/bin``, but it is possible to use a version installed from Homebrew or elsewhere.
-
-Next, you will need to install wheel and Sphinx:
+Install wheel and Sphinx:
 
 .. code-block:: bash
 
-   python3 -m venv --system-site-packages venv
+   python3 -m venv venv
    source venv/bin/activate
-   pip install wheel
-   pip install sphinx
+   pip install wheel sphinx
+   sphinx-build --version
 
 Keep track of the Sphinx version while installing, since you'll need it for the next step.
 
@@ -174,18 +186,11 @@ Versions and prefixes may vary.
       externals:
       - spec: doxygen@1.12.0
         prefix: /opt/homebrew
-    llvm:
-      version: [19.1.1]
-      buildable: false
-      externals:
-      - spec: llvm+clang@19.1.1
-        prefix: /opt/homebrew/opt/llvm@19
     py-sphinx:
       buildable: false
       externals:
       - spec: py-sphinx@7.4.7
         prefix: /path/to/venv
-
 
 Livermore Computing (LC)
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -201,7 +206,7 @@ developing large codes. To specify which compiler to use add the compiler specif
 command line option. We provide recommended Spack specs for LC in ``scripts/spack/specs.json``.
 
 You can use these directly in the ``uberenv.py`` command in the :ref:`building_tpls-label`
-section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang@=19.1.1"``.
+section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang_19"``.
 
 .. note::
   On LC machines, it is good practice to do the build step in parallel on a compute node.
@@ -261,7 +266,7 @@ The above spack command will output a concretization that looks like the followi
 .. code-block:: shell
 
     ==> Concretized 1 spec:
-     -   uu3sgzv  serac@develop cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~asan~cuda~devtools+enzyme~ipo+openmp+petsc~profiling+raja~rocm~shared+slepc+strumpack+sundials+tribol+umpire build_system=cmake build_type=Release dev_path=/home/white238/projects/serac/repo generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
+     -   uu3sgzv  smith@develop cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~asan~cuda~devtools+enzyme~ipo+openmp+petsc~profiling+raja~rocm~shared+slepc+strumpack+sundials+tribol+umpire build_system=cmake build_type=Release dev_path=/home/white238/projects/smith/repo generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
      -   x77izrn      ^axom@0.10.1.1 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC +cpp14~cuda~devtools~examples~fortran+hdf5~ipo+lua+mfem+mpi~opencascade+openmp~python+raja~rocm~scr~shared~tools+umpire build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
      -   prysqkw          ^blt@0.6.2 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC  build_system=generic arch=linux-ubuntu24.04-skylake %clang@19.1.1
      -   6vi46wm      ^camp@2024.07.0 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~cuda~ipo~omptarget+openmp~rocm~sycl~tests build_system=cmake build_type=Release generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
@@ -319,43 +324,43 @@ by another package, so you can also add it with this yaml section:
 .. _building_tpls-label:
 
 --------------------------------------
-Building Serac's Third-party Libraries
+Building Smith's Third-party Libraries
 --------------------------------------
 
-It is now time to build Serac's Third-party Libraries (TPLs). Run the command with the compiler
+It is now time to build Smith's Third-party Libraries (TPLs). Run the command with the compiler
 that you want to develop with:
 
 .. code-block:: bash
 
-    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=<path/to/spack.yaml> --spec="%clang@=19.1.1"
+    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=<path/to/spack.yaml> --spec="%clang_19"
 
 Some helpful uberenv options include :
 
 * ``--spec=" build_type=Debug"`` (build core TPLs, such as MFEM and Hypre, with debug symbols)
 * ``--spec=+profiling`` (build the Adiak and Caliper libraries)
 * ``--spec=+devtools`` (also build the devtools with one command)
-* ``--spec=%clang@19.1.1`` (build with a specific compiler as defined in the ``spack.yaml`` file)
+* ``--spec=%clang_19`` (build with a specific compiler as defined in the ``spack.yaml`` file)
 * ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
-* ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Serac repository
+* ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Smith repository
 
-The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang@19.1.1'``.
+The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang_19'``.
 
 
 If successful, you will see two things. The first is what we call a host-config. It is all the CMake
-inputs you need to build Serac. This file will be a new CMake file in the current directory with your machine
+inputs you need to build Smith. This file will be a new CMake file in the current directory with your machine
 name, system type, and compiler, for example ``mycomputerlinux-ubuntu24.04-skylake-clang@19.1.1.cmake``.
 The second will be output from Spack that ends in this:
 
 .. code-block:: bash
 
-    ==> serac: Executing phase: 'initconfig'
+    ==> smith: Executing phase: 'initconfig'
     ==> Updating view at /my/prefix/spack_env/.spack-env/view
 
 --------------
-Building Serac
+Building Smith
 --------------
 
-Finally, with the TPL's built and the host-config file, you can build Serac with the following
+Finally, with the TPL's built and the host-config file, you can build Smith with the following
 command:
 
 .. code-block:: bash
@@ -365,7 +370,7 @@ command:
     make -j
     make -j8 test
 
-For more detail instructions on how to build Serac, see :ref:`build-label`.
+For more detail instructions on how to build Smith, see :ref:`build-label`.
 
 
 

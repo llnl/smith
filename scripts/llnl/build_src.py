@@ -2,7 +2,7 @@
 "exec" "python3" "-u" "-B" "$0" "$@"
 
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for details.
+# other Smith Project Developers. See the top-level LICENSE file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -10,7 +10,7 @@
  file: build_src.py
 
  description: 
-  Builds Serac with the host-configs for the current machine.
+  Builds Smith with the host-configs for the current machine.
 
 """
 

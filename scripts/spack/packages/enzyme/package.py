@@ -39,6 +39,9 @@ class Enzyme(CMakePackage):
     version("0.0.14", sha256="740641eeeeadaf47942ac88cc52e62ddc0e8c25767a501bed36ec241cf258b8d")
     version("0.0.13", sha256="d4a53964ec1f763772db2c56e6734269b7656c8b2ecd41fa7a41315bcd896b5a")
 
+    # TODO: push to Spack's builtin repo
+    variant("coverage", default=False, description="Enable Code Coverage Support")
+
     depends_on("c", type="build")  # generated
     depends_on("cxx", type="build")  # generated
     depends_on("fortran", type="build")  # generated
@@ -52,12 +55,12 @@ class Enzyme(CMakePackage):
     depends_on("llvm@15:19", when="@0.0.149:")
     depends_on("cmake@3.13:", type="build")
 
-    # TODO: Comment out when after Spack 1.0 and push to Spack's builtin repo, this may not be enough
-    # You can end up compiling with gcc but linking to llvm in certain cases
-    #conflicts("%cxx=gcc")
+    for compiler_ in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
+        conflicts(f"%[virtuals=c,cxx] {compiler_}")
 
     def cmake_args(self):
         spec = self.spec
+
         # TODO: push to Spack's builtin repo
         # On Ubuntu 24, with apt installed packages this dir doesn't exist. Error:
         #   Looking for LLVM_DIR at /usr/lib/cmake/llvm
@@ -65,6 +68,12 @@ class Enzyme(CMakePackage):
         #     The given LLVM_DIR does not exist.  Typo?
         #args = ["-DLLVM_DIR=" + spec["llvm"].prefix.lib + "/cmake/llvm"]
         args = ["-DLLVM_DIR=" + spec["llvm"].prefix]
+
+        # TODO: push to Spack's builtin repo
+        # Add coverage flags for compatibility
+        if "+coverage" in self.spec:
+            args.append("-DCMAKE_CXX_FLAGS=-fno-omit-frame-pointer -fprofile-instr-generate -fcoverage-mapping")
+
         return args
 
     @property

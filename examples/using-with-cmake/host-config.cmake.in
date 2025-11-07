@@ -1,11 +1,11 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 #------------------------------------------------------------------------------
 # Host-config for example. 
-# Defines configuration variables from Serac's build.
+# Defines configuration variables from Smith's build.
 #------------------------------------------------------------------------------
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE                       CACHE BOOL "")
@@ -44,5 +44,5 @@ if(ENABLE_CUDA)
 endif()
 
 
-# Path to Serac
-set(SERAC_DIR        "@CMAKE_INSTALL_PREFIX@" CACHE PATH "")
+# Path to Smith
+set(SMITH_DIR        "@CMAKE_INSTALL_PREFIX@" CACHE PATH "")

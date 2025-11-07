@@ -2,7 +2,7 @@
 "exec" "python3" "-u" "-B" "$0" "$@"
 ##############################################################################
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level COPYRIGHT file for details.
+# other Smith Project Developers. See the top-level COPYRIGHT file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 ##############################################################################
@@ -11,7 +11,7 @@
  file: check_for_missing_headers.py
 
  description:
-  This script takes a serac install and source directory and checks to see
+  This script takes a Smith install and source directory and checks to see
   if install includes the same header files.
 
 """
@@ -70,8 +70,8 @@ def main():
     print("============================================================")
 
     # grab headers from install and src
-    install_headers = get_headers_from(os.path.join(install_dir, "include", "serac"))
-    src_headers = get_headers_from(os.path.join(src_dir, "serac"))
+    install_headers = get_headers_from(os.path.join(install_dir, "include", "smith"))
+    src_headers = get_headers_from(os.path.join(src_dir, "smith"))
     
     # check if each header in src is in install as well
     res = 0

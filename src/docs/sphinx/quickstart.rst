@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -9,46 +9,46 @@
 Quickstart Guide
 ======================
 
-Getting Serac
+Getting Smith
 -------------
 
-Serac is hosted on `GitHub <https://github.com/LLNL/serac>`_. Serac uses git submodules, so the project must be cloned
-recursively. Use either of the following commands to pull Serac's repository:
+Smith is hosted on `GitHub <https://github.com/LLNL/smith>`_. Smith uses git submodules, so the project must be cloned
+recursively. Use either of the following commands to pull Smith's repository:
 
 .. code-block:: bash
 
    # Using SSH keys setup with GitHub
-   $ git clone --recursive git@github.com:LLNL/serac.git
+   $ git clone --recursive git@github.com:LLNL/smith.git
 
    # Using HTTPS which works for everyone but is slightly slower and will require username/password
    # for some commands
-   $ git clone --recursive https://github.com/LLNL/serac.git
+   $ git clone --recursive https://github.com/LLNL/smith.git
 
-Overview of the Serac build process
+Overview of the Smith build process
 ------------------------------------
 
-The Serac build process has been broken into three phases with various related options:
+The Smith build process has been broken into three phases with various related options:
 
 1. (Optional) Build the developer tools
 2. Build the third party libraries
-3. Build the Serac source code
+3. Build the Smith source code
 
-The developer tools are only required if you wish to contribute to the Serac source code. The first two steps involve building all of the
-third party libraries that are required by Serac. Two options exist for this process: using the `Spack HPC package manager <https://spack.io/>`_
+The developer tools are only required if you wish to contribute to the Smith source code. The first two steps involve building all of the
+third party libraries that are required by Smith. Two options exist for this process: using the `Spack HPC package manager <https://spack.io/>`_
 via the `uberenv wrapper script <https://github.com/LLNL/uberenv>`_ or building the required dependencies on your own. We recommend the first
-option as building HPC libraries by hand can be a tedious process. Once the third party libraries are built, Serac can be built using the
+option as building HPC libraries by hand can be a tedious process. Once the third party libraries are built, Smith can be built using the
 cmake-based `BLT HPC build system <https://github.com/LLNL/blt>`_.
 
 .. _devtools-label:
 
-Building Serac's Developer Tools
+Building Smith's Developer Tools
 --------------------------------
 
 .. note::
-  This can be skipped if you are not doing Serac development or if you are on an LC machine.
+  This can be skipped if you are not doing Smith development or if you are on an LC machine.
   They are installed in a group space defined in ``host-config/<machine name>-<SYS_TYPE>-<compiler>.cmake``
 
-Serac developers utilize some industry standard development tools in their everyday work.  We build
+Smith developers utilize some industry standard development tools in their everyday work.  We build
 these with Spack and have them installed in a public space on commonly used LC machines. These are
 defined in the host-configs in our repository.
 
@@ -72,11 +72,11 @@ For example on **Ubuntu 24.04**:
 
    python3 scripts/uberenv/uberenv.py --project-json=scripts/spack/devtools.json --spack-env-file=scripts/spack/configs/linux_ubuntu_24/spack.yaml --prefix=../path/to/install
 
-Unlike Serac's library dependencies, our developer tools can be built with any compiler because
-they are not linked into the serac executable.  We recommend Clang 19 because we have tested that they all
+Unlike Smith's library dependencies, our developer tools can be built with any compiler because
+they are not linked into the smith executable.  We recommend Clang 19 because we have tested that they all
 build with that compiler.
 
-Building Serac's Dependencies via Spack/uberenv
+Building Smith's Dependencies via Spack/uberenv
 -----------------------------------------------
 
 For detailed instructions see :ref:`tpl_builds-label`.
@@ -89,15 +89,15 @@ For detailed instructions see :ref:`tpl_builds-label`.
 Using a Docker Image with Preinstalled Dependencies
 ---------------------------------------------------
 
-As an alternative, you can build Serac using preinstalled dependencies inside a Docker
+As an alternative, you can build Smith using preinstalled dependencies inside a Docker
 container. Instructions for this process are located :ref:`here <docker-label>`.
 
 .. _build-label:
 
-Building Serac
+Building Smith
 --------------
 
-Serac uses a CMake build system that wraps its configure step with a script
+Smith uses a CMake build system that wraps its configure step with a script
 called ``config-build.py``.  This script creates a build directory and
 runs the necessary CMake command for you. You just need to point the script
 at the generated or a provided host-config. This can be accomplished with
@@ -105,7 +105,7 @@ one of the following commands:
 
 .. code-block:: bash
 
-   # If you built Serac's dependencies yourself either via Spack or by hand
+   # If you built Smith's dependencies yourself either via Spack or by hand
    $ python3 ./config-build.py -hc <config_dependent_name>.cmake
 
    # If you are on an LC machine and want to use our public pre-built dependencies
@@ -118,17 +118,17 @@ If you built the dependencies using Spack/uberenv, the host-config file is outpu
 project root. To use the pre-built dependencies on LC, you must be in the appropriate
 LC group. Contact `Brandon Talamini <talamini1@llnl.gov>`_ for access.
 
-Some build options frequently used by Serac include:
+Some build options frequently used by Smith include:
 
 * ``CMAKE_BUILD_TYPE``: Specifies the build type, see the `CMake docs <https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html>`_
 * ``ENABLE_BENCHMARKS``: Enables Google Benchmark performance tests, defaults to ``OFF``
 * ``ENABLE_WARNINGS_AS_ERRORS``: Turns compiler warnings into errors, defaults to ``ON``
 * ``ENABLE_ASAN``: Enables the Address Sanitizer for memory safety inspections, defaults to ``OFF``
-* ``SERAC_ENABLE_TESTS``: Enables Serac unit tests, defaults to ``ON``
-* ``SERAC_ENABLE_CODEVELOP``: Enables local development build of MFEM/Axom, see :ref:`codevelop-label`, defaults to ``OFF``
-* ``SERAC_USE_VDIM_ORDERING``: Sets the vector ordering to be ``byVDIM``, which is significantly faster for algebraic multigrid, defaults to ``ON``.
+* ``SMITH_ENABLE_TESTS``: Enables Smith unit tests, defaults to ``ON``
+* ``SMITH_ENABLE_CODEVELOP``: Enables local development build of MFEM/Axom, see :ref:`codevelop-label`, defaults to ``OFF``
+* ``SMITH_USE_VDIM_ORDERING``: Sets the vector ordering to be ``byVDIM``, which is significantly faster for algebraic multigrid, defaults to ``ON``.
 
-Once the build has been configured, Serac can be built with the following commands:
+Once the build has been configured, Smith can be built with the following commands:
 
 .. code-block:: bash
 

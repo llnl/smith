@@ -1,5 +1,5 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -17,7 +17,7 @@ if(NOT MFEM_DIR)
     message(FATAL_ERROR "MFEM support needs explicit MFEM_DIR")
 endif()
 message(STATUS "Looking for MFEM using MFEM_DIR = ${MFEM_DIR}")
-serac_assert_is_directory(DIR_VARIABLE MFEM_DIR)
+smith_assert_is_directory(DIR_VARIABLE MFEM_DIR)
 
 set(_MFEM_DIR ${MFEM_DIR}) # Save MFEM_DIR as a non-cache variable
 find_package(MFEM CONFIG NO_DEFAULT_PATH PATHS "${MFEM_DIR}/lib/cmake/mfem")
@@ -116,7 +116,7 @@ else()
     list(APPEND MFEM_LIBRARIES ${mfem_tpl_lnk_flags})
 
     if(mfem_cfg_file_txt MATCHES "MFEM_USE_CUDA += YES")
-        if(NOT SERAC_ENABLE_CUDA)
+        if(NOT SMITH_ENABLE_CUDA)
             message(WARNING "MFEM was built with CUDA but CUDA is not enabled")
         endif()
         list(APPEND MFEM_INCLUDE_DIRS ${CUDA_INCLUDE_DIRS})
@@ -134,7 +134,7 @@ else()
         EXPORTABLE    ON)
 
     install(TARGETS          mfem
-        EXPORT               serac-targets
+        EXPORT               smith-targets
         DESTINATION          lib
         )
 endif()
