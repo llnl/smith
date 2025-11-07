@@ -72,14 +72,14 @@ class LumpedMassExplicitNewmark {
 
     std::vector<ConstFieldPtr> pred_states = {&u_pred, &v_pred, &a, states[COORDINATES], params[DENSITY]};
 
-    auto zero_mass_resid = weak_form_->residual(time, dt, &u_pred, pred_states);
+    auto force_resid = weak_form_->residual(time, dt, &u_pred, pred_states);
 
     FiniteElementState a_pred(a.space(), "acceleration_pred");
     auto a_pred_ptr = a_pred.Write();
     auto m_inv_ptr = m_inv.Read();
-    auto zero_mass_resid_ptr = zero_mass_resid.Read();
+    auto force_resid_ptr = force_resid.Read();
     mfem::forall_switch(a_pred.UseDevice(), a_pred.Size(),
-                        [=] MFEM_HOST_DEVICE(int i) { a_pred_ptr[i] = m_inv_ptr[i] * zero_mass_resid_ptr[i]; });
+                        [=] MFEM_HOST_DEVICE(int i) { a_pred_ptr[i] = m_inv_ptr[i] * force_resid_ptr[i]; });
 
     v_pred.Add(0.5 * dt, a_pred);
 

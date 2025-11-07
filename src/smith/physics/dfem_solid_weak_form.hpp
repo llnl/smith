@@ -140,7 +140,7 @@ class DfemSolidWeakForm : public DfemWeakForm {
       const std::vector<const mfem::ParFiniteElementSpace*>& parameter_fe_spaces)
   {
     std::vector<const mfem::ParFiniteElementSpace*> input_spaces;
-    input_spaces.reserve(4 + parameter_fe_spaces.size());
+    input_spaces.reserve(NUM_STATE_VARS + parameter_fe_spaces.size());
     for (int i = 0; i < 3; ++i) {
       input_spaces.push_back(&test_space);
     }
