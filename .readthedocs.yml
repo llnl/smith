@@ -10,7 +10,7 @@ sphinx:
   configuration: src/docs/conf.py
 
 # Optionally build your docs in additional formats such as PDF and ePub
-# TODO this was turned off due to build failures in the pdf generation. See https://github.com/LLNL/serac/issues/901
+# TODO this was turned off due to build failures in the pdf generation. See https://github.com/LLNL/smith/issues/901
 # formats: all
 
 # Set the OS, Python version and other tools you might need

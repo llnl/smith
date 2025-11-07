@@ -21,8 +21,8 @@ Setting Up Includes and Initializing
 Smith provides a single unified header for all classes and functions needed by users. Shown here:
 
 .. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp
-   :start-after: _serac_include_header_start
-   :end-before: _serac_include_header_end
+   :start-after: _smith_include_header_start
+   :end-before: _smith_include_header_end
    :language: C++
 
 .. note::
@@ -58,7 +58,7 @@ Constructing the Mesh
 Smith's mesh utilities include support for reading meshes from a file and for generating meshes of common solids,
 like cuboids, rectangles, disks, and cylinders. In this introductory example, we will use a simple square 
 mesh with 10 quadrilateral elements in each space dimension for 100 elements total. Smith's mesh class,
-``serac::Mesh``, takes in one of these meshes and automatically adds it to the ``StateManager``. Once created, the
+``smith::Mesh``, takes in one of these meshes and automatically adds it to the ``StateManager``. Once created, the
 primary mesh will be registered with the ``StateManager``: 
 
 .. literalinclude:: ../../../../examples/conduction/simple_conduction.cpp

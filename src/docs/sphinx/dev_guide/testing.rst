@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -9,9 +9,9 @@
 Testing
 =======
 
-Serac has two levels of tests, unit and integration. Unit tests are used to test
+Smith has two levels of tests, unit and integration. Unit tests are used to test
 individual components of code, such as a class or function.  While integration tests
-are for testing the code as a whole. For example, testing the ``serac`` driver with
+are for testing the code as a whole. For example, testing the ``smith`` driver with
 an input file against blessed answers.
 
 Unit Tests
@@ -32,7 +32,7 @@ Requirements:
 * ``ATS_EXECUTABLE`` defined in the host-config (added automatically to
   Spack generated host-configs) or on 
   command line via ``-DATS_EXECUTABLE=/path/to/ats``.
-* If using a personal machine, check the ``ats-config`` directory in the serac
+* If using a personal machine, check the ``ats-config`` directory in the Smith
   repo and create a json file ``<your_machine_name>.json`` if you haven't already.
   Your machine's name can be found by running the following lines of code::
 
@@ -85,7 +85,7 @@ Requirements:
      # All baselines
      $ ./ats.sh -b all
 
-   This will update the json files located in the `serac_tests <https://github.com/LLNL/serac_tests>`_ submodule. To
+   This will update the json files located in the `smith_tests <https://github.com/LLNL/smith_tests>`_ submodule. To
    avoid Caliper files from additionally being generated, configure with ``-DENABLE_BENCHMARKS=OFF``.
 
 
@@ -109,8 +109,8 @@ easier in ``tests/test.ats``.
 * ``tolerance_test``
 
    .. literalinclude:: ../../../../tests/integration/test.ats
-      :start-after: _serac_tolerance_test_start
-      :end-before: _serac_tolerance_test_end
+      :start-after: _smith_tolerance_test_start
+      :end-before: _smith_tolerance_test_end
       :language: text
       :dedent: 4
 

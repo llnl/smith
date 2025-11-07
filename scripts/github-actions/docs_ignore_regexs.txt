@@ -3,5 +3,5 @@ Error: \/undefined in getenv
 Package newunicodechar Warning: Redefining Unicode character on input line
 
 # doxygen is having problems handling the inherited constructors
-.*argument 'mesh' of command @param is not found in the argument list of serac::.*::FiniteElementVector\(typename FunctionSpace\)
-.*argument 'name' of command @param is not found in the argument list of serac::.*::FiniteElementVector\(typename FunctionSpace\)
+.*argument 'mesh' of command @param is not found in the argument list of smith::.*::FiniteElementVector\(typename FunctionSpace\)
+.*argument 'name' of command @param is not found in the argument list of smith::.*::FiniteElementVector\(typename FunctionSpace\)
