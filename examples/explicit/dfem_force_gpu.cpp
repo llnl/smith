@@ -1,19 +1,19 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "mfem.hpp"
-#include "serac/infrastructure/accelerator.hpp"
-#include "serac/infrastructure/application_manager.hpp"
-#include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
-#include "serac/physics/mesh.hpp"
-#include "serac/physics/state/state_manager.hpp"
+#include "smith/infrastructure/accelerator.hpp"
+#include "smith/infrastructure/application_manager.hpp"
+#include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "smith/physics/mesh.hpp"
+#include "smith/physics/state/state_manager.hpp"
 
-#include "serac/physics/functional_weak_form.hpp"
-#include "serac/physics/dfem_solid_weak_form.hpp"
-#include "serac/physics/dfem_mass_weak_form.hpp"
+#include "smith/physics/functional_weak_form.hpp"
+#include "smith/physics/dfem_solid_weak_form.hpp"
+#include "smith/physics/dfem_mass_weak_form.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
@@ -26,7 +26,7 @@ namespace future {
  * @brief Compute Green's strain from the displacement gradient
  */
 template <typename T, int dim>
-SERAC_HOST_DEVICE auto greenStrain(const tensor<T, dim, dim>& grad_u)
+SMITH_HOST_DEVICE auto greenStrain(const tensor<T, dim, dim>& grad_u)
 {
   return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
 }
@@ -34,7 +34,7 @@ SERAC_HOST_DEVICE auto greenStrain(const tensor<T, dim, dim>& grad_u)
 }  // namespace future
 }  // namespace mfem
 
-namespace serac {
+namespace smith {
 
 // NOTE (EBC): NeoHookean is not working with dfem on device with HIP, since some needed LLVM intrinsics are not
 // implemented in Enzyme with the call to log1p()/log().
@@ -51,7 +51,7 @@ struct StVenantKirchhoffWithFieldDensityDfem {
    * @return The first Piola stress
    */
   template <typename T, int dim, typename Density>
-  SERAC_HOST_DEVICE auto pkStress(double, const mfem::future::tensor<T, dim, dim>& du_dX,
+  SMITH_HOST_DEVICE auto pkStress(double, const mfem::future::tensor<T, dim, dim>& du_dX,
                                   const mfem::future::tensor<T, dim, dim>&, const Density&) const
   {
     auto I = mfem::future::IdentityMatrix<dim>();
@@ -65,7 +65,7 @@ struct StVenantKirchhoffWithFieldDensityDfem {
 
   /// @brief interpolates density field
   template <typename Density>
-  SERAC_HOST_DEVICE auto density(const Density& density) const
+  SMITH_HOST_DEVICE auto density(const Density& density) const
   {
     return density;
   }
@@ -74,14 +74,14 @@ struct StVenantKirchhoffWithFieldDensityDfem {
   double G;  ///< Shear modulus
 };
 
-}  // namespace serac
+}  // namespace smith
 
 int main(int argc, char* argv[])
 {
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
 
-  using SolidMaterialDfem = serac::StVenantKirchhoffWithFieldDensityDfem;
+  using SolidMaterialDfem = smith::StVenantKirchhoffWithFieldDensityDfem;
 
   enum STATE
   {
@@ -114,40 +114,40 @@ int main(int argc, char* argv[])
   app.set_help_flag("--help");
   app.allow_extras()->parse(argc, argv);
 
-  auto exec_space = use_gpu ? serac::ExecutionSpace::GPU : serac::ExecutionSpace::CPU;
+  auto exec_space = use_gpu ? smith::ExecutionSpace::GPU : smith::ExecutionSpace::CPU;
 
-  serac::ApplicationManager applicationManager(argc, argv, MPI_COMM_WORLD, true, exec_space);
+  smith::ApplicationManager applicationManager(argc, argv, MPI_COMM_WORLD, true, exec_space);
 
   MPI_Barrier(MPI_COMM_WORLD);
 
   axom::sidre::DataStore datastore;
-  serac::StateManager::initialize(datastore, "solid_dynamics");
+  smith::StateManager::initialize(datastore, "solid_dynamics");
 
   // create mesh
   constexpr double length = 1.0;
   constexpr double width = 1.0;
   int nel_x = n_els;
   int nel_y = n_els;
-  auto mesh = std::make_shared<serac::Mesh>(
+  auto mesh = std::make_shared<smith::Mesh>(
       mfem::Mesh::MakeCartesian2D(nel_x, nel_y, element_shape, true, length, width), MESHTAG, 0, 0);
 
   // create residual evaluator
-  using VectorSpace = serac::H1<disp_order, dim>;
-  using DensitySpace = serac::L2<disp_order - 1>;
-  serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
-  serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
-  serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
-  serac::FiniteElementState coords = serac::StateManager::newState(VectorSpace{}, "coordinates", mesh->tag());
-  serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
+  using VectorSpace = smith::H1<disp_order, dim>;
+  using DensitySpace = smith::L2<disp_order - 1>;
+  smith::FiniteElementState disp = smith::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
+  smith::FiniteElementState velo = smith::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
+  smith::FiniteElementState accel = smith::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
+  smith::FiniteElementState coords = smith::StateManager::newState(VectorSpace{}, "coordinates", mesh->tag());
+  smith::FiniteElementState density = smith::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-  std::vector<serac::FiniteElementState> states{disp, velo, accel, coords};
-  std::vector<serac::FiniteElementState> params{density};
+  std::vector<smith::FiniteElementState> states{disp, velo, accel, coords};
+  std::vector<smith::FiniteElementState> params{density};
 
   std::string physics_name = "solid";
   double E = 1.0e3;
   double nu = 0.3;
 
-  using SolidT = serac::DfemSolidWeakForm;
+  using SolidT = smith::DfemSolidWeakForm;
   auto solid_dfem_weak_form =
       std::make_shared<SolidT>(physics_name, mesh, states[DISPLACEMENT].space(), getSpaces(params));
 
@@ -157,7 +157,7 @@ int main(int argc, char* argv[])
   int ir_order = 3;
   const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
   mfem::Array<int> solid_attrib({1});
-  solid_dfem_weak_form->setMaterial<SolidMaterialDfem, serac::ScalarParameter<0>>(solid_attrib, dfem_mat,
+  solid_dfem_weak_form->setMaterial<SolidMaterialDfem, smith::ScalarParameter<0>>(solid_attrib, dfem_mat,
                                                                                   displacement_ir);
 
   mfem::future::tensor<mfem::real_t, dim> g({0.0, -9.81});  // gravity vector
@@ -168,7 +168,7 @@ int main(int argc, char* argv[])
   mfem::future::tuple<mfem::future::Value<SolidT::NUM_STATE_VARS + 1>> g_outputs{};
   solid_dfem_weak_form->addBodyIntegral(
       solid_attrib,
-      [=] SERAC_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim>&,
+      [=] SMITH_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim>&,
                             const mfem::future::tensor<mfem::real_t, dim>&,
                             const mfem::future::tensor<mfem::real_t, dim>&,
                             const mfem::future::tensor<mfem::real_t, dim, dim>& dX_dxi, mfem::real_t weight, double) {
@@ -178,8 +178,8 @@ int main(int argc, char* argv[])
       g_inputs, g_outputs, displacement_ir, std::index_sequence<>{});
 
   states[DISPLACEMENT] = 0.0;
-  states[VELOCITY].setFromFieldFunction([](serac::tensor<double, dim>) {
-    serac::tensor<double, dim> u({0.0, -1.0});
+  states[VELOCITY].setFromFieldFunction([](smith::tensor<double, dim>) {
+    smith::tensor<double, dim> u({0.0, -1.0});
     return u;
   });
   states[ACCELERATION] = 0.0;
@@ -199,7 +199,7 @@ int main(int argc, char* argv[])
   auto u_pred = u;
   u_pred.Add(dt, v_pred);
 
-  std::vector<serac::ConstFieldPtr> pred_states = {&u_pred, &v_pred, &a, &states[COORDINATES], &params[DENSITY]};
+  std::vector<smith::ConstFieldPtr> pred_states = {&u_pred, &v_pred, &a, &states[COORDINATES], &params[DENSITY]};
 
   axom::utilities::Timer timer(true);
   for (size_t step = 0; step < num_steps; ++step) {

@@ -1,10 +1,10 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if(SERAC_USE_DFEM)
+if(SMITH_USE_DFEM)
     set(EXPLICIT_DYNAMICS_EXAMPLES_SOURCES
         dfem_gpu.cpp
         dfem_force_gpu.cpp
@@ -16,9 +16,9 @@ if(SERAC_USE_DFEM)
         blt_add_executable(NAME        explicit_${example_name}
                            SOURCES     ${filename}
                            OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
-                           DEPENDS_ON  serac_physics serac_mesh_utils)
+                           DEPENDS_ON  smith_physics smith_mesh_utils)
 
-        serac_add_example_test(NAME           explicit_${example_name}
+        smith_add_example_test(NAME           explicit_${example_name}
                                COMMAND        explicit_${example_name}
                                NUM_MPI_TASKS  4)
         
@@ -28,7 +28,7 @@ if(SERAC_USE_DFEM)
         FILES
             ${EXPLICIT_DYNAMICS_EXAMPLES_SOURCES}
         DESTINATION
-            examples/serac/explicit
+            examples/smith/explicit
     )
 
 endif()
