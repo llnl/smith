@@ -259,7 +259,7 @@ class ContactData {
    */
   int num_pressure_dofs_;
 
-#ifdef SERAC_USE_TRIBOL
+#ifdef SMITH_USE_TRIBOL
   /**
    * @brief Tracks whether the Jacobian and pressure offsets need to be updated
    *
@@ -298,7 +298,7 @@ class ContactData {
    */
   mutable mfem::Array<HYPRE_BigInt> global_pressure_dof_offsets_;
 
-#ifdef SERAC_USE_TRIBOL
+#ifdef SMITH_USE_TRIBOL
   int cycle_{0};
   double time_{0.0};
   double dt_{1.0};
