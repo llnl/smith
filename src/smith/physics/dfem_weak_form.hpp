@@ -12,7 +12,6 @@
 
 #pragma once
 
-#include <mfem/fem/dfem/parameterspace.hpp>
 #include "smith/smith_config.hpp"
 
 #ifdef SMITH_USE_DFEM

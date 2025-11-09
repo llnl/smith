@@ -4,15 +4,6 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <mfem/config/config.hpp>
-#include <mfem/fem/dfem/fieldoperator.hpp>
-#include <mfem/fem/dfem/parameterspace.hpp>
-#include <mfem/fem/dfem/tuple.hpp>
-#include <mfem/fem/dfem/util.hpp>
-//#include <mfem/fem/pgridfunc.hpp>
-//#include <mfem/linalg/tensor.hpp>
-#include <mfem/linalg/tensor.hpp>
-#include <mfem/linalg/vector.hpp>
 #include <ostream>
 #include <string>
 

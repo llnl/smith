@@ -12,7 +12,6 @@
 
 #pragma once
 
-#include <mfem/fem/dfem/parameterspace.hpp>
 #include <vector>
 #include <string>
 #include <memory>
@@ -29,7 +28,7 @@ namespace smith {
 class FiniteElementState;
 class FiniteElementDual;
 
-#ifdef SERAC_USE_DFEM
+#ifdef SMITH_USE_DFEM
 using QuadratureField = mfem::future::ParameterFunction;
 #else
 using QuadratureField = double;  ///< This is a placeholder for quadrature fields

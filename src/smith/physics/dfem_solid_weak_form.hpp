@@ -13,7 +13,6 @@
 #pragma once
 
 #include <memory>
-#include <mfem/fem/dfem/fieldoperator.hpp>
 #include "smith/smith_config.hpp"
 
 #ifdef SMITH_USE_DFEM
