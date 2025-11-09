@@ -28,9 +28,13 @@ namespace smith {
 class FiniteElementState;
 class FiniteElementDual;
 
-using QuadratureField = double;                 ///< This is a placeholder for quadrature fields
-using QuadratureFieldPtr = double*;             ///< This is a placeholder for quadrature field pointers
-using ConstQuadratureFieldPtr = const double*;  ///< This is a placeholder for quadrature field pointers
+#ifdef SMITH_USE_DFEM
+using QuadratureField = mfem::future::ParameterFunction;
+#else
+using QuadratureField = double;  ///< This is a placeholder for quadrature fields
+#endif
+using QuadratureFieldPtr = QuadratureField*;
+using ConstQuadratureFieldPtr = const QuadratureField*;
 
 /// @brief Abstract WeakForm class
 class WeakForm {

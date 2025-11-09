@@ -50,6 +50,15 @@ if (TRIBOL_FOUND)
         ${physics_serial_tribol_test_sources})
 endif()
 
+if (SMITH_USE_DFEM)
+    list(APPEND physics_serial_test_sources
+                test_dfem_explicit_dynamics.cpp
+                test_dfem_lumped_mass.cpp
+                test_dfem_plasticity.cpp
+                test_dfem_vs_functional.cpp
+                test_dfem_weak_form.cpp)
+endif()
+
 smith_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 1)

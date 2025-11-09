@@ -41,6 +41,7 @@
 #cmakedefine SMITH_USE_CAMP
 #cmakedefine SMITH_USE_CONDUIT
 #cmakedefine SMITH_USE_CONTINUATION
+#cmakedefine SMITH_USE_DFEM
 #cmakedefine SMITH_USE_ENZYME
 #cmakedefine SMITH_USE_FMT
 #cmakedefine SMITH_USE_HDF5
