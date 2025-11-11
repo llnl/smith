@@ -599,7 +599,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             $<INSTALL_INTERFACE:include>
         )
         
-        set(TRIBOL_FOUND ON CACHE BOOL "" FORCE)
+        set(TRIBOL_FOUND TRUE CACHE BOOL "" FORCE)
         set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
     endif()
 
