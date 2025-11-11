@@ -92,16 +92,14 @@
  struct ThermalStiffening {
    // using State = Empty;  ///< if this material has no internal variables
    struct State {
-     double w_H = 0.0;   //high-T mass fraction
+     double w_e = 0.0;   //high-T mass fraction
      double time = 0.0;  // time for scaling temperature ramp
      tensor<double,3,3> Cp{{{1.0, 0.0, 0.0},
                             {0.0, 1.0, 0.0},
                             {0.0, 0.0, 1.0}}}; // previous value of right Cauchy-Green
-     tensor<double,3,3> Fhsi{{{1.0, 0.0, 0.0},
+     tensor<double,3,3> Fesi{{{1.0, 0.0, 0.0},
                               {0.0, 1.0, 0.0},
                               {0.0, 0.0, 1.0}}}; 
-     //deque<double> dwl = {0};
-     //deque<tensor<double,3,3>> Fas = {Identity<3>()};
    };
 
    /**
@@ -145,24 +143,14 @@
     // this function calculates the equilibrium low-T mass fraction as a function of temperature
     SERAC_HOST_DEVICE auto equilibrium_xi(double temp) const{
         double Tt = 443.0;
-        double k = 36.0;//50.0;
+        double k = 36.0;
         return exp(-(pow(temp/Tt,k)));
      }
 
-     SERAC_HOST_DEVICE auto HEAVISIDE(double val) const{
-        // 1 if geq 0, 0 otherwise
-        if (val>=0) {
-            return 1;
-        }
-        else {
-            return 0;
-        }
-     }
-
-     SERAC_HOST_DEVICE auto Gl0(double g) const{
+     SERAC_HOST_DEVICE auto Gm0(double g) const{
       // low-T shear modulus at reference temperature as a function of particle wt% g
       double junk = g;
-      return Gl*junk/g;
+      return Gm*junk/g;
      }
 
      SERAC_HOST_DEVICE auto f1(double T) const{
@@ -171,10 +159,10 @@
       return exp(-N * (T - Tr));
      }
 
-     SERAC_HOST_DEVICE auto Gh0(double g) const{
+     SERAC_HOST_DEVICE auto Ge0(double g) const{
       // high-T shear modulus at reference temperature as a function of particle wt% g
       double junk = g;
-      return Gh*junk/g;
+      return Ge*junk/g;
      }
  
    template <typename T, int dim>
@@ -182,11 +170,11 @@
    {
  
  
-     auto whp = state.w_H; // previous wh
-     auto wlp = 1.0-whp;
+     auto wep = state.w_e; // previous wh
+     auto wfp = 1.0-wep;
      auto current_time = state.time;
      auto Cp = state.Cp;
-     auto Fhsip = state.Fhsi;
+     auto Fesip = state.Fesi;
  
      auto Temp = temperature_function(current_time);
 
@@ -199,9 +187,9 @@
      constexpr auto I = Identity<dim>();
  
      auto F = du_dX + I;
-     auto Fh = dot(F,Fhsip); // Fh for the extant high-T material, called Fh1 in my notes
-     auto Jh = det(Fh);
-     auto Ch = dot(transpose(Fh),Fh);
+     auto Fe = dot(F,Fesip); // Fh for the extant high-T material, called Fh1 in my notes
+     auto Je = det(Fe);
+     //auto Ce = dot(transpose(Fe),Fe);
  
      auto C = dot(transpose(F), F);
      auto Cdot = (C - Cp)/dt;
@@ -214,94 +202,72 @@
      auto J = det(F);
 
      // get moduli
-     auto Gl_eff = Gl0(gw)*f1(Temp);
-     auto Gh_eff = Gh0(gw);
-
-     // evaluate chemical potentials
-     // mu_l always uses the current F, mu_h always uses I
-     auto mu_l = 0.5*Gl_eff*(pow(J,-2./3)*tr(C)-3.)/rhol0 + 0.5*Kl*pow(J-1.,2.)/rhol0 - (J-1.)*(Temp-Tr)*Kl*betal/rhol0 - cvl*(Temp*log(Temp/Tr)-(Temp-Tr));
-     auto mu_h = 0.5*Gh_eff*(pow(Jh,-2./3)*tr(Ch)-3.)/rhoh0 + 0.5*Kh*pow(Jh-1.,2.)/rhoh0 - (Jh-1.)*(Temp-Tr)*Kh*betah/rhoh0 - cvh*(Temp*log(Temp/Tr)-(Temp-Tr));
-
-     // get forward and reverse heaviside functions
-     auto Hf = ((mu_l-mu_h)>=0) ? 1 : 0;
-     auto Hr = ((mu_h-mu_l)>=0) ? 1 : 0;
+     auto Gm_eff = Gm0(gw)*f1(Temp);
+     auto Ge_eff = Ge0(gw);
 
      // calculate forward and reverse reaction rate
-     auto kf = Hf * Af * exp(-E_af / (R*Temp));
-     auto kr = Hr * Ar * exp(-E_ar / (R*Temp));
+     auto kf = Af * exp(-E_af / (R*Temp));
+     auto kr = Ar * exp(-E_ar / (R*Temp));
 
      // get mass fraction supplies, forward and reverse
-
-     auto dwlf = (xi-wlp)*kf*dt/(1.+kf*dt);
-     auto dwhr = (1.-xi-whp)*kr*dt/(1.+kr*dt);
-     //auto dwl = dwlf - dwhr;
-     auto dwh = -dwlf + dwhr;
+     auto dwff = (xi-wfp)*kf*dt/(1.+kf*dt);
+     auto dwer = (1.-xi-wep)*kr*dt/(1.+kr*dt);
+     // get net mass fraction supply
+     auto dwe = -dwff + dwer;
 
      // if dwh>0, I need to get the new equivalent Fhsi
-     if (dwh>0 && whp==0) {
-      auto Fhsi = inv(F); // initialize Fhsi as the inverse of F at the current time
-      Fh = dot(F,Fhsi);
-      state.Fhsi = get_value(Fhsi);
+     if (dwe>0 && wep==0) {
+      auto Fesi = inv(F); // initialize Fhsi as the inverse of F at the current time
+      Fe = dot(F,Fesi);
+      state.Fesi = get_value(Fesi);
      }
-     else if (dwh>0) {
-      auto Fhsi = (whp/(whp+dwh))*Fhsip; // update the effective value of Fhsi
-      Fh = dot(F,Fhsi); // calculate the current elastic deformation of the high-T material
-      state.Fhsi = get_value(Fhsi);
+     else if (dwe>0) {
+      auto Fesi = (wep/(wep+dwe))*Fesip; // update the effective value of Fhsi
+      Fe = dot(F,Fesi); // calculate the current elastic deformation of the high-T material
+      state.Fesi = get_value(Fesi);
      }
      else {
-      auto Fhsi = Fhsip;
-      Fh = dot(F,Fhsi);
-      state.Fhsi = get_value(Fhsi);
+      auto Fesi = Fesip;
+      Fe = dot(F,Fesi);
+      state.Fesi = get_value(Fesi);
      }
 
      // update mass fractions
-     //auto wl = wlp + dwl;
-     auto wh = whp + dwh;
+     auto we = wep + dwe;
 
-     std::cout << "wh: " << wh << "\n";
-/*
-     // store evolved mass fraction in deque, store current F in deque
-     if (dwl>0) {
-      // store the new dwl
-     }
-     else if (dwl<0) {
-      // go through the entire queue
-     }
-*/ 
+     std::cout << "we: " << we << "\n";
+
     // calculate B_bar, J based on Fh
-     auto Bh = dot(Fh, transpose(Fh));
-     auto trBh = tr(Bh);
-     auto Bh_bar = Bh - (trBh / 3.0) * I;
+     auto Be = dot(Fe, transpose(Fe));
+     auto trBe = tr(Be);
+     auto Be_bar = Be - (trBe / 3.0) * I;
 
      // calculate kirchoff stress
-     auto Tl = Gl_eff * pow(J, -2./3.) * B_bar + J * Kl * (J - 1. - betal*(Temp-Tr)) * I + etal * D;
-     auto Th = Gh_eff * pow(Jh, -2./3.) * Bh_bar + Jh * Kh * (Jh - 1. - betah*(Temp-Tr)) * I + etah * D;
+     auto Tm = Gm_eff * pow(J, -2./3.) * B_bar + J * Km * (J - 1. - betam*(Temp-Tr)) * I; // + etal * D;
+     auto Te = Ge_eff * pow(Je, -2./3.) * Be_bar + Je * Ke * (Je - 1.) * I; // + etah * D;
  
-     auto TK = wh * Th + (1. - wh) * Tl;
+     auto TK = wm * Tm + (1. - wm) * we * Te + (1.-we)*eta*D;
    
      // Pull back to Piola
  
-     state.w_H = get_value(wh);
+     state.w_e = get_value(we);
      state.time = get_value(current_time + dt);
      state.Cp = get_value(dot(transpose(F),F));
-     //state.Fhsi = Fhsi;
      return dot(TK, inv(transpose(F)));
    }
  
    double density;   ///< mass density
-   double Kl;        ///< bulk modulus
-   double Gl;        ///< shear modulus
-   double betal;     ///< volumetric CTE
-   double cvl;       ///< specific heat
-   double rhol0;     ///< referential density
-   double etal;      ///< viscosity
+   double Km;        ///< bulk modulus
+   double Gm;        ///< shear modulus
+   double betam;     ///< volumetric CTE
+   double cvm;       ///< specific heat
+   double rhom0;     ///< referential density
+   double eta;      ///< viscosity
  
-   double Kh;        ///< bulk modulus
-   double Gh;        ///< shear modulus
-   double betah;     ///< volumetric CTE
-   double cvh;       ///< specific heat
-   double rhoh0;     ///< referential density
-   double etah;      ///< viscosity
+   double Ke;        ///< bulk modulus
+   double Ge;        ///< shear modulus
+   double cvc;       ///< specific heat
+   double rhoc0;     ///< referential density
  
    double dt;        ///< fixed dt
  
@@ -315,6 +281,8 @@
    double Tr;        ///< reference temperature
 
    double gw;        ///< particle weight fraction
+
+   double wm;        ///< matrix mass fraction
  };
  };
  
@@ -328,7 +296,7 @@
    // I always want 120 degree temperature rise - specify deg/min gives tfinal
    double degPerMin = 5;
    double tfinal = 2*(120/degPerMin)*60.;     // twice the amount of time required to heat up to account for cool down
-   double Npts = 12;                          // number of time points per cycle
+   double Npts = 24;                          // number of time points per cycle
    double Ncycle = 240;                       // number of sinusoidal cycles up and back
    //=========== end time and temp params ==============
  
@@ -407,32 +375,32 @@
  
    using Material = Zimmerman_EOS::ThermalStiffening;
    // Units are standard FEBio: Mpa-mm-s
-   double Kl = 0.5;         ///< low-T bulk modulus, MPa
-   double Gl = 0.0073976;//0.001759;    ///< low-T shear modulus, MPa
-   double betal = 0;
-   double cvl = 1.0;
-   double rhol0 = 1.0;
-   double etal = 0.;//0.002;//0.005;     ///< low-T viscosity, MPa-s
+   double Km = 0.5;         ///< matrix bulk modulus, MPa
+   double Gm = 0.0073976;//0.001759;    ///< matrix shear modulus, MPa
+   double betam = 0;
+   double cvm = 1.0;
+   double rhom0 = 1.0;
+   double eta = 0.;//0.002;//0.005;     ///< viscosity, MPa-s
  
-   double Kh = 0.5;       ///< high-T bulk modulus, MPa
-   double Gh = 0.225075;//0.0006408;     ///< high-T shear modulus, MPa
-   double betah = 0;
-   double cvh = 2.0;
-   double rhoh0 = 1.0;
-   double etah = 0.;//0.0005;     ///< high-T viscosity, MPa-s
+   double Ke = 0.5;       ///< entanglement bulk modulus, MPa
+   double Ge = 0.225075;//0.0006408;     ///< entanglement shear modulus, MPa
+   double cvc = 4.0;
+   double rhoc0 = 1.0;
  
    // E_a and R can be SI units since they cancel out in the exponent
    double Af = 2.5e15;      ///< forward (low-high) exponential prefactor, 1/s
    double E_af = 1.5e5;     ///< forward (low-high) activation energy, J/mol
    double Ar = 1.0e-21;//4.2e-24;      ///< reverse exponential prefactor, 1/s
-   double E_ar = -1.55e5;//-1.5e5;     ///< reverse activation energy, J/mol
+   double E_ar = -1.55e5;//-1.5e5;    ///< reverse activation energy, J/mol
    double R = 8.314;        ///< universal gas constant, J/mol/K
    double Tr = 353;         ///< reference temperature, K
 
    double gw = 0.2;         ///< particle weight fraction
+
+   double wm = 0.5;         ///< matrix mass fraction
  
 
-   Material mat{.density=1.0,.Kl=Kl, .Gl=Gl, .betal=betal, .cvl=cvl, .rhol0=rhol0, .etal=etal, .Kh=Kh, .Gh=Gh, .betah=betah, .cvh=cvh, .rhoh0=rhoh0, .etah=etah, .dt=dt,.Af=Af,.E_af=E_af, .Ar=Ar, .E_ar=E_ar, .R=R, .Tr=Tr, .gw=gw};
+   Material mat{.density=1.0,.Km=Km, .Gm=Gm, .betam=betam, .cvm=cvm, .rhom0=rhom0, .eta=eta, .Ke=Ke, .Ge=Ge, .cvc=cvc, .rhoc0=rhoc0, .dt=dt,.Af=Af,.E_af=E_af, .Ar=Ar, .E_ar=E_ar, .R=R, .Tr=Tr, .gw=gw, .wm=wm};
 
    // Material mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
    Domain whole_mesh = EntireDomain(pmesh);
@@ -463,7 +431,7 @@
      double val = 0.0;
      double tstar = 0.; // was 30
      double ramp = 0.; //was 0.1
-     double sin_mag = 0.01; //0.05
+     double sin_mag = 0.05; //0.05
      //double freq = 0.125; //0.0166666; // was 10
      double freq = Ncycle/tfinal; // frequency is set to enforce the number of cycles specified earlier
      if (t < tstar){

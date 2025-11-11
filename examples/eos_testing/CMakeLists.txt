@@ -7,7 +7,7 @@
 
 if (STRUMPACK_DIR)
     blt_add_executable( NAME        active_eos
-                        SOURCES     pnc_eos_v1.cpp
+                        SOURCES     pnc_eos_v2.cpp
                         OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                         DEPENDS_ON  serac_physics
                         )
