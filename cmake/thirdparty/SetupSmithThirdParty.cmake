@@ -292,7 +292,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
                 "Additional packages required by STRUMPACK.")
             set(STRUMPACK_TARGET_NAMES STRUMPACK::strumpack CACHE STRING "")
         endif()
-        set(MFEM_USE_UMPIRE OFF CACHE BOOL "")
+        set(MFEM_USE_UMPIRE ${SMITH_ENABLE_HIP} CACHE BOOL "")
         set(MFEM_USE_ZLIB ON CACHE BOOL "")
 
         #### MFEM Configuration Options

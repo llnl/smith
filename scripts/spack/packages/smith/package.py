@@ -131,7 +131,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("netcdf-c@4.7.4")
 
-    # TODO propagate rocm and cuda to hypre
     depends_on("hypre@2.26.0:~superlu-dist+mpi")
 
     with when("+petsc"):
@@ -307,6 +306,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         # required
         depends_on(f"axom {ext_rocm_dep}", when=f"{ext_rocm_dep}")
         depends_on(f"mfem {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"hypre {ext_rocm_dep}", when=f"{ext_rocm_dep}")
 
         # optional
         depends_on(f"caliper {ext_rocm_dep}", when=f"+profiling {ext_rocm_dep}")
@@ -332,7 +332,8 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
         # required
         depends_on(f"axom {ext_rocm_dep}", when=f"{ext_rocm_dep}")
-        depends_on(f"mfem {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"mfem+raja+umpire {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"hypre+umpire {ext_rocm_dep}", when=f"{ext_rocm_dep}")
 
         # optional
         depends_on(f"caliper {ext_rocm_dep}", when=f"+profiling {ext_rocm_dep}")
@@ -413,18 +414,29 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         if spec.satisfies("+rocm"):
             entries.append(cmake_cache_option("ENABLE_HIP", True))
 
-            # Add search paths
+            hip_link_flags = ""
+
             rocm_root = os.path.dirname(spec["llvm-amdgpu"].prefix)
-            entries.append(cmake_cache_path("ROCM_PATH", rocm_root))
-            hip_link_flags = "-L{0}/lib -Wl,-rpath,{0}/lib ".format(rocm_root)
-            hip_link_flags += "-L{0}/llvm/lib -Wl,-rpath,{0}/llvm/lib ".format(rocm_root)
+            entries.append(cmake_cache_path("ROCM_ROOT_DIR", rocm_root))
 
             # Recommended MPI flags
             hip_link_flags += "-lxpmem "
-            hip_link_flags += "-L/opt/cray/pe/mpich/{0}/gtl/lib ".format(spec["mpi"].version)
-            hip_link_flags += "-Wl,-rpath,/opt/cray/pe/mpich/{0}/gtl/lib ".format(spec["mpi"].version)
+            hip_link_flags += "-L/opt/cray/pe/mpich/{0}/gtl/lib ".format(spec["mpi"].version.up_to(3))
+            hip_link_flags += "-Wl,-rpath,/opt/cray/pe/mpich/{0}/gtl/lib ".format(
+                spec["mpi"].version.up_to(3)
+            )
             hip_link_flags += "-lmpi_gtl_hsa "
 
+            if spec.satisfies("^hip@6.0.0:"):
+                hip_link_flags += "-L{0}/lib/llvm/lib -Wl,-rpath,{0}/lib/llvm/lib ".format(rocm_root)
+            else:
+                hip_link_flags += "-L{0}/llvm/lib -Wl,-rpath,{0}/llvm/lib ".format(rocm_root)
+            # Only amdclang requires this path; cray compiler fails if this is included
+            if spec.satisfies("%llvm-amdgpu"):
+                hip_link_flags += "-L{0}/lib -Wl,-rpath,{0}/lib ".format(rocm_root)
+
+            # Fixes for mpi for rocm until wrapper paths are fixed
+            # These flags are already part of the wrapped compilers on TOSS4 systems
             if self.is_fortran_compiler("amdflang"):
                 hip_link_flags += "-Wl,--disable-new-dtags "
                 hip_link_flags += "-lflang -lflangrti "

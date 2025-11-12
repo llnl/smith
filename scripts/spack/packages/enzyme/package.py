@@ -68,10 +68,8 @@ class Enzyme(CMakePackage):
         if spec.satisfies("%libllvm=llvm"):
             return spec["llvm"].prefix
         if spec.satisfies("%libllvm=llvm-amdgpu"):
-            # TODO: push to Spack's builtin repo
-            # Seems inconsistent with above if-block. External path should contain "llvm".
-            # return join_path(spec["llvm-amdgpu"].prefix, "llvm")
-            return spec["llvm"].prefix
+            # https://github.com/spack/spack-packages/pull/2365
+            return spec["llvm-amdgpu"].prefix
         raise InstallError("Unknown 'libllvm' provider!")
 
     @property

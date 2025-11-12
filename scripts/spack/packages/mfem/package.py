@@ -48,3 +48,40 @@ class Mfem(BuiltinMfem):
                 env.append_flags(flag, "-fno-omit-frame-pointer")
                 if '+debug' in self.spec:
                     env.append_flags(flag, "-fno-optimize-sibling-calls")
+
+
+    # Override hypre make options to include extra rocm libs...
+    def get_make_config_options(self, spec, prefix):
+        options = BuiltinMfem.get_make_config_options(self, spec, prefix)
+
+        # Remove old options
+        options[:] = [opt for opt in options if "HYPRE_OPT" not in opt and "HYPRE_LIB" not in opt]
+
+        # We need to add rpaths explicitly to allow proper export of link flags
+        # from within MFEM. We use the following two functions to do that.
+        ld_flags_from_library_list = self.ld_flags_from_library_list
+
+        if "+mpi" in spec:
+            hypre = spec["hypre"]
+            all_hypre_libs = hypre.libs
+
+            hypre_gpu_libs = ""
+            if "+rocm" in hypre:
+                hypre_rocm_libs = LibraryList([])
+                if "^rocsparse" in hypre:
+                    hypre_rocm_libs += hypre["rocsparse"].libs
+                if "^rocrand" in hypre:
+                    hypre_rocm_libs += hypre["rocrand"].libs
+                # https://github.com/spack/spack-packages/pull/2363
+                if hypre.version >= Version("2.29.0"):
+                    if "^rocsolver" in hypre:
+                        hypre_rocm_libs += hypre["rocsolver"].libs
+                    if "^rocblas" in hypre:
+                        hypre_rocm_libs += hypre["rocblas"].libs
+                hypre_gpu_libs = " " + ld_flags_from_library_list(hypre_rocm_libs)
+            options += [
+                "HYPRE_OPT=-I%s" % hypre.prefix.include,
+                "HYPRE_LIB=%s%s" % (ld_flags_from_library_list(all_hypre_libs), hypre_gpu_libs),
+            ]
+
+        return options
