@@ -32,7 +32,7 @@ using VectorSpace = serac::H1<disp_order, dim>;
 
 using DensitySpace = serac::L2<disp_order - 1>;
 
-//using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
+// using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 
 struct MyLinearIsotropic {
   using State = serac::Empty;  ///< this material has no internal variables
@@ -333,8 +333,7 @@ int main(int argc, char* argv[])
     solver.SetPrintLevel(nonlinear_print_level);
     // solver.SetNeighborhoodParameter(beta0);
     // solver.SetDeltaMax(delta_MAX);
-    
-    
+
     auto writer = createParaviewOutput(mesh->mfemParMesh(), serac::getConstFieldPointers(states), "contact");
     writer.write(0, 0.0, serac::getConstFieldPointers(states));
     solver.Mult(X0, Xf);
