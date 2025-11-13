@@ -32,7 +32,7 @@ using VectorSpace = serac::H1<disp_order, dim>;
 
 using DensitySpace = serac::L2<disp_order - 1>;
 
-// using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
+//using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 
 struct MyLinearIsotropic {
   using State = serac::Empty;  ///< this material has no internal variables
@@ -267,7 +267,7 @@ int main(int argc, char* argv[])
 
   // initialize displacement
   contact_states[serac::ContactFields::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
-    auto u = 0.0 * x;  // 0.1 * x;
+    auto u = 0.0 * x;
     return u;
   });
 
@@ -291,12 +291,9 @@ int main(int argc, char* argv[])
   solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.e-2 * n; });
 
   serac::tensor<double, dim> constant_force{};
-  constant_force[0] = 0.0;
+  constant_force[0] = 1.0;
   constant_force[1] = 0.0;
   constant_force[2] = 0.0;
-  // for (int i = 0; i < dim; i++) {
-  //   constant_force[i] = (double) i;
-  // }
 
   solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
     return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
@@ -306,6 +303,7 @@ int main(int argc, char* argv[])
   auto non_const_states = serac::getFieldPointers(states, params);
   auto contact_state_ptrs = serac::getFieldPointers(contact_states);
 
+  // boundary conditions
   mfem::Array<int> ess_bdr_marker(mesh->mfemParMesh().bdr_attributes.Max());
   ess_bdr_marker = 0;
   ess_bdr_marker[2] = 1;
@@ -315,15 +313,12 @@ int main(int argc, char* argv[])
     ess_bdr_marker[4] = 1;
   }
   mfem::Array<int> ess_fixed_tdof_list;
-
   states[FIELD::DISP].space().GetEssentialTrueDofs(ess_bdr_marker, ess_fixed_tdof_list);
-  std::cout << "|tdof_list| = " << ess_fixed_tdof_list.Size() << std::endl;
-  std::cout << "numd dofs = " << states[FIELD::DISP].space().GetTrueVSize() << std::endl;
 
   TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, non_const_states, mesh, solid_mechanics_weak_form,
                                              contact_constraint, ess_fixed_tdof_list);
   if (true) {
-    double nonlinear_absolute_tol = 1.e-4;
+    double nonlinear_absolute_tol = 1.e-6;
     // double beta0 = 1.0;
     // double delta_MAX = 5.0;
     int nonlinear_max_iterations = 30;
@@ -338,17 +333,17 @@ int main(int argc, char* argv[])
     solver.SetPrintLevel(nonlinear_print_level);
     // solver.SetNeighborhoodParameter(beta0);
     // solver.SetDeltaMax(delta_MAX);
-    // auto objective_states = {states[FIELD::DISP], states[FIELD::DENSITY]};
-    auto writer = createParaviewOutput(mesh->mfemParMesh(), all_states, "contact");
-    writer.write(0, 0.0, all_states);
+    
+    
+    auto writer = createParaviewOutput(mesh->mfemParMesh(), serac::getConstFieldPointers(states), "contact");
+    writer.write(0, 0.0, serac::getConstFieldPointers(states));
     solver.Mult(X0, Xf);
     bool converged = solver.GetConverged();
     SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
     mfem::Vector u(states[FIELD::DISP].space().GetTrueVSize());
-    u = 0.0;
     problem.fullDisplacement(Xf, u);
     states[FIELD::DISP].Set(1.0, u);
-    writer.write(1, 1.0, all_states);
+    writer.write(1, 1.0, serac::getConstFieldPointers(states));
   } else {
     // finite difference check on residual
     // check r(u0 + eps * udir) - r(u0) / eps - dr/dr(u0) * udir = O(eps)
@@ -375,7 +370,6 @@ int main(int argc, char* argv[])
     for (int i = 0; i < 30; i++) {
       u1.Set(1.0, u0);
       u1.Add(eps, udir);
-
       auto res1 = problem.residual(u1, new_point);
       error.Set(1.0, res1);
       error.Add(-1.0, res0);
@@ -387,9 +381,7 @@ int main(int argc, char* argv[])
                                        error.Normlinf(), eps));
       eps /= 2.0;
     }
-    // SLIC_INFO_ROOT(axom::fmt::format("|| res Jacobian ||_F = {}", resJacobian->FNorm()));
-
-    // double gapJacobianFNorm = gapJacobian->FNorm();
+    SLIC_INFO_ROOT(axom::fmt::format("|| res Jacobian ||_F = {}", resJacobian->FNorm()));
     // if (gapJacobianFNorm > 1.e-12) {
     //   auto adjoint = problem.GetOptimizationVariable();
     //   auto adjoint_load = problem.GetOptimizationVariable();
@@ -432,12 +424,11 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
     mask[i] = 1;
   }
   for (int i = 0; i < ess_tdof_list.Size(); i++) {
-    mask[i] = 0;
+    mask[ess_tdof_list[i]] = 0;
   }
   R.reset(GenerateProjector(uOffsets.get(), all_states_[FIELD::DISP]->space().GetTrueDofOffsets(), mask));
 
   P.reset(R->Transpose());
-
   // obtain pressure dof information
   HYPRE_BigInt cOffsets[2];
   if (contact) {
@@ -472,7 +463,6 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
           constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP,
                                  true);  // new_point);
       dcdu_.reset(mfem::ParMult(dcdufull_.get(), P.get(), true));
-      // dcdu_->Print("gapJacobian");
     }
   } else {
     int nentries = 0;
@@ -509,7 +499,7 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(co
 {
   ufull_ = 0.0;
   P->Mult(u, ufull_);
-  all_states_[FIELD::DISP]->Set(1.0, u);
+  all_states_[FIELD::DISP]->Set(1.0, ufull_);
   // drdu_.reset();
   auto drdufull_ =
       weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
