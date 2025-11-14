@@ -123,7 +123,7 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   int dimu_;
   int dimc_;
   std::vector<serac::FieldPtr> contact_states_;
-  std::vector<serac::FieldPtr> all_states_;
+  std::vector<serac::FieldPtr> residual_states_;
   std::shared_ptr<SolidWeakFormType> weak_form_;
   std::unique_ptr<serac::FiniteElementState> shape_disp_;
   std::shared_ptr<serac::Mesh> mesh_;
@@ -137,7 +137,7 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   mfem::Vector g0_;
 
  public:
-  TiedContactProblem(std::vector<serac::FieldPtr> contact_states, std::vector<serac::FieldPtr> all_states,
+  TiedContactProblem(std::vector<serac::FieldPtr> contact_states, std::vector<serac::FieldPtr> residual_states,
                      std::shared_ptr<serac::Mesh> mesh, std::shared_ptr<SolidWeakFormType> weak_form,
                      std::shared_ptr<serac::ContactConstraint> constraints, mfem::Array<int> ess_tdof_list);
   mfem::Vector residual(const mfem::Vector& u, bool new_point) const;
@@ -298,7 +298,7 @@ int main(int argc, char* argv[])
   });
 
   auto all_states = serac::getConstFieldPointers(states, params);
-  auto non_const_states = serac::getFieldPointers(states, params);
+  auto residual_state_ptrs = serac::getFieldPointers(states, params);
   auto contact_state_ptrs = serac::getFieldPointers(contact_states);
 
   // boundary conditions
@@ -313,7 +313,7 @@ int main(int argc, char* argv[])
   mfem::Array<int> ess_fixed_tdof_list;
   states[FIELD::DISP].space().GetEssentialTrueDofs(ess_bdr_marker, ess_fixed_tdof_list);
 
-  TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, non_const_states, mesh, solid_mechanics_weak_form,
+  TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, residual_state_ptrs, mesh, solid_mechanics_weak_form,
                                              contact_constraint, ess_fixed_tdof_list);
   if (true) {
     double nonlinear_absolute_tol = 1.e-6;
@@ -391,16 +391,16 @@ int main(int argc, char* argv[])
 
 template <typename SolidWeakFormType>
 TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::FiniteElementState*> contact_states,
-                                                          std::vector<serac::FiniteElementState*> all_states,
+                                                          std::vector<serac::FiniteElementState*> residual_states,
                                                           std::shared_ptr<serac::Mesh> mesh,
                                                           std::shared_ptr<SolidWeakFormType> weak_form,
                                                           std::shared_ptr<serac::ContactConstraint> constraints,
                                                           mfem::Array<int> ess_tdof_list)
     : EqualityConstrainedHomotopyProblem(), weak_form_(weak_form), mesh_(mesh), constraints_(constraints)
 {
-  // copy states
-  all_states_.resize(all_states.size());
-  std::copy(all_states.begin(), all_states.end(), all_states_.begin());
+  // copy residual states
+  residual_states_.resize(residual_states.size());
+  std::copy(residual_states.begin(), residual_states.end(), residual_states_.begin());
 
   // copy contact states
   contact_states_.resize(contact_states.size());
@@ -409,7 +409,7 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   // obtain displacement dof information
   // degrees of freedom with respect to solver
   // are the internal non essential dofs
-  const int dimufull_ = all_states[FIELD::DISP]->space().GetTrueVSize();
+  const int dimufull_ = residual_states[FIELD::DISP]->space().GetTrueVSize();
   ufull_.SetSize(dimufull_);
   ufull_ = 0.0;
   dimu_ = dimufull_ - ess_tdof_list.Size();
@@ -445,7 +445,7 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   for (int i = 0; i < ess_tdof_list.Size(); i++) {
     mask[static_cast<size_t>(ess_tdof_list[i])] = 0;
   }
-  restriction_.reset(GenerateProjector(uOffsets.get(), all_states_[FIELD::DISP]->space().GetTrueDofOffsets(), mask.get()));
+  restriction_.reset(GenerateProjector(uOffsets.get(), residual_states_[FIELD::DISP]->space().GetTrueDofOffsets(), mask.get()));
   
   
   prolongation_.reset(restriction_->Transpose());
@@ -490,8 +490,8 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector&
   // 2. obtain full residual via u_prolongated
   // 3. restrict residual
   prolongation_->Mult(u, ufull_);
-  all_states_[FIELD::DISP]->Set(1.0, ufull_);
-  auto resfull = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
+  residual_states_[FIELD::DISP]->Set(1.0, ufull_);
+  auto resfull = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(residual_states_));
   mfem::Vector res(dimu_);
   res = 0.0;
   restriction_->Mult(resfull, res);
@@ -502,9 +502,9 @@ template <typename SolidWeakFormType>
 mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(const mfem::Vector& u, bool /*new_point*/)
 {
   prolongation_->Mult(u, ufull_);
-  all_states_[FIELD::DISP]->Set(1.0, ufull_);
+  residual_states_[FIELD::DISP]->Set(1.0, ufull_);
   auto drdufull_ =
-      weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
+      weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(residual_states_), jacobian_weights_);
   drdu_.reset(RAP(drdufull_.get(), prolongation_.get()));
   return drdu_.get();
 }
