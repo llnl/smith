@@ -296,7 +296,6 @@ int main(int argc, char* argv[])
     return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
   });
 
-  auto all_states = serac::getConstFieldPointers(states, params);
   auto residual_state_ptrs = serac::getFieldPointers(states, params);
   auto contact_state_ptrs = serac::getFieldPointers(contact_states);
 
@@ -371,10 +370,11 @@ int main(int argc, char* argv[])
       error.Add(-1.0, res0);
       error /= eps;
       error.Add(-1.0, resJacobianudir);
-      double err = mfem::GlobalLpNorm(mfem::infinity(), error.Normlinf(), MPI_COMM_WORLD);
-      SLIC_INFO_ROOT(axom::fmt::format("|| (res(u0 + eps * udir)||_inf = {}, eps = {}", res1.Normlinf(), eps));
+      double err = mfem::GlobalLpNorm(2, error.Norml2(), MPI_COMM_WORLD);
+      double res_norm = mfem::GlobalLpNorm(2, res1.Norml2(), MPI_COMM_WORLD);
+      SLIC_INFO_ROOT(axom::fmt::format("|| (res(u0 + eps * udir)||_2 = {}, eps = {}", res_norm, eps));
       SLIC_INFO_ROOT(
-          axom::fmt::format("|| (res(u0 + eps * udir) - res(u0)) / eps - J(u0) * udir||_inf = {}, eps = {}", err, eps));
+          axom::fmt::format("|| (res(u0 + eps * udir) - res(u0)) / eps - J(u0) * udir||_2 = {}, eps = {}", err, eps));
       eps /= 2.0;
     }
     SLIC_INFO_ROOT(axom::fmt::format("|| res Jacobian ||_F = {}", resJacobian->FNorm()));
