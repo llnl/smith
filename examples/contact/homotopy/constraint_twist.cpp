@@ -32,7 +32,6 @@ using VectorSpace = serac::H1<disp_order, dim>;
 
 using DensitySpace = serac::L2<disp_order - 1>;
 
-
 struct MyLinearIsotropic {
   using State = serac::Empty;  ///< this material has no internal variables
 
@@ -89,7 +88,7 @@ struct MyLinearIsotropic {
 };
 
 using SolidMaterial = MyLinearIsotropic;
-//using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
+// using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 
 using SolidWeakFormT = serac::SolidWeakForm<disp_order, dim, serac::Parameters<DensitySpace>>;
 
@@ -374,8 +373,8 @@ int main(int argc, char* argv[])
       error.Add(-1.0, resJacobianudir);
       double err = mfem::GlobalLpNorm(mfem::infinity(), error.Normlinf(), MPI_COMM_WORLD);
       SLIC_INFO_ROOT(axom::fmt::format("|| (res(u0 + eps * udir)||_inf = {}, eps = {}", res1.Normlinf(), eps));
-      SLIC_INFO_ROOT(axom::fmt::format("|| (res(u0 + eps * udir) - res(u0)) / eps - J(u0) * udir||_inf = {}, eps = {}",
-                                       err, eps));
+      SLIC_INFO_ROOT(
+          axom::fmt::format("|| (res(u0 + eps * udir) - res(u0)) / eps - J(u0) * udir||_inf = {}, eps = {}", err, eps));
       eps /= 2.0;
     }
     SLIC_INFO_ROOT(axom::fmt::format("|| res Jacobian ||_F = {}", resJacobian->FNorm()));
@@ -432,8 +431,7 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   }
   // set pressure and displacement dof information
   SetSizes(uOffsets.get(), cOffsets.get());
-  
-  
+
   // mask out essential tdofs
   // mask[i] = 1 ==> ith dof will be made visible to solver
   // these dofs will be made visiible via explicit use
@@ -445,14 +443,10 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   for (int i = 0; i < ess_tdof_list.Size(); i++) {
     mask[static_cast<size_t>(ess_tdof_list[i])] = 0;
   }
-  restriction_.reset(GenerateProjector(uOffsets.get(), residual_states_[FIELD::DISP]->space().GetTrueDofOffsets(), mask.get()));
-  
-  
+  restriction_.reset(
+      GenerateProjector(uOffsets.get(), residual_states_[FIELD::DISP]->space().GetTrueDofOffsets(), mask.get()));
+
   prolongation_.reset(restriction_->Transpose());
-
-
-
-
 
   // shape_disp field
   shape_disp_ = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
@@ -466,7 +460,7 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
       contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
       g0_.SetSize(dimc_);
       g0_.Set(1.0,
-             constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_), true));  // new_point);
+              constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_), true));  // new_point);
 
       auto dcdufull_ =
           constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP,
@@ -529,16 +523,16 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vecto
 }
 
 template <typename SolidWeakFormType>
-mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(const mfem::Vector& u, bool /*new_point*/)
+mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(const mfem::Vector& u,
+                                                                                bool /*new_point*/)
 {
   bool new_point = true;
   if (contact) {
     if (!linearized_contact) {
       prolongation_->Mult(u, ufull_);
       contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
-      auto dcdufull_ =
-          constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP,
-                                 new_point);
+      auto dcdufull_ = constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_),
+                                              serac::ContactFields::DISP, new_point);
       dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), new_point));
     }
   }
@@ -558,9 +552,8 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
     } else {
       prolongation_->Mult(u, ufull_);
       contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
-      auto res_contribution =
-          constraints_->residual_contribution(time_, dt_, serac::getConstFieldPointers(contact_states_), l,
-                                              serac::ContactFields::DISP, new_point);
+      auto res_contribution = constraints_->residual_contribution(
+          time_, dt_, serac::getConstFieldPointers(contact_states_), l, serac::ContactFields::DISP, new_point);
       restriction_->Mult(res_contribution, res);
     }
   }
