@@ -122,7 +122,6 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   std::unique_ptr<mfem::HypreParMatrix> dcdu_;
   int dimu_;
   int dimc_;
-  mfem::Array<int> y_partition_;
   std::vector<serac::FieldPtr> contact_states_;
   std::vector<serac::FieldPtr> all_states_;
   std::shared_ptr<SolidWeakFormType> weak_form_;
@@ -132,10 +131,10 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   double time_ = 0.0;
   double dt_ = 0.0;
   std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};
-  std::unique_ptr<mfem::HypreParMatrix> R;
-  std::unique_ptr<mfem::HypreParMatrix> P;
+  std::unique_ptr<mfem::HypreParMatrix> restriction_;
+  std::unique_ptr<mfem::HypreParMatrix> prolongation_;
   mutable mfem::Vector ufull_;
-  mfem::Vector g0;
+  mfem::Vector g0_;
 
  public:
   TiedContactProblem(std::vector<serac::FieldPtr> contact_states, std::vector<serac::FieldPtr> all_states,
@@ -408,6 +407,8 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   std::copy(contact_states.begin(), contact_states.end(), contact_states_.begin());
 
   // obtain displacement dof information
+  // degrees of freedom with respect to solver
+  // are the internal non essential dofs
   const int dimufull_ = all_states[FIELD::DISP]->space().GetTrueVSize();
   ufull_.SetSize(dimufull_);
   ufull_ = 0.0;
@@ -415,20 +416,9 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
 
   std::unique_ptr<HYPRE_BigInt> uOffsets;
   uOffsets.reset(offsetsFromLocalSizes(dimu_, MPI_COMM_WORLD));
+  std::unique_ptr<HYPRE_BigInt[]> cOffsets = std::make_unique<HYPRE_BigInt[]>(2);
 
-  // mask out essential tdofs
-  HYPRE_Int * mask = new HYPRE_Int[static_cast<size_t>(dimufull_)];
-  for (int i = 0; i < dimufull_; i++) {
-    mask[i] = 1;
-  }
-  for (int i = 0; i < ess_tdof_list.Size(); i++) {
-    mask[ess_tdof_list[i]] = 0;
-  }
-  R.reset(GenerateProjector(uOffsets.get(), all_states_[FIELD::DISP]->space().GetTrueDofOffsets(), mask));
-  delete[] mask;
-  P.reset(R->Transpose());
   // obtain pressure dof information
-  HYPRE_BigInt cOffsets[2];
   if (contact) {
     dimc_ = constraints_->numPressureDofs();
     HYPRE_BigInt pressure_offset = 0;
@@ -441,27 +431,47 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
     cOffsets[1] = 0;
   }
   // set pressure and displacement dof information
-  SetSizes(uOffsets.get(), cOffsets);
+  SetSizes(uOffsets.get(), cOffsets.get());
+  
+  
+  // mask out essential tdofs
+  // mask[i] = 1 ==> ith dof will be made visible to solver
+  // these dofs will be made visiible via explicit use
+  // of prolongation/restriction operators in residual/constraint  member functions
+  std::unique_ptr<HYPRE_Int[]> mask = std::make_unique<HYPRE_Int[]>(static_cast<size_t>(dimufull_));
+  for (int i = 0; i < dimufull_; i++) {
+    mask[static_cast<size_t>(i)] = 1;
+  }
+  for (int i = 0; i < ess_tdof_list.Size(); i++) {
+    mask[static_cast<size_t>(ess_tdof_list[i])] = 0;
+  }
+  restriction_.reset(GenerateProjector(uOffsets.get(), all_states_[FIELD::DISP]->space().GetTrueDofOffsets(), mask.get()));
+  
+  
+  prolongation_.reset(restriction_->Transpose());
+
+
+
+
 
   // shape_disp field
   shape_disp_ = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
 
   if (contact) {
-    // Linearize
+    // Linearize gap about zero displacement state
     if (linearized_contact) {
       mfem::Vector u0(dimu_);
       u0 = 0.0;
-      P->Mult(u0, ufull_);
+      prolongation_->Mult(u0, ufull_);
       contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
-      g0.SetSize(dimc_);
-      g0.Set(1.0,
+      g0_.SetSize(dimc_);
+      g0_.Set(1.0,
              constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_), true));  // new_point);
 
       auto dcdufull_ =
           constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP,
                                  true);  // new_point);
-      dcdufull_->Print("contactJacobian");
-      dcdu_.reset(mfem::ParMult(dcdufull_.get(), P.get(), true));
+      dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), true));
     }
   } else {
     int nentries = 0;
@@ -469,7 +479,7 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
     dimuglb_ = 0;
     MPI_Allreduce(&dimu_, &dimuglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     auto temp = std::make_unique<mfem::SparseMatrix>(dimc_, dimuglb_, nentries);
-    dcdu_.reset(GenerateHypreParMatrixFromSparseMatrix(cOffsets, uOffsets.get(), temp.get()));
+    dcdu_.reset(GenerateHypreParMatrixFromSparseMatrix(cOffsets.get(), uOffsets.get(), temp.get()));
   }
 }
 
@@ -477,29 +487,25 @@ template <typename SolidWeakFormType>
 mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector& u, bool /*new_point*/) const
 {
   // 1. prolongate u --> u_prolongated
-  // 2. obtain residual via u_prolongated
+  // 2. obtain full residual via u_prolongated
   // 3. restrict residual
-  ufull_ = 0.0;
-  mfem::Vector res_vector(dimu_);
-  res_vector = 0.0;
-  P->Mult(u, ufull_);
+  prolongation_->Mult(u, ufull_);
   all_states_[FIELD::DISP]->Set(1.0, ufull_);
   auto resfull = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(all_states_));
   mfem::Vector res(dimu_);
   res = 0.0;
-  R->Mult(resfull, res);
+  restriction_->Mult(resfull, res);
   return res;
 };
 
 template <typename SolidWeakFormType>
 mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(const mfem::Vector& u, bool /*new_point*/)
 {
-  ufull_ = 0.0;
-  P->Mult(u, ufull_);
+  prolongation_->Mult(u, ufull_);
   all_states_[FIELD::DISP]->Set(1.0, ufull_);
   auto drdufull_ =
       weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
-  drdu_.reset(RAP(drdufull_.get(), P.get()));
+  drdu_.reset(RAP(drdufull_.get(), prolongation_.get()));
   return drdu_.get();
 }
 
@@ -512,9 +518,9 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vecto
   if (contact) {
     if (linearized_contact) {
       dcdu_->Mult(u, gap);
-      gap.Add(1.0, g0);
+      gap.Add(1.0, g0_);
     } else {
-      P->Mult(u, ufull_);
+      prolongation_->Mult(u, ufull_);
       contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
       gap = constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_), new_point);
     }
@@ -528,12 +534,12 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(
   bool new_point = true;
   if (contact) {
     if (!linearized_contact) {
-      P->Mult(u, ufull_);
+      prolongation_->Mult(u, ufull_);
       contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
       auto dcdufull_ =
           constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP,
                                  new_point);
-      dcdu_.reset(mfem::ParMult(dcdufull_.get(), P.get(), new_point));
+      dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), new_point));
     }
   }
   return dcdu_.get();
@@ -550,23 +556,23 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
     if (linearized_contact) {
       dcdu_->MultTranspose(l, res);
     } else {
-      P->Mult(u, ufull_);
+      prolongation_->Mult(u, ufull_);
       contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
       auto res_contribution =
           constraints_->residual_contribution(time_, dt_, serac::getConstFieldPointers(contact_states_), l,
                                               serac::ContactFields::DISP, new_point);
-      R->Mult(res_contribution, res);
+      restriction_->Mult(res_contribution, res);
     }
   }
   return res;
 }
 
 template <typename SolidWeakFormType>
-void TiedContactProblem<SolidWeakFormType>::fullDisplacement(const mfem::Vector& y, mfem::Vector& u)
+void TiedContactProblem<SolidWeakFormType>::fullDisplacement(const mfem::Vector& X, mfem::Vector& u)
 {
-  mfem::BlockVector yblock(y_partition);
-  yblock.Set(1.0, y);
-  P->Mult(yblock.GetBlock(0), u);
+  mfem::BlockVector Xblock(y_partition);
+  Xblock.Set(1.0, X);
+  prolongation_->Mult(Xblock.GetBlock(0), u);
 }
 
 template <typename SolidWeakFormType>
