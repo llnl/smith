@@ -25,8 +25,8 @@
 static constexpr int dim = 3;
 static constexpr int disp_order = 1;
 
-bool linearized_contact = true;
-bool contact = true;
+int linearized_contact = 1;
+int contact = 0;
 
 using VectorSpace = serac::H1<disp_order, dim>;
 
@@ -222,6 +222,22 @@ int main(int argc, char* argv[])
   // Initialize and automatically finalize MPI and other libraries
   serac::ApplicationManager applicationManager(argc, argv);
 
+  int fd_check = 0;  // finite difference check or homotopy solve
+  // command line arguments
+  axom::CLI::App app{"Constraint twist."};
+  app.add_option("--contact", contact, "enable contact (1) or use Dirichlet BCs for contact surface (0)")
+      ->default_val("0")
+      ->check(axom::CLI::Range(0, 1));
+  app.add_option("--lincontact", linearized_contact, "use linearized contact (1) or nonlinear contact (0)")
+      ->default_val("1")
+      ->check(axom::CLI::Range(0, 1));
+  app.add_option("--fdcheck", fd_check, "finite difference check (1) or Homotopy solve (0)")
+      ->default_val("1")
+      ->check(axom::CLI::Range(0, 1));
+  app.set_help_flag("--help");
+
+  CLI11_PARSE(app, argc, argv);
+
   // Create DataStore
   std::string name = "contact_twist_example";
   axom::sidre::DataStore datastore;
@@ -236,7 +252,7 @@ int main(int argc, char* argv[])
 
   serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
                                         .enforcement = serac::ContactEnforcement::LagrangeMultiplier,
-                                        .type = serac::ContactType::Frictionless,
+                                        .type = serac::ContactType::TiedNormal,
                                         .jacobian = serac::ContactJacobian::Exact};
 
   std::string contact_constraint_name = "default_contact";
@@ -279,18 +295,22 @@ int main(int argc, char* argv[])
   auto solid_mechanics_weak_form =
       std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), getSpaces(params));
 
-  SolidMaterial mat{10.0, 10.0};
+  SolidMaterial mat;
+  mat.K = 1.0;
+  mat.G = 0.5;
   solid_mechanics_weak_form->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
 
   // apply some traction boundary conditions
-  std::string surface_name = "side";
-  mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(6));
-  solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.e-2 * n; });
+  // std::string surface_name = "side";
+  // mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(6));
+  // solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.e-2 * n; });
 
   serac::tensor<double, dim> constant_force{};
-  constant_force[0] = 1.0;
-  constant_force[1] = 0.0;
-  constant_force[2] = 0.0;
+  // constant_force[0] = 1.0;
+  for (int i = 0; i < dim; i++) {
+    constant_force[i] = 0.0;
+  }
+  constant_force[dim - 1] = -0.1;
 
   solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
     return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
@@ -299,7 +319,7 @@ int main(int argc, char* argv[])
   auto residual_state_ptrs = serac::getFieldPointers(states, params);
   auto contact_state_ptrs = serac::getFieldPointers(contact_states);
 
-  // boundary conditions
+  // homogeneous Dirichlet boundary conditions
   mfem::Array<int> ess_bdr_marker(mesh->mfemParMesh().bdr_attributes.Max());
   ess_bdr_marker = 0;
   ess_bdr_marker[2] = 1;
@@ -313,7 +333,7 @@ int main(int argc, char* argv[])
 
   TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, residual_state_ptrs, mesh, solid_mechanics_weak_form,
                                              contact_constraint, ess_fixed_tdof_list);
-  if (true) {
+  if (!fd_check) {
     double nonlinear_absolute_tol = 1.e-6;
     // double beta0 = 1.0;
     // double delta_MAX = 5.0;
@@ -341,11 +361,13 @@ int main(int argc, char* argv[])
     writer.write(1, 1.0, serac::getConstFieldPointers(states));
   } else {
     // finite difference check on residual
-    // check r(u0 + eps * udir) - r(u0) / eps - dr/dr(u0) * udir = O(eps)
+    // check that the finite difference quotient residual
+    // r(u0 + eps * udir) - r(u0) / eps - dr/dr(u0) * udir
+    // is O(eps)
 
     auto dimu = problem.GetDisplacementDim();
     mfem::Vector u0(dimu);
-    u0 = 1.0;
+    u0 = 0.0;
     mfem::Vector u1(dimu);
     u1 = 0.0;
     mfem::Vector udir(dimu);
@@ -536,6 +558,7 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(
       dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), new_point));
     }
   }
+  SLIC_INFO_ROOT(axom::fmt::format("|| contact gap Jacobian ||_F = {}", dcdu_->FNorm()));
   return dcdu_.get();
 }
 
