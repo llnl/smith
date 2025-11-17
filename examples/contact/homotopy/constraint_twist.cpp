@@ -223,6 +223,7 @@ int main(int argc, char* argv[])
   serac::ApplicationManager applicationManager(argc, argv);
 
   int fd_check = 0;  // finite difference check or homotopy solve
+  int visualize = 1;
   // command line arguments
   axom::CLI::App app{"Constraint twist."};
   app.add_option("--contact", contact, "enable contact (1) or use Dirichlet BCs for contact surface (0)")
@@ -232,7 +233,10 @@ int main(int argc, char* argv[])
       ->default_val("1")
       ->check(axom::CLI::Range(0, 1));
   app.add_option("--fdcheck", fd_check, "finite difference check (1) or Homotopy solve (0)")
-      ->default_val("1")
+      ->default_val("0")
+      ->check(axom::CLI::Range(0, 1));
+  app.add_option("--visualize", visualize, "solution visualization")
+      ->default_val("1")  // Matches value set above
       ->check(axom::CLI::Range(0, 1));
   app.set_help_flag("--help");
 
@@ -349,16 +353,20 @@ int main(int argc, char* argv[])
     solver.SetPrintLevel(nonlinear_print_level);
     // solver.SetNeighborhoodParameter(beta0);
     // solver.SetDeltaMax(delta_MAX);
-
-    auto writer = createParaviewOutput(mesh->mfemParMesh(), serac::getConstFieldPointers(states), "contact");
-    writer.write(0, 0.0, serac::getConstFieldPointers(states));
     solver.Mult(X0, Xf);
     bool converged = solver.GetConverged();
     SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
-    mfem::Vector u(states[FIELD::DISP].space().GetTrueVSize());
-    problem.fullDisplacement(Xf, u);
-    states[FIELD::DISP].Set(1.0, u);
-    writer.write(1, 1.0, serac::getConstFieldPointers(states));
+    
+    auto writer = createParaviewOutput(mesh->mfemParMesh(), serac::getConstFieldPointers(states), "contact");
+    if (visualize) {
+      mfem::Vector u(states[FIELD::DISP].space().GetTrueVSize());
+      problem.fullDisplacement(X0, u);
+      states[FIELD::DISP].Set(1.0, u);
+      writer.write(0, 0.0, serac::getConstFieldPointers(states));
+      problem.fullDisplacement(Xf, u);
+      states[FIELD::DISP].Set(1.0, u);
+      writer.write(1, 1.0, serac::getConstFieldPointers(states));
+    }
   } else {
     // finite difference check on residual
     // check that the finite difference quotient residual
@@ -374,9 +382,9 @@ int main(int argc, char* argv[])
     udir.Randomize();
     udir *= 1.e-1;
     bool new_point = true;
-    auto res0 = problem.residual(u0, new_point);
+    auto res0 = problem.constraint(u0, new_point);
 
-    auto resJacobian = problem.residualJacobian(u0, new_point);
+    auto resJacobian = problem.constraintJacobian(u0, new_point);
 
     mfem::Vector resJacobianudir(resJacobian->Height());
     resJacobianudir = 0.0;
@@ -387,7 +395,7 @@ int main(int argc, char* argv[])
     for (int i = 0; i < 30; i++) {
       u1.Set(1.0, u0);
       u1.Add(eps, udir);
-      auto res1 = problem.residual(u1, new_point);
+      auto res1 = problem.constraint(u1, new_point);
       error.Set(1.0, res1);
       error.Add(-1.0, res0);
       error /= eps;
