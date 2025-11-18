@@ -1,0 +1,4 @@
+These host-configs are used for internal team builds and testing.
+The libraries they reference are guarded by linux group permissions.
+If you think you should have access and don't, please reach out to
+Brandon Talamini (talamini1@llnl.gov).
