@@ -7,43 +7,58 @@
 /**
  * @file accelerator.hpp
  *
- * @brief This file contains the interface used for initializing/terminating
- * any hardware accelerator-related functionality
+ * @brief This file contains the interface used for initializing/terminating any hardware accelerator-related
+ * functionality
  */
 
 #pragma once
 
-#if defined(__CUDACC__)
+#include "smith/smith_config.hpp"
+
+#if defined(SMITH_USE_CUDA) || defined(SMITH_USE_HIP)
+/**
+ * @brief Macro that evaluates to `__host__ __device__` when compiling with nvcc or amdclang and does nothing on a host
+ * compiler.
+ */
 #define SMITH_HOST_DEVICE __host__ __device__
+/**
+ * @brief Macro that evaluates to `__host__` when compiling with nvcc or amdclang and does nothing on a host compiler
+ */
 #define SMITH_HOST __host__
+/**
+ * @brief Macro that evaluates to `__host__` when compiling with nvcc or amdclang and does nothing on a host compiler
+ */
 #define SMITH_DEVICE __device__
+#else
+/**
+ * @brief Macro that evaluates to `__host__ __device__` when compiling with nvcc or amdclang and does nothing on a host
+ * compiler.
+ */
+#define SMITH_HOST_DEVICE
+/**
+ * @brief Macro that evaluates to `__host__` when compiling with nvcc or amdclang and does nothing on a host compiler
+ */
+#define SMITH_HOST
+/**
+ * @brief Macro that evaluates to `__device__` when compiling with nvcc or amdclang and does nothing on a host compiler
+ */
+#define SMITH_DEVICE
+#endif
 
 /**
  * Note: nvcc will sometimes emit a warning if a __host__ __device__ function calls a __host__-only or __device__-only
  * function. make_tensor is marked __host__ __device__ and is used frequently in the code base, so it was emitting a lot
- * of warnings. This #pragma directive suppresses the warning for a specific function.
+ * of warnings. This pragma directive suppresses the warning for a specific function.
  */
 
+#if defined(__CUDACC__)
 #if __CUDAVER__ >= 75000
 #define SMITH_SUPPRESS_NVCC_HOSTDEVICE_WARNING #pragma nv_exec_check_disable
 #else
 #define SMITH_SUPPRESS_NVCC_HOSTDEVICE_WARNING #pragma hd_warning_disable
 #endif
-
 #include <cuda_runtime.h>
-#else  //__CUDACC__
-/**
- * @brief Macro that evaluates to `__host__ __device__` when compiling with nvcc and does nothing on a host compiler.
- */
-#define SMITH_HOST_DEVICE
-/**
- * @brief Macro that evaluates to `__host__` when compiling with nvcc and does nothing on a host compiler
- */
-#define SMITH_HOST
-/**
- * @brief Macro that evaluates to `__device__` when compiling with nvcc and does nothing on a host compiler
- */
-#define SMITH_DEVICE
+#else
 /**
  * @brief Macro to turn off specific nvcc warnings
  */
@@ -202,7 +217,7 @@ namespace accelerator {
  *
  * @note This function should only be called once
  */
-void initializeDevice();
+void initializeDevice(ExecutionSpace exec_space);
 
 /**
  * @brief Cleans up the device, if applicable
