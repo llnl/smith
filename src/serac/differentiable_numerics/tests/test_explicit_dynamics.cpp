@@ -160,7 +160,8 @@ struct MeshFixture : public testing::Test {
     auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(stable_dt);
 
     std::shared_ptr<serac::StateAdvancer> time_integrator =
-        std::make_shared<serac::LumpedMassExplicitNewmarkStateAdvancer>(solid_mechanics_residual, solid_mass_residual, dt_estimator, bc_manager);
+        std::make_shared<serac::LumpedMassExplicitNewmarkStateAdvancer>(solid_mechanics_residual, solid_mass_residual,
+                                                                        dt_estimator, bc_manager);
 
     // construct mechanics
     mechanics = std::make_shared<serac::DifferentiablePhysics>(mesh, checkpointer_, *shape_disp, states, params,

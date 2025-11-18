@@ -210,7 +210,12 @@ class DataStore {
 
   /// @brief Deallocate the dual value
   /// @param step
-  void clear_dual(Int step) { if (duals_[step]){ duals_[step] = nullptr; } }
+  void clear_dual(Int step)
+  {
+    if (duals_[step]) {
+      duals_[step] = nullptr;
+    }
+  }
 
   /// @brief Check if state in use
   /// @param step step

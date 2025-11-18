@@ -27,9 +27,9 @@ FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryCondit
 }
 
 std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(const FieldState& shape_disp,
-                                                                const std::vector<FieldState>& states,
-                                                                const std::vector<FieldState>& params,
-                                                                const TimeInfo& time_info) const
+                                                                             const std::vector<FieldState>& states,
+                                                                             const std::vector<FieldState>& params,
+                                                                             const TimeInfo& time_info) const
 {
   SERAC_MARK_FUNCTION;
   SLIC_ERROR_IF(states.size() != 3, "ExplicitNewmark is a 2nd order time integrator requiring 3 states.");

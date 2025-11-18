@@ -28,8 +28,9 @@ class BoundaryConditionManager;
 class LumpedMassExplicitNewmarkStateAdvancer : public StateAdvancer {
  public:
   /// Constructor for lumped mass explicit Newmark implementation
-  LumpedMassExplicitNewmarkStateAdvancer(const std::shared_ptr<WeakForm>& r, const std::shared_ptr<WeakForm>& mr, const std::shared_ptr<TimestepEstimator>& ts,
-                            std::shared_ptr<BoundaryConditionManager> bc)
+  LumpedMassExplicitNewmarkStateAdvancer(const std::shared_ptr<WeakForm>& r, const std::shared_ptr<WeakForm>& mr,
+                                         const std::shared_ptr<TimestepEstimator>& ts,
+                                         std::shared_ptr<BoundaryConditionManager> bc)
       : residual_eval_(r), mass_residual_eval_(mr), ts_estimator_(ts), bc_manager_(bc)
   {
   }
@@ -48,4 +49,4 @@ class LumpedMassExplicitNewmarkStateAdvancer : public StateAdvancer {
                    ///< timestep to avoid recomputing the mass each step.
 };
 
-}
+}  // namespace serac

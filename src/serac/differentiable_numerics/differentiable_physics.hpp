@@ -33,7 +33,8 @@ class DifferentiablePhysics : public BasePhysics {
   /// @brief constructor
   DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                         const FieldState& shape_disp, const std::vector<FieldState>& states,
-                        const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer, std::string mech_name);
+                        const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer,
+                        std::string mech_name);
   /// @brief destructor
   ~DifferentiablePhysics() {}
 

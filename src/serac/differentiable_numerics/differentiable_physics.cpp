@@ -30,8 +30,7 @@ gretl::State<int> make_milestone(const std::vector<FieldState>& states)
 DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                                              const FieldState& shape_disp, const std::vector<FieldState>& states,
                                              const std::vector<FieldState>& params,
-                                             std::shared_ptr<StateAdvancer> advancer,
-                                             std::string mech_name)
+                                             std::shared_ptr<StateAdvancer> advancer, std::string mech_name)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
       advancer_(advancer)
