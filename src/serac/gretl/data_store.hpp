@@ -61,7 +61,7 @@ class DataStore {
   virtual ~DataStore() {}
 
   /// @brief create a new state in the graph, store it, return it
-  template <typename T, typename D = T>
+  template <typename T, typename D>
   State<T, D> create_state(
       const T& t, InitializeZeroDual<T, D> initial_zero_dual = [](const T&) { return D{}; })
   {
@@ -210,7 +210,7 @@ class DataStore {
 
   /// @brief Deallocate the dual value
   /// @param step
-  void clear_dual(Int step) { duals_[step] = nullptr; }
+  void clear_dual(Int step) { if (duals_[step]){ duals_[step] = nullptr; } }
 
   /// @brief Check if state in use
   /// @param step step

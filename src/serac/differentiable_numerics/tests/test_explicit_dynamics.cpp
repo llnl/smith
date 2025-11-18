@@ -7,7 +7,7 @@
 #include "serac/gretl/data_store.hpp"
 #include "serac/physics/solid_weak_form.hpp"
 
-#include "serac/differentiable_numerics/state_advancer.hpp"
+#include "serac/differentiable_numerics/lumped_mass_explicit_newmark_state_advancer.hpp"
 #include "serac/differentiable_numerics/lumped_mass_weak_form.hpp"
 #include "serac/differentiable_numerics/tests/paraview_helper.hpp"
 #include "serac/differentiable_numerics/differentiable_utils.hpp"
@@ -115,19 +115,20 @@ struct MeshFixture : public testing::Test {
     mesh = std::make_shared<serac::Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem_shape, true, length, width), MESHTAG, 0,
                                          0);
     // checkpointing graph
-    checkpointer = std::make_shared<gretl::DataStore>(200);
+    checkpointer_ = std::make_shared<gretl::DataStore>(200);
 
     // create residual evaluator
     const double density = 1.0;
     std::string physics_name = "solid";
 
+    double stable_dt = 1e-3;
+
     shape_disp = std::make_unique<serac::FieldState>(
-        create_field_state(*checkpointer, VectorSpace{}, physics_name + "_shape_displacement", mesh->tag()));
-    auto disp = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_displacement", mesh->tag());
-    auto velo = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_velocity", mesh->tag());
-    auto accel = create_field_state(*checkpointer, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
-    auto density0 = create_field_state(*checkpointer, DensitySpace{}, physics_name + "_density", mesh->tag());
-    serac::DoubleState fixed_dt = checkpointer->create_state<double, double>(1e-3);
+        create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_shape_displacement", mesh->tag()));
+    auto disp = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh->tag());
+    auto velo = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_velocity", mesh->tag());
+    auto accel = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
+    auto density0 = create_field_state(*checkpointer_, DensitySpace{}, physics_name + "_density", mesh->tag());
 
     *density0.get() = density;
 
@@ -156,13 +157,14 @@ struct MeshFixture : public testing::Test {
     auto zero_bcs = std::make_shared<mfem::FunctionCoefficient>([](const mfem::Vector&) { return 0.0; });
     bc_manager->addEssential(std::set<int>{1}, zero_bcs, states[DISP].get()->space());
 
+    auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(stable_dt);
+
     std::shared_ptr<serac::StateAdvancer> time_integrator =
-        std::make_shared<serac::LumpedMassExplicitNewmark>(solid_mechanics_residual, solid_mass_residual, bc_manager);
-    auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(fixed_dt);
+        std::make_shared<serac::LumpedMassExplicitNewmarkStateAdvancer>(solid_mechanics_residual, solid_mass_residual, dt_estimator, bc_manager);
 
     // construct mechanics
-    mechanics = std::make_shared<serac::DifferentiablePhysics>(mesh, checkpointer, *shape_disp, states, params,
-                                                               time_integrator, dt_estimator, "mechanics");
+    mechanics = std::make_shared<serac::DifferentiablePhysics>(mesh, checkpointer_, *shape_disp, states, params,
+                                                               time_integrator, "mechanics");
     physics = mechanics;
 
     // kinetic energy integrator for qoi
@@ -244,7 +246,7 @@ struct MeshFixture : public testing::Test {
 
   axom::sidre::DataStore datastore_;
   std::shared_ptr<serac::Mesh> mesh;
-  std::shared_ptr<gretl::DataStore> checkpointer;
+  std::shared_ptr<gretl::DataStore> checkpointer_;
 
   std::unique_ptr<serac::FieldState> shape_disp;
   std::vector<serac::FieldState> initial_states;
@@ -285,6 +287,8 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_LIDO)
   for (size_t p = 0; p < num_params; ++p) {
     std::cout << parameter_sensitivities[p].Norml2() << std::endl;
   }
+
+  checkpointer_ = nullptr;
 }
 
 TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
@@ -307,7 +311,7 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
   }
 
   set_as_objective(gretl_qoi);
-  checkpointer->back_prop();
+  checkpointer_->back_prop();
 
   for (auto s : initial_states) {
     std::cout << s.get()->name() << " " << s.get()->Norml2() << " " << s.get_dual()->Norml2() << std::endl;
@@ -321,11 +325,11 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
               << std::endl;
   }
 
-  EXPECT_GT(serac::check_grad_wrt(gretl_qoi, *shape_disp, *checkpointer, 0.01, 4, true), 0.8);
-  EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[DISP], *checkpointer, 0.01, 4, true), 0.8);
-  EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[VELO], *checkpointer, 0.01, 4, true), 0.8);
-  EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[ACCEL], *checkpointer, 1.0, 4, true), 0.8);
-  EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[DENSITY], *checkpointer, 0.01, 4, true), 0.8);
+  EXPECT_GT(serac::check_grad_wrt(gretl_qoi, *shape_disp, *checkpointer_, 0.01, 4, true), 0.8);
+  EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[DISP], *checkpointer_, 0.01, 4, true), 0.8);
+  EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[VELO], *checkpointer_, 0.01, 4, true), 0.8);
+  EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[ACCEL], *checkpointer_, 1.0, 4, true), 0.8);
+  EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[DENSITY], *checkpointer_, 0.01, 4, true), 0.8);
 }
 
 int main(int argc, char* argv[])

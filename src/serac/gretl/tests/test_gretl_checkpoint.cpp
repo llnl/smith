@@ -150,7 +150,7 @@ TEST_F(CheckpointFixture, Automated)
   std::vector<double> advanceStates(N + 1);
 
   gretl::DataStore dataStore(S);
-  gretl::State<double> X = dataStore.create_state(x);
+  gretl::State<double> X = dataStore.create_state<double,double>(x);
 
   advanceStates[0] = X.get();
   for (size_t n = 0; n < N; ++n) {

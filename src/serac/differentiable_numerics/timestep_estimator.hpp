@@ -33,16 +33,20 @@ class ConstantTimeStepEstimator : public TimestepEstimator {
  public:
   /// @brief Constructor
   /// @param dt fixed timestep to use throughout the simulation
-  ConstantTimeStepEstimator(DoubleState dt) : dt_(dt) {}
+  ConstantTimeStepEstimator(double dt) : dt_(dt) {}
 
   /// @overload
   DoubleState dt([[maybe_unused]] const FieldState& shape_disp, [[maybe_unused]] const std::vector<FieldState>& states,
                  [[maybe_unused]] const std::vector<FieldState>& params) const override
   {
-    return dt_;
+    double dt = dt_;
+    DoubleState DT = gretl::create_state<double, double>(
+        gretl::defaultInitializeZeroDual<double, double>(), [dt](FEFieldPtr) { return dt; },
+        [](FEFieldPtr, double, FEDualPtr&, double) {}, shape_disp);
+    return DT;
   }
 
-  DoubleState dt_;  ///< fixed timestep
+  double dt_;  ///< fixed timestep
 };
 
 }  // namespace serac

@@ -5,16 +5,17 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 set(differentiable_numerics_sources
-    state_advancer.cpp
     field_state.cpp
     differentiable_utils.cpp
     differentiable_physics.cpp
+    lumped_mass_explicit_newmark_state_advancer.cpp
     )
 
 set(differentiable_numerics_headers
     field_state.hpp
     state_advancer.hpp
     timestep_estimator.hpp
+    lumped_mass_explicit_newmark_state_advancer.hpp
     explicit_dynamic_solve.hpp
     lumped_mass_weak_form.hpp
     differentiable_utils.hpp

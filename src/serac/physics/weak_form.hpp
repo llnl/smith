@@ -40,6 +40,8 @@ class WeakForm {
    */
   WeakForm(std::string name) : name_(name) {}
 
+  virtual size_t numInputs() const { return 0; }
+
   /// @brief destructor
   virtual ~WeakForm() {}
 

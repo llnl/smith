@@ -25,7 +25,6 @@ class Mesh;
 class WeakForm;
 class DifferentiableSolver;
 class StateAdvancer;
-class TimestepEstimator;
 
 /// @brief Implementation of BasePhysics which uses FieldStates and gretl to track the computational graph, dynamically
 /// checkpoint, and back-propagate sensitivities.
@@ -34,8 +33,7 @@ class DifferentiablePhysics : public BasePhysics {
   /// @brief constructor
   DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                         const FieldState& shape_disp, const std::vector<FieldState>& states,
-                        const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer,
-                        std::shared_ptr<TimestepEstimator> dt_estimate, std::string mech_name);
+                        const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer, std::string mech_name);
   /// @brief destructor
   ~DifferentiablePhysics() {}
 
@@ -108,8 +106,6 @@ class DifferentiablePhysics : public BasePhysics {
 
   std::shared_ptr<gretl::DataStore> checkpointer_;  ///< gretl data store manages dynamic checkpointing logic
   std::shared_ptr<StateAdvancer> advancer_;  ///< abstract interface for advancing state from one cycle to the next
-  std::shared_ptr<TimestepEstimator>
-      dt_estimator_;  ///< abstract interface for estimating stable timestep from the current states
 
   std::vector<FieldState> initial_field_states_;  ///< hold a copy of the initial states, mostly to have a record of
                                                   ///< initial condition sensitivities
