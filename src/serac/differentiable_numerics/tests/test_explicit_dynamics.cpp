@@ -287,8 +287,6 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_LIDO)
   for (size_t p = 0; p < num_params; ++p) {
     std::cout << parameter_sensitivities[p].Norml2() << std::endl;
   }
-
-  checkpointer_ = nullptr;
 }
 
 TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)

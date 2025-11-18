@@ -63,9 +63,7 @@ void DataStore::reset()
     } else {
       num_persistent++;
     }
-    if (duals_[stepToClear]) {
-      duals_[stepToClear] = nullptr;
-    }
+    duals_[stepToClear] = nullptr;
   }
   checkpointManager_.reset();
   currentStep_ = num_persistent;
@@ -108,9 +106,7 @@ void DataStore::reset_for_backprop()
   currentStep_ = size();
   fetch_state_data(currentStep_ - 1);
   for (auto& dual : duals_) {
-    if (dual) {
-      dual = nullptr;
-    }
+    dual = nullptr;
   }
 }
 
@@ -157,12 +153,11 @@ void printv(const std::vector<StateBase>& v)
 
 void DataStore::try_to_free(Int step)
 {
+  if (is_persistent(step)) return;
   if (states_[step] && states_[step]->data_) {
     if (usageCount_[step] == 0 && !active_[step] && states_[step]->data_.use_count() <= 1) {
       states_[step]->primal() = nullptr;
-      if (duals_[step]) {
-        duals_[step] = nullptr;
-      }
+      duals_[step] = nullptr;
     }
   }
 }
