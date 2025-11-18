@@ -224,6 +224,7 @@ int main(int argc, char* argv[])
 
   int fd_check = 0;  // finite difference check or homotopy solve
   int visualize = 1;
+  int visualize_all_iterates = 1;
   // command line arguments
   axom::CLI::App app{"Constraint twist."};
   app.add_option("--contact", contact, "enable contact (1) or use Dirichlet BCs for contact surface (0)")
@@ -314,7 +315,7 @@ int main(int argc, char* argv[])
   for (int i = 0; i < dim; i++) {
     constant_force[i] = 0.0;
   }
-  constant_force[dim - 1] = -0.1;
+  constant_force[dim - 1] = -0.01;
 
   solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
     return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
@@ -353,6 +354,7 @@ int main(int argc, char* argv[])
     solver.SetPrintLevel(nonlinear_print_level);
     // solver.SetNeighborhoodParameter(beta0);
     // solver.SetDeltaMax(delta_MAX);
+    solver.EnableSaveIterates();
     solver.Mult(X0, Xf);
     bool converged = solver.GetConverged();
     SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
@@ -363,9 +365,62 @@ int main(int argc, char* argv[])
       problem.fullDisplacement(X0, u);
       states[FIELD::DISP].Set(1.0, u);
       writer.write(0, 0.0, serac::getConstFieldPointers(states));
-      problem.fullDisplacement(Xf, u);
-      states[FIELD::DISP].Set(1.0, u);
-      writer.write(1, 1.0, serac::getConstFieldPointers(states));
+      if (!visualize_all_iterates) {
+        problem.fullDisplacement(Xf, u);
+        states[FIELD::DISP].Set(1.0, u);
+        writer.write(1, 1.0, serac::getConstFieldPointers(states));
+      }
+      else {
+        // TODO: write iterates of the solver
+	auto iterates = solver.GetIterates();
+	for (int i = 0; i < iterates.Size(); i++)
+	{
+	  problem.fullDisplacement(*iterates[i], u);
+          states[FIELD::DISP].Set(1.0, u);
+	  writer.write((i+1), static_cast<double>(i+1), serac::getConstFieldPointers(states));
+	}
+
+        // finite difference check along each displacement u_(i+1) - u_i
+        auto dimu = problem.GetDisplacementDim();
+        for (int j = 0; j < iterates.Size() - 1; j++) {
+	  mfem::Vector u0(dimu);
+          u0 = 0.0;
+	  u0.Set(1.0, *iterates[j]);
+          mfem::Vector u1(dimu);
+          u1 = 0.0;
+          bool new_point = true;
+          mfem::Vector udir(dimu);
+          udir.Set(1.0, *iterates[j+1]);
+	  udir.Add(-1.0, *iterates[j]);
+	  //udir.Randomize();
+          //udir *= 1.e-1;
+          auto res0 = problem.constraint(u0, new_point);
+
+          auto resJacobian = problem.constraintJacobian(u0, new_point);
+
+          mfem::Vector resJacobianudir(resJacobian->Height());
+          resJacobianudir = 0.0;
+          mfem::Vector error(resJacobian->Height());
+          error = 0.0;
+          resJacobian->Mult(udir, resJacobianudir);
+          double eps = 1.0;
+          for (int i = 0; i < 30; i++) {
+            u1.Set(1.0, u0);
+            u1.Add(eps, udir);
+            auto res1 = problem.constraint(u1, new_point);
+            error.Set(1.0, res1);
+            error.Add(-1.0, res0);
+            error /= eps;
+            error.Add(-1.0, resJacobianudir);
+            double err = mfem::GlobalLpNorm(2, error.Norml2(), MPI_COMM_WORLD);
+            double res_norm = mfem::GlobalLpNorm(2, res1.Norml2(), MPI_COMM_WORLD);
+            SLIC_INFO_ROOT(axom::fmt::format("|| (res(u0 + eps * udir)||_2 = {}, eps = {}", res_norm, eps));
+            SLIC_INFO_ROOT(
+                axom::fmt::format("|| (res(u0 + eps * udir) - res(u0)) / eps - J(u0) * udir||_2 = {}, eps = {}", err, eps));
+            eps /= 2.0;
+          }
+	}
+      }
     }
   } else {
     // finite difference check on residual
