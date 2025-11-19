@@ -53,8 +53,12 @@ def parse_args():
 
 
 def main():
-    # Args
     args = parse_args()
+
+    if not ensure_on_lc_and_group_permissions():
+        return 1
+
+    # Args
     cmake_options = args["extra_cmake_options"] + " -DENABLE_BENCHMARKS=OFF -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Release"
     host_config = args["host_config"]
     timestamp = args["timestamp"]
