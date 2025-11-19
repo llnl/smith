@@ -134,6 +134,7 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   std::unique_ptr<mfem::HypreParMatrix> prolongation_;
   mutable mfem::Vector ufull_;
   mfem::Vector g0_;
+  mfem::Vector u0_;
 
  public:
   TiedContactProblem(std::vector<serac::FieldPtr> contact_states, std::vector<serac::FieldPtr> residual_states,
@@ -145,6 +146,8 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool new_point);
   mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool new_point) const;
   void fullDisplacement(const mfem::Vector& x, mfem::Vector& u);
+  void setLinearizationPoint(const mfem::Vector & u0);
+  void Linearize();
   virtual ~TiedContactProblem();
 };
 
@@ -315,7 +318,7 @@ int main(int argc, char* argv[])
   for (int i = 0; i < dim; i++) {
     constant_force[i] = 0.0;
   }
-  constant_force[dim - 1] = -0.01;
+  constant_force[dim - 1] = -0.8;
 
   solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
     return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
@@ -348,6 +351,41 @@ int main(int argc, char* argv[])
     auto X0 = problem.GetOptimizationVariable();
     auto Xf = problem.GetOptimizationVariable();
 
+    int num_lin_steps = 10;
+    if (!linearized_contact)
+    {
+      num_lin_steps = 1;
+    }
+    
+    for (int i = 0; i < num_lin_steps -1; i++)
+    {
+      HomotopySolver solver(&problem);
+      solver.SetTol(nonlinear_absolute_tol);
+      solver.SetMaxIter(nonlinear_max_iterations);
+      solver.SetPrintLevel(nonlinear_print_level);
+      // solver.SetNeighborhoodParameter(beta0);
+      // solver.SetDeltaMax(delta_MAX);
+      //solver.EnableSaveIterates();
+      solver.Mult(X0, Xf);
+      bool converged = solver.GetConverged();
+      SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
+     
+      auto dimu = problem.GetDisplacementDim(); 
+      mfem::Array<int> offsets(3);
+      offsets[0] = 0;
+      offsets[1] = dimu;
+      offsets[2] = X0.Size() - offsets[1];
+      offsets.PartialSum();
+      mfem::BlockVector Xfblock(offsets);
+      Xfblock.Set(1.0, Xf);
+      mfem::Vector uf(dimu);
+      uf.Set(1.0, Xfblock.GetBlock(0));
+      std::cout << "||uf|| = " << uf.Norml2() << std::endl;
+      problem.setLinearizationPoint(uf);
+      X0.Set(1.0, Xf);
+    }
+    
+
     HomotopySolver solver(&problem);
     solver.SetTol(nonlinear_absolute_tol);
     solver.SetMaxIter(nonlinear_max_iterations);
@@ -358,7 +396,6 @@ int main(int argc, char* argv[])
     solver.Mult(X0, Xf);
     bool converged = solver.GetConverged();
     SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
-    
     auto writer = createParaviewOutput(mesh->mfemParMesh(), serac::getConstFieldPointers(states), "contact");
     if (visualize) {
       mfem::Vector u(states[FIELD::DISP].space().GetTrueVSize());
@@ -539,18 +576,9 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   if (contact) {
     // Linearize gap about zero displacement state
     if (linearized_contact) {
-      mfem::Vector u0(dimu_);
-      u0 = 0.0;
-      prolongation_->Mult(u0, ufull_);
-      contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
-      g0_.SetSize(dimc_);
-      g0_.Set(1.0,
-              constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_), true));  // new_point);
-
-      auto dcdufull_ =
-          constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP,
-                                 true);  // new_point);
-      dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), true));
+      u0_.SetSize(dimu_);
+      u0_ = 0.0;
+      Linearize();
     }
   } else {
     int nentries = 0;
@@ -596,7 +624,10 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vecto
   gap = 0.0;
   if (contact) {
     if (linearized_contact) {
-      dcdu_->Mult(u, gap);
+      mfem::Vector du(dimu_);
+      du.Set(1.0, u);
+      du.Add(-1.0, u0_);
+      dcdu_->Mult(du, gap);
       gap.Add(1.0, g0_);
     } else {
       prolongation_->Mult(u, ufull_);
@@ -624,6 +655,30 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(
   SLIC_INFO_ROOT(axom::fmt::format("|| contact gap Jacobian ||_F = {}", dcdu_->FNorm()));
   return dcdu_.get();
 }
+
+template <typename SolidWeakFormType>
+void TiedContactProblem<SolidWeakFormType>::setLinearizationPoint(const mfem::Vector & u0)
+{
+  u0_.Set(1.0, u0);
+  Linearize();
+}
+
+template <typename SolidWeakFormType>
+void TiedContactProblem<SolidWeakFormType>::Linearize()
+{
+   prolongation_->Mult(u0_, ufull_);
+   contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
+   g0_.SetSize(dimc_);
+   g0_.Set(1.0,
+           constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_), true));  // new_point);
+
+   auto dcdufull_ =
+       constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_), serac::ContactFields::DISP,
+                              true);  // new_point);
+   dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), true));
+}
+
+
 
 template <typename SolidWeakFormType>
 mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l,
