@@ -115,8 +115,6 @@ struct MeshFixture : public testing::Test {
     const double density = 1.0;
     std::string physics_name = "solid";
 
-    double stable_dt = 1e-3;
-
     shape_disp = std::make_unique<serac::FieldState>(
         create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_shape_displacement", mesh->tag()));
     auto disp = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh->tag());
@@ -157,7 +155,7 @@ struct MeshFixture : public testing::Test {
     auto zero_bcs = std::make_shared<mfem::FunctionCoefficient>([](const mfem::Vector&) { return 0.0; });
     bc_manager->addEssential(std::set<int>{1}, zero_bcs, states[DISP].get()->space());
 
-    auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(stable_dt);
+    auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(dt / dt_reduction);
 
     std::shared_ptr<serac::StateAdvancer> time_integrator =
         std::make_shared<serac::LumpedMassExplicitNewmarkStateAdvancer>(solid_mechanics_residual, solid_mass_residual,
@@ -259,6 +257,7 @@ struct MeshFixture : public testing::Test {
   std::shared_ptr<serac::Functional<double(VectorSpace, VectorSpace, DensitySpace)>> kinetic_energy_integrator;
 
   const double dt = 1e-2;
+  const int dt_reduction = 10;
   const size_t num_steps = 4;
 };
 
@@ -306,7 +305,9 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
   auto pv_writer = serac::createParaviewOutput(*mesh, all_fields, pv_dir);
   pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);
   for (size_t m = 0; m < num_steps; ++m) {
-    mechanics->advanceTimestep(dt);
+    for (int n=0; n < dt_reduction; ++n) {
+      mechanics->advanceTimestep(dt / dt_reduction);
+    }
     all_fields = mechanics->getAllFieldStates();
     gretl_qoi =
         gretl_qoi + serac::evaluate_objective(objective, *shape_disp, {all_fields[F_VELO], all_fields[F_DENSITY]});

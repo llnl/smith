@@ -2,6 +2,7 @@
 #include "serac/physics/weak_form.hpp"
 #include "serac/differentiable_numerics/field_state.hpp"
 #include "serac/differentiable_numerics/explicit_dynamic_solve.hpp"
+#include "serac/differentiable_numerics/timestep_estimator.hpp"
 #include "serac/physics/boundary_conditions/boundary_condition_manager.hpp"
 
 namespace serac {
@@ -27,12 +28,12 @@ FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryCondit
 }
 
 std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(const FieldState& shape_disp,
-                                                                             const std::vector<FieldState>& states,
+                                                                             const std::vector<FieldState>& states_in,
                                                                              const std::vector<FieldState>& params,
                                                                              const TimeInfo& time_info) const
 {
   SERAC_MARK_FUNCTION;
-  SLIC_ERROR_IF(states.size() != 3, "ExplicitNewmark is a 2nd order time integrator requiring 3 states.");
+  SLIC_ERROR_IF(states_in.size() != 3, "ExplicitNewmark is a 2nd order time integrator requiring 3 states.");
 
   enum STATES
   {
@@ -46,37 +47,58 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(con
     DENSITY
   };
 
-  // grabs initial states
-  const FieldState& u = states[DISP];
-  const FieldState& v = states[VELO];
-  const FieldState& a = states[ACCEL];
+  std::vector<FieldState> states = states_in;
 
-  // first pass of setting u and v predictors
-  FieldState v_half_step = v + 0.5 * (time_info.dt() * a);  // axpby(1.0, v, 0.5 * dt, a);
-  FieldState u_pred = u + time_info.dt() * v_half_step;     // auto u_pred = axpby(1.0, u, dt, v_half_step);
+  if (time_info.cycle()==0 || !m_diag_inv) {
+    //  Calculate a_pred, lumped mass version
+    auto lumped_mass = computeLumpedMass(mass_residual_eval_.get(), shape_disp, states[DISP], params[DENSITY]);
+    auto diag_inv = diagInverse(lumped_mass);  // should return inverse of diagonal matrix as a field state
+    m_diag_inv = std::make_unique<FieldState>(diag_inv);
+  }
 
-  // zeroing out u predictor dofs associated with zero BCs
-  u_pred = applyZeroBoundaryConditions(u_pred, bc_manager_.get());
-  // create a vector of type FieldState called state_pred and put the u and v predictors into it
-  std::vector<FieldState> state_pred{u_pred, v_half_step, zero_copy(a)};
+  double start_time = time_info.time();
+  double end_time = time_info.time() + time_info.dt();
 
-  // if (cycle == 0) {
-  //  Calculate a_pred, lumped mass version
-  //  Note that this could maybe done at a higher up level and then flowed down, which would be more efficient?
-  auto lumped_mass = computeLumpedMass(mass_residual_eval_.get(), shape_disp, states[DISP], params[DENSITY]);
-  auto diag_inv = diagInverse(lumped_mass);  // should return inverse of diagonal matrix as a field state
-  // m_diag_inv = std::make_unique<FieldState>(diag_inv);
-  //}
+  DoubleState stable_dt = ts_estimator_->dt(shape_disp, states, params);
+  DoubleState time = gretl::clone_state([=](double) { return start_time; },
+                                        [](double, double, double&, double) {}, stable_dt);
+  while (time.get() < end_time) {
+    if (time.get() + stable_dt.get() > end_time) {
+      stable_dt = end_time - time;
+    }
 
-  // should return the evaluation of the residual for the current state variables
-  auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, state_pred, params, time_info, ACCEL);
-  // m_diag_inv*zero_mass_res; // calculate the acceleration
-  // auto a_pred = componentWiseMult(*m_diag_inv, zero_mass_res, bc_manager.get());
-  auto a_pred = componentWiseMult(diag_inv, zero_mass_res, bc_manager_.get());
-  // update the v predictor after a predictor solves
-  FieldState v_pred = v_half_step + 0.5 * (time_info.dt() * a_pred);
+    time = time + stable_dt;
+
+    // grabs initial states
+    const FieldState& u = states[DISP];
+    const FieldState& v = states[VELO];
+    const FieldState& a = states[ACCEL];
+
+    // first pass of setting u and v predictors
+    FieldState v_half_step = v + 0.5 * (stable_dt * a);
+    FieldState u_pred = u + stable_dt * v_half_step;
+
+    // zeroing out u predictor dofs associated with zero BCs
+    u_pred = applyZeroBoundaryConditions(u_pred, bc_manager_.get());
+    // create a vector of type FieldState called state_pred and put the u and v predictors into it
+    std::vector<FieldState> state_pred{u_pred, v_half_step, zero_copy(a)};
+
+    // should return the evaluation of the residual for the current state variables
+    auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, state_pred, params, time_info, ACCEL);
+    // m_diag_inv*zero_mass_res; // calculate the acceleration
+    auto a_pred = negativeComponentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
+    // update the v predictor after a predictor solves
+    FieldState v_pred = v_half_step + 0.5 * (stable_dt * a_pred);
+
+    states = std::vector<FieldState>{u_pred, v_pred, a_pred};
+
+    if (time.get() < end_time) {
+       stable_dt = ts_estimator_->dt(shape_disp, states, params);
+    }
+  }
+
   // place all solved updated states into the output
-  return std::vector<FieldState>{u_pred, v_pred, a_pred};
+  return states;
 }
 
 }  // namespace serac
