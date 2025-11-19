@@ -49,7 +49,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(con
 
   std::vector<FieldState> states = states_in;
 
-  if (time_info.cycle()==0 || !m_diag_inv) {
+  if (time_info.cycle() == 0 || !m_diag_inv) {
     //  Calculate a_pred, lumped mass version
     auto lumped_mass = computeLumpedMass(mass_residual_eval_.get(), shape_disp, states[DISP], params[DENSITY]);
     auto diag_inv = diagInverse(lumped_mass);  // should return inverse of diagonal matrix as a field state
@@ -60,8 +60,8 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(con
   double end_time = time_info.time() + time_info.dt();
 
   DoubleState stable_dt = ts_estimator_->dt(shape_disp, states, params);
-  DoubleState time = gretl::clone_state([=](double) { return start_time; },
-                                        [](double, double, double&, double) {}, stable_dt);
+  DoubleState time =
+      gretl::clone_state([=](double) { return start_time; }, [](double, double, double&, double) {}, stable_dt);
   while (time.get() < end_time) {
     if (time.get() + stable_dt.get() > end_time) {
       stable_dt = end_time - time;
@@ -93,7 +93,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(con
     states = std::vector<FieldState>{u_pred, v_pred, a_pred};
 
     if (time.get() < end_time) {
-       stable_dt = ts_estimator_->dt(shape_disp, states, params);
+      stable_dt = ts_estimator_->dt(shape_disp, states, params);
     }
   }
 

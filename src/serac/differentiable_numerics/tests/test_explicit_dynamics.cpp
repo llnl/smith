@@ -305,7 +305,7 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
   auto pv_writer = serac::createParaviewOutput(*mesh, all_fields, pv_dir);
   pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);
   for (size_t m = 0; m < num_steps; ++m) {
-    for (int n=0; n < dt_reduction; ++n) {
+    for (int n = 0; n < dt_reduction; ++n) {
       mechanics->advanceTimestep(dt / dt_reduction);
     }
     all_fields = mechanics->getAllFieldStates();
