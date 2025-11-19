@@ -626,13 +626,13 @@ def ensure_on_lc_and_group_permissions(allow_non_lc_builds=False):
             # Only check smithdev in this case if on LC
             if not in_smithdev:
                 print(f"Error: You are on LC and this script requires you to be in the '{group_name}' group.\n User '{user}' is not in the required '{group_name}' group.")
-            ok = False
+                ok = False
     else:
         if not is_sys_type_defined:
             print("Error: This script requires to you be on LC. The 'SYS_TYPE' environment variable is not set.")
             if not in_smithdev:
                 print(f"Error: User '{user}' is not in the required '{group_name}' group.")
-            ok = False
+                ok = False
         else:
             if not in_smithdev:
                 print(f"Error: This script requires you to be on LC and be in the '{group_name}' group.\n User '{user}' is not in the required '{group_name}' group.")
