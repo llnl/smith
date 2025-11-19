@@ -87,8 +87,8 @@ struct MyLinearIsotropic {
   double G;  ///< shear modulus
 };
 
-using SolidMaterial = MyLinearIsotropic;
-// using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
+//using SolidMaterial = MyLinearIsotropic;
+using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
 
 using SolidWeakFormT = serac::SolidWeakForm<disp_order, dim, serac::Parameters<DensitySpace>>;
 
@@ -343,10 +343,16 @@ int main(int argc, char* argv[])
     ess_bdr_marker[4] = 1;
   }
   mfem::Array<int> ess_fixed_tdof_list;
+  mfem::Array<int> ess_disp_tdof_list;
   states[FIELD::DISP].space().GetEssentialTrueDofs(ess_bdr_marker, ess_fixed_tdof_list);
+  ess_bdr_marker = 0;
+  states[FIELD::DISP].space().GetEssentialTrueDofs(ess_bdr_marker, ess_disp_tdof_list);
+  mfem::Vector uDC(states[FIELD::DISP].space().GetTrueVSize()); uDC = 0.0;
+  
+
 
   TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, residual_state_ptrs, mesh, solid_mechanics_weak_form,
-                                             contact_constraint, ess_fixed_tdof_list);
+                                             contact_constraint, ess_disp_tdof_list, uDC, ess_fixed_tdof_list);
   if (!fd_check) {
     double nonlinear_absolute_tol = 1.e-6;
     // double beta0 = 1.0;
@@ -357,7 +363,7 @@ int main(int argc, char* argv[])
     auto X0 = problem.GetOptimizationVariable();
     auto Xf = problem.GetOptimizationVariable();
 
-    int num_lin_steps = 10;
+    int num_lin_steps = 1;
     if (!linearized_contact)
     {
       num_lin_steps = 1;
@@ -391,11 +397,12 @@ int main(int argc, char* argv[])
       X0.Set(1.0, Xf);
     }
     
-
+    double theta0 = 1.e-6;
     HomotopySolver solver(&problem);
     solver.SetTol(nonlinear_absolute_tol);
     solver.SetMaxIter(nonlinear_max_iterations);
     solver.SetPrintLevel(nonlinear_print_level);
+    solver.SetContinuationParameter(theta0);
     // solver.SetNeighborhoodParameter(beta0);
     // solver.SetDeltaMax(delta_MAX);
     solver.EnableSaveIterates();
@@ -541,6 +548,8 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   const int dimufull_ = residual_states[FIELD::DISP]->space().GetTrueVSize();
   ufull_.SetSize(dimufull_);
   ufull_ = 0.0;
+  dispBC_.SetSize(dimufull_);
+  dispBC_.Set(1.0, dispBC);
   dimu_ = dimufull_ - ess_tdof_list.Size() - disp_ess_tdof_list.Size();
 
   std::unique_ptr<HYPRE_BigInt> uOffsets;
@@ -576,6 +585,17 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   for (int i = 0; i < disp_ess_tdof_list.Size(); i++) {
     mask[static_cast<size_t>(disp_ess_tdof_list[i])] = 0;
   }
+
+  // now mask out dofs that aren't disp BC dofs
+  std::unique_ptr<HYPRE_Int[]> dispmask = std::make_unique<HYPRE_Int[]>(static_cast<size_t>(dimufull_));
+  for (int i = 0; i < dimufull_; i++)
+  {
+    dispmask[static_cast<size_t>(i)] = 0;
+  }
+  for (int i = 0; i < disp_ess_tdof_list.Size(); i++) {
+    dispmask[static_cast<size_t>(disp_ess_tdof_list[i])] = 1;
+  }
+
   // TODO: check that the intersection of ess_tdof_list and disp_ess_tdof_list is empty!
 
   restriction_.reset(
@@ -585,11 +605,11 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
 
   // need disp offsets
   std::unique_ptr<HYPRE_BigInt> dispuOffsets;
-  dispuOffsets.reset(offsetsFromLocalSizes(dimu_, MPI_COMM_WORLD));
-  //
-
+  dispuOffsets.reset(offsetsFromLocalSizes(disp_ess_tdof_list.Size(), MPI_COMM_WORLD));
+  disp_restriction_.reset(
+      GenerateProjector(dispuOffsets.get(), residual_states_[FIELD::DISP]->space().GetTrueDofOffsets(), dispmask.get()));
   
-
+  disp_prolongation_.reset(disp_restriction_->Transpose());
 
   // shape_disp field
   shape_disp_ = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
