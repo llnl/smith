@@ -19,8 +19,8 @@ namespace serac {
 
 /// @brief creates a lumped mass weak form
 template <int spatial_dim, typename LumpedFieldSpace, typename DensitySpace, typename... parameter_space>
-auto create_solid_mass_weak_form(const std::string& physics_name, std::shared_ptr<serac::Mesh>& mesh,
-                                 const FiniteElementState& lumped_field, const FiniteElementState& density)
+auto createSolidMassWeakForm(const std::string& physics_name, std::shared_ptr<serac::Mesh>& mesh,
+                             const FiniteElementState& lumped_field, const FiniteElementState& density)
 {
   static constexpr int lumped_dim = LumpedFieldSpace::components;
 

@@ -149,13 +149,11 @@ struct MeshFixture : public testing::Test {
 
     // create mass evaluator and state in order to be able to create a diagonalized mass matrix
     std::string mass_residual_name = "mass";
-    auto solid_mass_residual = serac::create_solid_mass_weak_form<VectorSpace::components, VectorSpace, DensitySpace>(
+    auto solid_mass_residual = serac::createSolidMassWeakForm<VectorSpace::components, VectorSpace, DensitySpace>(
         mass_residual_name, mesh, *states[DISP].get(), *params[DENSITY].get());
 
     // specify dirichlet bcs
     bc_manager = std::make_shared<serac::BoundaryConditionManager>(mesh->mfemParMesh());
-    // auto zero_bcs = std::make_shared<mfem::FunctionCoefficient>([](const mfem::Vector&) { return 0.0; });
-    // bc_manager->addEssential(std::set<int>{1}, zero_bcs, states[DISP].get()->space());
 
     auto dt_estimator = std::make_shared<serac::ConstantTimeStepEstimator>(dt / double(dt_reduction));
     std::shared_ptr<serac::StateAdvancer> time_integrator =
@@ -178,7 +176,7 @@ struct MeshFixture : public testing::Test {
     objective = ke_objective;
 
     // kinetic energy integrator for qoi
-    kinetic_energy_integrator = serac::create_kinetic_energy_integrator<VectorSpace, DensitySpace>(
+    kinetic_energy_integrator = serac::createKineticEnergyIntegrator<VectorSpace, DensitySpace>(
         mesh->entireBody(), shape_disp->get()->space(), params[DENSITY].get()->space());
   }
 

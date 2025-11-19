@@ -29,8 +29,8 @@ DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const 
 
 /// @brief Utility function to construct a serac::functional which evaluates the total kinetic energy
 template <typename DispSpace, typename DensitySpace>
-auto create_kinetic_energy_integrator(serac::Domain& domain, const mfem::ParFiniteElementSpace& velocity_space,
-                                      const mfem::ParFiniteElementSpace& density_space)
+auto createKineticEnergyIntegrator(serac::Domain& domain, const mfem::ParFiniteElementSpace& velocity_space,
+                                   const mfem::ParFiniteElementSpace& density_space)
 {
   static constexpr int dim = DispSpace::components;
   auto ke_integrator = std::make_shared<serac::Functional<double(DispSpace, DispSpace, DensitySpace)>>(
