@@ -208,18 +208,24 @@ inline std::vector<const mfem::ParFiniteElementSpace*> spaces(const std::vector<
   return spaces;
 };
 
-/// @brief Get the spaces from the primal fields of a vector of field states
-inline std::vector<gretl::StateBase> combineAsStateBases(const FieldState& d, const std::vector<FieldState>& states,
-                                                         const std::vector<FieldState>& params = {})
+/// @brief Get a vector of FieldPtr or DualFieldPtr from a vector of FieldState
+inline std::vector<FiniteElementState*> getFieldPointers(std::vector<FieldState>& states)
 {
-  std::vector<gretl::StateBase> merged_states{d};
-  for (const auto& s : states) {
-    merged_states.push_back(s);
+  std::vector<FiniteElementState*> pointers;
+  for (auto& t : states) {
+    pointers.push_back(t.get().get());
   }
-  for (const auto& p : params) {
-    merged_states.push_back(p);
+  return pointers;
+}
+
+/// @brief Get a vector of ConstFieldPtr or ConstDualFieldPtr from a vector of FieldState
+inline std::vector<const FiniteElementState*> getConstFieldPointers(std::vector<FieldState>& states)
+{
+  std::vector<const FiniteElementState*> pointers;
+  for (auto& t : states) {
+    pointers.push_back(t.get().get());
   }
-  return merged_states;
-};
+  return pointers;
+}
 
 }  // namespace serac

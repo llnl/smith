@@ -19,9 +19,13 @@
 namespace serac {
 
 /// Evaluates a DoubleState using a provided ScalarObjective instance, and the input arguments to that objective. This
+/// operation is tracked on the gretl graph.  ScalarObjective must remain in scope for the
+DoubleState evaluate_objective(std::shared_ptr<ScalarObjective> objective, const TimeInfo& time_info,
+                               const FieldState& shape_disp, const std::vector<FieldState>& inputs);
+
 /// operation is tracked on the gretl graph.
-DoubleState evaluate_objective(const TimeInfo& time_info, const FieldState& shape_disp,
-                               const std::vector<FieldState>& inputs, const ScalarObjective* objective);
+DoubleState evaluate_objective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp,
+                               const std::vector<FieldState>& inputs);
 
 /// @brief Utility function to construct a serac::functional which evaluates the total kinetic energy
 template <typename DispSpace, typename DensitySpace>

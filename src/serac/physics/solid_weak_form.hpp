@@ -345,8 +345,8 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
  */
 template <int order, int dim, typename... ParameterSpaces>
 auto create_solid_weak_form(const std::string& physics_name, std::shared_ptr<serac::Mesh> mesh,
-                            const std::vector<serac::FiniteElementState*>& states,  // u, v, a, e
-                            const std::vector<serac::FiniteElementState*>& params)
+                            const std::vector<const serac::FiniteElementState*>& states,  // u, v, a, e
+                            const std::vector<const serac::FiniteElementState*>& params)
 {
   /// Local enum to better document the expected indexing order to states
   enum FieldNumbering

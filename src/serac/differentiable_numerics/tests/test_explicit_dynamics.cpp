@@ -6,6 +6,7 @@
 
 #include "serac/gretl/data_store.hpp"
 #include "serac/physics/solid_weak_form.hpp"
+#include "serac/physics/functional_objective.hpp"
 
 #include "serac/differentiable_numerics/lumped_mass_explicit_newmark_state_advancer.hpp"
 #include "serac/differentiable_numerics/lumped_mass_weak_form.hpp"
@@ -63,15 +64,6 @@ struct NeoHookeanWithFixedDensity {
   double G;  ///< shear modulus
   double density0;
 };
-
-std::vector<serac::FiniteElementState*> getStatePtrs(const std::vector<serac::FieldState>& field_states)
-{
-  std::vector<serac::FiniteElementState*> pointers;
-  for (const auto& s : field_states) {
-    pointers.push_back(s.get().get());
-  }
-  return pointers;
-}
 
 struct MeshFixture : public testing::Test {
   static constexpr int dim = 2;
@@ -140,7 +132,7 @@ struct MeshFixture : public testing::Test {
     std::vector<serac::FieldState> states{disp, velo, accel};
 
     auto solid_mechanics_residual = serac::create_solid_weak_form<disp_order, dim, DensitySpace>(
-        physics_name, mesh, getStatePtrs(states), getStatePtrs(params));
+        physics_name, mesh, getConstFieldPointers(states), getConstFieldPointers(params));
 
     SolidMaterial mat;
     mat.density0 = density;
@@ -175,6 +167,16 @@ struct MeshFixture : public testing::Test {
     mechanics = std::make_shared<serac::DifferentiablePhysics>(mesh, checkpointer_, *shape_disp, states, params,
                                                                time_integrator, "mechanics");
     physics = mechanics;
+
+    auto ke_objective = std::make_shared<serac::FunctionalObjective<dim, serac::Parameters<VectorSpace, DensitySpace>>>(
+        "integrated_squared_temperature", mesh, serac::spaces({states[DISP], params[DENSITY]}));
+
+    ke_objective->addBodyIntegral(serac::DependsOn<0, 1>(), mesh->entireBodyName(),
+                                  [](auto /*t*/, auto /*X*/, auto U, auto Rho) {
+                                    auto u = get<serac::VALUE>(U);
+                                    return 0.5 * get<serac::VALUE>(Rho) * serac::inner(u, u);
+                                  });
+    objective = ke_objective;
 
     // kinetic energy integrator for qoi
     kinetic_energy_integrator = serac::create_kinetic_energy_integrator<VectorSpace, DensitySpace>(
@@ -253,6 +255,7 @@ struct MeshFixture : public testing::Test {
   std::shared_ptr<serac::DifferentiablePhysics> mechanics;
   std::shared_ptr<serac::BasePhysics> physics;
 
+  std::shared_ptr<serac::ScalarObjective> objective;
   std::shared_ptr<serac::Functional<double(VectorSpace, VectorSpace, DensitySpace)>> kinetic_energy_integrator;
 
   const double dt = 1e-2;
@@ -295,16 +298,18 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
   resetAndApplyInitialConditions();
 
   auto all_fields = mechanics->getAllFieldStates();
-  gretl::State<double> gretl_qoi = serac::compute_kinetic_energy(kinetic_energy_integrator, *shape_disp,
-                                                                 all_fields[F_VELO], all_fields[F_DENSITY], 0.0);
+
+  gretl::State<double> gretl_qoi =
+      0.0 * serac::evaluate_objective(objective, *shape_disp, {all_fields[F_VELO], all_fields[F_DENSITY]});
+
   std::string pv_dir = std::string("paraview_") + mechanics->name();
   auto pv_writer = serac::createParaviewOutput(*mesh, all_fields, pv_dir);
   pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);
   for (size_t m = 0; m < num_steps; ++m) {
     mechanics->advanceTimestep(dt);
     all_fields = mechanics->getAllFieldStates();
-    gretl_qoi = gretl_qoi + serac::compute_kinetic_energy(kinetic_energy_integrator, *shape_disp, all_fields[F_VELO],
-                                                          all_fields[F_DENSITY], 1.0);
+    gretl_qoi =
+        gretl_qoi + serac::evaluate_objective(objective, *shape_disp, {all_fields[F_VELO], all_fields[F_DENSITY]});
     pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);
   }
 
@@ -327,10 +332,10 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
   }
 
   EXPECT_GT(serac::check_grad_wrt(gretl_qoi, *shape_disp, *checkpointer_, 0.01, 4, true), 0.8);
-  //EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[DISP], *checkpointer_, 0.01, 4, true), 0.8);
-  //EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[VELO], *checkpointer_, 0.01, 4, true), 0.8);
-  //EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[ACCEL], *checkpointer_, 1.0, 4, true), 0.8);
-  //EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[DENSITY], *checkpointer_, 0.01, 4, true), 0.8);
+  // EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[DISP], *checkpointer_, 0.01, 4, true), 0.8);
+  // EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[VELO], *checkpointer_, 0.01, 4, true), 0.8);
+  // EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[ACCEL], *checkpointer_, 1.0, 4, true), 0.8);
+  // EXPECT_GT(serac::check_grad_wrt(gretl_qoi, initial_states[DENSITY], *checkpointer_, 0.01, 4, true), 0.8);
 }
 
 int main(int argc, char* argv[])
