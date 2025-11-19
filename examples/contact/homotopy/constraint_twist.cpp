@@ -136,11 +136,8 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   std::unique_ptr<mfem::HypreParMatrix> disp_prolongation_;
   mutable mfem::Vector ufull_;
   mfem::Vector g0_;
-<<<<<<< HEAD
   mfem::Vector u0_;
-=======
   mfem::Vector dispBC_;
->>>>>>> f5439cb478ab2209762cba3d3586a183ded5543b
 
  public:
   TiedContactProblem(std::vector<serac::FieldPtr> contact_states, std::vector<serac::FieldPtr> residual_states,
