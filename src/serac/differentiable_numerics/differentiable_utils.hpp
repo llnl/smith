@@ -24,8 +24,8 @@ DoubleState evaluate_objective(std::shared_ptr<ScalarObjective> objective, const
                                const FieldState& shape_disp, const std::vector<FieldState>& inputs);
 
 /// operation is tracked on the gretl graph.
-DoubleState evaluate_objective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp,
-                               const std::vector<FieldState>& inputs);
+DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp,
+                              const std::vector<FieldState>& inputs);
 
 /// @brief Utility function to construct a serac::functional which evaluates the total kinetic energy
 template <typename DispSpace, typename DensitySpace>

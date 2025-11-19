@@ -172,6 +172,7 @@ void DifferentiablePhysics::advanceTimestep(double dt)
 
   TimeInfo time_info(time_, dt, static_cast<size_t>(cycle_));
   field_states_ = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_, time_info);
+
   cycle_++;
   time_ += dt;
   milestones_.push_back(make_milestone(field_states_).step());

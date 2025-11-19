@@ -40,8 +40,8 @@ DoubleState evaluate_objective(std::shared_ptr<ScalarObjective> objective, const
   return value.finalize();
 }
 
-DoubleState evaluate_objective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp,
-                               const std::vector<FieldState>& inputs)
+DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp,
+                              const std::vector<FieldState>& inputs)
 {
   TimeInfo time_info(0.0, 1.0, 0);
   return evaluate_objective(objective, time_info, shape_disp, inputs);

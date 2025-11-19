@@ -219,7 +219,7 @@ inline std::vector<FiniteElementState*> getFieldPointers(std::vector<FieldState>
 }
 
 /// @brief Get a vector of ConstFieldPtr or ConstDualFieldPtr from a vector of FieldState
-inline std::vector<const FiniteElementState*> getConstFieldPointers(std::vector<FieldState>& states)
+inline std::vector<const FiniteElementState*> getConstFieldPointers(const std::vector<FieldState>& states)
 {
   std::vector<const FiniteElementState*> pointers;
   for (auto& t : states) {
