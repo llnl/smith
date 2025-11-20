@@ -147,8 +147,7 @@ TEST_F(WeakFormFixture, VjpConsistency)
   pseudoRand(v);
   auto field_vjps = getFieldPointers(state_duals, param_duals);
 
-  weak_form->vjp(time_info, shape_disp.get(), input_fields, {}, getConstFieldPointers(v), shape_disp_dual.get(),
-                 field_vjps, {});
+  weak_form->vjp(time_info, shape_disp.get(), input_fields, {}, &v, shape_disp_dual.get(), field_vjps, {});
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
     serac::FiniteElementState vjp = *input_fields[i];
@@ -187,14 +186,13 @@ TEST_F(WeakFormFixture, JvpConsistency)
   serac::FiniteElementDual jvp_slow(states[HeatWeakFormT::TEMPERATURE].space(), "jvp_slow");
   serac::FiniteElementDual jvp(states[HeatWeakFormT::TEMPERATURE].space(), "jvp");
   jvp = 4.0;
-  auto jvps = getFieldPointers(jvp);
 
   auto field_tangents = getFieldPointers(state_tangents, param_tangents);
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
     auto J = weak_form->jacobian(time_info, shape_disp.get(), input_fields, jacobian_weights(i));
     J->Mult(*field_tangents[i], jvp_slow);
-    weak_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr, selectStates(i), {}, jvps);
+    weak_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr, selectStates(i), {}, &jvp);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 }
