@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
+// other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -44,7 +44,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * @brief Construct a new FunctionalWeakForm object
    *
    * @param physics_name A name for the physics module instance
-   * @param mesh The Smith mesh
+   * @param mesh The smith mesh
    * @param output_mfem_space Test space
    * @param input_mfem_spaces Vector of finite element spaces which are arguments to the residual
    */
@@ -286,10 +286,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
   /// @overload
   mfem::Vector residual(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
-                        [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {},
-                        int block_row = 0) const override
+                        [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
-    SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
     auto ret = (*weak_form_)(time_info.time(), *shape_disp, *fields[input_indices]...);
@@ -300,10 +298,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   std::unique_ptr<mfem::HypreParMatrix> jacobian(
       TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
       const std::vector<double>& jacobian_weights,
-      [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}, int block_row = 0) const override
+      [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
-    SLIC_ERROR_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for FunctionalResidual");
-
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
 
@@ -340,11 +336,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
            [[maybe_unused]] ConstFieldPtr v_shape_disp, const std::vector<ConstFieldPtr>& v_fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& v_quad_fields,
-           const std::vector<DualFieldPtr>& jvp_reactions) const override
+           DualFieldPtr jvp_reaction) const override
   {
     SLIC_ERROR_IF(v_fields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(jvp_reactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
@@ -352,41 +347,39 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time_info.time(),
                                   shape_disp, fields);
 
-    *jvp_reactions[0] = 0.0;
+    *jvp_reaction = 0.0;
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (v_fields[input_col] != nullptr) {
         auto K = smith::get<DERIVATIVE>(jacs[input_col](time_info.time(), shape_disp, fields));
-        K.AddMult(*v_fields[input_col], *jvp_reactions[0]);
+        K.AddMult(*v_fields[input_col], *jvp_reaction);
       }
     }
   }
 
   /// @overload
   void vjp(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
-           [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
-           const std::vector<ConstFieldPtr>& v_fields, DualFieldPtr vjp_shape_disp_sensitivity,
-           const std::vector<DualFieldPtr>& vjp_sensitivities,
+           [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields, ConstFieldPtr v_field,
+           DualFieldPtr vjp_shape_disp_sensitivity, const std::vector<DualFieldPtr>& vjp_sensitivities,
            [[maybe_unused]] const std::vector<QuadratureFieldPtr>& vjp_quad_field_sensitivities) const override
   {
     SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
-    SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{},
-                                           time_info.time(), shape_disp, v_fields[0], fields);
+                                           time_info.time(), shape_disp, v_field, fields);
     {
       auto shape_vjp = smith::get<DERIVATIVE>((*v_dot_weak_form_residual_)(
-          DifferentiateWRT<0>{}, time_info.time(), *shape_disp, *v_fields[0], *fields[input_indices]...));
+          DifferentiateWRT<0>{}, time_info.time(), *shape_disp, *v_field, *fields[input_indices]...));
       auto shape_vjp_vector = assemble(shape_vjp);
       *vjp_shape_disp_sensitivity += *shape_vjp_vector;
     }
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-        auto vec_jac = smith::get<DERIVATIVE>(vecJacs[input_col](time_info.time(), shape_disp, v_fields[0], fields));
+        auto vec_jac = smith::get<DERIVATIVE>(vecJacs[input_col](time_info.time(), shape_disp, v_field, fields));
         auto vec_jac_mfem_vector = assemble(vec_jac);
         *vjp_sensitivities[input_col] += *vec_jac_mfem_vector;
       }

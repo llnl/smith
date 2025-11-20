@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
+// other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -56,8 +56,8 @@ inline FieldState computeLumpedMass(const WeakForm* mass_residual_eval, const Fi
     FiniteElementState Z_dual_state(Z_dual->space(), Z_dual->name());
     Z_dual_state = *Z_dual;
 
-    mass_residual_eval->vjp(TimeInfo(0.0, 0.0), ShapeDisp.get(), getConstFieldPointers(Rho), {},
-                            getConstFieldPointers(Z_dual_state), Shape_dual.get(), getFieldPointers(Rho_dual), {});
+    mass_residual_eval->vjp(TimeInfo(0.0, 0.0), ShapeDisp.get(), getConstFieldPointers(Rho), {}, &Z_dual_state,
+                            Shape_dual.get(), getFieldPointers(Rho_dual), {});
   });
 
   return z.finalize();
@@ -107,7 +107,7 @@ inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_d
   auto z = states[inertial_index].clone(allStateBases);
 
   z.set_eval([=](const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) {
-    SMITH_MARK_FUNCTION;
+    SERAC_MARK_FUNCTION;
 
     size_t num_fields = inputs.size() - 1;          // get the number of non-shapedisp input fields
     std::vector<ConstFieldPtr> fields(num_fields);  // set up fields vector
@@ -133,7 +133,7 @@ inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_d
   });
 
   z.set_vjp([=](gretl::UpstreamStates& inputs, const gretl::DownstreamState& output) {
-    SMITH_MARK_FUNCTION;
+    SERAC_MARK_FUNCTION;
 
     const FEFieldPtr Z = output.get<FEFieldPtr>();
     const FEDualPtr Z_dual = output.get_dual<FEDualPtr, FEFieldPtr>();
@@ -163,8 +163,8 @@ inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_d
     auto shape_disp_sensitivity_ptr = inputs[num_fields].get_dual<FEDualPtr, FEFieldPtr>();
 
     // set the dual fields for each input, using the call to residual that pulls the derivative
-    residual_eval->vjp(time_info, shape_disp_ptr.get(), fields, {}, getConstFieldPointers(Z_dual_state),
-                       shape_disp_sensitivity_ptr.get(), field_sensitivities, {});
+    residual_eval->vjp(time_info, shape_disp_ptr.get(), fields, {}, &Z_dual_state, shape_disp_sensitivity_ptr.get(),
+                       field_sensitivities, {});
   });
 
   return z.finalize();

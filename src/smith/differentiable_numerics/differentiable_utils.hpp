@@ -1,11 +1,11 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
+// other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file differentiable_utils.hpp
+ * @file differentiable_utils.hppq
  *
  * @brief Utility functions for testing.
  */
@@ -19,14 +19,18 @@
 namespace smith {
 
 /// Evaluates a DoubleState using a provided ScalarObjective instance, and the input arguments to that objective. This
+/// operation is tracked on the gretl graph.  ScalarObjective must remain in scope for the
+DoubleState evaluate_objective(std::shared_ptr<ScalarObjective> objective, const TimeInfo& time_info,
+                               const FieldState& shape_disp, const std::vector<FieldState>& inputs);
+
 /// operation is tracked on the gretl graph.
-DoubleState evaluate_objective(const TimeInfo& time_info, const FieldState& shape_disp,
-                               const std::vector<FieldState>& inputs, const ScalarObjective* objective);
+DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp,
+                              const std::vector<FieldState>& inputs);
 
 /// @brief Utility function to construct a smith::functional which evaluates the total kinetic energy
 template <typename DispSpace, typename DensitySpace>
-auto create_kinetic_energy_integrator(smith::Domain& domain, const mfem::ParFiniteElementSpace& velocity_space,
-                                      const mfem::ParFiniteElementSpace& density_space)
+auto createKineticEnergyIntegrator(smith::Domain& domain, const mfem::ParFiniteElementSpace& velocity_space,
+                                   const mfem::ParFiniteElementSpace& density_space)
 {
   static constexpr int dim = DispSpace::components;
   auto ke_integrator = std::make_shared<smith::Functional<double(DispSpace, DispSpace, DensitySpace)>>(

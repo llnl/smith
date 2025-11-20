@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
+// other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -14,8 +14,9 @@
 
 #include <string>
 #include "mfem.hpp"
-#include "smith/physics/mesh.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/physics/mesh.hpp"
+#include <variant>
 
 namespace smith {
 
@@ -36,7 +37,7 @@ class ParaviewWriter {
 
   void write(size_t step, double time, const std::vector<const FiniteElementState*>& current_states)
   {
-    SMITH_MARK_FUNCTION;
+    SERAC_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
 
     for (size_t n = 0; n < states.size(); ++n) {
@@ -52,7 +53,7 @@ class ParaviewWriter {
 
   void write(size_t step, double time, const std::vector<const FiniteElementDual*>& current_duals)
   {
-    SMITH_MARK_FUNCTION;
+    SERAC_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_duals.size() != dual_states.size(), "wrong number of output states to write");
 
     for (size_t n = 0; n < dual_states.size(); ++n) {
@@ -68,7 +69,7 @@ class ParaviewWriter {
 
   void write(int step, double time, const std::vector<FieldState>& current_fields)
   {
-    SMITH_MARK_FUNCTION;
+    SERAC_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_fields.size() != states.size(), "wrong number of output states to write");
 
     for (size_t n = 0; n < states.size(); ++n) {
@@ -76,12 +77,12 @@ class ParaviewWriter {
       *state = *current_fields[n].get();
       state->gridFunction();
 
-      // auto& dual = dual_states[n];
-      // current_fields[n].get_dual()->linearForm().ParallelAssemble(*dual);
-      // dual->gridFunction();
+      auto& dual = dual_states[n];
+      current_fields[n].get_dual()->linearForm().ParallelAssemble(*dual);
+      dual->gridFunction();
     }
 
-    pv->SetCycle(static_cast<int>(step));
+    pv->SetCycle(step);
     pv->SetTime(time);
     pv->Save();
   }
@@ -113,7 +114,7 @@ inline auto createParaviewOutput(const smith::Mesh& mesh, const std::vector<Fiel
     paraview_dc->RegisterField(state->name(), &output_states.back()->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
 
-    const auto& dual = fstate.get();  // not getting the dual, as it may not exist on the graph!
+    const auto& dual = fstate.get_dual();
     output_duals.push_back(std::make_shared<smith::FiniteElementState>(dual->space(), dual->name()));
     paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
@@ -205,7 +206,6 @@ inline std::vector<const smith::FiniteElementDual*> get_dual_ptrs_for_output(
     smith::FieldState shape_disp, const std::vector<smith::FieldState>& states_in,
     std::vector<smith::FieldState> other_fields = {})
 {
-  exit(1);
   std::vector<const smith::FiniteElementDual*> duals_out{shape_disp.get_dual().get()};
   for (auto& s : states_in) {
     duals_out.push_back(s.get_dual().get());

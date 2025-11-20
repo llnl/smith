@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
+// other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -59,7 +59,7 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
    * @brief Construct a new SolidWeakForm object
    *
    * @param physics_name A name for the physics module instance
-   * @param mesh The Smith Mesh
+   * @param mesh The smith Mesh
    * @param test_space Test space
    * @param parameter_fe_spaces Vector of parameters spaces
    */
@@ -284,7 +284,7 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
      * isotropic material
      */
     template <typename X, typename State, typename Displacement, typename Acceleration, typename... Params>
-    auto SMITH_HOST_DEVICE operator()(double, X, State& state, Displacement displacement, Acceleration acceleration,
+    auto SERAC_HOST_DEVICE operator()(double, X, State& state, Displacement displacement, Acceleration acceleration,
                                       Params... params) const
     {
       auto du_dX = get<DERIVATIVE>(displacement);
@@ -328,7 +328,7 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
      */
     template <typename X, typename State, typename Displacement, typename Velocity, typename Acceleration,
               typename... Params>
-    auto SMITH_HOST_DEVICE operator()(double /*t*/, X, State& state, Displacement displacement, Velocity velocity,
+    auto SERAC_HOST_DEVICE operator()(double /*t*/, X, State& state, Displacement displacement, Velocity velocity,
                                       Acceleration acceleration, Params... params) const
     {
       auto du_dX = get<DERIVATIVE>(displacement);
@@ -345,8 +345,8 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
  */
 template <int order, int dim, typename... ParameterSpaces>
 auto create_solid_weak_form(const std::string& physics_name, std::shared_ptr<smith::Mesh> mesh,
-                            const std::vector<smith::FiniteElementState*>& states,  // u, v, a, e
-                            const std::vector<smith::FiniteElementState*>& params)
+                            const std::vector<const smith::FiniteElementState*>& states,  // u, v, a, e
+                            const std::vector<const smith::FiniteElementState*>& params)
 {
   /// Local enum to better document the expected indexing order to states
   enum FieldNumbering

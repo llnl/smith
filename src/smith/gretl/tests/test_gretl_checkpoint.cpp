@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
+// other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -150,7 +150,7 @@ TEST_F(CheckpointFixture, Automated)
   std::vector<double> advanceStates(N + 1);
 
   gretl::DataStore dataStore(S);
-  gretl::State<double> X = dataStore.create_state(x);
+  gretl::State<double> X = dataStore.create_state<double, double>(x);
 
   advanceStates[0] = X.get();
   for (size_t n = 0; n < N; ++n) {

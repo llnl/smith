@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
+// other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -61,8 +61,9 @@ class DataStore {
   virtual ~DataStore() {}
 
   /// @brief create a new state in the graph, store it, return it
-  template <typename T, typename D = T>
-  State<T, D> create_state(const T& t, InitializeZeroDual<T, D> initial_zero_dual = [](const T&) { return D{}; })
+  template <typename T, typename D>
+  State<T, D> create_state(
+      const T& t, InitializeZeroDual<T, D> initial_zero_dual = [](const T&) { return D{}; })
   {
     State<T, D> state(this, states_.size(), std::make_shared<std::any>(t), initial_zero_dual);
     add_state(std::make_unique<State<T, D>>(state), {});
@@ -209,7 +210,12 @@ class DataStore {
 
   /// @brief Deallocate the dual value
   /// @param step
-  void clear_dual(Int step) { duals_[step] = nullptr; }
+  void clear_dual(Int step)
+  {
+    if (duals_[step]) {
+      duals_[step] = nullptr;
+    }
+  }
 
   /// @brief Check if state in use
   /// @param step step

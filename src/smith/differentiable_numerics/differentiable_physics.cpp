@@ -2,7 +2,6 @@
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
-#include "smith/differentiable_numerics/timestep_estimator.hpp"
 #include "smith/gretl/data_store.hpp"
 
 namespace smith {
@@ -31,12 +30,10 @@ gretl::State<int> make_milestone(const std::vector<FieldState>& states)
 DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                                              const FieldState& shape_disp, const std::vector<FieldState>& states,
                                              const std::vector<FieldState>& params,
-                                             std::shared_ptr<StateAdvancer> advancer,
-                                             std::shared_ptr<TimestepEstimator> dt_estimate, std::string mech_name)
+                                             std::shared_ptr<StateAdvancer> advancer, std::string mech_name)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
-      advancer_(advancer),
-      dt_estimator_(dt_estimate)
+      advancer_(advancer)
 {
   SLIC_ERROR_IF(states.size() == 0, "Must have a least 1 state for a mechanics.");
   field_shape_displacement_ = std::make_unique<FieldState>(shape_disp);
@@ -169,31 +166,15 @@ const FiniteElementState& DifferentiablePhysics::adjoint([[maybe_unused]] const 
 void DifferentiablePhysics::advanceTimestep(double dt)
 {
   if (cycle_ == 0) {
-    sub_cycle_ = 0;
     field_states_ = initial_field_states_;
     milestones_.push_back(make_milestone(field_states_).step());
   }
 
-  double time_for_capture = time_;
-  double target_time = time_ + dt;
+  TimeInfo time_info(time_, dt, static_cast<size_t>(cycle_));
+  field_states_ = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_, time_info);
 
-  DoubleState stable_dt = dt_estimator_->dt(*field_shape_displacement_, field_states_, field_params_);
-  DoubleState time = gretl::clone_state([time_for_capture](double) { return time_for_capture; },
-                                        [](double, double, double&, double) {}, stable_dt);
-  while (time_ < target_time) {
-    if (time.get() + stable_dt.get() > target_time) {
-      stable_dt = target_time - time;
-    }
-
-    std::tie(field_states_, time) = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_,
-                                                            time, stable_dt, sub_cycle_++);
-    time_ = time.get();
-    if (time_ < target_time) {
-      stable_dt = dt_estimator_->dt(*field_shape_displacement_, field_states_, field_params_);
-    }
-  }
-
-  ++cycle_;
+  cycle_++;
+  time_ += dt;
   milestones_.push_back(make_milestone(field_states_).step());
 }
 

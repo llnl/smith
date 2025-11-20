@@ -1,5 +1,5 @@
 // Copyright (c), Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
+// other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -19,8 +19,8 @@ namespace smith {
 
 /// @brief creates a lumped mass weak form
 template <int spatial_dim, typename LumpedFieldSpace, typename DensitySpace, typename... parameter_space>
-auto create_solid_mass_weak_form(const std::string& physics_name, std::shared_ptr<smith::Mesh>& mesh,
-                                 const FiniteElementState& lumped_field, const FiniteElementState& density)
+auto createSolidMassWeakForm(const std::string& physics_name, std::shared_ptr<smith::Mesh>& mesh,
+                             const FiniteElementState& lumped_field, const FiniteElementState& density)
 {
   static constexpr int lumped_dim = LumpedFieldSpace::components;
 

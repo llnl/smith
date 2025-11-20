@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
+// other Serac Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -185,8 +185,7 @@ TEST_F(WeakFormFixture, VjpConsistency)
     auto J = weak_form->jacobian(time_info, shape_disp.get(), input_fields, jacobian_weights(i));
     J->AddMultTranspose(v, vjp);
   }
-  weak_form->vjp(time_info, shape_disp.get(), input_fields, {}, getConstFieldPointers(v), shape_disp_dual.get(),
-                 field_vjps, {});
+  weak_form->vjp(time_info, shape_disp.get(), input_fields, {}, &v, shape_disp_dual.get(), field_vjps, {});
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
     EXPECT_NEAR(field_vjps_slow[i].Norml2(), field_vjps[i]->Norml2(), 1e-12)
@@ -222,14 +221,13 @@ TEST_F(WeakFormFixture, JvpConsistency)
   smith::FiniteElementDual jvp_slow(states[DISP].space(), "jvp_slow");
   smith::FiniteElementDual jvp(states[DISP].space(), "jvp");
   jvp = 4.0;  // set to some value to test jvp resets these values
-  auto jvps = getFieldPointers(jvp);
 
   auto field_tangents = getConstFieldPointers(state_tangents, param_tangents);
 
   for (size_t i = 0; i < input_fields.size(); ++i) {
     auto J = weak_form->jacobian(time_info, shape_disp.get(), input_fields, jacobianWeights(i));
     J->Mult(*field_tangents[i], jvp_slow);
-    weak_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr, selectStates(i), {}, jvps);
+    weak_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr, selectStates(i), {}, &jvp);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 
@@ -244,7 +242,7 @@ TEST_F(WeakFormFixture, JvpConsistency)
     J->Mult(*field_tangents[DISP], jvp_slow);
 
     state_tangents[VELO] *= velo_factor;
-    weak_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr, field_tangents, {}, jvps);
+    weak_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr, field_tangents, {}, &jvp);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
 }
