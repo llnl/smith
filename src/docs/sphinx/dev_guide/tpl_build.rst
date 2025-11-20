@@ -212,6 +212,11 @@ section by substituting the values in these two command line options: ``--spack-
   On LC machines, it is good practice to do the build step in parallel on a compute node.
   You should add the following to the start of your commands: ``salloc -ppdebug -N1 --exclusive python3 scripts/uberenv/uberenv.py``
 
+.. note::
+   If you do not have access to the ``smithdev`` linux group. You cannot currently use our prebuilt Dev Tools
+   referenced in the Spack Environment files listed above. You will be required to turn off the devtool variant
+   on your Spack spec by adding ``~devtools`` to your uberenv or Spack spec.
+
 -------------------------------
 Generate Spack Environment File
 -------------------------------
