@@ -88,9 +88,9 @@ TEST_F(MeshFixture, FieldStateWithDifferentiable_axpby)
 
   checkpointer_->back_prop();
 
-  EXPECT_GT(smith::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::check_grad_wrt(uu, dt, *checkpointer_, 1e-7, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, dt, *checkpointer_, 1e-7, 4, true), 0.95);
 }
 
 TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
@@ -136,11 +136,11 @@ TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
 
   checkpointer_->back_prop();
 
-  EXPECT_GT(smith::check_grad_wrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::check_grad_wrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::check_grad_wrt(uu, accel, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::check_grad_wrt(uu, dt, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::check_grad_wrt(uu, h, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, accel, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, dt, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, h, *checkpointer_, 1e-5, 4, true), 0.95);
 }
 
 int main(int argc, char* argv[])

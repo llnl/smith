@@ -3,7 +3,7 @@
 
 namespace smith {
 
-DoubleState evaluate_objective(std::shared_ptr<ScalarObjective> objective, const TimeInfo& time_info,
+DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const TimeInfo& time_info,
                                const FieldState& shape_disp, const std::vector<FieldState>& inputs)
 {
   std::vector<gretl::StateBase> all_states{shape_disp};
@@ -44,7 +44,7 @@ DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const 
                               const std::vector<FieldState>& inputs)
 {
   TimeInfo time_info(0.0, 1.0, 0);
-  return evaluate_objective(objective, time_info, shape_disp, inputs);
+  return evaluateObjective(objective, time_info, shape_disp, inputs);
 }
 
 }  // namespace smith

@@ -338,11 +338,11 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
               << std::endl;
   }
 
-  EXPECT_GT(smith::check_grad_wrt(gretl_qoi, *shape_disp, *checkpointer_, 0.01, 4, true), 0.8);
-  EXPECT_GT(smith::check_grad_wrt(gretl_qoi, initial_states[DISP], *checkpointer_, 0.01, 4, true), 0.8);
-  EXPECT_GT(smith::check_grad_wrt(gretl_qoi, initial_states[VELO], *checkpointer_, 0.01, 4, true), 0.8);
-  // EXPECT_GT(smith::check_grad_wrt(gretl_qoi, initial_states[ACCEL], *checkpointer_, 1.0, 4, true), 0.8);
-  EXPECT_GT(smith::check_grad_wrt(gretl_qoi, initial_states[DENSITY], *checkpointer_, 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, *shape_disp, *checkpointer_, 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states[DISP], *checkpointer_, 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states[VELO], *checkpointer_, 0.01, 4, true), 0.8);
+  // EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states[ACCEL], *checkpointer_, 1.0, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states[DENSITY], *checkpointer_, 0.01, 4, true), 0.8);
 }
 
 TEST_F(MeshFixture, TRANSIENT_CONSTANT_GRAVITY)

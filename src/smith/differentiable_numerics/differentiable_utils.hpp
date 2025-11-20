@@ -20,8 +20,8 @@ namespace smith {
 
 /// Evaluates a DoubleState using a provided ScalarObjective instance, and the input arguments to that objective. This
 /// operation is tracked on the gretl graph.  ScalarObjective must remain in scope for the
-DoubleState evaluate_objective(std::shared_ptr<ScalarObjective> objective, const TimeInfo& time_info,
-                               const FieldState& shape_disp, const std::vector<FieldState>& inputs);
+DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const TimeInfo& time_info,
+                              const FieldState& shape_disp, const std::vector<FieldState>& inputs);
 
 /// operation is tracked on the gretl graph.
 DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp,
@@ -51,7 +51,7 @@ auto createKineticEnergyIntegrator(smith::Domain& domain, const mfem::ParFiniteE
 
 /// @brief Utility function which computes the kinetic energy and returns it as a gretl state (with its vjp defined)
 template <typename DispSpace, typename DensitySpace>
-gretl::State<double> compute_kinetic_energy(
+gretl::State<double> computeKineticEnergy(
     const std::shared_ptr<smith::Functional<double(DispSpace, DispSpace, DensitySpace)>>& energy_func,
     smith::FieldState disp, smith::FieldState velo, smith::FieldState density, double scaling)
 {
@@ -84,7 +84,7 @@ gretl::State<double> compute_kinetic_energy(
 }
 
 /// testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
-inline auto check_gradients(const gretl::State<double>& objectiveState, FieldState& inputState,
+inline auto checkGradients(const gretl::State<double>& objectiveState, FieldState& inputState,
                             FiniteElementDual& inputDual, double objectiveBase, gretl::DataStore& dataStore, double eps)
 {
   smith::FiniteElementState inputSave(*inputState.get());
@@ -111,7 +111,7 @@ inline auto check_gradients(const gretl::State<double>& objectiveState, FieldSta
 }
 
 /// testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
-inline auto check_gradients(const gretl::State<double>& objectiveState, gretl::State<double, double>& inputState,
+inline auto checkGradients(const gretl::State<double>& objectiveState, gretl::State<double, double>& inputState,
                             double& inputDual, double objectiveBase, gretl::DataStore& dataStore, double eps)
 {
   double inputSave = inputState.get();
@@ -125,7 +125,7 @@ inline auto check_gradients(const gretl::State<double>& objectiveState, gretl::S
 /// @brief Testing utility function which runs a gretl graph num_fd_steps (with increasingly smaller finite difference
 /// steps) to check if the computed graph gradients are converging to the finite differenced gradients at the expected
 /// rate
-inline double check_grad_wrt(const gretl::State<double>& objective, smith::FieldState& input, gretl::DataStore& graph,
+inline double checkGradWrt(const gretl::State<double>& objective, smith::FieldState& input, gretl::DataStore& graph,
                              double eps, size_t num_fd_steps = 4, bool printmore = false)
 {
   // reset each time, just to be sure
@@ -141,12 +141,12 @@ inline double check_grad_wrt(const gretl::State<double>& objective, smith::Field
   auto dual_vec = *input.get_dual();
 
   std::vector<double> grad_errors;
-  auto [grad, grad_fd] = check_gradients(objective, input, dual_vec, objectiveBase, graph, eps);
+  auto [grad, grad_fd] = checkGradients(objective, input, dual_vec, objectiveBase, graph, eps);
   grad_errors.push_back(std::abs(grad - grad_fd));
 
   for (size_t step = 1; step < num_fd_steps; ++step) {
     eps /= 2;
-    std::tie(grad, grad_fd) = check_gradients(objective, input, dual_vec, objectiveBase, graph, eps);
+    std::tie(grad, grad_fd) = checkGradients(objective, input, dual_vec, objectiveBase, graph, eps);
     if (printmore) std::cout << "grad    = " << grad << "\ngrad fd = " << grad_fd << std::endl;
     grad_errors.push_back(std::abs(grad - grad_fd));
   }
@@ -165,7 +165,7 @@ inline double check_grad_wrt(const gretl::State<double>& objective, smith::Field
 /// @brief Testing utility function which runs a gretl graph num_fd_steps (with increasingly smaller finite difference
 /// steps) to check if the computed graph gradients are converging to the finite differenced gradients at the expected
 /// rate
-inline double check_grad_wrt(const gretl::State<double>& objective, gretl::State<double, double>& input,
+inline double checkGradWrt(const gretl::State<double>& objective, gretl::State<double, double>& input,
                              gretl::DataStore& graph, double eps, size_t num_fd_steps = 4, bool printmore = false)
 {
   // reset each time, just to be sure
@@ -181,12 +181,12 @@ inline double check_grad_wrt(const gretl::State<double>& objective, gretl::State
   auto dual = input.get_dual();
 
   std::vector<double> grad_errors;
-  auto [grad, grad_fd] = check_gradients(objective, input, dual, objectiveBase, graph, eps);
+  auto [grad, grad_fd] = checkGradients(objective, input, dual, objectiveBase, graph, eps);
   grad_errors.push_back(std::abs(grad - grad_fd));
 
   for (size_t step = 1; step < num_fd_steps; ++step) {
     eps /= 2;
-    std::tie(grad, grad_fd) = check_gradients(objective, input, dual, objectiveBase, graph, eps);
+    std::tie(grad, grad_fd) = checkGradients(objective, input, dual, objectiveBase, graph, eps);
     if (printmore) std::cout << "grad    = " << grad << "\ngrad fd = " << grad_fd << std::endl;
     grad_errors.push_back(std::abs(grad - grad_fd));
   }
