@@ -32,7 +32,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(con
                                                                              const std::vector<FieldState>& params,
                                                                              const TimeInfo& time_info) const
 {
-  SERAC_MARK_FUNCTION;
+  SMITH_MARK_FUNCTION;
   SLIC_ERROR_IF(states_in.size() != 3, "ExplicitNewmark is a 2nd order time integrator requiring 3 states.");
 
   enum STATES

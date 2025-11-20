@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -284,7 +284,7 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
      * isotropic material
      */
     template <typename X, typename State, typename Displacement, typename Acceleration, typename... Params>
-    auto SERAC_HOST_DEVICE operator()(double, X, State& state, Displacement displacement, Acceleration acceleration,
+    auto SMITH_HOST_DEVICE operator()(double, X, State& state, Displacement displacement, Acceleration acceleration,
                                       Params... params) const
     {
       auto du_dX = get<DERIVATIVE>(displacement);
@@ -328,7 +328,7 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
      */
     template <typename X, typename State, typename Displacement, typename Velocity, typename Acceleration,
               typename... Params>
-    auto SERAC_HOST_DEVICE operator()(double /*t*/, X, State& state, Displacement displacement, Velocity velocity,
+    auto SMITH_HOST_DEVICE operator()(double /*t*/, X, State& state, Displacement displacement, Velocity velocity,
                                       Acceleration acceleration, Params... params) const
     {
       auto du_dX = get<DERIVATIVE>(displacement);

@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -37,7 +37,7 @@ struct NeoHookeanWithFieldWithRateForTesting {
   using State = Empty;  ///< this material has no internal variables
 
   template <typename T1, typename T2, int dim>
-  SERAC_HOST_DEVICE auto pkStress(double /*dt*/, State& /* state */, const tensor<T1, dim, dim>& du_dX,
+  SMITH_HOST_DEVICE auto pkStress(double /*dt*/, State& /* state */, const tensor<T1, dim, dim>& du_dX,
                                   const tensor<T2, dim, dim>& /*dv_dX*/) const
   {
     using std::log1p;
@@ -54,7 +54,7 @@ struct NeoHookeanWithFieldWithRateForTesting {
     return dot(TK, inv(transpose(F)));
   }
 
-  SERAC_HOST_DEVICE auto density() const { return Rho; }
+  SMITH_HOST_DEVICE auto density() const { return Rho; }
 
   double K;    ///< bulk modulus
   double G;    ///< shear modulus

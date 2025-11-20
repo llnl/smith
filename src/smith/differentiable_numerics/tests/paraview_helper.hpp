@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -37,7 +37,7 @@ class ParaviewWriter {
 
   void write(size_t step, double time, const std::vector<const FiniteElementState*>& current_states)
   {
-    SERAC_MARK_FUNCTION;
+    SMITH_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
 
     for (size_t n = 0; n < states.size(); ++n) {
@@ -53,7 +53,7 @@ class ParaviewWriter {
 
   void write(size_t step, double time, const std::vector<const FiniteElementDual*>& current_duals)
   {
-    SERAC_MARK_FUNCTION;
+    SMITH_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_duals.size() != dual_states.size(), "wrong number of output states to write");
 
     for (size_t n = 0; n < dual_states.size(); ++n) {
@@ -69,7 +69,7 @@ class ParaviewWriter {
 
   void write(int step, double time, const std::vector<FieldState>& current_fields)
   {
-    SERAC_MARK_FUNCTION;
+    SMITH_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_fields.size() != states.size(), "wrong number of output states to write");
 
     for (size_t n = 0; n < states.size(); ++n) {
