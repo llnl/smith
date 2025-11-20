@@ -40,8 +40,6 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
   using ShapeDispSpace = H1<SHAPE_ORDER, spatial_dim>;  ///< typedef
 
-  size_t numInputs() const override { return sizeof...(InputSpaces); }
-
   /**
    * @brief Construct a new FunctionalWeakForm object
    *
