@@ -21,13 +21,23 @@ namespace {
 std::unique_ptr<mfem::Device> device;
 }  // namespace
 
-void initializeDevice()
+void initializeDevice(ExecutionSpace exec_space)
 {
   SLIC_ERROR_ROOT_IF(device, "smith::accelerator::initializeDevice cannot be called more than once");
   device = std::make_unique<mfem::Device>();
+  switch (exec_space) {
+    case ExecutionSpace::GPU:
 #if defined(MFEM_USE_CUDA) && defined(SMITH_USE_CUDA_KERNEL_EVALUATION)
-  device->Configure("cuda");
+      device->Configure("cuda");
+#elif defined(MFEM_USE_HIP)
+      device->Configure("hip");
 #endif
+      break;
+    case ExecutionSpace::CPU:
+      break;
+    case ExecutionSpace::Dynamic:
+      break;
+  }
 }
 
 void terminateDevice()
