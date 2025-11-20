@@ -85,7 +85,7 @@ gretl::State<double> computeKineticEnergy(
 
 /// testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
 inline auto checkGradients(const gretl::State<double>& objectiveState, FieldState& inputState,
-                            FiniteElementDual& inputDual, double objectiveBase, gretl::DataStore& dataStore, double eps)
+                           FiniteElementDual& inputDual, double objectiveBase, gretl::DataStore& dataStore, double eps)
 {
   smith::FiniteElementState inputSave(*inputState.get());
   dataStore.reset();
@@ -112,7 +112,7 @@ inline auto checkGradients(const gretl::State<double>& objectiveState, FieldStat
 
 /// testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
 inline auto checkGradients(const gretl::State<double>& objectiveState, gretl::State<double, double>& inputState,
-                            double& inputDual, double objectiveBase, gretl::DataStore& dataStore, double eps)
+                           double& inputDual, double objectiveBase, gretl::DataStore& dataStore, double eps)
 {
   double inputSave = inputState.get();
   dataStore.reset();
@@ -126,7 +126,7 @@ inline auto checkGradients(const gretl::State<double>& objectiveState, gretl::St
 /// steps) to check if the computed graph gradients are converging to the finite differenced gradients at the expected
 /// rate
 inline double checkGradWrt(const gretl::State<double>& objective, smith::FieldState& input, gretl::DataStore& graph,
-                             double eps, size_t num_fd_steps = 4, bool printmore = false)
+                           double eps, size_t num_fd_steps = 4, bool printmore = false)
 {
   // reset each time, just to be sure
   graph.reset();
@@ -166,7 +166,7 @@ inline double checkGradWrt(const gretl::State<double>& objective, smith::FieldSt
 /// steps) to check if the computed graph gradients are converging to the finite differenced gradients at the expected
 /// rate
 inline double checkGradWrt(const gretl::State<double>& objective, gretl::State<double, double>& input,
-                             gretl::DataStore& graph, double eps, size_t num_fd_steps = 4, bool printmore = false)
+                           gretl::DataStore& graph, double eps, size_t num_fd_steps = 4, bool printmore = false)
 {
   // reset each time, just to be sure
   graph.reset();
