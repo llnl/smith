@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file differentiable_utils.hppq
+ * @file differentiable_utils.hpp
  *
  * @brief Utility functions for testing.
  */
