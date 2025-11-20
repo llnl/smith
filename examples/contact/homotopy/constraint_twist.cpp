@@ -312,17 +312,11 @@ int main(int argc, char* argv[])
   mat.G = 0.5;
   solid_mechanics_weak_form->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
 
-  // apply some traction boundary conditions
-  // std::string surface_name = "side";
-  // mesh->addDomainOfBoundaryElements(surface_name, serac::by_attr<dim>(6));
-  // solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.e-2 * n; });
-
   serac::tensor<double, dim> constant_force{};
-  // constant_force[0] = 1.0;
   for (int i = 0; i < dim; i++) {
     constant_force[i] = 0.0;
   }
-  constant_force[dim - 1] = -0.8;
+  constant_force[dim - 1] = 0.0;
 
   solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
     return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
@@ -332,27 +326,36 @@ int main(int argc, char* argv[])
   auto contact_state_ptrs = serac::getFieldPointers(contact_states);
 
   // homogeneous Dirichlet boundary conditions
+  mfem::Array<int> ess_fixed_tdof_list;
+  mfem::Array<int> ess_disp_tdof_list;
   mfem::Array<int> ess_bdr_marker(mesh->mfemParMesh().bdr_attributes.Max());
   ess_bdr_marker = 0;
   ess_bdr_marker[2] = 1;
-  ess_bdr_marker[5] = 1;
+  ess_bdr_marker[5] = 0;
   if (!contact) {
     ess_bdr_marker[3] = 1;
     ess_bdr_marker[4] = 1;
   }
-  mfem::Array<int> ess_fixed_tdof_list;
-  mfem::Array<int> ess_disp_tdof_list;
   states[FIELD::DISP].space().GetEssentialTrueDofs(ess_bdr_marker, ess_fixed_tdof_list);
   ess_bdr_marker = 0;
+  ess_bdr_marker[5] = 1;
   states[FIELD::DISP].space().GetEssentialTrueDofs(ess_bdr_marker, ess_disp_tdof_list);
   mfem::Vector uDC(states[FIELD::DISP].space().GetTrueVSize());
   uDC = 0.0;
+  auto applied_displacement = [](serac::tensor<double, dim> /*x*/) {
+    serac::tensor<double, dim> u{};
+    u[0] = 0.0;
+    u[1] = 0.0;
+    u[2] = -0.06;
+    return u;
+  };
+  states[FIELD::DISP].setFromFieldFunction(applied_displacement);
+  uDC.Set(1.0, states[FIELD::DISP]);
 
   TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, residual_state_ptrs, mesh, solid_mechanics_weak_form,
                                              contact_constraint, ess_disp_tdof_list, uDC, ess_fixed_tdof_list);
   double nonlinear_absolute_tol = 1.e-6;
   int nonlinear_max_iterations = 30;
-  double homotopy_solver_continuation_parameter = 1.e-6;  // continuation parameter
   int nonlinear_print_level = 1;
   // optimization variables
   auto X0 = problem.GetOptimizationVariable();
@@ -362,7 +365,7 @@ int main(int argc, char* argv[])
   solver.SetTol(nonlinear_absolute_tol);
   solver.SetMaxIter(nonlinear_max_iterations);
   solver.SetPrintLevel(nonlinear_print_level);
-  solver.SetContinuationParameter(homotopy_solver_continuation_parameter);
+  solver.EnableRegularizedNewtonMode();
   solver.EnableSaveIterates();
   solver.Mult(X0, Xf);
   bool converged = solver.GetConverged();
@@ -380,7 +383,6 @@ int main(int argc, char* argv[])
       states[FIELD::DISP].Set(1.0, u);
       writer.write(1, 1.0, serac::getConstFieldPointers(states));
     } else {
-      // TODO: write iterates of the solver
       auto iterates = solver.GetIterates();
       for (int i = 0; i < iterates.Size(); i++) {
         problem.fullDisplacement(*iterates[i], u);
@@ -462,8 +464,6 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   for (int i = 0; i < disp_ess_tdof_list.Size(); i++) {
     dispmask[static_cast<size_t>(disp_ess_tdof_list[i])] = 1;
   }
-
-  // TODO: check that the intersection of ess_tdof_list and disp_ess_tdof_list is empty!
 
   restriction_.reset(
       GenerateProjector(uOffsets.get(), residual_states_[FIELD::DISP]->space().GetTrueDofOffsets(), mask.get()));
@@ -569,7 +569,6 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(
       dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), new_point));
     }
   }
-  SLIC_INFO_ROOT(axom::fmt::format("|| contact gap Jacobian ||_F = {}", dcdu_->FNorm()));
   return dcdu_.get();
 }
 
@@ -622,6 +621,7 @@ void TiedContactProblem<SolidWeakFormType>::fullDisplacement(const mfem::Vector&
   mfem::BlockVector Xblock(y_partition);
   Xblock.Set(1.0, X);
   prolongation_->Mult(Xblock.GetBlock(0), u);
+  u.Add(1.0, dispBC_);
 }
 
 template <typename SolidWeakFormType>
