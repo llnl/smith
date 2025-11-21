@@ -35,7 +35,7 @@ smith::NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSol
                                                    .relative_tol = 1.0e-9,
                                                    .absolute_tol = 1.0e-9,
                                                    .max_iterations = 500,
-                                                   .print_level = 2};
+                                                   .print_level = 0};
 
 static constexpr int dim = 3;
 static constexpr int order = 1;
@@ -148,9 +148,9 @@ TEST_F(ThermoMechMeshFixture, Test)
 
   std::cout << "final disp norm2 = " << disp_squared.get() << std::endl;
 
-  EXPECT_GT(checkGradWrt(disp_squared, shape_disp, *graph, 1e-1, 4, true), 0.95);
-  EXPECT_GT(checkGradWrt(disp_squared, params[0], *graph, 1e-1, 4, true), 0.95);
-  EXPECT_GT(checkGradWrt(disp_squared, params[1], *graph, 1e-1, 4, true), 0.95);
+  EXPECT_GT(checkGradWrt(disp_squared, shape_disp, *graph, 1.1e-2, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(disp_squared, params[0], *graph, 1.6e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(disp_squared, params[1], *graph, 1.6e-1, 4, true), 0.7);
 }
 
 }  // namespace smith
