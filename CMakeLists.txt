@@ -215,7 +215,7 @@ if (SMITH_ENABLE_CODEVELOP)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/axom/src>
     )
 
-    install(TARGETS              mfem ${axom_exported_targets} ${tribol_exported_targets}            EXPORT               smith-targets
+    install(TARGETS              mfem ${axom_exported_targets} ${tribol_exported_targets} gretl           EXPORT               smith-targets
             DESTINATION          lib
             )
 endif()

@@ -28,6 +28,7 @@ set(differentiable_numerics_depends
     smith_contact
     smith_numerics
     smith_physics
+    gretl
     )
 
 blt_add_library(
