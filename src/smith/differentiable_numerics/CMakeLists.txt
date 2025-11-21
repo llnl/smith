@@ -9,6 +9,10 @@ set(differentiable_numerics_sources
     differentiable_utils.cpp
     differentiable_physics.cpp
     lumped_mass_explicit_newmark_state_advancer.cpp
+    solid_mechanics_state_advancer.cpp
+    differentiable_solver.cpp
+    nonlinear_solve.cpp
+    dirichlet_boundary_conditions.cpp
     )
 
 set(differentiable_numerics_headers
@@ -20,6 +24,12 @@ set(differentiable_numerics_headers
     differentiable_utils.hpp
     differentiable_physics.hpp
     lumped_mass_explicit_newmark_state_advancer.hpp
+    solid_mechanics_state_advancer.hpp
+    differentiable_solver.hpp
+    nonlinear_solve.hpp
+    dirichlet_boundary_conditions.hpp
+    time_integration_rule.hpp
+    time_discretized_weak_form.hpp
     )
 
 set(differentiable_numerics_depends

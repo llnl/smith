@@ -87,6 +87,11 @@ class ParaviewWriter {
     pv->Save();
   }
 
+  void write(size_t step, double time, const std::vector<FieldState>& current_fields)
+  {
+    write(static_cast<int>(step), time, current_fields);
+  }
+
  private:
   std::unique_ptr<mfem::ParaViewDataCollection> pv;
   StateVecs states;
