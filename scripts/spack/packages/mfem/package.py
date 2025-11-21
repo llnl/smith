@@ -51,6 +51,7 @@ class Mfem(BuiltinMfem):
 
 
     # Override hypre make options to include extra rocm libs...
+    # TODO remove once this PR merges into Spack https://github.com/spack/spack-packages/pull/2363
     def get_make_config_options(self, spec, prefix):
         options = BuiltinMfem.get_make_config_options(self, spec, prefix)
 

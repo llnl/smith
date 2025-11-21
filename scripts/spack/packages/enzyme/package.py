@@ -5,6 +5,9 @@
 # Can't import like this
 #from spack_repo.builtin.build_systems.cmake import CMakePackage
 
+# NOTE: this custom package can be removed after this PR merges into Spack
+# https://github.com/spack/spack-packages/pull/2365
+
 from spack.package import *
 
 
@@ -68,7 +71,6 @@ class Enzyme(CMakePackage):
         if spec.satisfies("%libllvm=llvm"):
             return spec["llvm"].prefix
         if spec.satisfies("%libllvm=llvm-amdgpu"):
-            # https://github.com/spack/spack-packages/pull/2365
             return spec["llvm-amdgpu"].prefix
         raise InstallError("Unknown 'libllvm' provider!")
 

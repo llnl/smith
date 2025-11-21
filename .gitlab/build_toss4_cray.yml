@@ -5,7 +5,7 @@
     SCHEDULER_PARAMETERS: "--queue pci --exclusive --time-limit=${ALLOC_TIME}m --nodes=${ALLOC_NODES}"
   tags:
     - batch
-    - tuo
+    - tuolumne
   rules:
     - if: '$CI_COMMIT_BRANCH =~ /_qnone/ || $ON_TOSS4_CRAY == "OFF"' #run except if ...
       when: never
