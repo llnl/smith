@@ -113,7 +113,7 @@ FieldState nonlinearSolve(const WeakForm* residual_eval, const FieldState& shape
               r.SetSubVector(constrained_dofs, 0.0);
             }
           }
-          
+
           return r;
         },
         [=](const FiniteElementState& s_) {

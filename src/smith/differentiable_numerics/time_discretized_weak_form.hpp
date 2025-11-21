@@ -51,7 +51,6 @@ class TimeDiscretizedWeakForm : public FunctionalWeakForm<spatial_dim, OutputSpa
   }
 };
 
-
 template <int spatial_dim, typename OutputSpace, typename... InputSpaces>
 class SecondOrderTimeDiscretizedWeakForm : public TimeDiscretizedWeakForm<spatial_dim, OutputSpace, InputSpaces...> {
  public:

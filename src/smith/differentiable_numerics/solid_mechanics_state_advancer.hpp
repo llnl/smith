@@ -33,8 +33,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
  public:
   SolidMechanicsStateAdvancer(std::shared_ptr<DifferentiableSolver> solid_solver,
                               std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
-                              std::shared_ptr<WeakForm> solid_weak_form,
-                              SecondOrderTimeIntegrationRule time_rule);
+                              std::shared_ptr<WeakForm> solid_weak_form, SecondOrderTimeIntegrationRule time_rule);
 
   enum STATE
   {
@@ -44,8 +43,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   };
 
   template <typename FirstParamSpace, typename... ParamSpaces>
-  static std::vector<FieldState> createParams(gretl::DataStore& graph, std::string name, std::string tag,
-                                                  int index = 0)
+  static std::vector<FieldState> createParams(gretl::DataStore& graph, std::string name, std::string tag, int index = 0)
   {
     FieldState newParam = create_field_state(graph, FirstParamSpace{}, name + "_" + std::to_string(index), tag);
     std::vector<FieldState> end_spaces{};
@@ -65,14 +63,13 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
     auto disp = create_field_state(*graph, VectorSpace{}, physics_name + "_displacement", mesh->tag());
     auto velo = create_field_state(*graph, VectorSpace{}, physics_name + "_velocity", mesh->tag());
     auto acceleration = create_field_state(*graph, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
-    auto time = graph->create_state<double,double>(initial_time);
+    auto time = graph->create_state<double, double>(initial_time);
     std::vector<FieldState> params = createParams<ParamSpaces...>(*graph, physics_name + "_param", mesh->tag());
     std::vector<FieldState> states{disp, velo, acceleration};
 
     // weak form unknowns are disp, disp_old, velo_old, accel_old
     using SolidWeakFormT = SecondOrderTimeDiscretizedWeakForm<
-        spatial_dim, VectorSpace,
-        Parameters<VectorSpace, VectorSpace, VectorSpace, VectorSpace, ParamSpaces...>>;
+        spatial_dim, VectorSpace, Parameters<VectorSpace, VectorSpace, VectorSpace, VectorSpace, ParamSpaces...>>;
     auto input_spaces = spaces({states[DISPLACEMENT], states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]});
     auto param_spaces = spaces(params);
     input_spaces.insert(input_spaces.end(), param_spaces.begin(), param_spaces.end());

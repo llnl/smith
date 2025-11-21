@@ -7,8 +7,8 @@
 /**
  * @file time_integration_rule.hpp
  *
- * @brief Provides templated implementations for discretizing values, velocities and accelerations from current and previous
- * states
+ * @brief Provides templated implementations for discretizing values, velocities and accelerations from current and
+ * previous states
  */
 
 #pragma once
@@ -27,18 +27,20 @@ struct SecondOrderTimeIntegrationRule {
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
-  SMITH_HOST_DEVICE auto value([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new, [[maybe_unused]] const T2& field_old,
-                               [[maybe_unused]] const T3& velo_old, [[maybe_unused]] const T4& accel_old) const
+  SMITH_HOST_DEVICE auto value([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
+                               [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                               [[maybe_unused]] const T4& accel_old) const
   {
     return field_new;
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
-  SMITH_HOST_DEVICE auto derivative([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new, [[maybe_unused]] const T2& field_old,
-                                    [[maybe_unused]] const T3& velo_old, [[maybe_unused]] const T4& accel_old) const
+  SMITH_HOST_DEVICE auto derivative([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
+                                    [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                                    [[maybe_unused]] const T4& accel_old) const
   {
-    return velo_old; //(1.0 / t.dt()) * (field_new - field_old);
+    return velo_old;  //(1.0 / t.dt()) * (field_new - field_old);
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
@@ -50,7 +52,8 @@ struct SecondOrderTimeIntegrationRule {
     return accel_old;
   }
 
-  double theta_;  ///< parameter specifying the particular integration rule for integrating second order systems with two steps
+  double theta_;  ///< parameter specifying the particular integration rule for integrating second order systems with
+                  ///< two steps
 };
 
 }  // namespace smith
