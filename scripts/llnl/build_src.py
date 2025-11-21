@@ -80,6 +80,9 @@ def parse_args():
 def main():
     args = parse_args()
 
+    if not ensure_on_lc_and_group_permissions(allow_non_lc_builds=True):
+        return 1
+
     # Determine source directory to be built
     if os.environ.get("UBERENV_PREFIX") != None:
         repo_dir = os.environ["UBERENV_PREFIX"]

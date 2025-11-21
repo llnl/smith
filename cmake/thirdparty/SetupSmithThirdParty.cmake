@@ -198,6 +198,40 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     message(STATUS "ARPACK support is ${ARPACK_FOUND}")
 
     #------------------------------------------------------------------------------
+    # Enzyme
+    #------------------------------------------------------------------------------
+    if (ENZYME_DIR)
+        smith_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
+        set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
+        find_dependency(Enzyme REQUIRED)
+
+        smith_assert_find_succeeded(PROJECT_NAME Enzyme
+                                    TARGET       ClangEnzymeFlags
+                                    DIR_VARIABLE ENZYME_DIR)
+
+        message(STATUS "Checking for Target 'ClangEnzymeFlags' plugin target exists..")
+        get_target_property(_clangenzyme_opts ClangEnzymeFlags INTERFACE_COMPILE_OPTIONS)
+        if("${_clangenzyme_opts}" MATCHES "\\$<TARGET_FILE:([^>]+)>")
+            set(_enzyme_target "${CMAKE_MATCH_1}")
+
+            # Check if the extracted target exists
+            if(TARGET "${_enzyme_target}")
+                message(STATUS "Found 'ClangEnzymeFlags' plugin target: ${_enzyme_target}")
+            else()
+                message(FATAL_ERROR "'ClangEnzymeFlags' plugin target '${_enzyme_target}' referenced in INTERFACE_COMPILE_OPTIONS does not exist.")
+            endif()
+        else()
+            message(STATUS "Skipped check. `ClangEnzymeFlags` target does not reference another target")
+        endif()
+
+        message(STATUS "Enzyme support is ON")
+        set(ENZYME_FOUND TRUE)
+    else()
+        message(STATUS "Enzyme support is OFF")
+        set(ENZYME_FOUND FALSE)
+    endif()
+
+    #------------------------------------------------------------------------------
     # MFEM
     #------------------------------------------------------------------------------
     if(NOT SMITH_ENABLE_CODEVELOP)
@@ -294,6 +328,12 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endif()
         set(MFEM_USE_UMPIRE ${SMITH_ENABLE_HIP} CACHE BOOL "")
         set(MFEM_USE_ZLIB ON CACHE BOOL "")
+        if(ENZYME_DIR)
+            smith_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
+            set(MFEM_USE_ENZYME ON CACHE BOOL "")
+        else()
+            set(MFEM_USE_ENZYME OFF CACHE BOOL "")
+        endif()
 
         #### MFEM Configuration Options
 
@@ -506,40 +546,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         blt_convert_to_system_includes(TARGET core)
 
         set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
-    endif()
-
-    #------------------------------------------------------------------------------
-    # Enzyme
-    #------------------------------------------------------------------------------
-    if (ENZYME_DIR)
-        smith_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
-        set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
-        find_dependency(Enzyme REQUIRED)
-
-        smith_assert_find_succeeded(PROJECT_NAME Enzyme
-                                    TARGET       ClangEnzymeFlags
-                                    DIR_VARIABLE ENZYME_DIR)
-
-        message(STATUS "Checking for Target 'ClangEnzymeFlags' plugin target exists..")
-        get_target_property(_clangenzyme_opts ClangEnzymeFlags INTERFACE_COMPILE_OPTIONS)
-        if("${_clangenzyme_opts}" MATCHES "\\$<TARGET_FILE:([^>]+)>")
-            set(_enzyme_target "${CMAKE_MATCH_1}")
-
-            # Check if the extracted target exists
-            if(TARGET "${_enzyme_target}")
-                message(STATUS "Found 'ClangEnzymeFlags' plugin target: ${_enzyme_target}")
-            else()
-                message(FATAL_ERROR "'ClangEnzymeFlags' plugin target '${_enzyme_target}' referenced in INTERFACE_COMPILE_OPTIONS does not exist.")
-            endif()
-        else()
-            message(STATUS "Skipped check. `ClangEnzymeFlags` target does not reference another target")
-        endif()
-
-        message(STATUS "Enzyme support is ON")
-        set(ENZYME_FOUND TRUE)
-    else()
-        message(STATUS "Enzyme support is OFF")
-        set(ENZYME_FOUND FALSE)
     endif()
 
     #------------------------------------------------------------------------------

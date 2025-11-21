@@ -68,6 +68,9 @@ def parse_args():
 def main():
     args = parse_args()
 
+    if not ensure_on_lc_and_group_permissions():
+        return 1
+
     # Handle case where spec is a List (i.e. spec contained spaces and wasn't wrapped in quotes)
     spec = args["spec"]
     if len(spec) > 0:
