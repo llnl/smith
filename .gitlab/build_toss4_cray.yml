@@ -5,7 +5,7 @@
     SCHEDULER_PARAMETERS: "--queue pci --exclusive --time-limit=${ALLOC_TIME}m --nodes=${ALLOC_NODES}"
   tags:
     - batch
-    - tioga
+    - tuo
   rules:
     - if: '$CI_COMMIT_BRANCH =~ /_qnone/ || $ON_TOSS4_CRAY == "OFF"' #run except if ...
       when: never
@@ -56,7 +56,7 @@ toss4_cray-rocmcc_6_2_1-src-codevelop:
 toss4_cray-rocmcc_6_2_1-tpl:
   variables:
     COMPILER: "rocmcc@6.2.1"
-    SPEC: "--spec %${COMPILER}~openmp+rocm~petsc amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion"
+    SPEC: "--spec %~devtools~profiling~openmp+rocm~petsc~slepc~enzyme~sundials amdgpu_target=gfx942,gfx90a %${COMPILER}"
     ALLOC_NODES: "1"
     ALLOC_TIME: "45"
   extends: .tpl_build_on_toss4_cray
