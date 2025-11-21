@@ -199,7 +199,6 @@ set(exported_targets
     smith_mesh_utils
     smith_numerics
     smith_physics
-    smith_gretl
     smith_differentiable_numerics)
 
 add_library(smith INTERFACE)
@@ -216,8 +215,7 @@ if (SMITH_ENABLE_CODEVELOP)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/axom/src>
     )
 
-    install(TARGETS              mfem ${axom_exported_targets} ${tribol_exported_targets}
-            EXPORT               smith-targets
+    install(TARGETS              mfem ${axom_exported_targets} ${tribol_exported_targets}            EXPORT               smith-targets
             DESTINATION          lib
             )
 endif()

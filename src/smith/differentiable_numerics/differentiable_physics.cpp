@@ -2,7 +2,7 @@
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
-#include "smith/gretl/data_store.hpp"
+#include "gretl/src/data_store.hpp"
 
 namespace smith {
 

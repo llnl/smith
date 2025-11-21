@@ -4,7 +4,7 @@
 #include "smith/physics/materials/solid_material.hpp"
 #include "smith/physics/mesh.hpp"
 
-#include "smith/gretl/data_store.hpp"
+#include "gretl/src/data_store.hpp"
 #include "smith/physics/solid_weak_form.hpp"
 #include "smith/physics/functional_objective.hpp"
 

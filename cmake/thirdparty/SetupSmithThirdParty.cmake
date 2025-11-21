@@ -547,7 +547,44 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
 
         set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
     endif()
+    #------------------------------------------------------------------------------
+    # Gretl
+    #------------------------------------------------------------------------------
+    if (NOT DEFINED SMITH_ENABLE_GRETL)
+        set(SMITH_ENABLE_GRETL ON)
+    endif()
+    message(STATUS "Smith Enable Gretl: ${SMITH_ENABLE_CONTINUATION}")
+    
+    if(SMITH_ENABLE_GRETL)
+        # set(GRETL_ENABLE_TESTING ${SMITH_ENABLE_TESTS} CACHE BOOL "")
+        # Allow gretl as a non-submodule
+        if (DEFINED GRETL_SOURCE_DIR)
+            if(NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
+                message(FATAL_ERROR "Given GRETL_SOURCE_DIR does not contain CMakeLists.txt")
+            endif()
+        else()
+            set(GRETL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/gretl" CACHE PATH "")
 
+            if (NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
+                message(FATAL_ERROR
+                    "The gretl repo is not present. "
+                    "Either run the following command in your git repository: \n"
+                    "    git submodule update --init --recursive\n"
+                    "Or add -DGRETL_SOURCE_DIR=/path/to/gretl to your CMake command." )
+            endif()
+        endif()
+
+        set(GRETL_FOUND TRUE)
+        message(STATUS "Gretl dir = ${GRETL_SOURCE_DIR}")
+        add_subdirectory("${GRETL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/gretl)
+
+        target_include_directories(gretl PUBLIC)
+        #    $<BUILD_INTERFACE:${tribol_repo_dir}/src>
+        #    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
+        #    $<INSTALL_INTERFACE:include>
+        #)
+
+    endif()
     #------------------------------------------------------------------------------
     # Tribol
     #------------------------------------------------------------------------------

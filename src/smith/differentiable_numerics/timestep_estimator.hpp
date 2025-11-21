@@ -12,8 +12,8 @@
 
 #pragma once
 
+#include "gretl/src/double_state.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
-#include "smith/gretl/double_state.hpp"
 
 namespace smith {
 

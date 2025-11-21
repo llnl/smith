@@ -1,5 +1,5 @@
+#include "gretl/src/data_store.hpp"
 #include "smith/differentiable_numerics/differentiable_utils.hpp"
-#include "smith/gretl/data_store.hpp"
 
 namespace smith {
 

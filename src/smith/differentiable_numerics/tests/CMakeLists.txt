@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-set(differentiable_numerics_test_depends smith_physics smith_gretl smith_differentiable_numerics gtest)
+set(differentiable_numerics_test_depends smith_physics smith_differentiable_numerics gtest)
 
 set(differentiable_numerics_tests
     test_explicit_dynamics.cpp

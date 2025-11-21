@@ -13,8 +13,8 @@
 #pragma once
 
 #include <vector>
+#include "gretl/src/double_state.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
-#include "smith/gretl/double_state.hpp"
 #include "smith/physics/common.hpp"
 
 namespace smith {

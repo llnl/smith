@@ -3,7 +3,7 @@
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/physics/mesh.hpp"
 
-#include "smith/gretl/data_store.hpp"
+#include "data_store.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/differentiable_utils.hpp"
 
