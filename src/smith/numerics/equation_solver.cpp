@@ -635,6 +635,9 @@ class TrustRegion : public mfem::NewtonSolver {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
 
+    print_level = print_options.iterations ? 1 : print_level;
+    print_level = print_options.summary ? 2 : print_level;
+
     using real_t = mfem::real_t;
 
     num_hess_vecs = 0;

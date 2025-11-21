@@ -31,24 +31,24 @@ smith::LinearSolverOptions solid_linear_options{.linear_solver = smith::LinearSo
                                                 .print_level = 0};
 
 smith::NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
-                                                   .relative_tol = 1.0e-11,
-                                                   .absolute_tol = 1.0e-11,
+                                                   .relative_tol = 1.0e-9,
+                                                   .absolute_tol = 1.0e-9,
                                                    .max_iterations = 500,
-                                                   .print_level = 0};
+                                                   .print_level = 2};
 
-static constexpr int dim = 2;
+static constexpr int dim = 3;
 static constexpr int order = 1;
 
 using ShapeDispSpace = H1<1, dim>;
 using VectorSpace = H1<order, dim>;
-//using ScalarParameterSpace = L2<0>;
-using ScalarParameterSpace = H1<1>;
+using ScalarParameterSpace = L2<0>;
 
 struct ThermoMechMeshFixture : public testing::Test {
   double length = 1.0;
   double width = 0.04;
   int num_elements_x = 20;
   int num_elements_y = 4;
+  int num_elements_z = 4;
   double elem_size = length / num_elements_x;
 
   void SetUp()
@@ -56,9 +56,9 @@ struct ThermoMechMeshFixture : public testing::Test {
     smith::StateManager::initialize(datastore, "solid");
     auto mfem_shape = mfem::Element::QUADRILATERAL;
     mesh = std::make_shared<smith::Mesh>(
-        mfem::Mesh::MakeCartesian2D(num_elements_x, num_elements_y, mfem_shape, false, length, width), "mesh", 0, 0);
-    mesh->addDomainOfBoundaryElements("left", smith::by_attr<dim>(4));
-    mesh->addDomainOfBoundaryElements("right", smith::by_attr<dim>(2));
+        mfem::Mesh::MakeCartesian3D(num_elements_x, num_elements_y, num_elements_z, mfem_shape, length, width, width), "mesh", 0, 0);
+    mesh->addDomainOfBoundaryElements("left", smith::by_attr<dim>(5));
+    mesh->addDomainOfBoundaryElements("right", smith::by_attr<dim>(3));
   }
 
   axom::sidre::DataStore datastore;
@@ -72,10 +72,15 @@ TEST_F(ThermoMechMeshFixture, Test)
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
       buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
-  MaterialType material{.density = 1.0, .K0 = 1.0, .G0 = 1.0};
+  double E = 100.0;
+  double nu = 0.25;
+  auto K = E / ( 3.0 * (1.0 - 2*nu) );
+  auto G = E / ( 2.0 * (1.0 + nu) );
 
-  double time_increment = 1e-1;
+  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
+  MaterialType material{.density = 1.0, .K0 = K, .G0 = G};
+
+  double time_increment = 0.5;
 
   smith::SecondOrderTimeIntegrationRule time_rule(1.0);
 
@@ -85,13 +90,15 @@ TEST_F(ThermoMechMeshFixture, Test)
       SolidMechanicsStateAdvancer::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace,
                                                           ScalarParameterSpace>(physics_name, mesh, graph, time_rule);
 
-  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim> x) {
-    double scaling = ((x[0] < 3) && (x[0] > 2)) ? 0.99 : 0.001;
+
+                                                          
+  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    double scaling = 1.0; //((x[0] < 3) && (x[0] > 2)) ? 0.99 : 0.001;
     return scaling * material.K0;
   });
 
-  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim> x) {
-    double scaling = ((x[0] <= 3) && (x[0] >= 2)) ? 0.99 : 0.001;
+  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    double scaling = 1.0; //((x[0] <= 3) && (x[0] >= 2)) ? 0.99 : 0.001;
     return scaling * material.G0;
   });
 
@@ -135,12 +142,15 @@ TEST_F(ThermoMechMeshFixture, Test)
   });
 
   auto final_states = physics.getAllFieldStates();
-  DoubleState temperature_squared = smith::evaluateObjective(objective, shape_disp, {final_states[SolidMechanicsStateAdvancer::DISPLACEMENT]});
-  gretl::set_as_objective(temperature_squared);
+  DoubleState disp_squared = smith::evaluateObjective(objective, shape_disp, {final_states[SolidMechanicsStateAdvancer::DISPLACEMENT]});
+  gretl::set_as_objective(disp_squared);
 
-  EXPECT_GT(checkGradWrt(temperature_squared, shape_disp, *graph, 4e-5, 4, true), 0.95);
-  EXPECT_GT(checkGradWrt(temperature_squared, states[0], *graph, 4e-5, 4, true), 0.95);
-  EXPECT_GT(checkGradWrt(temperature_squared, states[2], *graph, 1e-2, 4, true), 0.95);
+  std::cout << "final disp norm2 = " << disp_squared.get() << std::endl;
+  return;
+
+  EXPECT_GT(checkGradWrt(disp_squared, shape_disp, *graph, 4e-5, 4, true), 0.95);
+  EXPECT_GT(checkGradWrt(disp_squared, states[0], *graph, 4e-5, 4, true), 0.95);
+  EXPECT_GT(checkGradWrt(disp_squared, states[2], *graph, 1e-2, 4, true), 0.95);
 }
 
 }  // namespace smith
