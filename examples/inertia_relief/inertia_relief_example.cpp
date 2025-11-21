@@ -322,7 +322,7 @@ int main(int argc, char* argv[])
   // set solver options
   solver.SetTol(nonlinear_absolute_tol);
   solver.SetMaxIter(nonlinear_max_iterations);
-
+  solver.EnableRegularizedNewtonMode();
   // solve the inertia relief problem
   solver.SetPrintLevel(2);
   solver.Mult(X0, Xf);
