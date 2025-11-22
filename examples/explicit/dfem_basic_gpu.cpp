@@ -12,6 +12,7 @@
 
 #include "serac/physics/functional_weak_form.hpp"
 #include "serac/physics/dfem_weak_form.hpp"
+#include "serac/serac_config.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
 
@@ -140,8 +141,13 @@ int main(int argc, char* argv[])
   constexpr double width = 1.0;
   int nel_x = n_els;
   int nel_y = n_els;
-  auto mesh = std::make_shared<serac::Mesh>(
-      mfem::Mesh::MakeCartesian2D(nel_x, nel_y, element_shape, true, length, width), MESHTAG, 0, 0);
+  auto temp_mesh = mfem::Mesh::MakeCartesian2D(nel_x, nel_y, element_shape, true, length, width);
+  mfem::H1_FECollection nodes_fec(disp_order, dim);
+  mfem::FiniteElementSpace nodes_fes(&temp_mesh, &nodes_fec, dim, serac::ordering);
+  mfem::GridFunction nodes(&nodes_fes);
+  temp_mesh.SetNodalGridFunction(&nodes);
+  
+  auto mesh = std::make_shared<serac::Mesh>(std::move(temp_mesh), MESHTAG, 0, 0);
 
   // create residual evaluator
   using VectorSpace = serac::H1<disp_order, dim>;
@@ -162,7 +168,7 @@ int main(int argc, char* argv[])
   SolidMaterialDfem dfem_mat;
   dfem_mat.K = E / (3.0 * (1.0 - 2.0 * nu));  // bulk modulus
   dfem_mat.G = E / (2.0 * (1.0 + nu));        // shear modulus
-  int ir_order = 3;
+  int ir_order = 2;
   const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
   mfem::Array<int> solid_attrib({1});
   auto stress_div_integral = serac::StressDivQFunction<SolidMaterialDfem>{.material = dfem_mat};
