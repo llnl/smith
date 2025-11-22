@@ -2,7 +2,7 @@ FROM ghcr.io/llnl/radiuss:clang-19-ubuntu-24.04
 LABEL maintainer="chapman39@llnl.gov"
 ARG branch=develop
 ENV llvm_version="19"
-ENV spec="+devtools+enzyme ^enzyme+coverage %clang_${llvm_version}"
+ENV spec="+devtools+enzyme %clang_${llvm_version}"
 
 SHELL ["/bin/bash", "-c"]
 RUN sudo apt-get update -y
