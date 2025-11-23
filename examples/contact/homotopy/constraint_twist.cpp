@@ -12,7 +12,7 @@
 #include "axom/slic.hpp"
 
 #include "mfem.hpp"
-#include "serac/physics/contact/contact_config.hpp"
+#include "smith/physics/contact/contact_config.hpp"
 #include "shared/mesh/MeshBuilder.hpp"
 
 // ContinuationSolver headers
@@ -20,7 +20,7 @@
 #include "solvers/HomotopySolver.hpp"
 #include "utilities.hpp"
 
-#include "serac/serac.hpp"
+#include "smith/smith.hpp"
 
 static constexpr int dim = 3;
 static constexpr int disp_order = 1;
@@ -28,12 +28,12 @@ static constexpr int disp_order = 1;
 int linearized_contact = 1;
 int contact = 0;
 
-using VectorSpace = serac::H1<disp_order, dim>;
+using VectorSpace = smith::H1<disp_order, dim>;
 
-using DensitySpace = serac::L2<disp_order - 1>;
+using DensitySpace = smith::L2<disp_order - 1>;
 
 struct MyLinearIsotropic {
-  using State = serac::Empty;  ///< this material has no internal variables
+  using State = smith::Empty;  ///< this material has no internal variables
 
   /**
    * @brief stress calculation for a linear isotropic material model
@@ -47,17 +47,17 @@ struct MyLinearIsotropic {
    * @return The stress
    */
   template <typename T, int dim>
-  SERAC_HOST_DEVICE auto operator()(State& /* state */, const serac::tensor<T, dim, dim>& du_dX) const
+  SMITH_HOST_DEVICE auto operator()(State& /* state */, const smith::tensor<T, dim, dim>& du_dX) const
   {
-    auto I = serac::Identity<dim>();
+    auto I = smith::Identity<dim>();
     auto lambda = K - (2.0 / 3.0) * G;
     auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
     return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
   }
   template <typename T, int dim, typename Density>
-  SERAC_HOST_DEVICE auto pkStress(State& /* state */, const serac::tensor<T, dim, dim>& du_dX, const Density&) const
+  SMITH_HOST_DEVICE auto pkStress(State& /* state */, const smith::tensor<T, dim, dim>& du_dX, const Density&) const
   {
-    auto I = serac::Identity<dim>();
+    auto I = smith::Identity<dim>();
     auto lambda = K - (2.0 / 3.0) * G;
     auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
     return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
@@ -77,9 +77,9 @@ struct MyLinearIsotropic {
 
   /// @brief interpolates density field
   template <typename Density>
-  SERAC_HOST_DEVICE auto density(const Density& density) const
+  SMITH_HOST_DEVICE auto density(const Density& density) const
   {
-    return get<serac::VALUE>(density);
+    return get<smith::VALUE>(density);
   }
 
   // double density;  ///< mass density
@@ -88,9 +88,9 @@ struct MyLinearIsotropic {
 };
 
 // using SolidMaterial = MyLinearIsotropic;
-using SolidMaterial = serac::solid_mechanics::NeoHookeanWithFieldDensity;
+using SolidMaterial = smith::solid_mechanics::NeoHookeanWithFieldDensity;
 
-using SolidWeakFormT = serac::SolidWeakForm<disp_order, dim, serac::Parameters<DensitySpace>>;
+using SolidWeakFormT = smith::SolidWeakForm<disp_order, dim, smith::Parameters<DensitySpace>>;
 
 enum FIELD
 {
@@ -121,12 +121,12 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   std::unique_ptr<mfem::HypreParMatrix> dcdu_;
   int dimu_;
   int dimc_;
-  std::vector<serac::FieldPtr> contact_states_;
-  std::vector<serac::FieldPtr> residual_states_;
+  std::vector<smith::FieldPtr> contact_states_;
+  std::vector<smith::FieldPtr> residual_states_;
   std::shared_ptr<SolidWeakFormType> weak_form_;
-  std::unique_ptr<serac::FiniteElementState> shape_disp_;
-  std::shared_ptr<serac::Mesh> mesh_;
-  std::shared_ptr<serac::ContactConstraint> constraints_;
+  std::unique_ptr<smith::FiniteElementState> shape_disp_;
+  std::shared_ptr<smith::Mesh> mesh_;
+  std::shared_ptr<smith::ContactConstraint> constraints_;
   double time_ = 0.0;
   double dt_ = 0.0;
   std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};
@@ -140,9 +140,9 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   mfem::Vector dispBC_;
 
  public:
-  TiedContactProblem(std::vector<serac::FieldPtr> contact_states, std::vector<serac::FieldPtr> residual_states,
-                     std::shared_ptr<serac::Mesh> mesh, std::shared_ptr<SolidWeakFormType> weak_form,
-                     std::shared_ptr<serac::ContactConstraint> constraints, mfem::Array<int> disp_ess_tdof_list,
+  TiedContactProblem(std::vector<smith::FieldPtr> contact_states, std::vector<smith::FieldPtr> residual_states,
+                     std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<SolidWeakFormType> weak_form,
+                     std::shared_ptr<smith::ContactConstraint> constraints, mfem::Array<int> disp_ess_tdof_list,
                      mfem::Vector dispBC, mfem::Array<int> ess_tdof_list);
   mfem::Vector residual(const mfem::Vector& u, bool new_point) const;
   mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool new_point);
@@ -157,8 +157,8 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
 
 class ParaviewWriter {
  public:
-  using StateVecs = std::vector<std::shared_ptr<serac::FiniteElementState>>;
-  using DualVecs = std::vector<std::shared_ptr<serac::FiniteElementDual>>;
+  using StateVecs = std::vector<std::shared_ptr<smith::FiniteElementState>>;
+  using DualVecs = std::vector<std::shared_ptr<smith::FiniteElementDual>>;
 
   ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_)
       : pv(std::move(pv_)), states(states_)
@@ -170,9 +170,9 @@ class ParaviewWriter {
   {
   }
 
-  void write(int step, double time, const std::vector<serac::FiniteElementState const*>& current_states)
+  void write(int step, double time, const std::vector<smith::FiniteElementState const*>& current_states)
   {
-    SERAC_MARK_FUNCTION;
+    SMITH_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
 
     for (size_t n = 0; n < states.size(); ++n) {
@@ -192,7 +192,7 @@ class ParaviewWriter {
   StateVecs dual_states;
 };
 
-auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const serac::FiniteElementState*>& states,
+auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const smith::FiniteElementState*>& states,
                           std::string output_name)
 {
   if (output_name == "") {
@@ -201,7 +201,7 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const ser
 
   ParaviewWriter::StateVecs output_states;
   for (const auto& s : states) {
-    output_states.push_back(std::make_shared<serac::FiniteElementState>(s->space(), s->name()));
+    output_states.push_back(std::make_shared<smith::FiniteElementState>(s->space(), s->name()));
   }
 
   auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
@@ -227,7 +227,7 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const ser
 int main(int argc, char* argv[])
 {
   // Initialize and automatically finalize MPI and other libraries
-  serac::ApplicationManager applicationManager(argc, argv);
+  smith::ApplicationManager applicationManager(argc, argv);
 
   int fd_check = 0;  // finite difference check or homotopy solve
   int visualize = 1;
@@ -253,19 +253,19 @@ int main(int argc, char* argv[])
   // Create DataStore
   std::string name = "contact_twist_example";
   axom::sidre::DataStore datastore;
-  serac::StateManager::initialize(datastore, name + "_data");
+  smith::StateManager::initialize(datastore, name + "_data");
 
   // Construct the appropriate dimension mesh and give it to the data store
-  std::string filename = SERAC_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
-  auto mesh = std::make_shared<serac::Mesh>(serac::buildMeshFromFile(filename), "twist_mesh", 3, 0);
+  std::string filename = SMITH_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
+  auto mesh = std::make_shared<smith::Mesh>(smith::buildMeshFromFile(filename), "twist_mesh", 3, 0);
 
-  mesh->addDomainOfBoundaryElements("fixed_surface", serac::by_attr<dim>(3));
-  mesh->addDomainOfBoundaryElements("driven_surface", serac::by_attr<dim>(6));
+  mesh->addDomainOfBoundaryElements("fixed_surface", smith::by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("driven_surface", smith::by_attr<dim>(6));
 
-  serac::ContactOptions contact_options{.method = serac::ContactMethod::SingleMortar,
-                                        .enforcement = serac::ContactEnforcement::LagrangeMultiplier,
-                                        .type = serac::ContactType::TiedNormal,
-                                        .jacobian = serac::ContactJacobian::Exact};
+  smith::ContactOptions contact_options{.method = smith::ContactMethod::SingleMortar,
+                                        .enforcement = smith::ContactEnforcement::LagrangeMultiplier,
+                                        .type = smith::ContactType::TiedNormal,
+                                        .jacobian = smith::ContactJacobian::Exact};
 
   std::string contact_constraint_name = "default_contact";
 
@@ -273,30 +273,30 @@ int main(int argc, char* argv[])
   auto contact_interaction_id = 0;
   std::set<int> surface_1_boundary_attributes({4});
   std::set<int> surface_2_boundary_attributes({5});
-  auto contact_constraint = std::make_shared<serac::ContactConstraint>(
+  auto contact_constraint = std::make_shared<smith::ContactConstraint>(
       contact_interaction_id, mesh->mfemParMesh(), surface_1_boundary_attributes, surface_2_boundary_attributes,
       contact_options, contact_constraint_name);
 
-  serac::FiniteElementState shape = serac::StateManager::newState(VectorSpace{}, "shape", mesh->tag());
-  serac::FiniteElementState disp = serac::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
-  serac::FiniteElementState velo = serac::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
-  serac::FiniteElementState accel = serac::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
-  serac::FiniteElementState density = serac::StateManager::newState(DensitySpace{}, "density", mesh->tag());
+  smith::FiniteElementState shape = smith::StateManager::newState(VectorSpace{}, "shape", mesh->tag());
+  smith::FiniteElementState disp = smith::StateManager::newState(VectorSpace{}, "displacement", mesh->tag());
+  smith::FiniteElementState velo = smith::StateManager::newState(VectorSpace{}, "velocity", mesh->tag());
+  smith::FiniteElementState accel = smith::StateManager::newState(VectorSpace{}, "acceleration", mesh->tag());
+  smith::FiniteElementState density = smith::StateManager::newState(DensitySpace{}, "density", mesh->tag());
 
-  std::vector<serac::FiniteElementState> contact_states;
-  std::vector<serac::FiniteElementState> states;
-  std::vector<serac::FiniteElementState> params;
+  std::vector<smith::FiniteElementState> contact_states;
+  std::vector<smith::FiniteElementState> states;
+  std::vector<smith::FiniteElementState> params;
   contact_states = {shape, disp};
   states = {disp, velo, accel};
   params = {density};
 
   // initialize displacement
-  contact_states[serac::ContactFields::DISP].setFromFieldFunction([](serac::tensor<double, dim> x) {
+  contact_states[smith::ContactFields::DISP].setFromFieldFunction([](smith::tensor<double, dim> x) {
     auto u = 0.0 * x;
     return u;
   });
 
-  contact_states[serac::ContactFields::SHAPE] = 0.0;
+  contact_states[smith::ContactFields::SHAPE] = 0.0;
   states[FIELD::VELO] = 0.0;
   states[FIELD::ACCEL] = 0.0;
   params[0] = 1.0;
@@ -310,20 +310,20 @@ int main(int argc, char* argv[])
   SolidMaterial mat;
   mat.K = 1.0;
   mat.G = 0.5;
-  solid_mechanics_weak_form->setMaterial(serac::DependsOn<0>{}, mesh->entireBodyName(), mat);
+  solid_mechanics_weak_form->setMaterial(smith::DependsOn<0>{}, mesh->entireBodyName(), mat);
 
-  serac::tensor<double, dim> constant_force{};
+  smith::tensor<double, dim> constant_force{};
   for (int i = 0; i < dim; i++) {
     constant_force[i] = 0.0;
   }
   constant_force[dim - 1] = 0.0;
 
   solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
-    return serac::tuple{constant_force, 0.0 * serac::get<serac::DERIVATIVE>(x)};
+    return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(x)};
   });
 
-  auto residual_state_ptrs = serac::getFieldPointers(states, params);
-  auto contact_state_ptrs = serac::getFieldPointers(contact_states);
+  auto residual_state_ptrs = smith::getFieldPointers(states, params);
+  auto contact_state_ptrs = smith::getFieldPointers(contact_states);
 
   // homogeneous Dirichlet boundary conditions
   mfem::Array<int> ess_fixed_tdof_list;
@@ -342,8 +342,8 @@ int main(int argc, char* argv[])
   states[FIELD::DISP].space().GetEssentialTrueDofs(ess_bdr_marker, ess_disp_tdof_list);
   mfem::Vector uDC(states[FIELD::DISP].space().GetTrueVSize());
   uDC = 0.0;
-  auto applied_displacement = [](serac::tensor<double, dim> /*x*/) {
-    serac::tensor<double, dim> u{};
+  auto applied_displacement = [](smith::tensor<double, dim> /*x*/) {
+    smith::tensor<double, dim> u{};
     u[0] = 0.0;
     u[1] = 0.0;
     u[2] = -0.06;
@@ -372,22 +372,22 @@ int main(int argc, char* argv[])
   SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
 
   // visualize
-  auto writer = createParaviewOutput(mesh->mfemParMesh(), serac::getConstFieldPointers(states), "contact");
+  auto writer = createParaviewOutput(mesh->mfemParMesh(), smith::getConstFieldPointers(states), "contact");
   if (visualize) {
     mfem::Vector u(states[FIELD::DISP].space().GetTrueVSize());
     problem.fullDisplacement(X0, u);
     states[FIELD::DISP].Set(1.0, u);
-    writer.write(0, 0.0, serac::getConstFieldPointers(states));
+    writer.write(0, 0.0, smith::getConstFieldPointers(states));
     if (!visualize_all_iterates) {
       problem.fullDisplacement(Xf, u);
       states[FIELD::DISP].Set(1.0, u);
-      writer.write(1, 1.0, serac::getConstFieldPointers(states));
+      writer.write(1, 1.0, smith::getConstFieldPointers(states));
     } else {
       auto iterates = solver.GetIterates();
       for (int i = 0; i < iterates.Size(); i++) {
         problem.fullDisplacement(*iterates[i], u);
         states[FIELD::DISP].Set(1.0, u);
-        writer.write((i + 1), static_cast<double>(i + 1), serac::getConstFieldPointers(states));
+        writer.write((i + 1), static_cast<double>(i + 1), smith::getConstFieldPointers(states));
       }
     }
   }
@@ -395,11 +395,11 @@ int main(int argc, char* argv[])
 }
 
 template <typename SolidWeakFormType>
-TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::FiniteElementState*> contact_states,
-                                                          std::vector<serac::FiniteElementState*> residual_states,
-                                                          std::shared_ptr<serac::Mesh> mesh,
+TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<smith::FiniteElementState*> contact_states,
+                                                          std::vector<smith::FiniteElementState*> residual_states,
+                                                          std::shared_ptr<smith::Mesh> mesh,
                                                           std::shared_ptr<SolidWeakFormType> weak_form,
-                                                          std::shared_ptr<serac::ContactConstraint> constraints,
+                                                          std::shared_ptr<smith::ContactConstraint> constraints,
                                                           mfem::Array<int> disp_ess_tdof_list, mfem::Vector dispBC,
                                                           mfem::Array<int> ess_tdof_list)
     : EqualityConstrainedHomotopyProblem(), weak_form_(weak_form), mesh_(mesh), constraints_(constraints)
@@ -484,7 +484,7 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<serac::Fin
   disp_prolongation_->Mult(RdispBC, dispBC_);
 
   // shape_disp field
-  shape_disp_ = std::make_unique<serac::FiniteElementState>(mesh->newShapeDisplacement());
+  shape_disp_ = std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
 
   if (contact) {
     // Linearize gap about zero displacement state
@@ -512,7 +512,7 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector&
   prolongation_->Mult(u, ufull_);
   ufull_.Add(1.0, dispBC_);
   residual_states_[FIELD::DISP]->Set(1.0, ufull_);
-  auto resfull = weak_form_->residual(time_, dt_, shape_disp_.get(), serac::getConstFieldPointers(residual_states_));
+  auto resfull = weak_form_->residual(time_, dt_, shape_disp_.get(), smith::getConstFieldPointers(residual_states_));
   mfem::Vector res(dimu_);
   res = 0.0;
   restriction_->Mult(resfull, res);
@@ -547,8 +547,8 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vecto
     } else {
       prolongation_->Mult(u, ufull_);
       ufull_.Add(1.0, dispBC_);
-      contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
-      gap = constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_), new_point);
+      contact_states_[smith::ContactFields::DISP]->Set(1.0, ufull_);
+      gap = constraints_->evaluate(time_, dt_, smith::getConstFieldPointers(contact_states_), new_point);
     }
   }
   return gap;
@@ -563,9 +563,9 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(
     if (!linearized_contact) {
       ufull_.Add(1.0, dispBC_);
       prolongation_->Mult(u, ufull_);
-      contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
-      auto dcdufull_ = constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_),
-                                              serac::ContactFields::DISP, new_point);
+      contact_states_[smith::ContactFields::DISP]->Set(1.0, ufull_);
+      auto dcdufull_ = constraints_->jacobian(time_, dt_, smith::getConstFieldPointers(contact_states_),
+                                              smith::ContactFields::DISP, new_point);
       dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), new_point));
     }
   }
@@ -584,12 +584,12 @@ void TiedContactProblem<SolidWeakFormType>::Linearize()
 {
   bool new_point = true;
   prolongation_->Mult(u0_, ufull_);
-  contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
+  contact_states_[smith::ContactFields::DISP]->Set(1.0, ufull_);
   g0_.SetSize(dimc_);
-  g0_.Set(1.0, constraints_->evaluate(time_, dt_, serac::getConstFieldPointers(contact_states_), new_point));
+  g0_.Set(1.0, constraints_->evaluate(time_, dt_, smith::getConstFieldPointers(contact_states_), new_point));
 
-  auto dcdufull_ = constraints_->jacobian(time_, dt_, serac::getConstFieldPointers(contact_states_),
-                                          serac::ContactFields::DISP, new_point);
+  auto dcdufull_ = constraints_->jacobian(time_, dt_, smith::getConstFieldPointers(contact_states_),
+                                          smith::ContactFields::DISP, new_point);
   dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), true));
 }
 
@@ -606,9 +606,9 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
     } else {
       prolongation_->Mult(u, ufull_);
       ufull_.Add(1.0, dispBC_);
-      contact_states_[serac::ContactFields::DISP]->Set(1.0, ufull_);
+      contact_states_[smith::ContactFields::DISP]->Set(1.0, ufull_);
       auto res_contribution = constraints_->residual_contribution(
-          time_, dt_, serac::getConstFieldPointers(contact_states_), l, serac::ContactFields::DISP, new_point);
+          time_, dt_, smith::getConstFieldPointers(contact_states_), l, smith::ContactFields::DISP, new_point);
       restriction_->Mult(res_contribution, res);
     }
   }
