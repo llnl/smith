@@ -1,0 +1,231 @@
+spack:
+  config:
+    install_tree:
+      root: $spack/..
+      projections:
+        all: '{compiler.name}-{compiler.version}/{name}-{version}-{hash}'
+    misc_cache: $spack/../misc_cache
+    test_stage: $spack/../test_stage
+    build_stage::
+    - $spack/../build_stage
+
+  toolchains:
+    clang_19:
+    - spec: '%c=llvm@19.1.1'
+      when: '%c'
+    - spec: '%cxx=llvm@19.1.1'
+      when: '%cxx'
+    - spec: '%fortran=gcc@13.3.0'
+      when: '%fortran'
+    - spec: '%mpich'
+      when: '%mpi'
+    gcc_14:
+    - spec: '%c=gcc@14.2.0'
+      when: '%c'
+    - spec: '%cxx=gcc@14.2.0'
+      when: '%cxx'
+    - spec: '%fortran=gcc@14.2.0'
+      when: '%fortran'
+    - spec: '%mpich'
+      when: '%mpi'
+    gcc_13:
+    - spec: '%c=gcc@13.3.0'
+      when: '%c'
+    - spec: '%cxx=gcc@13.3.0'
+      when: '%cxx'
+    - spec: '%fortran=gcc@13.3.0'
+      when: '%fortran'
+    - spec: '%mpich'
+      when: '%mpi'
+
+  # Regular TPLs do not need views
+  view: false
+
+  include:
+  - ../defaults.yaml
+  - ../versions.yaml
+
+  packages:
+    all:
+      target: [x86_64]
+      providers:
+        awk: [gawk]
+        blas: [openblas]
+        lapack: [openblas]
+        daal: [intel-daal]
+        elf: [elfutils]
+        golang: [gcc]
+        ipp: [intel-ipp]
+        java: [jdk]
+        mkl: [intel-mkl]
+        mpe: [mpe2]
+        mpi: [mpich]
+        opencl: [pocl]
+        openfoam: [openfoam-com, openfoam-org, foam-extend]
+        pil: [py-pillow]
+        scalapack: [netlib-scalapack]
+        szip: [libszip, libaec]
+        tbb: [intel-tbb]
+        jpeg: [libjpeg-turbo, libjpeg]
+
+    # Compiler packages
+    gcc:
+      externals:
+      - spec: gcc@13.3.0 languages:=c,c++,fortran
+        prefix: /usr/bin
+        extra_attributes:
+          compilers:
+            c: /usr/bin/gcc-13
+            cxx: /usr/bin/g++-13
+            fortran: /usr/bin/gfortran-13
+          flags:
+            cflags: -fPIC -pthread
+            cxxflags: -fPIC -pthread
+            fflags: -fPIC -pthread
+      - spec: gcc@14.2.0 languages:=c,c++,fortran
+        prefix: /usr/bin
+        extra_attributes:
+          compilers:
+            c: /usr/bin/gcc-14
+            cxx: /usr/bin/g++-14
+            fortran: /usr/bin/gfortran-14
+          flags:
+            cflags: -fPIC -pthread
+            cxxflags: -fPIC -pthread
+            fflags: -fPIC -pthread
+    llvm:
+      externals:
+      - spec: llvm@19.1.1+clang~lld~lldb
+        prefix: /usr/lib/llvm-19
+        extra_attributes:
+          compilers:
+            c: /usr/lib/llvm-19/bin/clang
+            cxx: /usr/lib/llvm-19/bin/clang++
+          flags:
+            cflags: -fPIC -pthread
+            cxxflags: -fPIC -pthread
+            fflags: -fPIC -pthread
+
+    # Use spack-built mpich.
+    # Ubuntu 24.04's mpich has unit test failures.
+    mpi:
+      require: "mpich@4.2.0"
+
+    # System level packages to not build
+    autotools:
+      buildable: false
+      externals:
+      - spec: autotools@2.71
+        prefix: /usr
+    bzip2:
+      buildable: false
+      externals:
+      - spec: bzip2@1.0.8
+        prefix: /usr
+    # TODO add HIP version
+    cuda:
+      buildable: false
+      externals:
+        - spec: cuda@12.5.82
+          prefix: /usr/local/cuda-12.5
+    curl:
+      buildable: false
+      externals:
+      - spec: curl@8.5.0
+        prefix: /usr
+    diffutils:
+      buildable: false
+      externals:
+      - spec: diffutils@3.10
+        prefix: /usr
+    expat:
+      buildable: false
+      externals:
+      - spec: expat@2.6.1
+        prefix: /usr
+    findutils:
+      buildable: false
+      externals:
+      - spec: findutils@4.9.0
+        prefix: /usr
+    gettext:
+      buildable: false
+      externals:
+      - spec: gettext@0.21
+        prefix: /usr
+    gmake:
+      buildable: false
+      externals:
+      - spec: gmake@4.3
+        prefix: /usr
+    lua:
+      buildable: false
+      externals:
+      - spec: lua@5.2.4
+        prefix: /usr
+    m4:
+      buildable: false
+      externals:
+      - spec: m4@1.4.19
+        prefix: /usr
+    perl:
+      buildable: false
+      externals:
+      - spec: perl@5.38.2
+        prefix: /usr
+    pkg-config:
+      buildable: false
+      externals:
+      - spec: pkg-config@1.8.1
+        prefix: /usr
+    python:
+      buildable: false
+      externals:
+      - spec: python@3.12.3
+        prefix: /usr
+    tar:
+      buildable: false
+      externals:
+      - spec: tar@1.35
+        prefix: /usr
+    graphviz:
+      buildable: false
+      externals:
+      - spec: graphviz@2.43.0
+        prefix: /usr
+    openblas:
+      buildable: false
+      externals:
+      - spec: openblas@0.3.26
+        prefix: /usr
+    zlib:
+      buildable: false
+      externals:
+      - spec: zlib@1.3
+        prefix: /usr
+
+    # Globally lock in version of CMake
+    cmake:
+      version: [3.23.1]
+      buildable: false
+      externals:
+      - spec: cmake@3.23.1
+        prefix: /usr/local
+    doxygen:
+      version: [1.9.8]
+      buildable: false
+      externals:
+      - spec: doxygen@1.9.8
+        prefix: /usr/local
+    py-sphinx:
+      version: [4.3.2]
+      buildable: false
+      externals:
+      - spec: py-sphinx@4.3.2
+        prefix: /usr
+    cppcheck:
+      version: [2.13.0]
+      buildable: false
+      externals:
+      - spec: cppcheck@2.13.0
+        prefix: /usr

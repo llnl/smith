@@ -2,7 +2,7 @@
 "exec" "python3" "-u" "-B" "$0" "$@"
 
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for details.
+# other Smith Project Developers. See the top-level LICENSE file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -10,7 +10,7 @@
  file: build_devtools.py
 
  description: 
-  Builds all Serac Devtools
+  Builds all Smith Devtools
 
 """
 
@@ -49,6 +49,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    if not ensure_on_lc_and_group_permissions():
+        return 1
 
     # Determine location to do all the building
     if args["directory"] != "":

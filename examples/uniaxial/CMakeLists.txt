@@ -1,17 +1,17 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 if (STRUMPACK_DIR)
-    blt_add_executable( NAME        uniaxial_tension
-                        SOURCES     uniaxial_tension.cpp
-                        OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                        DEPENDS_ON  serac_physics
-                        )
+    smith_add_executable( NAME        uniaxial_tension
+                          SOURCES     uniaxial_tension.cpp
+                          OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                          DEPENDS_ON  smith_physics
+                          )
 
-    serac_add_example_test(NAME            uniaxial_tension
+    smith_add_example_test(NAME            uniaxial_tension
                            COMMAND         uniaxial_tension
                            NUM_MPI_TASKS   4)
 
@@ -19,6 +19,6 @@ if (STRUMPACK_DIR)
         FILES
             uniaxial_tension.cpp
         DESTINATION
-            examples/serac/uniaxial
+            examples/smith/uniaxial
     )
 endif()

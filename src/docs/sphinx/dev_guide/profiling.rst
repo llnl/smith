@@ -33,70 +33,70 @@ linked into Smith.
 TPL Build Instructions
 ----------------------
 
-To use Adiak and Caliper with Smith, install the ``profiling`` variant of ``serac``
-with Spack, i.e., ``serac+profiling``. Note that these libraries are pre-built as
+To use Adiak and Caliper with Smith, install the ``profiling`` variant of ``smith``
+with Spack, i.e., ``smith+profiling``. Note that these libraries are pre-built as
 part of the installed set of libraries on LC.
 
 Instrumenting Code
 ------------------
 
-To use the functions and macros described in the remainder of this section, the ``serac/infrastructure/profiling.hpp`` header must be included.
+To use the functions and macros described in the remainder of this section, the ``smith/infrastructure/profiling.hpp`` header must be included.
 
-To enable Adiak and Caliper for a program, call ``serac::profiling::initialize()``.
+To enable Adiak and Caliper for a program, call ``smith::profiling::initialize()``.
 This will begin the collection of metadata and performance data. Optionally, an MPI
 communicator can be passed to configure Adiak and a Caliper `ConfigManager configuration string <https://software.llnl.gov/Caliper/ConfigManagerAPI.html#configmanager-configuration-string-syntax>`_
 can be passed to configure Caliper. Note that you must still annotate regions to be
 profiled and provide any custom metadata.
 
-Call ``serac::profiling::finalize()`` to conclude metadata and performance monitoring
+Call ``smith::profiling::finalize()`` to conclude metadata and performance monitoring
 and to write the data to a ``.cali`` file.
 
-To provide custom metadata for comparing program runs, call ``SERAC_SET_METADATA(name, data)``
-after ``serac::profiling::initialize()`` and before ``serac::profiling::finalize``.
+To provide custom metadata for comparing program runs, call ``SMITH_SET_METADATA(name, data)``
+after ``smith::profiling::initialize()`` and before ``smith::profiling::finalize``.
 This will add extra metadata into the ``.cali`` file. Supported metadata types are
 integrals, floating points, and strings. Note that this macro is a no-op if the
 ``profiling`` variant is not used.
 
 .. code-block:: c++
 		
-   SERAC_SET_METADATA("dimensions", 2);
-   SERAC_SET_METADATA("mesh", "../data/star.mesh");
+   SMITH_SET_METADATA("dimensions", 2);
+   SMITH_SET_METADATA("mesh", "../data/star.mesh");
 
 To add profile regions and ensure that Caliper is only used when it has been enabled
 through Spack, only use the macros described below to instrument your code:
 
-Use ``SERAC_MARK_FUNCTION`` at the very top of a function to mark it for profiling.
+Use ``SMITH_MARK_FUNCTION`` at the very top of a function to mark it for profiling.
 
-Use ``SERAC_MARK_BEGIN(name)`` at the beginning of a region and ``SERAC_MARK_END(name)`` at the end of the region.
+Use ``SMITH_MARK_BEGIN(name)`` at the beginning of a region and ``SMITH_MARK_END(name)`` at the end of the region.
 
-Use ``SERAC_MARK_LOOP_BEGIN(id, name)`` before a loop to mark it for profiling, ``SERAC_MARK_LOOP_ITERATION(id, i)`` at the beginning
-of the  ``i`` th iteration of a loop, and ``SERAC_MARK_LOOP_END(id)`` immediately after the loop ends:
+Use ``SMITH_MARK_LOOP_BEGIN(id, name)`` before a loop to mark it for profiling, ``SMITH_MARK_LOOP_ITERATION(id, i)`` at the beginning
+of the  ``i`` th iteration of a loop, and ``SMITH_MARK_LOOP_END(id)`` immediately after the loop ends:
 
 .. code-block:: c++
 
-  SERAC_MARK_BEGIN("region_name");
+  SMITH_MARK_BEGIN("region_name");
    
-  SERAC_MARK_LOOP_BEGIN(doubling_loop, "doubling_loop");
+  SMITH_MARK_LOOP_BEGIN(doubling_loop, "doubling_loop");
   for (int i = 0; i < input.size(); i++)
   {
-    SERAC_MARK_LOOP_ITERATION(doubling_loop, i);
+    SMITH_MARK_LOOP_ITERATION(doubling_loop, i);
     output[i] = input[i] * 2;
   }
-  SERAC_MARK_LOOP_END(doubling_loop);
+  SMITH_MARK_LOOP_END(doubling_loop);
 
-  SERAC_MARK_END("region_name");
+  SMITH_MARK_END("region_name");
 
 
-Note that the ``id`` argument to the ``SERAC_MARK_LOOP_*`` macros can be any identifier as long as it is consistent
-between all uses of ``SERAC_MARK_LOOP_*`` for a given loop.  
+Note that the ``id`` argument to the ``SMITH_MARK_LOOP_*`` macros can be any identifier as long as it is consistent
+between all uses of ``SMITH_MARK_LOOP_*`` for a given loop.  
 
-To reduce the amount of annotation for regions bounded by a particular scope, use ``SERAC_MARK_SCOPE(name)``. This will follow RAII and works with graceful exception handling. When ``SERAC_MARK_SCOPE`` is instantiated, profiling of this region starts, and when the scope exits, profiling of this region will end.
+To reduce the amount of annotation for regions bounded by a particular scope, use ``SMITH_MARK_SCOPE(name)``. This will follow RAII and works with graceful exception handling. When ``SMITH_MARK_SCOPE`` is instantiated, profiling of this region starts, and when the scope exits, profiling of this region will end.
 
 .. code-block:: c++
 
-   // Refine once more and utilize SERAC_MARK_SCOPE
+   // Refine once more and utilize SMITH_MARK_SCOPE
   {
-    SERAC_MARK_SCOPE("RefineOnceMore");
+    SMITH_MARK_SCOPE("RefineOnceMore");
     pmesh->UniformRefinement();
   }
 
@@ -121,7 +121,7 @@ Make sure benchmarks are enabled and the build type is release.
 .. code-block:: bash
 
   ./config-build.py -hc <host config file> -bt Release -DENABLE_BENCHMARKS=ON
-  cd <serac build location>
+  cd <smith build location>
   make -j
   make run_benchmarks
   pwd
@@ -142,7 +142,7 @@ files:
 Smith benchmarks are run weekly to track changes over time. The following are steps to visualize this data in a meaningful
 way:
 
-- Go to https://lc.llnl.gov/spot2/?sf=/usr/workspace/smithdev/califiles/serac
+- Go to https://lc.llnl.gov/spot2/?sf=/usr/workspace/smithdev/califiles/smith
 - Click the check mark button on the top right to view additional data categories
 - Ensure ``mpi.world.size``, ``executable``, ``cluster``, and ``compilers`` are enabled
 - Find the pie and bar charts associated with those categories
@@ -164,9 +164,9 @@ Utilizing Hatchet, it is possible to view the performance changes of a prospecti
 develop. This process has been conveniently wrapped in a CI pipeline. This Hatchet comparison can only be performed
 on LC, since the baseline benchmarks are generated on LC systems.
 
-1. Go to the following CZ GitLab page to create a new pipeline https://lc.llnl.gov/gitlab/smith/serac/-/pipelines/new
+1. Go to the following CZ GitLab page to create a new pipeline https://lc.llnl.gov/gitlab/smith/smith/-/pipelines/new
 2. Choose your branch
-3. Under variables, add ``SERAC_CI_WORKFLOW_TYPE`` and ``comparison`` for the key and value, respectively
+3. Under variables, add ``SMITH_CI_WORKFLOW_TYPE`` and ``comparison`` for the key and value, respectively
 
 It's possible to perform this comparison locally. Since baseline benchmarks are generated across different machines and
 compilers, a single build won't compare against all baselines. The benchmarks can be compared using dane-gcc and dane-clang builds.

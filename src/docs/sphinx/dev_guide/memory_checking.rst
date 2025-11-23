@@ -33,7 +33,7 @@ Here is a recommended workflow:
     ./config-build.py -hc host-configs/ruby-toss_4_x86_64_ib-clang@14.0.6.cmake -DENABLE_ASAN=ON
     cd build-ruby-toss_4_x86_64_ib-clang@14.0.6-debug
     srun -N1 --exclusive --mpi-bind=off make -j
-    LSAN_OPTIONS=suppressions=../suppressions.asan ASAN_OPTIONS=log_path=asan.out:log_exe_name=true srun -n2 bin/serac
+    LSAN_OPTIONS=suppressions=../suppressions.asan ASAN_OPTIONS=log_path=asan.out:log_exe_name=true srun -n2 bin/smith
 
 This will output files in the current directory for each process that follow the pattern:
 ``asan.out.<exe name>.<pid>``.  It also sets your return code to a non-zero value if there
@@ -65,18 +65,18 @@ If a program results in address sanitizer emitting an error (gcc example, here):
 
     ==45800==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x61a00000a1c0 at pc 0x5561996372b7 bp 0x7fff89f707e0 sp 0x7fff89f707d0
     READ of size 8 at 0x61a00000a1c0 thread T0
-        #0 0x5561996372b6 in serac::Functional<double (serac::H1<2, 1>), (serac::ExecutionSpace)0>::Gradient::operator mfem::Vector() (/home/sam/code/serac/build/tests/functional_qoi+0x57e2b6)
-        #1 0x55619962df8c in void check_gradient<double (serac::H1<2, 1>)>(serac::Functional<double (serac::H1<2, 1>), (serac::ExecutionSpace)0>&, mfem::Vector&) (/home/sam/code/serac/build/tests/functional_qoi+0x574f8c)
-        #2 0x556199624144 in void functional_qoi_test<2, 2>(mfem::ParMesh&, serac::H1<2, 1>, serac::Dimension<2>) (/home/sam/code/serac/build/tests/functional_qoi+0x56b144)
-        #3 0x556199614ee3 in main /home/sam/code/serac/src/serac/physics/utilities/functional/tests/functional_qoi.cpp:206
+        #0 0x5561996372b6 in smith::Functional<double (smith::H1<2, 1>), (smith::ExecutionSpace)0>::Gradient::operator mfem::Vector() (/home/sam/code/smith/build/tests/functional_qoi+0x57e2b6)
+        #1 0x55619962df8c in void check_gradient<double (smith::H1<2, 1>)>(smith::Functional<double (smith::H1<2, 1>), (smith::ExecutionSpace)0>&, mfem::Vector&) (/home/sam/code/smith/build/tests/functional_qoi+0x574f8c)
+        #2 0x556199624144 in void functional_qoi_test<2, 2>(mfem::ParMesh&, smith::H1<2, 1>, smith::Dimension<2>) (/home/sam/code/smith/build/tests/functional_qoi+0x56b144)
+        #3 0x556199614ee3 in main /home/sam/code/smith/src/smith/physics/utilities/functional/tests/functional_qoi.cpp:206
 
-the information provided (e.g. invalid read at /home/sam/code/serac/build/tests/functional_qoi+0x57e2b6) doesn't precisely reveal where the error takes place.
+the information provided (e.g. invalid read at /home/sam/code/smith/build/tests/functional_qoi+0x57e2b6) doesn't precisely reveal where the error takes place.
 We can set a breakpoint on the address sanitizer error function to find out exactly where the problem lies, but first we need to find out the name of that
 error reporting symbol. One way to do this is to filter the symbols in the executable:
 
 .. code-block:: bash
 
-    sam@provolone:~/code/serac/build/tests$ nm -g ./functional_qoi | grep asan
+    sam@provolone:~/code/smith/build/tests$ nm -g ./functional_qoi | grep asan
                      U __asan_after_dynamic_init
                      U __asan_before_dynamic_init
                      U __asan_handle_no_return
@@ -140,7 +140,7 @@ Here is a recommended workflow:
     ./config-build.py -hc host-configs/rzgenie-toss_3_x86_64_ib-gcc@8.1.0.cmake
     cd build-rzgenie-toss_3_x86_64_ib-gcc@8.1.0-debug
     srun -N1 --exclusive --mpi-bind=off make -j
-    srun -n2 valgrind --tool=memcheck --log-file=valgrind.out --leak-check=yes --show-leak-kinds=all --num-callers=20 --suppressions=../suppressions.valgrind bin/serac
+    srun -n2 valgrind --tool=memcheck --log-file=valgrind.out --leak-check=yes --show-leak-kinds=all --num-callers=20 --suppressions=../suppressions.valgrind bin/smith
 
 This will produce a file called ``valgrind.out`` in the current directory with a valgrind report.
 

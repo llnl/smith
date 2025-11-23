@@ -49,7 +49,7 @@ Message Levels
 
 SLIC has 4 message levels to help indicate the important of messages. Descriptions are as follows:
 
- * Debug - messages that help debugging runs, only on when ``SERAC_DEBUG`` is defined
+ * Debug - messages that help debugging runs, only on when ``SMITH_DEBUG`` is defined
  * Info - basic informational messages
  * Warning - message indicating that something has gone wrong but not enough to end the simulation
  * Error - message indicating a non-recoverable error has occurred

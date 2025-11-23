@@ -2,7 +2,7 @@
 "exec" "python3" "-u" "-B" "$0" "$@"
 
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for details.
+# other Smith Project Developers. See the top-level LICENSE file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -10,7 +10,7 @@
  file: build_src.py
 
  description: 
-  Builds Serac with the host-configs for the current machine.
+  Builds Smith with the host-configs for the current machine.
 
 """
 
@@ -79,6 +79,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    if not ensure_on_lc_and_group_permissions(allow_non_lc_builds=True):
+        return 1
 
     # Determine source directory to be built
     if os.environ.get("UBERENV_PREFIX") != None:

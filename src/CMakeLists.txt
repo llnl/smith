@@ -1,10 +1,10 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-add_subdirectory(serac)
+add_subdirectory(smith)
 add_subdirectory(drivers)
 add_subdirectory(tools)
 
@@ -12,13 +12,13 @@ if (ENABLE_DOCS)
     add_subdirectory(docs)
 endif()
 
-if(SERAC_ENABLE_TESTS)
+if(SMITH_ENABLE_TESTS)
     add_subdirectory(tests)
 endif()
 
 # Create single unified header of component-level unified headers
-serac_write_unified_header(
-    NAME    serac
-    HEADERS ${_serac_unified_headers}
+smith_write_unified_header(
+    NAME    smith
+    HEADERS ${_smith_unified_headers}
     NO_PATH_MODIFICATION ON
     )
