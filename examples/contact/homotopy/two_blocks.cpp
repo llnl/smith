@@ -25,71 +25,12 @@
 static constexpr int dim = 3;
 static constexpr int disp_order = 1;
 
-int linearized_contact = 1;
-int contact = 0;
+int linearized_contact = 0;
 
 using VectorSpace = smith::H1<disp_order, dim>;
-
 using DensitySpace = smith::L2<disp_order - 1>;
 
-struct MyLinearIsotropic {
-  using State = smith::Empty;  ///< this material has no internal variables
-
-  /**
-   * @brief stress calculation for a linear isotropic material model
-   *
-   * When applied to 2D displacement gradients, the stress is computed in plane strain,
-   * returning only the in-plane components.
-   *
-   * @tparam T Number-like type for the displacement gradient components
-   * @tparam dim Dimensionality of space
-   * @param du_dX Displacement gradient with respect to the reference configuration
-   * @return The stress
-   */
-  template <typename T, int dim>
-  SMITH_HOST_DEVICE auto operator()(State& /* state */, const smith::tensor<T, dim, dim>& du_dX) const
-  {
-    auto I = smith::Identity<dim>();
-    auto lambda = K - (2.0 / 3.0) * G;
-    auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
-    return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
-  }
-  template <typename T, int dim, typename Density>
-  SMITH_HOST_DEVICE auto pkStress(State& /* state */, const smith::tensor<T, dim, dim>& du_dX, const Density&) const
-  {
-    auto I = smith::Identity<dim>();
-    auto lambda = K - (2.0 / 3.0) * G;
-    auto epsilon = 0.5 * (transpose(du_dX) + du_dX);
-    return lambda * tr(epsilon) * I + 2.0 * G * epsilon;
-    // using std::log1p;
-    // constexpr auto I = Identity<dim>();
-    // auto lambda = K - (2.0 / 3.0) * G;
-    // auto B_minus_I = dot(du_dX, transpose(du_dX)) + transpose(du_dX) + du_dX;
-
-    // auto logJ = log1p(detApIm1(du_dX));
-    //// Kirchoff stress, in form that avoids cancellation error when F is near I
-    // auto TK = lambda * logJ * I + G * B_minus_I;
-
-    //// Pull back to Piola
-    // auto F = du_dX + I;
-    // return dot(TK, inv(transpose(F)));
-  }
-
-  /// @brief interpolates density field
-  template <typename Density>
-  SMITH_HOST_DEVICE auto density(const Density& density) const
-  {
-    return get<smith::VALUE>(density);
-  }
-
-  // double density;  ///< mass density
-  double K;  ///< bulk modulus
-  double G;  ///< shear modulus
-};
-
-// using SolidMaterial = MyLinearIsotropic;
 using SolidMaterial = smith::solid_mechanics::NeoHookeanWithFieldDensity;
-
 using SolidWeakFormT = smith::SolidWeakForm<disp_order, dim, smith::Parameters<DensitySpace>>;
 
 enum FIELD
@@ -229,18 +170,11 @@ int main(int argc, char* argv[])
   // Initialize and automatically finalize MPI and other libraries
   smith::ApplicationManager applicationManager(argc, argv);
 
-  int fd_check = 0;  // finite difference check or homotopy solve
   int visualize = 1;
   int visualize_all_iterates = 1;
   // command line arguments
-  axom::CLI::App app{"Constraint twist."};
-  app.add_option("--contact", contact, "enable contact (1) or use Dirichlet BCs for contact surface (0)")
-      ->default_val("0")
-      ->check(axom::CLI::Range(0, 1));
-  app.add_option("--lincontact", linearized_contact, "use linearized contact (1) or nonlinear contact (0)")
-      ->default_val("1")
-      ->check(axom::CLI::Range(0, 1));
-  app.add_option("--fdcheck", fd_check, "finite difference check (1) or Homotopy solve (0)")
+  axom::CLI::App app{"Two block contact."};
+  app.add_option("--lincontact", linearized_contact, "nonlinear contact (0) or linearized contact (1)")
       ->default_val("0")
       ->check(axom::CLI::Range(0, 1));
   app.add_option("--visualize", visualize, "solution visualization")
@@ -251,13 +185,13 @@ int main(int argc, char* argv[])
   CLI11_PARSE(app, argc, argv);
 
   // Create DataStore
-  std::string name = "contact_twist_example";
+  std::string name = "two_block_example";
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, name + "_data");
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SMITH_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
-  auto mesh = std::make_shared<smith::Mesh>(smith::buildMeshFromFile(filename), "twist_mesh", 3, 0);
+  auto mesh = std::make_shared<smith::Mesh>(smith::buildMeshFromFile(filename), "two_block_mesh", 3, 0);
 
   mesh->addDomainOfBoundaryElements("fixed_surface", smith::by_attr<dim>(3));
   mesh->addDomainOfBoundaryElements("driven_surface", smith::by_attr<dim>(6));
@@ -332,10 +266,6 @@ int main(int argc, char* argv[])
   ess_bdr_marker = 0;
   ess_bdr_marker[2] = 1;
   ess_bdr_marker[5] = 0;
-  if (!contact) {
-    ess_bdr_marker[3] = 1;
-    ess_bdr_marker[4] = 1;
-  }
   states[FIELD::DISP].space().GetEssentialTrueDofs(ess_bdr_marker, ess_fixed_tdof_list);
   ess_bdr_marker = 0;
   ess_bdr_marker[5] = 1;
@@ -427,17 +357,11 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<smith::Fin
   std::unique_ptr<HYPRE_BigInt[]> cOffsets = std::make_unique<HYPRE_BigInt[]>(2);
 
   // obtain pressure dof information
-  if (contact) {
-    dimc_ = constraints_->numPressureDofs();
-    HYPRE_BigInt pressure_offset = 0;
-    MPI_Scan(&dimc_, &pressure_offset, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-    cOffsets[0] = pressure_offset - dimc_;
-    cOffsets[1] = pressure_offset;
-  } else {
-    dimc_ = 0;
-    cOffsets[0] = 0;
-    cOffsets[1] = 0;
-  }
+  dimc_ = constraints_->numPressureDofs();
+  HYPRE_BigInt pressure_offset = 0;
+  MPI_Scan(&dimc_, &pressure_offset, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  cOffsets[0] = pressure_offset - dimc_;
+  cOffsets[1] = pressure_offset;
   // set pressure and displacement dof information
   SetSizes(uOffsets.get(), cOffsets.get());
 
@@ -486,20 +410,11 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<smith::Fin
   // shape_disp field
   shape_disp_ = std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
 
-  if (contact) {
-    // Linearize gap about zero displacement state
-    if (linearized_contact) {
-      u0_.SetSize(dimu_);
-      u0_ = 0.0;
-      Linearize();
-    }
-  } else {
-    int nentries = 0;
-    int dimuglb_;
-    dimuglb_ = 0;
-    MPI_Allreduce(&dimu_, &dimuglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-    auto temp = std::make_unique<mfem::SparseMatrix>(dimc_, dimuglb_, nentries);
-    dcdu_.reset(GenerateHypreParMatrixFromSparseMatrix(cOffsets.get(), uOffsets.get(), temp.get()));
+  // Linearize gap about zero displacement state
+  if (linearized_contact) {
+    u0_.SetSize(dimu_);
+    u0_ = 0.0;
+    Linearize();
   }
 }
 
@@ -537,19 +452,17 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vecto
   bool new_point = true;
   mfem::Vector gap(dimc_);
   gap = 0.0;
-  if (contact) {
-    if (linearized_contact) {
-      mfem::Vector du(dimu_);
-      du.Set(1.0, u);
-      du.Add(-1.0, u0_);
-      dcdu_->Mult(du, gap);
-      gap.Add(1.0, g0_);
-    } else {
-      prolongation_->Mult(u, ufull_);
-      ufull_.Add(1.0, dispBC_);
-      contact_states_[smith::ContactFields::DISP]->Set(1.0, ufull_);
-      gap = constraints_->evaluate(time_, dt_, smith::getConstFieldPointers(contact_states_), new_point);
-    }
+  if (linearized_contact) {
+    mfem::Vector du(dimu_);
+    du.Set(1.0, u);
+    du.Add(-1.0, u0_);
+    dcdu_->Mult(du, gap);
+    gap.Add(1.0, g0_);
+  } else {
+    prolongation_->Mult(u, ufull_);
+    ufull_.Add(1.0, dispBC_);
+    contact_states_[smith::ContactFields::DISP]->Set(1.0, ufull_);
+    gap = constraints_->evaluate(time_, dt_, smith::getConstFieldPointers(contact_states_), new_point);
   }
   return gap;
 }
@@ -559,15 +472,13 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(
                                                                                 bool /*new_point*/)
 {
   bool new_point = true;
-  if (contact) {
-    if (!linearized_contact) {
-      ufull_.Add(1.0, dispBC_);
-      prolongation_->Mult(u, ufull_);
-      contact_states_[smith::ContactFields::DISP]->Set(1.0, ufull_);
-      auto dcdufull_ = constraints_->jacobian(time_, dt_, smith::getConstFieldPointers(contact_states_),
-                                              smith::ContactFields::DISP, new_point);
-      dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), new_point));
-    }
+  if (!linearized_contact) {
+    ufull_.Add(1.0, dispBC_);
+    prolongation_->Mult(u, ufull_);
+    contact_states_[smith::ContactFields::DISP]->Set(1.0, ufull_);
+    auto dcdufull_ = constraints_->jacobian(time_, dt_, smith::getConstFieldPointers(contact_states_),
+                                            smith::ContactFields::DISP, new_point);
+    dcdu_.reset(mfem::ParMult(dcdufull_.get(), prolongation_.get(), new_point));
   }
   return dcdu_.get();
 }
@@ -600,18 +511,17 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
   bool new_point = true;
   mfem::Vector res(dimu_);
   res = 0.0;
-  if (contact) {
-    if (linearized_contact) {
-      dcdu_->MultTranspose(l, res);
-    } else {
-      prolongation_->Mult(u, ufull_);
-      ufull_.Add(1.0, dispBC_);
-      contact_states_[smith::ContactFields::DISP]->Set(1.0, ufull_);
-      auto res_contribution = constraints_->residual_contribution(
-          time_, dt_, smith::getConstFieldPointers(contact_states_), l, smith::ContactFields::DISP, new_point);
-      restriction_->Mult(res_contribution, res);
-    }
+  if (linearized_contact) {
+    dcdu_->MultTranspose(l, res);
+  } else {
+    prolongation_->Mult(u, ufull_);
+    ufull_.Add(1.0, dispBC_);
+    contact_states_[smith::ContactFields::DISP]->Set(1.0, ufull_);
+    auto res_contribution = constraints_->residual_contribution(
+        time_, dt_, smith::getConstFieldPointers(contact_states_), l, smith::ContactFields::DISP, new_point);
+    restriction_->Mult(res_contribution, res);
   }
+  
   return res;
 }
 
