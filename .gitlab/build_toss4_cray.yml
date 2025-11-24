@@ -38,16 +38,16 @@ toss4_cray-llvm_amdgpu_6_4_2-src:
   variables:
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "30"
+    ALLOC_TIME: "60"
   extends: .src_build_on_toss4_cray
  
 toss4_cray-llvm_amdgpu_6_4_2-src-codevelop:
   variables:
-    # TODO: Add -DSMITH_USE_DFEM=ON when TPLs are updated
+    # TODO: Add -DSMITH_USE_DFEM=ON when enzyme is enabled in toss4_cray host configs
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug -DSMITH_ENABLE_CODEVELOP=ON"
     EXTRA_BUILD_OPTIONS: "--skip-install"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "30"
+    ALLOC_TIME: "60"
   extends: .src_build_on_toss4_cray
 
 # NOTE: SPEC should matches specs.json, but devtools and profiling variants removed
@@ -55,18 +55,18 @@ toss4_cray-llvm_amdgpu_6_4_2-tpl:
   variables:
     SPEC: "--spec %~devtools~profiling~openmp+rocm~petsc~slepc~enzyme~sundials amdgpu_target=gfx942,gfx90a %${COMPILER}"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "45"
+    ALLOC_TIME: "90"
   extends: .tpl_build_on_toss4_cray
 
 toss4_cray-llvm_amdgpu_6_4_2-examples:
   variables:
     EXTRA_CMAKE_OPTIONS: "-DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "45"
+    ALLOC_TIME: "90"
   extends: .examples_build_on_toss4_cray
 
 toss4_cray-llvm_amdgpu_6_4_2-benchmarks:
   variables:
     ALLOC_NODES: "1"
-    ALLOC_TIME: "60"
+    ALLOC_TIME: "120"
   extends: .benchmarks_build_on_toss4_cray
