@@ -200,8 +200,7 @@ class ContactConstraint : public Constraint {
       contact_.update(cycle, time, dt);
       pressures_set_ = false;
     }
-    if (!pressures_set_)
-    {
+    if (!pressures_set_) {
       // with updated gaps, we can update pressure for contact interactions with penalty enforcement
       contact_.setPressures(multipliers);
       // call update again with the right pressures
@@ -244,8 +243,7 @@ class ContactConstraint : public Constraint {
       contact_.update(cycle, time, dt);
       pressures_set_ = false;
     }
-    if (!pressures_set_)
-    {
+    if (!pressures_set_) {
       // with updated gaps, we can update pressure for contact interactions with penalty enforcement
       contact_.setPressures(multipliers);
       // call update again with the right pressures
@@ -316,7 +314,7 @@ class ContactConstraint : public Constraint {
   mutable std::unique_ptr<mfem::BlockOperator> J_contact_;
 
   /**
-   * @brief own_blocks_ temporary boolean 
+   * @brief own_blocks_ temporary boolean
    */
   const bool own_blocks_ = true;
 
@@ -324,8 +322,6 @@ class ContactConstraint : public Constraint {
    * @brief pressures_set_ are the Lagrange multipliers set
    */
   mutable bool pressures_set_ = false;
-
-
 };
 
 }  // namespace smith
