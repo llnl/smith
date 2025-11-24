@@ -521,7 +521,7 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
         time_, dt_, smith::getConstFieldPointers(contact_states_), l, smith::ContactFields::DISP, new_point);
     restriction_->Mult(res_contribution, res);
   }
-  
+
   return res;
 }
 
