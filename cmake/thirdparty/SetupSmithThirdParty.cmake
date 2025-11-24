@@ -298,7 +298,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             set(MFEM_USE_SLEPC OFF CACHE BOOL "")
         endif()
 
-        set(MFEM_USE_RAJA OFF CACHE BOOL "")
+        set(MFEM_USE_RAJA ${SMITH_ENABLE_HIP} CACHE BOOL "")
         set(MFEM_USE_SUNDIALS ${SMITH_USE_SUNDIALS} CACHE BOOL "")
         if(SUPERLUDIST_DIR)
             smith_assert_is_directory(DIR_VARIABLE SUPERLUDIST_DIR)
