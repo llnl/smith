@@ -63,8 +63,8 @@ jobs:
     container:
       image: ${{ matrix.config.compiler_image }}
       volumes:
-      - /home/serac/serac
-      # Required - default is set to user "serac"
+      - /home/smith/smith
+      # Required - default is set to user "smith"
       options: --user root
     steps:
       - name: Checkout Smith
@@ -106,8 +106,8 @@ jobs:
     container:
       image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
       volumes:
-      - /home/serac/serac
-      # Required - default is set to user "serac"
+      - /home/smith/smith
+      # Required - default is set to user "smith"
       options: --user root
       env:
         CHECK_TYPE: ${{ matrix.check_type }}
