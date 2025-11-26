@@ -58,8 +58,6 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
  protected:
   std::unique_ptr<mfem::HypreParMatrix> drdu_;
   std::unique_ptr<mfem::HypreParMatrix> dcdu_;
-  int dimu_;
-  int dimc_;
   std::vector<smith::FieldPtr> contact_states_;
   std::vector<smith::FieldPtr> residual_states_;
   std::shared_ptr<SolidWeakFormType> weak_form_;
@@ -333,21 +331,26 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<smith::Fin
   // obtain displacement dof information
   // degrees of freedom with respect to solver
   // are the internal non essential dofs
-  const int dimufull_ = residual_states[FIELD::DISP]->space().GetTrueVSize();
-  dimu_ = dimufull_ - fixed_tdof_list.Size() - disp_tdof_list.Size();
+  const int dimu = residual_states[FIELD::DISP]->space().GetTrueVSize();
+  const int dimc = constraints->numPressureDofs();
+  SetSizes(dimu, dimc);
+  
+  //const int dimufull_ = residual_states[FIELD::DISP]->space().GetTrueVSize();
+  //dimu_ = dimufull_ - fixed_tdof_list.Size() - disp_tdof_list.Size();
 
-  std::unique_ptr<HYPRE_BigInt> uOffsets;
-  uOffsets.reset(offsetsFromLocalSizes(dimu_, MPI_COMM_WORLD));
-  std::unique_ptr<HYPRE_BigInt[]> cOffsets = std::make_unique<HYPRE_BigInt[]>(2);
+  //std::unique_ptr<HYPRE_BigInt> uOffsets;
+  //uOffsets.reset(offsetsFromLocalSizes(dimu_, MPI_COMM_WORLD));
+  //std::unique_ptr<HYPRE_BigInt[]> cOffsets = std::make_unique<HYPRE_BigInt[]>(2);
 
-  // obtain pressure dof information
-  dimc_ = constraints_->numPressureDofs();
-  HYPRE_BigInt pressure_offset = 0;
-  MPI_Scan(&dimc_, &pressure_offset, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  cOffsets[0] = pressure_offset - dimc_;
-  cOffsets[1] = pressure_offset;
+  //// obtain pressure dof information
+  //dimc_ = constraints_->numPressureDofs();
+  //HYPRE_BigInt pressure_offset = 0;
+  //MPI_Scan(&dimc_, &pressure_offset, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  //cOffsets[0] = pressure_offset - dimc_;
+  //cOffsets[1] = pressure_offset;
+  
   // set pressure and displacement dof information
-  SetSizes(uOffsets.get(), cOffsets.get());
+  // SetSizes(uOffsets.get(), cOffsets.get());
 
   // shape_disp field
   shape_disp_ = std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
@@ -399,15 +402,6 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
   auto res_contribution = constraints_->residual_contribution(time_, dt_, smith::getConstFieldPointers(contact_states_),
                                                               l, smith::ContactFields::DISP, new_point);
   return res_contribution;
-}
-
-template <typename SolidWeakFormType>
-void TiedContactProblem<SolidWeakFormType>::fullDisplacement(const mfem::Vector& X, mfem::Vector& u)
-{
-  mfem::BlockVector Xblock(y_partition);
-  Xblock.Set(1.0, X);
-  prolongation_->Mult(Xblock.GetBlock(0), u);
-  u.Add(1.0, uDC_);
 }
 
 template <typename SolidWeakFormType>
