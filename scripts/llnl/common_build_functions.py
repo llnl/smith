@@ -21,8 +21,11 @@ import json
 import getpass
 import shutil
 import time
+import grp
+import pwd
 
 from os.path import join as pjoin
+
 
 def shell_exec(cmd,
                echo = False,
@@ -591,6 +594,50 @@ def build_devtools(builds_dir, timestamp, short_path, report_to_stdout = False):
     set_group_and_perms(prefix)
 
     return res
+
+
+def ensure_on_lc_and_group_permissions(allow_non_lc_builds=False):
+    user = getpass.getuser()
+    group_name = "smithdev"
+    ok = True
+
+    # Check group membership
+    try:
+        # Supplementary groups
+        groups = [g.gr_name for g in grp.getgrall() if user in g.gr_mem]
+        # Primary group
+        primary_group = grp.getgrgid(pwd.getpwnam(user).pw_gid).gr_name
+        in_smithdev = group_name in groups or primary_group == group_name
+    except Exception as e:
+        print(f"Error: exception when checking group membership: {e}")
+        ok = False
+
+    # --- Check SYS_TYPE environment variable ---
+    is_sys_type_defined = False
+    if 'SYS_TYPE' in os.environ:
+        is_sys_type_defined = True
+        sys_type = os.environ['SYS_TYPE']
+        if not sys_type.strip():
+            print("Error: This script requires to you be on LC. The 'SYS_TYPE' environment variable is set but empty.")
+            ok = False
+
+    if allow_non_lc_builds:
+        if is_sys_type_defined:
+            # Only check smithdev in this case if on LC
+            if not in_smithdev:
+                print(f"Error: You are on LC and this script requires you to be in the '{group_name}' group.\n User '{user}' is not in the required '{group_name}' group.")
+                ok = False
+    else:
+        if not is_sys_type_defined:
+            print("Error: This script requires to you be on LC. The 'SYS_TYPE' environment variable is not set.")
+            if not in_smithdev:
+                print(f"Error: User '{user}' is not in the required '{group_name}' group.")
+                ok = False
+        else:
+            if not in_smithdev:
+                print(f"Error: This script requires you to be on LC and be in the '{group_name}' group.\n User '{user}' is not in the required '{group_name}' group.")
+                ok = False
+    return ok
 
 
 def get_specs_for_current_machine():

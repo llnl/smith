@@ -50,6 +50,9 @@ def parse_args():
 def main():
     args = parse_args()
 
+    if not ensure_on_lc_and_group_permissions():
+        return 1
+
     # Determine location to do all the building
     if args["directory"] != "":
         build_dir = args["directory"]
