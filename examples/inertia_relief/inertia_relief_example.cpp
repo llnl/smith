@@ -129,10 +129,6 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
  protected:
   std::unique_ptr<mfem::HypreParMatrix> drdu_;             // Jacobian of residual
   std::unique_ptr<mfem::HypreParMatrix> dcdu_;             // Jacobian of constraint
-  int dimu_;                                               // dimension of displacement
-  int dimc_;                                               // dimension of constraints
-  int dimuglb_;                                            // global dimension of displacement
-  int dimcglb_;                                            // global dimension of constraints
   std::vector<smith::FieldPtr> obj_states_;                // states for objective evaluation
   std::vector<smith::FieldPtr> all_states_;                // states for weak_form evaluation
   std::shared_ptr<SolidWeakFormT> weak_form_;              // weak_form
@@ -366,23 +362,21 @@ InertialReliefProblem::InertialReliefProblem(std::vector<smith::FiniteElementSta
   obj_states_.resize(obj_states.size());
   std::copy(obj_states.begin(), obj_states.end(), obj_states_.begin());
 
-  int dimu = all_states_[FIELD::DISP]->space().GetTrueVSize();
-  int dimc = static_cast<int>(constraints_.size());
+  int dim_displacement = all_states_[FIELD::DISP]->space().GetTrueVSize();
+  int dim_constraints = static_cast<int>(constraints_.size());
   int myid = mfem::Mpi::WorldRank();
   if (myid > 0) {
-    dimc = 0;
+    dim_displacement = 0;
   }
-  SetSizes(dimu, dimc);
-  MPI_Allreduce(&dimc_, &dimcglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(&dimu_, &dimuglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  SetSizes(dim_displacement, dim_constraints);
 
 
-
-  constraint_cached_.SetSize(dimc_);
+  
+  constraint_cached_.SetSize(dim_constraints);
   constraint_cached_ = 0.0;
-  residual_cached_.SetSize(dimu_);
+  residual_cached_.SetSize(dim_displacement);
   residual_cached_ = 0.0;
-  JTvp_cached_.SetSize(dimu_);
+  JTvp_cached_.SetSize(dim_displacement);
   JTvp_cached_ = 0.0;
 }
 
@@ -402,15 +396,17 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
                                                           bool new_point) const
 {
   if (new_point) {
+    int dim_constraints = GetMultiplierDim();
+    int dim_displacement = GetDisplacementDim();
     obj_states_[FIELD::DISP]->Set(1.0, u);
     std::vector<double> multipliers(constraints_.size());
-    for (int i = 0; i < dimc_; i++) {
+    for (int i = 0; i < dim_constraints; i++) {
       multipliers[static_cast<size_t>(i)] = l(i);
     }
     const int nconstraints = static_cast<int>(constraints_.size());
     MPI_Bcast(multipliers.data(), nconstraints, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    mfem::Vector constraint_gradient(dimu_);
+    mfem::Vector constraint_gradient(dim_displacement);
     constraint_gradient = 0.0;
     JTvp_cached_ = 0.0;
     for (size_t i = 0; i < constraints_.size(); i++) {
@@ -431,7 +427,8 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
     drdu_.reset();
     drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
   }
-  SLIC_ERROR_ROOT_IF(drdu_->Height() != dimu_ || drdu_->Width() != dimu_, "residual Jacobian of an unexpected shape");
+  int dim_displacement = GetDisplacementDim();
+  SLIC_ERROR_ROOT_IF(drdu_->Height() != dim_displacement || drdu_->Width() != dim_displacement, "residual Jacobian of an unexpected shape");
   return drdu_.get();
 }
 
@@ -439,6 +436,7 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
 mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool new_point) const
 {
   if (new_point) {
+    int dim_constraints = GetMultiplierDim();
     obj_states_[FIELD::DISP]->Set(1.0, u);
 
     for (size_t i = 0; i < constraints_.size(); i++) {
@@ -448,7 +446,7 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool new_p
 
       double constraint_i =
           constraints_[i]->evaluate(time_, dt_, shape_disp_.get(), smith::getConstFieldPointers(obj_states_));
-      if (dimc_ > 0) {
+      if (dim_constraints > 0) {
         constraint_cached_(idx) = constraint_i;
       }
     }
@@ -459,16 +457,19 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool new_p
 // Jacobian of the constraint
 mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u, bool new_point)
 {
+  int dim_constraints = GetMultiplierDim();
+  int glbdim_displacement = GetGlobalDisplacementDim();
   if (new_point) {
     obj_states_[FIELD::DISP]->Set(1.0, u);
-    int nentries = dimuglb_;
+    // dense rows
+    int nentries = glbdim_displacement;
     if (dimc_ == 0) {
       nentries = 0;
     }
-    mfem::SparseMatrix dcdumat(dimc_, dimuglb_, nentries);
+    mfem::SparseMatrix dcdumat(dim_constraints, glbdim_displacement, nentries);
     mfem::Array<int> cols;
-    cols.SetSize(dimuglb_);
-    for (int i = 0; i < dimuglb_; i++) {
+    cols.SetSize(glbdim_displacement);
+    for (int i = 0; i < glbdim_displacement; i++) {
       cols[i] = i;
     }
     std::unique_ptr<mfem::Vector> globalGradVector;
@@ -476,15 +477,14 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
       const int idx = static_cast<int>(i);
       const size_t i2 = static_cast<size_t>(idx);
       SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
-      mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
+      mfem::HypreParVector gradVector(MPI_COMM_WORLD, glbdim_displacement, uOffsets_);
       gradVector.Set(1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(),
                                                     smith::getConstFieldPointers(obj_states_), FIELD::DISP));
       globalGradVector.reset(gradVector.GlobalVector());
-      if (dimc_ > 0) {
+      if (dim_constraints > 0) {
         dcdumat.SetRow(idx, cols, *globalGradVector.get());
       }
     }
-    dcdumat.Threshold(1.e-20);
     dcdumat.Finalize();
     dcdu_.reset(GenerateHypreParMatrixFromSparseMatrix(cOffsets_, uOffsets_, &dcdumat));
   }

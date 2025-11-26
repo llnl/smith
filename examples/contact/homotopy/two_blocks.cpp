@@ -328,30 +328,13 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<smith::Fin
   contact_states_.resize(contact_states.size());
   std::copy(contact_states.begin(), contact_states.end(), contact_states_.begin());
 
-  // obtain displacement dof information
-  // degrees of freedom with respect to solver
-  // are the internal non essential dofs
-  const int dimu = residual_states[FIELD::DISP]->space().GetTrueVSize();
+  // number of "internal" non-essential dofs
+  const int dimu = residual_states[FIELD::DISP]->space().GetTrueVSize() - fixed_tdof_list.Size() - disp_tdof_list.Size();
+  // number of contact constraints
   const int dimc = constraints->numPressureDofs();
+  // EqualityConstrainedHomotopyProblem utility function
   SetSizes(dimu, dimc);
   
-  //const int dimufull_ = residual_states[FIELD::DISP]->space().GetTrueVSize();
-  //dimu_ = dimufull_ - fixed_tdof_list.Size() - disp_tdof_list.Size();
-
-  //std::unique_ptr<HYPRE_BigInt> uOffsets;
-  //uOffsets.reset(offsetsFromLocalSizes(dimu_, MPI_COMM_WORLD));
-  //std::unique_ptr<HYPRE_BigInt[]> cOffsets = std::make_unique<HYPRE_BigInt[]>(2);
-
-  //// obtain pressure dof information
-  //dimc_ = constraints_->numPressureDofs();
-  //HYPRE_BigInt pressure_offset = 0;
-  //MPI_Scan(&dimc_, &pressure_offset, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  //cOffsets[0] = pressure_offset - dimc_;
-  //cOffsets[1] = pressure_offset;
-  
-  // set pressure and displacement dof information
-  // SetSizes(uOffsets.get(), cOffsets.get());
-
   // shape_disp field
   shape_disp_ = std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
 }
