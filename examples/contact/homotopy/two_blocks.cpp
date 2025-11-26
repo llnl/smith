@@ -288,17 +288,17 @@ int main(int argc, char* argv[])
   auto writer = createParaviewOutput(mesh->mfemParMesh(), smith::getConstFieldPointers(states), "contact");
   if (visualize) {
     mfem::Vector u(states[FIELD::DISP].space().GetTrueVSize());
-    problem.fullDisplacement(X0, u);
+    u = problem.GetDisplacement(X0);
     states[FIELD::DISP].Set(1.0, u);
     writer.write(0, 0.0, smith::getConstFieldPointers(states));
     if (!visualize_all_iterates) {
-      problem.fullDisplacement(Xf, u);
+      u = problem.GetDisplacement(Xf);
       states[FIELD::DISP].Set(1.0, u);
       writer.write(1, 1.0, smith::getConstFieldPointers(states));
     } else {
       auto iterates = solver.GetIterates();
       for (int i = 0; i < iterates.Size(); i++) {
-        problem.fullDisplacement(*iterates[i], u);
+        u = problem.GetDisplacement(*iterates[i]);
         states[FIELD::DISP].Set(1.0, u);
         writer.write((i + 1), static_cast<double>(i + 1), smith::getConstFieldPointers(states));
       }

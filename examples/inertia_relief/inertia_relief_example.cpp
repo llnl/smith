@@ -366,20 +366,17 @@ InertialReliefProblem::InertialReliefProblem(std::vector<smith::FiniteElementSta
   obj_states_.resize(obj_states.size());
   std::copy(obj_states.begin(), obj_states.end(), obj_states_.begin());
 
-  HYPRE_BigInt cOffsets[2];
-  HYPRE_BigInt* uOffsets = all_states[FIELD::DISP]->space().GetTrueDofOffsets();
-  dimc_ = static_cast<int>(constraints_.size());
+  int dimu = all_states_[FIELD::DISP]->space().GetTrueVSize();
+  int dimc = static_cast<int>(constraints_.size());
   int myid = mfem::Mpi::WorldRank();
-  cOffsets[0] = 0;
-  cOffsets[1] = dimc_;
   if (myid > 0) {
-    dimc_ = 0;
-    cOffsets[0] = cOffsets[1];
+    dimc = 0;
   }
-
-  dimu_ = all_states_[FIELD::DISP]->space().GetTrueVSize();
+  SetSizes(dimu, dimc);
   MPI_Allreduce(&dimc_, &dimcglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&dimu_, &dimuglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+
 
   constraint_cached_.SetSize(dimc_);
   constraint_cached_ = 0.0;
@@ -387,7 +384,6 @@ InertialReliefProblem::InertialReliefProblem(std::vector<smith::FiniteElementSta
   residual_cached_ = 0.0;
   JTvp_cached_.SetSize(dimu_);
   JTvp_cached_ = 0.0;
-  SetSizes(uOffsets, cOffsets);
 }
 
 // residual callback
