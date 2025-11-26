@@ -69,11 +69,12 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   double time_ = 0.0;
   double dt_ = 0.0;
   std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};
+
  public:
   TiedContactProblem(std::vector<smith::FieldPtr> contact_states, std::vector<smith::FieldPtr> residual_states,
                      std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<SolidWeakFormType> weak_form,
                      std::shared_ptr<smith::ContactConstraint> constraints, mfem::Array<int> fixed_tdof_list,
-		     mfem::Array<int> disp_tdof_list, mfem::Vector uDC);
+                     mfem::Array<int> disp_tdof_list, mfem::Vector uDC);
   mfem::Vector residual(const mfem::Vector& u, bool new_point) const;
   mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool new_point);
   mfem::Vector constraint(const mfem::Vector& u, bool new_point) const;
@@ -314,9 +315,12 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<smith::Fin
                                                           std::shared_ptr<smith::Mesh> mesh,
                                                           std::shared_ptr<SolidWeakFormType> weak_form,
                                                           std::shared_ptr<smith::ContactConstraint> constraints,
-                                                          mfem::Array<int> fixed_tdof_list,	  
-							  mfem::Array<int> disp_tdof_list, mfem::Vector uDC)
-    : EqualityConstrainedHomotopyProblem(fixed_tdof_list, disp_tdof_list, uDC), weak_form_(weak_form), mesh_(mesh), constraints_(constraints)
+                                                          mfem::Array<int> fixed_tdof_list,
+                                                          mfem::Array<int> disp_tdof_list, mfem::Vector uDC)
+    : EqualityConstrainedHomotopyProblem(fixed_tdof_list, disp_tdof_list, uDC),
+      weak_form_(weak_form),
+      mesh_(mesh),
+      constraints_(constraints)
 {
   // copy residual states
   residual_states_.resize(residual_states.size());
@@ -345,7 +349,6 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<smith::Fin
   // set pressure and displacement dof information
   SetSizes(uOffsets.get(), cOffsets.get());
 
-
   // shape_disp field
   shape_disp_ = std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
 }
@@ -362,7 +365,8 @@ template <typename SolidWeakFormType>
 mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(const mfem::Vector& u, bool /*new_point*/)
 {
   residual_states_[FIELD::DISP]->Set(1.0, u);
-  drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), smith::getConstFieldPointers(residual_states_), jacobian_weights_);
+  drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), smith::getConstFieldPointers(residual_states_),
+                               jacobian_weights_);
   return drdu_.get();
 }
 
@@ -372,7 +376,7 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vecto
   bool new_point = true;
   contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
   auto gap = constraints_->evaluate(time_, dt_, smith::getConstFieldPointers(contact_states_), new_point);
-  return gap;  
+  return gap;
 }
 
 template <typename SolidWeakFormType>
@@ -381,8 +385,8 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(
 {
   bool new_point = true;
   contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
-  dcdu_ = constraints_->jacobian(time_, dt_, smith::getConstFieldPointers(contact_states_),
-                                            smith::ContactFields::DISP, new_point);
+  dcdu_ = constraints_->jacobian(time_, dt_, smith::getConstFieldPointers(contact_states_), smith::ContactFields::DISP,
+                                 new_point);
   return dcdu_.get();
 }
 
@@ -392,8 +396,8 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
 {
   bool new_point = true;
   contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
-  auto res_contribution = constraints_->residual_contribution(
-      time_, dt_, smith::getConstFieldPointers(contact_states_), l, smith::ContactFields::DISP, new_point);
+  auto res_contribution = constraints_->residual_contribution(time_, dt_, smith::getConstFieldPointers(contact_states_),
+                                                              l, smith::ContactFields::DISP, new_point);
   return res_contribution;
 }
 
