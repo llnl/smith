@@ -329,12 +329,13 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<smith::Fin
   std::copy(contact_states.begin(), contact_states.end(), contact_states_.begin());
 
   // number of "internal" non-essential dofs
-  const int dimu = residual_states[FIELD::DISP]->space().GetTrueVSize() - fixed_tdof_list.Size() - disp_tdof_list.Size();
+  const int dimu =
+      residual_states[FIELD::DISP]->space().GetTrueVSize() - fixed_tdof_list.Size() - disp_tdof_list.Size();
   // number of contact constraints
   const int dimc = constraints->numPressureDofs();
   // EqualityConstrainedHomotopyProblem utility function
   SetSizes(dimu, dimc);
-  
+
   // shape_disp field
   shape_disp_ = std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
 }

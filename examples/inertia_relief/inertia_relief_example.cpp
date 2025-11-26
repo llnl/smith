@@ -370,8 +370,6 @@ InertialReliefProblem::InertialReliefProblem(std::vector<smith::FiniteElementSta
   }
   SetSizes(dim_displacement, dim_constraints);
 
-
-  
   constraint_cached_.SetSize(dim_constraints);
   constraint_cached_ = 0.0;
   residual_cached_.SetSize(dim_displacement);
@@ -428,7 +426,8 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
     drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
   }
   int dim_displacement = GetDisplacementDim();
-  SLIC_ERROR_ROOT_IF(drdu_->Height() != dim_displacement || drdu_->Width() != dim_displacement, "residual Jacobian of an unexpected shape");
+  SLIC_ERROR_ROOT_IF(drdu_->Height() != dim_displacement || drdu_->Width() != dim_displacement,
+                     "residual Jacobian of an unexpected shape");
   return drdu_.get();
 }
 
