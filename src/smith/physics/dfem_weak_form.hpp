@@ -265,16 +265,11 @@ class DfemWeakForm : public WeakForm {
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
         auto deriv_op = v_dot_weak_form_residual_.GetDerivative(input_col, test_par_gf, field_par_gf);
-        // do this entry by entry until assembly is supported
-        mfem::Vector direction(vjp_sensitivities[input_col]->Size());
-        direction = 0.0;
-        for (int i = 0; i < vjp_sensitivities[input_col]->Size(); ++i) {
-          direction[i] = 1.0;
-          mfem::Vector value(1);
-          deriv_op->Mult(direction, value);
-          (*vjp_sensitivities[input_col])[i] += value[0];
-          direction[i] = 0.0;
-        }
+        mfem::Vector vec_jac_mfem_vector(vjp_sensitivities[input_col]->Size());
+        vec_jac_mfem_vector = 0.0;
+        // NOTE: this is happening entry by entry inside this (temporary) dfem function
+        deriv_op->Assemble(vec_jac_mfem_vector);
+        (*vjp_sensitivities[input_col]) += vec_jac_mfem_vector;
       }
     }
   }
