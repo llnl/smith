@@ -41,7 +41,7 @@ class Constraint {
    * @param time time
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
-   * @param new_point boolean indicating if this is a new point or not
+   * @param new_point boolean indicating if this is a new evaluation point or not
    * @return mfem::Vector which is the constraint evaluation
    */
   virtual mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields,
@@ -53,7 +53,7 @@ class Constraint {
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
-   * @param new_point boolean indicating if this is a new point or not
+   * @param new_point boolean indicating if this is a new evaluation point or not
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt,
@@ -67,7 +67,7 @@ class Constraint {
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
-   * @param new_point boolean indicating if this is a new point or not
+   * @param new_point boolean indicating if this is a new evaluation point or not
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   virtual std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt,
@@ -85,7 +85,7 @@ class Constraint {
    * @param fields vector of smith::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
-   * @param new_point boolean indicating if this is a new point or not
+   * @param new_point boolean indicating if this is a new evaluation point or not
    * @return std::Vector
    */
   virtual mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
@@ -108,7 +108,7 @@ class Constraint {
    * @param fields vector of smith::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
-   * @param new_point boolean indicating if this is a new point or not
+   * @param new_point boolean indicating if this is a new evaluation point or not
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   virtual std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(
