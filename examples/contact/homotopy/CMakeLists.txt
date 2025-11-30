@@ -6,7 +6,7 @@
 
 if (TRIBOL_FOUND AND STRUMPACK_DIR AND SMITH_ENABLE_CONTINUATION)
     blt_add_executable( NAME       two_blocks_example
-  	                SOURCES    two_blocks.cpp
+                        SOURCES    two_blocks.cpp
                         OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                         DEPENDS_ON smith_physics smith_mesh_utils continuation_solver
 		      )
