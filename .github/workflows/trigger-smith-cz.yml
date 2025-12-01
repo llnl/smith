@@ -1,0 +1,21 @@
+name: Trigger Smith CZ Pipeline
+
+on:
+  pull_request:
+  push:
+    branches:
+    - develop
+
+jobs:
+  trigger-smith-cz:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Smith CZ Pipeline
+        run: |
+          curl -X POST \
+          --fail \
+          --form token=$SMITH_CZ_TRIGGER_TOKEN \
+          --form ref=develop \
+          "https://lc.llnl.gov/gitlab/api/v4/projects/521/trigger/pipeline"
+        env:
+          SMITH_CZ_TRIGGER_TOKEN: ${{ secrets.SMITH_CZ_TRIGGER_TOKEN }}
