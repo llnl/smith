@@ -11,8 +11,8 @@
 #include "serac/physics/materials/green_saint_venant_thermoelastic.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/numerics/functional/dual.hpp"
-using std::pow;
-using std::exp;
+// using std::pow;
+// using std::exp;
 
 /// Thermomechanics helper data types
 namespace serac::thermomechanics {
@@ -211,6 +211,7 @@ struct ThermalStiffeningMaterial {
   
   template<typename scalar>
   SERAC_HOST_DEVICE auto equilibrium_xi(scalar temp) const{
+    using std::pow, std::exp;
     auto Tt = 443.0;
     auto k = 36.0;
     return exp(-(pow(temp/Tt,k)));
@@ -225,6 +226,7 @@ struct ThermalStiffeningMaterial {
   
   template<typename scalar>
   SERAC_HOST_DEVICE auto f1(scalar T) const{
+    using std::exp;
     // thermal softening function for low-T modulus
     auto N = 0.02;
     return exp(-N * (T - Tr));
@@ -232,6 +234,7 @@ struct ThermalStiffeningMaterial {
 
   template<typename scalar>
   SERAC_HOST_DEVICE auto df1(scalar T) const{
+    using std::exp;
     // thermal softening function for low-T modulus
     auto N = 0.02;
     return -N*exp(-N * (T - Tr));
@@ -248,10 +251,11 @@ struct ThermalStiffeningMaterial {
   auto operator()(double dt, State& state, const tensor<T1, dim, dim>& grad_u, const tensor<T2, dim, dim>& grad_v, T3 theta,
                   const tensor<T4, dim>& grad_theta) const
   {
+    using std::pow, std::exp;
 
     auto wep = state.w_e;     // previous entangled fraction
     auto wfp = 1.0-wep;       // previous free fraction
-    auto Cp = state.Cp;       // previous right Cauchy-Green tensor
+    // auto Cp = state.Cp;       // previous right Cauchy-Green tensor
     auto Fesip = state.Fesi;  // previous inverse of mapping F^{es}
 
     // get equilibrium wl=xi
@@ -262,9 +266,9 @@ struct ThermalStiffeningMaterial {
     constexpr auto I = Identity<dim>();
 
     auto F = grad_u + I;
-    auto Fe = dot(F,Fesip); // Fe for the extant entangled material, called Fh1 in my notes about the relaxation method
-    auto Je = det(Fe);
-    //auto Ce = dot(transpose(Fe),Fe);
+    auto FeIni = dot(F,Fesip); // Fe for the extant entangled material, called Fh1 in my notes about the relaxation method
+    auto Je = det(FeIni);
+    //auto Ce = dot(transpose(FeIni),FeIni);
 
     auto C = dot(transpose(F), F);
     auto Ci = inv(C);
@@ -291,22 +295,21 @@ struct ThermalStiffeningMaterial {
     // get net mass fraction supply
     auto dwe = -dwff + dwer;
 
+    auto aux1 = 0.0, aux2 = 0.0, aux3 = 0.0;
     // if dwh>0, I need to get the new equivalent Fhsi
     if (dwe>0 && wep==0) {
-    auto Fesi = inv(F); // initialize Fhsi as the inverse of F at the current time
-    Fe = dot(F,Fesi);
-    state.Fesi = get_value(Fesi);
+      aux1 = 1.0; // initialize Fhsi as the inverse of F at the current time
     }
-    else if (dwe>0) {
-    auto Fesi = (wep/(wep+dwe))*Fesip; // update the effective value of Fhsi
-    Fe = dot(F,Fesi); // calculate the current elastic deformation of the high-T material
-    state.Fesi = get_value(Fesi);
+    else if (dwe>0) { // calculate the current elastic deformation of the high-T material
+      aux2 = 1.0; // update the effective value of Fhsi
     }
     else {
-    auto Fesi = Fesip;
-    Fe = dot(F,Fesi);
-    state.Fesi = get_value(Fesi);
+      aux3 = 1.0;
     }
+
+    auto Fesi = aux1 * inv(F) + aux2 * (wep/(wep+dwe))*Fesip + aux3 * Fesip;
+    auto Fe = dot(F,Fesi);
+    state.Fesi = get_value(Fesi);
 
     // update mass fractions
     auto we = wep + dwe;
