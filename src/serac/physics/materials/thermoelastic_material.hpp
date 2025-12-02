@@ -10,6 +10,9 @@
 #include "serac/numerics/functional/tuple.hpp"
 #include "serac/physics/materials/green_saint_venant_thermoelastic.hpp"
 #include "serac/physics/materials/solid_material.hpp"
+#include "serac/numerics/functional/dual.hpp"
+using std::pow;
+using std::exp;
 
 /// Thermomechanics helper data types
 namespace serac::thermomechanics {
@@ -205,33 +208,39 @@ struct ThermalStiffeningMaterial {
    */
 
   // this function calculates the equilibrium low-T mass fraction as a function of temperature
-  SERAC_HOST_DEVICE auto equilibrium_xi(double temp) const{
-    double Tt = 443.0;
-    double k = 36.0;
-    return std::exp(-(std::pow(temp/Tt,k)));
+  
+  template<typename scalar>
+  SERAC_HOST_DEVICE auto equilibrium_xi(scalar temp) const{
+    auto Tt = 443.0;
+    auto k = 36.0;
+    return exp(-(pow(temp/Tt,k)));
   }
 
-  SERAC_HOST_DEVICE auto Gm0(double g) const{
+  template<typename scalar>
+  SERAC_HOST_DEVICE auto Gm0(scalar g) const{
     // low-T shear modulus at reference temperature as a function of particle wt% g
-    double junk = g;
+    auto junk = g;
     return Gm*junk/g;
   }
-
-  SERAC_HOST_DEVICE auto f1(double T) const{
+  
+  template<typename scalar>
+  SERAC_HOST_DEVICE auto f1(scalar T) const{
     // thermal softening function for low-T modulus
     auto N = 0.02;
-    return std::exp(-N * (T - Tr));
+    return exp(-N * (T - Tr));
   }
 
-  SERAC_HOST_DEVICE auto df1(double T) const{
+  template<typename scalar>
+  SERAC_HOST_DEVICE auto df1(scalar T) const{
     // thermal softening function for low-T modulus
     auto N = 0.02;
-    return -N*std::exp(-N * (T - Tr));
+    return -N*exp(-N * (T - Tr));
   }
 
-  SERAC_HOST_DEVICE auto Ge0(double g) const{
+  template<typename scalar>
+  SERAC_HOST_DEVICE auto Ge0(scalar g) const{
     // high-T shear modulus at reference temperature as a function of particle wt% g
-    double junk = g;
+    auto junk = g;
     return Ge*junk/g;
   }
 
@@ -239,6 +248,7 @@ struct ThermalStiffeningMaterial {
   auto operator()(double dt, State& state, const tensor<T1, dim, dim>& grad_u, const tensor<T2, dim, dim>& grad_v, T3 theta,
                   const tensor<T4, dim>& grad_theta) const
   {
+
     auto wep = state.w_e;     // previous entangled fraction
     auto wfp = 1.0-wep;       // previous free fraction
     auto Cp = state.Cp;       // previous right Cauchy-Green tensor
@@ -272,8 +282,8 @@ struct ThermalStiffeningMaterial {
     auto Ge_eff = Ge0(gw);
 
     // calculate forward and reverse reaction rate
-    auto kf = Af * std::exp(-E_af / (R*theta));
-    auto kr = Ar * std::exp(-E_ar / (R*theta));
+    auto kf = Af * exp(-E_af / (R*theta));
+    auto kr = Ar * exp(-E_ar / (R*theta));
 
     // get mass fraction supplies, forward and reverse
     auto dwff = (xi-wfp)*kf*dt/(1.+kf*dt);
@@ -309,8 +319,8 @@ struct ThermalStiffeningMaterial {
     auto Be_bar = Be - (trBe / 3.0) * I;
 
     // calculate kirchoff stress
-    auto Tm = Gm_eff * std::pow(J, -2./3.) * B_bar + J * Km * (J - 1. - betam*(theta-Tr)) * I; // + etal * D;
-    auto Te = Ge_eff * std::pow(Je, -2./3.) * Be_bar + Je * Ke * (Je - 1.) * I; // + etah * D;
+    auto Tm = Gm_eff * pow(J, -2./3.) * B_bar + J * Km * (J - 1. - betam*(theta-Tr)) * I; // + etal * D;
+    auto Te = Ge_eff * pow(Je, -2./3.) * Be_bar + Je * Ke * (Je - 1.) * I; // + etah * D;
 
     auto TK = wm * Tm + (1. - wm) * we * Te + 2*((1.-we)*etam+we*etae)*D;
   
@@ -331,7 +341,7 @@ struct ThermalStiffeningMaterial {
     // viscous stress
     auto Sv = 2*((1.-we)*etam+we*etae)*dot(Ci,dot(greenStrainRate,Ci));
     // derivative of elastic S with respect to T
-    auto dtmdT = Gm0(gw)*df1(theta)*std::pow(J,-2./3)*B_bar-Km*J*betam*I;
+    auto dtmdT = Gm0(gw)*df1(theta)*pow(J,-2./3)*B_bar-Km*J*betam*I;
     auto dSedT = dot(inv(F),dot(wm*dtmdT,transpose(inv(F))));
     const auto s0 = tr(dot(Sv+theta*dSedT,greenStrainRate));
     //const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate);
