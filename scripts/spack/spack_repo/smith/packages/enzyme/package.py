@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
-# Can't import like this
-#from spack_repo.builtin.build_systems.cmake import CMakePackage
+from spack_repo.builtin.build_systems.cmake import CMakePackage
 
 # NOTE: this custom package can be removed after this PR merges into Spack
 # https://github.com/spack/spack-packages/pull/2365
