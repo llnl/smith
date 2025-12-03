@@ -366,7 +366,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<smith::FiniteElementSta
   int dim_constraints = static_cast<int>(constraints_.size());
   int myid = mfem::Mpi::WorldRank();
   if (myid > 0) {
-    dim_displacement = 0;
+    dim_constraints = 0;
   }
   SetSizes(dim_displacement, dim_constraints);
 
