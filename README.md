@@ -70,6 +70,10 @@ PackageName: BLT
 PackageHomePage: https://github.com/LLNL/blt  
 PackageLicenseDeclared: BSD-3-Clause  
 
+PackageName: ContinuationSolvers  
+PackageHomePage: https://github.com/LLNL/ContinuationSolvers  
+PackageLicenseDeclared: BSD-3-Clause  
+
 PackageName: MFEM  
 PackageHomePage: https://github.com/mfem/mfem  
 PackageLicenseDeclared: BSD-3-Clause  
