@@ -32,8 +32,8 @@ smith::LinearSolverOptions solid_linear_options{.linear_solver = smith::LinearSo
                                                 .print_level = 0};
 
 smith::NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
-                                                   .relative_tol = 1.0e-9,
-                                                   .absolute_tol = 1.0e-9,
+                                                   .relative_tol = 1.0e-10,
+                                                   .absolute_tol = 1.0e-10,
                                                    .max_iterations = 500,
                                                    .print_level = 0};
 
@@ -44,7 +44,7 @@ using ShapeDispSpace = H1<1, dim>;
 using VectorSpace = H1<order, dim>;
 using ScalarParameterSpace = L2<0>;
 
-struct ThermoMechMeshFixture : public testing::Test {
+struct SolidMechanicsMeshFixture : public testing::Test {
   double length = 1.0;
   double width = 0.04;
   int num_elements_x = 21;
@@ -67,52 +67,67 @@ struct ThermoMechMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh;
 };
 
-TEST_F(ThermoMechMeshFixture, Test)
+template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
+auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
+                         std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
+                         smith::SecondOrderTimeIntegrationRule time_rule, std::string physics_name, const std::vector<std::string>& param_names={})
 {
-  SMITH_MARK_FUNCTION;
-
-  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
-
-  double E = 100.0;
-  double nu = 0.25;
-  auto K = E / (3.0 * (1.0 - 2 * nu));
-  auto G = E / (2.0 * (1.0 + nu));
-
-  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
-  MaterialType material{.density = 1.0, .K0 = K, .G0 = G};
-
-  double time_increment = 0.5;
-
-  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
-
   auto graph = std::make_shared<gretl::DataStore>(100);
-  std::string physics_name = "solid";
   auto [shape_disp, states, params, time, solid_mechanics_weak_form] =
-      SolidMechanicsStateAdvancer::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace,
-                                                          ScalarParameterSpace>(physics_name, mesh, graph, time_rule);
-
-  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    double scaling = 1.0;  //((x[0] < 3) && (x[0] > 2)) ? 0.99 : 0.001;
-    return scaling * material.K0;
-  });
-
-  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    double scaling = 1.0;  //((x[0] <= 3) && (x[0] >= 2)) ? 0.99 : 0.001;
-    return scaling * material.G0;
-  });
+      SolidMechanicsStateAdvancer::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ParamSpaces...>(
+          mesh, graph, time_rule, physics_name, param_names);
 
   auto vector_bcs = std::make_shared<DirichletBoundaryConditions>(
       mesh->mfemParMesh(), space(states[SolidMechanicsStateAdvancer::DISPLACEMENT]));
-  vector_bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
+
+  auto solid_mech_advancer = std::make_shared<SolidMechanicsStateAdvancer>(d_solid_nonlinear_solver, vector_bcs,
+                                                                           solid_mechanics_weak_form, time_rule);
+  auto physics = std::make_shared<DifferentiablePhysics>(mesh, graph, shape_disp, states, params, solid_mech_advancer,
+                                                         physics_name);
+
+  return std::make_tuple(physics, solid_mechanics_weak_form, vector_bcs);
+}
+
+
+
+
+
+TEST_F(SolidMechanicsMeshFixture, Test)
+{
+  SMITH_MARK_FUNCTION;
+
+  std::string physics_name = "solid";
+  
+  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
+      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+
+  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
+
+  // add names for params.
+  // resultant. reaction.
+  // warm-start
+  // implicit Newmark
+
+  auto [physics, weak_form, bcs] = 
+      buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
+          mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
+
+  bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
+  bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
     bc[0] = 0.01 * t;
     bc[1] = -0.05 * t;
     return bc;
   });
-  vector_bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
 
-  solid_mechanics_weak_form->addBodyIntegral(
+  double E = 100.0;
+  double nu = 0.25;
+  auto K = E / (3.0 * (1.0 - 2 * nu));
+  auto G = E / (2.0 * (1.0 + nu));
+  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
+  MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
+
+  weak_form->addBodyIntegral(
       smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
       [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
         MaterialType::State state;
@@ -120,18 +135,28 @@ TEST_F(ThermoMechMeshFixture, Test)
         return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
       });
 
-  auto solid_mech_advancer = std::make_shared<SolidMechanicsStateAdvancer>(d_solid_nonlinear_solver, vector_bcs,
-                                                                           solid_mechanics_weak_form, time_rule);
+  auto shape_disp = physics->getShapeDispFieldState();
+  auto params = physics->getFieldParams();
+  auto states = physics->getInitialFieldStates();
 
-  DifferentiablePhysics physics(mesh, graph, shape_disp, states, params, solid_mech_advancer, physics_name);
+  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    double scaling = 1.0;
+    return scaling * material.K0;
+  });
 
-  physics.resetStates();
+  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    double scaling = 1.0;
+    return scaling * material.G0;
+  });
 
-  auto pv_writer = smith::createParaviewOutput(*mesh, physics.getAllFieldStates(), physics_name);
-  pv_writer.write(0, physics.time(), physics.getAllFieldStates());
-  for (size_t m = 0; m < 10; ++m) {
-    physics.advanceTimestep(time_increment);
-    pv_writer.write(m + 1, physics.time(), physics.getAllFieldStates());
+  physics->resetStates();
+
+  double time_increment = 0.5;
+  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getAllFieldStates(), physics_name);
+  pv_writer.write(0, physics->time(), physics->getAllFieldStates());
+  for (size_t m = 0; m < 5; ++m) {
+    physics->advanceTimestep(time_increment);
+    pv_writer.write(m + 1, physics->time(), physics->getAllFieldStates());
   }
 
   auto objective = std::make_shared<smith::FunctionalObjective<dim, Parameters<VectorSpace> > >(
@@ -141,16 +166,16 @@ TEST_F(ThermoMechMeshFixture, Test)
     return smith::inner(u, u);
   });
 
-  auto final_states = physics.getAllFieldStates();
+  auto final_states = physics->getAllFieldStates();
   DoubleState disp_squared =
       smith::evaluateObjective(objective, shape_disp, {final_states[SolidMechanicsStateAdvancer::DISPLACEMENT]});
   gretl::set_as_objective(disp_squared);
 
   std::cout << "final disp norm2 = " << disp_squared.get() << std::endl;
 
-  EXPECT_GT(checkGradWrt(disp_squared, shape_disp, *graph, 1.1e-2, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(disp_squared, params[0], *graph, 1.6e-1, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(disp_squared, params[1], *graph, 1.6e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(disp_squared, shape_disp, 1.1e-2, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(disp_squared, params[0], 3.2e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(disp_squared, params[1], 3.2e-1, 4, true), 0.7);
 }
 
 }  // namespace smith

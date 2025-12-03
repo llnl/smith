@@ -20,6 +20,7 @@ set(differentiable_numerics_headers
     state_advancer.hpp
     timestep_estimator.hpp
     explicit_dynamic_solve.hpp
+    reaction.hpp
     lumped_mass_weak_form.hpp
     differentiable_utils.hpp
     differentiable_physics.hpp
