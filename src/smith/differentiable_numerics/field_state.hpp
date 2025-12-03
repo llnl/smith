@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include "gretl/src/data_store.hpp"
-#include "gretl/src/state.hpp"
-#include "gretl/src/create_state.hpp"
+#include "gretl/data_store.hpp"
+#include "gretl/state.hpp"
+#include "gretl/create_state.hpp"
 #include "smith/physics/state/state_manager.hpp"
 
 namespace smith {
