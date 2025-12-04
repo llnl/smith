@@ -408,6 +408,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
 
         set(MFEM_BUILT_WITH_CMAKE TRUE)
     endif()
+
     #------------------------------------------------------------------------------
     # ContinuationSolvers
     #------------------------------------------------------------------------------
@@ -446,6 +447,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(CONTINUATION_FOUND TRUE)
         add_subdirectory("${CONTINUATION_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/ContinuationSolvers)
     endif()
+
     #------------------------------------------------------------------------------
     # Axom
     #------------------------------------------------------------------------------
@@ -547,6 +549,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
 
         set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
     endif()
+
     #------------------------------------------------------------------------------
     # Gretl
     #------------------------------------------------------------------------------
@@ -578,13 +581,9 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         message(STATUS "Gretl dir = ${GRETL_SOURCE_DIR}")
         add_subdirectory("${GRETL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/gretl)
 
-        target_include_directories(gretl PUBLIC)
-        #    $<BUILD_INTERFACE:${tribol_repo_dir}/src>
-        #    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
-        #    $<INSTALL_INTERFACE:include>
-        #)
-
     endif()
+
+
     #------------------------------------------------------------------------------
     # Tribol
     #------------------------------------------------------------------------------
@@ -710,6 +709,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     # Restore cleared Adiak/Caliper directories, reason at top of file.
     set(ADIAK_DIR ${_adiak_dir} CACHE PATH "" FORCE)
     set(CALIPER_DIR ${_caliper_dir} CACHE PATH "" FORCE)
+
     #------------------------------------------------------------------------------
     # Adiak
     #------------------------------------------------------------------------------
