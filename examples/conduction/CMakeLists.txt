@@ -7,7 +7,7 @@
 smith_add_executable( NAME        simple_conduction
                       SOURCES     simple_conduction.cpp
                       OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                      DEPENDS_ON  smith_physics
+                      DEPENDS_ON  smith
                       )
 
 install(

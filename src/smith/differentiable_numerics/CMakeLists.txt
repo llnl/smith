@@ -23,12 +23,12 @@ set(differentiable_numerics_headers
     )
 
 set(differentiable_numerics_depends
+    gretl
     smith_state
     smith_boundary_conditions
     smith_contact
     smith_numerics
     smith_physics
-    gretl
     )
 
 blt_add_library(

@@ -16,7 +16,7 @@ if(SMITH_USE_DFEM)
         blt_add_executable(NAME        explicit_${example_name}
                            SOURCES     ${filename}
                            OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
-                           DEPENDS_ON  smith_physics smith_mesh_utils)
+                           DEPENDS_ON  smith)
 
         smith_add_example_test(NAME           explicit_${example_name}
                                COMMAND        explicit_${example_name}

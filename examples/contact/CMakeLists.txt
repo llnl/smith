@@ -19,7 +19,7 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
         smith_add_executable(NAME        contact_${example_name}
                              SOURCES     ${filename}
                              OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
-                             DEPENDS_ON  smith_physics smith_mesh_utils)
+                             DEPENDS_ON  smith)
 
         smith_add_example_test(NAME           contact_${example_name}
                                COMMAND        contact_${example_name}

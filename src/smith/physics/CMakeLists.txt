@@ -51,7 +51,6 @@ set(physics_depends
     smith_contact
     smith_numerics
     smith_physics_materials
-    smith_differentiable_numerics
     )
 
 smith_add_library(
