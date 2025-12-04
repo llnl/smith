@@ -104,7 +104,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("lua")
 
-    depends_on("enzyme@0.0.180", when="+enzyme")
+    depends_on("enzyme@0.0.180:", when="+enzyme")
     depends_on("cuda+allow-unsupported-compilers", when="+enzyme+cuda")
     depends_on("enzyme %libllvm=llvm-amdgpu", when="+enzyme+rocm")
 
@@ -314,21 +314,21 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("amgx", when="+cuda")
 
     for val in CudaPackage.cuda_arch_values:
-        ext_rocm_dep = f"+cuda cuda_arch={val}"
+        ext_cuda_dep = f"+cuda cuda_arch={val}"
 
         # required
-        depends_on(f"axom {ext_rocm_dep}", when=f"{ext_rocm_dep}")
-        depends_on(f"mfem {ext_rocm_dep}", when=f"{ext_rocm_dep}")
-        depends_on(f"hypre {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"axom {ext_cuda_dep}", when=f"{ext_cuda_dep}")
+        depends_on(f"mfem {ext_cuda_dep}", when=f"{ext_cuda_dep}")
+        depends_on(f"hypre {ext_cuda_dep}", when=f"{ext_cuda_dep}")
 
         # optional
-        depends_on(f"caliper {ext_rocm_dep}", when=f"+profiling {ext_rocm_dep}")
-        depends_on(f"petsc {ext_rocm_dep}", when=f"+petsc {ext_rocm_dep}")
-        depends_on(f"raja {ext_rocm_dep}", when=f"+raja {ext_rocm_dep}")
-        depends_on(f"slepc {ext_rocm_dep}", when=f"+slepc {ext_rocm_dep}")
-        depends_on(f"sundials {ext_rocm_dep}", when=f"+sundials {ext_rocm_dep}")
-        depends_on(f"tribol {ext_rocm_dep}", when=f"+tribol {ext_rocm_dep}")
-        depends_on(f"umpire {ext_rocm_dep}", when=f"+umpire {ext_rocm_dep}")
+        depends_on(f"caliper {ext_cuda_dep}", when=f"+profiling {ext_cuda_dep}")
+        depends_on(f"petsc {ext_cuda_dep}", when=f"+petsc {ext_cuda_dep}")
+        depends_on(f"raja {ext_cuda_dep}", when=f"+raja {ext_cuda_dep}")
+        depends_on(f"slepc {ext_cuda_dep}", when=f"+slepc {ext_cuda_dep}")
+        depends_on(f"sundials {ext_cuda_dep}", when=f"+sundials {ext_cuda_dep}")
+        depends_on(f"tribol {ext_cuda_dep}", when=f"+tribol {ext_cuda_dep}")
+        depends_on(f"umpire {ext_cuda_dep}", when=f"+umpire {ext_cuda_dep}")
 
     #
     # ROCm
