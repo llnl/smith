@@ -3,6 +3,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+from spack_repo.builtin.build_systems.bundle import BundlePackage
 from spack.package import *
 
 class SmithDevtools(BundlePackage):
