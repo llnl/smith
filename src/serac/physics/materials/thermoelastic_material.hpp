@@ -11,8 +11,6 @@
 #include "serac/physics/materials/green_saint_venant_thermoelastic.hpp"
 #include "serac/physics/materials/solid_material.hpp"
 #include "serac/numerics/functional/dual.hpp"
-// using std::pow;
-// using std::exp;
 
 /// Thermomechanics helper data types
 namespace serac::thermomechanics {
@@ -252,10 +250,14 @@ struct ThermalStiffeningMaterial {
                   const tensor<T4, dim>& grad_theta) const
   {
     using std::pow, std::exp;
+    
+    // Tr is a double but I need auto to add to theta
+    auto tempref = Tr; // 353.0;
+
+    theta=theta+tempref;
 
     auto wep = state.w_e;     // previous entangled fraction
     auto wfp = 1.0-wep;       // previous free fraction
-    // auto Cp = state.Cp;       // previous right Cauchy-Green tensor
     auto Fesip = state.Fesi;  // previous inverse of mapping F^{es}
 
     // get equilibrium wl=xi
@@ -268,12 +270,9 @@ struct ThermalStiffeningMaterial {
     auto F = grad_u + I;
     auto FeIni = dot(F,Fesip); // Fe for the extant entangled material, called Fh1 in my notes about the relaxation method
     auto Je = det(FeIni);
-    //auto Ce = dot(transpose(FeIni),FeIni);
 
     auto C = dot(transpose(F), F);
     auto Ci = inv(C);
-    //auto Cdot = (C - Cp)/dt;
-    //auto CdFi = dot(Cdot, inv(F));
     auto D = 0.5*(grad_v+transpose(grad_v));//dot(inv(transpose(F)),CdFi)*0.5;
 
     auto B = dot(F, transpose(F));
@@ -335,8 +334,6 @@ struct ThermalStiffeningMaterial {
 
     state.w_e = get_value(we);
     state.Cp = get_value(dot(transpose(F),F));
-  
-
 
     // internal heat power
     auto greenStrainRate =
