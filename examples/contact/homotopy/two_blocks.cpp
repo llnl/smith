@@ -155,12 +155,12 @@ int main(int argc, char* argv[])
   // Initialize and automatically finalize MPI and other libraries
   smith::ApplicationManager applicationManager(argc, argv);
 
-  int visualize = 1;
-  int visualize_all_iterates = 1;
+  int visualize = 0;
+  int visualize_all_iterates = 0;
   // command line arguments
   axom::CLI::App app{"Two block contact."};
   app.add_option("--visualize", visualize, "solution visualization")
-      ->default_val("1")  // Matches value set above
+      ->default_val("0")  // Matches value set above
       ->check(axom::CLI::Range(0, 1));
   app.set_help_flag("--help");
 
@@ -215,7 +215,7 @@ int main(int argc, char* argv[])
   contact_states[smith::ContactFields::SHAPE] = 0.0;
   states[FIELD::VELO] = 0.0;
   states[FIELD::ACCEL] = 0.0;
-  params[0] = 1.0;
+  params[0] = 1.0;  // density
 
   std::string physics_name = "solid";
 
@@ -223,16 +223,18 @@ int main(int argc, char* argv[])
   auto solid_mechanics_weak_form =
       std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), getSpaces(params));
 
+  // set material parameters
   SolidMaterial mat;
   mat.K = 1.0;
   mat.G = 0.5;
   solid_mechanics_weak_form->setMaterial(smith::DependsOn<0>{}, mesh->entireBodyName(), mat);
 
+  // constant body force
   smith::tensor<double, dim> constant_force{};
   for (int i = 0; i < dim; i++) {
     constant_force[i] = 0.0;
   }
-  constant_force[dim - 1] = 0.0;
+  constant_force[dim - 1] = -1.e-4;
 
   solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
     return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(x)};
@@ -252,8 +254,6 @@ int main(int argc, char* argv[])
   ess_bdr_marker = 0;
   ess_bdr_marker[5] = 1;
   states[FIELD::DISP].space().GetEssentialTrueDofs(ess_bdr_marker, ess_disp_tdof_list);
-  mfem::Vector uDC(states[FIELD::DISP].space().GetTrueVSize());
-  uDC = 0.0;
   auto applied_displacement = [](smith::tensor<double, dim> /*x*/) {
     smith::tensor<double, dim> u{};
     u[0] = 0.0;
@@ -262,23 +262,30 @@ int main(int argc, char* argv[])
     return u;
   };
   states[FIELD::DISP].setFromFieldFunction(applied_displacement);
+  mfem::Vector uDC(states[FIELD::DISP].space().GetTrueVSize());
+  uDC = 0.0;
   uDC.Set(1.0, states[FIELD::DISP]);
 
+  // define tied contact problem
   TiedContactProblem<SolidWeakFormT> problem(contact_state_ptrs, residual_state_ptrs, mesh, solid_mechanics_weak_form,
                                              contact_constraint, ess_fixed_tdof_list, ess_disp_tdof_list, uDC);
-  double nonlinear_absolute_tol = 1.e-6;
-  int nonlinear_max_iterations = 30;
-  int nonlinear_print_level = 1;
   // optimization variables
   auto X0 = problem.GetOptimizationVariable();
   auto Xf = problem.GetOptimizationVariable();
 
+  // set optimization parameters
+  double nonlinear_absolute_tol = 1.e-6;
+  int nonlinear_max_iterations = 30;
+  int nonlinear_print_level = 1;
+
+  // setup Homotopy solver
   HomotopySolver solver(&problem);
   solver.SetTol(nonlinear_absolute_tol);
   solver.SetMaxIter(nonlinear_max_iterations);
   solver.SetPrintLevel(nonlinear_print_level);
   solver.EnableRegularizedNewtonMode();
   solver.EnableSaveIterates();
+  // solve tied contact problem via Homotopy solver
   solver.Mult(X0, Xf);
   bool converged = solver.GetConverged();
   SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
