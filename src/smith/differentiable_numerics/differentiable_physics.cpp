@@ -4,6 +4,7 @@
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
+#include "gretl/data_store.hpp"
 
 namespace smith {
 

@@ -8,7 +8,7 @@ if (SMITH_ENABLE_CONTINUATION AND STRUMPACK_DIR)
     smith_add_executable( NAME        inertia_relief_example
                           SOURCES     inertia_relief_example.cpp
                           OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                          DEPENDS_ON  smith_physics continuation_solver
+                          DEPENDS_ON  smith continuation_solver
                           )
     smith_add_example_test(NAME            inertia_relief
                            COMMAND         inertia_relief_example

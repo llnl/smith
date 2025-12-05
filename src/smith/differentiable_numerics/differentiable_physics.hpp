@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "gretl/src/data_store.hpp"
+#include "gretl/data_store.hpp"
 #include "smith/physics/base_physics.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include <vector>
