@@ -109,6 +109,14 @@ const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_nam
   size_t reaction_index = reaction_name_to_resultant_index_.at(dual_name);
   SLIC_ERROR_IF(reaction_index >= reaction_names_.size(),
                 "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
+
+  if (resultant_states.size() <= reaction_index) {
+    resultant_states.resize(reaction_index+1);
+  }
+
+  TimeInfo time_info(time_, dt, static_cast<size_t>(cycle_)--);
+  resultant_states[reaction_index] = reactions_.evaluate(
+
   return *resultant_states_[0].get();
 
 }

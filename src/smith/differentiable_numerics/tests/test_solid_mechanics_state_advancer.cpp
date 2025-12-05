@@ -107,8 +107,8 @@ TEST_F(SolidMechanicsMeshFixture, Test)
 
   // add names for params.
   // resultant. reaction.
-  // warm-start
-  // implicit Newmark
+  // warm-start.
+  // implicit Newmark.
 
   auto [physics, weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
