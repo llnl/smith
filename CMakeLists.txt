@@ -215,13 +215,13 @@ if (SMITH_ENABLE_CODEVELOP)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/axom/src>
     )
 
-    install(TARGETS              mfem ${axom_exported_targets} ${tribol_exported_targets} gretl
+    install(TARGETS              mfem ${axom_exported_targets} ${tribol_exported_targets}
             EXPORT               smith-targets
             DESTINATION          lib
             )
 endif()
 
-install(EXPORT smith-targets 
+install(EXPORT smith-targets
         NAMESPACE smith::
         DESTINATION lib/cmake
         )
