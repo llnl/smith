@@ -13,13 +13,14 @@
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "smith/physics/materials/parameterized_solid_material.hpp"
 
-#include "smith/differentiable_numerics/differentiable_utils.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
+#include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/tests/paraview_helper.hpp"
+#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
 namespace smith {
 
@@ -70,7 +71,8 @@ struct SolidMechanicsMeshFixture : public testing::Test {
 template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
 auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
                          std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
-                         smith::SecondOrderTimeIntegrationRule time_rule, std::string physics_name, const std::vector<std::string>& param_names={})
+                         smith::SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+                         const std::vector<std::string>& param_names = {})
 {
   auto graph = std::make_shared<gretl::DataStore>(100);
   auto [shape_disp, states, params, time, solid_mechanics_weak_form] =
@@ -82,22 +84,22 @@ auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
 
   auto solid_mech_advancer = std::make_shared<SolidMechanicsStateAdvancer>(d_solid_nonlinear_solver, vector_bcs,
                                                                            solid_mechanics_weak_form, time_rule);
+
+  auto reaction = std::make_shared<Reaction>(solid_mechanics_weak_form, vector_bcs, 0, "reaction");
+  std::vector<std::shared_ptr<Reaction>> reactions{reaction};
+  
   auto physics = std::make_shared<DifferentiablePhysics>(mesh, graph, shape_disp, states, params, solid_mech_advancer,
-                                                         physics_name);
+                                                         physics_name, reactions);
 
   return std::make_tuple(physics, solid_mechanics_weak_form, vector_bcs);
 }
-
-
-
-
 
 TEST_F(SolidMechanicsMeshFixture, Test)
 {
   SMITH_MARK_FUNCTION;
 
   std::string physics_name = "solid";
-  
+
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
       buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
@@ -108,7 +110,7 @@ TEST_F(SolidMechanicsMeshFixture, Test)
   // warm-start
   // implicit Newmark
 
-  auto [physics, weak_form, bcs] = 
+  auto [physics, weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
           mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
 
@@ -158,6 +160,10 @@ TEST_F(SolidMechanicsMeshFixture, Test)
     physics->advanceTimestep(time_increment);
     pv_writer.write(m + 1, physics->time(), physics->getAllFieldStates());
   }
+
+
+  //auto nodal_reaction_forces = reaction.evaluate(time_info, shape_disp, physics->getAllFieldStates());
+  //auto disp_squared = innerProduct(nodal_reaction_forces, nodal_reaction_forces);
 
   auto objective = std::make_shared<smith::FunctionalObjective<dim, Parameters<VectorSpace> > >(
       "integrated_squared_temperature", mesh, spaces({states[SolidMechanicsStateAdvancer::DISPLACEMENT]}));

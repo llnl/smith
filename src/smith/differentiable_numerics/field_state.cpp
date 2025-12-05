@@ -20,12 +20,24 @@ FieldState square(const FieldState& state)
       state);
 }
 
-gretl::State<double> inner_product(const FieldState& a, const FieldState& b)
+gretl::State<double> innerProduct(const FieldState& a, const FieldState& b)
 {
   return gretl::create_state<double, double>(
       gretl::defaultInitializeZeroDual<double, double>(),
       [](FEFieldPtr A, FEFieldPtr B) { return smith::innerProduct(*A, *B); },
       [](FEFieldPtr A, FEFieldPtr B, double, FEDualPtr& A_, FEDualPtr& B_, double product_) {
+        A_->Add(product_, *B);
+        B_->Add(product_, *A);
+      },
+      a, b);
+}
+
+gretl::State<double> innerProduct(const ResultantState& a, const ResultantState& b)
+{
+  return gretl::create_state<double, double>(
+      gretl::defaultInitializeZeroDual<double, double>(),
+      [](FEDualPtr A, FEDualPtr B) { return smith::innerProduct(*A, *B); },
+      [](FEDualPtr A, FEDualPtr B, double, FEFieldPtr& A_, FEFieldPtr& B_, double product_) {
         A_->Add(product_, *B);
         B_->Add(product_, *A);
       },

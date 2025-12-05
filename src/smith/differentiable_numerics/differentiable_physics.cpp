@@ -32,10 +32,11 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
                                              const FieldState& shape_disp, const std::vector<FieldState>& states,
                                              const std::vector<FieldState>& params,
                                              std::shared_ptr<StateAdvancer> advancer, std::string mech_name,
-                                             std::vector<std::shared_ptr<Reaction>> reactions)
+                                             const std::vector<std::shared_ptr<Reaction>>& reactions)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
-      advancer_(advancer)
+      advancer_(advancer),
+      reactions_(reactions)
 {
   SLIC_ERROR_IF(states.size() == 0, "Must have a least 1 state for a mechanics.");
   field_shape_displacement_ = std::make_unique<FieldState>(shape_disp);
@@ -44,14 +45,19 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
     field_states_.push_back(s);
     initial_field_states_.push_back(s);
     state_name_to_field_index_[s.get()->name()] = i;
-    state_names.push_back(s.get()->name());
+    state_names_.push_back(s.get()->name());
   }
 
   for (size_t i = 0; i < params.size(); ++i) {
     const auto& p = params[i];
     field_params_.push_back(p);
     param_name_to_field_index_[p.get()->name()] = i;
-    param_names.push_back(p.get()->name());
+    param_names_.push_back(p.get()->name());
+  }
+
+  for (size_t i=0; i < reactions_.size(); ++i) {
+    reaction_names_.push_back(reactions_[i]->name());
+    reaction_name_to_resultant_index_[reactions_[i]->name()] = i;
   }
 
   completeSetup();
@@ -80,9 +86,9 @@ void DifferentiablePhysics::resetAdjointStates()
   gretl_assert(checkpointer_->check_validity());
 }
 
-std::vector<std::string> DifferentiablePhysics::stateNames() const { return state_names; }
+std::vector<std::string> DifferentiablePhysics::stateNames() const { return state_names_; }
 
-std::vector<std::string> DifferentiablePhysics::parameterNames() const { return param_names; }
+std::vector<std::string> DifferentiablePhysics::parameterNames() const { return param_names_; }
 
 const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const std::string& field_name) const
 {
@@ -93,6 +99,18 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
   SLIC_ERROR_IF(state_index >= field_states_.size(),
                 "Field states not correctly allocated yet, cannot get state until after initializationStep is called.");
   return *field_states_[state_index].get();
+}
+
+const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_name) const
+{
+  SLIC_ERROR_IF(
+      reaction_name_to_resultant_index_.find(dual_name) == reaction_name_to_resultant_index_.end(),
+      axom::fmt::format("Could not find dual named {0} in mesh with tag \"{1}\" to get", dual_name, mesh_->tag()));
+  size_t reaction_index = reaction_name_to_resultant_index_.at(dual_name);
+  SLIC_ERROR_IF(reaction_index >= reaction_names_.size(),
+                "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
+  return *resultant_states_[0].get();
+
 }
 
 FiniteElementState DifferentiablePhysics::loadCheckpointedState(const std::string& state_name, int cycle)

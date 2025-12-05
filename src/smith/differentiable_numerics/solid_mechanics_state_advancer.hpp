@@ -43,7 +43,9 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   };
 
   template <typename FirstParamSpace, typename... ParamSpaces>
-  static std::vector<FieldState> createParams(gretl::DataStore& graph, const std::string& name, const std::vector<std::string>& param_names, const std::string& tag, size_t index = 0)
+  static std::vector<FieldState> createParams(gretl::DataStore& graph, const std::string& name,
+                                              const std::vector<std::string>& param_names, const std::string& tag,
+                                              size_t index = 0)
   {
     FieldState newParam = create_field_state(graph, FirstParamSpace{}, name + "_" + param_names[index], tag);
     std::vector<FieldState> end_spaces{};
@@ -55,16 +57,17 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   }
 
   template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
-  static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh,
-                                     const std::shared_ptr<gretl::DataStore>& graph,
-                                     SecondOrderTimeIntegrationRule time_rule, std::string physics_name, const std::vector<std::string>& param_names, double initial_time = 0.0)
+  static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<gretl::DataStore>& graph,
+                                     SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+                                     const std::vector<std::string>& param_names, double initial_time = 0.0)
   {
     auto shape_disp = create_field_state(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
     auto disp = create_field_state(*graph, VectorSpace{}, physics_name + "_displacement", mesh->tag());
     auto velo = create_field_state(*graph, VectorSpace{}, physics_name + "_velocity", mesh->tag());
     auto acceleration = create_field_state(*graph, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
     auto time = graph->create_state<double, double>(initial_time);
-    std::vector<FieldState> params = createParams<ParamSpaces...>(*graph, physics_name + "_param", param_names, mesh->tag());
+    std::vector<FieldState> params =
+        createParams<ParamSpaces...>(*graph, physics_name + "_param", param_names, mesh->tag());
     std::vector<FieldState> states{disp, velo, acceleration};
 
     // weak form unknowns are disp, disp_old, velo_old, accel_old

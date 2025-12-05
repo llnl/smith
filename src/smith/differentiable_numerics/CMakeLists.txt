@@ -18,15 +18,15 @@ set(differentiable_numerics_sources
 set(differentiable_numerics_headers
     field_state.hpp
     state_advancer.hpp
+    reaction.hpp
+    differentiable_solver.hpp
+    differentiable_physics.hpp
+    differentiable_test_utils.hpp
     timestep_estimator.hpp
     explicit_dynamic_solve.hpp
-    reaction.hpp
     lumped_mass_weak_form.hpp
-    differentiable_utils.hpp
-    differentiable_physics.hpp
     lumped_mass_explicit_newmark_state_advancer.hpp
     solid_mechanics_state_advancer.hpp
-    differentiable_solver.hpp
     nonlinear_solve.hpp
     dirichlet_boundary_conditions.hpp
     time_integration_rule.hpp

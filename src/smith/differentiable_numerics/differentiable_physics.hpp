@@ -36,7 +36,7 @@ class DifferentiablePhysics : public BasePhysics {
   DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                         const FieldState& shape_disp, const std::vector<FieldState>& states,
                         const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer,
-                        std::string mech_name, std::vector<std::shared_ptr<Reaction>> reactions={});
+                        std::string physics_name, const std::vector<std::shared_ptr<Reaction>>& reactions = {});
   /// @brief destructor
   ~DifferentiablePhysics() {}
 
@@ -57,6 +57,9 @@ class DifferentiablePhysics : public BasePhysics {
 
   /// @overload
   const FiniteElementState& state(const std::string& state_name) const override;
+
+  /// @overload
+  const FiniteElementDual& dual(const std::string& dual_name) const override;
 
   /// @overload
   FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle) override;
@@ -102,20 +105,20 @@ class DifferentiablePhysics : public BasePhysics {
       const override;
 
   /// @brief Get all the FieldStates... states first, parameters next
-  std::vector<FieldState> getInitialFieldStates() const {
-    return initial_field_states_;
-  }
+  std::vector<FieldState> getInitialFieldStates() const { return initial_field_states_; }
 
   /// @brief Get all the parameter FieldStates
-  std::vector<FieldState> getFieldParams() const {
-    return field_params_;
-  }
+  std::vector<FieldState> getFieldParams() const { return field_params_; }
 
   /// @brief Get all the FieldStates... states first, parameters next
   std::vector<FieldState> getAllFieldStates() const;
 
   /// @brief Get the shape displacement FieldState
   FieldState getShapeDispFieldState() const;
+
+  std::vector<ResultantState> getResultantStates() const {
+    return resultant_states_;
+  }
 
   std::shared_ptr<gretl::DataStore> checkpointer_;  ///< gretl data store manages dynamic checkpointing logic
   std::shared_ptr<StateAdvancer> advancer_;  ///< abstract interface for advancing state from one cycle to the next
@@ -129,8 +132,13 @@ class DifferentiablePhysics : public BasePhysics {
 
   std::map<std::string, size_t> state_name_to_field_index_;  ///< map from state names to field index
   std::map<std::string, size_t> param_name_to_field_index_;  ///< map from param names to param index
-  std::vector<std::string> state_names;                      ///< names of all the states in order
-  std::vector<std::string> param_names;                      ///< names of all the states in order
+  std::vector<std::string> state_names_;                      ///< names of all the states in order
+  std::vector<std::string> param_names_;                      ///< names of all the states in order
+
+  std::vector<ResultantState> resultant_states_;                   ///< all the resultants registered for the physics
+  std::vector<std::shared_ptr<Reaction>> reactions_;               ///< all the resultants registered for the physics
+  std::map<std::string, size_t> reaction_name_to_resultant_index_; ///< map from reaction names to resultant index
+  std::vector<std::string> reaction_names_;
 
   std::vector<gretl::Int> milestones_;  ///< a record of the steps in the graph that represent the end conditions of
                                         ///< advanceTimestep(dt). this information is used to halt the gretl graph when

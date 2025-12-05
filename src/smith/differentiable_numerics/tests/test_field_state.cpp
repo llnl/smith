@@ -5,7 +5,7 @@
 
 #include "gretl/src/data_store.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
-#include "smith/differentiable_numerics/differentiable_utils.hpp"
+#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
 // This tests the interface between the new smith::WeakForm with gretl and its conformity to the existing base_physics
 // interface
@@ -80,8 +80,8 @@ TEST_F(MeshFixture, FieldStateWithDifferentiable_axpby)
   auto u = axpby(dt, disp, dt, velo);
   auto u_exact = axpby(dt_f, disp, dt_f, velo);
 
-  auto uu_exact = smith::inner_product(u_exact, u_exact);
-  auto uu = smith::inner_product(u, u);
+  auto uu_exact = smith::innerProduct(u_exact, u_exact);
+  auto uu = smith::innerProduct(u, u);
   gretl::set_as_objective(uu);
 
   EXPECT_EQ(uu.get(), uu_exact.get());
@@ -125,8 +125,8 @@ TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
   u_exact = axpby(2.0, velo, -2.0, u_exact);
   u_exact = axpby(initial_dt * initial_h, u_exact, 0.0, u_exact);
 
-  auto uu_exact = smith::inner_product(u_exact, u_exact);
-  auto uu = smith::inner_product(u, u);
+  auto uu_exact = smith::innerProduct(u_exact, u_exact);
+  auto uu = smith::innerProduct(u, u);
 
   gretl::set_as_objective(uu);
 
