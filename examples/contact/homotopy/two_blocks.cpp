@@ -150,7 +150,6 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const smi
   return ParaviewWriter(std::move(paraview_dc), output_states, {});
 }
 
-// this example is intended to eventually replace twist.cpp
 int main(int argc, char* argv[])
 {
   // Initialize and automatically finalize MPI and other libraries
@@ -242,7 +241,7 @@ int main(int argc, char* argv[])
   auto residual_state_ptrs = smith::getFieldPointers(states, params);
   auto contact_state_ptrs = smith::getFieldPointers(contact_states);
 
-  // homogeneous Dirichlet boundary conditions
+  // Dirichlet boundary conditions
   mfem::Array<int> ess_fixed_tdof_list;
   mfem::Array<int> ess_disp_tdof_list;
   mfem::Array<int> ess_bdr_marker(mesh->mfemParMesh().bdr_attributes.Max());
