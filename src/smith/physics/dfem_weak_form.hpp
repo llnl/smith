@@ -247,39 +247,31 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  void vjp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
-           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, const std::vector<ConstFieldPtr>& /*v_fields*/,
-           DualFieldPtr /*vjp_shape_disp_sensitivity*/, const std::vector<DualFieldPtr>& /*vjp_sensitivities*/,
+  void vjp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& fields,
+           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, const std::vector<ConstFieldPtr>& v_fields,
+           DualFieldPtr /*vjp_shape_disp_sensitivity*/, const std::vector<DualFieldPtr>& vjp_sensitivities,
            const std::vector<QuadratureFieldPtr>& /*vjp_quad_field_sensitivities*/) const override
   {
-    SLIC_ERROR_ROOT("DfemWeakForm does not support vjp calculations");
-
-    // SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
-    //               "Invalid number of field sensitivities relative to the number of fields");
-    // SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
+    SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
+                  "Invalid number of field sensitivities relative to the number of fields");
+    SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
 
     dt_ = dt;
 
-    // TODO (EBC): add in a future PR...
-    // std::vector<mfem::Vector*> test_par_gf({&v_fields[0]->gridFunction()});
-    // std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
-    // // field_par_gf.push_back(&v_fields[0]->gridFunction());
+    std::vector<mfem::Vector*> test_par_gf({&v_fields[0]->gridFunction()});
+    std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
+    // field_par_gf.push_back(&v_fields[0]->gridFunction());
 
-    // for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
-    //   if (vjp_sensitivities[input_col] != nullptr) {
-    //     auto deriv_op = v_dot_weak_form_residual_.GetDerivative(input_col, test_par_gf, field_par_gf);
-    //     // do this entry by entry until assembly is supported
-    //     mfem::Vector direction(vjp_sensitivities[input_col]->Size());
-    //     direction = 0.0;
-    //     for (int i = 0; i < vjp_sensitivities[input_col]->Size(); ++i) {
-    //       direction[i] = 1.0;
-    //       mfem::Vector value(1);
-    //       deriv_op->Mult(direction, value);
-    //       (*vjp_sensitivities[input_col])[i] += value[0];
-    //       direction[i] = 0.0;
-    //     }
-    //   }
-    // }
+    for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
+      if (vjp_sensitivities[input_col] != nullptr) {
+        auto deriv_op = v_dot_weak_form_residual_.GetDerivative(input_col, test_par_gf, field_par_gf);
+        mfem::Vector vec_jac_mfem_vector(vjp_sensitivities[input_col]->Size());
+        vec_jac_mfem_vector = 0.0;
+        // NOTE: this is happening entry by entry inside this (temporary) dfem function
+        deriv_op->Assemble(vec_jac_mfem_vector);
+        (*vjp_sensitivities[input_col]) += vec_jac_mfem_vector;
+      }
+    }
   }
 
  protected:
