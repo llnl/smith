@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file boundary_conditions.hpp
+ * @file dirichlet_boundary_conditions.hpp
  *
  * @brief Contains DirichletBoundaryConditions class for interaction with the differentiable solve interfaces
  */

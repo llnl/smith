@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file differentiable_solve.hpp
+ * @file differentiable_solver.hpp
  *
  * @brief This file contains the declaration of the DifferentiableSolver interface
  */
@@ -31,6 +31,8 @@ class Mesh;
 struct NonlinearSolverOptions;
 struct LinearSolverOptions;
 
+
+/// @brief Abstract interface to DifferentiableSolver inteface.  Each dfferenriable solve should provide both its forward solve and an adjoint solve
 class DifferentiableSolver {
  public:
   virtual ~DifferentiableSolver() {}

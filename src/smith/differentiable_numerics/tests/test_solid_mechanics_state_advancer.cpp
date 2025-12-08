@@ -82,10 +82,10 @@ auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
       mesh->mfemParMesh(), space(states[SolidMechanicsStateAdvancer::DISPLACEMENT]));
 
   auto state_advancer = std::make_shared<SolidMechanicsStateAdvancer>(d_solid_nonlinear_solver, vector_bcs,
-                                                                           solid_mechanics_weak_form, time_rule);
+                                                                      solid_mechanics_weak_form, time_rule);
 
-  auto physics = std::make_shared<DifferentiablePhysics>(mesh, graph, shape_disp, states, params, state_advancer,
-                                                         physics_name);
+  auto physics =
+      std::make_shared<DifferentiablePhysics>(mesh, graph, shape_disp, states, params, state_advancer, physics_name);
 
   return std::make_tuple(physics, solid_mechanics_weak_form, vector_bcs);
 }
@@ -155,27 +155,28 @@ TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
     pv_writer.write(m + 1, physics->time(), physics->getFieldStatesAndParamStates());
   }
 
-  TimeInfo time_info(physics->time()-time_increment, time_increment);
+  TimeInfo time_info(physics->time() - time_increment, time_increment);
 
   auto final_states = physics->getFieldStates();
   auto previous_to_final_states = physics->getFieldStatesOld();
 
   auto state_advancer = physics->getStateAdvancer();
   printf("a\n");
-  auto reactions = state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
+  auto reactions =
+      state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
   printf("b\n");
   auto disp_squared = innerProduct(reactions[0], reactions[0]);
 
-  //serac::FiniteElementDual physics->dual("reaction");
-  // auto objective = std::make_shared<smith::FunctionalObjective<dim, Parameters<VectorSpace>>>(
-  //     "integrated_squared_temperature", mesh, spaces({states[SolidMechanicsStateAdvancer::DISPLACEMENT]}));
-  // objective->addBodyIntegral(smith::DependsOn<0>(), mesh->entireBodyName(), [](auto /*t*/, auto /*X*/, auto U) {
-  //   auto u = get<VALUE>(U);
-  //   return smith::inner(u, u);
-  // });
-  // auto final_states = physics->getFieldStatesAndParamStates();
-  // DoubleState disp_squared =
-  //     smith::evaluateObjective(objective, shape_disp, {final_states[SolidMechanicsStateAdvancer::DISPLACEMENT]});
+  // serac::FiniteElementDual physics->dual("reaction");
+  //  auto objective = std::make_shared<smith::FunctionalObjective<dim, Parameters<VectorSpace>>>(
+  //      "integrated_squared_temperature", mesh, spaces({states[SolidMechanicsStateAdvancer::DISPLACEMENT]}));
+  //  objective->addBodyIntegral(smith::DependsOn<0>(), mesh->entireBodyName(), [](auto /*t*/, auto /*X*/, auto U) {
+  //    auto u = get<VALUE>(U);
+  //    return smith::inner(u, u);
+  //  });
+  //  auto final_states = physics->getFieldStatesAndParamStates();
+  //  DoubleState disp_squared =
+  //      smith::evaluateObjective(objective, shape_disp, {final_states[SolidMechanicsStateAdvancer::DISPLACEMENT]});
 
   gretl::set_as_objective(disp_squared);
   std::cout << "final disp norm2 = " << disp_squared.get() << std::endl;

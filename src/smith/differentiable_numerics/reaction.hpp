@@ -21,8 +21,11 @@ namespace smith {
 
 /// @brief gretl-function implementation which evaluates the residual force (which is minus the mechanical force)
 /// given
-/// shape displacement, states and params.  The field_for_residual_space Field is only used to set the approriate size (mfem::ParFiniteElementSpace) for the residual field so it can be returned as a ResultantState
-inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const TimeInfo& time_info, FieldState shape_disp, const std::vector<FieldState>& field_states, FieldState field_for_residual_space)
+/// shape displacement, states and params.  The field_for_residual_space Field is only used to set the approriate size
+/// (mfem::ParFiniteElementSpace) for the residual field so it can be returned as a ResultantState
+inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const TimeInfo& time_info,
+                             FieldState shape_disp, const std::vector<FieldState>& field_states,
+                             FieldState field_for_residual_space)
 {
   std::vector<gretl::StateBase> all_state_bases{shape_disp};
   for (auto& f : field_states) all_state_bases.push_back(f);
@@ -33,13 +36,13 @@ inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const T
   z.set_eval([=](const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) {
     SMITH_MARK_FUNCTION;
 
-    size_t num_fields = inputs.size()-2;
+    size_t num_fields = inputs.size() - 2;
     ConstFieldPtr shape_disp_ = inputs[0].get<FEFieldPtr>().get();
     std::vector<ConstFieldPtr> fields(num_fields);
     for (size_t field_index = 0; field_index < num_fields; ++field_index) {
-      fields[field_index] = inputs[field_index+1].get<FEFieldPtr>().get();
+      fields[field_index] = inputs[field_index + 1].get<FEFieldPtr>().get();
     }
-    ConstFieldPtr field_for_residual_space = inputs[num_fields+1].get<FEFieldPtr>().get();
+    ConstFieldPtr field_for_residual_space = inputs[num_fields + 1].get<FEFieldPtr>().get();
 
     FEDualPtr R = std::make_shared<FiniteElementDual>(field_for_residual_space->space(),
                                                       "residual");  // set up output pointer
@@ -63,23 +66,22 @@ inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const T
     FiniteElementState Z_dual_state(Z_dual->space(), Z_dual->name());
     Z_dual_state = *Z_dual;
 
-    size_t num_fields = inputs.size()-2;
+    size_t num_fields = inputs.size() - 2;
     std::vector<ConstFieldPtr> fields(num_fields);
     for (size_t field_index = 0; field_index < num_fields; ++field_index) {
-      fields[field_index] = inputs[field_index+1].get<FEFieldPtr>().get();
+      fields[field_index] = inputs[field_index + 1].get<FEFieldPtr>().get();
     }
 
     std::vector<DualFieldPtr> field_sensitivities(num_fields);
     for (size_t field_index = 0; field_index < num_fields; ++field_index) {
-      field_sensitivities[field_index] = inputs[field_index+1].get_dual<FEDualPtr, FEFieldPtr>().get();
+      field_sensitivities[field_index] = inputs[field_index + 1].get_dual<FEDualPtr, FEFieldPtr>().get();
     }
 
     ConstFieldPtr shape_disp = inputs[0].get<FEFieldPtr>().get();
     DualFieldPtr shape_disp_sensitivity = inputs[0].get_dual<FEDualPtr, FEFieldPtr>().get();
 
     // set the dual fields for each input, using the call to residual that pulls the derivative
-    weak_form->vjp(time_info, shape_disp, fields, {}, &Z_dual_state, shape_disp_sensitivity,
-                    field_sensitivities, {});
+    weak_form->vjp(time_info, shape_disp, fields, {}, &Z_dual_state, shape_disp_sensitivity, field_sensitivities, {});
   });
 
   return z.finalize();
@@ -100,7 +102,8 @@ inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const T
 //   /// given
 //   /// shape displacement, states and params.  The inertial index denotes which index in the state corresponds to the
 //   /// highest time derivative term (e.g., acceleration for solid mechanics).
-//   inline ResultantState evaluate(TimeInfo time_info, FieldState shape_disp, const std::vector<FieldState>& field_states)
+//   inline ResultantState evaluate(TimeInfo time_info, FieldState shape_disp, const std::vector<FieldState>&
+//   field_states)
 //   {
 //     size_t field_index_for_residual_size = index_of_field_with_residual_space_;
 //     std::shared_ptr<WeakForm> weak_form = weak_form_;
@@ -110,7 +113,8 @@ inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const T
 //     std::vector<gretl::StateBase> all_state_bases{shape_disp};
 //     for (auto& f : field_states) all_state_bases.push_back(f);
 
-//     std::cout << "all state, all field states = " << all_state_bases.size() << " " << field_states.size() << std::endl;
+//     std::cout << "all state, all field states = " << all_state_bases.size() << " " << field_states.size() <<
+//     std::endl;
 
 //     printf("a\n");
 

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file nonlinear_system.hpp
+ * @file nonlinear_solve.hpp
  *
  * @brief Specifies parametrized residuals and various linearized evaluations for arbitrary nonlinear systems of
  * equations
