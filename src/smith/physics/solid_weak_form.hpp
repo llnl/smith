@@ -59,7 +59,7 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
    * @brief Construct a new SolidWeakForm object
    *
    * @param physics_name A name for the physics module instance
-   * @param mesh The smith Mesh
+   * @param mesh The Smith Mesh
    * @param test_space Test space
    * @param parameter_fe_spaces Vector of parameters spaces
    */
