@@ -74,7 +74,7 @@ class Reaction {
 
       size_t num_fields = inputs.size();
       std::vector<ConstFieldPtr> fields;
-      fields.reserve(num_fields-1);  // set up fields vector
+      fields.reserve(num_fields - 1);  // set up fields vector
 
       printf("d\n");
 
@@ -110,7 +110,7 @@ class Reaction {
       // get the input values and store them in corrected_fields
       size_t num_fields = inputs.size();
       std::vector<ConstFieldPtr> fields;
-      fields.reserve(num_fields-1);  // set up fields vector
+      fields.reserve(num_fields - 1);  // set up fields vector
       for (size_t field_index = 1; field_index < num_fields; ++field_index) {
         fields.push_back(inputs[field_index].get<FEFieldPtr>().get());
       }

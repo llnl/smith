@@ -105,12 +105,6 @@ FieldState nonlinearSolve(const WeakForm* residual_eval, const FieldState& shape
             }
           }
 
-          std::cout << "time info = " << time_info.time() << std::endl;
-          std::cout << "num fields = " << corrected_fields.size() << std::endl;
-          std::cout << "shape disp name = " << shape_disp_ptr.get()->name() << std::endl;
-          for (auto& f : getConstFieldPointers(corrected_fields)) {
-            std::cout << "name = " << f->name() << std::endl;
-          }
           auto r = residual_eval->residual(time_info, shape_disp_ptr.get(), getConstFieldPointers(corrected_fields));
 
           if (bc_manager) {

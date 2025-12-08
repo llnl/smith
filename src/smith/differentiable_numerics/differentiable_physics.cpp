@@ -1,4 +1,4 @@
-#include "gretl/src/data_store.hpp"
+#include "gretl/data_store.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
@@ -32,12 +32,10 @@ gretl::State<int> make_milestone(const std::vector<FieldState>& states)
 DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                                              const FieldState& shape_disp, const std::vector<FieldState>& states,
                                              const std::vector<FieldState>& params,
-                                             std::shared_ptr<StateAdvancer> advancer, std::string mech_name,
-                                             const std::vector<std::shared_ptr<Reaction>>& reactions)
+                                             std::shared_ptr<StateAdvancer> advancer, std::string mech_name)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
-      advancer_(advancer),
-      reactions_(reactions)
+      advancer_(advancer)
 {
   SLIC_ERROR_IF(states.size() == 0, "Must have a least 1 state for a mechanics.");
   field_shape_displacement_ = std::make_unique<FieldState>(shape_disp);
@@ -54,11 +52,6 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
     field_params_.push_back(p);
     param_name_to_field_index_[p.get()->name()] = i;
     param_names_.push_back(p.get()->name());
-  }
-
-  for (size_t i=0; i < reactions_.size(); ++i) {
-    reaction_names_.push_back(reactions_[i]->name());
-    reaction_name_to_resultant_index_[reactions_[i]->name()] = i;
   }
 
   completeSetup();
@@ -91,6 +84,8 @@ std::vector<std::string> DifferentiablePhysics::stateNames() const { return stat
 
 std::vector<std::string> DifferentiablePhysics::parameterNames() const { return param_names_; }
 
+std::vector<std::string> DifferentiablePhysics::dualNames() const { return resultant_names_; }
+
 const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const std::string& field_name) const
 {
   SLIC_ERROR_IF(
@@ -105,21 +100,16 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
 const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_name) const
 {
   SLIC_ERROR_IF(
-      reaction_name_to_resultant_index_.find(dual_name) == reaction_name_to_resultant_index_.end(),
+      resultant_name_to_resultant_index_.find(dual_name) == resultant_name_to_resultant_index_.end(),
       axom::fmt::format("Could not find dual named {0} in mesh with tag \"{1}\" to get", dual_name, mesh_->tag()));
-  size_t reaction_index = reaction_name_to_resultant_index_.at(dual_name);
-  SLIC_ERROR_IF(reaction_index >= reaction_names_.size(),
-                "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
+  size_t reaction_index = resultant_name_to_resultant_index_.at(dual_name);
+  SLIC_ERROR_IF(
+      reaction_index >= resultant_names_.size(),
+      "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
 
-  if (resultant_states.size() <= reaction_index) {
-    resultant_states.resize(reaction_index+1);
-  }
-
-  TimeInfo time_info(time_, dt, static_cast<size_t>(cycle_)--);
-  resultant_states[reaction_index] = reactions_.evaluate(
-
-  return *resultant_states_[0].get();
-
+  TimeInfo time_info(time_old_, dt_old_, static_cast<size_t>(cycle_old_));
+  resultant_states_ = advancer_->computeResultants(*field_shape_displacement_, field_states_, field_states_old_, field_params_, time_info);
+  return *resultant_states_[reaction_index].get();
 }
 
 FiniteElementState DifferentiablePhysics::loadCheckpointedState(const std::string& state_name, int cycle)
@@ -199,8 +189,14 @@ void DifferentiablePhysics::advanceTimestep(double dt)
     milestones_.push_back(make_milestone(field_states_).step());
   }
 
+  field_states_old_ = field_states_;
+  cycle_old_ = cycle_;
+  time_old_ = time_;
+  dt_old_ = dt;
+
   TimeInfo time_info(time_, dt, static_cast<size_t>(cycle_));
-  field_states_ = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_, time_info);
+  field_states_ =
+      advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_, time_info);
 
   cycle_++;
   time_ += dt;

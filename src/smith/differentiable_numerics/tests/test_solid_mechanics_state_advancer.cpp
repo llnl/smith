@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "gretl/src/data_store.hpp"
+#include "gretl/data_store.hpp"
 
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
@@ -87,9 +87,9 @@ auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
 
   auto reaction = std::make_shared<Reaction>(solid_mechanics_weak_form, vector_bcs, 0, "reaction");
   std::vector<std::shared_ptr<Reaction>> reactions{reaction};
-  
+
   auto physics = std::make_shared<DifferentiablePhysics>(mesh, graph, shape_disp, states, params, solid_mech_advancer,
-                                                         physics_name, reactions);
+                                                         physics_name);
 
   return std::make_tuple(physics, solid_mechanics_weak_form, vector_bcs);
 }
@@ -161,11 +161,10 @@ TEST_F(SolidMechanicsMeshFixture, Test)
     pv_writer.write(m + 1, physics->time(), physics->getAllFieldStates());
   }
 
+  // auto nodal_reaction_forces = reaction.evaluate(time_info, shape_disp, physics->getAllFieldStates());
+  // auto disp_squared = innerProduct(nodal_reaction_forces, nodal_reaction_forces);
 
-  //auto nodal_reaction_forces = reaction.evaluate(time_info, shape_disp, physics->getAllFieldStates());
-  //auto disp_squared = innerProduct(nodal_reaction_forces, nodal_reaction_forces);
-
-  auto objective = std::make_shared<smith::FunctionalObjective<dim, Parameters<VectorSpace> > >(
+  auto objective = std::make_shared<smith::FunctionalObjective<dim, Parameters<VectorSpace>>>(
       "integrated_squared_temperature", mesh, spaces({states[SolidMechanicsStateAdvancer::DISPLACEMENT]}));
   objective->addBodyIntegral(smith::DependsOn<0>(), mesh->entireBodyName(), [](auto /*t*/, auto /*X*/, auto U) {
     auto u = get<VALUE>(U);

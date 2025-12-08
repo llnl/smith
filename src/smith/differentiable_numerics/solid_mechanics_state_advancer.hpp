@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include "gretl/src/data_store.hpp"
+#include "gretl/data_store.hpp"
 #include "smith/smith_config.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
