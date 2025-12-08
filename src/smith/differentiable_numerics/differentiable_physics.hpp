@@ -106,6 +106,7 @@ class DifferentiablePhysics : public BasePhysics {
   /// @brief Get the shape displacement FieldState
   FieldState getShapeDispFieldState() const;
 
+ private:
   std::shared_ptr<gretl::DataStore> checkpointer_;  ///< gretl data store manages dynamic checkpointing logic
   std::shared_ptr<StateAdvancer> advancer_;  ///< abstract interface for advancing state from one cycle to the next
 
@@ -125,8 +126,6 @@ class DifferentiablePhysics : public BasePhysics {
                                         ///< advanceTimestep(dt). this information is used to halt the gretl graph when
                                         ///< back-propagating to allow users of reverseAdjointTimestep to specify
                                         ///< adjoint loads and to retrieve timestep sensitivity information.
-
-  size_t sub_cycle_;  ///< counts all calls to state advancer's advance step (on the forward pass)
 };
 
 }  // namespace smith
