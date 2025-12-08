@@ -3,6 +3,7 @@
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
+#include "smith/differentiable_numerics/reaction.hpp"
 
 namespace smith {
 
@@ -44,6 +45,15 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const FieldSta
                                                       states_old[VELOCITY], states_old[ACCELERATION]);
 
   return states;
+}
+
+std::vector<ResultantState> SolidMechanicsStateAdvancer::computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
+                                                                           const std::vector<FieldState>& states_old,
+                                                                           const std::vector<FieldState>& params, const TimeInfo& time_info) const
+{
+  std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY], states_old[ACCELERATION]};
+  solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
+  return {evaluateWeakForm(weak_form_, time_info, shape_disp, solid_inputs, states[DISPLACEMENT])};
 }
 
 }  // namespace smith

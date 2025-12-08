@@ -63,7 +63,7 @@ class DifferentiablePhysics : public BasePhysics {
 
   /// @overload
   const FiniteElementDual& dual(const std::string& dual_name) const override;
-  
+
   /// @overload
   const FiniteElementState& shapeDisplacement() const override;
 
@@ -107,20 +107,29 @@ class DifferentiablePhysics : public BasePhysics {
   const std::unordered_map<std::string, const smith::FiniteElementDual&> computeInitialConditionSensitivity()
       const override;
 
-  /// @brief Get all the FieldStates... states first, parameters next
+  /// @brief Get all the initial FieldStates
   std::vector<FieldState> getInitialFieldStates() const { return initial_field_states_; }
+
+  /// @brief Get all the current FieldStates
+  std::vector<FieldState> getFieldStates() const { return field_states_; }
+
+  /// @brief Get all the previous FieldStates
+  std::vector<FieldState> getFieldStatesOld() const { return field_states_old_; }
 
   /// @brief Get all the parameter FieldStates
   std::vector<FieldState> getFieldParams() const { return field_params_; }
 
   /// @brief Get all the FieldStates... states first, parameters next
-  std::vector<FieldState> getAllFieldStates() const;
+  std::vector<FieldState> getFieldStatesAndParamStates() const;
 
   /// @brief Get the shape displacement FieldState
   FieldState getShapeDispFieldState() const;
 
   /// @brief Get the current ResultantStates
   std::vector<ResultantState> getResultantStates() const { return resultant_states_; }
+
+  /// @brief Get state advancer
+  std::shared_ptr<StateAdvancer> getStateAdvancer() const { return advancer_; }
 
   std::shared_ptr<gretl::DataStore> checkpointer_;  ///< gretl data store manages dynamic checkpointing logic
   std::shared_ptr<StateAdvancer> advancer_;  ///< abstract interface for advancing state from one cycle to the next
@@ -138,9 +147,9 @@ class DifferentiablePhysics : public BasePhysics {
   std::vector<std::string> state_names_;                     ///< names of all the states in order
   std::vector<std::string> param_names_;                     ///< names of all the states in order
 
-  mutable std::vector<ResultantState> resultant_states_;            ///< all the resultants registered for the physics
-  std::map<std::string, size_t> resultant_name_to_resultant_index_; ///< map from reaction names to resultant index
-  std::vector<std::string> resultant_names_;                        ///< names for all the relevant resultants/reactions
+  mutable std::vector<ResultantState> resultant_states_;             ///< all the resultants registered for the physics
+  std::map<std::string, size_t> resultant_name_to_resultant_index_;  ///< map from reaction names to resultant index
+  std::vector<std::string> resultant_names_;  ///< names for all the relevant resultants/reactions
 
   std::vector<gretl::Int> milestones_;  ///< a record of the steps in the graph that represent the end conditions of
                                         ///< advanceTimestep(dt). this information is used to halt the gretl graph when

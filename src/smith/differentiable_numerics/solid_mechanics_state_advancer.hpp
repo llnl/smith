@@ -86,6 +86,11 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   std::vector<FieldState> advanceState(const FieldState& shape_disp, const std::vector<FieldState>& states_old,
                                        const std::vector<FieldState>& params, const TimeInfo& time_info) const override;
 
+  std::vector<ResultantState> computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
+                                                const std::vector<FieldState>& states_old,
+                                                const std::vector<FieldState>& params,
+                                                const TimeInfo& time_info) const override;
+
  private:
   std::shared_ptr<DifferentiableSolver> solver_;
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;

@@ -108,7 +108,8 @@ const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_nam
       "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
 
   TimeInfo time_info(time_old_, dt_old_, static_cast<size_t>(cycle_old_));
-  resultant_states_ = advancer_->computeResultants(*field_shape_displacement_, field_states_, field_states_old_, field_params_, time_info);
+  resultant_states_ = advancer_->computeResultants(*field_shape_displacement_, field_states_, field_states_old_,
+                                                   field_params_, time_info);
   return *resultant_states_[reaction_index].get();
 }
 
@@ -195,8 +196,7 @@ void DifferentiablePhysics::advanceTimestep(double dt)
   dt_old_ = dt;
 
   TimeInfo time_info(time_, dt, static_cast<size_t>(cycle_));
-  field_states_ =
-      advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_, time_info);
+  field_states_ = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_, time_info);
 
   cycle_++;
   time_ += dt;
@@ -251,7 +251,7 @@ DifferentiablePhysics::computeInitialConditionSensitivity() const
   return map;
 }
 
-std::vector<FieldState> DifferentiablePhysics::getAllFieldStates() const
+std::vector<FieldState> DifferentiablePhysics::getFieldStatesAndParamStates() const
 {
   std::vector<FieldState> fields;
   fields.insert(fields.end(), field_states_.begin(), field_states_.end());

@@ -303,7 +303,7 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
 
   resetAndApplyInitialConditions();
 
-  auto all_fields = mechanics->getAllFieldStates();
+  auto all_fields = mechanics->getFieldStatesAndParamStates();
 
   gretl::State<double> gretl_qoi =
       0.0 * smith::evaluateObjective(objective, *shape_disp, {all_fields[F_VELO], all_fields[F_DENSITY]});
@@ -315,7 +315,7 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
     for (size_t n = 0; n < dt_reduction; ++n) {
       mechanics->advanceTimestep(dt / double(dt_reduction));
     }
-    all_fields = mechanics->getAllFieldStates();
+    all_fields = mechanics->getFieldStatesAndParamStates();
     gretl_qoi =
         gretl_qoi + smith::evaluateObjective(objective, *shape_disp, {all_fields[F_VELO], all_fields[F_DENSITY]});
     pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);
@@ -349,7 +349,7 @@ TEST_F(MeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   SMITH_MARK_FUNCTION;
 
   mechanics->resetStates();
-  auto all_fields = mechanics->getAllFieldStates();
+  auto all_fields = mechanics->getFieldStatesAndParamStates();
 
   std::string pv_dir = std::string("paraview_") + mechanics->name();
   std::cout << "Writing output to " << pv_dir << std::endl;
@@ -359,7 +359,7 @@ TEST_F(MeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   for (size_t m = 0; m < dt_reduction * num_steps; ++m) {
     double timestep = dt / double(dt_reduction);
     mechanics->advanceTimestep(timestep);
-    all_fields = mechanics->getAllFieldStates();
+    all_fields = mechanics->getFieldStatesAndParamStates();
     pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);
     time += timestep;
   }
