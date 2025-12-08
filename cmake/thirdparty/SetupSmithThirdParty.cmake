@@ -559,7 +559,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     message(STATUS "Smith Enable Gretl: ${SMITH_ENABLE_GRETL}")
     
     if(SMITH_ENABLE_GRETL)
-        # set(GRETL_ENABLE_TESTING ${SMITH_ENABLE_TESTS} CACHE BOOL "")
         # Allow gretl as a non-submodule
         if (DEFINED GRETL_SOURCE_DIR)
             if(NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
