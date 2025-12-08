@@ -161,11 +161,9 @@ TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
   auto previous_to_final_states = physics->getFieldStatesOld();
 
   auto state_advancer = physics->getStateAdvancer();
-  printf("a\n");
   auto reactions =
       state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
-  printf("b\n");
-  auto disp_squared = innerProduct(reactions[0], reactions[0]);
+  auto reaction_squared = innerProduct(reactions[0], reactions[0]);
 
   // serac::FiniteElementDual physics->dual("reaction");
   //  auto objective = std::make_shared<smith::FunctionalObjective<dim, Parameters<VectorSpace>>>(
@@ -175,15 +173,15 @@ TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
   //    return smith::inner(u, u);
   //  });
   //  auto final_states = physics->getFieldStatesAndParamStates();
-  //  DoubleState disp_squared =
+  //  DoubleState reaction_squared =
   //      smith::evaluateObjective(objective, shape_disp, {final_states[SolidMechanicsStateAdvancer::DISPLACEMENT]});
 
-  gretl::set_as_objective(disp_squared);
-  std::cout << "final disp norm2 = " << disp_squared.get() << std::endl;
+  gretl::set_as_objective(reaction_squared);
+  std::cout << "final disp norm2 = " << reaction_squared.get() << std::endl;
 
-  EXPECT_GT(checkGradWrt(disp_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(disp_squared, params[0], 3.2e-1, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(disp_squared, params[1], 3.2e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 3.2e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[1], 3.2e-1, 4, true), 0.7);
 }
 
 }  // namespace smith
