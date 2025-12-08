@@ -53,4 +53,3 @@ install(TARGETS              smith_differentiable_numerics
 if(SMITH_ENABLE_TESTS)
     add_subdirectory(tests)
 endif()
-    
