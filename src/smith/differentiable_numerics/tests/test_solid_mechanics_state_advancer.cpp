@@ -157,24 +157,90 @@ TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
 
   TimeInfo time_info(physics->time() - time_increment, time_increment);
 
-  auto final_states = physics->getFieldStates();
-  auto previous_to_final_states = physics->getFieldStatesOld();
+  auto state_advancer = physics->getStateAdvancer();
+  auto reactions =
+      state_advancer->computeResultants(shape_disp, physics->getFieldStates(), physics->getFieldStatesOld(), params, time_info);
+  auto reaction_squared = innerProduct(reactions[0], reactions[0]);
+
+  gretl::set_as_objective(reaction_squared);
+  std::cout << "final disp norm2 = " << reaction_squared.get() << std::endl;
+
+  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 3.2e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[1], 3.2e-1, 4, true), 0.7);
+}
+
+TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
+{
+  SMITH_MARK_FUNCTION;
+
+  std::string physics_name = "solid";
+
+  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
+      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+
+  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
+
+  // warm-start.
+  // implicit Newmark.
+
+  auto [physics, weak_form, bcs] =
+      buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
+          mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
+
+  bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
+  bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
+    auto bc = 0.0 * X;
+    bc[0] = 0.01 * t;
+    bc[1] = -0.05 * t;
+    return bc;
+  });
+
+  double E = 100.0;
+  double nu = 0.25;
+  auto K = E / (3.0 * (1.0 - 2 * nu));
+  auto G = E / (2.0 * (1.0 + nu));
+  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
+  MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
+
+  weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
+      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
+        MaterialType::State state;
+        auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
+        return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
+      });
+
+  auto shape_disp = physics->getShapeDispFieldState();
+  auto params = physics->getFieldParams();
+  auto states = physics->getInitialFieldStates();
+
+  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    double scaling = 1.0;
+    return scaling * material.K0;
+  });
+
+  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    double scaling = 1.0;
+    return scaling * material.G0;
+  });
+
+  physics->resetStates();
+
+  double time_increment = 0.5;
+  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
+  pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
+  for (size_t m = 0; m < 5; ++m) {
+    physics->advanceTimestep(time_increment);
+    pv_writer.write(m + 1, physics->time(), physics->getFieldStatesAndParamStates());
+  }
+
+  TimeInfo time_info(physics->time() - time_increment, time_increment);
 
   auto state_advancer = physics->getStateAdvancer();
   auto reactions =
-      state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
+      state_advancer->computeResultants(shape_disp, physics->getFieldStates(), physics->getFieldStatesOld(), params, time_info);
   auto reaction_squared = innerProduct(reactions[0], reactions[0]);
-
-  // serac::FiniteElementDual physics->dual("reaction");
-  //  auto objective = std::make_shared<smith::FunctionalObjective<dim, Parameters<VectorSpace>>>(
-  //      "integrated_squared_temperature", mesh, spaces({states[SolidMechanicsStateAdvancer::DISPLACEMENT]}));
-  //  objective->addBodyIntegral(smith::DependsOn<0>(), mesh->entireBodyName(), [](auto /*t*/, auto /*X*/, auto U) {
-  //    auto u = get<VALUE>(U);
-  //    return smith::inner(u, u);
-  //  });
-  //  auto final_states = physics->getFieldStatesAndParamStates();
-  //  DoubleState reaction_squared =
-  //      smith::evaluateObjective(objective, shape_disp, {final_states[SolidMechanicsStateAdvancer::DISPLACEMENT]});
 
   gretl::set_as_objective(reaction_squared);
   std::cout << "final disp norm2 = " << reaction_squared.get() << std::endl;
