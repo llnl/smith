@@ -313,7 +313,7 @@ struct ThermalStiffeningMaterial {
     // update mass fractions
     auto we = wep + dwe;
 
-    std::cout << "we: " << we << "\n";
+    // std::cout << "we: " << we << "\n";
 
   // calculate B_bar, J based on Fh
     auto Be = dot(Fe, transpose(Fe));
