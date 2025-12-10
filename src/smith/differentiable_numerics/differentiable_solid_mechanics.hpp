@@ -19,6 +19,10 @@
 
 namespace smith {
 
+/// Helper function to generate the base-physics for solid mechanics
+/// This will return a tuple of shared pointers to the: BasePhysics, WeakForm, and DirichetBoundaryConditions
+/// Only the BasePhysics needs to stay in scope.  The others are returned to the user so they can define the WeakForm
+/// integrals, and to specify space and time varying boundary conditions
 template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
 auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
                          std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,

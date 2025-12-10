@@ -18,12 +18,16 @@ namespace smith {
 
 class Mesh;
 
+/// @brief A generic class for setting Dirichlet boundary conditions on arbitrary physics
 class DirichletBoundaryConditions {
  public:
+  /// @brief Construct from mfem::ParMesh
   DirichletBoundaryConditions(const mfem::ParMesh& mfem_mesh, mfem::ParFiniteElementSpace& space);
 
+  /// @brief Construct from smith::Mesh
   DirichletBoundaryConditions(const Mesh& mesh, mfem::ParFiniteElementSpace& space);
 
+  ///
   template <int spatial_dim, typename AppliedDisplacementFunction>
   void setVectorBCs(const Domain& domain, std::vector<int> components, AppliedDisplacementFunction applied_displacement)
   {
@@ -108,6 +112,7 @@ class DirichletBoundaryConditions {
     setFixedVectorBCs<spatial_dim>(domain, components);
   }
 
+  /// Return the smith BoundaryConditionManager
   const smith::BoundaryConditionManager& getBoundaryConditionManager() const { return bcs_; }
 
  private:

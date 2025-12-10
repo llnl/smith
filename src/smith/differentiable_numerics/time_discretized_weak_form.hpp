@@ -20,10 +20,18 @@
 
 namespace smith {
 
+/// @brief A time discretized weakform get a TimeInfo object passed as arguments to q-function (lambdas which are
+/// integrated over quadrature points) so users can have access to time increments, and timestep cycle.  These
+/// quantities are often valuable for time integrated PDEs.
+/// @tparam OutputSpace The output residual for the weak form (test-space)
+/// @tparam ...InputSpaces All the input FiniteElementState fields (test-spaces)
+/// @tparam spatial_dim The spatial dimension for the problem
 template <int spatial_dim, typename OutputSpace, typename... InputSpaces>
 class TimeDiscretizedWeakForm : public FunctionalWeakForm<spatial_dim, OutputSpace, InputSpaces...> {
  public:
   using WeakFormT = FunctionalWeakForm<spatial_dim, OutputSpace, InputSpaces...>;
+
+  /// Constructor
   TimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
                           const mfem::ParFiniteElementSpace& output_mfem_space,
                           const typename WeakFormT::SpacesT& input_mfem_spaces)
@@ -51,13 +59,21 @@ class TimeDiscretizedWeakForm : public FunctionalWeakForm<spatial_dim, OutputSpa
   }
 };
 
+/// @brief Useful for time-discretized PDE of second order (involves for first and second derivatives of time).  Users
+/// write q-functions in terns of u, u_dot, u_dot_dot, and the weak form is transformed by the
+/// SecondOrderTimeIntegrationRule so that is it globally a function of u, u_old, u_dot_old, u_dot_dot_old, with u as
+/// the distinct unknown for the time discretized system.
+/// @tparam OutputSpace The output residual for the weak form (test-space)
+/// @tparam ...InputSpaces All the input FiniteElementState fields (test-spaces)
+/// @tparam spatial_dim The spatial dimension for the problem
 template <int spatial_dim, typename OutputSpace, typename... InputSpaces>
 class SecondOrderTimeDiscretizedWeakForm : public TimeDiscretizedWeakForm<spatial_dim, OutputSpace, InputSpaces...> {
  public:
-  static constexpr int NUM_STATE_VARS = 4;  // u, u_old, v_old, a_old
+  static constexpr int NUM_STATE_VARS = 4;  //< u, u_old, v_old, a_old
 
   using WeakFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, InputSpaces...>;
 
+  /// @brief Constructor
   SecondOrderTimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
                                      SecondOrderTimeIntegrationRule time_rule,
                                      const mfem::ParFiniteElementSpace& output_mfem_space,
@@ -89,7 +105,7 @@ class SecondOrderTimeDiscretizedWeakForm : public TimeDiscretizedWeakForm<spatia
     addBodyIntegral(DependsOn<>{}, body_name, body_integral);
   }
 
-  SecondOrderTimeIntegrationRule time_rule_;
+  SecondOrderTimeIntegrationRule time_rule_;  /// encodes the time integration rule
 };
 
 }  // namespace smith

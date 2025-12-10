@@ -29,12 +29,19 @@ class DifferentiableSolver;
 class DirichletBoundaryConditions;
 class WeakForm;
 
+/// @brief Implementation of the StateAdvancer interface for advancing the solution of solid mechanics problems
 class SolidMechanicsStateAdvancer : public StateAdvancer {
  public:
+  /// @brief Constructor
+  /// @param solid_solver differentiable solve
+  /// @param vector_bcs Dirichlet boundary conditions that can be applies to vector unknowns
+  /// @param solid_weak_form The weak-form for solid mechanics equations
+  /// @param time_rule The specific time-integration rule, typically Implicit Newmark or Quasi-static
   SolidMechanicsStateAdvancer(std::shared_ptr<DifferentiableSolver> solid_solver,
                               std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
                               std::shared_ptr<WeakForm> solid_weak_form, SecondOrderTimeIntegrationRule time_rule);
 
+  /// State enum for indexing convenience
   enum STATE
   {
     DISPLACEMENT,
