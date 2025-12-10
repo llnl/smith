@@ -61,6 +61,12 @@ class DirichletBoundaryConditions {
     setVectorBCs<spatial_dim>(domain, components, applied_displacement);
   }
 
+  /// @brief
+  /// @tparam AppliedDisplacementFunction
+  /// @tparam spatial_dim
+  /// @param domain domain
+  /// @param component component
+  /// @param applied_displacement applied_displacement
   template <int spatial_dim, typename AppliedDisplacementFunction>
   void setScalarBCs(const Domain& domain, int component, AppliedDisplacementFunction applied_displacement)
   {
@@ -81,24 +87,37 @@ class DirichletBoundaryConditions {
     bcs_.addEssential(dof_list, component_disp_bdr_coef_, space_, component);
   }
 
+  bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
+    auto bc = 0.0 * X;
+    bc[0] = 0.01 * t;
+    bc[1] = -0.05 * t;
+    return bc;
+  });
+
+  /// @brief Specify time and space varying Dirichlet boundary conditions over a domain.
+  /// @param domain domain
+  /// @param applied_displacement component
   template <int spatial_dim, typename AppliedDisplacementFunction>
   void setScalarBCs(const Domain& domain, AppliedDisplacementFunction applied_displacement)
   {
     setScalarBCs<spatial_dim>(domain, 0, applied_displacement);
   }
 
+  /// @brief Constrain the dofs of a scalar field over a domain
   template <int spatial_dim>
   void setFixedScalarBCs(const Domain& domain, int component = 0)
   {
     setScalarBCs<spatial_dim>(domain, component, [](auto, auto) { return 0.0; });
   }
 
+  /// @brief Constrain the vector dofs over a domain corresponding to a subset of the vector components
   template <int spatial_dim>
   void setFixedVectorBCs(const Domain& domain, std::vector<int> components)
   {
     setVectorBCs<spatial_dim>(domain, components, [](auto, auto) { return smith::tensor<double, spatial_dim>{}; });
   }
 
+  /// @brief Constrain all the vector dofs over a domain
   template <int spatial_dim>
   void setFixedVectorBCs(const Domain& domain)
   {
@@ -112,12 +131,12 @@ class DirichletBoundaryConditions {
     setFixedVectorBCs<spatial_dim>(domain, components);
   }
 
-  /// Return the smith BoundaryConditionManager
+  /// @brief Return the smith BoundaryConditionManager
   const smith::BoundaryConditionManager& getBoundaryConditionManager() const { return bcs_; }
 
  private:
-  smith::BoundaryConditionManager bcs_;
-  mfem::ParFiniteElementSpace& space_;
+  smith::BoundaryConditionManager bcs_;  ///< boundary condition manager that does the heavy lifting
+  mfem::ParFiniteElementSpace& space_;   ///< save the space for the field which will be constrained
 };
 
 }  // namespace smith

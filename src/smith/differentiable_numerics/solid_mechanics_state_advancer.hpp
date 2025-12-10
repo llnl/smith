@@ -49,6 +49,8 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
     ACCELERATION
   };
 
+  /// @brief Recursive function for constructing parameter FieldStates of the appropriate space and name, register it on
+  /// the gretl graph.
   template <typename FirstParamSpace, typename... ParamSpaces>
   static std::vector<FieldState> createParams(gretl::DataStore& graph, const std::string& name,
                                               const std::vector<std::string>& param_names, const std::string& tag,
@@ -63,6 +65,8 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
     return end_spaces;
   }
 
+  /// @brief Utility function to consistently construct all the weak forms and FieldStates for a solid mechanics
+  /// application You will get back: shape_disp, states, params, time, and solid_mechanics_weak_form
   template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
   static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<gretl::DataStore>& graph,
                                      SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
@@ -90,19 +94,22 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
     return std::make_tuple(shape_disp, states, params, time, solid_mechanics_weak_form);
   }
 
+  /// @overload
   std::vector<FieldState> advanceState(const FieldState& shape_disp, const std::vector<FieldState>& states_old,
                                        const std::vector<FieldState>& params, const TimeInfo& time_info) const override;
 
+  /// @overload
   std::vector<ResultantState> computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
                                                 const std::vector<FieldState>& states_old,
                                                 const std::vector<FieldState>& params,
                                                 const TimeInfo& time_info) const override;
 
  private:
-  std::shared_ptr<DifferentiableSolver> solver_;
-  std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;
-  std::shared_ptr<WeakForm> weak_form_;
-  SecondOrderTimeIntegrationRule time_rule_;
+  std::shared_ptr<DifferentiableSolver> solver_;             ///< Differentiable solver
+  std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;  ///< Dirichlet boundary conditions on a vector-field
+  std::shared_ptr<WeakForm> weak_form_;       ///< Solid mechanics weak form, user must setup the appropriate integrals
+  SecondOrderTimeIntegrationRule time_rule_;  ///< second order time integration rule.  Can compute u, u_dot, u_dot_dot,
+                                              ///< given the current predicted u and the previous u, u_dot, u_dot_dot
 };
 
 }  // namespace smith

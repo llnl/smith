@@ -29,7 +29,7 @@ namespace smith {
 template <int spatial_dim, typename OutputSpace, typename... InputSpaces>
 class TimeDiscretizedWeakForm : public FunctionalWeakForm<spatial_dim, OutputSpace, InputSpaces...> {
  public:
-  using WeakFormT = FunctionalWeakForm<spatial_dim, OutputSpace, InputSpaces...>;
+  using WeakFormT = FunctionalWeakForm<spatial_dim, OutputSpace, InputSpaces...>;  ///< using
 
   /// Constructor
   TimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
@@ -69,9 +69,9 @@ class TimeDiscretizedWeakForm : public FunctionalWeakForm<spatial_dim, OutputSpa
 template <int spatial_dim, typename OutputSpace, typename... InputSpaces>
 class SecondOrderTimeDiscretizedWeakForm : public TimeDiscretizedWeakForm<spatial_dim, OutputSpace, InputSpaces...> {
  public:
-  static constexpr int NUM_STATE_VARS = 4;  //< u, u_old, v_old, a_old
+  static constexpr int NUM_STATE_VARS = 4;  ///< u, u_old, v_old, a_old
 
-  using WeakFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, InputSpaces...>;
+  using WeakFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, InputSpaces...>;  ///< using
 
   /// @brief Constructor
   SecondOrderTimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
@@ -105,7 +105,7 @@ class SecondOrderTimeDiscretizedWeakForm : public TimeDiscretizedWeakForm<spatia
     addBodyIntegral(DependsOn<>{}, body_name, body_integral);
   }
 
-  SecondOrderTimeIntegrationRule time_rule_;  /// encodes the time integration rule
+  SecondOrderTimeIntegrationRule time_rule_;  ///< encodes the time integration rule
 };
 
 }  // namespace smith

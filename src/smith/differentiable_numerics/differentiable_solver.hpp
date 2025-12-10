@@ -81,8 +81,8 @@ class LinearDifferentiableSolver : public DifferentiableSolver {
   std::shared_ptr<smith::FiniteElementState> solveAdjoint(
       const smith::FiniteElementDual& u_bar, std::unique_ptr<mfem::HypreParMatrix> jacobian_transposed) const override;
 
-  mutable std::unique_ptr<mfem::Solver> mfem_solver;          //< linear solver
-  mutable std::unique_ptr<mfem::Solver> mfem_preconditioner;  //< optionally used preconditioner
+  mutable std::unique_ptr<mfem::Solver> mfem_solver;          ///< linear solver
+  mutable std::unique_ptr<mfem::Solver> mfem_preconditioner;  ///< optionally used preconditioner
 };
 
 /// @brief Implementation of the DifferentiableSolver interface for the special case of nonlinear solves with linear
@@ -107,9 +107,9 @@ class NonlinearDifferentiableSolver : public DifferentiableSolver {
   /// @overload
   void clearMemory() const override;
 
-  mutable std::unique_ptr<mfem::HypreParMatrix> J_;  //< stored linearized Jacobian matrix for memory reuse
+  mutable std::unique_ptr<mfem::HypreParMatrix> J_;  ///< stored linearized Jacobian matrix for memory reuse
   mutable std::unique_ptr<EquationSolver>
-      nonlinear_solver_;  //< the nonlinear equation solver used for the forward pass
+      nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 };
 
 /// @brief Create a differentiable linear solver
