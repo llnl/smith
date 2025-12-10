@@ -422,14 +422,16 @@ TEST_F(SolidMechanicsSensitivityFixture, QuasiStaticShapeSensitivities)
 TEST_F(SolidMechanicsSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjectiveAndGradient)
 {
   auto solid_solver = createNonlinearSolidMechanicsSolver();
-  auto [qoi1, _, __, shape_sensitivity1] = computeSolidMechanicsQoiSensitivities(*solid_solver, tsInfo);
+  auto [qoi1, shape_unused1, shape_unused2, shape_sensitivity1] =
+      computeSolidMechanicsQoiSensitivities(*solid_solver, tsInfo);
 
   solid_solver->resetStates();
   applyInitialAndBoundaryConditions(*solid_solver);
   FiniteElementState derivative_direction(shape_sensitivity1.space(), "derivative_direction");
   fillDirection(derivative_direction);
 
-  auto [qoi2, ___, ____, shape_sensitivity2] = computeSolidMechanicsQoiSensitivities(*solid_solver, tsInfo);
+  auto [qoi2, shape_unused3, shape_unused4, shape_sensitivity2] =
+      computeSolidMechanicsQoiSensitivities(*solid_solver, tsInfo);
 
   EXPECT_EQ(qoi1, qoi2);
 

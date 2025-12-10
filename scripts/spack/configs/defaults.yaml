@@ -8,7 +8,10 @@ packages:
     - spec: "~shared~test~examples~utilities"
   hdf5:
     require:
-    - spec: ~shared~mpi
+    - spec: "~shared~mpi"
+  mfem:
+    require:
+    - spec: "cxxstd=17"
   raja:
     require:
     - spec: "~shared~examples~exercises"

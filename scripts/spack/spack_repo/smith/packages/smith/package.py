@@ -15,6 +15,10 @@ from spack_repo.builtin.build_systems.cached_cmake import (
 from spack_repo.builtin.build_systems.cuda import CudaPackage
 from spack_repo.builtin.build_systems.rocm import ROCmPackage
 
+from spack_repo.builtin.build_systems.cached_cmake import CachedCMakePackage
+from spack_repo.builtin.build_systems.cuda import CudaPackage
+from spack_repo.builtin.build_systems.rocm import ROCmPackage
+
 import os
 import socket
 from os.path import join as pjoin
@@ -100,7 +104,9 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("lua")
 
-    depends_on('enzyme@0.0.180', when="+enzyme")
+    depends_on("enzyme@0.0.180:", when="+enzyme")
+    depends_on("cuda+allow-unsupported-compilers", when="+enzyme+cuda")
+    depends_on("enzyme %libllvm=llvm-amdgpu", when="+enzyme+rocm")
 
     # Devtool dependencies these need to match smith_devtools/package.py
     with when("+devtools"):
@@ -117,16 +123,19 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         # NOTE: Sundials must be built static to prevent the following runtime error:
         # "error while loading shared libraries: libsundials_nvecserial.so.6:
         # cannot open shared object file: No such file or directory"
-        depends_on("sundials+hypre~monitoring~examples~examples-install+static~shared")
+        depends_on("sundials+hypre~trilinos~monitoring~examples~examples-install+static~shared~petsc")
         depends_on("sundials+asan", when="+asan")
 
     depends_on("mfem+netcdf+metis+superlu-dist+lapack+mpi")
     depends_on("mfem+sundials", when="+sundials")
+    depends_on("mfem~sundials", when="~sundials")
     depends_on("mfem+amgx", when="+cuda")
     depends_on("mfem+asan", when="+asan")
     depends_on("mfem+strumpack", when="+strumpack")
     depends_on("mfem+petsc", when="+petsc")
+    depends_on("mfem~petsc", when="~petsc")
     depends_on("mfem+slepc", when="+slepc")
+    depends_on("mfem~slepc", when="~slepc")
     depends_on("mfem+openmp", when="+openmp")
     depends_on("mfem+enzyme", when="+enzyme")
 
@@ -135,7 +144,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("hypre@2.26.0:~superlu-dist+mpi")
 
     with when("+petsc"):
-        depends_on("petsc")
+        depends_on("petsc~mmg")
         depends_on("petsc+strumpack", when="+strumpack")
         depends_on("petsc~strumpack", when="~strumpack")
         depends_on("petsc+openmp", when="+openmp")
@@ -155,7 +164,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     # Note: Certain combinations of CMake and Conduit do not like +mpi
     #  and cause FindHDF5.cmake to fail and only return mpi information
     #  (includes, libs, etc) instead of hdf5 info
-    depends_on("hdf5@1.8.21:+hl~mpi")
+    depends_on("hdf5@1.8.21:+hl~mpi cflags=-Wno-int-conversion")
 
     depends_on("camp@2024.02.0:")
 
@@ -180,7 +189,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("metis@5.1.0")
     depends_on("parmetis@4.0.3")
 
-    depends_on("conduit~python~test")
+    depends_on("conduit~python~test~silo")
 
     with when("+profiling"):
         depends_on("adiak+mpi")
@@ -267,6 +276,9 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     for compiler_ in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
         conflicts("+enzyme", when=f"%[virtuals=c,cxx] {compiler_}")
 
+    requires("%cxx=llvm-amdgpu", when="+enzyme+rocm")
+    requires("%cxx=llvm", when="+enzyme~rocm")
+
     conflicts("+openmp", when="+rocm")
     conflicts("+cuda", when="+rocm")
     conflicts("~umpire", when="+raja", msg="Axom requires both raja and umpire in order to properly set CAMP_DIR.")
@@ -302,20 +314,21 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("amgx", when="+cuda")
 
     for val in CudaPackage.cuda_arch_values:
-        ext_rocm_dep = f"+cuda cuda_arch={val}"
+        ext_cuda_dep = f"+cuda cuda_arch={val}"
 
         # required
-        depends_on(f"axom {ext_rocm_dep}", when=f"{ext_rocm_dep}")
-        depends_on(f"mfem {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"axom {ext_cuda_dep}", when=f"{ext_cuda_dep}")
+        depends_on(f"mfem {ext_cuda_dep}", when=f"{ext_cuda_dep}")
+        depends_on(f"hypre {ext_cuda_dep}", when=f"{ext_cuda_dep}")
 
         # optional
-        depends_on(f"caliper {ext_rocm_dep}", when=f"+profiling {ext_rocm_dep}")
-        depends_on(f"petsc {ext_rocm_dep}", when=f"+petsc {ext_rocm_dep}")
-        depends_on(f"raja {ext_rocm_dep}", when=f"+raja {ext_rocm_dep}")
-        depends_on(f"slepc {ext_rocm_dep}", when=f"+slepc {ext_rocm_dep}")
-        depends_on(f"sundials {ext_rocm_dep}", when=f"+sundials {ext_rocm_dep}")
-        depends_on(f"tribol {ext_rocm_dep}", when=f"+tribol {ext_rocm_dep}")
-        depends_on(f"umpire {ext_rocm_dep}", when=f"+umpire {ext_rocm_dep}")
+        depends_on(f"caliper {ext_cuda_dep}", when=f"+profiling {ext_cuda_dep}")
+        depends_on(f"petsc {ext_cuda_dep}", when=f"+petsc {ext_cuda_dep}")
+        depends_on(f"raja {ext_cuda_dep}", when=f"+raja {ext_cuda_dep}")
+        depends_on(f"slepc {ext_cuda_dep}", when=f"+slepc {ext_cuda_dep}")
+        depends_on(f"sundials {ext_cuda_dep}", when=f"+sundials {ext_cuda_dep}")
+        depends_on(f"tribol {ext_cuda_dep}", when=f"+tribol {ext_cuda_dep}")
+        depends_on(f"umpire {ext_cuda_dep}", when=f"+umpire {ext_cuda_dep}")
 
     #
     # ROCm
@@ -332,7 +345,8 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
         # required
         depends_on(f"axom {ext_rocm_dep}", when=f"{ext_rocm_dep}")
-        depends_on(f"mfem {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"mfem+raja+umpire {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"hypre+umpire {ext_rocm_dep}", when=f"{ext_rocm_dep}")
 
         # optional
         depends_on(f"caliper {ext_rocm_dep}", when=f"+profiling {ext_rocm_dep}")
@@ -413,18 +427,29 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         if spec.satisfies("+rocm"):
             entries.append(cmake_cache_option("ENABLE_HIP", True))
 
-            # Add search paths
+            hip_link_flags = ""
+
             rocm_root = os.path.dirname(spec["llvm-amdgpu"].prefix)
-            entries.append(cmake_cache_path("ROCM_PATH", rocm_root))
-            hip_link_flags = "-L{0}/lib -Wl,-rpath,{0}/lib ".format(rocm_root)
-            hip_link_flags += "-L{0}/llvm/lib -Wl,-rpath,{0}/llvm/lib ".format(rocm_root)
+            entries.append(cmake_cache_path("ROCM_ROOT_DIR", rocm_root))
 
             # Recommended MPI flags
             hip_link_flags += "-lxpmem "
-            hip_link_flags += "-L/opt/cray/pe/mpich/{0}/gtl/lib ".format(spec["mpi"].version)
-            hip_link_flags += "-Wl,-rpath,/opt/cray/pe/mpich/{0}/gtl/lib ".format(spec["mpi"].version)
+            hip_link_flags += "-L/opt/cray/pe/mpich/{0}/gtl/lib ".format(spec["mpi"].version.up_to(3))
+            hip_link_flags += "-Wl,-rpath,/opt/cray/pe/mpich/{0}/gtl/lib ".format(
+                spec["mpi"].version.up_to(3)
+            )
             hip_link_flags += "-lmpi_gtl_hsa "
 
+            if spec.satisfies("^hip@6.0.0:"):
+                hip_link_flags += "-L{0}/lib/llvm/lib -Wl,-rpath,{0}/lib/llvm/lib ".format(rocm_root)
+            else:
+                hip_link_flags += "-L{0}/llvm/lib -Wl,-rpath,{0}/llvm/lib ".format(rocm_root)
+            # Only amdclang requires this path; cray compiler fails if this is included
+            if spec.satisfies("%llvm-amdgpu"):
+                hip_link_flags += "-L{0}/lib -Wl,-rpath,{0}/lib ".format(rocm_root)
+
+            # Fixes for mpi for rocm until wrapper paths are fixed
+            # These flags are already part of the wrapped compilers on TOSS4 systems
             if self.is_fortran_compiler("amdflang"):
                 hip_link_flags += "-Wl,--disable-new-dtags "
                 hip_link_flags += "-lflang -lflangrti "
