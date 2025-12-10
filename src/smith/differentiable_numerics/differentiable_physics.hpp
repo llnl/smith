@@ -36,7 +36,7 @@ class DifferentiablePhysics : public BasePhysics {
   DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                         const FieldState& shape_disp, const std::vector<FieldState>& states,
                         const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer,
-                        std::string physics_name);
+                        std::string physics_name, const std::vector<std::string>& resultant_names = {});
   /// @brief destructor
   ~DifferentiablePhysics() {}
 
@@ -87,6 +87,9 @@ class DifferentiablePhysics : public BasePhysics {
 
   /// @overload
   void setAdjointLoad(std::unordered_map<std::string, const smith::FiniteElementDual&> string_to_dual) override;
+
+  /// @overload
+  void setDualAdjointBcs(std::unordered_map<std::string, const smith::FiniteElementState&> string_to_bc) override;
 
   /// @overload
   const FiniteElementState& adjoint(const std::string& adjoint_name) const override;

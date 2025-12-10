@@ -32,10 +32,12 @@ gretl::State<int> make_milestone(const std::vector<FieldState>& states)
 DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                                              const FieldState& shape_disp, const std::vector<FieldState>& states,
                                              const std::vector<FieldState>& params,
-                                             std::shared_ptr<StateAdvancer> advancer, std::string mech_name)
+                                             std::shared_ptr<StateAdvancer> advancer, std::string mech_name,
+                                             const std::vector<std::string>& resultant_names)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
-      advancer_(advancer)
+      advancer_(advancer),
+      resultant_names_(resultant_names)
 {
   SLIC_ERROR_IF(states.size() == 0, "Must have a least 1 state for a mechanics.");
   field_shape_displacement_ = std::make_unique<FieldState>(shape_disp);
@@ -52,6 +54,10 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
     field_params_.push_back(p);
     param_name_to_field_index_[p.get()->name()] = i;
     param_names_.push_back(p.get()->name());
+  }
+
+  for (size_t i = 0; i < resultant_names_.size(); ++i) {
+    resultant_name_to_resultant_index_[resultant_names_[i]] = i;
   }
 
   completeSetup();
@@ -168,11 +174,25 @@ void DifferentiablePhysics::setAdjointLoad(
   for (auto string_dual_pair : string_to_dual) {
     std::string field_name = string_dual_pair.first;
     const smith::FiniteElementDual& dual = string_dual_pair.second;
-    SLIC_ERROR_IF(
-        state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
-        axom::fmt::format("Could not find dual named {0} in mesh with tag {1} to set", field_name, mesh_->tag()));
+    SLIC_ERROR_IF(state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
+                  axom::fmt::format("Could not find dual named {0} in mesh with tag {1}", field_name, mesh_->tag()));
     size_t state_index = state_name_to_field_index_.at(field_name);
     *field_states_[state_index].get_dual() += dual;
+  }
+}
+
+void DifferentiablePhysics::setDualAdjointBcs(
+    std::unordered_map<std::string, const smith::FiniteElementState&> string_to_bc)
+{
+  for (auto string_bc_pair : string_to_bc) {
+    std::string reaction_name = string_bc_pair.first;
+    const smith::FiniteElementState& reaction_dual = string_bc_pair.second;
+    SLIC_ERROR_IF(
+        resultant_name_to_resultant_index_.find(reaction_name) == resultant_name_to_resultant_index_.end(),
+        axom::fmt::format("When calling setDualAdjointBcs, could not find reaction named {0} in mesh with tag {1}",
+                          reaction_name, mesh_->tag()));
+    size_t reaction_index = resultant_name_to_resultant_index_.at(reaction_name);
+    *resultant_states_[reaction_index].get_dual() += reaction_dual;
   }
 }
 

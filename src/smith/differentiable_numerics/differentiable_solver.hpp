@@ -31,8 +31,8 @@ class Mesh;
 struct NonlinearSolverOptions;
 struct LinearSolverOptions;
 
-
-/// @brief Abstract interface to DifferentiableSolver inteface.  Each dfferenriable solve should provide both its forward solve and an adjoint solve
+/// @brief Abstract interface to DifferentiableSolver inteface.  Each dfferenriable solve should provide both its
+/// forward solve and an adjoint solve
 class DifferentiableSolver {
  public:
   virtual ~DifferentiableSolver() {}

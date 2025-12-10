@@ -13,11 +13,10 @@
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "smith/physics/materials/parameterized_solid_material.hpp"
 
-#include "smith/differentiable_numerics/differentiable_physics.hpp"
-#include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
-#include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/differentiable_numerics/differentiable_solid_mechanics.hpp"
+#include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
+
 #include "smith/differentiable_numerics/tests/paraview_helper.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
@@ -67,30 +66,41 @@ struct SolidMechanicsMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh;
 };
 
-template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
-auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
-                         std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
-                         smith::SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
-                         const std::vector<std::string>& param_names = {})
+void resetAndApplyInitialConditions(std::shared_ptr<BasePhysics> physics) { physics->resetStates(); }
+
+double integrateForward(std::shared_ptr<BasePhysics> physics)
 {
-  auto graph = std::make_shared<gretl::DataStore>(100);
-  auto [shape_disp, states, params, time, solid_mechanics_weak_form] =
-      SolidMechanicsStateAdvancer::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ParamSpaces...>(
-          mesh, graph, time_rule, physics_name, param_names);
+  resetAndApplyInitialConditions(physics);
+  double time_increment = 0.5;
+  for (size_t m = 0; m < 5; ++m) {
+    physics->advanceTimestep(time_increment);
+  }
+  FiniteElementDual reaction = physics->dual("reactions");
 
-  auto vector_bcs = std::make_shared<DirichletBoundaryConditions>(
-      mesh->mfemParMesh(), space(states[SolidMechanicsStateAdvancer::DISPLACEMENT]));
-
-  auto state_advancer = std::make_shared<SolidMechanicsStateAdvancer>(d_solid_nonlinear_solver, vector_bcs,
-                                                                      solid_mechanics_weak_form, time_rule);
-
-  auto physics =
-      std::make_shared<DifferentiablePhysics>(mesh, graph, shape_disp, states, params, state_advancer, physics_name);
-
-  return std::make_tuple(physics, solid_mechanics_weak_form, vector_bcs);
+  return 0.5 * innerProduct(reaction, reaction);
 }
 
-TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
+void adjointBackward(std::shared_ptr<BasePhysics> physics, smith::FiniteElementDual& shape_sensitivity,
+                     std::vector<smith::FiniteElementDual>& parameter_sensitivities)
+{
+  smith::FiniteElementDual reaction = physics->dual("reactions");
+  smith::FiniteElementState reaction_dual(reaction.space(), "reactions_dual");
+  reaction_dual = reaction;
+
+  physics->resetAdjointStates();
+
+  physics->setDualAdjointBcs({{"reactions", reaction_dual}});
+
+  while (physics->cycle() > 0) {
+    physics->reverseAdjointTimestep();
+    shape_sensitivity += physics->computeTimestepShapeSensitivity();
+    for (size_t param_index = 0; param_index < parameter_sensitivities.size(); ++param_index) {
+      parameter_sensitivities[param_index] += physics->computeTimestepSensitivity(param_index);
+    }
+  }
+}
+
+TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
 {
   SMITH_MARK_FUNCTION;
 
@@ -158,9 +168,9 @@ TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
   TimeInfo time_info(physics->time() - time_increment, time_increment);
 
   auto state_advancer = physics->getStateAdvancer();
-  auto reactions =
-      state_advancer->computeResultants(shape_disp, physics->getFieldStates(), physics->getFieldStatesOld(), params, time_info);
-  auto reaction_squared = innerProduct(reactions[0], reactions[0]);
+  auto reactions = state_advancer->computeResultants(shape_disp, physics->getFieldStates(),
+                                                     physics->getFieldStatesOld(), params, time_info);
+  auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
 
   gretl::set_as_objective(reaction_squared);
   std::cout << "final disp norm2 = " << reaction_squared.get() << std::endl;
@@ -170,7 +180,7 @@ TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
   EXPECT_GT(checkGradWrt(reaction_squared, params[1], 3.2e-1, 4, true), 0.7);
 }
 
-TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
+TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_BASE_PHYSICS)
 {
   SMITH_MARK_FUNCTION;
 
@@ -180,9 +190,6 @@ TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
       buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   smith::SecondOrderTimeIntegrationRule time_rule(1.0);
-
-  // warm-start.
-  // implicit Newmark.
 
   auto [physics, weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
@@ -227,27 +234,29 @@ TEST_F(SolidMechanicsMeshFixture, TestQoiSensitivities_Gretl)
 
   physics->resetStates();
 
-  double time_increment = 0.5;
-  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
-  pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
-  for (size_t m = 0; m < 5; ++m) {
-    physics->advanceTimestep(time_increment);
-    pv_writer.write(m + 1, physics->time(), physics->getFieldStatesAndParamStates());
+  double qoi = integrateForward(physics);
+  std::cout << "qoi = " << qoi << std::endl;
+
+  size_t num_params = physics->parameterNames().size();
+
+  smith::FiniteElementDual shape_sensitivity(*shape_disp.get_dual());
+  std::vector<smith::FiniteElementDual> parameter_sensitivities;
+  for (size_t p = 0; p < num_params; ++p) {
+    parameter_sensitivities.emplace_back(*params[p].get_dual());
   }
 
-  TimeInfo time_info(physics->time() - time_increment, time_increment);
+  adjointBackward(physics, shape_sensitivity, parameter_sensitivities);
 
-  auto state_advancer = physics->getStateAdvancer();
-  auto reactions =
-      state_advancer->computeResultants(shape_disp, physics->getFieldStates(), physics->getFieldStatesOld(), params, time_info);
-  auto reaction_squared = innerProduct(reactions[0], reactions[0]);
+  auto state_sensitivities = physics->computeInitialConditionSensitivity();
+  for (auto name_and_state_sensitivity : state_sensitivities) {
+    std::cout << name_and_state_sensitivity.first << " " << name_and_state_sensitivity.second.Norml2() << std::endl;
+  }
 
-  gretl::set_as_objective(reaction_squared);
-  std::cout << "final disp norm2 = " << reaction_squared.get() << std::endl;
+  std::cout << shape_sensitivity.name() << " " << shape_sensitivity.Norml2() << std::endl;
 
-  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 3.2e-1, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, params[1], 3.2e-1, 4, true), 0.7);
+  for (size_t p = 0; p < num_params; ++p) {
+    std::cout << parameter_sensitivities[p].name() << " " << parameter_sensitivities[p].Norml2() << std::endl;
+  }
 }
 
 }  // namespace smith

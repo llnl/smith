@@ -31,6 +31,7 @@ set(differentiable_numerics_headers
     dirichlet_boundary_conditions.hpp
     time_integration_rule.hpp
     time_discretized_weak_form.hpp
+    differentiable_solid_mechanics.hpp
     )
 
 set(differentiable_numerics_depends

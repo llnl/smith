@@ -58,7 +58,6 @@ inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const T
   });
 
   z.set_vjp([=](gretl::UpstreamStates& inputs, const gretl::DownstreamState& output) {
-    printf("reverse residual\n");
     SMITH_MARK_FUNCTION;
 
     const FEDualPtr Z = output.get<FEDualPtr, FEFieldPtr>();

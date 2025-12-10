@@ -198,14 +198,14 @@ struct MeshFixture : public testing::Test {
   double integrateForward()
   {
     resetAndApplyInitialConditions();
-    double lido_qoi = 0.0;
+    double base_physics_qoi = 0.0;
     for (size_t m = 0; m < num_steps; ++m) {
       physics->advanceTimestep(dt);
-      lido_qoi += (*kinetic_energy_integrator)(physics->time(), physics->shapeDisplacement(), physics->state(velo_name),
-                                               physics->parameter(DENSITY));
+      base_physics_qoi += (*kinetic_energy_integrator)(physics->time(), physics->shapeDisplacement(),
+                                                       physics->state(velo_name), physics->parameter(DENSITY));
     }
 
-    return lido_qoi;
+    return base_physics_qoi;
   }
 
   void adjointBackward(smith::FiniteElementDual& shape_sensitivity,
@@ -262,7 +262,7 @@ struct MeshFixture : public testing::Test {
   const size_t num_steps = 4;
 };
 
-TEST_F(MeshFixture, TRANSIENT_DYNAMICS_LIDO)
+TEST_F(MeshFixture, TRANSIENT_DYNAMICS_BASE_PHYSICS)
 {
   SMITH_MARK_FUNCTION;
 
