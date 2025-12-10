@@ -263,10 +263,9 @@ FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const 
   }
 }
 
-FieldState solve(const WeakForm* residual_eval, const FieldState& shape_disp,
-                        const std::vector<FieldState>& states, const std::vector<FieldState>& params,
-                        const TimeInfo& time_info, const DifferentiableSolver* solver,
-                        const BoundaryConditionManager* bc_manager)
+FieldState solve(const WeakForm* residual_eval, const FieldState& shape_disp, const std::vector<FieldState>& states,
+                 const std::vector<FieldState>& params, const TimeInfo& time_info, const DifferentiableSolver* solver,
+                 const BoundaryConditionManager* bc_manager)
 {
   std::vector<double> state_update_weights(states.size(), 0.0);
   state_update_weights[0] = 1.0;

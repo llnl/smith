@@ -13,8 +13,7 @@ namespace smith {
 using smith::FiniteElementDual;
 using smith::FiniteElementState;
 
-inline int to_int(size_t i) { return static_cast<int>(i); }
-
+/// @brief Utility to compute the matrix norm
 inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 {
   mfem::HypreParMatrix* H = K.get();
@@ -24,6 +23,7 @@ inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
   return Hfronorm;
 }
 
+/// @brief Utility to compute 0.5*norm(K-K.T)
 inline double skewMatrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 {
   auto K_T = std::unique_ptr<mfem::HypreParMatrix>(K->Transpose());
