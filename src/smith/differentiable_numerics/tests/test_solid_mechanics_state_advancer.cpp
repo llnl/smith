@@ -259,6 +259,112 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_BASE_PHYSICS)
   }
 }
 
+TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
+{
+  SMITH_MARK_FUNCTION;
+
+  const double dt = 1e-2;
+  const size_t dt_reduction = 10;
+  const size_t num_steps = 4;
+  std::string physics_name = "solid";
+
+  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
+      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+
+  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
+
+  auto [physics, weak_form, bcs] =
+      buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
+          mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
+
+  double E = 100.0;
+  double nu = 0.25;
+  auto K = E / (3.0 * (1.0 - 2 * nu));
+  auto G = E / (2.0 * (1.0 + nu));
+  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
+  MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
+
+  weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
+      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
+        MaterialType::State state;
+        auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
+        return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
+      });
+
+  auto shape_disp = physics->getShapeDispFieldState();
+  auto params = physics->getFieldParams();
+  auto states = physics->getInitialFieldStates();
+
+  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    double scaling = 1.0;
+    return scaling * material.K0;
+  });
+
+  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    double scaling = 1.0;
+    return scaling * material.G0;
+  });
+
+  physics->resetStates();
+
+  auto all_fields = physics->getFieldStatesAndParamStates();
+
+  std::string pv_dir = std::string("paraview_") + physics->name();
+  std::cout << "Writing output to " << pv_dir << std::endl;
+  auto pv_writer = createParaviewOutput(*mesh, all_fields, pv_dir);
+  pv_writer.write(physics->cycle(), physics->time(), all_fields);
+  double time = 0.0;
+  for (size_t m = 0; m < dt_reduction * num_steps; ++m) {
+    double timestep = dt / double(dt_reduction);
+    physics->advanceTimestep(timestep);
+    all_fields = physics->getFieldStatesAndParamStates();
+    pv_writer.write(physics->cycle(), physics->time(), all_fields);
+    time += timestep;
+  }
+
+  // static constexpr double gravity = -9.0;
+  // double a_exact = gravity;
+  // double v_exact = gravity * time;
+  // double u_exact = 0.5 * gravity * time * time;
+
+  // FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh,
+  //                                                               spaces({all_fields[ACCEL]}));
+  // accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
+  //   auto a = get<VALUE>(A);
+  //   auto da0 = a[0];
+  //   auto da1 = a[1] - a_exact;
+  //   return da0 * da0 + da1 * da1;
+  // });
+  // double a_err = accel_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp->get().get(),
+  //                                     getConstFieldPointers({all_fields[ACCEL]}));
+  // EXPECT_NEAR(0.0, a_err, 1e-14);
+
+  // FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh,
+  //                                                                            spaces({all_fields[VELO]}));
+  // velo_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
+  //   auto v = get<VALUE>(V);
+  //   auto dv0 = v[0];
+  //   auto dv1 = v[1] - v_exact;
+  //   return dv0 * dv0 + dv1 * dv1;
+  // });
+  // double v_err = velo_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp->get().get(),
+  //                                    getConstFieldPointers({all_fields[VELO]}));
+  // EXPECT_NEAR(0.0, v_err, 1e-14);
+
+  // FunctionalObjective<dim, Parameters<VectorSpace>> disp_error("disp_error", mesh,
+  //                                                                            spaces({all_fields[DISP]}));
+  // disp_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
+  //   auto u = get<VALUE>(U);
+  //   auto du0 = u[0];
+  //   auto du1 = u[1] - u_exact;
+  //   return du0 * du0 + du1 * du1;
+  // });
+  // double u_err = disp_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp->get().get(),
+  //                                    getConstFieldPointers({all_fields[DISP]}));
+  // EXPECT_NEAR(0.0, u_err, 1e-14);
+}
+
 }  // namespace smith
 
 int main(int argc, char* argv[])
