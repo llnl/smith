@@ -36,6 +36,7 @@ inline double skewMatrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
   return Hfronorm;
 }
 
+/// @brief Initialize mfem solver if near-nullspace is needed
 void initializeSolver(mfem::Solver* mfem_solver, const smith::FiniteElementState& u)
 {
   // If the user wants the AMG preconditioner with a linear solver, set the pfes

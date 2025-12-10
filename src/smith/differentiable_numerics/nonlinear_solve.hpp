@@ -24,6 +24,19 @@ class DifferentiableSolver;
 class BoundaryConditionManager;
 class DirichletBoundaryConditions;
 
+/// @brief Solve a nonlinear system of equations as defined by the weak form
+/// @param residual_eval The weak form which defines the equations to be solved
+/// @param shape_disp The mesh-morphed shape displacement
+/// @param states The time varying states as inputs to the weak form
+/// @param params The fixed field parameters as inputs to the weak form
+/// @param state_update_weights Specifies how to blend the arguments of the weak form into a unique unknown.  The primary unknown is states[primal_solve_state_index].  However, other arguments to the weak form may depend on this unknown.
+/// The state_update_weights specify how this is done.  For a nonzero weight, the field argument i is assumed to be 
+/// @param primal_solve_state_index Index specifying which of the states is the primary unknown.
+/// @param primal_solve_state_index Index specifying which of the states is the primary unknown.
+/// @param time_info Timestep information (time, dt, cycle)
+/// @param solver The differentiable, potentially nonlinear, equation solver used to solve the system of equations
+/// @param bcs Holds information about which degrees of freedom (DOFS), and has the information about the time and space varying values for the boundary conditions
+/// @return The field solution to the weak form
 FieldState nonlinearSolve(const WeakForm* residual_eval, const FieldState& shape_disp,
                           const std::vector<FieldState>& states, const std::vector<FieldState>& params,
                           const std::vector<double>& state_update_weights, size_t primal_solve_state_index,
@@ -31,20 +44,35 @@ FieldState nonlinearSolve(const WeakForm* residual_eval, const FieldState& shape
                           const DifferentiableSolver* solver, const BoundaryConditionManager* bc_manager,
                           const FieldState* bc_field = nullptr);
 
+/// @brief Solve a nonlinear system of equations as defined by the weak form, assuming that the field indexed by unknown_index is the unknown field
+/// @param x_guess Initial guess
+/// @param shape_disp The mesh-morphed shape displacement
+/// @param states The time varying states as inputs to the weak form
+/// @param params The fixed field parameters as inputs to the weak form
+/// @param time_info Timestep information (time, dt, cycle)
+/// @param residual_eval The weak form which defines the equations to be solved
+/// @param solver The differentiable, potentially nonlinear, equation solver used to solve the system of equations
+/// @param bcs Holds information about which degrees of freedom (DOFS), and has the information about the time and space varying values for the boundary conditions
+/// @param unknown_index 
+/// @return The field solution to the weak form
 FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const std::vector<FieldState>& params,
                  const TimeInfo& time_info, const WeakForm& weak_form, const DifferentiableSolver& solver,
                  const DirichletBoundaryConditions& bcs, size_t unknown_index = 0);
 
-inline FieldState solve(const WeakForm* residual_eval, const FieldState& shape_disp,
+/// @brief Solve a nonlinear system of equations as defined by the weak_form, assuming the first field in states is the
+/// unknown field
+/// @param residual_eval The weak form which defines the equations to be solved
+/// @param shape_disp The mesh-morphed shape displacement
+/// @param states The time varying states as inputs to the weak form
+/// @param params The fixed field parameters as inputs to the weak form
+/// @param time_info Timestep information (time, dt, cycle)
+/// @param solver The differentiable, potentially nonlinear, equation solver used to solve the system of equations
+/// @param bc_manager Holds information about which degrees of freedom (DOFS), and has the information about the time and space varying values for the boundary conditions
+/// @return The field solution to the weak form
+FieldState solve(const WeakForm* residual_eval, const FieldState& shape_disp,
                         const std::vector<FieldState>& states, const std::vector<FieldState>& params,
                         const TimeInfo& time_info, const DifferentiableSolver* solver,
-                        const BoundaryConditionManager* bc_manager)
-{
-  std::vector<double> state_update_weights(states.size(), 0.0);
-  state_update_weights[0] = 1.0;
-  return nonlinearSolve(residual_eval, shape_disp, states, params, state_update_weights, 0, 0, time_info, solver,
-                        bc_manager);
-}
+                        const BoundaryConditionManager* bc_manager);
 
 /// @brief Solve a nonlinear system of equations as defined by the weak_form, assuming the first field in states is the
 /// unknown field

@@ -262,6 +262,18 @@ FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const 
                           time_info, &solver, &bcs.getBoundaryConditionManager());
   }
 }
+
+FieldState solve(const WeakForm* residual_eval, const FieldState& shape_disp,
+                        const std::vector<FieldState>& states, const std::vector<FieldState>& params,
+                        const TimeInfo& time_info, const DifferentiableSolver* solver,
+                        const BoundaryConditionManager* bc_manager)
+{
+  std::vector<double> state_update_weights(states.size(), 0.0);
+  state_update_weights[0] = 1.0;
+  return nonlinearSolve(residual_eval, shape_disp, states, params, state_update_weights, 0, 0, time_info, solver,
+                        bc_manager);
+}
+
 /*
 std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
                                     const std::vector<std::vector<size_t>> block_indices, const FieldState& shape_disp,
