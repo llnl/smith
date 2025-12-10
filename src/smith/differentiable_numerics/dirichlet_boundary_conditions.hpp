@@ -27,7 +27,15 @@ class DirichletBoundaryConditions {
   /// @brief Construct from smith::Mesh
   DirichletBoundaryConditions(const Mesh& mesh, mfem::ParFiniteElementSpace& space);
 
-  ///
+  /// @brief Specify time and space varying Dirichlet boundary conditions over a domain.
+  /// @param domain domain All dofs in this domain have boundary conditions applied to it.
+  /// @param components vectors of computents.  The applied_displacement function returns the full vector, this
+  /// specifies which subset of those should have dirichlet boundary conditions applied.  direction to apply boundary
+  /// condition to if the underlying field is a vector-field.
+  /// @param applied_displacement applied_displacement is a functor which takes time, and a
+  /// smith::tensor<double,spatial_dim> corresponding to the spatial coordinate.  The functor must return a
+  /// smith::Tensor<double,field_dim>, where field_dim is the dimension of the vector space for the field.  For example:
+  /// [](double t, smith::tensor<double, dim> X) { return smith::tensor<double,2>{}; }
   template <int spatial_dim, typename AppliedDisplacementFunction>
   void setVectorBCs(const Domain& domain, std::vector<int> components, AppliedDisplacementFunction applied_displacement)
   {
@@ -50,6 +58,7 @@ class DirichletBoundaryConditions {
     }
   }
 
+  /// @overload
   template <int spatial_dim, typename AppliedDisplacementFunction>
   void setVectorBCs(const Domain& domain, AppliedDisplacementFunction applied_displacement)
   {
@@ -61,12 +70,12 @@ class DirichletBoundaryConditions {
     setVectorBCs<spatial_dim>(domain, components, applied_displacement);
   }
 
-  /// @brief
-  /// @tparam AppliedDisplacementFunction
-  /// @tparam spatial_dim
-  /// @param domain domain
-  /// @param component component
-  /// @param applied_displacement applied_displacement
+  /// @brief Specify time and space varying Dirichlet boundary conditions over a domain.
+  /// @param domain domain All dofs in this domain have boundary conditions applied to it.
+  /// @param component component direction to apply boundary condition to if the underlying field is a vector-field.
+  /// @param applied_displacement applied_displacement is a functor which takes time, and a
+  /// smith::tensor<double,spatial_dim> corresponding to the spatial coordinate.  The functor must return a double.  For
+  /// example: [](double t, smith::tensor<double, dim> X) { return 1.0; }
   template <int spatial_dim, typename AppliedDisplacementFunction>
   void setScalarBCs(const Domain& domain, int component, AppliedDisplacementFunction applied_displacement)
   {
@@ -87,16 +96,7 @@ class DirichletBoundaryConditions {
     bcs_.addEssential(dof_list, component_disp_bdr_coef_, space_, component);
   }
 
-  bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
-    auto bc = 0.0 * X;
-    bc[0] = 0.01 * t;
-    bc[1] = -0.05 * t;
-    return bc;
-  });
-
-  /// @brief Specify time and space varying Dirichlet boundary conditions over a domain.
-  /// @param domain domain
-  /// @param applied_displacement component
+  /// @overload
   template <int spatial_dim, typename AppliedDisplacementFunction>
   void setScalarBCs(const Domain& domain, AppliedDisplacementFunction applied_displacement)
   {
