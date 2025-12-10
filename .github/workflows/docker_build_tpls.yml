@@ -14,7 +14,7 @@ jobs:
         dockerfile_suffix: [clang-19, gcc-14] #, cuda-12]
     env:
       REPO: seracllnl/tpls
-      HOSTCONFIG_LOC: /home/serac/export_hostconfig
+      HOSTCONFIG_LOC: /home/smith/export_hostconfig
       DOCKERFILE_PREFIX: ./scripts/docker/dockerfile_
     steps:
     - name: Extract branch name
