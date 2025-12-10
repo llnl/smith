@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 #include "gretl/data_store.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"

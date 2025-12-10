@@ -159,13 +159,10 @@ class DifferentiablePhysics : public BasePhysics {
                                         ///< advanceTimestep(dt). this information is used to halt the gretl graph when
                                         ///< back-propagating to allow users of reverseAdjointTimestep to specify
                                         ///< adjoint loads and to retrieve timestep sensitivity information.
-<<<<<<< HEAD
 
   double time_old_ = 0.0;
   double dt_old_ = 0.0;
   int cycle_old_ = 0;
-=======
->>>>>>> gretl_submodule
 };
 
 }  // namespace smith
