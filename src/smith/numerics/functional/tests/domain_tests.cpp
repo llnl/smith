@@ -17,6 +17,12 @@
 #include "smith/smith_config.hpp"
 #include "smith/mesh_utils/mesh_utils.hpp"
 
+#include "smith/smith_config.hpp"
+#include "smith/numerics/functional/functional.hpp"
+#include "smith/numerics/functional/shape_aware_functional.hpp"
+#include "smith/numerics/functional/tensor.hpp"
+#include "smith/physics/state/finite_element_state.hpp"
+
 using namespace smith;
 
 std::string mesh_dir = SMITH_REPO_DIR "/data/meshes/";
@@ -35,6 +41,14 @@ mfem::Mesh import_mesh(std::string meshfile)
   mesh.EnsureNodes();
   return mesh;
 }
+
+struct IdentityFunctor {
+  template <typename Arg1, typename Arg2>
+  SMITH_HOST_DEVICE auto operator()(Arg1, Arg2) const
+  {
+    return 1.0;
+  }
+};
 
 TEST(domain, of_edges)
 {
@@ -125,6 +139,129 @@ TEST(domain, of_edges)
 
     Domain d5 = Domain::ofBoundaryElements(*mesh, [](std::vector<vec2>, int) { return true; });
     EXPECT_EQ(d5.edge_ids_.size(), 18);  // 1x8 row of quads has 18 boundary edges
+  }
+}
+
+TEST(domain, of_boundary_elements)
+{ {
+    auto bmesh =
+      mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::QUADRILATERAL, true, 1.0, 1.0);;
+    bmesh.FinalizeQuadMesh(true);
+    auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
+
+    Domain d0 = Domain::ofBoundaryElements(*mesh, std::function([](std::vector<vec2> X, int /* bdr_attr */) {
+      for (auto &x: X){
+      auto y_val = x[1];
+      if (y_val > 0.99)
+        return true;
+      }  
+      return false;
+    }));// top face
+
+    Domain d1 = Domain::ofBoundaryElements(*mesh, std::function([](std::vector<vec2> X, int /* bdr_attr */) {
+      for (auto &x: X){
+      auto x_val = x[0];
+      if (x_val > 0.99)
+        return true;
+      }  
+      return false;
+    })); // right face
+
+    Domain d2 = Domain::ofBoundaryElements(*mesh, std::function([](std::vector<vec2> X, int /* bdr_attr */) {
+      for (auto &x: X){
+      auto y_val = x[1];
+      if (y_val < 0.01)
+        return true;
+      }  
+      return false;
+    })); // bot
+
+    Domain d3 = Domain::ofBoundaryElements(*mesh, std::function([](std::vector<vec2> X, int /* bdr_attr */) {
+      for (auto &x: X){
+      auto x_val = x[0];
+      if (x_val < 0.01)
+        return true;
+      }  
+      return false;
+    })); // left
+
+    EXPECT_EQ(d0.edge_ids_.size(), 4);
+    EXPECT_EQ(d0.dim_, 1);
+    EXPECT_EQ(d1.edge_ids_.size(), 4);
+    EXPECT_EQ(d1.dim_, 1);
+    EXPECT_EQ(d2.edge_ids_.size(), 4);
+    EXPECT_EQ(d2.dim_, 1);
+    EXPECT_EQ(d3.edge_ids_.size(), 4);
+    EXPECT_EQ(d3.dim_, 1);
+
+    Domain d4 = d0 | d1;
+    Domain d5 = d0 | d2;
+    Domain d6 = d0 & d1;
+
+    EXPECT_EQ(d4.edge_ids_.size(), 6);
+    EXPECT_EQ(d5.edge_ids_.size(), 8);
+    EXPECT_EQ(d6.edge_ids_.size(), 2);
+  }
+
+  {
+    auto bmesh =
+      mfem::Mesh::MakeCartesian3D(2, 2, 2,mfem::Element::HEXAHEDRON, true, 1.0, 1.0,1.0);;
+    bmesh.FinalizeQuadMesh(true);
+    auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
+
+    Domain d0 = Domain::ofBoundaryElements(*mesh, std::function([](std::vector<vec3> X, int /* bdr_attr */) {
+      for (auto &x: X){
+      auto y_val = x[1];
+      if (y_val > 0.99)
+        return true;
+      }  
+      return false;
+    }));// top face
+
+    Domain d1 = Domain::ofBoundaryElements(*mesh, std::function([](std::vector<vec3> X, int /* bdr_attr */) {
+      for (auto &x: X){
+      auto x_val = x[0];
+      if (x_val > 0.99)
+        return true;
+      }  
+      return false;
+    })); // right face
+
+    Domain d2 = Domain::ofBoundaryElements(*mesh, std::function([](std::vector<vec3> X, int /* bdr_attr */) {
+      for (auto &x: X){
+      auto y_val = x[1];
+      if (y_val < 0.01)
+        return true;
+      }  
+      return false;
+    })); // bot
+
+    Domain d3 = Domain::ofBoundaryElements(*mesh, std::function([](std::vector<vec3> X, int /* bdr_attr */) {
+      for (auto &x: X){
+      auto x_val = x[0];
+      if (x_val < 0.01)
+        return true;
+      }  
+      return false;
+    })); // left
+
+    EXPECT_EQ(d0.quad_ids_.size(), 12);
+    EXPECT_EQ(d0.dim_, 2);
+    EXPECT_EQ(d1.quad_ids_.size(), 12);
+    EXPECT_EQ(d1.dim_, 2);
+    EXPECT_EQ(d2.quad_ids_.size(), 12);
+    EXPECT_EQ(d2.dim_, 2);
+    EXPECT_EQ(d3.quad_ids_.size(), 12);
+    EXPECT_EQ(d3.dim_, 2);
+
+    Domain d4 = d0 | d1;
+    Domain d5 = d0 | d2;
+    Domain d6 = d0 & d1;
+
+    EXPECT_EQ(d4.quad_ids_.size(), 18);
+    EXPECT_EQ(d5.quad_ids_.size(), 24);
+    EXPECT_EQ(d6.quad_ids_.size(), 6);
+
   }
 }
 
@@ -490,6 +627,61 @@ TEST(domain, of3dBoundaryElementsFindsDofs)
   dof_indices = d2.dof_list(&fes);
 
   EXPECT_EQ(dof_indices.Size(), 15);
+}
+
+TEST(domain, interior)
+{
+  {
+    auto expectedArea = 40.0;
+    auto meshInput = buildMeshFromFile(SMITH_REPO_DIR "/data/meshes/PartitionedToothPasteL20_Try3.g");
+    auto mesh = smith::mesh::refineAndDistribute(std::move(meshInput), 0, 0);
+
+    Domain d0 = Domain::ofInteriorBoundaries(*mesh, by_attr<3>(2)); 
+    using test_space = double;
+    using trial_space = H1<1>;
+    auto [trial_fespace, trial_fec] = smith::generateParFiniteElementSpace<trial_space>(mesh.get());
+    mfem::Vector U(trial_fespace->TrueVSize());
+    
+    // Calculate the area of the internal boundary region
+    Functional<test_space(trial_space)> totalArea({trial_fespace.get()});
+
+    totalArea.AddBoundaryIntegral(smith::Dimension<2>{}, smith::DependsOn<>{}, IdentityFunctor{}, d0);
+    double calculatedArea = totalArea(0.0, U);
+
+    EXPECT_NEAR(calculatedArea, expectedArea, 1e-6);
+
+    Domain d1 = Domain::ofBoundaryElements(*mesh,by_attr<3>(1));
+    Domain d2 = d1|d0;
+    EXPECT_EQ(d2.tri_ids_.size(), 4334);
+  }
+
+  {
+    auto expectedArea = 1.0;
+    auto meshInput = buildMeshFromFile(SMITH_REPO_DIR "/data/meshes/SplitCubeTest.g");
+    auto mesh = smith::mesh::refineAndDistribute(std::move(meshInput), 0, 0);
+
+    Domain d0 = Domain::ofInteriorBoundaries(*mesh, by_attr<3>(2)); 
+    using test_space = double;
+    using trial_space = H1<1>;
+    auto [trial_fespace, trial_fec] = smith::generateParFiniteElementSpace<trial_space>(mesh.get());
+    mfem::Vector U(trial_fespace->TrueVSize());
+    
+    // Calculate the area of the internal boundary region
+    Functional<test_space(trial_space)> totalArea({trial_fespace.get()});
+
+    totalArea.AddBoundaryIntegral(smith::Dimension<2>{}, smith::DependsOn<>{}, IdentityFunctor{}, d0);
+    double calculatedArea = totalArea(0.0, U);
+
+    EXPECT_NEAR(calculatedArea, expectedArea, 1e-6);
+
+    Domain d1 = Domain::ofBoundaryElements(*mesh,by_attr<3>(1));
+
+    Domain d2 = d1|d0;
+    EXPECT_EQ(d2.quad_ids_.size(), 28);
+
+
+  }
+
 }
 
 int main(int argc, char* argv[])

@@ -291,7 +291,7 @@ void Domain::addElements(const std::vector<int>& geom_ids, const std::vector<int
                          mfem::Geometry::Type element_geometry)
 {
   SLIC_ERROR_IF(geom_ids.size() != elem_ids.size(),
-                "To add elements, you must specify a geom_id AND an elem_id for each element");
+               "To add elements, you must specify a geom_id AND an elem_id for each element");
 
   for (std::vector<int>::size_type i = 0; i < geom_ids.size(); ++i) {
     addElement(geom_ids[i], elem_ids[i], element_geometry);
@@ -322,10 +322,26 @@ static Domain domain_of_boundary_elems(const mesh_t& mesh,
 
   // faces that satisfy the predicate are added to the domain
   for (int f = 0; f < mesh.GetNumFaces(); f++) {
-    // discard faces with the wrong type
-    if (mesh.GetFaceInformation(f).IsInterior()) continue;
 
     auto geom = mesh.GetFaceGeometry(f);
+
+    // discard faces with the wrong type
+    if (mesh.GetFaceInformation(f).IsInterior()) {
+      switch (geom) {
+        case mfem::Geometry::SEGMENT:
+          edge_id++;
+          break;
+        case mfem::Geometry::TRIANGLE:
+          tri_id++;
+          break;
+        case mfem::Geometry::SQUARE:
+          quad_id++;
+          break;
+        default:
+          SLIC_ERROR("unsupported element type");
+        break;
+      }
+      continue;};
 
     mfem::Array<int> vertex_ids;
     mesh.GetFaceVertices(f, vertex_ids);
@@ -660,6 +676,104 @@ Domain InteriorFaces(const mesh_t& mesh)
   return output;
 }
 
+template <int d>
+static Domain domain_of_interior_boundary_elements(const mesh_t& mesh,
+                                       std::function<bool(std::vector<tensor<double, d>>, int)> predicate)
+{
+  assert(mesh.SpaceDimension() == d);
+
+  Domain output{mesh, d - 1, Domain::Type::BoundaryElements};
+
+  mfem::Array<int> face_id_to_bdr_id = mesh.GetFaceToBdrElMap();
+
+  // layout is undocumented, but it seems to be
+  // [x1, x2, x3, ..., y1, y2, y3 ..., (z1, z2, z3, ...)]
+  mfem::Vector vertices;
+  mesh.GetVertices(vertices);
+
+  int edge_id = 0;
+  int tri_id = 0;
+  int quad_id = 0;
+
+  // faces that satisfy the predicate are added to the domain
+  for (int f = 0; f < mesh.GetNumFaces(); f++) {
+
+    auto geom = mesh.GetFaceGeometry(f);
+
+    // discard faces with the wrong type (skip rest of loop if we are not interior)
+    if (!mesh.GetFaceInformation(f).IsInterior()) {
+      switch (geom) {
+        case mfem::Geometry::SEGMENT:
+          edge_id++;
+          break;
+        case mfem::Geometry::TRIANGLE:
+          tri_id++;
+          break;
+        case mfem::Geometry::SQUARE:
+          quad_id++;
+          break;
+        default:
+          SLIC_ERROR("unsupported element type");
+        break;
+      }
+      continue;};
+
+    mfem::Array<int> vertex_ids;
+    mesh.GetFaceVertices(f, vertex_ids);
+
+    auto x = gather<d>(vertices, vertex_ids);
+
+    int bdr_id = face_id_to_bdr_id[f];
+    int attr = (bdr_id >= 0) ? mesh.GetBdrAttribute(bdr_id) : -1;
+
+    bool add = predicate(x, attr);
+
+    switch (geom) {
+      case mfem::Geometry::SEGMENT:
+        if (add) {
+          output.addElement(edge_id, f, geom);
+          //output.edge_ids_.push_back(edge_id++);
+          //output.mfem_edge_ids_.push_back(f);
+        }
+        edge_id++;
+        break;
+      case mfem::Geometry::TRIANGLE:
+        if (add) {
+          output.addElement(tri_id, f, geom);
+          //output.edge_ids_.push_back(edge_id++);
+          //output.mfem_edge_ids_.push_back(f);
+        }
+        tri_id++;
+        break;
+      case mfem::Geometry::SQUARE:
+        if (add) {
+          output.addElement(quad_id, f, geom);
+          //output.edge_ids_.push_back(edge_id++);
+          //output.mfem_edge_ids_.push_back(f);
+        }
+        quad_id++;
+        break;
+      default:
+        SLIC_ERROR("unsupported element type");
+        break;
+    }
+  }
+
+  return output;
+}
+
+Domain Domain::ofInteriorBoundaries(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func)
+{
+  return domain_of_interior_boundary_elements<2>(mesh, func);
+}
+
+Domain Domain::ofInteriorBoundaries(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func)
+{
+  return domain_of_interior_boundary_elements<3>(mesh, func);
+}
+
+
+
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -734,8 +848,34 @@ Domain set_operation(SET_OPERATION op, const Domain& a, const Domain& b)
 
   auto fill_combined_lists = [apply_set_op, &combined](const Ids& a_ids, const Ids& a_mfem_ids, const Ids& b_ids,
                                                        const Ids& b_mfem_ids, mfem::Geometry::Type g) {
+    // std::cout << "a ids: " << a_ids.size() << std::endl;
+    // std::cout << "b ids: " << b_ids.size() << std::endl;
+    // std::cout << "a mfem ids: " << a_mfem_ids.size() << std::endl;
+    // std::cout << "b mfem ids: " << b_mfem_ids.size() << std::endl;
+    // for(int i = 0;i<int(a_ids.size());i++){
+    //   std::cout << "a id #: "  << a_ids[i] << std::endl;
+    // }
+    // for(int i = 0;i<int(a_mfem_ids.size());i++){
+    //   std::cout << "a mfem id #: " << a_mfem_ids[i] << std::endl;
+    // }
+    // for(int i = 0;i<int(b_ids.size());i++){ 
+    //   std::cout << "b id #: " << b_ids[i] << std::endl;
+    // }
+    // for(int i = 0;i<int(b_mfem_ids.size());i++){ 
+    //   std::cout << "b mfem id #: " << b_mfem_ids[i] << std::endl;
+    // }
     auto combined_ids = apply_set_op(a_ids, b_ids);
     auto combined_mfem_ids = apply_set_op(a_mfem_ids, b_mfem_ids);
+    // std::cout << "combined ids: " << combined_ids.size() << std::endl;
+    // std::cout << "combined mfem ids: " << combined_mfem_ids.size() << std::endl;
+
+    // for(int i = 0;i<int(combined_ids.size());i++){ 
+    //   std::cout << "combined ids #: "<< combined_ids[i] << std::endl;
+    // }
+    // for(int i = 0;i<int(combined_mfem_ids.size());i++){ 
+    //   std::cout << "combined mfem ids #: " << combined_mfem_ids[i] << std::endl;
+    // }
+
     combined.addElements(combined_ids, combined_mfem_ids, g);
   };
 
