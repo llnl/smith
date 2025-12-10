@@ -1,3 +1,9 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #include "smith/differentiable_numerics/lumped_mass_explicit_newmark_state_advancer.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"

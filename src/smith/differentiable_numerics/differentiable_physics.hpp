@@ -1,4 +1,4 @@
-// Copyright (c), Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -134,6 +134,7 @@ class DifferentiablePhysics : public BasePhysics {
   /// @brief Get state advancer
   std::shared_ptr<StateAdvancer> getStateAdvancer() const { return advancer_; }
 
+ private:
   std::shared_ptr<gretl::DataStore> checkpointer_;  ///< gretl data store manages dynamic checkpointing logic
   std::shared_ptr<StateAdvancer> advancer_;  ///< abstract interface for advancing state from one cycle to the next
 
@@ -158,10 +159,13 @@ class DifferentiablePhysics : public BasePhysics {
                                         ///< advanceTimestep(dt). this information is used to halt the gretl graph when
                                         ///< back-propagating to allow users of reverseAdjointTimestep to specify
                                         ///< adjoint loads and to retrieve timestep sensitivity information.
+<<<<<<< HEAD
 
   double time_old_ = 0.0;
   double dt_old_ = 0.0;
   int cycle_old_ = 0;
+=======
+>>>>>>> gretl_submodule
 };
 
 }  // namespace smith

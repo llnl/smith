@@ -188,7 +188,7 @@ FieldStateWeightedSum operator-(const FieldStateWeightedSum& ax, const FieldStat
 /// @brief subtract FieldStateWeightedSum from FieldState
 FieldStateWeightedSum operator-(const FieldState& ax, const FieldStateWeightedSum& by);
 
-// TO DO
+// TODO:
 // Add multplication of WeightedSum by a differentiable State<double> for improve efficiency
 // Consider adding divide operators, maybe component-wise things as well
 

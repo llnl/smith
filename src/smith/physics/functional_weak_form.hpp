@@ -44,7 +44,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * @brief Construct a new FunctionalWeakForm object
    *
    * @param physics_name A name for the physics module instance
-   * @param mesh The smith mesh
+   * @param mesh The Smith mesh
    * @param output_mfem_space Test space
    * @param input_mfem_spaces Vector of finite element spaces which are arguments to the residual
    */
