@@ -40,7 +40,8 @@ struct SecondOrderTimeIntegrationRule {
                                     [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                                     [[maybe_unused]] const T4& accel_old) const
   {
-    return velo_old;  //(1.0 / t.dt()) * (field_new - field_old);
+    // return velo_old;  //(1.0 / t.dt()) * (field_new - field_old);
+    return (1.0 / t.dt()) * (field_new - field_old);
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
