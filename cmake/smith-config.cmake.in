@@ -1,0 +1,192 @@
+# Copyright (c) Lawrence Livermore National Security, LLC and
+# other Smith Project Developers. See the top-level COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (BSD-3-Clause)
+#------------------------------------------------------------------------------
+
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+
+@PACKAGE_INIT@
+
+if(NOT SMITH_FOUND)
+
+  #----------------------------------------------------------------------------
+  # Set version and paths
+  #----------------------------------------------------------------------------
+
+  set(SMITH_VERSION       "@SMITH_VERSION_FULL@")
+  set(SMITH_VERSION_MAJOR "@SMITH_VERSION_MAJOR@")
+  set(SMITH_VERSION_MINOR "@SMITH_VERSION_MINOR@")
+  set(SMITH_VERSION_PATCH "@SMITH_VERSION_PATCH@")
+  
+  set(SMITH_INSTALL_PREFIX "@SMITH_INSTALL_PREFIX@")
+  set(SMITH_INCLUDE_DIRS "${SMITH_INSTALL_PREFIX}/include")
+
+  #----------------------------------------------------------------------------
+  # Set user configuration options and features
+  #----------------------------------------------------------------------------
+
+  set(SMITH_ENABLE_CODEVELOP   @SMITH_ENABLE_CODEVELOP@)
+  set(SMITH_ENABLE_CUDA        @SMITH_ENABLE_CUDA@)
+  set(SMITH_ENABLE_HIP         @SMITH_ENABLE_HIP@)
+  set(SMITH_ENABLE_MPI         @SMITH_ENABLE_MPI@)
+  set(SMITH_ENABLE_OPENMP      @SMITH_ENABLE_OPENMP@)
+
+  set(SMITH_USE_ADIAK          @SMITH_USE_ADIAK@)
+  set(SMITH_USE_AXOM           @SMITH_USE_AXOM@)
+  set(SMITH_USE_CAMP           @SMITH_USE_CAMP@)
+  set(SMITH_USE_CALIPER        @SMITH_USE_CALIPER@)
+  set(SMITH_USE_CONDUIT        @SMITH_USE_CONDUIT@)
+  set(SMITH_USE_CONTINUATION   @SMITH_USE_CONTINUATION@)
+  set(SMITH_USE_DFEM           @SMITH_USE_DFEM@)
+  set(SMITH_USE_ENZYME         @SMITH_USE_ENZYME@)
+  set(SMITH_USE_GRETL          @SMITH_USE_GRETL@)
+  set(SMITH_USE_HDF5           @SMITH_USE_HDF5@)
+  set(SMITH_USE_MFEM           @SMITH_USE_MFEM@)
+  set(SMITH_USE_MPI            @SMITH_USE_MPI@)
+  set(SMITH_USE_PETSC          @SMITH_USE_PETSC@)
+  set(SMITH_USE_RAJA           @SMITH_USE_RAJA@)
+  set(SMITH_USE_SLEPC          @SMITH_USE_SLEPC@)
+  set(SMITH_USE_STRUMPACK      @SMITH_USE_STRUMPACK@)
+  set(SMITH_USE_SUNDIALS       @SMITH_USE_SUNDIALS@)
+  set(SMITH_USE_TRIBOL         @SMITH_USE_TRIBOL@)
+  set(SMITH_USE_UMPIRE         @SMITH_USE_UMPIRE@)
+  
+  set(SMITH_ADIAK_DIR          "@ADIAK_DIR@")
+  set(SMITH_AXOM_DIR           "@AXOM_DIR@")
+  set(SMITH_CAMP_DIR           "@CAMP_DIR@")
+  set(SMITH_CALIPER_DIR        "@CALIPER_DIR@")
+  set(SMITH_CONDUIT_DIR        "@CONDUIT_DIR@")
+  set(SMITH_CONTINUATION_DIR   "@CONTINUATION_DIR@")
+  set(SMITH_ENZYME_DIR         "@ENZYME_DIR@")
+  set(SMITH_GRETL_DIR          "@SMITH_INSTALL_PREFIX@")
+  set(SMITH_HDF5_DIR           "@HDF5_DIR@")
+  set(SMITH_MFEM_DIR           "@MFEM_DIR@")
+  set(SMITH_PETSC_DIR          "@PETSC_DIR@")
+  set(SMITH_RAJA_DIR           "@RAJA_DIR@")
+  set(SMITH_SLEPC_DIR          "@SLEPC_DIR@")
+  set(SMITH_STRUMPACK_DIR      "@STRUMPACK_DIR@")
+  set(SMITH_SUNDIALS_DIR       "@SUNDIALS_DIR@")
+  set(SMITH_TRIBOL_DIR         "@TRIBOL_DIR@")
+  set(SMITH_UMPIRE_DIR         "@UMPIRE_DIR@")
+
+  # Codevelop TPLs are installed alongside Smith
+  if(SMITH_ENABLE_CODEVELOP)
+    set(SMITH_AXOM_DIR "${SMITH_INSTALL_PREFIX}")
+    set(SMITH_MFEM_DIR "${SMITH_INSTALL_PREFIX}")
+  endif()
+
+  # Set to real variable unless user overrode it
+  foreach(dep ADIAK AXOM CAMP CALIPER CONDUIT HDF5 MFEM PETSC RAJA SLEPC STRUMPACK SUNDIALS TRIBOL UMPIRE)
+    if (NOT ${dep}_DIR)
+      set(${dep}_DIR "${SMITH_${dep}_DIR}")
+    endif()
+  endforeach()
+
+  #----------------------------------------------------------------------------
+  # Bring in required dependencies for this Smith configuration
+  #----------------------------------------------------------------------------
+  include(CMakeFindDependencyMacro)
+
+  # Enable various find commands to look in non-default paths
+  set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB32_PATHS TRUE)
+  set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
+  set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIBX32_PATHS TRUE)
+
+  # Adiak
+  if(SMITH_USE_ADIAK)
+    find_dependency(adiak REQUIRED PATHS "${ADIAK_DIR}" "${ADIAK_DIR}/lib/cmake/adiak")
+  endif()
+
+  # Caliper
+  if(SMITH_USE_CALIPER)
+    find_dependency(caliper REQUIRED PATHS "${CALIPER_DIR}" "${CALIPER_DIR}/share/cmake/caliper")
+  endif()
+
+  # See comment in SetupSmithThirdParty.cmake
+  if(SMITH_ENABLE_CUDA)
+    if(CMAKE_VERSION VERSION_LESS 3.17)
+      message(FATAL_ERROR "Smith+CUDA requires CMake > 3.17.")
+    else()
+      find_package(CUDAToolkit REQUIRED)
+    endif() 
+  endif()
+
+  # Camp
+  find_dependency(camp REQUIRED PATHS "${CAMP_DIR}")
+
+  # Umpire
+  if(SMITH_USE_UMPIRE)
+    find_dependency(umpire REQUIRED PATHS "${UMPIRE_DIR}")
+  endif()
+
+  # RAJA
+  if(SMITH_USE_RAJA)
+    find_dependency(raja REQUIRED PATHS "${RAJA_DIR}")
+  endif()
+
+  # Conduit
+  if(SMITH_USE_CONDUIT)
+    # Load mpi targets because we require the optional Conduit mpi targets
+    find_package(MPI REQUIRED)
+
+    find_dependency(Conduit REQUIRED
+                    PATHS "${CONDUIT_DIR}"
+                          "${CONDUIT_DIR}/lib/cmake/conduit")
+  endif()
+
+  # MFEM
+  if(SMITH_USE_MFEM AND NOT TARGET mfem)
+    set(SMITH_MFEM_BUILT_WITH_CMAKE @MFEM_BUILT_WITH_CMAKE@)
+    if(SMITH_MFEM_BUILT_WITH_CMAKE)
+      find_dependency(mfem REQUIRED PATHS "${MFEM_DIR}/lib/cmake/mfem" NAMES MFEM)
+      # MFEM include directories are added as the variable but not always added to the target itself
+      target_include_directories(mfem SYSTEM INTERFACE "${MFEM_INCLUDE_DIRS}")
+    else()
+      add_library(mfem INTERFACE IMPORTED GLOBAL)
+      target_include_directories(mfem SYSTEM INTERFACE "@MFEM_INCLUDE_DIRS@")
+      target_link_libraries(mfem INTERFACE "@MFEM_LIBRARIES@")
+    endif()
+  endif()
+
+  # Axom
+  # also covers fmt/cli11
+  if(SMITH_USE_AXOM)
+    find_dependency(Axom REQUIRED NO_DEFAULT_PATH PATHS "${AXOM_DIR}/lib/cmake")
+  endif()
+  
+  # HDF5
+  if(SMITH_USE_HDF5)
+    set(SMITH_HDF5_DIR     "@HDF5_DIR@")
+    # Note: Targets not currently imported
+  endif()
+
+  # Tribol
+  if(SMITH_USE_TRIBOL)
+    find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
+  endif()
+
+  # Enzyme
+  if(SMITH_USE_ENZYME)
+    set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
+    find_dependency(Enzyme REQUIRED)
+  endif()
+
+  # Gretl
+  if(SMITH_USE_GRETL)
+    find_dependency(gretl REQUIRED PATHS ${SMITH_GRETL_DIR}/lib/cmake)
+  endif()
+
+  #----------------------------------------------------------------------------
+  # Load BLT and Smith targets
+  #----------------------------------------------------------------------------
+  get_filename_component(SMITH_CMAKE_CONFIG_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+  include(${SMITH_CMAKE_CONFIG_DIR}/BLTSetupTargets.cmake)
+  include(${SMITH_CMAKE_CONFIG_DIR}/smith-targets.cmake)
+
+  #----------------------------------------------------------------------------
+  # Indicate that Smith is correctly set up
+  #----------------------------------------------------------------------------
+  set(SMITH_FOUND TRUE)
+
+endif()

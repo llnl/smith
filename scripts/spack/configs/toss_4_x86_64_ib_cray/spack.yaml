@@ -13,51 +13,44 @@ spack:
   view: false
 
   include:
-    - ../defaults.yaml
-    - ../versions.yaml
+  - ../defaults.yaml
+  - ../versions.yaml
 
-  compilers::
-  - compiler:
-      environment: {}
-      extra_rpaths: []
-      flags: {}
-      modules: []
-      operating_system: rhel8
-      paths:
-        cc: /opt/rocm-6.2.1/llvm/bin/amdclang
-        cxx: /opt/rocm-6.2.1/llvm/bin/amdclang++
-        f77: /opt/rocm-6.2.1/llvm/bin/amdflang
-        fc: /opt/rocm-6.2.1/llvm/bin/amdflang
-      spec: rocmcc@=6.2.1
-      target: x86_64
+  toolchains:
+    rocm_6_4_2:
+    - spec: '%c=llvm-amdgpu@6.4.2'
+      when: '%c'
+    - spec: '%cxx=llvm-amdgpu@6.4.2'
+      when: '%cxx'
+    - spec: '%fortran=llvm-amdgpu@6.4.2'
+      when: '%fortran'
+    - spec: '%cray-mpich@8.1.29.rocm_6_4_2'
+      when: '%mpi'
 
   packages:
     all:
-      target: [x86_64_v3]
-      #target: [zen2]
       providers:
         blas: [netlib-lapack]
         lapack: [netlib-lapack]
-        gl: [opengl]
-        glu: [openglu]
         zlib-api: [zlib]
         mpi: [cray-mpich]
+
+    # Compiler package(s)
+    llvm-amdgpu:
+      externals:
+      - spec: llvm-amdgpu@6.4.2
+        prefix: /opt/rocm-6.4.2/llvm
+        extra_attributes:
+          compilers:
+            c: /opt/rocm-6.4.2/llvm/bin/amdclang
+            cxx: /opt/rocm-6.4.2/llvm/bin/amdclang++
+            fortran: /opt/rocm-6.4.2/llvm/bin/amdflang
 
     # Providers
     netlib-lapack:
       buildable: false
       externals:
-      - spec: netlib-lapack@3.6.1
-        prefix: /usr
-    opengl:
-      buildable: false
-      externals:
-      - spec: opengl@1.7.0
-        prefix: /usr
-    openglu:
-      buildable: false
-      externals:
-      - spec: openglu@1.3.1
+      - spec: netlib-lapack@3.8.0
         prefix: /usr
     zlib:
       buildable: false
@@ -71,80 +64,95 @@ spack:
     cray-mpich:
       buildable: false
       externals:
-      - spec: cray-mpich@8.1.29%rocmcc@6.2.1+slurm
-        prefix: /usr/tce/packages/cray-mpich-tce/cray-mpich-8.1.29-rocmcc-6.2.1/
+      - spec: cray-mpich@8.1.29.rocm_6_4_2+slurm
+        prefix: /usr/tce/packages/cray-mpich-tce/cray-mpich-8.1.29-rocmcc-6.4.2/
 
     # ROCm
     hip:
       buildable: false
       externals:
-      - spec: hip@6.2.1
-        prefix: /opt/rocm-6.2.1
+      - spec: hip@6.4.2
+        prefix: /opt/rocm-6.4.2
     hipblas:
       buildable: false
       externals:
-      - spec: hipblas@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: hipblas@6.4.2
+        prefix: /opt/rocm-6.4.2
+    hipblas-common:
+      buildable: false
+      externals:
+      - spec: hipblas-common@6.4.2
+        prefix: /opt/rocm-6.4.2
+    hipsolver:
+      buildable: false
+      externals:
+      - spec: hipsolver@6.4.2
+        prefix: /opt/rocm-6.4.2
     hipsparse:
       buildable: false
       externals:
-      - spec: hipsparse@6.2.1
-        prefix: /opt/rocm-6.2.1/
-    llvm-amdgpu:
-      buildable: false
-      externals:
-      - spec: llvm-amdgpu@6.2.1
-        prefix: /opt/rocm-6.2.1/llvm
+      - spec: hipsparse@6.4.2
+        prefix: /opt/rocm-6.4.2
     hsa-rocr-dev:
       buildable: false
       externals:
-      - spec: hsa-rocr-dev@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: hsa-rocr-dev@6.4.2
+        prefix: /opt/rocm-6.4.2/
     rocblas:
       buildable: false
       externals:
-      - spec: rocblas@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: rocblas@6.4.2
+        prefix: /opt/rocm-6.4.2
     rocm-core:
       buildable: false
       externals:
-      - spec: rocm-core@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: rocm-core@6.4.2
+        prefix: /opt/rocm-6.4.2
     rocrand:
       buildable: false
       externals:
-      - spec: rocrand@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: rocrand@6.4.2
+        prefix: /opt/rocm-6.4.2
     rocminfo:
       buildable: false
       externals:
-      - spec: rocminfo@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: rocminfo@6.4.2
+        prefix: /opt/rocm-6.4.2
     rocsolver:
       buildable: false
       externals:
-      - spec: rocsolver@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: rocsolver@6.4.2
+        prefix: /opt/rocm-6.4.2
     rocsparse:
       buildable: false
       externals:
-      - spec: rocsparse@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: rocsparse@6.4.2
+        prefix: /opt/rocm-6.4.2
     rocthrust:
       buildable: false
       externals:
-      - spec: rocthrust@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: rocthrust@6.4.2
+        prefix: /opt/rocm-6.4.2
     rocprim:
       buildable: false
       externals:
-      - spec: rocprim@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: rocprim@6.4.2
+        prefix: /opt/rocm-6.4.2
     rocm-device-libs:
       buildable: false
       externals:
-      - spec: rocm-device-libs@6.2.1
-        prefix: /opt/rocm-6.2.1/
+      - spec: rocm-device-libs@6.4.2
+        prefix: /opt/rocm-6.4.2
+    rocm-openmp-extras:
+      buildable: false
+      externals:
+      - spec: rocm-openmp-extras@6.4.2
+        prefix: /opt/rocm-6.4.2
+    rocprofiler-dev:
+      buildable: false
+      externals:
+      - spec: rocprofiler-dev@6.4.2
+        prefix: /opt/rocm-6.4.2
 
     # System level packages to not build
     autoconf:
@@ -175,7 +183,7 @@ spack:
     curl:
       buildable: false
       externals:
-      - spec: curl@7.29.0
+      - spec: curl@7.61.1
         prefix: /usr
     diffutils:
       buildable: false
@@ -185,17 +193,12 @@ spack:
     elfutils:
       buildable: false
       externals:
-      - spec: elfutils@0.187
+      - spec: elfutils@0.190
         prefix: /usr
     expat:
       buildable: false
       externals:
       - spec: expat@2.2.5
-        prefix: /usr
-    libepoxy:
-      buildable: false
-      externals:
-      - spec: libepoxy@1.5.8
         prefix: /usr
     flex:
       buildable: false
@@ -235,12 +238,12 @@ spack:
     groff:
       buildable: false
       externals:
-      - spec: groff@1.22.2
+      - spec: groff@1.22.3
         prefix: /usr
     hwloc:
       buildable: false
       externals:
-      - spec: hwloc@2.9.0
+      - spec: hwloc@2.12.2
         prefix: /usr
     libtool:
       buildable: false
@@ -271,8 +274,8 @@ spack:
     ninja:
       buildable: false
       externals:
-      - spec: ninja@1.11.0
-        prefix: /usr/tce/packages/ninja/ninja-1.11.0
+      - spec: ninja@1.10.2
+        prefix: /usr/tce/packages/ninja/ninja-1.10.2
     openssl:
       buildable: false
       externals:
@@ -287,11 +290,6 @@ spack:
       buildable: false
       externals:
       - spec: pkg-config@1.4.2
-        prefix: /usr
-    pkgconf:
-      buildable: false
-      externals:
-      - spec: pkgconf@1.4.2
         prefix: /usr
     readline:
       buildable: false
@@ -325,8 +323,14 @@ spack:
       externals:
       - spec: python@3.9.12
         prefix: /usr/tce/packages/python/python-3.9.12
+    llvm:
+      version: [19.0.0]
+      buildable: false
+      externals:
+      - spec: llvm@19.0.0
+        prefix: /usr/tce/packages/rocmcc/rocmcc-6.4.2-magic/llvm
 
     # Platform-specific defaults and versions
     caliper:
-      require: 
-      - spec: "+shared"
+      require:
+      - spec: +shared

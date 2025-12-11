@@ -1,5 +1,5 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -14,42 +14,42 @@ cmake_minimum_required(VERSION 3.14)
 
 # Check for minimum CMake version required w/o changing policies like cmake_minimum_required
 if(ENABLE_CUDA AND ${CMAKE_VERSION} VERSION_LESS 3.18.0)
-    message(FATAL_ERROR "Serac requires CMake version 3.18.0+ when CUDA is enabled.")
+    message(FATAL_ERROR "Smith requires CMake version 3.18.0+ when CUDA is enabled.")
 endif()
 
-project(serac LANGUAGES CXX C)
+project(smith LANGUAGES CXX C)
 
-# MPI is required in Serac.
+# MPI is required in Smith.
 # Note: for the style only mode, which doesn't need to actually build, we need to ignore this
-if (NOT SERAC_STYLE_CI_ONLY)
+if (NOT SMITH_STYLE_CI_ONLY)
     set(ENABLE_MPI ON CACHE BOOL "")
 
     if (NOT MPI_C_COMPILER OR NOT MPI_CXX_COMPILER)
         message(FATAL_ERROR 
-                "Serac requires MPI.  It is required to provide the MPI C/C++ "
+                "Smith requires MPI.  It is required to provide the MPI C/C++ "
                 "compiler wrappers via the CMake variables, "
                 "MPI_C_COMPILER and MPI_CXX_COMPILER.")
     endif()
 endif()
 
 
-# Save off "raw" flags before they are modified by serac/BLT
+# Save off "raw" flags before they are modified by Smith/BLT
 set(RAW_CMAKE_C_FLAGS   ${CMAKE_C_FLAGS}   CACHE STRING "")
 set(RAW_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} CACHE STRING "")
 
-if (NOT DEFINED SERAC_ENABLE_CODEVELOP)
-   set(SERAC_ENABLE_CODEVELOP OFF)
+if (NOT DEFINED SMITH_ENABLE_CODEVELOP)
+   set(SMITH_ENABLE_CODEVELOP OFF)
 endif()
-message(STATUS "Serac Codevelop Build: ${SERAC_ENABLE_CODEVELOP}")
+message(STATUS "Smith Codevelop Build: ${SMITH_ENABLE_CODEVELOP}")
 
-if(NOT DEFINED SERAC_SOURCE_DIR)
-  set(SERAC_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR} CACHE PATH "")
+if(NOT DEFINED SMITH_SOURCE_DIR)
+  set(SMITH_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR} CACHE PATH "")
 endif()
-message(STATUS "Serac Source Dir: ${SERAC_SOURCE_DIR}")
+message(STATUS "Smith Source Dir: ${SMITH_SOURCE_DIR}")
 
 # For HIP case, this flag prevents the following Strumpack linker error:
 # undefined symbol: mpi_abort_
-if(SERAC_ENABLE_CODEVELOP OR (ENABLE_HIP AND STRUMPACK_DIR))
+if(SMITH_ENABLE_CODEVELOP OR (ENABLE_HIP AND STRUMPACK_DIR))
     set(ENABLE_FORTRAN ON CACHE BOOL "")
 endif()
 
@@ -84,7 +84,7 @@ if (NOT BLT_CXX_STD)
     set(BLT_CXX_STD "c++17" CACHE STRING "")
 endif()
 
-# These BLT tools are not used in Serac, turn them off
+# These BLT tools are not used in Smith, turn them off
 set(_unused_blt_tools
     CLANGQUERY
     VALGRIND
@@ -96,7 +96,7 @@ foreach(_tool ${_unused_blt_tools})
     set(ENABLE_${_tool} OFF CACHE BOOL "")
 endforeach()
 
-# These BLT tools are only used by Serac developers, so turn them off
+# These BLT tools are only used by Smith developers, so turn them off
 # unless an explicit executable path is given
 set(_used_blt_tools
     CLANGFORMAT
@@ -112,14 +112,14 @@ foreach(_tool ${_used_blt_tools})
     endif()
 endforeach()
 
-set(BLT_REQUIRED_CLANGFORMAT_VERSION  "14" CACHE STRING "")
+set(BLT_REQUIRED_CLANGFORMAT_VERSION  "19" CACHE STRING "")
 
 set(ENABLE_ALL_WARNINGS ON CACHE BOOL "")
 set(ENABLE_WARNINGS_AS_ERRORS ON CACHE BOOL "")
 
 set(BLT_EXPORT_THIRDPARTY OFF CACHE BOOL "")
 if (BLT_EXPORT_THIRDPARTY)
-    message(FATAL_ERROR "Serac does not use BLT's exporting of TPLs, it conflicts with the new blt_install_tpl_setups macro.")
+    message(FATAL_ERROR "Smith does not use BLT's exporting of TPLs, it conflicts with the new blt_install_tpl_setups macro.")
 endif()
 
 include(${BLT_SOURCE_DIR}/SetupBLT.cmake)
@@ -128,33 +128,33 @@ include(${BLT_SOURCE_DIR}/SetupBLT.cmake)
 # Setup Macros/Basics
 #------------------------------------------------------------------------------
 
-include(${PROJECT_SOURCE_DIR}/cmake/SeracMacros.cmake)
-include(${PROJECT_SOURCE_DIR}/cmake/SeracBasics.cmake)
-include(${PROJECT_SOURCE_DIR}/cmake/SeracCompilerFlags.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/SmithMacros.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/SmithBasics.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/SmithCompilerFlags.cmake)
 
 
 #------------------------------------------------------------------------------
 # Add Code Checks
 #------------------------------------------------------------------------------
 
-message(STATUS "Serac Code Checks: ${SERAC_ENABLE_CODE_CHECKS}")
+message(STATUS "Smith Code Checks: ${SMITH_ENABLE_CODE_CHECKS}")
 
 # Add extra file extensions for code styling
-# Note: Add them also to serac_add_code_checks in cmake/SeracMacros.cmake
+# Note: Add them also to smith_add_code_checks in cmake/SmithMacros.cmake
 
 # CUDA
 list(APPEND BLT_C_FILE_EXTS ".cuh")
 # Configured C++ files
 list(APPEND BLT_C_FILE_EXTS ".cpp.in" ".hpp.in")
 
-if (SERAC_STYLE_CI_ONLY OR SERAC_ENABLE_CODE_CHECKS)
-    serac_add_code_checks(PREFIX serac)
+if (SMITH_STYLE_CI_ONLY OR SMITH_ENABLE_CODE_CHECKS)
+    smith_add_code_checks(PREFIX smith)
 endif()
 
-if (SERAC_STYLE_CI_ONLY)
+if (SMITH_STYLE_CI_ONLY)
     # Exit processing the rest of the build in style only build to avoid any possible
     # CMake configuration issues outside of just enabling `make style`. This build,
-    # is not capable of building Serac and should not be advertised. It is for CI 
+    # is not capable of building Smith and should not be advertised. It is for CI 
     # purposes only.
     return()
 endif()
@@ -163,18 +163,18 @@ endif()
 # Setup Dependencies
 #------------------------------------------------------------------------------
 
-# Restore raw compiler flags so subprojects don't end up using Serac's flags
-set(SERAC_CMAKE_C_FLAGS   ${CMAKE_C_FLAGS})
-set(SERAC_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+# Restore raw compiler flags so subprojects don't end up using Smith's flags
+set(SMITH_CMAKE_C_FLAGS   ${CMAKE_C_FLAGS})
+set(SMITH_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
 set(CMAKE_C_FLAGS         ${RAW_CMAKE_C_FLAGS} CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS       ${RAW_CMAKE_CXX_FLAGS} CACHE STRING "" FORCE)
 
-include(${PROJECT_SOURCE_DIR}/cmake/thirdparty/SetupSeracThirdParty.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/thirdparty/SetupSmithThirdParty.cmake)
 
-set(CMAKE_C_FLAGS   ${SERAC_CMAKE_C_FLAGS})
-set(CMAKE_CXX_FLAGS ${SERAC_CMAKE_CXX_FLAGS})
+set(CMAKE_C_FLAGS   ${SMITH_CMAKE_C_FLAGS})
+set(CMAKE_CXX_FLAGS ${SMITH_CMAKE_CXX_FLAGS})
 
-include(${PROJECT_SOURCE_DIR}/cmake/SeracConfigHeader.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/SmithConfigHeader.cmake)
 
 #------------------------------------------------------------------------------
 # Add subdirectories
@@ -183,6 +183,8 @@ include(${PROJECT_SOURCE_DIR}/cmake/SeracConfigHeader.cmake)
 add_subdirectory(src)
 
 add_subdirectory(examples)
+
+add_subdirectory(korner_examples)
 
 #------------------------------------------------------------------------------
 # Generate helper script for running ATS
@@ -195,21 +197,20 @@ configure_file(
 # Export Targets
 #------------------------------------------------------------------------------
 set(exported_targets
-    serac_infrastructure
-    serac_mesh_utils
-    serac_numerics
-    serac_physics
-    serac_gretl
-    serac_differentiable_numerics)
+    smith_infrastructure
+    smith_mesh_utils
+    smith_numerics
+    smith_physics
+    smith_differentiable_numerics)
 
-add_library(serac INTERFACE)
-target_link_libraries(serac INTERFACE ${exported_targets})
-install(TARGETS              serac
-        EXPORT               serac-targets
+add_library(smith INTERFACE)
+target_link_libraries(smith INTERFACE ${exported_targets})
+install(TARGETS              smith
+        EXPORT               smith-targets
         DESTINATION          lib
         )
 
-if (SERAC_ENABLE_CODEVELOP)
+if (SMITH_ENABLE_CODEVELOP)
     # This really shouldn't be needed but it keeps getting dropped from axom.
     # It certainly shouldn't go here either.
     target_include_directories(axom SYSTEM INTERFACE
@@ -217,12 +218,12 @@ if (SERAC_ENABLE_CODEVELOP)
     )
 
     install(TARGETS              mfem ${axom_exported_targets} ${tribol_exported_targets}
-            EXPORT               serac-targets
+            EXPORT               smith-targets
             DESTINATION          lib
             )
 endif()
 
-install(EXPORT serac-targets 
-        NAMESPACE serac::
+install(EXPORT smith-targets
+        NAMESPACE smith::
         DESTINATION lib/cmake
         )

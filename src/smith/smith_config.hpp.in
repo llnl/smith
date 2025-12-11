@@ -1,0 +1,71 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+#pragma once
+
+// Smith Version Information
+// clang-format off
+#define SMITH_VERSION_MAJOR @SMITH_VERSION_MAJOR@
+#define SMITH_VERSION_MINOR @SMITH_VERSION_MINOR@
+#define SMITH_VERSION_PATCH @SMITH_VERSION_PATCH@
+#define SMITH_VERSION_FULL  "@SMITH_VERSION_FULL@"
+// clang-format on
+/*NOTE: Do not add SMITH_GIT_SHA here.  This will force
+ * full rebuild on all local changes. It is added in smith::version()
+ * and smith::about(), as well as accessible from smith::gitSha().
+ */
+
+// Smith Locations
+#define SMITH_REPO_DIR "@SMITH_REPO_DIR@"
+#define SMITH_BINARY_DIR "@SMITH_BINARY_DIR@"
+
+// Compiler Information
+#define SMITH_COMPILER_NAME "@CMAKE_CXX_COMPILER_ID@"
+#define SMITH_COMPILER_VERSION "@CMAKE_CXX_COMPILER_VERSION@"
+
+// General defines
+#cmakedefine SMITH_DEBUG
+
+#cmakedefine SMITH_USE_CUDA
+#cmakedefine SMITH_USE_HIP
+#cmakedefine SMITH_USE_OPENMP
+#cmakedefine SMITH_USE_MPI
+
+// Compiler defines for TPLs
+#cmakedefine SMITH_USE_ADIAK
+#cmakedefine SMITH_USE_AXOM
+#cmakedefine SMITH_USE_CALIPER
+#cmakedefine SMITH_USE_CAMP
+#cmakedefine SMITH_USE_CONDUIT
+#cmakedefine SMITH_USE_CONTINUATION
+#cmakedefine SMITH_USE_DFEM
+#cmakedefine SMITH_USE_ENZYME
+#cmakedefine SMITH_USE_FMT
+#cmakedefine SMITH_USE_HDF5
+#cmakedefine SMITH_USE_LUA
+#cmakedefine SMITH_USE_MFEM
+#cmakedefine SMITH_USE_MPI
+#cmakedefine SMITH_USE_PETSC
+#cmakedefine SMITH_USE_RAJA
+#cmakedefine SMITH_USE_SLEPC
+#cmakedefine SMITH_USE_SUNDIALS
+#cmakedefine SMITH_USE_TRIBOL
+#cmakedefine SMITH_USE_UMPIRE
+
+#cmakedefine SMITH_USE_VDIM_ORDERING
+
+#ifdef SMITH_USE_MFEM
+#include "mfem.hpp"
+
+namespace smith {
+/// The mfem ordering / memory layout used for finite element vectors throughout Smith
+#ifdef SMITH_USE_VDIM_ORDERING
+constexpr auto ordering = mfem::Ordering::byVDIM;
+#else
+constexpr auto ordering = mfem::Ordering::byNODES;
+#endif
+};  // namespace smith
+#endif

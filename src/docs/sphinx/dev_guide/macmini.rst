@@ -62,4 +62,4 @@ The following is an example of a cron job that could be used to test a Mac build
 
 .. code-block:: bash
 
-    0 7 * * 4 /Users/chapman39/dev/serac/ci/repo/scripts/shared-macmini/build-and-test.sh
+    0 7 * * 4 /Users/chapman39/dev/smith/ci/repo/scripts/shared-macmini/build-and-test.sh

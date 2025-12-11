@@ -2,7 +2,7 @@
 "exec" "python3" "-u" "-B" "$0" "$@"
 ##############################################################################
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level COPYRIGHT file for details.
+# other Smith Project Developers. See the top-level COPYRIGHT file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 ##############################################################################
@@ -15,7 +15,7 @@ import sys
 import time
 
 
-# This script compares two Serac summary files against each other.
+# This script compares two Smith summary files against each other.
 # The 'baseline' file is treated as a truth against the possibly wrong
 # 'test' file. It attempts to fail with the most error messages it can at a given
 # correctness level (field names > stat names > stat values).
@@ -51,7 +51,7 @@ def ensure_file(path, wait_for_file=False):
 
 def parse_args():
     usage = """
-Compare two Serac summary files.
+Compare two Smith summary files.
 
 Example usages for --tolerance:
     --tolerance=0.001 // used for all field values

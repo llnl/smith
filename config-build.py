@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
@@ -23,10 +23,10 @@ import socket
 _host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-llvm@19.1.3.cmake",
                      "rzwhippet" : "rzwhippet-toss_4_x86_64_ib-llvm@19.1.3.cmake",
                      "rzvernal"  : "rzvernal-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
-                     "rzansel"   : "rzansel-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake",
+                     "rzadams"   : "rzadams-toss_4_x86_64_ib_cray-llvm-amdgpu@6.4.2_hip.cmake",
                      "dane"      : "dane-toss_4_x86_64_ib-llvm@19.1.3.cmake",
-                     "tioga"     : "tioga-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
-                     "lassen"    : "lassen-blueos_3_ppc64le_ib_p9-clang@14.0.5_cuda.cmake"}
+                     "tioga"     : "tuolumne-toss_4_x86_64_ib_cray-llvm-amdgpu@6.4.2_hip.cmake",
+                     "tuolumne"  : "tuolumne-toss_4_x86_64_ib_cray-llvm-amdgpu@6.4.2_hip.cmake"}
 
 def get_machine_name():
     return socket.gethostname().rstrip('1234567890')
@@ -103,7 +103,7 @@ def parse_arguments():
     parser.add_argument("-n", 
                         "--ninja",
                         action='store_true',
-                        help="use ninja generator to build serac instead of make")
+                        help="use ninja generator to build Smith instead of make")
 
     args, unknown_args = parser.parse_known_args()
     if unknown_args:

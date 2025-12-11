@@ -1,5 +1,5 @@
 {
-"package_name" : "serac_devtools",
+"package_name" : "smith_devtools",
 "package_version" : "fakeversion",
 "package_source_dir" : "../..",
 "package_final_phase" : "",
@@ -9,5 +9,5 @@
 "spack_packages_url": "https://github.com/spack/spack-packages.git",
 "spack_packages_commit": "a75a7f75182ffc7a51c6ca7f0fec4bf9b2705be8",
 "spack_configs_path": "scripts/spack/devtools_configs",
-"spack_packages_path": ["scripts/spack/radiuss-spack-configs/spack_repo/llnl_radiuss/packages", "scripts/spack/packages"]
+"spack_packages_path": ["scripts/spack/radiuss-spack-configs/spack_repo/llnl_radiuss/packages", "scripts/spack/spack_repo/smith/packages"]
 }

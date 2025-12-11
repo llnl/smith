@@ -1,6 +1,9 @@
 ##############################################################################
-# Copyright (c) Lawrence Livermore National Security, LLC and Serac
-# project contributors. See the LICENSE file for details.
+# Copyright (c) Lawrence Livermore National Security, LLC and
+# other Smith Project Developers. See the top-level LICENSE file for
+# details.
+#
+# SPDX-License-Identifier: (BSD-3-Clause)
 ##############################################################################
 
 variables:
@@ -10,7 +13,7 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
   PROJECT_ALLOC_NAME: ${CI_PROJECT_NAME}_ci_${CI_PIPELINE_ID}
   BUILD_ROOT: ${CI_PROJECT_DIR}
-  FULL_BUILD_ROOT: ${CI_BUILDS_DIR}/serac/${CI_JOB_NAME}
+  FULL_BUILD_ROOT: ${CI_BUILDS_DIR}/smith/${CI_JOB_NAME}
   ALLOC_BANK: eng
   SPOT_DIR: ${BUILD_ROOT}/califiles
 
@@ -30,39 +33,39 @@ stages:
 .src_workflow:
   stage: src
   rules:
-    - if: $SERAC_CI_WORKFLOW_TYPE != "examples" &&
-          $SERAC_CI_WORKFLOW_TYPE != "tpl" &&
-          $SERAC_CI_WORKFLOW_TYPE != "benchmarks" &&
-          $SERAC_CI_WORKFLOW_TYPE != "comparison"
+    - if: $SMITH_CI_WORKFLOW_TYPE != "examples" &&
+          $SMITH_CI_WORKFLOW_TYPE != "tpl" &&
+          $SMITH_CI_WORKFLOW_TYPE != "benchmarks" &&
+          $SMITH_CI_WORKFLOW_TYPE != "comparison"
 
 # Run examples as a nightly scheduled pipeline
 .examples_workflow:
   stage: examples
   rules:
-    - if: $SERAC_CI_WORKFLOW_TYPE == "examples"
+    - if: $SMITH_CI_WORKFLOW_TYPE == "examples"
 
 # Run tpl build as a nightly scheduled pipeline
 .tpl_workflow:
   stage: tpl
   rules:
-    - if: $SERAC_CI_WORKFLOW_TYPE == "tpl"
+    - if: $SMITH_CI_WORKFLOW_TYPE == "tpl"
 
 # Run benchmarks build as a weekly scheduled pipeline
 # or, run benchmarks and save them in tmp location for comparison
 .benchmarks_workflow:
   stage: benchmarks
   rules:
-    - if: $SERAC_CI_WORKFLOW_TYPE == "benchmarks"
+    - if: $SMITH_CI_WORKFLOW_TYPE == "benchmarks"
       variables:
         # Note: make sure this matches what's in common_build_functions.py!
-        SPOT_DIR: /usr/workspace/smithdev/califiles/serac
-    - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
+        SPOT_DIR: /usr/workspace/smithdev/califiles/smith
+    - if: $SMITH_CI_WORKFLOW_TYPE == "comparison"
 
 # Compare caliper files (generated from .benchmarks_workflow) against develop
 .comparison_workflow:
   stage: comparison
   rules:
-    - if: $SERAC_CI_WORKFLOW_TYPE == "comparison"
+    - if: $SMITH_CI_WORKFLOW_TYPE == "comparison"
   dependencies:
     # TODO re-enable with CZMatrix
     # - blueos-clang_14_0_5-benchmarks
@@ -83,14 +86,14 @@ stages:
     expire_in: 2 weeks
     when: always
     paths:
-      - _serac_build_and_test_*/output.log*.txt
-      - _serac_build_and_test_*/build-*/output.log*.txt
-      - _serac_build_and_test_*/build-*/*.*.logs/*.log
-      - _serac_build_and_test_*/build-*/*.*.logs/*.err
+      - _smith_build_and_test_*/output.log*.txt
+      - _smith_build_and_test_*/build-*/output.log*.txt
+      - _smith_build_and_test_*/build-*/*.*.logs/*.log
+      - _smith_build_and_test_*/build-*/*.*.logs/*.err
     reports:
       junit:
-      - _serac_build_and_test_*/build-*/junit.xml
-      - _serac_build_and_test_*/build-*/*.*.logs/atsr.xml
+      - _smith_build_and_test_*/build-*/junit.xml
+      - _smith_build_and_test_*/build-*/*.*.logs/atsr.xml
 
 .tpl_build_script:
   script:
@@ -105,10 +108,10 @@ stages:
     when: always
     paths:
       - ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/output.log*.txt
-      - ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_serac_build_and_test_*/output.log*.txt
-      - ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_serac_build_and_test_*/build-*/output.log*.txt
+      - ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_smith_build_and_test_*/output.log*.txt
+      - ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_smith_build_and_test_*/build-*/output.log*.txt
     reports:
-      junit: ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_serac_build_and_test_*/build-*/junit.xml
+      junit: ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_smith_build_and_test_*/build-*/junit.xml
 
 .examples_build_script:
   script:
@@ -121,10 +124,10 @@ stages:
     expire_in: 2 weeks
     when: always
     paths:
-      - _serac_build_and_test_*/output.log*.txt
-      - _serac_build_and_test_*/build-*/output.log*.txt
-      - _serac_build_and_test_*/build-*/*.*.logs/*.log
-      - _serac_build_and_test_*/build-*/*.*.logs/*.err
+      - _smith_build_and_test_*/output.log*.txt
+      - _smith_build_and_test_*/build-*/output.log*.txt
+      - _smith_build_and_test_*/build-*/*.*.logs/*.log
+      - _smith_build_and_test_*/build-*/*.*.logs/*.err
 
 .benchmarks_build_script:
   script:
@@ -138,8 +141,8 @@ stages:
     expire_in: 2 weeks
     when: always
     paths:
-      - _serac_build_and_test_*/output.log*.txt
-      - _serac_build_and_test_*/build-*/output.log*.txt
+      - _smith_build_and_test_*/output.log*.txt
+      - _smith_build_and_test_*/build-*/output.log*.txt
       - ${SPOT_DIR}/*.cali
 
 .comparison_build_script:

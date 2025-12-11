@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -15,15 +15,11 @@ Create New Docker File
 
 .. note:: If a Dockerfile for the desired compiler already exists, you can skip this section and go to `update-docker-image-label`_ .
 
-#. Start by cloning the ``serac`` repository and creating a branch off ``develop``.  
+#. Start by cloning the ``smith`` repository and creating a branch off ``develop``.  
 #. Ensure that an image exists on Dockerhub for the desired compiler.
    If no corresponding compiler image exists, it should be 
    created before proceeding. Here is the `RADIUSS Docker repository images <https://github.com/LLNL/radiuss-docker/pkgs/container/radiuss>`_.
-#. Go to the ``scripts/docker`` directory and run ``build_new_dockerfile.sh``, passing the compiler
-   name and full version, e.g. for Clang 14, run ``./build_new_dockerfile.sh clang 14.0.0``.
-   This will create a Dockerfile whose name corresponds to a specific compiler and major version, e.g., ``dockerfile_clang-14``.
-   This may require modifications depending on the compiler and base image - for example, an extra system package might
-   be installed so Spack doesn't need to build it from source.
+#. Go to the ``scripts/docker`` and copy one of the various dockerfiles (e.g. dockerfile_clang-19) - renaming the file and modifying the ``FROM`` image and ``ENV spec`` as needed.
 #. Edit ``./github/workflows/docker_build_tpls.yml`` to add new job for the new compiler image.  This can be copy-pasted 
    from one of the existing jobs - the only things that must be changed are the job name and ``TAG``, which should match the
    name of the compiler/generated ``Dockerfile``.  For example, a build for ``dockerfile_clang-14`` must set ``TAG``
