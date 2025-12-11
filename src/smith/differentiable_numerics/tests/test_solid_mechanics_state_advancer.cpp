@@ -100,6 +100,22 @@ void adjointBackward(std::shared_ptr<BasePhysics> physics, smith::FiniteElementD
   }
 }
 
+// FiniteElementState createReactionMask(FiniteElementDual& reactions, int direction,
+//                                       std::shared_ptr<smith::Mesh> mesh, std::string domain_name)
+// {
+//   FiniteElementState reactionDirections(reactions.space(), "reaction_directions");
+//   reactionDirections = 0.0;
+
+//   mfem::VectorFunctionCoefficient func(dim, [direction](const mfem::Vector& /*x*/, mfem::Vector& u) {
+//     u = 0.0;
+//     u[direction] = 1.0;
+//   });
+
+//   reactionDirections.project(func, mesh->domain(domain_name));
+
+//   return reactionDirections;
+// }
+
 TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
 {
   SMITH_MARK_FUNCTION;
@@ -114,7 +130,7 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
   // warm-start.
   // implicit Newmark.
 
-  auto [physics, weak_form, bcs] =
+  auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
           mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
 
@@ -133,7 +149,7 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
   using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
   MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
 
-  weak_form->addBodyIntegral(
+  solid_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
       [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
         MaterialType::State state;
@@ -165,11 +181,16 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
     pv_writer.write(m + 1, physics->time(), physics->getFieldStatesAndParamStates());
   }
 
-  TimeInfo time_info(physics->time() - time_increment, time_increment);
+  TimeInfo time_info(physics->time(), time_increment);
 
   auto state_advancer = physics->getStateAdvancer();
   auto reactions = state_advancer->computeResultants(shape_disp, physics->getFieldStates(),
                                                      physics->getFieldStatesOld(), params, time_info);
+
+  // FiniteElementDual& theResidualVector = *reactions[0].get();
+  // mask = createReactionMask(theResidualVector, 0, mesh, "top");
+  // double total_reaction_force = innerProduct(theResidualVector, mask);
+
   auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
 
   gretl::set_as_objective(reaction_squared);
@@ -191,7 +212,7 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_BASE_PHYSICS)
 
   smith::SecondOrderTimeIntegrationRule time_rule(1.0);
 
-  auto [physics, weak_form, bcs] =
+  auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
           mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
 
@@ -210,7 +231,7 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_BASE_PHYSICS)
   using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
   MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
 
-  weak_form->addBodyIntegral(
+  solid_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
       [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
         MaterialType::State state;
@@ -263,7 +284,14 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
 {
   SMITH_MARK_FUNCTION;
 
-  const double dt = 1e-2;
+  enum STATE
+  {
+    DISP,
+    VELO,
+    ACCEL
+  };
+
+  const double time_simulation = 1e-2;
   const size_t dt_reduction = 10;
   const size_t num_steps = 4;
   std::string physics_name = "solid";
@@ -273,9 +301,11 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
 
   smith::SecondOrderTimeIntegrationRule time_rule(1.0);
 
-  auto [physics, weak_form, bcs] =
+  auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
           mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
+
+  static constexpr double gravity = -9.0;
 
   double E = 100.0;
   double nu = 0.25;
@@ -284,13 +314,19 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
   MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
 
-  weak_form->addBodyIntegral(
+  solid_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
       [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
         MaterialType::State state;
         auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
         return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
       });
+
+  solid_weak_form->addBodySource(mesh->entireBodyName(), [](auto /*time*/, auto X) {
+    auto b = 0.0 * X;
+    b[1] = gravity;
+    return b;
+  });
 
   auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();
@@ -314,31 +350,31 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   std::cout << "Writing output to " << pv_dir << std::endl;
   auto pv_writer = createParaviewOutput(*mesh, all_fields, pv_dir);
   pv_writer.write(physics->cycle(), physics->time(), all_fields);
-  double time = 0.0;
+  const double timestep = time_simulation / double(dt_reduction);
   for (size_t m = 0; m < dt_reduction * num_steps; ++m) {
-    double timestep = dt / double(dt_reduction);
     physics->advanceTimestep(timestep);
     all_fields = physics->getFieldStatesAndParamStates();
     pv_writer.write(physics->cycle(), physics->time(), all_fields);
-    time += timestep;
   }
 
-  // static constexpr double gravity = -9.0;
-  // double a_exact = gravity;
+  printf("time = %gm %g\n", time, time_simulation);
+
+  double a_exact = gravity;
   // double v_exact = gravity * time;
   // double u_exact = 0.5 * gravity * time * time;
 
-  // FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh,
-  //                                                               spaces({all_fields[ACCEL]}));
-  // accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
-  //   auto a = get<VALUE>(A);
-  //   auto da0 = a[0];
-  //   auto da1 = a[1] - a_exact;
-  //   return da0 * da0 + da1 * da1;
-  // });
-  // double a_err = accel_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp->get().get(),
-  //                                     getConstFieldPointers({all_fields[ACCEL]}));
-  // EXPECT_NEAR(0.0, a_err, 1e-14);
+  TimeInfo end_time_info(physics->time(), timestep, physics->cycle());
+
+  FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({all_fields[ACCEL]}));
+  accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
+    auto a = get<VALUE>(A);
+    auto da0 = a[0];
+    auto da1 = a[1] - a_exact;
+    return da0 * da0 + da1 * da1;
+  });
+  double a_err =
+      accel_error.evaluate(end_time_info, shape_disp.get().get(), getConstFieldPointers({all_fields[ACCEL]}));
+  EXPECT_NEAR(0.0, a_err, 1e-14);
 
   // FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh,
   //                                                                            spaces({all_fields[VELO]}));

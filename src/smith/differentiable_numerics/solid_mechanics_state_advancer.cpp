@@ -16,22 +16,33 @@ SolidMechanicsStateAdvancer::SolidMechanicsStateAdvancer(std::shared_ptr<smith::
 }
 
 std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const FieldState& shape_disp,
-                                                                  const std::vector<FieldState>& states_old,
+                                                                  const std::vector<FieldState>& states_old_,
                                                                   const std::vector<FieldState>& params,
                                                                   const TimeInfo& time_info) const
 {
+  std::vector<FieldState> states_old = states_old_;
+  if (time_info.cycle()==0) {
+    // input fields for solid_weak_form
+    std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY]};
+    solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
+    FieldState accel_guess = states_old[ACCELERATION];
+    states_old[ACCELERATION] =
+      solve(accel_guess, shape_disp, solid_inputs, time_info, *weak_form_, *solver_, *vector_bcs_, 3);
+  }
+
   double dt = time_info.dt();
   size_t cycle = time_info.cycle();
   double final_time = time_info.time() + dt;
-
   TimeInfo final_time_info(final_time, dt, cycle);
 
   // evaluate initial guesses
-  FieldState displacement_guess = states_old[DISPLACEMENT] + dt * states_old[VELOCITY];
+  FieldState displacement_guess = states_old[DISPLACEMENT] + dt * states_old[VELOCITY] + (0.5 * dt * dt) * states_old[ACCELERATION];
 
   // input fields for solid_weak_form
   std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[VELOCITY], states_old[ACCELERATION]};
   solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
+
+
 
   auto displacement =
       solve(displacement_guess, shape_disp, solid_inputs, final_time_info, *weak_form_, *solver_, *vector_bcs_);
