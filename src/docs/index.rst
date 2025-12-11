@@ -7,7 +7,7 @@
 Smith
 =======
 
-Smith, formerly known as Serac, is a 3D implicit nonlinear thermal-structural simulation code. Its primary purpose is to
+Smith is a 3D implicit nonlinear thermal-structural simulation code. Its primary purpose is to
 investigate multiphysics abstraction strategies and implicit finite element-based algorithm development for emerging
 computing architectures. It heavily leverages the `MFEM finite element library <https://mfem.org/>`_. 
 
