@@ -68,7 +68,7 @@ int main(int argc, char* argv[])
   std::string mesh_location = SMITH_REPO_DIR "/korner_examples/" + mesh_tag + ".g";
   int serial_refinement = 0;
   int parallel_refinement = 0;
-  mesh = make_shared<smith::Mesh>(smith::buildMeshFromFile(mesh_location), mesh_tag, serial_refinement,
+  mesh = std::make_shared<smith::Mesh>(smith::buildMeshFromFile(mesh_location), mesh_tag, serial_refinement,
                                   parallel_refinement);
   mesh->addDomainOfBoundaryElements("fix_bottom", smith::by_attr<dim>(2));
   mesh->addDomainOfBoundaryElements("fix_top", smith::by_attr<dim>(3));
