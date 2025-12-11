@@ -20,33 +20,19 @@
 
 using namespace smith;
 
-double CalculateReaction(FiniteElementDual& reactions, const int face, const int direction)
+double CalculateReaction(FiniteElementDual& reactions, std::shared_ptr<smith::Mesh> mesh, std::string domain_name,
+                         const int direction)
 {
-  auto fespace = reactions.space();
+  FiniteElementState reactionDirections(reactions.space(), "reaction_directions");
+  const int dim = mesh->mfemParMesh().Dimension();
 
-  mfem::ParGridFunction mask_gf(&fespace);
-  mask_gf = 0.0;
-  auto fhan = [direction](const mfem::Vector&, mfem::Vector& y) {
-    y = 0.0;
-    y[direction] = 1.0;
-  };
+  reactionDirections = 0.0;
+  mfem::VectorFunctionCoefficient func(dim, [direction](const mfem::Vector& /*x*/, mfem::Vector& u) {
+    u = 0.0;
+    u[direction] = 1.0;
+  });
 
-  mfem::VectorFunctionCoefficient boundary_coeff(3, fhan);
-  mfem::Array<int> ess_bdr(fespace.GetParMesh()->bdr_attributes.Max());
-  ess_bdr = 0;
-  ess_bdr[face] = 1;
-  mask_gf.ProjectBdrCoefficient(boundary_coeff, ess_bdr);
+  reactionDirections.project(func, mesh->domain(domain_name));
 
-  mfem::Vector projections = reactions;
-  mfem::Vector mask_t(fespace.GetTrueVSize());
-  mask_t = 0.0;
-  fespace.GetRestrictionMatrix()->Mult(mask_gf, mask_t);
-  projections *= mask_t;
-
-  double local_sum = projections.Sum();
-  MPI_Comm mycomm = fespace.GetParMesh()->GetComm();
-  double global_sum = 0.0;
-  MPI_Allreduce(&local_sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, mycomm);
-
-  return global_sum;
+  return innerProduct(reactions, reactionDirections);
 }
