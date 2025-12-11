@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
   bcs->setFixedVectorBCs<dim>(mesh->domain("fix_bottom"));
   bcs->setVectorBCs<dim>(mesh->domain("fix_top"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
-    bc[1] = -20.0 * t;
+    bc[1] = -10.0 * t;
     return bc;
   });
 
