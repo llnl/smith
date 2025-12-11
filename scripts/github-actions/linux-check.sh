@@ -25,8 +25,8 @@ cmake_args="-DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=ON -DENABLE_CLANGTIDY=O
 
 if [[ "$CHECK_TYPE" == "coverage" ]] ; then
     # Alias llvm-cov to gcov so it acts like gcov
-    ln -s `which llvm-cov` /home/serac/gcov
-    cmake_args="$cmake_args -DENABLE_COVERAGE=ON -DGCOV_EXECUTABLE=/home/serac/gcov"
+    ln -s `which llvm-cov` /home/smith/gcov
+    cmake_args="$cmake_args -DENABLE_COVERAGE=ON -DGCOV_EXECUTABLE=/home/smith/gcov"
 fi
 
 if [[ "$CHECK_TYPE" == "docs" ]] ; then
