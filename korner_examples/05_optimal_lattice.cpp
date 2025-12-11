@@ -144,6 +144,14 @@ int main(int argc, char* argv[])
       std::cout << "Time Step: " << cnt << ", Time: " << physics->time() << std::endl;
     }
     physics->advanceTimestep(time_increment);
+
+    TimeInfo time_info(physics->time() - time_increment, time_increment);
+    auto reactions = physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(),
+                                                                    physics->getFieldStatesOld(), params, time_info);
+    double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
+    if (mfem::Mpi::Root()) {
+      std::cout << "Reaction: " << reaction << std::endl;
+    }
     pv_writer.write(cnt, physics->time(), physics->getFieldStatesAndParamStates());
   }
 
