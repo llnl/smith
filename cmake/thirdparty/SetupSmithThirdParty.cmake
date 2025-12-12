@@ -417,9 +417,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # ContinuationSolvers
     #------------------------------------------------------------------------------
-    if (NOT DEFINED SMITH_ENABLE_CONTINUATION)
-        set(SMITH_ENABLE_CONTINUATION ON)
-    endif()
     message(STATUS "Smith Enable Continuation: ${SMITH_ENABLE_CONTINUATION}")
     
     if(SMITH_ENABLE_CONTINUATION)
