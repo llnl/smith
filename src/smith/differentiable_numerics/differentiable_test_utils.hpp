@@ -110,7 +110,7 @@ inline auto checkGradients(const gretl::State<double>& objectiveState, FieldStat
   return std::make_pair(directionDeriv, (objectivePlus - objectiveBase) / eps);
 }
 
-/// testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
+/// @brief testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
 inline auto checkGradients(const gretl::State<double>& objectiveState, gretl::State<double, double>& inputState,
                            double& inputDual, double objectiveBase, gretl::DataStore& dataStore, double eps)
 {

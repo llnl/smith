@@ -61,7 +61,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(con
     auto diag_inv = diagInverse(lumped_mass);  // should return inverse of diagonal matrix as a field state
     m_diag_inv = std::make_unique<FieldState>(diag_inv);
     auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, states, params, time_info, ACCEL);
-    auto a_initial = componentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
+    auto a_initial = negativeComponentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
     states[ACCEL] = a_initial;
   }
 
@@ -97,7 +97,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(con
     auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, state_pred, params, time_info, ACCEL);
 
     // m_diag_inv*zero_mass_res; // calculate the acceleration
-    auto a_pred = componentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
+    auto a_pred = negativeComponentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
 
     // update the v predictor after a predictor solves
     FieldState v_pred = v_half_step + 0.5 * (stable_dt * a_pred);
