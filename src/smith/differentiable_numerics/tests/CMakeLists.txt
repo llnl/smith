@@ -15,4 +15,3 @@ set(differentiable_numerics_tests
 smith_add_tests( SOURCES       ${differentiable_numerics_tests}
                  DEPENDS_ON    ${differentiable_numerics_test_depends}
                  NUM_MPI_TASKS 1)
-
