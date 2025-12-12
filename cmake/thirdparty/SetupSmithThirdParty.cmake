@@ -558,9 +558,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # Gretl
     #------------------------------------------------------------------------------
-    if (NOT DEFINED SMITH_ENABLE_GRETL)
-        set(SMITH_ENABLE_GRETL ON)
-    endif()
     message(STATUS "Smith Enable Gretl: ${SMITH_ENABLE_GRETL}")
     
     if(SMITH_ENABLE_GRETL)
