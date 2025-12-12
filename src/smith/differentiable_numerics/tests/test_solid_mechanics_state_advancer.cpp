@@ -46,9 +46,12 @@ using ScalarParameterSpace = L2<0>;
 struct SolidMechanicsMeshFixture : public testing::Test {
   double length = 1.0;
   double width = 0.04;
-  int num_elements_x = 21;
-  int num_elements_y = 3;
-  int num_elements_z = 3;
+  // int num_elements_x = 21;
+  // int num_elements_y = 3;
+  // int num_elements_z = 3;
+  int num_elements_x = 4;
+  int num_elements_y = 1;
+  int num_elements_z = 1;
   double elem_size = length / num_elements_x;
 
   void SetUp()
@@ -309,10 +312,10 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
 
   double E = 100.0;
   double nu = 0.25;
-  auto K = E / (3.0 * (1.0 - 2 * nu));
+  auto K = E / (3.0 * (1.0 - 2.0 * nu));
   auto G = E / (2.0 * (1.0 + nu));
   using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
-  MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
+  MaterialType material{.density = 1.0, .K0 = K, .G0 = G};
 
   solid_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
@@ -357,8 +360,6 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
     pv_writer.write(physics->cycle(), physics->time(), all_fields);
   }
 
-  printf("time = %gm %g\n", time, time_simulation);
-
   double a_exact = gravity;
   // double v_exact = gravity * time;
   // double u_exact = 0.5 * gravity * time * time;
@@ -368,6 +369,7 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({all_fields[ACCEL]}));
   accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
     auto a = get<VALUE>(A);
+    std::cout << "a = " << a << std::endl;
     auto da0 = a[0];
     auto da1 = a[1] - a_exact;
     return da0 * da0 + da1 * da1;

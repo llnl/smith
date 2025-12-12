@@ -41,10 +41,11 @@ struct SecondOrderTimeIntegrationRule {
                                     [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                                     [[maybe_unused]] const T4& accel_old) const
   {
-    auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
-    auto v_n = velo_old;
-    return (2.0 * v_np5) - v_n;  // (2.0 / t.dt()) * (field_new - field_old) - velo_old;
+    // auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
+    // auto v_n = velo_old;
+    // return (2.0 * v_np5) - v_n;
     // return v_fd;
+    return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
@@ -53,10 +54,16 @@ struct SecondOrderTimeIntegrationRule {
                                            [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                                            [[maybe_unused]] const T4& accel_old) const
   {
-    auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
-    auto v_n = velo_old;
-    auto a_np25 = (1.0 / t.dt()) * (v_np5 - v_n);
-    return (4.0 * a_np25) - accel_old;
+    // auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
+    // auto v_n = velo_old;
+    // auto a_np25 = (1.0 / t.dt()) * (v_np5 - v_n);
+    // return (4.0 * a_np25) - accel_old;
+    auto dt = t.dt();
+    return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
+    // auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
+    //  auto v_n = velo_old;
+    //  auto a_np25 = (1.0 / t.dt()) * (v_np5 - v_n);
+    //  return (4.0 * a_np25) - accel_old;
   }
 
   double alpha_v0 = 1.0;

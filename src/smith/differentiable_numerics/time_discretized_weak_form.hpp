@@ -96,6 +96,7 @@ class SecondOrderTimeDiscretizedWeakForm : public TimeDiscretizedWeakForm<spatia
                                                   time_rule.second_derivative(t, F, F_old, F_dot_old, F_dot_dot_old),
                                                   inputs...);
                                });
+    non_td_wf->addBodyIntegral(DependsOn, body_name, integrand);
   }
 
   /// @overload
@@ -106,6 +107,8 @@ class SecondOrderTimeDiscretizedWeakForm : public TimeDiscretizedWeakForm<spatia
   }
 
   SecondOrderTimeIntegrationRule time_rule_;  ///< encodes the time integration rule
+
+  FUnctionWeakForm non_td_wf;
 };
 
 }  // namespace smith

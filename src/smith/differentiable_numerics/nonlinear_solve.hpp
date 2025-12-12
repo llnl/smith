@@ -67,7 +67,8 @@ FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const 
                  const TimeInfo& time_info, const WeakForm& residual_eval, const DifferentiableSolver& solver,
                  const DirichletBoundaryConditions& bcs, size_t unknown_index = 0);
 
-// /// @brief Solve a nonlinear system of equations as defined by the weak_form, assuming the first field in states is the
+// /// @brief Solve a nonlinear system of equations as defined by the weak_form, assuming the first field in states is
+// the
 // /// unknown field
 // /// @param residual_eval The weak form which defines the equations to be solved
 // /// @param shape_disp The mesh-morphed shape displacement
@@ -79,10 +80,11 @@ FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const 
 // /// and space varying values for the boundary conditions
 // /// @return The field solution to the weak form
 // FieldState solve(const WeakForm* residual_eval, const FieldState& shape_disp, const std::vector<FieldState>& states,
-//                  const std::vector<FieldState>& params, const TimeInfo& time_info, const DifferentiableSolver* solver,
-//                  const BoundaryConditionManager* bc_manager);
+//                  const std::vector<FieldState>& params, const TimeInfo& time_info, const DifferentiableSolver*
+//                  solver, const BoundaryConditionManager* bc_manager);
 
-// /// @brief Solve a nonlinear system of equations as defined by the weak_form, assuming the first field in states is the
+// /// @brief Solve a nonlinear system of equations as defined by the weak_form, assuming the first field in states is
+// the
 // /// unknown field
 // /// @param residual_eval The weak form which defines the equations to be solved
 // /// @param shape_disp The mesh-morphed shape displacement

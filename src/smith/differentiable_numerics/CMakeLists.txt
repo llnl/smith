@@ -6,7 +6,7 @@
 
 set(differentiable_numerics_sources
     field_state.cpp
-    differentiable_utils.cpp
+    differentiable_test_utils.cpp
     differentiable_physics.cpp
     lumped_mass_explicit_newmark_state_advancer.cpp
     solid_mechanics_state_advancer.cpp
