@@ -38,7 +38,7 @@ if (NOT SMITH_BASICS_SETUP)
     cmake_dependent_option(SMITH_ENABLE_OPENMP "Enables Smith with OPENMP support" ON "ENABLE_OPENMP" OFF)
 
     option(SMITH_ENABLE_GRETL "Enables Smith with Gretl Support" ON)
-    option(SMITH_ENABLE_CONTINUATION "Enable Continuation Solver support" ON)
+    option(SMITH_ENABLE_CONTINUATION "Enables Smith with Continuation Solver support" ON)
 
     #------------------------------------------------------------------------------
     # Profiling options
