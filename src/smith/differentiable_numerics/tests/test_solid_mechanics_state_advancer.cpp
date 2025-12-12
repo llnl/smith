@@ -130,9 +130,6 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
 
   smith::SecondOrderTimeIntegrationRule time_rule(1.0);
 
-  // warm-start.
-  // implicit Newmark.
-
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
           mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
@@ -364,7 +361,7 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   // double v_exact = gravity * time;
   // double u_exact = 0.5 * gravity * time * time;
 
-  TimeInfo end_time_info(physics->time(), timestep, physics->cycle());
+  TimeInfo end_time_info(physics->time(), timestep, static_cast<int>(physics->cycle()));
 
   FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({all_fields[ACCEL]}));
   accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {

@@ -82,8 +82,10 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
     std::vector<FieldState> states{disp, velo, acceleration};
 
     // weak form unknowns are disp, disp_old, velo_old, accel_old
+    //using SolidWeakFormT = SecondOrderTimeDiscretizedWeakForm<
+    //    spatial_dim, VectorSpace, Parameters<VectorSpace, VectorSpace, VectorSpace, VectorSpace, ParamSpaces...>>;
     using SolidWeakFormT = SecondOrderTimeDiscretizedWeakForm<
-        spatial_dim, VectorSpace, Parameters<VectorSpace, VectorSpace, VectorSpace, VectorSpace, ParamSpaces...>>;
+      spatial_dim, VectorSpace, Parameters<VectorSpace, VectorSpace, VectorSpace, ParamSpaces...>>;
     auto input_spaces = spaces({states[DISPLACEMENT], states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]});
     auto param_spaces = spaces(params);
     input_spaces.insert(input_spaces.end(), param_spaces.begin(), param_spaces.end());
