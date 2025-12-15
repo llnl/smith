@@ -100,13 +100,18 @@ jobs:
     strategy:
       # If any of checks (e.g. style) fail, allow other jobs to continue running.
       fail-fast: false
+      # TODO Simplify this matrix once coverage can run with LLVM https://github.com/LLNL/smith/issues/1481
       matrix:
-        check_type: [ style, header, docs ]
-        docker_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
-        host_config: llvm@19.1.1.cmake
-        # NOTE: coverage should be moved to above `check_type` matrix once this issue is resolved
-        # https://github.com/LLNL/smith/issues/1481
         include:
+        - check_type: style
+          docker_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
+          host_config: llvm@19.1.1.cmake
+        - check_type: header
+          docker_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
+          host_config: llvm@19.1.1.cmake
+        - check_type: docs
+          docker_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
+          host_config: llvm@19.1.1.cmake
         - check_type: coverage
           docker_image: ${{ needs.set_image_vars.outputs.gcc_docker_image }}
           host_config: gcc@14.2.0.cmake
@@ -118,7 +123,7 @@ jobs:
       options: --user root
       env:
         CHECK_TYPE: ${{ matrix.check_type }}
-        HOST_CONFIG: llvm@19.1.1.cmake
+        HOST_CONFIG: ${{ matrix.host_config }}
     steps:
     - name: Checkout Smith
       uses: actions/checkout@v4
