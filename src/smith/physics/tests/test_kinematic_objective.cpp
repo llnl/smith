@@ -71,8 +71,7 @@ struct ConstrainedWeakFormFixture : public testing::Test {
 
     using ObjectiveT = smith::FunctionalObjective<dim, smith::Parameters<VectorSpace, DensitySpace>>;
 
-    double time = 0.0;
-    double dt = 0.0;
+    smith::TimeInfo time_info(0.0, 0.0);
     auto input_fields = getConstFieldPointers(states, params);
     auto objective_states = {input_fields[DISP], input_fields[DENSITY]};
 
@@ -82,7 +81,7 @@ struct ConstrainedWeakFormFixture : public testing::Test {
     mass_objective.addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
                                    [](double /*time*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
 
-    double mass = mass_objective.evaluate(time, dt, shape_disp.get(), objective_states);
+    double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
     smith::tensor<double, dim> initial_cg;
 
@@ -94,7 +93,7 @@ struct ConstrainedWeakFormFixture : public testing::Test {
               /*time*/,
               auto X, auto U,
               auto RHO) { return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO); });
-      initial_cg[i] = cg_objective->evaluate(time, dt, shape_disp.get(), objective_states) / mass;
+      initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
       constraint_evaluators.push_back(cg_objective);
     }
 
@@ -160,21 +159,20 @@ struct ConstrainedWeakFormFixture : public testing::Test {
 
 TEST_F(ConstrainedWeakFormFixture, CanComputeObjectivesAndTheirGradients)
 {
-  double time = 0.0;
-  double dt = 1.0;
+  smith::TimeInfo time_info(0.0, 1.0);
   auto input_fields = getConstFieldPointers(states, params);
 
   smith::FiniteElementDual res_vector(states[DISP].space(), "residual");
-  res_vector = weak_form->residual(time, dt, shape_disp.get(), input_fields);
+  res_vector = weak_form->residual(time_info, shape_disp.get(), input_fields);
   ASSERT_NE(0.0, res_vector.Norml2());
 
   auto objective_states = {input_fields[DISP], input_fields[DENSITY]};
   for (const auto& c : constraints) {
-    ASSERT_NE(0.0, c->evaluate(time, dt, shape_disp.get(), objective_states));
+    ASSERT_NE(0.0, c->evaluate(time_info, shape_disp.get(), objective_states));
     for (size_t f_ordinal = 0; f_ordinal < objective_states.size(); ++f_ordinal) {
-      ASSERT_NE(0.0, c->gradient(time, dt, shape_disp.get(), objective_states, int(f_ordinal)).Norml2());
+      ASSERT_NE(0.0, c->gradient(time_info, shape_disp.get(), objective_states, int(f_ordinal)).Norml2());
     }
-    ASSERT_NE(0.0, c->mesh_coordinate_gradient(time, dt, shape_disp.get(), objective_states).Norml2());
+    ASSERT_NE(0.0, c->mesh_coordinate_gradient(time_info, shape_disp.get(), objective_states).Norml2());
   }
 }
 

@@ -345,8 +345,8 @@ class SolidWeakForm<order, dim, Parameters<InputSpaces...>>
  */
 template <int order, int dim, typename... ParameterSpaces>
 auto create_solid_weak_form(const std::string& physics_name, std::shared_ptr<smith::Mesh> mesh,
-                            const std::vector<smith::FiniteElementState*>& states,  // u, v, a, e
-                            const std::vector<smith::FiniteElementState*>& params)
+                            const std::vector<const smith::FiniteElementState*>& states,  // u, v, a, e
+                            const std::vector<const smith::FiniteElementState*>& params)
 {
   /// Local enum to better document the expected indexing order to states
   enum FieldNumbering

@@ -22,3 +22,6 @@
 [submodule "ContinuationSolvers"]
 	path = ContinuationSolvers
 	url = https://github.com/LLNL/ContinuationSolvers
+[submodule "gretl"]
+	path = gretl
+	url = https://github.com/LLNL/gretl
