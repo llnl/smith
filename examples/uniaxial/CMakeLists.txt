@@ -8,7 +8,7 @@ if (STRUMPACK_DIR)
     smith_add_executable( NAME        uniaxial_tension
                           SOURCES     uniaxial_tension.cpp
                           OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                          DEPENDS_ON  smith_physics
+                          DEPENDS_ON  smith
                           )
 
     smith_add_example_test(NAME            uniaxial_tension

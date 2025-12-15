@@ -402,16 +402,6 @@ class BasePhysics {
   }
 
   /**
-   * @brief Initialize any fields nessary for before the first step of the time integration
-   */
-  virtual void initializationStep() {}
-
-  /**
-   * @brief Compute adjoint sensitivities back through initializationStep
-   */
-  virtual void reverseAdjointInitializationStep() {}
-
-  /**
    * @brief Output the current state of the PDE fields in Sidre format and optionally in Paraview format
    *  if \p paraview_output_dir is given.
    *
