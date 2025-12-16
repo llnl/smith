@@ -7,6 +7,7 @@ set (korner_examples
   06_snap_array_nominal
   07_snap_array_optimal
   08_quasistatic_thermomechanics
+  09_viscoelastic_cyclic_tests
 )
 set (korner_example_depends
   smith_differentiable_numerics

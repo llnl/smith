@@ -311,13 +311,14 @@ int main(int argc, char* argv[])
   auto previous_to_final_states = physics->getFieldStatesOld();
 
   auto state_advancer = physics->getStateAdvancer();
-  printf("a\n");
   auto reactions =
       state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
 
-  printf("b\n");
   auto disp_squared = innerProduct(reactions[0], reactions[0]);
 
   gretl::set_as_objective(disp_squared);
-  std::cout << "final disp norm2 = " << disp_squared.get() << std::endl;
+
+  if (mfem::Mpi::Root()) {
+    std::cout << "final disp norm2 = " << disp_squared.get() << std::endl;
+  }
 }

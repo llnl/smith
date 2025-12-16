@@ -2,26 +2,13 @@
 
 #include "gretl/data_store.hpp"
 
-#include "smith/smith_config.hpp"
-#include "smith/infrastructure/application_manager.hpp"
-#include "smith/numerics/equation_solver.hpp"
-#include "smith/numerics/solver_config.hpp"
-#include "smith/mesh_utils/mesh_utils.hpp"
-
-#include "smith/physics/state/state_manager.hpp"
-#include "smith/physics/functional_objective.hpp"
-#include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
-#include "smith/physics/materials/parameterized_solid_material.hpp"
-
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
-// #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/tests/paraview_helper.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
