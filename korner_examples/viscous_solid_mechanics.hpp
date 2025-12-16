@@ -2,26 +2,13 @@
 
 #include "gretl/data_store.hpp"
 
-#include "smith/smith_config.hpp"
-#include "smith/infrastructure/application_manager.hpp"
-#include "smith/numerics/equation_solver.hpp"
-#include "smith/numerics/solver_config.hpp"
-#include "smith/mesh_utils/mesh_utils.hpp"
-
-#include "smith/physics/state/state_manager.hpp"
-#include "smith/physics/functional_objective.hpp"
-#include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
-#include "smith/physics/materials/parameterized_solid_material.hpp"
-
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
-// #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/tests/paraview_helper.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
@@ -29,11 +16,11 @@ using namespace smith;
 
 namespace custom_physics {
 
-class SolidMechanicsStateAdvancer2 : public StateAdvancer {
+class SolidMechanicsStateAdvancer : public StateAdvancer {
  public:
-  SolidMechanicsStateAdvancer2(std::shared_ptr<DifferentiableSolver> solid_solver,
-                               std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
-                               std::shared_ptr<WeakForm> weak_form, SecondOrderTimeIntegrationRule time_rule)
+  SolidMechanicsStateAdvancer(std::shared_ptr<DifferentiableSolver> solid_solver,
+                              std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
+                              std::shared_ptr<WeakForm> weak_form, SecondOrderTimeIntegrationRule time_rule)
       : solver_(solid_solver), vector_bcs_(vector_bcs), weak_form_(weak_form), time_rule_(time_rule)
   {
   }
@@ -143,14 +130,14 @@ auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
 {
   auto graph = std::make_shared<gretl::DataStore>(100);
   auto [shape_disp, states, params, time, solid_mechanics_weak_form] =
-      SolidMechanicsStateAdvancer2::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ParamSpaces...>(
+      SolidMechanicsStateAdvancer::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ParamSpaces...>(
           mesh, graph, time_rule, physics_name, param_names);
 
   auto vector_bcs = std::make_shared<DirichletBoundaryConditions>(
-      mesh->mfemParMesh(), space(states[SolidMechanicsStateAdvancer2::DISPLACEMENT]));
+      mesh->mfemParMesh(), space(states[SolidMechanicsStateAdvancer::DISPLACEMENT]));
 
-  auto state_advancer = std::make_shared<SolidMechanicsStateAdvancer2>(d_solid_nonlinear_solver, vector_bcs,
-                                                                       solid_mechanics_weak_form, time_rule);
+  auto state_advancer = std::make_shared<SolidMechanicsStateAdvancer>(d_solid_nonlinear_solver, vector_bcs,
+                                                                      solid_mechanics_weak_form, time_rule);
 
   auto physics =
       std::make_shared<DifferentiablePhysics>(mesh, graph, shape_disp, states, params, state_advancer, physics_name);
