@@ -578,9 +578,17 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             endif()
         endif()
 
+        
+        if(EXISTS "${GRETL_SOURCE_DIR}")
+            add_subdirectory(${PROJECT_SOURCE_DIR}/smith/mfem ${CMAKE_BINARY_DIR}/gretl)
+        else()
+            set(GRETL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/smith/gretl" CACHE PATH "")
+            add_subdirectory(${PROJECT_SOURCE_DIR}/smith/mfem ${CMAKE_BINARY_DIR}/gretl)
+        endif()
+
         set(GRETL_FOUND TRUE)
-        message(STATUS "Gretl dir = ${GRETL_SOURCE_DIR}")
-        add_subdirectory("${GRETL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/gretl)
+
+        #add_subdirectory("${GRETL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/gretl)
 
     endif()
 
