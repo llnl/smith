@@ -117,8 +117,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on("py-sphinx")
 
     with when("+sundials"):
-        # Going to sundials@7: causes 80%+ test failures
-        depends_on("sundials@:6.999")
+        depends_on("sundials")
         # MFEM is deprecating the monitoring support with sundials v6.0 and later
         # NOTE: Sundials must be built static to prevent the following runtime error:
         # "error while loading shared libraries: libsundials_nvecserial.so.6:
