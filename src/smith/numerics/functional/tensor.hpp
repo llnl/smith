@@ -1335,7 +1335,7 @@ SMITH_HOST_DEVICE constexpr auto detApIm1(const tensor<T, 3, 3>& A)
 
   // clang-format off
   // equivalent to tr(A) + I2(A) + det(A)
-  return A(0, 0) + A(1, 1) + A(2, 2) 
+  return A(0, 0) + A(1, 1) + A(2, 2)
        - A(0, 1) * A(1, 0) * (1 + A(2, 2))
        + A(0, 0) * A(1, 1) * (1 + A(2, 2))
        - A(0, 2) * A(2, 0) * (1 + A(1, 1))
@@ -2086,7 +2086,7 @@ inline mat < 2, 2 > look_at(const vec < 2 > & direction) {
 
 inline mat < 3, 3 > R3_basis(const vec3 & n) {
   float sign = (n[2] >= 0.0f) ? 1.0f : -1.0f;
-  float a = -1.0f / (sign + n[2]); 
+  float a = -1.0f / (sign + n[2]);
   float b = n[0] * n[1] * a;
 
   return mat < 3, 3 >{

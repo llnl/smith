@@ -67,12 +67,14 @@ class LumpedMassExplicitNewmark {
       u_pred.SetSubVector(bc_manager_->allEssentialTrueDofs(), 0.0);
     }
 
-    auto m_inv = mass_weak_form_->residual(time, dt, &u, {states[COORDINATES], params[DENSITY]});
+    TimeInfo time_info(time, dt);
+
+    auto m_inv = mass_weak_form_->residual(time_info, &u, {states[COORDINATES], params[DENSITY]});
     m_inv.Reciprocal();
 
     std::vector<ConstFieldPtr> pred_states = {&u_pred, &v_pred, &a, states[COORDINATES], params[DENSITY]};
 
-    auto force_resid = weak_form_->residual(time, dt, &u_pred, pred_states);
+    auto force_resid = weak_form_->residual(time_info, &u_pred, pred_states);
 
     FiniteElementState a_pred(a.space(), "acceleration_pred");
     auto a_pred_ptr = a_pred.Write();

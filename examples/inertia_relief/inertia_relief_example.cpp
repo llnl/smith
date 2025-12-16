@@ -126,6 +126,8 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<smith::Fi
  * for compatibility with the HomotopySolver.
  */
 class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
+  InertialReliefProblem() : time_info_(0.0, 0.0, 0) {}
+
  protected:
   std::unique_ptr<mfem::HypreParMatrix> drdu_;             // Jacobian of residual
   std::unique_ptr<mfem::HypreParMatrix> dcdu_;             // Jacobian of constraint
@@ -254,6 +256,7 @@ int main(int argc, char* argv[])
 
   double time = 0.0;
   double dt = 1.0;
+  smith::TimeInfo time_info(time, dt, 0);
   auto all_states = getConstFieldPointers(states, params);
   auto objective_states = {all_states[FIELD::DISP], all_states[FIELD::DENSITY]};
 
@@ -263,7 +266,7 @@ int main(int argc, char* argv[])
 
   mass_objective.addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
                                  [](double /*t*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
-  double mass = mass_objective.evaluate(time, dt, shape_disp.get(), objective_states);
+  double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
   smith::tensor<double, dim> initial_cg;  // center of gravity
 
@@ -275,7 +278,7 @@ int main(int argc, char* argv[])
                                       auto X, auto U, auto RHO) {
                                     return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
                                   });
-    initial_cg[i] = cg_objective->evaluate(time, dt, shape_disp.get(), objective_states) / mass;
+    initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
 
     constraints.push_back(cg_objective);
   }
@@ -347,7 +350,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<smith::FiniteElementSta
                                              std::shared_ptr<smith::Mesh> mesh,
                                              std::shared_ptr<SolidWeakFormT> weak_form,
                                              std::vector<std::shared_ptr<smith::ScalarObjective>> constraints)
-    : EqualityConstrainedHomotopyProblem()
+    : EqualityConstrainedHomotopyProblem(), time_info_(0.0, 0.0, 0)
 {
   weak_form_ = weak_form;
   mesh_ = mesh;

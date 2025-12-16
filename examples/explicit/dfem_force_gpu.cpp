@@ -203,7 +203,7 @@ int main(int argc, char* argv[])
 
   axom::utilities::Timer timer(true);
   for (size_t step = 0; step < num_steps; ++step) {
-    auto no_mass_resid = solid_dfem_weak_form->residual(time, dt, &u_pred, pred_states);
+    auto no_mass_resid = solid_dfem_weak_form->residual(smith::TimeInfo(time, dt), &u_pred, pred_states);
     time += dt;
   }
   timer.stop();

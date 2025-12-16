@@ -189,14 +189,11 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  mfem::Vector residual(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
-                        const std::vector<ConstFieldPtr>& fields,
-                        const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {},
-                        int block_row = 0) const override
+  mfem::Vector residual(TimeInfo time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& fields,
+                        const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {}) const override
   {
-    SLIC_ERROR_ROOT_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for DfemWeakForm");
-
-    dt_ = dt;
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
 
     weak_form_.SetParameters(getLVectors(fields));
     weak_form_.Mult(residual_vector_, residual_vector_);
@@ -204,33 +201,31 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  std::unique_ptr<mfem::HypreParMatrix> jacobian(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
-                                                 const std::vector<ConstFieldPtr>& /*fields*/,
-                                                 const std::vector<double>& /*jacobian_weights*/,
-                                                 const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {},
-                                                 int /*block_row*/ = 0) const override
+  std::unique_ptr<mfem::HypreParMatrix> jacobian(
+      TimeInfo time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
+      const std::vector<double>& /*jacobian_weights*/,
+      const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {}) const override
   {
     SLIC_ERROR_ROOT("DfemWeakForm does not support matrix assembly");
-
-    dt_ = dt;
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
 
     return std::make_unique<mfem::HypreParMatrix>();
   }
 
   /// @overload
-  void jvp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
+  void jvp(TimeInfo time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
            const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, ConstFieldPtr /*v_shape_disp*/,
            const std::vector<ConstFieldPtr>& /*v_fields*/,
-           const std::vector<ConstQuadratureFieldPtr>& /*v_quad_fields*/,
-           const std::vector<DualFieldPtr>& /*jvp_reactions*/) const override
+           const std::vector<ConstQuadratureFieldPtr>& /*v_quad_fields*/, DualFieldPtr /*jvp_reaction*/) const override
   {
     SLIC_ERROR_ROOT("DfemWeakForm does not support jvp calculations");
 
     // SLIC_ERROR_IF(v_fields.size() != fields.size(),
     //               "Invalid number of field sensitivities relative to the number of fields");
     // SLIC_ERROR_IF(jvp_reactions.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
-
-    dt_ = dt;
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
 
     // TODO (EBC): add in a future PR...
     // std::vector<mfem::Vector*> test_par_gf({&fields[0]->gridFunction()});
@@ -247,8 +242,8 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  void vjp(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
-           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, const std::vector<ConstFieldPtr>& /*v_fields*/,
+  void vjp(TimeInfo time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
+           const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, ConstFieldPtr /*v_fields*/,
            DualFieldPtr /*vjp_shape_disp_sensitivity*/, const std::vector<DualFieldPtr>& /*vjp_sensitivities*/,
            const std::vector<QuadratureFieldPtr>& /*vjp_quad_field_sensitivities*/) const override
   {
@@ -257,8 +252,8 @@ class DfemWeakForm : public WeakForm {
     // SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
     //               "Invalid number of field sensitivities relative to the number of fields");
     // SLIC_ERROR_IF(v_fields.size() != 1, "FunctionalResidual nonlinear systems only supports 1 output residual");
-
-    dt_ = dt;
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
 
     // TODO (EBC): add in a future PR...
     // std::vector<mfem::Vector*> test_par_gf({&v_fields[0]->gridFunction()});
@@ -319,6 +314,9 @@ class DfemWeakForm : public WeakForm {
 
   /// @brief timestep, this needs to be held here and modified for rate dependent applications
   mutable double dt_ = std::numeric_limits<double>::max();
+
+  /// @brief cycle or step or iteration.  This counter is useful for certain time integrators.
+  mutable size_t cycle_ = 0;
 
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;

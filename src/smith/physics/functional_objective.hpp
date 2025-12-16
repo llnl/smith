@@ -76,31 +76,38 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
   }
 
   /// @overload
-  virtual double evaluate(double time, double dt, ConstFieldPtr shape_disp,
+  virtual double evaluate(TimeInfo time_info, ConstFieldPtr shape_disp,
                           const std::vector<ConstFieldPtr>& fields) const override
   {
-    dt_ = dt;
-    return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time, shape_disp, fields);
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
+
+    return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time_info.time(),
+                             shape_disp, fields);
   }
 
   /// @overload
-  virtual mfem::Vector gradient(double time, double dt, ConstFieldPtr shape_disp,
-                                const std::vector<ConstFieldPtr>& fields, int field_ordinal) const override
+  virtual mfem::Vector gradient(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+                                size_t field_ordinal) const override
   {
-    dt_ = dt;
-    auto grads =
-        gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time, shape_disp, fields);
-    auto g = smith::get<DERIVATIVE>(grads[static_cast<size_t>(field_ordinal)](time, shape_disp, fields));
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
+
+    auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time_info.time(),
+                                    shape_disp, fields);
+    auto g = smith::get<DERIVATIVE>(grads[field_ordinal](time_info.time(), shape_disp, fields));
     return *assemble(g);
   }
 
   /// @overload
-  virtual mfem::Vector mesh_coordinate_gradient(double time, double dt, ConstFieldPtr shape_disp,
+  virtual mfem::Vector mesh_coordinate_gradient(TimeInfo time_info, ConstFieldPtr shape_disp,
                                                 const std::vector<ConstFieldPtr>& fields) const override
   {
-    dt_ = dt;
-    auto g =
-        smith::get<DERIVATIVE>((*objective_)(DifferentiateWRT<0>{}, time, *shape_disp, *fields[parameter_indices]...));
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
+
+    auto g = smith::get<DERIVATIVE>(
+        (*objective_)(DifferentiateWRT<0>{}, time_info.time(), *shape_disp, *fields[parameter_indices]...));
     return *assemble(g);
   }
 
@@ -126,8 +133,11 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
         }...};
   };
 
-  /// @brief timestep, this needs to be held here and modified for rate dependent applications
+  /// @brief timestep, this needs to be held here and modified for rate dependent applications.
   mutable double dt_ = std::numeric_limits<double>::max();
+
+  /// @brief cycle or step or iteration.  This counter is useful for certain time integrators.
+  mutable size_t cycle_ = 0;
 
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;
