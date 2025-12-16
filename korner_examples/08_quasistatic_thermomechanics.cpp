@@ -24,6 +24,8 @@
 #include "smith/differentiable_numerics/tests/paraview_helper.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
+#include "quasistatic_thermomechanics.hpp"
+#include "calculate_reactions.hpp"
 
 namespace smith {
 
@@ -33,189 +35,91 @@ smith::LinearSolverOptions solid_linear_options{.linear_solver = smith::LinearSo
                                                 .relative_tol = 1e-8,
                                                 .absolute_tol = 1e-11,
                                                 .max_iterations = 10000,
-                                                .print_level = 1};
+                                                .print_level = 2};
 
 smith::NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
                                                    .relative_tol = 1.0e-8,
                                                    .absolute_tol = 1.0e-11,
                                                    .max_iterations = 500,
-                                                   .print_level = 1};
+                                                   .print_level = 2};
+
+struct NeoHookeanThermoelasticMaterial {
+  static constexpr int dim = 3;
+  double density;    ///< density
+  double E;          ///< Young's modulus
+  double nu;         ///< Poisson's ratio
+  double C_v;        ///< volumetric heat capacity
+  double alpha;      ///< thermal expansion coefficient
+  double theta_ref;  ///< datum temperature for thermal expansion
+  double kappa;      ///< thermal conductivity
+  double mu;         ///< viscous parameter
+
+  using State = Empty;
+  /**
+   * @brief Evaluate constitutive variables for thermomechanics
+   *
+   * @tparam T1 Type of the displacement gradient components (number-like)
+   * @tparam T2 Type of the temperature (number-like)
+   * @tparam T3 Type of the temperature gradient components (number-like)
+   *
+   * @param[in] grad_u Displacement gradient
+   * @param[in] theta Temperature
+   * @param[in] grad_theta Temperature gradient
+   * @param[in,out] state State variables for this material
+   *
+   * @return[out] tuple of constitutive outputs. Contains the
+   * First Piola stress, the volumetric heat capacity in the reference
+   * configuration, the heat generated per unit volume during the time
+   * step (units of energy), and the referential heat flux (units of
+   * energy per unit time and per unit area).
+   */
+  template <typename T1, typename T2, typename T3, typename T4, int dim>
+  auto operator()(State&, double /*dt*/, const tensor<T1, dim, dim>& grad_u, const tensor<T2, dim, dim>& grad_v,
+                  T3 theta, const tensor<T4, dim>& grad_theta) const
+  {
+    using std::log1p;
+    // std::cout << "dt = " << dt << "\n";
+    // constexpr double eps = 1.0e-12;
+    const double K = E / (3.0 * (1.0 - 2.0 * nu));
+    const double G = 0.5 * E / (1.0 + nu);
+    constexpr auto I = DenseIdentity<dim>();
+    auto lambda = K - (2.0 / 3.0) * G;
+    auto B_minus_I = dot(grad_u, transpose(grad_u)) + transpose(grad_u) + grad_u;
+
+    auto logJ = log1p(detApIm1(grad_u));
+    // Kirchoff stress, in form that avoids cancellation error when F is near I
+
+    // Pull back to Piola
+    auto F = grad_u + I;
+
+    auto L = dot(grad_v, inv(F));
+    auto D = sym(L);
+
+    auto TK = lambda * logJ * I + G * B_minus_I + 0.5 * det(F) * mu * D;  // dot(L, inv(transpose(F)));
+
+    // state.F_old = get_value(F);
+    const auto S = -1.0 * K * (dim * alpha * (theta - theta_ref)) * I;
+    auto Piola = dot(TK, inv(transpose(F))) + dot(F, S);
+    // internal heat power
+    auto greenStrainRate =
+        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
+    const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate);
+    // const auto s0 = -dim * K * alpha * (theta + 273.1);
+
+    // heat flux
+    const auto q0 = -kappa * grad_theta;
+    return tuple{Piola, C_v, s0, q0};
+  }
+};
 
 static constexpr int dim = 3;
 static constexpr int order = 1;
 
 using ShapeDispSpace = H1<1, dim>;
 using VectorSpace = H1<order, dim>;
-using TemperatureSpace = H1<order, 1>;
+using ScalarSpace = H1<order, 1>;
 using ScalarParameterSpace = L2<0>;
-
-struct ParameterizedNeoHookeanWithViscosity {
-  using State = Empty;
-
-  template <int d, typename DispGradType, typename VelGradType, typename BulkType, typename ShearType>
-  SMITH_HOST_DEVICE auto operator()(State& /*state*/, const smith::tensor<DispGradType, d, d>& du_dX,
-                                    const smith::tensor<VelGradType, d, d>& dv_dX, const BulkType& DeltaK,
-                                    const ShearType& DeltaG) const
-  {
-    using std::log1p;
-    constexpr auto I = Identity<d>();
-
-    auto K_eff = K0 + get<0>(DeltaK);
-    auto G_eff = G0 + get<0>(DeltaG);
-    auto lambda = K_eff - (2.0 / d) * G_eff;
-
-    auto F = du_dX + I;
-
-    auto grad_v = dv_dX * inv(F);
-    auto B_minus_I = du_dX * transpose(du_dX) + transpose(du_dX) + du_dX;
-    auto logJ = log1p(detApIm1(du_dX));
-    auto TK_elastic = lambda * logJ * I + G_eff * B_minus_I;
-
-    auto D = 0.5 * (grad_v + transpose(grad_v));
-    auto TK_viscous = 2.0 * eta * det(F) * D;
-
-    auto TK = TK_elastic + TK_viscous;
-    return dot(TK, inv(transpose(F)));
-  }
-
-  static constexpr int numParameters() { return 2; }
-
-  double density;
-  double K0;
-  double G0;
-  double eta;
-};
-
-class SolidMechanicsStateAdvancer2 : public StateAdvancer {
- public:
-  SolidMechanicsStateAdvancer2(std::shared_ptr<DifferentiableSolver> solid_solver,
-                               std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
-                               std::shared_ptr<WeakForm> weak_form, SecondOrderTimeIntegrationRule time_rule)
-      : solver_(solid_solver), vector_bcs_(vector_bcs), weak_form_(weak_form), time_rule_(time_rule)
-  {
-  }
-
-  enum STATE
-  {
-    DISPLACEMENT,
-    VELOCITY,
-    ACCELERATION
-  };
-
-  template <typename FirstParamSpace, typename... ParamSpaces>
-  static std::vector<FieldState> createParams(gretl::DataStore& graph, const std::string& name,
-                                              const std::vector<std::string>& param_names, const std::string& tag,
-                                              size_t index = 0)
-  {
-    FieldState newParam = create_field_state(graph, FirstParamSpace{}, name + "_" + param_names[index], tag);
-    std::vector<FieldState> end_spaces{};
-    if constexpr (sizeof...(ParamSpaces) > 0) {
-      end_spaces = createParams<ParamSpaces...>(graph, name, param_names, tag, ++index);
-    }
-    end_spaces.insert(end_spaces.begin(), newParam);
-    return end_spaces;
-  }
-
-  template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
-  static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<gretl::DataStore>& graph,
-                                     SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
-                                     const std::vector<std::string>& param_names, double initial_time = 0.0)
-  {
-    auto shape_disp = create_field_state(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
-    auto disp = create_field_state(*graph, VectorSpace{}, physics_name + "_displacement", mesh->tag());
-    auto velo = create_field_state(*graph, VectorSpace{}, physics_name + "_velocity", mesh->tag());
-    auto acceleration = create_field_state(*graph, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
-    auto time = graph->create_state<double, double>(initial_time);
-    std::vector<FieldState> params =
-        createParams<ParamSpaces...>(*graph, physics_name + "_param", param_names, mesh->tag());
-    std::vector<FieldState> states{disp, velo, acceleration};
-
-    // weak form unknowns are disp, disp_old, velo_old, accel_old
-    using SolidWeakFormT = SecondOrderTimeDiscretizedWeakForm<
-        spatial_dim, VectorSpace, Parameters<VectorSpace, VectorSpace, VectorSpace, VectorSpace, ParamSpaces...>>;
-    auto input_spaces = spaces({states[DISPLACEMENT], states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]});
-    auto param_spaces = spaces(params);
-    input_spaces.insert(input_spaces.end(), param_spaces.begin(), param_spaces.end());
-
-    auto solid_mechanics_weak_form =
-        std::make_shared<SolidWeakFormT>(physics_name, mesh, time_rule, space(states[DISPLACEMENT]), input_spaces);
-
-    return std::make_tuple(shape_disp, states, params, time, solid_mechanics_weak_form);
-  }
-
-  std::vector<FieldState> advanceState(const FieldState& shape_disp, const std::vector<FieldState>& states_old,
-                                       const std::vector<FieldState>& params, const TimeInfo& time_info) const override
-  {
-    double dt = time_info.dt();
-    size_t cycle = time_info.cycle();
-    double final_time = time_info.time() + dt;
-
-    TimeInfo final_time_info(final_time, dt, cycle);
-
-    // evaluate initial guesses
-    FieldState displacement_guess = states_old[DISPLACEMENT] + dt * states_old[VELOCITY];
-
-    // input fields for solid_weak_form
-    std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[VELOCITY], states_old[ACCELERATION]};
-    solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-
-    auto displacement =
-        solve(displacement_guess, shape_disp, solid_inputs, final_time_info, *weak_form_, *solver_, *vector_bcs_);
-
-    std::vector<FieldState> states = states_old;
-
-    states[DISPLACEMENT] = displacement;
-    states[VELOCITY] = time_rule_.derivative(final_time_info, displacement, states_old[DISPLACEMENT],
-                                             states_old[VELOCITY], states_old[ACCELERATION]);
-    // states[VELOCITY] = (1.0 / final_time_info.dt()) * (displacement - states_old[DISPLACEMENT]);
-    states[ACCELERATION] = time_rule_.second_derivative(final_time_info, displacement, states_old[DISPLACEMENT],
-                                                        states_old[VELOCITY], states_old[ACCELERATION]);
-
-    return states;
-  }
-
-  std::vector<ResultantState> computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                                                const std::vector<FieldState>& states_old,
-                                                const std::vector<FieldState>& params,
-                                                const TimeInfo& time_info) const override
-  {
-    std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
-                                         states_old[ACCELERATION]};
-    solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-    return {evaluateWeakForm(weak_form_, time_info, shape_disp, solid_inputs, states[DISPLACEMENT])};
-  }
-
- private:
-  std::shared_ptr<DifferentiableSolver> solver_;
-  std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;
-  std::shared_ptr<WeakForm> weak_form_;
-  SecondOrderTimeIntegrationRule time_rule_;
-};
-
-template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
-auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
-                         std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
-                         smith::SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
-                         const std::vector<std::string>& param_names = {})
-{
-  auto graph = std::make_shared<gretl::DataStore>(100);
-  auto [shape_disp, states, params, time, solid_mechanics_weak_form] =
-      SolidMechanicsStateAdvancer2::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ParamSpaces...>(
-          mesh, graph, time_rule, physics_name, param_names);
-
-  auto vector_bcs = std::make_shared<DirichletBoundaryConditions>(
-      mesh->mfemParMesh(), space(states[SolidMechanicsStateAdvancer2::DISPLACEMENT]));
-
-  auto state_advancer = std::make_shared<SolidMechanicsStateAdvancer2>(d_solid_nonlinear_solver, vector_bcs,
-                                                                       solid_mechanics_weak_form, time_rule);
-
-  auto physics =
-      std::make_shared<DifferentiablePhysics>(mesh, graph, shape_disp, states, params, state_advancer, physics_name);
-
-  return std::make_tuple(physics, solid_mechanics_weak_form, vector_bcs);
-}
-};  // namespace smith
-
+}  // namespace smith
 int main(int argc, char* argv[])
 {
   using namespace smith;
@@ -244,38 +148,71 @@ int main(int argc, char* argv[])
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
       buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
+  std::shared_ptr<DifferentiableSolver> d_thermal_nonlinear_solver =
+      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+
+  smith::SecondOrderTimeIntegrationRule solid_time_rule(1.0);
+  smith::SecondOrderTimeIntegrationRule thermal_time_rule(1.0);
 
   // warm-start.
   // implicit Newmark.
+  //
+  auto [physics, solid_mechanics_weak_form, thermal_mechanics_weak_form, vector_bcs, scalar_bcs] =
+      custom_physics::buildThermoMechanics<dim, ShapeDispSpace, VectorSpace, ScalarSpace, ScalarParameterSpace>(
+          mesh, d_solid_nonlinear_solver, d_thermal_nonlinear_solver, solid_time_rule, thermal_time_rule, physics_name,
+          {"bulk"});
 
-  auto [physics, weak_form, bcs] =
-      buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
-
-  bcs->setFixedVectorBCs<dim>(mesh->domain("fix_bottom"));
-  bcs->setVectorBCs<dim>(mesh->domain("fix_top"), [](double t, smith::tensor<double, dim> X) {
+  vector_bcs->setFixedVectorBCs<dim>(mesh->domain("fix_bottom"));
+  vector_bcs->setVectorBCs<dim>(mesh->domain("fix_top"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
-    bc[1] = -20.0 * t;
+    bc[1] = -10.0 * t;
     return bc;
   });
 
+  double rho = 1.0;
+  double alpha = 1.0e-3;
+  double theta_ref = 0.0;
+  double k = 1.0;
+  double mu = 0.0;
+  double c = 1.0;
   double E = 100.0;
   double nu = 0.25;
-  auto K = E / (3.0 * (1.0 - 2 * nu));
-  auto G = E / (2.0 * (1.0 + nu));
-  using MaterialType = ParameterizedNeoHookeanWithViscosity;
-  MaterialType material{.density = 10.0, .K0 = K, .G0 = G, .eta = 0.0e0};
+  // auto K = E / (3.0 * (1.0 - 2 * nu));
+  // auto G = E / (2.0 * (1.0 + nu));
+  using MaterialType = NeoHookeanThermoelasticMaterial;
+  MaterialType material = MaterialType{rho, E, nu, c, alpha, theta_ref, k, mu};
+  // using MaterialType = ParameterizedNeoHookeanWithViscosity;
+  // MaterialType material{.density = 10.0, .K0 = K, .G0 = G, .eta = 0.0e0};
 
-  weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto v, auto /*a*/, auto bulk, auto shear) {
+  solid_mechanics_weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
+      [material](const auto& time_info, auto /*X*/, auto u, auto v, auto /*a*/, auto theta, auto /*theta_dot*/,
+                 auto /*theta_dot_dot*/, auto /*bulk*/) {
         MaterialType::State state;
-        auto du_dX = get<DERIVATIVE>(u);
+        const double dt = time_info.dt();
+        auto Grad_u = get<DERIVATIVE>(u);
         auto Grad_v = get<DERIVATIVE>(v);
-        auto pk_stress = material(state, du_dX, Grad_v, bulk, shear);
+        auto theta_l = get<VALUE>(theta);
+        auto Grad_theta = get<DERIVATIVE>(theta);
+        auto [pk, C_v, s0, q0] = material(state, dt, Grad_u, Grad_v, theta_l, Grad_theta);
         // return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
-        return smith::tuple{smith::zero{}, pk_stress};
+        return smith::tuple{smith::zero{}, pk};
+      });
+
+  thermal_mechanics_weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
+      [material](const auto& time_info, auto /*X*/, auto theta, auto theta_dot, auto /*theta_dot_dot*/, auto u, auto v,
+                 auto /*a*/, auto /*bulk*/) {
+        MaterialType::State state;
+        const double dt = time_info.dt();
+        auto Grad_u = get<DERIVATIVE>(u);
+        auto Grad_v = get<DERIVATIVE>(v);
+        auto theta_l = get<VALUE>(theta);
+        auto Grad_theta = get<DERIVATIVE>(theta);
+        auto [pk, C_v, s0, q0] = material(state, dt, Grad_u, Grad_v, theta_l, Grad_theta);
+        auto dtheta_dt = get<VALUE>(theta_dot);
+        // return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
+        return smith::tuple{C_v * dtheta_dt - s0, -q0};
       });
 
   auto shape_disp = physics->getShapeDispFieldState();
@@ -284,12 +221,7 @@ int main(int argc, char* argv[])
 
   params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
     double scaling = 1.0;
-    return scaling * material.K0;
-  });
-
-  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    double scaling = 1.0;
-    return scaling * material.G0;
+    return scaling;
   });
 
   physics->resetStates();
@@ -306,6 +238,14 @@ int main(int argc, char* argv[])
       std::cout << "Time Step: " << cnt << ", Time: " << physics->time() << std::endl;
     }
     physics->advanceTimestep(time_increment);
+
+    TimeInfo time_info(physics->time() - time_increment, time_increment);
+    auto reactions = physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(),
+                                                                    physics->getFieldStatesOld(), params, time_info);
+    double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
+    if (mfem::Mpi::Root()) {
+      std::cout << "Reaction: " << reaction << std::endl;
+    }
     pv_writer.write(cnt, physics->time(), physics->getFieldStatesAndParamStates());
   }
 
@@ -315,13 +255,15 @@ int main(int argc, char* argv[])
   auto previous_to_final_states = physics->getFieldStatesOld();
 
   auto state_advancer = physics->getStateAdvancer();
-  printf("a\n");
   auto reactions =
       state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
 
-  printf("b\n");
   auto disp_squared = innerProduct(reactions[0], reactions[0]);
 
   gretl::set_as_objective(disp_squared);
-  std::cout << "final disp norm2 = " << disp_squared.get() << std::endl;
+  if (mfem::Mpi::Root()) {
+    std::cout << "final disp norm2 = " << disp_squared.get() << std::endl;
+  }
+
+  return 0;
 }
