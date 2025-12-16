@@ -132,7 +132,7 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
 
     // Evolve Temperature
     // evaluate initial guess
-    SLIC_INFO("Thermal Solve");
+    // SLIC_INFO("Thermal Solve");
     FieldState temperature_guess = states_old[TEMPERATURE] + dt * states_old[TEMPERATURE_DOT];
     std::vector<FieldState> thermal_inputs{states_old[TEMPERATURE],      states_old[TEMPERATURE_DOT],
                                            states_old[TEMPERATURE_DDOT], states_old[DISPLACEMENT],
@@ -145,8 +145,8 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
     // Evolve Deformation
     // evaluate initial guess
     //
-    SLIC_INFO("Solids Solve");
-    FieldState displacement_guess = states_old[DISPLACEMENT];
+    // SLIC_INFO("Solids Solve");
+    FieldState displacement_guess = states_old[DISPLACEMENT] + dt * states_old[VELOCITY];
     std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT],    states_old[VELOCITY],
                                          states_old[ACCELERATION],    temperature,
                                          states_old[TEMPERATURE_DOT], states_old[TEMPERATURE_DDOT]};
