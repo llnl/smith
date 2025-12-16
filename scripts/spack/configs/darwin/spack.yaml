@@ -9,6 +9,9 @@ spack:
     build_stage::
     - $spack/../build_stage
 
+  concretizer:
+    compiler_mixing: false
+
   view: false
 
   include:
