@@ -6,14 +6,16 @@
 
 #pragma once
 
-#include "serac/numerics/functional/tensor.hpp"
-#include "serac/numerics/functional/tuple.hpp"
-#include "serac/physics/materials/green_saint_venant_thermoelastic.hpp"
-#include "serac/physics/materials/solid_material.hpp"
-#include "serac/numerics/functional/dual.hpp"
+#include "smith/numerics/functional/tensor.hpp"
+#include "smith/numerics/functional/tuple.hpp"
+#include "smith/physics/materials/green_saint_venant_thermoelastic.hpp"
+#include "smith/physics/materials/solid_material.hpp"
+#include "smith/numerics/functional/dual.hpp"
+
+using namespace smith;
 
 /// Thermomechanics helper data types
-namespace serac::thermomechanics {
+namespace smith::thermomechanics {
 /// @brief Alternative Green-Saint Venant isotropic thermoelastic model
 struct AlternativeGreenSaintVenantThermoelasticMaterial {
   double density;    ///< density
@@ -70,7 +72,7 @@ struct AlternativeGreenSaintVenantThermoelasticMaterial {
     // heat flux
     const auto q0 = -kappa * grad_theta;
 
-    return serac::tuple{Piola, C_v, s0, q0};
+    return smith::tuple{Piola, C_v, s0, q0};
   }
 };
 
@@ -114,7 +116,7 @@ struct NeoHookeanThermoelasticMaterial {
     // constexpr double eps = 1.0e-12;
     const double K = E / (3.0 * (1.0 - 2.0 * nu));
     const double G = 0.5 * E / (1.0 + nu);
-    constexpr auto I = serac::DenseIdentity<dim>();
+    constexpr auto I = smith::DenseIdentity<dim>();
     auto lambda = K - (2.0 / 3.0) * G;
     auto B_minus_I = dot(grad_u, transpose(grad_u)) + transpose(grad_u) + grad_u;
 
@@ -140,10 +142,11 @@ struct NeoHookeanThermoelasticMaterial {
 
     // heat flux
     const auto q0 = -kappa * grad_theta;
-    return serac::tuple{Piola, C_v, s0, q0};
+    return smith::tuple{Piola, C_v, s0, q0};
   }
 };
 
+///////////////////////////////////////////////////////////////////////////////
 
 /// PNC thermal stiffening material model
 struct ThermalStiffeningMaterial {
@@ -208,7 +211,7 @@ struct ThermalStiffeningMaterial {
   // this function calculates the equilibrium low-T mass fraction as a function of temperature
   
   template<typename scalar>
-  SERAC_HOST_DEVICE auto equilibrium_xi(scalar temp) const{
+  SMITH_HOST_DEVICE auto equilibrium_xi(scalar temp) const{
     using std::pow, std::exp;
     auto Tt = 443.0;
     auto k = 36.0;
@@ -216,14 +219,14 @@ struct ThermalStiffeningMaterial {
   }
 
   template<typename scalar>
-  SERAC_HOST_DEVICE auto Gm0(scalar g) const{
+  SMITH_HOST_DEVICE auto Gm0(scalar g) const{
     // low-T shear modulus at reference temperature as a function of particle wt% g
     auto junk = g;
     return Gm*junk/g;
   }
   
   template<typename scalar>
-  SERAC_HOST_DEVICE auto f1(scalar T) const{
+  SMITH_HOST_DEVICE auto f1(scalar T) const{
     using std::exp;
     // thermal softening function for low-T modulus
     auto N = 0.02;
@@ -231,7 +234,7 @@ struct ThermalStiffeningMaterial {
   }
 
   template<typename scalar>
-  SERAC_HOST_DEVICE auto df1(scalar T) const{
+  SMITH_HOST_DEVICE auto df1(scalar T) const{
     using std::exp;
     // thermal softening function for low-T modulus
     auto N = 0.02;
@@ -239,7 +242,7 @@ struct ThermalStiffeningMaterial {
   }
 
   template<typename scalar>
-  SERAC_HOST_DEVICE auto Ge0(scalar g) const{
+  SMITH_HOST_DEVICE auto Ge0(scalar g) const{
     // high-T shear modulus at reference temperature as a function of particle wt% g
     auto junk = g;
     return Ge*junk/g;
@@ -346,10 +349,10 @@ struct ThermalStiffeningMaterial {
     const auto s0 = tr(dot(Sv+theta*dSedT,greenStrainRate));
     //const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate);
 
-    return serac::tuple{Piola, C_v, s0, q0};
+    return smith::tuple{Piola, C_v, s0, q0};
   }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
-}  // namespace serac::thermomechanics
+}  // namespace smith::thermomechanics
