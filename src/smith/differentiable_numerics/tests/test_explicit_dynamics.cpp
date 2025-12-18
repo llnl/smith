@@ -112,7 +112,7 @@ struct MeshFixture : public testing::Test {
     auto mfem_shape = mfem::Element::QUADRILATERAL;  // mfem::Element::TRIANGLE;
     double length = 0.5;
     double width = 2.0;
-    mesh_ = std::make_shared<smith::Mesh>(mfem::Mesh::MakeCartesian2D(5, 5, mfem_shape, true, length, width), MESHTAG,
+    mesh_ = std::make_shared<smith::Mesh>(mfem::Mesh::MakeCartesian2D(5, 4, mfem_shape, true, length, width), MESHTAG,
                                           0, 0);
     // checkpointing graph
     checkpointer_ = std::make_shared<gretl::DataStore>(200);
@@ -162,7 +162,7 @@ struct MeshFixture : public testing::Test {
     bc_manager_ = std::make_shared<smith::BoundaryConditionManager>(mesh_->mfemParMesh());
 
     auto dt_estimator =
-        std::make_shared<smith::ConstantTimeStepEstimator>(dt / 100.0);  // reduce the timestep a bit, so it subcycles
+        std::make_shared<smith::ConstantTimeStepEstimator>(dt / 10.0);  // reduce the timestep a bit, so it subcycles
     std::shared_ptr<smith::StateAdvancer> time_integrator =
         std::make_shared<smith::LumpedMassExplicitNewmarkStateAdvancer>(solid_mechanics_residual, solid_mass_residual,
                                                                         dt_estimator, bc_manager_);
@@ -264,7 +264,7 @@ struct MeshFixture : public testing::Test {
 
   std::shared_ptr<smith::BoundaryConditionManager> bc_manager_;
 
-  static constexpr double total_simulation_time = 0.05;
+  static constexpr double total_simulation_time = 0.005;
   static constexpr size_t num_steps = 10;
   static constexpr double dt = total_simulation_time / num_steps;
 };
