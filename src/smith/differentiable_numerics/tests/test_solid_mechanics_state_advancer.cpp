@@ -316,17 +316,14 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
 
   solid_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
+      [material](const auto& /*time_info*/, auto X, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
         MaterialType::State state;
         auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
-        return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
+        auto b = 0.0 * get<VALUE>(X);
+        b[1] = gravity;
+        return smith::tuple{get<VALUE>(a) * material.density - b, pk_stress};
       });
 
-  solid_weak_form->addBodySource(mesh->entireBodyName(), [](auto /*time*/, auto X) {
-    auto b = 0.0 * X;
-    b[1] = gravity;
-    return b;
-  });
 
   auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();
@@ -343,13 +340,12 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   });
 
   physics->resetStates();
-
   auto all_fields = physics->getFieldStatesAndParamStates();
 
   std::string pv_dir = std::string("paraview_") + physics->name();
-  std::cout << "Writing output to " << pv_dir << std::endl;
   auto pv_writer = createParaviewOutput(*mesh, all_fields, pv_dir);
   pv_writer.write(physics->cycle(), physics->time(), all_fields);
+
   const double timestep = time_simulation / double(dt_reduction);
   for (size_t m = 0; m < dt_reduction * num_steps; ++m) {
     physics->advanceTimestep(timestep);
@@ -361,7 +357,7 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   // double v_exact = gravity * time;
   // double u_exact = 0.5 * gravity * time * time;
 
-  TimeInfo end_time_info(physics->time(), timestep, static_cast<int>(physics->cycle()));
+  TimeInfo end_time_info(physics->time(), timestep, static_cast<size_t>(physics->cycle()));
 
   FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({all_fields[ACCEL]}));
   accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {

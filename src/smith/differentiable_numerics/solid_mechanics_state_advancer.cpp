@@ -7,11 +7,14 @@
 
 namespace smith {
 
-SolidMechanicsStateAdvancer::SolidMechanicsStateAdvancer(std::shared_ptr<smith::DifferentiableSolver> solver,
-                                                         std::shared_ptr<smith::DirichletBoundaryConditions> vector_bcs,
-                                                         std::shared_ptr<smith::WeakForm> weak_form,
-                                                         smith::SecondOrderTimeIntegrationRule time_rule)
-    : solver_(solver), vector_bcs_(vector_bcs), weak_form_(weak_form), time_rule_(time_rule)
+SolidMechanicsStateAdvancer::SolidMechanicsStateAdvancer(
+    std::shared_ptr<smith::DifferentiableSolver> solver, std::shared_ptr<smith::DirichletBoundaryConditions> vector_bcs,
+    std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_dynamic_weak_forms,
+    smith::SecondOrderTimeIntegrationRule time_rule)
+    : solver_(solver),
+      vector_bcs_(vector_bcs),
+      solid_dynamic_weak_forms_(solid_dynamic_weak_forms),
+      time_rule_(time_rule)
 {
 }
 
@@ -23,13 +26,11 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const FieldSta
   std::vector<FieldState> states_old = states_old_;
   if (time_info.cycle() == 0) {
     // input fields for solid_weak_form
-    // std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY]};
-    // solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-    // FieldState accel_guess = states_old[ACCELERATION];
-    // states_old[ACCELERATION] =
-    //  solve(accel_guess, shape_disp, solid_inputs, time_info, *weak_form_, *solver_, *vector_bcs_, 3);
-    *states_old[ACCELERATION].get() = -9.0;
-    printf("solving for a\n");
+    std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[VELOCITY]};
+    solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
+    FieldState accel_guess = states_old[ACCELERATION];
+    states_old[ACCELERATION] =
+      solve(accel_guess, shape_disp, solid_inputs, time_info, *solid_dynamic_weak_forms_->quasi_static_weak_form, *solver_, *vector_bcs_);
   }
 
   double dt = time_info.dt();
@@ -46,7 +47,7 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const FieldSta
   solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
 
   auto displacement =
-      solve(displacement_guess, shape_disp, solid_inputs, final_time_info, *weak_form_, *solver_, *vector_bcs_);
+      solve(displacement_guess, shape_disp, solid_inputs, final_time_info, *solid_dynamic_weak_forms_->time_discretized_weak_form, *solver_, *vector_bcs_);
 
   std::vector<FieldState> states = states_old;
 
@@ -68,7 +69,7 @@ std::vector<ResultantState> SolidMechanicsStateAdvancer::computeResultants(const
   std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
                                        states_old[ACCELERATION]};
   solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-  return {evaluateWeakForm(weak_form_, time_info, shape_disp, solid_inputs, states[DISPLACEMENT])};
+  return {evaluateWeakForm(solid_dynamic_weak_forms_->time_discretized_weak_form, time_info, shape_disp, solid_inputs, states[DISPLACEMENT])};
 }
 
 }  // namespace smith
