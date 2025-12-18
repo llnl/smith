@@ -70,39 +70,6 @@ struct SolidMechanicsMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh;
 };
 
-void resetAndApplyInitialConditions(std::shared_ptr<BasePhysics> physics) { physics->resetStates(); }
-
-double integrateForward(std::shared_ptr<BasePhysics> physics, size_t num_steps, double dt)
-{
-  resetAndApplyInitialConditions(physics);
-  for (size_t m = 0; m < num_steps; ++m) {
-    physics->advanceTimestep(dt);
-  }
-  FiniteElementDual reaction = physics->dual("reactions");
-
-  return 0.5 * innerProduct(reaction, reaction);
-}
-
-void adjointBackward(std::shared_ptr<BasePhysics> physics, smith::FiniteElementDual& shape_sensitivity,
-                     std::vector<smith::FiniteElementDual>& parameter_sensitivities)
-{
-  smith::FiniteElementDual reaction = physics->dual("reactions");
-  smith::FiniteElementState reaction_dual(reaction.space(), "reactions_dual");
-  reaction_dual = reaction;
-
-  physics->resetAdjointStates();
-
-  physics->setDualAdjointBcs({{"reactions", reaction_dual}});
-
-  while (physics->cycle() > 0) {
-    physics->reverseAdjointTimestep();
-    shape_sensitivity += physics->computeTimestepShapeSensitivity();
-    for (size_t param_index = 0; param_index < parameter_sensitivities.size(); ++param_index) {
-      parameter_sensitivities[param_index] += physics->computeTimestepSensitivity(param_index);
-    }
-  }
-}
-
 TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
 {
   SMITH_MARK_FUNCTION;
@@ -177,85 +144,6 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
   EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
   EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
   EXPECT_GT(checkGradWrt(reaction_squared, params[1], 6.2e-1, 4, true), 0.7);
-}
-
-TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_BASE_PHYSICS)
-{
-  SMITH_MARK_FUNCTION;
-
-  std::string physics_name = "solid";
-
-  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
-
-  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
-
-  auto [physics, solid_weak_form, bcs] =
-      buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
-
-  bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
-  bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
-    auto bc = 0.0 * X;
-    bc[0] = 0.01 * t;
-    bc[1] = -0.05 * t;
-    return bc;
-  });
-
-  double E = 100.0;
-  double nu = 0.25;
-  auto K = E / (3.0 * (1.0 - 2 * nu));
-  auto G = E / (2.0 * (1.0 + nu));
-  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
-  MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
-
-  solid_weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
-        MaterialType::State state;
-        auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
-        return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
-      });
-
-  auto shape_disp = physics->getShapeDispFieldState();
-  auto params = physics->getFieldParams();
-  auto states = physics->getInitialFieldStates();
-
-  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    double scaling = 1.0;
-    return scaling * material.K0;
-  });
-
-  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    double scaling = 1.0;
-    return scaling * material.G0;
-  });
-
-  physics->resetStates();
-
-  double qoi = integrateForward(physics, num_steps_, dt_);
-  std::cout << "qoi = " << qoi << std::endl;
-
-  size_t num_params = physics->parameterNames().size();
-
-  smith::FiniteElementDual shape_sensitivity(*shape_disp.get_dual());
-  std::vector<smith::FiniteElementDual> parameter_sensitivities;
-  for (size_t p = 0; p < num_params; ++p) {
-    parameter_sensitivities.emplace_back(*params[p].get_dual());
-  }
-
-  adjointBackward(physics, shape_sensitivity, parameter_sensitivities);
-
-  auto state_sensitivities = physics->computeInitialConditionSensitivity();
-  for (auto name_and_state_sensitivity : state_sensitivities) {
-    std::cout << name_and_state_sensitivity.first << " " << name_and_state_sensitivity.second.Norml2() << std::endl;
-  }
-
-  std::cout << shape_sensitivity.name() << " " << shape_sensitivity.Norml2() << std::endl;
-
-  for (size_t p = 0; p < num_params; ++p) {
-    std::cout << parameter_sensitivities[p].name() << " " << parameter_sensitivities[p].Norml2() << std::endl;
-  }
 }
 
 TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
@@ -364,6 +252,120 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   double u_err =
       disp_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(), getConstFieldPointers({all_fields[DISP]}));
   EXPECT_NEAR(0.0, u_err, 1e-14);
+}
+
+// these functions mimic the BasePhysics style of running smith
+
+void resetAndApplyInitialConditions(std::shared_ptr<BasePhysics> physics) { physics->resetStates(); }
+
+double integrateForward(std::shared_ptr<BasePhysics> physics, size_t num_steps, double dt)
+{
+  resetAndApplyInitialConditions(physics);
+  for (size_t m = 0; m < num_steps; ++m) {
+    physics->advanceTimestep(dt);
+  }
+  FiniteElementDual reaction = physics->dual("reactions");
+
+  return 0.5 * innerProduct(reaction, reaction);
+}
+
+void adjointBackward(std::shared_ptr<BasePhysics> physics, smith::FiniteElementDual& shape_sensitivity,
+                     std::vector<smith::FiniteElementDual>& parameter_sensitivities)
+{
+  smith::FiniteElementDual reaction = physics->dual("reactions");
+  smith::FiniteElementState reaction_dual(reaction.space(), "reactions_dual");
+  reaction_dual = reaction;
+
+  physics->resetAdjointStates();
+
+  physics->setDualAdjointBcs({{"reactions", reaction_dual}});
+
+  while (physics->cycle() > 0) {
+    physics->reverseAdjointTimestep();
+    shape_sensitivity += physics->computeTimestepShapeSensitivity();
+    for (size_t param_index = 0; param_index < parameter_sensitivities.size(); ++param_index) {
+      parameter_sensitivities[param_index] += physics->computeTimestepSensitivity(param_index);
+    }
+  }
+}
+
+TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_BASE_PHYSICS)
+{
+  SMITH_MARK_FUNCTION;
+
+  std::string physics_name = "solid";
+
+  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
+      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+
+  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
+
+  auto [physics, solid_weak_form, bcs] =
+      buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
+          mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
+
+  bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
+  bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
+    auto bc = 0.0 * X;
+    bc[0] = 0.01 * t;
+    bc[1] = -0.05 * t;
+    return bc;
+  });
+
+  double E = 100.0;
+  double nu = 0.25;
+  auto K = E / (3.0 * (1.0 - 2 * nu));
+  auto G = E / (2.0 * (1.0 + nu));
+  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
+  MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
+
+  solid_weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
+      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
+        MaterialType::State state;
+        auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
+        return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
+      });
+
+  auto shape_disp = physics->getShapeDispFieldState();
+  auto params = physics->getFieldParams();
+  auto states = physics->getInitialFieldStates();
+
+  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    double scaling = 1.0;
+    return scaling * material.K0;
+  });
+
+  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    double scaling = 1.0;
+    return scaling * material.G0;
+  });
+
+  physics->resetStates();
+
+  double qoi = integrateForward(physics, num_steps_, dt_);
+  std::cout << "qoi = " << qoi << std::endl;
+
+  size_t num_params = physics->parameterNames().size();
+
+  smith::FiniteElementDual shape_sensitivity(*shape_disp.get_dual());
+  std::vector<smith::FiniteElementDual> parameter_sensitivities;
+  for (size_t p = 0; p < num_params; ++p) {
+    parameter_sensitivities.emplace_back(*params[p].get_dual());
+  }
+
+  adjointBackward(physics, shape_sensitivity, parameter_sensitivities);
+
+  auto state_sensitivities = physics->computeInitialConditionSensitivity();
+  for (auto name_and_state_sensitivity : state_sensitivities) {
+    std::cout << name_and_state_sensitivity.first << " " << name_and_state_sensitivity.second.Norml2() << std::endl;
+  }
+
+  std::cout << shape_sensitivity.name() << " " << shape_sensitivity.Norml2() << std::endl;
+
+  for (size_t p = 0; p < num_params; ++p) {
+    std::cout << parameter_sensitivities[p].name() << " " << parameter_sensitivities[p].Norml2() << std::endl;
+  }
 }
 
 }  // namespace smith
