@@ -63,13 +63,14 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
   }
 };
 
-/// @brief A container holding the two types of weak forms useful for solving time discretized second order (in time) systems of equations
+/// @brief A container holding the two types of weak forms useful for solving time discretized second order (in time)
+/// systems of equations
 class SecondOrderTimeDiscretizedWeakForms {
  public:
-  std::shared_ptr<WeakForm>
-      time_discretized_weak_form;  ///< this publically available abstract weak form is a functions of the current u, u_old, v_old, and a_old,
-  std::shared_ptr<WeakForm> quasi_static_weak_form;  ///< this publically available abstract weak form is structly a function of the current u, v,
-                                                     ///< and a (no time discretization)
+  std::shared_ptr<WeakForm> time_discretized_weak_form;  ///< this publically available abstract weak form is a
+                                                         ///< functions of the current u, u_old, v_old, and a_old,
+  std::shared_ptr<WeakForm> quasi_static_weak_form;      ///< this publically available abstract weak form is structly a
+                                                     ///< function of the current u, v, and a (no time discretization)
 };
 
 template <int spatial_dim, typename OutputSpace, typename inputs = Parameters<>>

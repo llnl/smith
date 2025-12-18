@@ -324,7 +324,6 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
         return smith::tuple{get<VALUE>(a) * material.density - b, pk_stress};
       });
 
-
   auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();
   auto states = physics->getInitialFieldStates();
