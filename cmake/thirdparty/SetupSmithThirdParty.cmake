@@ -558,8 +558,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # Gretl
     #------------------------------------------------------------------------------
-    message(STATUS "Smith Enable Gretl: ${SMITH_ENABLE_GRETL}")
-    
     if(SMITH_ENABLE_GRETL)
         if (NOT DEFINED GRETL_SOURCE_DIR)
             set(GRETL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/gretl" CACHE PATH "")
