@@ -17,9 +17,6 @@ spack:
       environment: {}
       extra_rpaths: []
 
-  concretizer:
-    compiler_mixing: false
-
   # Regular TPLs do not need views
   view: false
 
