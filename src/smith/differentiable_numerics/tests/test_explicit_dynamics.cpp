@@ -161,7 +161,7 @@ struct MeshFixture : public testing::Test {
     // specify dirichlet bcs
     bc_manager = std::make_shared<smith::BoundaryConditionManager>(mesh->mfemParMesh());
 
-    auto dt_estimator = std::make_shared<smith::ConstantTimeStepEstimator>(dt / double(dt_reduction));
+    auto dt_estimator = std::make_shared<smith::ConstantTimeStepEstimator>(dt / 10.0); // reduce the timestep a bit, so it subcycles
     std::shared_ptr<smith::StateAdvancer> time_integrator =
         std::make_shared<smith::LumpedMassExplicitNewmarkStateAdvancer>(solid_mechanics_residual, solid_mass_residual,
                                                                         dt_estimator, bc_manager);
@@ -263,9 +263,9 @@ struct MeshFixture : public testing::Test {
 
   std::shared_ptr<smith::BoundaryConditionManager> bc_manager;
 
-  const double dt = 1e-2;
-  const size_t dt_reduction = 10;
-  const size_t num_steps = 4;
+  static constexpr double total_simulation_time = 2.5;
+  static constexpr size_t num_steps = 17;
+  static constexpr double dt = total_simulation_time / num_steps;
 };
 
 TEST_F(MeshFixture, TRANSIENT_DYNAMICS_BASE_PHYSICS)
@@ -318,9 +318,7 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
   auto pv_writer = smith::createParaviewOutput(*mesh, all_fields, pv_dir);
   pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);
   for (size_t m = 0; m < num_steps; ++m) {
-    for (size_t n = 0; n < dt_reduction; ++n) {
-      mechanics->advanceTimestep(dt / double(dt_reduction));
-    }
+    mechanics->advanceTimestep(dt);
     all_fields = mechanics->getFieldStatesAndParamStates();
     gretl_qoi =
         gretl_qoi + smith::evaluateObjective(objective, *shape_disp, {all_fields[F_VELO], all_fields[F_DENSITY]});
@@ -362,8 +360,8 @@ TEST_F(MeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   auto pv_writer = smith::createParaviewOutput(*mesh, all_fields, pv_dir);
   pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);
   double time = 0.0;
-  for (size_t m = 0; m < dt_reduction * num_steps; ++m) {
-    double timestep = dt / double(dt_reduction);
+  for (size_t m = 0; m < num_steps; ++m) {
+    double timestep = dt / double(num_steps);
     mechanics->advanceTimestep(timestep);
     all_fields = mechanics->getFieldStatesAndParamStates();
     pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);

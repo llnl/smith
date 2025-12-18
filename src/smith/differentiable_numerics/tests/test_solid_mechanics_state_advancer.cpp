@@ -46,12 +46,9 @@ using ScalarParameterSpace = L2<0>;
 struct SolidMechanicsMeshFixture : public testing::Test {
   double length = 1.0;
   double width = 0.04;
-  // int num_elements_x = 21;
-  // int num_elements_y = 3;
-  // int num_elements_z = 3;
-  int num_elements_x = 4;
-  int num_elements_y = 1;
-  int num_elements_z = 1;
+  int num_elements_x = 14;
+  int num_elements_y = 2;
+  int num_elements_z = 2;
   double elem_size = length / num_elements_x;
 
   void SetUp()
@@ -65,18 +62,21 @@ struct SolidMechanicsMeshFixture : public testing::Test {
     mesh->addDomainOfBoundaryElements("right", smith::by_attr<dim>(5));
   }
 
+  static constexpr double total_simulation_time_ = 1.2;
+  static constexpr size_t num_steps_ = 5;
+  static constexpr double dt_ = total_simulation_time_ / num_steps_;
+  
   axom::sidre::DataStore datastore;
   std::shared_ptr<smith::Mesh> mesh;
 };
 
 void resetAndApplyInitialConditions(std::shared_ptr<BasePhysics> physics) { physics->resetStates(); }
 
-double integrateForward(std::shared_ptr<BasePhysics> physics)
+double integrateForward(std::shared_ptr<BasePhysics> physics, size_t num_steps, double dt)
 {
   resetAndApplyInitialConditions(physics);
-  double time_increment = 0.5;
-  for (size_t m = 0; m < 5; ++m) {
-    physics->advanceTimestep(time_increment);
+  for (size_t m = 0; m < num_steps; ++m) {
+    physics->advanceTimestep(dt);
   }
   FiniteElementDual reaction = physics->dual("reactions");
 
@@ -102,22 +102,6 @@ void adjointBackward(std::shared_ptr<BasePhysics> physics, smith::FiniteElementD
     }
   }
 }
-
-// FiniteElementState createReactionMask(FiniteElementDual& reactions, int direction,
-//                                       std::shared_ptr<smith::Mesh> mesh, std::string domain_name)
-// {
-//   FiniteElementState reactionDirections(reactions.space(), "reaction_directions");
-//   reactionDirections = 0.0;
-
-//   mfem::VectorFunctionCoefficient func(dim, [direction](const mfem::Vector& /*x*/, mfem::Vector& u) {
-//     u = 0.0;
-//     u[direction] = 1.0;
-//   });
-
-//   reactionDirections.project(func, mesh->domain(domain_name));
-
-//   return reactionDirections;
-// }
 
 TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
 {
@@ -173,32 +157,27 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
 
   physics->resetStates();
 
-  double time_increment = 0.5;
   auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
-  for (size_t m = 0; m < 5; ++m) {
-    physics->advanceTimestep(time_increment);
+  for (size_t m = 0; m < num_steps_; ++m) {
+    physics->advanceTimestep(dt_);
     pv_writer.write(m + 1, physics->time(), physics->getFieldStatesAndParamStates());
   }
 
-  TimeInfo time_info(physics->time(), time_increment);
+  TimeInfo time_info(physics->time(), dt_);
 
   auto state_advancer = physics->getStateAdvancer();
   auto reactions = state_advancer->computeResultants(shape_disp, physics->getFieldStates(),
                                                      physics->getFieldStatesOld(), params, time_info);
 
-  // FiniteElementDual& theResidualVector = *reactions[0].get();
-  // mask = createReactionMask(theResidualVector, 0, mesh, "top");
-  // double total_reaction_force = innerProduct(theResidualVector, mask);
-
   auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
 
   gretl::set_as_objective(reaction_squared);
-  std::cout << "final disp norm2 = " << reaction_squared.get() << std::endl;
+  std::cout << "final residual norm2 = " << reaction_squared.get() << std::endl;
 
   EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 3.2e-1, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, params[1], 3.2e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[1], 6.2e-1, 4, true), 0.7);
 }
 
 TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_BASE_PHYSICS)
@@ -255,7 +234,7 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_BASE_PHYSICS)
 
   physics->resetStates();
 
-  double qoi = integrateForward(physics);
+  double qoi = integrateForward(physics, num_steps_, dt_);
   std::cout << "qoi = " << qoi << std::endl;
 
   size_t num_params = physics->parameterNames().size();
@@ -291,9 +270,6 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
     ACCEL
   };
 
-  const double time_simulation = 1e-2;
-  const size_t dt_reduction = 10;
-  const size_t num_steps = 4;
   std::string physics_name = "solid";
 
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
@@ -316,10 +292,10 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
 
   solid_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-      [material](const auto& /*time_info*/, auto X, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
+      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
         MaterialType::State state;
         auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
-        auto b = 0.0 * get<VALUE>(X);
+        smith::tensor<double, dim> b{};
         b[1] = gravity;
         return smith::tuple{get<VALUE>(a) * material.density - b, pk_stress};
       });
@@ -345,23 +321,21 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   auto pv_writer = createParaviewOutput(*mesh, all_fields, pv_dir);
   pv_writer.write(physics->cycle(), physics->time(), all_fields);
 
-  const double timestep = time_simulation / double(dt_reduction);
-  for (size_t m = 0; m < dt_reduction * num_steps; ++m) {
-    physics->advanceTimestep(timestep);
+  for (size_t m = 0; m < num_steps_; ++m) {
+    physics->advanceTimestep(dt_);
     all_fields = physics->getFieldStatesAndParamStates();
     pv_writer.write(physics->cycle(), physics->time(), all_fields);
   }
 
   double a_exact = gravity;
-  // double v_exact = gravity * time;
-  // double u_exact = 0.5 * gravity * time * time;
+  double v_exact = gravity * total_simulation_time_;
+  double u_exact = 0.5 * gravity * total_simulation_time_ * total_simulation_time_;
 
-  TimeInfo end_time_info(physics->time(), timestep, static_cast<size_t>(physics->cycle()));
+  TimeInfo end_time_info(physics->time(), dt_, static_cast<size_t>(physics->cycle()));
 
   FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({all_fields[ACCEL]}));
   accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
     auto a = get<VALUE>(A);
-    std::cout << "a = " << a << std::endl;
     auto da0 = a[0];
     auto da1 = a[1] - a_exact;
     return da0 * da0 + da1 * da1;
@@ -370,29 +344,29 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
       accel_error.evaluate(end_time_info, shape_disp.get().get(), getConstFieldPointers({all_fields[ACCEL]}));
   EXPECT_NEAR(0.0, a_err, 1e-14);
 
-  // FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh,
-  //                                                                            spaces({all_fields[VELO]}));
-  // velo_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
-  //   auto v = get<VALUE>(V);
-  //   auto dv0 = v[0];
-  //   auto dv1 = v[1] - v_exact;
-  //   return dv0 * dv0 + dv1 * dv1;
-  // });
-  // double v_err = velo_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp->get().get(),
-  //                                    getConstFieldPointers({all_fields[VELO]}));
-  // EXPECT_NEAR(0.0, v_err, 1e-14);
+  FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh,
+                                                                             spaces({all_fields[VELO]}));
+  velo_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
+    auto v = get<VALUE>(V);
+    auto dv0 = v[0];
+    auto dv1 = v[1] - v_exact;
+    return dv0 * dv0 + dv1 * dv1;
+  });
+  double v_err = velo_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(),
+                                     getConstFieldPointers({all_fields[VELO]}));
+  EXPECT_NEAR(0.0, v_err, 1e-14);
 
-  // FunctionalObjective<dim, Parameters<VectorSpace>> disp_error("disp_error", mesh,
-  //                                                                            spaces({all_fields[DISP]}));
-  // disp_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
-  //   auto u = get<VALUE>(U);
-  //   auto du0 = u[0];
-  //   auto du1 = u[1] - u_exact;
-  //   return du0 * du0 + du1 * du1;
-  // });
-  // double u_err = disp_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp->get().get(),
-  //                                    getConstFieldPointers({all_fields[DISP]}));
-  // EXPECT_NEAR(0.0, u_err, 1e-14);
+  FunctionalObjective<dim, Parameters<VectorSpace>> disp_error("disp_error", mesh,
+                                                                             spaces({all_fields[DISP]}));
+  disp_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
+    auto u = get<VALUE>(U);
+    auto du0 = u[0];
+    auto du1 = u[1] - u_exact;
+    return du0 * du0 + du1 * du1;
+  });
+  double u_err = disp_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(),
+                                     getConstFieldPointers({all_fields[DISP]}));
+  EXPECT_NEAR(0.0, u_err, 1e-14);
 }
 
 }  // namespace smith

@@ -110,7 +110,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;  ///< Dirichlet boundary conditions on a vector-field
   std::shared_ptr<SecondOrderTimeDiscretizedWeakForms>
       solid_dynamic_weak_forms_;  ///< Solid mechanics time discretized weak forms, user must setup the appropriate
-                                  ///< integrals, has both the time discretized and the undiscretized weak forms
+                                  ///< integrals.  Has both the time discretized and the undiscretized weak forms.
   SecondOrderTimeIntegrationRule time_rule_;  ///< second order time integration rule.  Can compute u, u_dot, u_dot_dot,
                                               ///< given the current predicted u and the previous u, u_dot, u_dot_dot
 };
