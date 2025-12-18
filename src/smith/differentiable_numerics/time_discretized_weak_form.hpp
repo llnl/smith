@@ -30,7 +30,8 @@ class TimeDiscretizedWeakForm;
 /// @tparam ...InputSpaces All the input FiniteElementState fields (trial-spaces)
 /// @tparam spatial_dim The spatial dimension for the problem
 template <int spatial_dim, typename OutputSpace, typename... InputSpaces>
-class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>> : public FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>> {
+class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>
+    : public FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>> {
  public:
   using WeakFormT = FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>;  ///< using
 
@@ -74,15 +75,17 @@ class SecondOrderTimeDiscretizedWeakForm;
 /// unknown of the time discretized equation.
 /// @tparam ...InputSpaces Spaces for all the remaining input FiniteElementState fields.
 /// @tparam spatial_dim The spatial dimension for the problem.
-template <int spatial_dim, typename OutputSpace, typename... InputSpaces>
-class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>
-    : public TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>> {
+template <int spatial_dim, typename OutputSpace, typename TrialInputSpace, typename... InputSpaces>
+class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<TrialInputSpace, InputSpaces...>>
+    : public TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<TrialInputSpace, InputSpaces...>> {
  public:
   static constexpr int NUM_STATE_VARS = 4;  ///< u, u_old, v_old, a_old
 
-  using WeakFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>;  ///< using
-  //using WeakFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<TrialInputSpace, InputSpaces...>>;  ///< using
- // using QuasiStaticWeakFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, InputSpaces...>;      ///< using
+  // using WeakFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>;  ///< using
+  using WeakFormT =
+      TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<TrialInputSpace, InputSpaces...>>;  ///< using
+  using QuasiStaticWeakFormT =
+      TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>;  ///< using
 
   /// @brief Constructor
   SecondOrderTimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
@@ -93,11 +96,11 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<In
   {
     typename WeakFormT::SpacesT input_mfem_spaces_trial_removed(std::next(input_mfem_spaces.begin()),
                                                                 input_mfem_spaces.end());
-    //quasi_static_weak_form_ =
-    //    std::make_shared<QuasiStaticWeakFormT>(physics_name, mesh, output_mfem_space, input_mfem_spaces_trial_removed);
+    quasi_static_weak_form_ =
+        std::make_shared<QuasiStaticWeakFormT>(physics_name, mesh, output_mfem_space, input_mfem_spaces_trial_removed);
   }
 
-  //std::shared_ptr<WeakForm> quasiStaticWeakForm() const { return quasi_static_weak_form_; }
+  std::shared_ptr<WeakForm> quasiStaticWeakForm() const { return quasi_static_weak_form_; }
 
   /// @overload
   template <int... active_parameters, typename BodyIntegralType>
@@ -108,20 +111,13 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<In
     WeakFormT::addBodyIntegral(DependsOn<0, 1, 2, 3, NUM_STATE_VARS + active_parameters...>{}, body_name,
                                [integrand, time_rule](const TimeInfo& t, auto X, auto U, auto U_old, auto U_dot_old,
                                                       auto U_dot_dot_old, auto... inputs) {
-                                //  return integrand(t, X, time_rule.value(t, U, U_old, U_dot_old, U_dot_dot_old),
-                                //                   time_rule.derivative(t, U, U_old, U_dot_old, U_dot_dot_old),
-                                //                   time_rule.second_derivative(t, U, U_old, U_dot_old, U_dot_dot_old),
-                                //                   inputs...);
-                                  return smith::tuple{smith::zero{}, smith::zero{}};
+                                 return integrand(t, X, time_rule.value(t, U, U_old, U_dot_old, U_dot_dot_old),
+                                                  time_rule.derivative(t, U, U_old, U_dot_old, U_dot_dot_old),
+                                                  time_rule.second_derivative(t, U, U_old, U_dot_old, U_dot_dot_old),
+                                                  inputs...);
                                });
-    //quasi_static_weak_form_->addBodyIntegral(
-    //    DependsOn<0, 1, 2 + active_parameters...>{}, body_name,
-    //    [integrand](const TimeInfo& t, auto X, auto U, auto V, auto A, auto... inputs) {
-    //      return integrand(t, X, U, V, A, inputs...);
-    //    });
-
-    //  //quasi_static_weak_form_->addBodyIntegral(DependsOn<0, 1, 2, NUM_STATE_VARS - 1 + active_parameters ...>{},
-    //  body_name, integrand);
+    quasi_static_weak_form_->addBodyIntegral(DependsOn<0, 1, 2, NUM_STATE_VARS - 1 + active_parameters...>{}, body_name,
+                                             integrand);
   }
 
   /// @overload
@@ -133,8 +129,8 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<In
 
   SecondOrderTimeIntegrationRule time_rule_;  ///< encodes the time integration rule
 
-  //std::shared_ptr<QuasiStaticWeakFormT>
-  //    quasi_static_weak_form_;  ///< this weak form is structly a function of the current u, v, and a (no time
+  std::shared_ptr<QuasiStaticWeakFormT>
+      quasi_static_weak_form_;  ///< this weak form is structly a function of the current u, v, and a (no time
                                 ///< discretization is encoded)
 };
 
