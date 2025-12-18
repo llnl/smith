@@ -269,11 +269,11 @@ spack:
 
     # Lock in versions of Devtools
     cmake:
-      version: [3.23.1]
       buildable: false
       externals:
-      - spec: cmake@3.23.1
-        prefix: /usr/tce
+      - spec: cmake@3.30.5
+        modules:
+        - cmake/3.30.5
     cppcheck:
       version: [2.9]
       buildable: false
@@ -286,17 +286,11 @@ spack:
       externals:
       - spec: doxygen@1.9.8
         prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/doxygen-1.9.8
-    py-ats:
-      version: [7.0.105]
-      buildable: false
-      externals:
-      - spec: py-ats@7.0.105
-        prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.11.7
     py-sphinx:
       version: [7.2.6]
       buildable: false
       externals:
-      - spec: py-sphinx@7.2.6
+      - spec: py-sphinx@7.2.6 ^python
         prefix: /usr/workspace/smithdev/devtools/toss_4_x86_64_ib/latest/python-3.11.7
     python:
       buildable: false

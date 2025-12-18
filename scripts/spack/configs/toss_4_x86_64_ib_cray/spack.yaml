@@ -316,8 +316,9 @@ spack:
     cmake:
       buildable: false
       externals:
-      - spec: cmake@3.24.2
-        prefix: /usr/tce
+      - spec: cmake@3.29.2
+        modules:
+        - cmake/3.29.2
     python:
       buildable: false
       externals:
