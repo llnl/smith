@@ -65,7 +65,7 @@ struct SolidMechanicsMeshFixture : public testing::Test {
   static constexpr double total_simulation_time_ = 1.2;
   static constexpr size_t num_steps_ = 5;
   static constexpr double dt_ = total_simulation_time_ / num_steps_;
-  
+
   axom::sidre::DataStore datastore;
   std::shared_ptr<smith::Mesh> mesh;
 };
@@ -344,28 +344,26 @@ TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
       accel_error.evaluate(end_time_info, shape_disp.get().get(), getConstFieldPointers({all_fields[ACCEL]}));
   EXPECT_NEAR(0.0, a_err, 1e-14);
 
-  FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh,
-                                                                             spaces({all_fields[VELO]}));
+  FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh, spaces({all_fields[VELO]}));
   velo_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
     auto v = get<VALUE>(V);
     auto dv0 = v[0];
     auto dv1 = v[1] - v_exact;
     return dv0 * dv0 + dv1 * dv1;
   });
-  double v_err = velo_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(),
-                                     getConstFieldPointers({all_fields[VELO]}));
+  double v_err =
+      velo_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(), getConstFieldPointers({all_fields[VELO]}));
   EXPECT_NEAR(0.0, v_err, 1e-14);
 
-  FunctionalObjective<dim, Parameters<VectorSpace>> disp_error("disp_error", mesh,
-                                                                             spaces({all_fields[DISP]}));
+  FunctionalObjective<dim, Parameters<VectorSpace>> disp_error("disp_error", mesh, spaces({all_fields[DISP]}));
   disp_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
     auto u = get<VALUE>(U);
     auto du0 = u[0];
     auto du1 = u[1] - u_exact;
     return du0 * du0 + du1 * du1;
   });
-  double u_err = disp_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(),
-                                     getConstFieldPointers({all_fields[DISP]}));
+  double u_err =
+      disp_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(), getConstFieldPointers({all_fields[DISP]}));
   EXPECT_NEAR(0.0, u_err, 1e-14);
 }
 

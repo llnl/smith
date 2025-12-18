@@ -161,7 +161,8 @@ struct MeshFixture : public testing::Test {
     // specify dirichlet bcs
     bc_manager = std::make_shared<smith::BoundaryConditionManager>(mesh->mfemParMesh());
 
-    auto dt_estimator = std::make_shared<smith::ConstantTimeStepEstimator>(dt / 100.0); // reduce the timestep a bit, so it subcycles
+    auto dt_estimator =
+        std::make_shared<smith::ConstantTimeStepEstimator>(dt / 100.0);  // reduce the timestep a bit, so it subcycles
     std::shared_ptr<smith::StateAdvancer> time_integrator =
         std::make_shared<smith::LumpedMassExplicitNewmarkStateAdvancer>(solid_mechanics_residual, solid_mass_residual,
                                                                         dt_estimator, bc_manager);
