@@ -564,27 +564,25 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     message(STATUS "Smith Enable Gretl: ${SMITH_ENABLE_GRETL}")
     
     if(SMITH_ENABLE_GRETL)
-        # Allow gretl as a non-submodule
-        if (DEFINED GRETL_SOURCE_DIR)
-            if(NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
-                message(FATAL_ERROR "Given GRETL_SOURCE_DIR does not contain CMakeLists.txt")
-            endif()
-        else()
+        if (NOT DEFINED GRETL_SOURCE_DIR)
             set(GRETL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/gretl" CACHE PATH "")
-
-            if (NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
-                message(FATAL_ERROR
-                    "The gretl repo is not present. "
-                    "Either run the following command in your git repository: \n"
-                    "    git submodule update --init --recursive\n"
-                    "Or add -DGRETL_SOURCE_DIR=/path/to/gretl to your CMake command." )
-            endif()
         endif()
 
-        set(GRETL_FOUND TRUE)
-        message(STATUS "Gretl dir = ${GRETL_SOURCE_DIR}")
-        add_subdirectory("${GRETL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/gretl)
+        # check if gretl exists in the GRETL_SOURCE_DIR, if not, try looking through the smith submodule
+        if (NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
+            set(GRETL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/smith/gretl" CACHE PATH "" FORCE)
+        endif()
 
+        if (NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
+            message(FATAL_ERROR
+                "The gretl repo is not present. "
+                "Either run the following command in your git repository: \n"
+                "    git submodule update --init --recursive\n"
+                "Or add -DGRETL_SOURCE_DIR=/path/to/gretl to your CMake command." )
+        endif()
+
+        add_subdirectory("${GRETL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/gretl)
+        set(GRETL_FOUND TRUE)
     endif()
 
 
