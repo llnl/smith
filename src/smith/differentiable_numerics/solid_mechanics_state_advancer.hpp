@@ -101,7 +101,6 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
 
   /// @overload
   std::vector<ResultantState> computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                                                const std::vector<FieldState>& states_old,
                                                 const std::vector<FieldState>& params,
                                                 const TimeInfo& time_info) const override;
 

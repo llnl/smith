@@ -167,8 +167,7 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
   TimeInfo time_info(physics->time(), dt_);
 
   auto state_advancer = physics->getStateAdvancer();
-  auto reactions = state_advancer->computeResultants(shape_disp, physics->getFieldStates(),
-                                                     physics->getFieldStatesOld(), params, time_info);
+  auto reactions = state_advancer->computeResultants(shape_disp, physics->getFieldStates(), params, time_info);
 
   auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
 

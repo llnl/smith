@@ -116,9 +116,6 @@ class DifferentiablePhysics : public BasePhysics {
   /// @brief Get all the current FieldStates
   std::vector<FieldState> getFieldStates() const { return field_states_; }
 
-  /// @brief Get all the previous FieldStates
-  std::vector<FieldState> getFieldStatesOld() const { return field_states_old_; }
-
   /// @brief Get all the parameter FieldStates
   std::vector<FieldState> getFieldParams() const { return field_params_; }
 
@@ -141,8 +138,7 @@ class DifferentiablePhysics : public BasePhysics {
   std::vector<FieldState> initial_field_states_;  ///< hold a copy of the initial states, mostly to have a record of
                                                   ///< initial condition sensitivities
   std::vector<FieldState> field_states_;          ///< all the states that may be changed by the StateAdvancer
-  std::vector<FieldState> field_states_old_;  ///< all the old states that were recently changed by the StateAdvancer
-  std::vector<FieldState> field_params_;      ///< all the parameters which should not be changed by the StateAdvancer
+  std::vector<FieldState> field_params_;  ///< all the parameters which should not be changed by the StateAdvancer
   std::unique_ptr<FieldState>
       field_shape_displacement_;  ///< shape displacement which is also fixed for a given simulation
 

@@ -64,14 +64,12 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const FieldSta
 
 std::vector<ResultantState> SolidMechanicsStateAdvancer::computeResultants(const FieldState& shape_disp,
                                                                            const std::vector<FieldState>& states,
-                                                                           const std::vector<FieldState>& states_old,
                                                                            const std::vector<FieldState>& params,
                                                                            const TimeInfo& time_info) const
 {
-  std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
-                                       states_old[ACCELERATION]};
+  std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]};
   solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-  return {evaluateWeakForm(solid_dynamic_weak_forms_->time_discretized_weak_form, time_info, shape_disp, solid_inputs,
+  return {evaluateWeakForm(solid_dynamic_weak_forms_->quasi_static_weak_form, time_info, shape_disp, solid_inputs,
                            states[DISPLACEMENT])};
 }
 
