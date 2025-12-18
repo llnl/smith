@@ -66,8 +66,6 @@ struct SecondOrderTimeIntegrationRule {
     //  return (4.0 * a_np25) - accel_old;
   }
 
-  double alpha_v0 = 1.0;
-
   double theta_;  ///< parameter specifying the particular integration rule for integrating second order systems with
                   ///< two steps
 };

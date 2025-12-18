@@ -35,7 +35,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   /// @brief Constructor
   /// @param solid_solver differentiable solve
   /// @param vector_bcs Dirichlet boundary conditions that can be applies to vector unknowns
-  /// @param solid_weak_form The weak-form for solid mechanics equations
+  /// @param solid_dynamic_weak_forms The weak-forms for time discretized solid mechanics equations
   /// @param time_rule The specific time-integration rule, typically Implicit Newmark or Quasi-static
   SolidMechanicsStateAdvancer(std::shared_ptr<DifferentiableSolver> solid_solver,
                               std::shared_ptr<DirichletBoundaryConditions> vector_bcs,

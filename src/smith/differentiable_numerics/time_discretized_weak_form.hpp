@@ -139,8 +139,13 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
     addBodyIntegral(DependsOn<>{}, body_name, body_integral);
   }
 
-  std::shared_ptr<TimeDiscretizedWeakFormT> time_discretized_weak_form_;
-  std::shared_ptr<QuasiStaticWeakFormT> quasi_static_weak_form_;
+ private:
+  std::shared_ptr<TimeDiscretizedWeakFormT>
+      time_discretized_weak_form_;  ///< fully templated time discretized weak form (with time integration rule injected
+                                    ///< into the q-function)
+  std::shared_ptr<QuasiStaticWeakFormT>
+      quasi_static_weak_form_;  ///< fully template underlying weak form (no time integration included, a function of
+                                ///< current u, v, and a)
 
   SecondOrderTimeIntegrationRule time_rule_;  ///< encodes the time integration rule
 };
