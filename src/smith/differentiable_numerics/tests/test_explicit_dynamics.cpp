@@ -207,9 +207,9 @@ struct MeshFixture : public testing::Test {
     resetAndApplyInitialConditions();
     double base_physics_qoi = 0.0;
     for (size_t m = 0; m < num_steps; ++m) {
-      physics->advanceTimestep(dt);
-      base_physics_qoi += (*kinetic_energy_integrator)(physics->time(), physics->shapeDisplacement(),
-                                                       physics->state(velo_name), physics->parameter(DENSITY));
+      physics_->advanceTimestep(dt);
+      base_physics_qoi += (*kinetic_energy_integrator_)(physics_->time(), physics_->shapeDisplacement(),
+                                                        physics_->state(velo_name), physics_->parameter(DENSITY));
     }
 
     return base_physics_qoi;
@@ -310,7 +310,7 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
 
   resetAndApplyInitialConditions();
 
-  auto all_fields = mechanics->getFieldStatesAndParamStates();
+  auto all_fields = mechanics_->getFieldStatesAndParamStates();
 
   gretl::State<double> gretl_qoi =
       0.0 * smith::evaluateObjective(objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
@@ -319,8 +319,8 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
   auto pv_writer = smith::createParaviewOutput(*mesh_, all_fields, pv_dir);
   pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
   for (size_t m = 0; m < num_steps; ++m) {
-    mechanics->advanceTimestep(dt);
-    all_fields = mechanics->getFieldStatesAndParamStates();
+    mechanics_->advanceTimestep(dt);
+    all_fields = mechanics_->getFieldStatesAndParamStates();
     gretl_qoi =
         gretl_qoi + smith::evaluateObjective(objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
     pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
@@ -343,18 +343,18 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
               << std::endl;
   }
 
-  EXPECT_GT(smith::checkGradWrt(gretl_qoi, *shape_disp, 0.01, 4, true), 0.8);
-  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states[DISP], 0.01, 4, true), 0.8);
-  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states[VELO], 0.01, 4, true), 0.8);
-  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states[DENSITY], 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, *shape_disp_, 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[DISP], 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[VELO], 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[DENSITY], 0.01, 4, true), 0.8);
 }
 
 TEST_F(MeshFixture, TRANSIENT_CONSTANT_GRAVITY)
 {
   SMITH_MARK_FUNCTION;
 
-  mechanics->resetStates();
-  auto all_fields = mechanics->getFieldStatesAndParamStates();
+  mechanics_->resetStates();
+  auto all_fields = mechanics_->getFieldStatesAndParamStates();
 
   std::string pv_dir = std::string("paraview_") + mechanics_->name();
   std::cout << "Writing output to " << pv_dir << std::endl;
@@ -363,9 +363,9 @@ TEST_F(MeshFixture, TRANSIENT_CONSTANT_GRAVITY)
   double time = 0.0;
   for (size_t m = 0; m < num_steps; ++m) {
     double timestep = dt / double(num_steps);
-    mechanics->advanceTimestep(timestep);
-    all_fields = mechanics->getFieldStatesAndParamStates();
-    pv_writer.write(mechanics->cycle(), mechanics->time(), all_fields);
+    mechanics_->advanceTimestep(timestep);
+    all_fields = mechanics_->getFieldStatesAndParamStates();
+    pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
     time += timestep;
   }
 
