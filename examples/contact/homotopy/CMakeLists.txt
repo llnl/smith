@@ -14,9 +14,9 @@ if (TRIBOL_FOUND AND STRUMPACK_DIR AND SMITH_ENABLE_CONTINUATION)
                            COMMAND       two_blocks_example
                            NUM_MPI_TASKS 4)
     install(
-	FILES
-	    two_blocks.cpp
-	DESTINATION
-	    examples/smith/two_blocks
+        FILES
+            two_blocks.cpp
+        DESTINATION
+            examples/smith/two_blocks
     )
 endif()
