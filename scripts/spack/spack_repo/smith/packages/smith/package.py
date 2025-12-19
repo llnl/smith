@@ -58,7 +58,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     # -----------------------------------------------------------------------
     # Variants
     # -----------------------------------------------------------------------
-    variant("shared",   default=False,
+    variant("shared", default=False,
             description="Enable build of shared libraries")
     variant("asan", default=False,
             description="Enable Address Sanitizer flags")
@@ -68,20 +68,20 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     varmsg = "Build development tools (such as Sphinx, CppCheck, ClangFormat, etc...)"
     variant("devtools", default=False, description=varmsg)
 
-    variant("profiling", default=False, 
+    variant("profiling", default=False,
             description="Build with hooks for Adiak/Caliper performance analysis")
 
-    variant("enzyme", default=True, sticky=True,
+    variant("enzyme", default=False, sticky=True,
             description="Enable Enzyme Automatic Differentiation Framework")
     variant("petsc", default=True, sticky=True,
             description="Enable PETSc support")
-    variant("slepc", default=True,  sticky=True,
+    variant("slepc", default=True, sticky=True,
             description="Enable SLEPc integration")
     variant("sundials", default=True, sticky=True,
             description="Build MFEM TPL with SUNDIALS nonlinear/ODE solver support")
-    variant("umpire",   default=True, sticky=True,
+    variant("umpire", default=True, sticky=True,
             description="Build with portable memory access support")
-    variant("raja",     default=True, sticky=True,
+    variant("raja", default=True, sticky=True,
             description="Build with portable kernel execution support")
     variant("tribol", default=True, sticky=True,
             description="Build Tribol, an interface physics library")

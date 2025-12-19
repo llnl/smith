@@ -1,7 +1,7 @@
 FROM ghcr.io/llnl/radiuss:gcc-14-ubuntu-24.04
 LABEL maintainer="chapman39@llnl.gov"
 ARG branch=develop
-ENV spec="~devtools~enzyme %gcc_14"
+ENV spec="+devtools~enzyme %gcc_14"
 
 SHELL ["/bin/bash", "-c"]
 RUN sudo apt-get update -y

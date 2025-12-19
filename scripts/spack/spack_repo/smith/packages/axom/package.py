@@ -7,6 +7,11 @@ from spack.package import *
 from spack_repo.builtin.packages.axom.package import Axom as BuiltinAxom
 
 class Axom(BuiltinAxom):
+    """Axom provides a robust, flexible software infrastructure for the development
+    of multi-physics applications and computational tools."""
+
+    homepage = "https://github.com/LLNL/axom"
+    git = "https://github.com/LLNL/axom.git"
 
     # Note: Make sure this sha coincides with the git submodule
     # Note: We add a number to the end of the real version number to indicate that we have
