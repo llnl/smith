@@ -205,13 +205,12 @@ spack:
         prefix: /usr
 
     # Globally lock in version of CMake
-    # https://github.com/llnl/radiuss-docker/issues/14
-    # cmake:
-    #   version: [3.23.1]
-    #   buildable: false
-    #   externals:
-    #   - spec: cmake@3.23.1
-    #     prefix: /usr/local
+    cmake:
+      version: [3.24.2]
+      buildable: false
+      externals:
+      - spec: cmake@3.24.2
+        prefix: /usr/local
     doxygen:
       version: [1.9.8]
       buildable: false

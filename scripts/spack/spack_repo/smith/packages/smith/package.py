@@ -143,7 +143,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("hypre@2.26.0:~superlu-dist+mpi")
 
     with when("+petsc"):
-        depends_on("petsc~mmg")
+        depends_on("petsc~mmg+metis")
         depends_on("petsc+strumpack", when="+strumpack")
         depends_on("petsc~strumpack", when="~strumpack")
         depends_on("petsc+openmp", when="+openmp")
