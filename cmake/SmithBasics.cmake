@@ -41,6 +41,11 @@ if (NOT SMITH_BASICS_SETUP)
     option(SMITH_ENABLE_GRETL "Enables Smith with Gretl Support" ON)
     option(SMITH_ENABLE_CONTINUATION "Enables Smith with Continuation Solver support" ON)
 
+    if (SMITH_ENABLE_HIP OR SMITH_ENABLE_CUDA)
+        message(STATUS "Disabling Smith's Continuation Solver support due to currently non-supported GPU build")
+        set(SMITH_ENABLE_CONTINUATION FALSE CACHE BOOL "" FORCE)
+    endif()
+
     #------------------------------------------------------------------------------
     # Profiling options
     #------------------------------------------------------------------------------
