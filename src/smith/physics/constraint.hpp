@@ -100,8 +100,8 @@ class Constraint {
     return y;
   };
 
-  /** @brief Virtual interface for computing Jacobians of the residual contribution from a vector of
-   * smith::FiniteElementState*
+  /** @brief Virtual interface for computing residual contribution Jacobian_tilde^(Transpose) * (Lagrange multiplier)
+   * from a vector of smith::FiniteElementState*
    *
    * @param time time
    * @param dt time step

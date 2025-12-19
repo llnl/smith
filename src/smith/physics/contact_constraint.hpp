@@ -122,16 +122,16 @@ class ContactConstraint : public Constraint {
    * @param time time
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
-   * @param new_point boolean indicating if this is a new point or not
+   * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
    * @return mfem::Vector which is the constraint evaluation
    */
   mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                        bool new_point = true) const override
+                        bool fresh_evaluation = true) const override
   {
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
 
-    if (new_point) {
+    if (fresh_evaluation) {
       // note: Tribol does not use cycle.
       int cycle = 0;
       contact_.update(cycle, time, dt);
@@ -150,17 +150,17 @@ class ContactConstraint : public Constraint {
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
-   * @param new_point boolean indicating if this is a new point or not
+   * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
    * @return std::unique_ptr<mfem::HypreParMatrix> The true Jacobian
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                 int direction, bool new_point = true) const override
+                                                 int direction, bool fresh_evaluation = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
-    if (new_point) {
+    if (fresh_evaluation) {
       int cycle = 0;
       contact_.update(cycle, time, dt);
       J_contact_ = contact_.mergedJacobian();
@@ -172,27 +172,27 @@ class ContactConstraint : public Constraint {
     return dgdu;
   };
 
-  /** @brief Interface for computing residual contribution Jacobian_tilde^T multiplier from a vector of
-   * smith::FiniteElementState*
+  /** @brief Interface for computing residual contribution Jacobian_tilde^(Transpose) * (Lagrange multiplier)
+   * from a vector of smith::FiniteElementState*
    *
    * @param time time
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
-   * @param new_point boolean indicating if this is a new point or not
+   * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
    * @return std::Vector
    */
   mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                      const mfem::Vector& multipliers, int direction,
-                                     bool new_point = true) const override
+                                     bool fresh_evaluation = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
 
     int cycle = 0;
-    if (new_point) {
+    if (fresh_evaluation) {
       // we need to call update first to update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
         interaction.evalJacobian(false);
@@ -222,20 +222,20 @@ class ContactConstraint : public Constraint {
    * @param fields vector of smith::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
-   * @param new_point boolean indicating if this is a new point or not
+   * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
                                                                        const std::vector<ConstFieldPtr>& fields,
                                                                        const mfem::Vector& multipliers, int direction,
-                                                                       bool new_point = true) const override
+                                                                       bool fresh_evaluation = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
     int cycle = 0;
-    if (new_point) {
+    if (fresh_evaluation) {
       // we need to call update first to update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
         interaction.evalJacobian(false);
@@ -266,18 +266,18 @@ class ContactConstraint : public Constraint {
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
-   * @param new_point boolean indicating if this is a new point or not
+   * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                       int direction, bool new_point = true) const override
+                                                       int direction, bool fresh_evaluation = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
     tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
     int cycle = 0;
-    if (new_point) {
+    if (fresh_evaluation) {
       contact_.update(cycle, time, dt);
       J_contact_.reset();
       J_contact_ = contact_.mergedJacobian();
