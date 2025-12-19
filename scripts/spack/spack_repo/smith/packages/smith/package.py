@@ -58,6 +58,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     # -----------------------------------------------------------------------
     # Variants
     # -----------------------------------------------------------------------
+    # variants for build settings
     variant("shared", default=False,
             description="Enable build of shared libraries")
     variant("asan", default=False,
@@ -68,25 +69,27 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     varmsg = "Build development tools (such as Sphinx, CppCheck, ClangFormat, etc...)"
     variant("devtools", default=False, description=varmsg)
 
-    variant("profiling", default=False,
-            description="Build with hooks for Adiak/Caliper performance analysis")
-
+    # variants for package dependencies
+    variant("adiak", default=False, sticky=True,
+            description="Build with adiak")
+    variant("caliper", default=False, sticky=True,
+            description="Build with caliper")
     variant("enzyme", default=False, sticky=True,
             description="Enable Enzyme Automatic Differentiation Framework")
     variant("petsc", default=True, sticky=True,
             description="Enable PETSc support")
-    variant("slepc", default=True, sticky=True,
-            description="Enable SLEPc integration")
-    variant("sundials", default=True, sticky=True,
-            description="Build MFEM TPL with SUNDIALS nonlinear/ODE solver support")
-    variant("umpire", default=True, sticky=True,
-            description="Build with portable memory access support")
     variant("raja", default=True, sticky=True,
             description="Build with portable kernel execution support")
-    variant("tribol", default=True, sticky=True,
-            description="Build Tribol, an interface physics library")
+    variant("slepc", default=True, sticky=True,
+            description="Enable SLEPc integration")
     variant("strumpack", default=True, sticky=True,
             description="Build MFEM TPL with Strumpack, a direct linear solver library")
+    variant("sundials", default=True, sticky=True,
+            description="Build MFEM TPL with SUNDIALS nonlinear/ODE solver support")
+    variant("tribol", default=True, sticky=True,
+            description="Build Tribol, an interface physics library")
+    variant("umpire", default=True, sticky=True,
+            description="Build with portable memory access support")
 
     # -----------------------------------------------------------------------
     # Dependencies
@@ -190,9 +193,9 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("conduit~python~test~silo")
 
-    with when("+profiling"):
-        depends_on("adiak+mpi")
-        depends_on("caliper+mpi+adiak~papi")
+    depends_on("adiak+mpi", when="+adiak")
+    depends_on("caliper+mpi~papi", when="+caliper")
+    depends_on("caliper+adiak", when="+caliper+adiak")
 
     depends_on("superlu-dist@8.1.2")
 
@@ -225,14 +228,14 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("sundials build_type=Debug".format(dep), when="+sundials build_type=Debug".format(dep))
 
     # Optional (require when="+profile")
-    depends_on("adiak build_type=Debug".format(dep), when="+profiling build_type=Debug")
-    depends_on("adiak+shared".format(dep), when="+profiling+shared")
-    depends_on("adiak~shared".format(dep), when="+profiling~shared")
+    depends_on("adiak build_type=Debug".format(dep), when="+adiak build_type=Debug")
+    depends_on("adiak+shared".format(dep), when="+adiak+shared")
+    depends_on("adiak~shared".format(dep), when="+adiak~shared")
 
     # Don't propagate ~shared to caliper in rocm builds
-    depends_on("caliper build_type=Debug".format(dep), when="+profiling build_type=Debug")
-    depends_on("caliper+shared".format(dep), when="+profiling+shared")
-    depends_on("caliper~shared".format(dep), when="+profiling~shared~rocm")
+    depends_on("caliper build_type=Debug".format(dep), when="+caliper build_type=Debug")
+    depends_on("caliper+shared".format(dep), when="+caliper+shared")
+    depends_on("caliper~shared".format(dep), when="+caliper~shared~rocm")
 
     # Required
     for dep in ["axom", "hdf5", "metis", "parmetis", "superlu-dist"]:
@@ -321,7 +324,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on(f"hypre {ext_cuda_dep}", when=f"{ext_cuda_dep}")
 
         # optional
-        depends_on(f"caliper {ext_cuda_dep}", when=f"+profiling {ext_cuda_dep}")
+        depends_on(f"caliper {ext_cuda_dep}", when=f"^caliper {ext_cuda_dep}")
         depends_on(f"petsc {ext_cuda_dep}", when=f"+petsc {ext_cuda_dep}")
         depends_on(f"raja {ext_cuda_dep}", when=f"+raja {ext_cuda_dep}")
         depends_on(f"slepc {ext_cuda_dep}", when=f"+slepc {ext_cuda_dep}")
@@ -335,10 +338,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     conflicts("amdgpu_target=none", when="+rocm",
               msg="AMD GPU target is required when building with ROCm")
 
-    with when("+profiling"):
-        depends_on("caliper+rocm", when="+rocm")
-        depends_on("caliper~rocm", when="~rocm")
-
     for val in ROCmPackage.amdgpu_targets:
         ext_rocm_dep = f"+rocm amdgpu_target={val}"
 
@@ -348,7 +347,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on(f"hypre+umpire {ext_rocm_dep}", when=f"{ext_rocm_dep}")
 
         # optional
-        depends_on(f"caliper {ext_rocm_dep}", when=f"+profiling {ext_rocm_dep}")
+        depends_on(f"caliper {ext_rocm_dep}", when=f"^caliper {ext_rocm_dep}")
         depends_on(f"petsc {ext_rocm_dep}", when=f"+petsc {ext_rocm_dep}")
         depends_on(f"raja {ext_rocm_dep}", when=f"+raja {ext_rocm_dep}")
         depends_on(f"slepc {ext_rocm_dep}", when=f"+slepc {ext_rocm_dep}")
