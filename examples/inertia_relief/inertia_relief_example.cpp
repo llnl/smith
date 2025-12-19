@@ -136,9 +136,9 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   std::shared_ptr<SolidWeakFormT> weak_form_;              // weak_form
   std::unique_ptr<smith::FiniteElementState> shape_disp_;  // shape displacement
   std::shared_ptr<smith::Mesh> mesh_;
-  std::vector<std::shared_ptr<smith::ScalarObjective>> constraints_; // vector of constraints
-  smith::TimeInfo time_info_; // time info for constraint and weak_form function calls
-  std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0}; // weights for weak_form_->jacobian calls
+  std::vector<std::shared_ptr<smith::ScalarObjective>> constraints_;  // vector of constraints
+  smith::TimeInfo time_info_;  // time info for constraint and weak_form function calls
+  std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};  // weights for weak_form_->jacobian calls
   mutable mfem::Vector constraint_cached_;
   mutable mfem::Vector residual_cached_;
   mutable mfem::Vector JTvp_cached_;
@@ -147,11 +147,11 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   InertialReliefProblem(std::vector<smith::FieldPtr> obj_states, std::vector<smith::FieldPtr> all_states,
                         std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<SolidWeakFormT> weak_form,
                         std::vector<std::shared_ptr<smith::ScalarObjective>> constraints);
-  mfem::Vector residual(const mfem::Vector& u, bool new_point) const;
-  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool new_point) const;
-  mfem::Vector constraint(const mfem::Vector& u, bool new_point) const;
-  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool new_point);
-  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool new_point);
+  mfem::Vector residual(const mfem::Vector& u, bool fresh_evaluation) const;
+  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool fresh_evaluation) const;
+  mfem::Vector constraint(const mfem::Vector& u, bool fresh_evaluation) const;
+  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool fresh_evaluation);
+  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool fresh_evaluation);
   virtual ~InertialReliefProblem();
 };
 
@@ -381,9 +381,9 @@ InertialReliefProblem::InertialReliefProblem(std::vector<smith::FiniteElementSta
 }
 
 // residual callback
-mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u, bool new_point) const
+mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u, bool fresh_evaluation) const
 {
-  if (new_point) {
+  if (fresh_evaluation) {
     obj_states_[FIELD::DISP]->Set(1.0, u);
     residual_cached_.Set(
         1.0, weak_form_->residual(time_info_, shape_disp_.get(), smith::getConstFieldPointers(all_states_)));
@@ -393,9 +393,9 @@ mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u, bool new_poi
 
 // constraint Jacobian transpose vector product
 mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l,
-                                                          bool new_point) const
+                                                          bool fresh_evaluation) const
 {
-  if (new_point) {
+  if (fresh_evaluation) {
     int dim_constraints = GetMultiplierDim();
     int dim_displacement = GetDisplacementDim();
     obj_states_[FIELD::DISP]->Set(1.0, u);
@@ -420,9 +420,9 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
 }
 
 // Jacobian of the residual
-mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u, bool new_point)
+mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u, bool fresh_evaluation)
 {
-  if (new_point) {
+  if (fresh_evaluation) {
     obj_states_[FIELD::DISP]->Set(1.0, u);
     drdu_.reset();
     drdu_ = weak_form_->jacobian(time_info_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
@@ -434,9 +434,9 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
 }
 
 // constraint callback
-mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool new_point) const
+mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool fresh_evaluation) const
 {
-  if (new_point) {
+  if (fresh_evaluation) {
     int dim_constraints = GetMultiplierDim();
     obj_states_[FIELD::DISP]->Set(1.0, u);
 
@@ -456,11 +456,11 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool new_p
 }
 
 // Jacobian of the constraint
-mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u, bool new_point)
+mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u, bool fresh_evaluation)
 {
   int dim_constraints = GetMultiplierDim();
   int glbdim_displacement = GetGlobalDisplacementDim();
-  if (new_point) {
+  if (fresh_evaluation) {
     obj_states_[FIELD::DISP]->Set(1.0, u);
     // dense rows
     int nentries = glbdim_displacement;
