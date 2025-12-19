@@ -1,7 +1,7 @@
 FROM ghcr.io/llnl/radiuss:cuda-12-5-ubuntu-24.04
 LABEL maintainer="chapman39@llnl.gov"
 ARG branch=develop
-ENV spec="+devtools~enzyme+cuda cuda_arch=70 %gcc_13"
+ENV spec="~devtools~enzyme+cuda cuda_arch=70 %gcc_13"
 
 SHELL ["/bin/bash", "-c"]
 RUN sudo apt-get update -y
