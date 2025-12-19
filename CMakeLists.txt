@@ -198,7 +198,8 @@ set(exported_targets
     smith_infrastructure
     smith_mesh_utils
     smith_numerics
-    smith_physics)
+    smith_physics
+    smith_differentiable_numerics)
 
 add_library(smith INTERFACE)
 target_link_libraries(smith INTERFACE ${exported_targets})
@@ -220,7 +221,7 @@ if (SMITH_ENABLE_CODEVELOP)
             )
 endif()
 
-install(EXPORT smith-targets 
+install(EXPORT smith-targets
         NAMESPACE smith::
         DESTINATION lib/cmake
         )

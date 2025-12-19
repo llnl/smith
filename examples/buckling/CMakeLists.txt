@@ -7,7 +7,7 @@
 smith_add_executable( NAME        buckling_cylinder
                       SOURCES     cylinder.cpp
                       OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
-                      DEPENDS_ON  smith_physics
+                      DEPENDS_ON  smith
                       )
 
 if(SMITH_ENABLE_HIP)

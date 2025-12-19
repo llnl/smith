@@ -413,6 +413,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
 
         set(MFEM_BUILT_WITH_CMAKE TRUE)
     endif()
+
     #------------------------------------------------------------------------------
     # ContinuationSolvers
     #------------------------------------------------------------------------------
@@ -451,6 +452,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(CONTINUATION_FOUND TRUE)
         add_subdirectory("${CONTINUATION_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/ContinuationSolvers)
     endif()
+
     #------------------------------------------------------------------------------
     # Axom
     #------------------------------------------------------------------------------
@@ -552,6 +554,34 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
 
         set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
     endif()
+
+    #------------------------------------------------------------------------------
+    # Gretl
+    #------------------------------------------------------------------------------
+    message(STATUS "Smith Enable Gretl: ${SMITH_ENABLE_GRETL}")
+    
+    if(SMITH_ENABLE_GRETL)
+        if (NOT DEFINED GRETL_SOURCE_DIR)
+            set(GRETL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/gretl" CACHE PATH "")
+        endif()
+
+        # check if gretl exists in the GRETL_SOURCE_DIR, if not, try looking through the smith submodule
+        if (NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
+            set(GRETL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/smith/gretl" CACHE PATH "" FORCE)
+        endif()
+
+        if (NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
+            message(FATAL_ERROR
+                "The gretl repo is not present. "
+                "Either run the following command in your git repository: \n"
+                "    git submodule update --init --recursive\n"
+                "Or add -DGRETL_SOURCE_DIR=/path/to/gretl to your CMake command." )
+        endif()
+
+        add_subdirectory("${GRETL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/gretl)
+        set(GRETL_FOUND TRUE)
+    endif()
+
 
     #------------------------------------------------------------------------------
     # Tribol
@@ -678,6 +708,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     # Restore cleared Adiak/Caliper directories, reason at top of file.
     set(ADIAK_DIR ${_adiak_dir} CACHE PATH "" FORCE)
     set(CALIPER_DIR ${_caliper_dir} CACHE PATH "" FORCE)
+
     #------------------------------------------------------------------------------
     # Adiak
     #------------------------------------------------------------------------------

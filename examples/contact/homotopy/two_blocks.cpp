@@ -66,6 +66,7 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   std::shared_ptr<smith::ContactConstraint> constraints_;
   double time_ = 0.0;
   double dt_ = 0.0;
+  smith::TimeInfo time_info_ = smith::TimeInfo(0.0, 0.0, 0);
   std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};
 
  public:
@@ -350,7 +351,7 @@ template <typename SolidWeakFormType>
 mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector& u, bool /*new_point*/) const
 {
   residual_states_[FIELD::DISP]->Set(1.0, u);
-  auto res = weak_form_->residual(time_, dt_, shape_disp_.get(), smith::getConstFieldPointers(residual_states_));
+  auto res = weak_form_->residual(time_info_, shape_disp_.get(), smith::getConstFieldPointers(residual_states_));
   return res;
 };
 
@@ -358,7 +359,7 @@ template <typename SolidWeakFormType>
 mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(const mfem::Vector& u, bool /*new_point*/)
 {
   residual_states_[FIELD::DISP]->Set(1.0, u);
-  drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), smith::getConstFieldPointers(residual_states_),
+  drdu_ = weak_form_->jacobian(time_info_, shape_disp_.get(), smith::getConstFieldPointers(residual_states_),
                                jacobian_weights_);
   return drdu_.get();
 }

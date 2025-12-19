@@ -126,6 +126,8 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<smith::Fi
  * for compatibility with the HomotopySolver.
  */
 class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
+  InertialReliefProblem() : time_info_(0.0, 0.0, 0) {}
+
  protected:
   std::unique_ptr<mfem::HypreParMatrix> drdu_;             // Jacobian of residual
   std::unique_ptr<mfem::HypreParMatrix> dcdu_;             // Jacobian of constraint
@@ -134,10 +136,9 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   std::shared_ptr<SolidWeakFormT> weak_form_;              // weak_form
   std::unique_ptr<smith::FiniteElementState> shape_disp_;  // shape displacement
   std::shared_ptr<smith::Mesh> mesh_;
-  std::vector<std::shared_ptr<smith::ScalarObjective>> constraints_;  // vector of constraints
-  double time_ = 0.0;  // parameter for constraint and weak_form member function calls
-  double dt_ = 0.0;    // parameter for constraint and weak_form member function calls
-  std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};  // weights for weak_form_->jacobian calls
+  std::vector<std::shared_ptr<smith::ScalarObjective>> constraints_; // vector of constraints
+  smith::TimeInfo time_info_; // time info for constraint and weak_form function calls
+  std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0}; // weights for weak_form_->jacobian calls
   mutable mfem::Vector constraint_cached_;
   mutable mfem::Vector residual_cached_;
   mutable mfem::Vector JTvp_cached_;
@@ -254,6 +255,7 @@ int main(int argc, char* argv[])
 
   double time = 0.0;
   double dt = 1.0;
+  smith::TimeInfo time_info(time, dt, 0);
   auto all_states = getConstFieldPointers(states, params);
   auto objective_states = {all_states[FIELD::DISP], all_states[FIELD::DENSITY]};
 
@@ -263,7 +265,7 @@ int main(int argc, char* argv[])
 
   mass_objective.addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
                                  [](double /*t*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
-  double mass = mass_objective.evaluate(time, dt, shape_disp.get(), objective_states);
+  double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
   smith::tensor<double, dim> initial_cg;  // center of gravity
 
@@ -275,7 +277,7 @@ int main(int argc, char* argv[])
                                       auto X, auto U, auto RHO) {
                                     return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
                                   });
-    initial_cg[i] = cg_objective->evaluate(time, dt, shape_disp.get(), objective_states) / mass;
+    initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
 
     constraints.push_back(cg_objective);
   }
@@ -347,7 +349,7 @@ InertialReliefProblem::InertialReliefProblem(std::vector<smith::FiniteElementSta
                                              std::shared_ptr<smith::Mesh> mesh,
                                              std::shared_ptr<SolidWeakFormT> weak_form,
                                              std::vector<std::shared_ptr<smith::ScalarObjective>> constraints)
-    : EqualityConstrainedHomotopyProblem()
+    : EqualityConstrainedHomotopyProblem(), time_info_(0.0, 0.0, 0)
 {
   weak_form_ = weak_form;
   mesh_ = mesh;
@@ -384,7 +386,7 @@ mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u, bool new_poi
   if (new_point) {
     obj_states_[FIELD::DISP]->Set(1.0, u);
     residual_cached_.Set(
-        1.0, weak_form_->residual(time_, dt_, shape_disp_.get(), smith::getConstFieldPointers(all_states_)));
+        1.0, weak_form_->residual(time_info_, shape_disp_.get(), smith::getConstFieldPointers(all_states_)));
   }
   return residual_cached_;
 }
@@ -408,7 +410,7 @@ mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u,
     constraint_gradient = 0.0;
     JTvp_cached_ = 0.0;
     for (size_t i = 0; i < constraints_.size(); i++) {
-      mfem::Vector grad_temp = constraints_[i]->gradient(time_, dt_, shape_disp_.get(),
+      mfem::Vector grad_temp = constraints_[i]->gradient(time_info_, shape_disp_.get(),
                                                          smith::getConstFieldPointers(obj_states_), FIELD::DISP);
       constraint_gradient.Set(1.0, grad_temp);
       JTvp_cached_.Add(multipliers[i], constraint_gradient);
@@ -423,7 +425,7 @@ mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector
   if (new_point) {
     obj_states_[FIELD::DISP]->Set(1.0, u);
     drdu_.reset();
-    drdu_ = weak_form_->jacobian(time_, dt_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
+    drdu_ = weak_form_->jacobian(time_info_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
   }
   int dim_displacement = GetDisplacementDim();
   SLIC_ERROR_ROOT_IF(drdu_->Height() != dim_displacement || drdu_->Width() != dim_displacement,
@@ -444,7 +446,7 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool new_p
       SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
 
       double constraint_i =
-          constraints_[i]->evaluate(time_, dt_, shape_disp_.get(), smith::getConstFieldPointers(obj_states_));
+          constraints_[i]->evaluate(time_info_, shape_disp_.get(), smith::getConstFieldPointers(obj_states_));
       if (dim_constraints > 0) {
         constraint_cached_(idx) = constraint_i;
       }
@@ -477,7 +479,7 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
       const size_t i2 = static_cast<size_t>(idx);
       SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
       mfem::HypreParVector gradVector(MPI_COMM_WORLD, glbdim_displacement, uOffsets_);
-      gradVector.Set(1.0, constraints_[i]->gradient(time_, dt_, shape_disp_.get(),
+      gradVector.Set(1.0, constraints_[i]->gradient(time_info_, shape_disp_.get(),
                                                     smith::getConstFieldPointers(obj_states_), FIELD::DISP));
       globalGradVector.reset(gradVector.GlobalVector());
       if (dim_constraints > 0) {
