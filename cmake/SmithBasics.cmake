@@ -37,6 +37,7 @@ if (NOT SMITH_BASICS_SETUP)
     cmake_dependent_option(SMITH_ENABLE_MPI "Enables Smith with MPI support" ON "ENABLE_MPI" OFF)
     cmake_dependent_option(SMITH_ENABLE_OPENMP "Enables Smith with OPENMP support" ON "ENABLE_OPENMP" OFF)
 
+    # Options for builtin TPLs
     option(SMITH_ENABLE_GRETL "Enables Smith with Gretl Support" ON)
     option(SMITH_ENABLE_CONTINUATION "Enables Smith with Continuation Solver support" ON)
 
