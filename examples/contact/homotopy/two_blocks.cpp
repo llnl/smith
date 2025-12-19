@@ -64,9 +64,7 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   std::unique_ptr<smith::FiniteElementState> shape_disp_;
   std::shared_ptr<smith::Mesh> mesh_;
   std::shared_ptr<smith::ContactConstraint> constraints_;
-  double time_ = 0.0;
-  double dt_ = 0.0;
-  smith::TimeInfo time_info_ = smith::TimeInfo(0.0, 0.0, 0);
+  smith::TimeInfo time_info_;
   std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};
 
  public:
@@ -325,7 +323,8 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<smith::Fin
     : EqualityConstrainedHomotopyProblem(fixed_tdof_list, disp_tdof_list, uDC),
       weak_form_(weak_form),
       mesh_(mesh),
-      constraints_(constraints)
+      constraints_(constraints),
+      time_info_(0.0, 0.0, 0)
 {
   // copy residual states
   residual_states_.resize(residual_states.size());
@@ -370,7 +369,8 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vecto
 {
   bool fresh_evaluation = true;
   contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
-  auto gap = constraints_->evaluate(time_, dt_, smith::getConstFieldPointers(contact_states_), fresh_evaluation);
+  auto gap = constraints_->evaluate(time_info_.time(), time_info_.dt(), smith::getConstFieldPointers(contact_states_),
+                                    fresh_evaluation);
   return gap;
 }
 
@@ -380,8 +380,8 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(
 {
   bool fresh_evaluation = true;
   contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
-  dcdu_ = constraints_->jacobian(time_, dt_, smith::getConstFieldPointers(contact_states_), smith::ContactFields::DISP,
-                                 fresh_evaluation);
+  dcdu_ = constraints_->jacobian(time_info_.time(), time_info_.dt(), smith::getConstFieldPointers(contact_states_),
+                                 smith::ContactFields::DISP, fresh_evaluation);
   return dcdu_.get();
 }
 
@@ -391,8 +391,9 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
 {
   bool fresh_evaluation = true;
   contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
-  auto res_contribution = constraints_->residual_contribution(time_, dt_, smith::getConstFieldPointers(contact_states_),
-                                                              l, smith::ContactFields::DISP, fresh_evaluation);
+  auto res_contribution = constraints_->residual_contribution(time_info_.time(), time_info_.dt(),
+                                                              smith::getConstFieldPointers(contact_states_), l,
+                                                              smith::ContactFields::DISP, fresh_evaluation);
   return res_contribution;
 }
 

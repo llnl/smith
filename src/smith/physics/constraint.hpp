@@ -44,7 +44,7 @@ class Constraint {
    * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
    * @return mfem::Vector which is the constraint evaluation
    */
-  virtual mfem::Vector evaluate(TimeInfo time_info, const std::vector<ConstFieldPtr>& fields,
+  virtual mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                 bool fresh_evaluation = true) const = 0;
 
   /** @brief Virtual interface for computing constraint Jacobian from a vector of smith::FiniteElementState*
@@ -56,7 +56,7 @@ class Constraint {
    * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(TimeInfo time_info,
+  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt,
                                                          const std::vector<ConstFieldPtr>& fields, int direction,
                                                          bool fresh_evaluation = true) const = 0;
 
@@ -70,11 +70,11 @@ class Constraint {
    * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
-  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(TimeInfo time_info,
+  virtual std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt,
                                                                const std::vector<ConstFieldPtr>& fields, int direction,
                                                                bool fresh_evaluation = true) const
   {
-    return jacobian(time_info, fields, direction, fresh_evaluation);
+    return jacobian(time, dt, fields, direction, fresh_evaluation);
   };
 
   /** @brief Virtual interface for computing residual contribution Jacobian_tilde^(Transpose) * (Lagrange multiplier)
@@ -88,11 +88,11 @@ class Constraint {
    * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
    * @return std::Vector
    */
-  virtual mfem::Vector residual_contribution(TimeInfo time_info, const std::vector<ConstFieldPtr>& fields,
+  virtual mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                                              const mfem::Vector& multipliers, int direction,
                                              bool fresh_evaluation = true) const
   {
-    std::unique_ptr<mfem::HypreParMatrix> jac = jacobian_tilde(time_info, fields, direction, fresh_evaluation);
+    std::unique_ptr<mfem::HypreParMatrix> jac = jacobian_tilde(time, dt, fields, direction, fresh_evaluation);
     mfem::Vector y(jac->Width());
     y = 0.0;
     SLIC_ERROR_ROOT_IF(jac->Height() != multipliers.Size(), "Incompatible matrix and vector sizes.");
