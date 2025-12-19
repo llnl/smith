@@ -167,7 +167,6 @@ TEST(Dfem, Plasticity)
   smith::StateManager::initialize(datastore, "dfem_plasticity");
   auto mfem_mesh = buildMeshFromFile(filename);
   auto mesh = std::make_shared<smith::Mesh>(std::move(mfem_mesh), "amesh", 0, 0);
-  mfem::out << "Constructed mesh" << std::endl;
 
   // TODO: add these when we have a solver
   // LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG, .print_level = 0};
@@ -215,20 +214,17 @@ TEST(Dfem, Plasticity)
 
   // initialize fields
 
-  /* Get boundary dofs for applying forcing, don't need this until we have a solver
+  // Get boundary dofs for computing reactions
   mfem::Array<int> bdr_attr_is_ess(mesh->mfemParMesh().bdr_attributes.Max());
-  mfem::Array<int> displacement_ess_tdof;
-  mfem::Array<int> bc_tdof;
+  mfem::Array<int> left_x_tdof;
   bdr_attr_is_ess = 0; // reset
   bdr_attr_is_ess[0] = 1; // flag boundary 0 (1 in mesh)
-  disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, bc_tdof, 0); // get x-dir dofs
-  for (auto td : bc_tdof) { displacement_ess_tdof.Append(td); };
+  disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, left_x_tdof, 0); // get x-dir dofs
 
+  mfem::Array<int> right_x_tdof;
   bdr_attr_is_ess = 0; // reset
   bdr_attr_is_ess[1] = 1; // flag boundary 1 (2 in mesh)
-  disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, bc_tdof, 0); // get x-dir dofs
-  for (auto td : bc_tdof) { displacement_ess_tdof.Append(td); };
-  */
+  disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, right_x_tdof, 0); // get x-dir dofs
 
   // set displacement to uniaxial stress solution
   auto applied_displacement = [nu](tensor<double, dim> X) {
@@ -254,6 +250,11 @@ TEST(Dfem, Plasticity)
   double dt = 1.0;
   FiniteElementDual reaction = StateManager::newDual(KinematicSpace{}, "reactions", mesh->tag());
   reaction = physics.residual(t, dt, &disp, {&disp, &velo, &accel, &coords}, {&internal_state});
+  double Fx = 0;
+  for (auto td : left_x_tdof) {
+    Fx += reaction[td];
+  }
+  mfem::out << "x force = " << Fx << std::endl;
   mfem::out << "reaction = \n";
   reaction.Print();
 
