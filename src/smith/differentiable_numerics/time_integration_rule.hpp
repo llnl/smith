@@ -17,6 +17,28 @@
 
 namespace smith {
 
+/// @brief encodes rules for time discretizing first order odes (involving first time derivatives).
+/// When solving f(u, u_dot, t) = 0
+/// this class provides the current discrete approximation for u and u_dot as a function of
+/// (u^{n+1}, u^n).
+struct FirstOrderTimeIntegrationRule {
+  FirstOrderTimeIntegrationRule(double theta = 1.0) : theta_(theta) {}
+
+  template <typename T1, typename T2>
+  SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new, const T2& field_old) const
+  {
+    return theta_ * field_new + (1.0 - theta_) * field_old;
+  }
+
+  template <typename T1, typename T2>
+  SMITH_HOST_DEVICE auto derivative(const TimeInfo& t, const T1& field_new, const T2& field_old) const
+  {
+    return (1.0 / t.dt()) * (field_new - field_old);
+  }
+
+  double theta_;
+};
+
 /// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
 /// When solving f(u, u_dot, u_dot_dot, t) = 0
 /// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of

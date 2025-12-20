@@ -273,28 +273,29 @@ FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const 
 //                         bc_manager);
 // }
 
-/*
 std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
                                     const std::vector<std::vector<size_t>> block_indices, const FieldState& shape_disp,
                                     const std::vector<std::vector<FieldState>>& states,
-                                    const std::vector<std::vector<FieldState>>& params, const DoubleState& time,
-                                    const DoubleState& dt, size_t cycle, const DifferentiableBlockSolver* solver,
+                                    const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
+                                    const DifferentiableBlockSolver* solver,
                                     const std::vector<BoundaryConditionManager*> bc_managers)
 {
-  size_t num_rows = residual_evals.size();
+  SMITH_MARK_FUNCTION;
+  size_t num_rows_ = residual_evals.size();
 
-  SLIC_ERROR_IF(num_rows != block_indices.size(), "Block indices size not consistent with number of residual rows");
-  SLIC_ERROR_IF(num_rows != states.size(), "Number of state input vectors not consistent with number of residual rows");
-  SLIC_ERROR_IF(num_rows != params.size(),
+  SLIC_ERROR_IF(num_rows_ != block_indices.size(), "Block indices size not consistent with number of residual rows");
+  SLIC_ERROR_IF(num_rows_ != states.size(),
+                "Number of state input vectors not consistent with number of residual rows");
+  SLIC_ERROR_IF(num_rows_ != params.size(),
                 "Number of parameter input vectors not consistent with number of residual rows");
-  SLIC_ERROR_IF(num_rows != bc_managers.size(),
+  SLIC_ERROR_IF(num_rows_ != bc_managers.size(),
                 "Number of boundary condition manager not consistent with number of residual rows");
 
-  for (size_t r = 0; r < num_rows; ++r) {
-    SLIC_ERROR_IF(num_rows != block_indices[r].size(), "All block index rows must have the same number of columns");
+  for (size_t r = 0; r < num_rows_; ++r) {
+    SLIC_ERROR_IF(num_rows_ != block_indices[r].size(), "All block index rows must have the same number of columns");
   }
 
-  std::vector<int> num_state_inputs;
+  std::vector<size_t> num_state_inputs;
   std::vector<gretl::StateBase> allFields;
   for (auto& ss : states) {
     num_state_inputs.push_back(ss.size());
@@ -302,7 +303,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       allFields.push_back(s);
     }
   }
-  std::vector<int> num_param_inputs;
+  std::vector<size_t> num_param_inputs;
   for (auto& ps : params) {
     num_param_inputs.push_back(ps.size());
     for (auto& p : ps) {
@@ -310,15 +311,13 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     }
   }
   allFields.push_back(shape_disp);
-  allFields.push_back(time);
-  allFields.push_back(dt);
 
   struct ZeroDualVectors {
     std::vector<FEDualPtr> operator()(const std::vector<FEFieldPtr>& fs)
     {
       std::vector<FEDualPtr> ds(fs.size());
       for (size_t i = 0; i < fs.size(); ++i) {
-        ds[i] = std::make_shared<smith::FiniteElementDual>(fs[i]->space(), fs[i]->name() + "_dual");
+        ds[i] = std::make_shared<FiniteElementDual>(fs[i]->space(), fs[i]->name() + "_dual");
       }
       return ds;
     }
@@ -327,17 +326,21 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
   FieldVecState sol =
       shape_disp.create_state<std::vector<FEFieldPtr>, std::vector<FEDualPtr>>(allFields, ZeroDualVectors());
 
-  sol.set_eval([num_state_inputs, num_param_inputs, residual_evals, bc_managers, cycle, block_indices, solver](
-                   const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
+  sol.set_eval([=](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
+    SMITH_MARK_BEGIN("solve forward");
     const size_t num_rows = num_state_inputs.size();
     std::vector<std::vector<FEFieldPtr>> input_fields(num_rows);
     SLIC_ERROR_IF(num_rows != num_param_inputs.size(), "row count for params and columns are inconsistent");
 
+    // The order of inputs in upstreams seems to be:
+    // states of residual 0 -> states of residual 1 -> params of residual 0 -> params of residual 1
     size_t field_count = 0;
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       for (size_t state_i = 0; state_i < num_state_inputs[row_i]; ++state_i) {
         input_fields[row_i].push_back(upstreams[field_count++].get<FEFieldPtr>());
       }
+    }
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       for (size_t param_i = 0; param_i < num_param_inputs[row_i]; ++param_i) {
         input_fields[row_i].push_back(upstreams[field_count++].get<FEFieldPtr>());
       }
@@ -355,24 +358,22 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     }
 
     const FEFieldPtr shape_disp_ptr = upstreams[field_count].get<FEFieldPtr>();
-    const double time = upstreams[field_count + 1].get<double>();
-    const double dt = upstreams[field_count + 2].get<double>();
 
     auto eval_residuals = [=](const std::vector<FEFieldPtr>& unknowns) {
       SLIC_ERROR_IF(unknowns.size() != num_rows,
                     "block solver unknown size must match the number or residuals in block_solve");
       std::vector<mfem::Vector> residuals(num_rows);
 
-      TimeInfo time_info(time, dt, cycle);
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
         *primal_field_row_i = *unknowns[row_i];
-        applyBoundaryConditions(time, bc_managers[row_i], primal_field_row_i, nullptr);
+        applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, nullptr);
       }
 
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         residuals[row_i] = residual_evals[row_i]->residual(time_info, shape_disp_ptr.get(),
                                                            getConstFieldPointers(input_fields[row_i]));
+        residuals[row_i].SetSubVector(bc_managers[row_i]->allEssentialTrueDofs(), 0.0);
       }
 
       return residuals;
@@ -383,11 +384,10 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
                     "block solver unknown size must match the number or residuals in block_solve");
       std::vector<std::vector<std::unique_ptr<mfem::HypreParMatrix>>> jacobians(num_rows);
 
-      TimeInfo time_info(time, dt, cycle);
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
         *primal_field_row_i = *unknowns[row_i];
-        applyBoundaryConditions(time, bc_managers[row_i], primal_field_row_i, nullptr);
+        applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, nullptr);
       }
 
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
@@ -401,9 +401,21 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
           jacobians[row_i].emplace_back(std::move(jac_ij));
           tangent_weights[field_index_to_diff] = 0.0;
         }
-        jacobians[row_i][row_i]->EliminateBC(bc_managers[row_i]->allEssentialTrueDofs(),
-                                             mfem::Operator::DiagonalPolicy::DIAG_ONE);
-        // MRT, what should we do to the boundary conditions for off diagonal jacobians?
+      }
+
+      // Apply BCs to the block system
+      for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+        mfem::HypreParMatrix* Jii =
+            jacobians[row_i][row_i]->EliminateRowsCols(bc_managers[row_i]->allEssentialTrueDofs());
+        delete Jii;
+        for (size_t col_j = 0; col_j < num_rows; ++col_j) {
+          if (col_j != row_i) {
+            jacobians[row_i][col_j]->EliminateRows(bc_managers[row_i]->allEssentialTrueDofs());
+            mfem::HypreParMatrix* Jji =
+                jacobians[col_j][row_i]->EliminateCols(bc_managers[row_i]->allEssentialTrueDofs());
+            delete Jji;
+          }
+        }
       }
 
       return jacobians;
@@ -411,31 +423,163 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     diagonal_fields = solver->solve(diagonal_fields, eval_residuals, eval_jacobians);
 
-    /// MRT, need to fill in the downstreams
-    // downstream.get<FieldVecState>() = diagonal_fields;
+    downstream.set<std::vector<FEFieldPtr>, std::vector<FEDualPtr>>(diagonal_fields);
 
-    // const std::vector<FieldT>& u_guesses,
-    // std::function<std::vector<mfem::Vector>(const std::vector<FieldT>&)> residuals,
-    // std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldT>&)> jacobians)
-
-    // std::vector<Field> = block_solver.solve(initial_guess, residual_func, jac_funs);
+    SMITH_MARK_END("solve forward");
   });
 
-  sol.set_vjp([](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
-    // const FEDualPtr& Z_dual = downstream.get_dual<FEDualPtr, FEFieldPtr>();
-    // FEDualPtr& X_dual = upstreams[0].get_dual<FEDualPtr, FEFieldPtr>();
-    // FEDualPtr& Y_dual = upstreams[1].get_dual<FEDualPtr, FEFieldPtr>();
-    // add(*X_dual, a, *Z_dual, *X_dual);
-    // add(*Y_dual, b, *Z_dual, *Y_dual);
+  sol.set_vjp([=](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
+    SMITH_MARK_BEGIN("solve reverse");
+    const std::vector<FEFieldPtr> s = downstream.get<std::vector<FEFieldPtr>>();  // get the final solution
+    const std::vector<FEDualPtr> s_dual =
+        downstream.get_dual<std::vector<FEDualPtr>, std::vector<FEFieldPtr>>();  // get the dual load
+
+    const size_t num_rows = num_state_inputs.size();
+    SLIC_ERROR_IF(s_dual.size() != num_rows,
+                  "block solver vjp downstream size must match the number or residuals in block_solve");
+
+    // We don't need this part yet but maybe will when we incorporate time integrators
+    // std::vector<std::vector<size_t>> non_primal_to_state_index(num_rows);
+    // for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+    //   for (size_t i = 0; i < num_state_inputs[row_i]; ++i) {
+    //     if (std::find(block_indices[row_i].begin(), block_indices[row_i].end(), i) == block_indices[row_i].end()) {
+    //       non_primal_to_state_index[row_i].push_back(i);
+    //     }
+    //   }
+    // }
+
+    std::vector<std::vector<FEFieldPtr>> input_fields(num_rows);
+    size_t field_count = 0;
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      for (size_t state_i = 0; state_i < num_state_inputs[row_i]; ++state_i) {
+        input_fields[row_i].push_back(upstreams[field_count++].get<FEFieldPtr>());
+      }
+    }
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      for (size_t param_i = 0; param_i < num_param_inputs[row_i]; ++param_i) {
+        input_fields[row_i].push_back(upstreams[field_count++].get<FEFieldPtr>());
+      }
+    }
+
+    // if the field is a primal variable we solved before,
+    // make a copy so we don't accidentally override the original copy
+    std::vector<FEFieldPtr> diagonal_fields(num_rows);
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      diagonal_fields[row_i] = std::make_shared<FiniteElementState>(*input_fields[row_i][block_indices[row_i][row_i]]);
+      *diagonal_fields[row_i] = *s[row_i];
+    }
+
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      for (size_t col_j = 0; col_j < num_rows; ++col_j) {
+        input_fields[row_i][block_indices[row_i][col_j]] = diagonal_fields[col_j];
+      }
+    }
+
+    const FEFieldPtr shape_disp_ptr = upstreams[field_count].get<FEFieldPtr>();
+
+    // I'm not sure this will be the right timestamp to apply boundary condition during backward propagation
+    // Need to double check for time-dependent boundary conditions
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
+      applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, nullptr);
+    }
+
+    solver->clearMemory();
+
+    std::vector<std::vector<std::unique_ptr<mfem::HypreParMatrix>>> jacobians(num_rows);
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      std::vector<FEFieldPtr> row_field_inputs = input_fields[row_i];
+      std::vector<double> tangent_weights(row_field_inputs.size(), 0.0);
+      for (size_t col_j = 0; col_j < num_rows; ++col_j) {
+        size_t field_index_to_diff = block_indices[row_i][col_j];
+        tangent_weights[field_index_to_diff] = 1.0;
+        auto jac_ij = residual_evals[row_i]->jacobian(time_info, shape_disp_ptr.get(),
+                                                      getConstFieldPointers(row_field_inputs), tangent_weights);
+        jacobians[row_i].emplace_back(std::move(jac_ij));
+        tangent_weights[field_index_to_diff] = 0.0;
+      }
+    }
+
+    // Apply BCs to the block system
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      s_dual[row_i]->SetSubVector(bc_managers[row_i]->allEssentialTrueDofs(), 0.0);
+
+      mfem::HypreParMatrix* Jii =
+          jacobians[row_i][row_i]->EliminateRowsCols(bc_managers[row_i]->allEssentialTrueDofs());
+      delete Jii;
+      for (size_t col_j = 0; col_j < num_rows; ++col_j) {
+        if (col_j != row_i) {
+          jacobians[row_i][col_j]->EliminateRows(bc_managers[row_i]->allEssentialTrueDofs());
+          mfem::HypreParMatrix* Jji =
+              jacobians[col_j][row_i]->EliminateCols(bc_managers[row_i]->allEssentialTrueDofs());
+          delete Jji;
+        }
+      }
+    }
+
+    // Take the transpose of the block system
+    std::vector<std::vector<std::unique_ptr<mfem::HypreParMatrix>>> jacobians_T(num_rows);
+    for (size_t col_j = 0; col_j < num_rows; ++col_j) {
+      for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+        jacobians_T[col_j].emplace_back(std::unique_ptr<mfem::HypreParMatrix>(jacobians[row_i][col_j]->Transpose()));
+      }
+    }
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      for (size_t col_j = 0; col_j < num_rows; ++col_j) {
+        jacobians[row_i][col_j].reset();
+      }
+    }
+
+    std::vector<FEFieldPtr> adjoint_fields(num_rows);
+    adjoint_fields = solver->solveAdjoint(s_dual, jacobians_T);
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      *adjoint_fields[row_i] *= -1.0;
+    }
+
+    // Update sensitivities
+    std::vector<std::vector<FEDualPtr>> field_sensitivities(num_rows);
+    FEDualPtr shape_disp_sensitivity = upstreams[field_count].get_dual<FEDualPtr, FEFieldPtr>();
+    size_t dual_index = 0;
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      for (size_t state_i = 0; state_i < num_state_inputs[row_i]; ++state_i) {
+        field_sensitivities[row_i].push_back(upstreams[dual_index++].get_dual<FEDualPtr, FEFieldPtr>());
+      }
+    }
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      for (size_t param_i = 0; param_i < num_param_inputs[row_i]; ++param_i) {
+        field_sensitivities[row_i].push_back(upstreams[dual_index++].get_dual<FEDualPtr, FEFieldPtr>());
+      }
+    }
+    SLIC_ERROR_IF(field_count != dual_index, "Number of sensitivities must equal to number of upstreams");
+
+    // No sensitivity needed for primal fields
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      for (size_t col_j = 0; col_j < num_rows; ++col_j) {
+        field_sensitivities[row_i][block_indices[row_i][col_j]] = nullptr;
+      }
+    }
+
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      // residual_evals[row_i]->vjp(time_info, shape_disp_ptr.get(), getConstFieldPointers(input_fields[row_i]), {},
+      //                            getConstFieldPointers(adjoint_fields[row_i]), shape_disp_sensitivity.get(),
+      //                            getFieldPointers(field_sensitivities[row_i]), {});
+      residual_evals[row_i]->vjp(time_info, shape_disp_ptr.get(), getConstFieldPointers(input_fields[row_i]), {},
+                                 adjoint_fields[row_i].get(), shape_disp_sensitivity.get(),
+                                 getFieldPointers(field_sensitivities[row_i]), {});
+    }
+
+    // bc field is not supported yet for block solver
+
+    SMITH_MARK_END("solve reverse");
   });
 
   sol.finalize();
 
   std::vector<FieldState> results;
-  for (size_t i = 0; i < num_rows; ++i) {
+  for (size_t i = 0; i < num_rows_; ++i) {
     FieldState s = gretl::create_state<FEFieldPtr, FEDualPtr>(
-        smith::zero_dual_from_state(),
-        [i](const std::vector<FEFieldPtr>& sols) { return std::make_shared<smith::FiniteElementState>(*sols[i]); },
+        zero_dual_from_state(),
+        [i](const std::vector<FEFieldPtr>& sols) { return std::make_shared<FiniteElementState>(*sols[i]); },
         [i](const std::vector<FEFieldPtr>&, const FEFieldPtr&, std::vector<FEDualPtr>& sols_,
             const FEDualPtr& output_) { *sols_[i] += *output_; },
         sol);
@@ -445,6 +589,5 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
   return results;
 }
-*/
 
 }  // namespace smith

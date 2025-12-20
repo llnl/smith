@@ -161,6 +161,114 @@ std::shared_ptr<FiniteElementState> NonlinearDifferentiableSolver::solveAdjoint(
 
 void NonlinearDifferentiableSolver::clearMemory() const { J_.reset(); }
 
+LinearDifferentiableBlockSolver::LinearDifferentiableBlockSolver(std::unique_ptr<mfem::Solver> s,
+                                                                 std::unique_ptr<mfem::Solver> p)
+    : mfem_solver(std::move(s)), mfem_preconditioner(std::move(p))
+{
+}
+
+void LinearDifferentiableBlockSolver::completeSetup(const std::vector<FieldT>& us)
+{
+  initializeSolver(mfem_preconditioner.get(), us[0]);
+}
+
+std::vector<DifferentiableBlockSolver::FieldPtr> LinearDifferentiableBlockSolver::solve(
+    const std::vector<FieldPtr>& u_guesses,
+    std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> residual_funcs,
+    std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobian_funcs) const
+{
+  SMITH_MARK_FUNCTION;
+
+  int num_rows = static_cast<int>(u_guesses.size());
+  SLIC_ERROR_IF(num_rows < 0, "Number of residual rows must be non-negative");
+
+  mfem::Array<int> block_offsets;
+  block_offsets.SetSize(num_rows + 1);
+  block_offsets[0] = 0;
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    block_offsets[row_i + 1] = u_guesses[static_cast<size_t>(row_i)]->space().TrueVSize();
+  }
+  block_offsets.PartialSum();
+
+  auto block_du = std::make_unique<mfem::BlockVector>(block_offsets);
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    block_du->GetBlock(row_i) = *u_guesses[static_cast<size_t>(row_i)];
+  }
+
+  auto residuals = residual_funcs(u_guesses);
+  auto block_r = std::make_unique<mfem::BlockVector>(block_offsets);
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    block_r->GetBlock(row_i) = residuals[static_cast<size_t>(row_i)];
+  }
+
+  auto jacs = jacobian_funcs(u_guesses);
+  auto block_jac = std::make_unique<mfem::BlockOperator>(block_offsets);
+  for (int i = 0; i < num_rows; ++i) {
+    for (int j = 0; j < num_rows; ++j) {
+      block_jac->SetBlock(i, j, jacs[static_cast<size_t>(i)][static_cast<size_t>(j)].get());
+    }
+  }
+
+  mfem_solver->SetOperator(*block_jac);
+
+  mfem_solver->Mult(*block_r, *block_du);
+
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    *u_guesses[static_cast<size_t>(row_i)] -= block_du->GetBlock(row_i);
+  }
+  *block_du = 0.0;
+
+  return u_guesses;
+}
+
+std::vector<DifferentiableBlockSolver::FieldPtr> LinearDifferentiableBlockSolver::solveAdjoint(
+    const std::vector<DualPtr>& u_bars, std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const
+{
+  SMITH_MARK_FUNCTION;
+
+  int num_rows = static_cast<int>(u_bars.size());
+  SLIC_ERROR_IF(num_rows < 0, "Number of residual rows must be non-negative");
+
+  std::vector<DifferentiableBlockSolver::FieldPtr> u_duals(static_cast<size_t>(num_rows));
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    u_duals[static_cast<size_t>(row_i)] = std::make_shared<DifferentiableBlockSolver::FieldT>(
+        u_bars[static_cast<size_t>(row_i)]->space(), "u_dual_" + std::to_string(row_i));
+  }
+
+  mfem::Array<int> block_offsets;
+  block_offsets.SetSize(num_rows + 1);
+  block_offsets[0] = 0;
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    block_offsets[row_i + 1] = u_bars[static_cast<size_t>(row_i)]->space().TrueVSize();
+  }
+  block_offsets.PartialSum();
+
+  auto block_ds = std::make_unique<mfem::BlockVector>(block_offsets);
+  *block_ds = 0.0;
+
+  auto block_r = std::make_unique<mfem::BlockVector>(block_offsets);
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    block_r->GetBlock(row_i) = *u_bars[static_cast<size_t>(row_i)];
+  }
+
+  auto block_jac = std::make_unique<mfem::BlockOperator>(block_offsets);
+  for (int i = 0; i < num_rows; ++i) {
+    for (int j = 0; j < num_rows; ++j) {
+      block_jac->SetBlock(i, j, jacobian_transposed[static_cast<size_t>(i)][static_cast<size_t>(j)].get());
+    }
+  }
+
+  mfem_solver->SetOperator(*block_jac);
+
+  mfem_solver->Mult(*block_r, *block_ds);
+
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    *u_duals[static_cast<size_t>(row_i)] = block_ds->GetBlock(row_i);
+  }
+
+  return u_duals;
+}
+
 std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolve(LinearSolverOptions linear_opts,
                                                                            const smith::Mesh& mesh)
 {

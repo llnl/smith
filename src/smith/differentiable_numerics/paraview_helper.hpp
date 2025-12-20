@@ -110,7 +110,8 @@ inline auto createParaviewOutput(const smith::Mesh& mesh, const std::vector<Fiel
 
   auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh.mfemParMesh());
   auto paraview_dc = std::make_unique<mfem::ParaViewDataCollection>(output_name, non_const_mesh);
-  int max_order_in_fields = 0;
+  // visualization order has to be at least 1 for paraview (because there is no zero order mesh)
+  int max_order_in_fields = 1;
 
   // Find the maximum polynomial order in the physics module's states
   for (const auto& fstate : states) {
@@ -148,7 +149,8 @@ inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<co
 
   auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
   auto paraview_dc = std::make_unique<mfem::ParaViewDataCollection>(output_name, non_const_mesh);
-  int max_order_in_fields = 0;
+  // visualization order has to be at least 1 for paraview (because there is no zero order mesh)
+  int max_order_in_fields = 1;
 
   // Find the maximum polynomial order in the physics module's states
   for (const auto& state : output_states) {
@@ -174,7 +176,8 @@ inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<co
 
   auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
   auto paraview_dc = std::make_unique<mfem::ParaViewDataCollection>(output_name, non_const_mesh);
-  int max_order_in_fields = 0;
+  // visualization order has to be at least 1 for paraview (because there is no zero order mesh)
+  int max_order_in_fields = 1;
 
   ParaviewWriter::StateVecs output_duals;
   // Find the maximum polynomial order in the physics module's states
