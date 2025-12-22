@@ -6,7 +6,6 @@
 
 set(differentiable_numerics_sources
     field_state.cpp
-    differentiable_test_utils.cpp
     differentiable_physics.cpp
     lumped_mass_explicit_newmark_state_advancer.cpp
     solid_mechanics_state_advancer.cpp
@@ -21,7 +20,6 @@ set(differentiable_numerics_headers
     reaction.hpp
     differentiable_solver.hpp
     differentiable_physics.hpp
-    differentiable_test_utils.hpp
     timestep_estimator.hpp
     explicit_dynamic_solve.hpp
     lumped_mass_weak_form.hpp

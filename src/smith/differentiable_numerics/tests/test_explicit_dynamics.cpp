@@ -17,9 +17,9 @@
 #include "smith/differentiable_numerics/lumped_mass_explicit_newmark_state_advancer.hpp"
 #include "smith/differentiable_numerics/lumped_mass_weak_form.hpp"
 #include "smith/differentiable_numerics/paraview_helper.hpp"
-#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/timestep_estimator.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
+#include "smith/differentiable_numerics/tests/differentiable_test_utils.hpp"
 
 // This tests the interface between the new smith::WeakForm with gretl and its conformity to the existing base_physics
 // interface
@@ -269,7 +269,7 @@ struct MeshFixture : public testing::Test {
   static constexpr double dt = total_simulation_time / num_steps;
 };
 
-TEST_F(MeshFixture, TRANSIENT_DYNAMICS_BASE_PHYSICS)
+TEST_F(MeshFixture, TransientDynamicsBasePhysics)
 {
   SMITH_MARK_FUNCTION;
 
@@ -301,7 +301,7 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_BASE_PHYSICS)
   }
 }
 
-TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
+TEST_F(MeshFixture, TransientDynamicsGretl)
 {
   SMITH_MARK_FUNCTION;
 
@@ -349,7 +349,7 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
   EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[DENSITY], 0.01, 4, true), 0.8);
 }
 
-TEST_F(MeshFixture, TRANSIENT_CONSTANT_GRAVITY)
+TEST_F(MeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;
 

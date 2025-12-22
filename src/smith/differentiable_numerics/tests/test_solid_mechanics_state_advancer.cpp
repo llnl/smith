@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-
 #include <gtest/gtest.h>
 
 #include "gretl/data_store.hpp"
@@ -23,9 +22,8 @@
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/differentiable_solid_mechanics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-
 #include "smith/differentiable_numerics/paraview_helper.hpp"
-#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
+#include "smith/differentiable_numerics/tests/differentiable_test_utils.hpp"
 
 namespace smith {
 
@@ -77,7 +75,7 @@ struct SolidMechanicsMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh;
 };
 
-TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
+TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
 {
   SMITH_MARK_FUNCTION;
 
@@ -147,10 +145,10 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
 
   gretl::set_as_objective(reaction_squared);
   std::cout << "final residual norm2 = " << reaction_squared.get() << std::endl;
-  
-  //EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  //EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
-  //EXPECT_GT(checkGradWrt(reaction_squared, params[1], 6.2e-1, 4, true), 0.7);
+
+  // EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
+  // EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
+  // EXPECT_GT(checkGradWrt(reaction_squared, params[1], 6.2e-1, 4, true), 0.7);
   EXPECT_GT(checkGradWrt(reaction_squared, initial_states[1], 6.2e-5, 4, true), 0.7);
 
   // re-evaluate the final objective value, and backpropagate again
@@ -162,8 +160,8 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
     std::cout << s.get()->name() << " " << s.get()->Norml2() << " " << s.get_dual()->Norml2() << std::endl;
   }
 
-  std::cout << shape_disp.get()->name() << " " << shape_disp.get()->Norml2() << " "
-            << shape_disp.get_dual()->Norml2() << std::endl;
+  std::cout << shape_disp.get()->name() << " " << shape_disp.get()->Norml2() << " " << shape_disp.get_dual()->Norml2()
+            << std::endl;
 
   for (size_t p = 0; p < params.size(); ++p) {
     std::cout << params[p].get()->name() << " " << params[p].get()->Norml2() << " " << params[p].get_dual()->Norml2()
@@ -171,7 +169,7 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
   }
 }
 
-TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
+TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;
 
@@ -314,7 +312,7 @@ void adjointBackward(std::shared_ptr<BasePhysics> physics, smith::FiniteElementD
   }
 }
 
-TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_BASE_PHYSICS)
+TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 {
   SMITH_MARK_FUNCTION;
 

@@ -41,8 +41,7 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const FieldSta
   TimeInfo final_time_info(final_time, dt, cycle);
 
   // evaluate initial guesses
-  FieldState displacement_guess =
-      states_old[DISPLACEMENT];
+  FieldState displacement_guess = states_old[DISPLACEMENT];
 
   // input fields for solid_weak_form
   std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[VELOCITY], states_old[ACCELERATION]};
