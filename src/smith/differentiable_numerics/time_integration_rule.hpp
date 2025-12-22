@@ -40,10 +40,12 @@ struct BackwardEulerFirstOrderTimeIntegrationRule {
   }
 };
 
+/// @brief Options for second order time integration methods
 enum class SecondOrderTimeIntegrationMethod
 {
-  IMPLICIT_NEWMARK,
-  QUASI_STATIC
+  IMPLICIT_NEWMARK,  /// implicit newmark discretization
+  QUASI_STATIC  /// quasi-static, specifies current field, velocity is central difference (for quasi-static artificial
+                /// viscosity), and acceleration is lagged for cases where it is set to some fixed value in time.
 };
 
 /// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
@@ -90,7 +92,7 @@ struct SecondOrderTimeIntegrationRule {
     return accel;
   }
 
-  SecondOrderTimeIntegrationMethod method_;
+  SecondOrderTimeIntegrationMethod method_;  ///< method specifying time integration rule to inject into the q-function.
 };
 
 }  // namespace smith
