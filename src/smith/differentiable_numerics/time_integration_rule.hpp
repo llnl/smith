@@ -22,9 +22,9 @@ namespace smith {
 /// this class provides the current discrete approximation for u and u_dot as a function of
 /// (u^{n+1}, u^n).
 struct FirstOrderTimeIntegrationRule {
-
   /// @brief Constructor
-  /// @param theta specifies where to evaluate the value in time.  A value of 1.0 is backward-euler, 0.0 is forward-euler.
+  /// @param theta specifies where to evaluate the value in time.  A value of 1.0 is backward-euler, 0.0 is
+  /// forward-euler.
   FirstOrderTimeIntegrationRule(double theta = 1.0) : theta_(theta) {}
 
   template <typename T1, typename T2>
