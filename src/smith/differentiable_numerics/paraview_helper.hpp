@@ -92,6 +92,7 @@ class ParaviewWriter {
     pv->Save();
   }
 
+  /// overload
   void write(size_t step, double time, const std::vector<FieldState>& current_fields)
   {
     write(static_cast<int>(step), time, current_fields);
@@ -103,7 +104,9 @@ class ParaviewWriter {
   StateVecs dual_states;
 };
 
-inline auto createParaviewOutput(const smith::Mesh& mesh, const std::vector<FieldState>& states,
+
+/// @brief Creates a ParaviewWriter from a mesh, vector of FieldState, and the name of the output paraview file.  File will be in directory filename/filename.pvd.
+inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<FieldState>& states,
                                  std::string output_name)
 {
   if (output_name == "") {
@@ -140,7 +143,8 @@ inline auto createParaviewOutput(const smith::Mesh& mesh, const std::vector<Fiel
   return ParaviewWriter(std::move(paraview_dc), output_states, output_duals);
 }
 
-inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const FiniteElementState*>& states,
+/// @brief Creates a ParaviewWriter from an mfem::ParMesh, vector of FiniteElementState pointers, and the name of the output paraview file.  File will be in directory filename/filename.pvd.
+inline auto createParaviewWriter(const mfem::ParMesh& mesh, const std::vector<const FiniteElementState*>& states,
                                  std::string output_name)
 {
   if (output_name == "") {
@@ -171,62 +175,5 @@ inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<co
 
   return ParaviewWriter(std::move(paraview_dc), output_states, {});
 }
-
-// inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const FiniteElementDual*>& duals,
-//                                  std::string output_name)
-// {
-//   if (output_name == "") {
-//     output_name = "default";
-//   }
-
-//   auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
-//   auto paraview_dc = std::make_unique<mfem::ParaViewDataCollection>(output_name, non_const_mesh);
-//   // visualization order has to be at least 1 for paraview (because there is no zero order mesh)
-//   int max_order_in_fields = 1;
-
-//   ParaviewWriter::StateVecs output_duals;
-//   // Find the maximum polynomial order in the physics module's states
-//   for (const auto& dual : duals) {
-//     output_duals.push_back(std::make_shared<smith::FiniteElementState>(dual->space(), dual->name()));
-//     paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
-//     max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
-//   }
-
-//   // Set the options for the paraview output files
-//   paraview_dc->SetLevelsOfDetail(max_order_in_fields);
-//   paraview_dc->SetHighOrderOutput(true);
-//   paraview_dc->SetDataFormat(mfem::VTKFormat::BINARY);
-//   paraview_dc->SetCompression(true);
-
-//   return ParaviewWriter(std::move(paraview_dc), {}, output_duals);
-// }
-
-// inline std::vector<const smith::FiniteElementState*> get_field_ptrs_for_output(
-//     smith::FieldState shape_disp, const std::vector<smith::FieldState>& states_in,
-//     std::vector<smith::FieldState> other_fields = {})
-// {
-//   std::vector<const smith::FiniteElementState*> states_out{shape_disp.get().get()};
-//   for (auto& s : states_in) {
-//     states_out.push_back(s.get().get());
-//   }
-//   for (auto& s : other_fields) {
-//     states_out.push_back(s.get().get());
-//   }
-//   return states_out;
-// };
-
-// inline std::vector<const smith::FiniteElementDual*> get_dual_ptrs_for_output(
-//     smith::FieldState shape_disp, const std::vector<smith::FieldState>& states_in,
-//     std::vector<smith::FieldState> other_fields = {})
-// {
-//   std::vector<const smith::FiniteElementDual*> duals_out{shape_disp.get_dual().get()};
-//   for (auto& s : states_in) {
-//     duals_out.push_back(s.get_dual().get());
-//   }
-//   for (auto& s : other_fields) {
-//     duals_out.push_back(s.get_dual().get());
-//   }
-//   return duals_out;
-// };
 
 }  // namespace smith

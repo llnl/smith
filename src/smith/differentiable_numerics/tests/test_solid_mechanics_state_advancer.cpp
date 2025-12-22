@@ -129,7 +129,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
 
   physics->resetStates();
 
-  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
+  auto pv_writer = smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
   for (size_t m = 0; m < num_steps_; ++m) {
     physics->advanceTimestep(dt_);
@@ -228,7 +228,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto all_fields = physics->getFieldStatesAndParamStates();
 
   std::string pv_dir = std::string("paraview_") + physics->name();
-  auto pv_writer = createParaviewOutput(*mesh, all_fields, pv_dir);
+  auto pv_writer = createParaviewWriter(*mesh, all_fields, pv_dir);
   pv_writer.write(physics->cycle(), physics->time(), all_fields);
 
   for (size_t m = 0; m < num_steps_; ++m) {

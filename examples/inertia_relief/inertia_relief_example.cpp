@@ -274,7 +274,7 @@ int main(int argc, char* argv[])
     return u;
   });
 
-  auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "inertia_relief");
+  auto writer = createParaviewWriter(mesh->mfemParMesh(), objective_states, "inertia_relief");
   if (visualize) {
     writer.write(0, 0.0, objective_states);
   }

@@ -130,18 +130,18 @@ class DifferentiableBlockSolver {
   virtual void completeSetup(const std::vector<FieldT>& us) = 0;
 
   /// @brief Solve a set of equations with a vector of FiniteElementState as unknown
-  /// @param u_guess initial guess for solver
-  /// @param equation std::function for equation to be solved
-  /// @param jacobian std::function for evaluating the linearized Jacobian about the current solution
-  /// @return The solution vector of FiniteElementState
+  /// @param u_guesses initial guess for solver
+  /// @param residuals std::vector<std::function> for equations to be solved
+  /// @param jacobians std::vector<std::vector>> of std::function for evaluating the linearized Jacobians about the current solution
+  /// @return std::vector of solution vectors (FiniteElementState)
   virtual std::vector<FieldPtr> solve(
       const std::vector<FieldPtr>& u_guesses,
       std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> residuals,
       std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobians) const = 0;
 
   /// @brief Solve the (linear) adjoint set of equations with a vector of FiniteElementState as unknown
-  /// @param u_bar rhs for the solve
-  /// @param jacobian_transposed the evaluated linearized adjoint space matrix
+  /// @param u_bars std::vector of right hand sides (rhs) for the solve
+  /// @param jacobian_transposed std::vector<std::vector>> of evaluated linearized adjoint space matrices
   /// @return The adjoint vector of solution field
   virtual std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
                                              std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const = 0;
@@ -170,8 +170,8 @@ class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
   std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
                                      std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const override;
 
-  mutable std::unique_ptr<mfem::Solver> mfem_solver;
-  mutable std::unique_ptr<mfem::Solver> mfem_preconditioner;
+  mutable std::unique_ptr<mfem::Solver> mfem_solver; ///< stored mfem block solver
+  mutable std::unique_ptr<mfem::Solver> mfem_preconditioner; ///< stored mfem block preconditioner
 };
 
 /// @brief Create a differentiable linear solver

@@ -21,25 +21,25 @@ namespace smith {
 /// When solving f(u, u_dot, t) = 0
 /// this class provides the current discrete approximation for u and u_dot as a function of
 /// (u^{n+1}, u^n).
-struct FirstOrderTimeIntegrationRule {
+struct BackwardEulerFirstOrderTimeIntegrationRule {
   /// @brief Constructor
   /// @param theta specifies where to evaluate the value in time.  A value of 1.0 is backward-euler, 0.0 is
   /// forward-euler.
-  FirstOrderTimeIntegrationRule(double theta = 1.0) : theta_(theta) {}
+  BackwardEulerFirstOrderTimeIntegrationRule() {}
 
+  /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2>
-  SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new, const T2& field_old) const
+  SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new, const T2& /*field_old*/) const
   {
-    return theta_ * field_new + (1.0 - theta_) * field_old;
+    return field_new;
   }
 
+  /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1, typename T2>
   SMITH_HOST_DEVICE auto derivative(const TimeInfo& t, const T1& field_new, const T2& field_old) const
   {
     return (1.0 / t.dt()) * (field_new - field_old);
   }
-
-  double theta_;
 };
 
 /// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).

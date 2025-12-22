@@ -317,7 +317,7 @@ TEST_F(MeshFixture, TransientDynamicsGretl)
       0.0 * smith::evaluateObjective(objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
 
   std::string pv_dir = std::string("paraview_") + mechanics_->name();
-  auto pv_writer = smith::createParaviewOutput(*mesh_, all_fields, pv_dir);
+  auto pv_writer = smith::createParaviewWriter(*mesh_, all_fields, pv_dir);
   pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
   for (size_t m = 0; m < num_steps; ++m) {
     mechanics_->advanceTimestep(dt);
@@ -359,7 +359,7 @@ TEST_F(MeshFixture, TransientConstantGravity)
 
   std::string pv_dir = std::string("paraview_") + mechanics_->name();
   std::cout << "Writing output to " << pv_dir << std::endl;
-  auto pv_writer = smith::createParaviewOutput(*mesh_, all_fields, pv_dir);
+  auto pv_writer = smith::createParaviewWriter(*mesh_, all_fields, pv_dir);
   pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
   double time = 0.0;
   for (size_t m = 0; m < num_steps; ++m) {

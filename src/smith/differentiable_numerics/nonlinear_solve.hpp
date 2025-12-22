@@ -81,14 +81,21 @@ FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const 
 // }
 
 /// @brief Solve a block nonlinear system of equations as defined by the vector of weak form
-/// @param residual_eval The weak forms which defines the equations to be solved
+/// @param residual_evals Vector of weak forms which define the equations to be solved
+/// @param block_indices Matrix of index arguments specifying where in each WeakForm the unknown fields are passed in.
+/// Example: for a 2 weak-form system, with weak-forms, r1, r2
+/// r1(a,b,c)
+/// r2(b,d,e,a)
+// with unknowns (with respect to the solver) being a, and b.
+// r1 has unknowns a,b in the ‘slots’ 0, 1
+// r2 has unknowns a,b, in the ‘slots’ 3,0
 /// @param shape_disp The mesh-morphed shape displacement
 /// @param states The time varying states as inputs to the weak form
 /// @param params The fixed field parameters as inputs to the weak form
 /// @param time_info Timestep information (time, dt, cycle)
 /// @param solver The differentiable, potentially nonlinear, equation solver used to solve the system of equations
 /// @param bc_managers Holds information about which degrees of freedom (DOFS)
-/// @return The field solution to the weak form
+/// @return Vector of field solutions satisfying the weak forms
 std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
                                     const std::vector<std::vector<size_t>> block_indices, const FieldState& shape_disp,
                                     const std::vector<std::vector<FieldState>>& states,

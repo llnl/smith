@@ -35,7 +35,7 @@ void applyBoundaryConditions(double time, const smith::BoundaryConditionManager*
 /// on this unknown. The state_update_weights specify how this is done.  For a nonzero weight, the field argument i is
 /// assumed to change as states[i] + (p - p_initial) * state_update_weights[i].
 /// @param primal_solve_state_index Index specifying which of the states is the primary unknown.
-/// @param to_dirichlet_state_index Index specifying which field has the Dirichlet boundary conditions applied to it.
+/// @param dirichlet_state_index Index specifying which field has the Dirichlet boundary conditions applied to it.
 /// Typically this will be the same as the primal_solve_state_index, but it can be different.  An example is explicit
 /// dynamics, where the unknown is the acceleration, and the boundary conditions are often applied directly to the
 /// displacement field.
