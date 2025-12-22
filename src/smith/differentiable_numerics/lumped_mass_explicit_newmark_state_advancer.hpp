@@ -36,7 +36,8 @@ class LumpedMassExplicitNewmarkStateAdvancer : public StateAdvancer {
   }
 
   /// @overload
-  std::vector<FieldState> advanceState(const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states,
+  std::vector<FieldState> advanceState(const TimeInfo& time_info, const FieldState& shape_disp,
+                                       const std::vector<FieldState>& states,
                                        const std::vector<FieldState>& params) const override;
 
  private:
