@@ -7,7 +7,7 @@
 /**
  * @file evaluate_objective.hpp
  *
- * @brief Methods for evaluating objective and tracking on the gretl graph with a custom vjp
+ * @brief Methods for evaluating objective functions and tracking these operations on the gretl graph with a custom vjp
  */
 
 #pragma once

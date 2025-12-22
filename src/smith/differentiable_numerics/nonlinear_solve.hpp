@@ -7,8 +7,8 @@
 /**
  * @file nonlinear_solve.hpp
  *
- * @brief Specifies parametrized residuals and various linearized evaluations for arbitrary nonlinear systems of
- * equations
+ * @brief Methods for solving systems of equations as given by WeakForms.  Tracks these operations on the gretl graph
+ * with a custom vjp.
  */
 
 #pragma once
