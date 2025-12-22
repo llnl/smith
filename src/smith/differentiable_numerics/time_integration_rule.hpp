@@ -40,13 +40,19 @@ struct BackwardEulerFirstOrderTimeIntegrationRule {
   }
 };
 
+enum class SecondOrderTimeIntegrationMethod
+{
+  IMPLICIT_NEWMARK,
+  QUASI_STATIC
+};
+
 /// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
 /// When solving f(u, u_dot, u_dot_dot, t) = 0
 /// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
 struct SecondOrderTimeIntegrationRule {
   /// @brief Constructor
-  SecondOrderTimeIntegrationRule() {}
+  SecondOrderTimeIntegrationRule(SecondOrderTimeIntegrationMethod method) : method_(method) {}
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
@@ -63,11 +69,11 @@ struct SecondOrderTimeIntegrationRule {
                                     [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                                     [[maybe_unused]] const T4& accel_old) const
   {
-    // auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
-    // auto v_n = velo_old;
-    // return (2.0 * v_np5) - v_n;
-    // return v_fd;
-    return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
+    if (method_ == SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK) {
+      return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
+    } else {
+      return (1.0 / t.dt()) * (field_new - field_old) - 0.0 * velo_old;
+    }
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
@@ -76,17 +82,15 @@ struct SecondOrderTimeIntegrationRule {
                                            [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                                            [[maybe_unused]] const T4& accel_old) const
   {
-    // auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
-    // auto v_n = velo_old;
-    // auto a_np25 = (1.0 / t.dt()) * (v_np5 - v_n);
-    // return (4.0 * a_np25) - accel_old;
     auto dt = t.dt();
-    return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
-    // auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
-    //  auto v_n = velo_old;
-    //  auto a_np25 = (1.0 / t.dt()) * (v_np5 - v_n);
-    //  return (4.0 * a_np25) - accel_old;
+    auto accel = (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
+    if (method_ == SecondOrderTimeIntegrationMethod::QUASI_STATIC) {
+      accel = accel_old + 0.0 * accel;
+    }
+    return accel;
   }
+
+  SecondOrderTimeIntegrationMethod method_;
 };
 
 }  // namespace smith
