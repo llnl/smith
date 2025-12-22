@@ -111,50 +111,47 @@ auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<smith::Fi
   return ParaviewWriter(std::move(paraview_dc), output_states, {});
 }
 
-/* NLMCP of the form
- * 0 <= x \perp F(x, y) >= 0
- *              Q(x, y)  = 0
- * Here, F and x are both 0-dimensional
- * and   Q(x, y) = [ r(u) + (dc/du)^T l]
- *                 [-c(u)]
- *            y  = [ u ]
- *                 [ l ]
- * we use the approximate Jacobian
- *       dQ/dy \approx [ dr/du     (dc/du)^T]
- *                     [-dc/du        0 ]
- * we note that the sign-convention with regard to "c" is important
- * as  the approximate Jacobian is positive semi-definite when dr/du is
- * and thus the NLMC problem is guaranteed to be semi-monotone.
+/* Nonlinear problem of the form
+ * F(X) = [ r(u) + (dc/du)^T l ] = [ 0 ]
+ *        [ -c(u)              ]   [ 0 ]
+ *   X  = [ u ]
+ *        [ l ]
+ *
+ * wherein r(u) is the elasticity nonlinear residual
+ *         c(u) are the tied gap contacts
+ *            u are the displacement dofs
+ *            l are the Lagrange multipliers
+ *
+ * This problem inherits from EqualityConstrainedHomotopyProblem
+ * for compatibility with the HomotopySolver.
  */
 class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   InertialReliefProblem() : time_info_(0.0, 0.0, 0) {}
 
  protected:
-  mfem::HypreParMatrix* drdu_ = nullptr;
-  mfem::HypreParMatrix* dcdu_ = nullptr;
-  int dimu_;
-  int dimc_;
-  int dimuglb_;
-  int dimcglb_;
-  mfem::Array<int> y_partition_;
-  std::vector<smith::FieldPtr> obj_states_;
-  std::vector<smith::FieldPtr> all_states_;
-  std::shared_ptr<SolidWeakFormT> weak_form_;
-  std::unique_ptr<smith::FiniteElementState> shape_disp_;
+  std::unique_ptr<mfem::HypreParMatrix> drdu_;             // Jacobian of residual
+  std::unique_ptr<mfem::HypreParMatrix> dcdu_;             // Jacobian of constraint
+  std::vector<smith::FieldPtr> obj_states_;                // states for objective evaluation
+  std::vector<smith::FieldPtr> all_states_;                // states for weak_form evaluation
+  std::shared_ptr<SolidWeakFormT> weak_form_;              // weak_form
+  std::unique_ptr<smith::FiniteElementState> shape_disp_;  // shape displacement
   std::shared_ptr<smith::Mesh> mesh_;
-  std::vector<std::shared_ptr<smith::ScalarObjective>> constraints_;
-  smith::TimeInfo time_info_;
-  std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};
+  std::vector<std::shared_ptr<smith::ScalarObjective>> constraints_;  // vector of constraints
+  smith::TimeInfo time_info_;  // time info for constraint and weak_form function calls
+  std::vector<double> jacobian_weights_ = {1.0, 0.0, 0.0, 0.0};  // weights for weak_form_->jacobian calls
+  mutable mfem::Vector constraint_cached_;
+  mutable mfem::Vector residual_cached_;
+  mutable mfem::Vector JTvp_cached_;
 
  public:
   InertialReliefProblem(std::vector<smith::FieldPtr> obj_states, std::vector<smith::FieldPtr> all_states,
                         std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<SolidWeakFormT> weak_form,
                         std::vector<std::shared_ptr<smith::ScalarObjective>> constraints);
-  mfem::Vector residual(const mfem::Vector& u) const;
-  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const;
-  mfem::Vector constraint(const mfem::Vector& u) const;
-  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u);
-  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u);
+  mfem::Vector residual(const mfem::Vector& u, bool fresh_evaluation) const;
+  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool fresh_evaluation) const;
+  mfem::Vector constraint(const mfem::Vector& u, bool fresh_evaluation) const;
+  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool fresh_evaluation);
+  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool fresh_evaluation);
   virtual ~InertialReliefProblem();
 };
 
@@ -228,7 +225,7 @@ int main(int argc, char* argv[])
 
   // construct residual
   auto solid_mechanics_weak_form =
-      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
+      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), getSpaces(params));
 
   SolidMaterial mat;
   mat.K = 1.0;
@@ -260,9 +257,9 @@ int main(int argc, char* argv[])
   double dt = 1.0;
   smith::TimeInfo time_info(time, dt, 0);
   auto all_states = getConstFieldPointers(states, params);
-  auto objective_states = {all_states[DISP], all_states[DENSITY]};
+  auto objective_states = {all_states[FIELD::DISP], all_states[FIELD::DENSITY]};
 
-  ObjectiveT::SpacesT param_space_ptrs{&all_states[DISP]->space(), &all_states[DENSITY]->space()};
+  ObjectiveT::SpacesT param_space_ptrs{&all_states[FIELD::DISP]->space(), &all_states[FIELD::DENSITY]->space()};
 
   ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
 
@@ -270,7 +267,7 @@ int main(int argc, char* argv[])
                                  [](double /*t*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
   double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
-  smith::tensor<double, dim> initial_cg;
+  smith::tensor<double, dim> initial_cg;  // center of gravity
 
   for (int i = 0; i < dim; ++i) {
     auto cg_objective = std::make_shared<ObjectiveT>("translation " + std::to_string(i), mesh, param_space_ptrs);
@@ -311,8 +308,8 @@ int main(int argc, char* argv[])
   }
   auto non_const_states = getFieldPointers(states, params);
   // create an inertial relief problem
-  InertialReliefProblem problem({non_const_states[DISP], non_const_states[DENSITY]}, non_const_states, mesh,
-                                solid_mechanics_weak_form, constraints);
+  InertialReliefProblem problem({non_const_states[FIELD::DISP], non_const_states[FIELD::DENSITY]}, non_const_states,
+                                mesh, solid_mechanics_weak_form, constraints);
 
   // optimization variables
   auto X0 = problem.GetOptimizationVariable();
@@ -323,8 +320,9 @@ int main(int argc, char* argv[])
   // set solver options
   solver.SetTol(nonlinear_absolute_tol);
   solver.SetMaxIter(nonlinear_max_iterations);
-
+  solver.EnableRegularizedNewtonMode();
   // solve the inertia relief problem
+  solver.SetPrintLevel(2);
   solver.Mult(X0, Xf);
   // extract displacement and Lagrange multipliers
   mfem::Vector displacement_sol = problem.GetDisplacement(Xf);
@@ -335,6 +333,12 @@ int main(int argc, char* argv[])
   double multiplier_norm = mfem::GlobalLpNorm(2, multiplier_sol.Norml2(), MPI_COMM_WORLD);
   SLIC_INFO_ROOT(axom::fmt::format("||displacement|| = {}", displacement_norm));
   SLIC_INFO_ROOT(axom::fmt::format("||multiplier|| = {}", multiplier_norm));
+  auto adjoint = problem.GetOptimizationVariable();
+  auto adjoint_load = problem.GetOptimizationVariable();
+  adjoint = 0.0;
+  adjoint_load = 1.0;
+  problem.AdjointSolve(displacement_sol, adjoint_load, adjoint);
+
   if (visualize) {
     writer.write(1, 1.0, objective_states);
   }
@@ -360,136 +364,132 @@ InertialReliefProblem::InertialReliefProblem(std::vector<smith::FiniteElementSta
   obj_states_.resize(obj_states.size());
   std::copy(obj_states.begin(), obj_states.end(), obj_states_.begin());
 
-  HYPRE_BigInt cOffsets[2];
-  HYPRE_BigInt* uOffsets = all_states[FIELD::DISP]->space().GetTrueDofOffsets();
-  dimc_ = static_cast<int>(constraints_.size());
+  int dim_displacement = all_states_[FIELD::DISP]->space().GetTrueVSize();
+  int dim_constraints = static_cast<int>(constraints_.size());
   int myid = mfem::Mpi::WorldRank();
-  cOffsets[0] = 0;
-  cOffsets[1] = dimc_;
   if (myid > 0) {
-    dimc_ = 0;
-    cOffsets[0] = cOffsets[1];
+    dim_constraints = 0;
   }
+  SetSizes(dim_displacement, dim_constraints);
 
-  dimu_ = all_states_[FIELD::DISP]->space().GetTrueVSize();
-  MPI_Allreduce(&dimc_, &dimcglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(&dimu_, &dimuglb_, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-
-  SetSizes(uOffsets, cOffsets);
+  constraint_cached_.SetSize(dim_constraints);
+  constraint_cached_ = 0.0;
+  residual_cached_.SetSize(dim_displacement);
+  residual_cached_ = 0.0;
+  JTvp_cached_.SetSize(dim_displacement);
+  JTvp_cached_ = 0.0;
 }
 
 // residual callback
-mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u) const
+mfem::Vector InertialReliefProblem::residual(const mfem::Vector& u, bool fresh_evaluation) const
 {
-  obj_states_[DISP]->Set(1.0, u);
-  auto res_vector = weak_form_->residual(time_info_, shape_disp_.get(), smith::getConstFieldPointers(all_states_));
-  return res_vector;
+  if (fresh_evaluation) {
+    obj_states_[FIELD::DISP]->Set(1.0, u);
+    residual_cached_.Set(
+        1.0, weak_form_->residual(time_info_, shape_disp_.get(), smith::getConstFieldPointers(all_states_)));
+  }
+  return residual_cached_;
 }
 
 // constraint Jacobian transpose vector product
-mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l) const
+mfem::Vector InertialReliefProblem::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l,
+                                                          bool fresh_evaluation) const
 {
-  obj_states_[DISP]->Set(1.0, u);
-  std::vector<double> multipliers(constraints_.size());
-  for (int i = 0; i < dimc_; i++) {
-    multipliers[static_cast<size_t>(i)] = l(i);
-  }
-  const int nconstraints = static_cast<int>(constraints_.size());
-  MPI_Bcast(multipliers.data(), nconstraints, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  if (fresh_evaluation) {
+    int dim_constraints = GetMultiplierDim();
+    int dim_displacement = GetDisplacementDim();
+    obj_states_[FIELD::DISP]->Set(1.0, u);
+    std::vector<double> multipliers(constraints_.size());
+    for (int i = 0; i < dim_constraints; i++) {
+      multipliers[static_cast<size_t>(i)] = l(i);
+    }
+    const int nconstraints = static_cast<int>(constraints_.size());
+    MPI_Bcast(multipliers.data(), nconstraints, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-  mfem::Vector constraint_gradient(dimu_);
-  constraint_gradient = 0.0;
-  mfem::Vector output_vec(dimu_);
-  output_vec = 0.0;
-
-  for (size_t i = 0; i < constraints_.size(); i++) {
-    mfem::Vector grad_temp =
-        constraints_[i]->gradient(time_info_, shape_disp_.get(), smith::getConstFieldPointers(obj_states_), DISP);
-    constraint_gradient.Set(1.0, grad_temp);
-    output_vec.Add(multipliers[i], constraint_gradient);
+    mfem::Vector constraint_gradient(dim_displacement);
+    constraint_gradient = 0.0;
+    JTvp_cached_ = 0.0;
+    for (size_t i = 0; i < constraints_.size(); i++) {
+      mfem::Vector grad_temp = constraints_[i]->gradient(time_info_, shape_disp_.get(),
+                                                         smith::getConstFieldPointers(obj_states_), FIELD::DISP);
+      constraint_gradient.Set(1.0, grad_temp);
+      JTvp_cached_.Add(multipliers[i], constraint_gradient);
+    }
   }
-  return output_vec;
+  return JTvp_cached_;
 }
 
 // Jacobian of the residual
-mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u)
+mfem::HypreParMatrix* InertialReliefProblem::residualJacobian(const mfem::Vector& u, bool fresh_evaluation)
 {
-  obj_states_[DISP]->Set(1.0, u);
-  auto drdu_unique =
-      weak_form_->jacobian(time_info_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
-
-  if (drdu_) {
-    delete drdu_;
+  if (fresh_evaluation) {
+    obj_states_[FIELD::DISP]->Set(1.0, u);
+    drdu_.reset();
+    drdu_ = weak_form_->jacobian(time_info_, shape_disp_.get(), getConstFieldPointers(all_states_), jacobian_weights_);
   }
-  drdu_ = drdu_unique.release();
-  SLIC_ERROR_ROOT_IF(drdu_->Height() != dimu_ || drdu_->Width() != dimu_, "residual Jacobian of an unexpected shape");
-  return drdu_;
+  int dim_displacement = GetDisplacementDim();
+  SLIC_ERROR_ROOT_IF(drdu_->Height() != dim_displacement || drdu_->Width() != dim_displacement,
+                     "residual Jacobian of an unexpected shape");
+  return drdu_.get();
 }
 
 // constraint callback
-mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u) const
+mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool fresh_evaluation) const
 {
-  obj_states_[DISP]->Set(1.0, u);
-  mfem::Vector output_vec(dimc_);
-  output_vec = 0.0;
+  if (fresh_evaluation) {
+    int dim_constraints = GetMultiplierDim();
+    obj_states_[FIELD::DISP]->Set(1.0, u);
 
-  for (size_t i = 0; i < constraints_.size(); i++) {
-    const int idx = static_cast<int>(i);
-    const size_t i2 = static_cast<size_t>(idx);
-    SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
+    for (size_t i = 0; i < constraints_.size(); i++) {
+      const int idx = static_cast<int>(i);
+      const size_t i2 = static_cast<size_t>(idx);
+      SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
 
-    double constraint_i =
-        constraints_[i]->evaluate(time_info_, shape_disp_.get(), smith::getConstFieldPointers(obj_states_));
-    if (dimc_ > 0) {
-      output_vec(idx) = constraint_i;
+      double constraint_i =
+          constraints_[i]->evaluate(time_info_, shape_disp_.get(), smith::getConstFieldPointers(obj_states_));
+      if (dim_constraints > 0) {
+        constraint_cached_(idx) = constraint_i;
+      }
     }
   }
-  return output_vec;
+  return constraint_cached_;
 }
 
 // Jacobian of the constraint
-mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u)
+mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u, bool fresh_evaluation)
 {
-  obj_states_[DISP]->Set(1.0, u);
-  int myid = mfem::Mpi::WorldRank();
-  int nentries = dimuglb_;
-  if (myid > 0) {
-    nentries = 0;
-  }
-  mfem::SparseMatrix dcdumat(dimc_, dimuglb_, nentries);
-  mfem::Array<int> cols;
-  cols.SetSize(dimuglb_);
-  for (int i = 0; i < dimuglb_; i++) {
-    cols[i] = i;
-  }
-  for (size_t i = 0; i < constraints_.size(); i++) {
-    const int idx = static_cast<int>(i);
-    const size_t i2 = static_cast<size_t>(idx);
-    SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
-    mfem::HypreParVector gradVector(MPI_COMM_WORLD, dimuglb_, uOffsets_);
-    gradVector.Set(
-        1.0, constraints_[i]->gradient(time_info_, shape_disp_.get(), smith::getConstFieldPointers(obj_states_), DISP));
-    mfem::Vector* globalGradVector = gradVector.GlobalVector();
-    if (myid == 0) {
-      dcdumat.SetRow(idx, cols, *globalGradVector);
+  int dim_constraints = GetMultiplierDim();
+  int glbdim_displacement = GetGlobalDisplacementDim();
+  if (fresh_evaluation) {
+    obj_states_[FIELD::DISP]->Set(1.0, u);
+    // dense rows
+    int nentries = glbdim_displacement;
+    if (dimc_ == 0) {
+      nentries = 0;
     }
-    delete globalGradVector;
+    mfem::SparseMatrix dcdumat(dim_constraints, glbdim_displacement, nentries);
+    mfem::Array<int> cols;
+    cols.SetSize(glbdim_displacement);
+    for (int i = 0; i < glbdim_displacement; i++) {
+      cols[i] = i;
+    }
+    std::unique_ptr<mfem::Vector> globalGradVector;
+    for (size_t i = 0; i < constraints_.size(); i++) {
+      const int idx = static_cast<int>(i);
+      const size_t i2 = static_cast<size_t>(idx);
+      SLIC_ERROR_ROOT_IF(i2 != i, "Constraint index is out of range, bad cast from size_t to int");
+      mfem::HypreParVector gradVector(MPI_COMM_WORLD, glbdim_displacement, uOffsets_);
+      gradVector.Set(1.0, constraints_[i]->gradient(time_info_, shape_disp_.get(),
+                                                    smith::getConstFieldPointers(obj_states_), FIELD::DISP));
+      globalGradVector.reset(gradVector.GlobalVector());
+      if (dim_constraints > 0) {
+        dcdumat.SetRow(idx, cols, *globalGradVector.get());
+      }
+    }
+    dcdumat.Finalize();
+    dcdu_.reset(GenerateHypreParMatrixFromSparseMatrix(cOffsets_, uOffsets_, &dcdumat));
   }
-  dcdumat.Threshold(1.e-20);
-  dcdumat.Finalize();
-  if (dcdu_) {
-    delete dcdu_;
-  }
-  dcdu_ = GenerateHypreParMatrixFromSparseMatrix(uOffsets_, cOffsets_, &dcdumat);
-  return dcdu_;
+  return dcdu_.get();
 }
 
-InertialReliefProblem::~InertialReliefProblem()
-{
-  if (drdu_) {
-    delete drdu_;
-  }
-  if (dcdu_) {
-    delete dcdu_;
-  }
-}
+InertialReliefProblem::~InertialReliefProblem() {}
