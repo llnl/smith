@@ -18,10 +18,10 @@ SolidMechanicsStateAdvancer::SolidMechanicsStateAdvancer(
 {
 }
 
-std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const FieldState& shape_disp,
+std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const TimeInfo& time_info, const FieldState& shape_disp,
                                                                   const std::vector<FieldState>& states_old_,
-                                                                  const std::vector<FieldState>& params,
-                                                                  const TimeInfo& time_info) const
+                                                                  const std::vector<FieldState>& params
+                                                                  ) const
 {
   std::vector<FieldState> states_old = states_old_;
   if (time_info.cycle() == 0) {
@@ -61,10 +61,10 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const FieldSta
   return states;
 }
 
-std::vector<ReactionState> SolidMechanicsStateAdvancer::computeReactions(const FieldState& shape_disp,
+std::vector<ReactionState> SolidMechanicsStateAdvancer::computeReactions(const TimeInfo& time_info, const FieldState& shape_disp,
                                                                          const std::vector<FieldState>& states,
-                                                                         const std::vector<FieldState>& params,
-                                                                         const TimeInfo& time_info) const
+                                                                         const std::vector<FieldState>& params
+                                                                         ) const
 {
   std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]};
   solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());

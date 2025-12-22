@@ -36,8 +36,8 @@ class LumpedMassExplicitNewmarkStateAdvancer : public StateAdvancer {
   }
 
   /// @overload
-  std::vector<FieldState> advanceState(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                                       const std::vector<FieldState>& params, const TimeInfo& time_info) const override;
+  std::vector<FieldState> advanceState(const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states,
+                                       const std::vector<FieldState>& params) const override;
 
  private:
   const std::shared_ptr<WeakForm> residual_eval_;               ///< weak form to evaluate mechanical forces
