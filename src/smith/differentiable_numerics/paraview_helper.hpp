@@ -20,21 +20,21 @@
 
 namespace smith {
 
+/// @brief Class which interactions with ParaViewDataCollection to write arbitrary field results to disk.  This allows
+/// output independent of a particular BasePhysics.
 class ParaviewWriter {
  public:
-  using StateVecs = std::vector<std::shared_ptr<FiniteElementState> >;
-  using DualVecs = std::vector<std::shared_ptr<FiniteElementDual> >;
+  using StateVecs = std::vector<std::shared_ptr<FiniteElementState> >;  ///< using
 
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_)
-      : pv(std::move(pv_)), states(states_)
-  {
-  }
-
+  /// Construct from ParaViewDataCollection, a vector of shared_ptr to FiniteElementState, and vector of shared_ptr to
+  /// FiniteElementState which dual fields will be copied into.
   ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
       : pv(std::move(pv_)), states(states_), dual_states(duals_)
   {
   }
 
+  /// @brief write paraview output from vector of finite element states. states must be passed in with a consistent
+  /// order as how the ParaviewWriter was constructed (consistent order of spaces)
   void write(size_t step, double time, const std::vector<const FiniteElementState*>& current_states)
   {
     SMITH_MARK_FUNCTION;
@@ -51,6 +51,8 @@ class ParaviewWriter {
     pv->Save();
   }
 
+  /// @brief write paraview output from vector of finite element duals. duals must be passed in with a consistent order
+  /// as how the ParaviewWriter was constructed (consistent order of spaces)
   void write(size_t step, double time, const std::vector<const FiniteElementDual*>& current_duals)
   {
     SMITH_MARK_FUNCTION;
@@ -67,6 +69,9 @@ class ParaviewWriter {
     pv->Save();
   }
 
+  /// @brief write paraview output from vector of FieldState. These must be passed in with a consistent order as how the
+  /// ParaviewWriter was constructed (consistent order of spaces).  Both the field, and its dual/reaction will be
+  /// written.
   void write(int step, double time, const std::vector<FieldState>& current_fields)
   {
     SMITH_MARK_FUNCTION;
@@ -167,61 +172,61 @@ inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<co
   return ParaviewWriter(std::move(paraview_dc), output_states, {});
 }
 
-inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const FiniteElementDual*>& duals,
-                                 std::string output_name)
-{
-  if (output_name == "") {
-    output_name = "default";
-  }
+// inline auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const FiniteElementDual*>& duals,
+//                                  std::string output_name)
+// {
+//   if (output_name == "") {
+//     output_name = "default";
+//   }
 
-  auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
-  auto paraview_dc = std::make_unique<mfem::ParaViewDataCollection>(output_name, non_const_mesh);
-  // visualization order has to be at least 1 for paraview (because there is no zero order mesh)
-  int max_order_in_fields = 1;
+//   auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
+//   auto paraview_dc = std::make_unique<mfem::ParaViewDataCollection>(output_name, non_const_mesh);
+//   // visualization order has to be at least 1 for paraview (because there is no zero order mesh)
+//   int max_order_in_fields = 1;
 
-  ParaviewWriter::StateVecs output_duals;
-  // Find the maximum polynomial order in the physics module's states
-  for (const auto& dual : duals) {
-    output_duals.push_back(std::make_shared<smith::FiniteElementState>(dual->space(), dual->name()));
-    paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
-    max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
-  }
+//   ParaviewWriter::StateVecs output_duals;
+//   // Find the maximum polynomial order in the physics module's states
+//   for (const auto& dual : duals) {
+//     output_duals.push_back(std::make_shared<smith::FiniteElementState>(dual->space(), dual->name()));
+//     paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
+//     max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
+//   }
 
-  // Set the options for the paraview output files
-  paraview_dc->SetLevelsOfDetail(max_order_in_fields);
-  paraview_dc->SetHighOrderOutput(true);
-  paraview_dc->SetDataFormat(mfem::VTKFormat::BINARY);
-  paraview_dc->SetCompression(true);
+//   // Set the options for the paraview output files
+//   paraview_dc->SetLevelsOfDetail(max_order_in_fields);
+//   paraview_dc->SetHighOrderOutput(true);
+//   paraview_dc->SetDataFormat(mfem::VTKFormat::BINARY);
+//   paraview_dc->SetCompression(true);
 
-  return ParaviewWriter(std::move(paraview_dc), {}, output_duals);
-}
+//   return ParaviewWriter(std::move(paraview_dc), {}, output_duals);
+// }
 
-inline std::vector<const smith::FiniteElementState*> get_field_ptrs_for_output(
-    smith::FieldState shape_disp, const std::vector<smith::FieldState>& states_in,
-    std::vector<smith::FieldState> other_fields = {})
-{
-  std::vector<const smith::FiniteElementState*> states_out{shape_disp.get().get()};
-  for (auto& s : states_in) {
-    states_out.push_back(s.get().get());
-  }
-  for (auto& s : other_fields) {
-    states_out.push_back(s.get().get());
-  }
-  return states_out;
-};
+// inline std::vector<const smith::FiniteElementState*> get_field_ptrs_for_output(
+//     smith::FieldState shape_disp, const std::vector<smith::FieldState>& states_in,
+//     std::vector<smith::FieldState> other_fields = {})
+// {
+//   std::vector<const smith::FiniteElementState*> states_out{shape_disp.get().get()};
+//   for (auto& s : states_in) {
+//     states_out.push_back(s.get().get());
+//   }
+//   for (auto& s : other_fields) {
+//     states_out.push_back(s.get().get());
+//   }
+//   return states_out;
+// };
 
-inline std::vector<const smith::FiniteElementDual*> get_dual_ptrs_for_output(
-    smith::FieldState shape_disp, const std::vector<smith::FieldState>& states_in,
-    std::vector<smith::FieldState> other_fields = {})
-{
-  std::vector<const smith::FiniteElementDual*> duals_out{shape_disp.get_dual().get()};
-  for (auto& s : states_in) {
-    duals_out.push_back(s.get_dual().get());
-  }
-  for (auto& s : other_fields) {
-    duals_out.push_back(s.get_dual().get());
-  }
-  return duals_out;
-};
+// inline std::vector<const smith::FiniteElementDual*> get_dual_ptrs_for_output(
+//     smith::FieldState shape_disp, const std::vector<smith::FieldState>& states_in,
+//     std::vector<smith::FieldState> other_fields = {})
+// {
+//   std::vector<const smith::FiniteElementDual*> duals_out{shape_disp.get_dual().get()};
+//   for (auto& s : states_in) {
+//     duals_out.push_back(s.get_dual().get());
+//   }
+//   for (auto& s : other_fields) {
+//     duals_out.push_back(s.get_dual().get());
+//   }
+//   return duals_out;
+// };
 
 }  // namespace smith

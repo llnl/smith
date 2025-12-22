@@ -119,11 +119,11 @@ class DifferentiableBlockSolver {
   /// @brief destructor
   virtual ~DifferentiableBlockSolver() {}
 
-  using FieldT = FiniteElementState;
-  using FieldPtr = std::shared_ptr<FieldT>;
-  using FieldD = FiniteElementDual;
-  using DualPtr = std::shared_ptr<FieldD>;
-  using MatrixPtr = std::unique_ptr<mfem::HypreParMatrix>;
+  using FieldT = FiniteElementState;                        ///< using
+  using FieldPtr = std::shared_ptr<FieldT>;                 ///< using
+  using FieldD = FiniteElementDual;                         ///< using
+  using DualPtr = std::shared_ptr<FieldD>;                  ///< using
+  using MatrixPtr = std::unique_ptr<mfem::HypreParMatrix>;  ///< using
 
   /// @brief required for certain solvers/preconditions, e.g. when multigrid algorithms want a near null-space
   /// For these cases, it should be called before solve
