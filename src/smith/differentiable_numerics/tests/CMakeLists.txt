@@ -19,7 +19,6 @@ set(differentiable_numerics_test_source
     test_field_state.cpp
     test_explicit_dynamics.cpp
     test_solid_mechanics_state_advancer.cpp
-    differentiable_test_utils.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}

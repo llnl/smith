@@ -263,16 +263,6 @@ FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const 
   }
 }
 
-// FieldState solve(const WeakForm* residual_eval, const FieldState& shape_disp, const std::vector<FieldState>& states,
-//                  const std::vector<FieldState>& params, const TimeInfo& time_info, const DifferentiableSolver*
-//                  solver, const BoundaryConditionManager* bc_manager)
-// {
-//   std::vector<double> state_update_weights(states.size(), 0.0);
-//   state_update_weights[0] = 1.0;
-//   return nonlinearSolve(residual_eval, shape_disp, states, params, state_update_weights, 0, 0, time_info, solver,
-//                         bc_manager);
-// }
-
 std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
                                     const std::vector<std::vector<size_t>> block_indices, const FieldState& shape_disp,
                                     const std::vector<std::vector<FieldState>>& states,
@@ -438,16 +428,6 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     SLIC_ERROR_IF(s_dual.size() != num_rows,
                   "block solver vjp downstream size must match the number or residuals in block_solve");
 
-    // We don't need this part yet but maybe will when we incorporate time integrators
-    // std::vector<std::vector<size_t>> non_primal_to_state_index(num_rows);
-    // for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-    //   for (size_t i = 0; i < num_state_inputs[row_i]; ++i) {
-    //     if (std::find(block_indices[row_i].begin(), block_indices[row_i].end(), i) == block_indices[row_i].end()) {
-    //       non_primal_to_state_index[row_i].push_back(i);
-    //     }
-    //   }
-    // }
-
     std::vector<std::vector<FEFieldPtr>> input_fields(num_rows);
     size_t field_count = 0;
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
@@ -560,15 +540,10 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     }
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-      // residual_evals[row_i]->vjp(time_info, shape_disp_ptr.get(), getConstFieldPointers(input_fields[row_i]), {},
-      //                            getConstFieldPointers(adjoint_fields[row_i]), shape_disp_sensitivity.get(),
-      //                            getFieldPointers(field_sensitivities[row_i]), {});
       residual_evals[row_i]->vjp(time_info, shape_disp_ptr.get(), getConstFieldPointers(input_fields[row_i]), {},
                                  adjoint_fields[row_i].get(), shape_disp_sensitivity.get(),
                                  getFieldPointers(field_sensitivities[row_i]), {});
     }
-
-    // bc field is not supported yet for block solver
 
     SMITH_MARK_END("solve reverse");
   });

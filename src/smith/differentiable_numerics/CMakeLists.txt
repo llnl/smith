@@ -11,6 +11,7 @@ set(differentiable_numerics_sources
     solid_mechanics_state_advancer.cpp
     differentiable_solver.cpp
     nonlinear_solve.cpp
+    evaluate_objective.cpp
     dirichlet_boundary_conditions.cpp
     )
 
@@ -26,6 +27,7 @@ set(differentiable_numerics_headers
     lumped_mass_explicit_newmark_state_advancer.hpp
     solid_mechanics_state_advancer.hpp
     nonlinear_solve.hpp
+    evaluate_objective.hpp
     dirichlet_boundary_conditions.hpp
     time_integration_rule.hpp
     time_discretized_weak_form.hpp
