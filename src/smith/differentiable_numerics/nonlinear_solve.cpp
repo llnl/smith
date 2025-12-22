@@ -267,7 +267,7 @@ FieldState solve(const WeakForm& weak_form, const FieldState& shape_disp, const 
                  const std::vector<FieldState>& params, const TimeInfo& time_info, const DifferentiableSolver& solver,
                  const DirichletBoundaryConditions& bcs, size_t unknown_state_index)
 {
-  std::vector<double> state_update_weights(unknown_state_index + 1, 0.0);
+  std::vector<double> state_update_weights(states.size(), 0.0);
   state_update_weights[unknown_state_index] = 1.0;
   return nonlinearSolve(&weak_form, shape_disp, states, params, state_update_weights, unknown_state_index,
                         unknown_state_index, time_info, &solver, &bcs.getBoundaryConditionManager());
