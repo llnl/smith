@@ -318,23 +318,6 @@ double solution_error(solution_type exact_solution, PatchBoundaryCondition bc)
   // Integrate in time
   for (int i = 0; i < 3; i++) {
     solid.advanceTimestep(1.0);
-
-    // Output solution for debugging
-    // solid.outputStateToDisk("paraview_output");
-    // std::cout << "cycle " << i << std::endl;
-    // std::cout << "time = " << solid.time() << std::endl;
-    // std::cout << "displacement =\n";
-    // solid.displacement().Print(std::cout);
-    // std::cout << "forces =\n";
-    // solid.reactions().Print();
-    // tensor<double, dim> resultant = make_tensor<dim>([&](int j) {
-    //   double y = 0;
-    //   for (int n = 0; n < solid.reactions().Size()/dim; n++) {
-    //     y += solid.reactions()(dim*n + j);
-    //   }
-    //   return y;
-    // });
-    // std::cout << "resultant = " << resultant << std::endl;
   }
 
   // Compute norm of error

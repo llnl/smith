@@ -38,7 +38,7 @@ gretl::State<double> innerProduct(const FieldState& a, const FieldState& b)
       a, b);
 }
 
-gretl::State<double> innerProduct(const ResultantState& a, const ResultantState& b)
+gretl::State<double> innerProduct(const ReactionState& a, const ReactionState& b)
 {
   return gretl::create_state<double, double>(
       gretl::defaultInitializeZeroDual<double, double>(),

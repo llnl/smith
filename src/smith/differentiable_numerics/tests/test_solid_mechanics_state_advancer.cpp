@@ -22,7 +22,7 @@
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/differentiable_solid_mechanics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/paraview_helper.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/tests/differentiable_test_utils.hpp"
 
 namespace smith {
@@ -88,7 +88,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
 
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
+          mesh, d_solid_nonlinear_solver, time_rule, 100, physics_name, {"bulk", "shear"});
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
   bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
@@ -139,7 +139,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   TimeInfo time_info(physics->time(), dt_);
 
   auto state_advancer = physics->getStateAdvancer();
-  auto reactions = state_advancer->computeResultants(shape_disp, physics->getFieldStates(), params, time_info);
+  auto reactions = state_advancer->computeReactions(shape_disp, physics->getFieldStates(), params, time_info);
 
   auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
 
@@ -189,7 +189,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
+          mesh, d_solid_nonlinear_solver, time_rule, 100, physics_name, {"bulk", "shear"});
 
   static constexpr double gravity = -9.0;
 
@@ -325,7 +325,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, time_rule, physics_name, {"bulk", "shear"});
+          mesh, d_solid_nonlinear_solver, time_rule, 100, physics_name, {"bulk", "shear"});
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
   bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {

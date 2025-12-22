@@ -26,10 +26,10 @@ namespace smith {
 template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
 auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
                          std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
-                         smith::SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
-                         const std::vector<std::string>& param_names = {})
+                         smith::SecondOrderTimeIntegrationRule time_rule, size_t num_checkpoints,
+                         std::string physics_name, const std::vector<std::string>& param_names = {})
 {
-  auto graph = std::make_shared<gretl::DataStore>(100);
+  auto graph = std::make_shared<gretl::DataStore>(num_checkpoints);
   auto [shape_disp, states, params, time, solid_mechanics_weak_form] =
       SolidMechanicsStateAdvancer::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ParamSpaces...>(
           mesh, graph, time_rule, physics_name, param_names);

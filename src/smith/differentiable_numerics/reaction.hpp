@@ -22,7 +22,7 @@ namespace smith {
 /// @brief gretl-function implementation which evaluates the residual force (which is minus the mechanical force)
 /// given
 /// shape displacement, states and params.  The field_for_residual_space Field is only used to set the approriate size
-/// (mfem::ParFiniteElementSpace) for the residual field so it can be returned as a ResultantState
+/// (mfem::ParFiniteElementSpace) for the residual field so it can be returned as a ReactionState
 inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const TimeInfo& time_info,
                              FieldState shape_disp, const std::vector<FieldState>& field_states,
                              FieldState field_for_residual_space)

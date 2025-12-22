@@ -16,7 +16,7 @@
 
 #include "smith/differentiable_numerics/lumped_mass_explicit_newmark_state_advancer.hpp"
 #include "smith/differentiable_numerics/lumped_mass_weak_form.hpp"
-#include "smith/differentiable_numerics/paraview_helper.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/timestep_estimator.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/evaluate_objective.hpp"

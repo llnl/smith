@@ -32,7 +32,7 @@ set(differentiable_numerics_headers
     time_integration_rule.hpp
     time_discretized_weak_form.hpp
     differentiable_solid_mechanics.hpp
-    paraview_helper.hpp
+    paraview_writer.hpp
     )
 
 set(differentiable_numerics_depends

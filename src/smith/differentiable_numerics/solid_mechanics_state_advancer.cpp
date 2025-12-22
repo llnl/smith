@@ -61,10 +61,10 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const FieldSta
   return states;
 }
 
-std::vector<ResultantState> SolidMechanicsStateAdvancer::computeResultants(const FieldState& shape_disp,
-                                                                           const std::vector<FieldState>& states,
-                                                                           const std::vector<FieldState>& params,
-                                                                           const TimeInfo& time_info) const
+std::vector<ReactionState> SolidMechanicsStateAdvancer::computeReactions(const FieldState& shape_disp,
+                                                                         const std::vector<FieldState>& states,
+                                                                         const std::vector<FieldState>& params,
+                                                                         const TimeInfo& time_info) const
 {
   std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]};
   solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());

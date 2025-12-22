@@ -36,7 +36,7 @@ class DifferentiablePhysics : public BasePhysics {
   DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                         const FieldState& shape_disp, const std::vector<FieldState>& states,
                         const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer,
-                        std::string physics_name, const std::vector<std::string>& resultant_names = {});
+                        std::string physics_name, const std::vector<std::string>& reaction_names = {});
   /// @brief destructor
   ~DifferentiablePhysics() {}
 
@@ -125,8 +125,8 @@ class DifferentiablePhysics : public BasePhysics {
   /// @brief Get the shape displacement FieldState
   FieldState getShapeDispFieldState() const;
 
-  /// @brief Get the current ResultantStates
-  std::vector<ResultantState> getResultantStates() const { return resultant_states_; }
+  /// @brief Get the current reactionStates
+  std::vector<ReactionState> getReactionStates() const { return reaction_states_; }
 
   /// @brief Get state advancer
   std::shared_ptr<StateAdvancer> getStateAdvancer() const { return advancer_; }
@@ -147,9 +147,9 @@ class DifferentiablePhysics : public BasePhysics {
   std::vector<std::string> state_names_;                     ///< names of all the states in order
   std::vector<std::string> param_names_;                     ///< names of all the states in order
 
-  mutable std::vector<ResultantState> resultant_states_;             ///< all the resultants registered for the physics
-  std::map<std::string, size_t> resultant_name_to_resultant_index_;  ///< map from reaction names to resultant index
-  std::vector<std::string> resultant_names_;  ///< names for all the relevant resultants/reactions
+  mutable std::vector<ReactionState> reaction_states_;             ///< all the reactions registered for the physics
+  std::map<std::string, size_t> reaction_name_to_reaction_index_;  ///< map from reaction names to reaction index
+  std::vector<std::string> reaction_names_;                        ///< names for all the relevant reactions/reactions
 
   std::vector<gretl::Int> milestones_;  ///< a record of the steps in the graph that represent the end conditions of
                                         ///< advanceTimestep(dt). this information is used to halt the gretl graph when

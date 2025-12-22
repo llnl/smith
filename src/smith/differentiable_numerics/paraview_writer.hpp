@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file paraview_helper.hpp
+ * @file paraview_writer.hpp
  *
  * @brief Simple paraview field output methods
  */

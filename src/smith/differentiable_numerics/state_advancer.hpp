@@ -32,14 +32,14 @@ class StateAdvancer {
                                                const std::vector<FieldState>& params,
                                                const TimeInfo& time_info) const = 0;
 
-  /// @brief interface method to compute resultants (e.g. nodal reaction forces) given previous, current states and
+  /// @brief interface method to compute reactions given previous, current states and
   /// parameters.
-  virtual std::vector<ResultantState> computeResultants(const FieldState& /*shape_disp*/,
-                                                        const std::vector<FieldState>& /*states*/,
-                                                        const std::vector<FieldState>& /*params*/,
-                                                        const TimeInfo& /*time_info*/) const
+  virtual std::vector<ReactionState> computeReactions(const FieldState& /*shape_disp*/,
+                                                      const std::vector<FieldState>& /*states*/,
+                                                      const std::vector<FieldState>& /*params*/,
+                                                      const TimeInfo& /*time_info*/) const
   {
-    return std::vector<ResultantState>{};
+    return std::vector<ReactionState>{};
   }
 };
 
