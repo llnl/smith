@@ -84,7 +84,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
       buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
+  smith::SecondOrderTimeIntegrationRule time_rule;
 
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
@@ -185,7 +185,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
       buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
+  smith::SecondOrderTimeIntegrationRule time_rule;
 
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
@@ -321,7 +321,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
       buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
+  smith::SecondOrderTimeIntegrationRule time_rule;
 
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(

@@ -25,11 +25,31 @@ void applyBoundaryConditions(double time, const smith::BoundaryConditionManager*
   }
 }
 
+/// @brief Solve a nonlinear system of equations as defined by the weak form
+/// @param residual_eval The weak form which defines the equations to be solved
+/// @param shape_disp The mesh-morphed shape displacement
+/// @param states The time varying states as inputs to the weak form
+/// @param params The fixed field parameters as inputs to the weak form
+/// @param state_update_weights Specifies how to blend the arguments of the weak form into a unique unknown.  The
+/// primary unknown, p, is states[primal_solve_state_index].  However, other arguments to the weak form may also depend
+/// on this unknown. The state_update_weights specify how this is done.  For a nonzero weight, the field argument i is
+/// assumed to change as states[i] + (p - p_initial) * state_update_weights[i].
+/// @param primal_solve_state_index Index specifying which of the states is the primary unknown.
+/// @param to_dirichlet_state_index Index specifying which field has the Dirichlet boundary conditions applied to it.
+/// Typically this will be the same as the primal_solve_state_index, but it can be different.  An example is explicit
+/// dynamics, where the unknown is the acceleration, and the boundary conditions are often applied directly to the
+/// displacement field.
+/// @param time_info Timestep information (time, dt, cycle)
+/// @param solver The differentiable, potentially nonlinear, equation solver used to solve the system of equations
+/// @param bc_manager Holds information about which degrees of freedom (DOFS)
+/// @param bc_field A field which holds to desired values for the fixed degrees of freedom as specified by the
+/// bc_manager
+/// @return The field solution to the weak form
 FieldState nonlinearSolve(const WeakForm* residual_eval, const FieldState& shape_disp,
                           const std::vector<FieldState>& states, const std::vector<FieldState>& params,
                           const std::vector<double>& state_update_weights, size_t primal_solve_state_index,
                           size_t dirichlet_state_index, const TimeInfo& time_info, const DifferentiableSolver* solver,
-                          const BoundaryConditionManager* bc_manager, const FieldState* bc_field)
+                          const BoundaryConditionManager* bc_manager, const FieldState* bc_field = nullptr)
 {
   SMITH_MARK_FUNCTION;
   // there should be one less input state, as the higher time derivative term (e.g., acceleration), does not have a

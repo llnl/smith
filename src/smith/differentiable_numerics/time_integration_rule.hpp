@@ -22,6 +22,9 @@ namespace smith {
 /// this class provides the current discrete approximation for u and u_dot as a function of
 /// (u^{n+1}, u^n).
 struct FirstOrderTimeIntegrationRule {
+
+  /// @brief Constructor
+  /// @param theta specifies where to evaluate the value in time.  A value of 1.0 is backward-euler, 0.0 is forward-euler.
   FirstOrderTimeIntegrationRule(double theta = 1.0) : theta_(theta) {}
 
   template <typename T1, typename T2>
@@ -44,9 +47,8 @@ struct FirstOrderTimeIntegrationRule {
 /// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
 struct SecondOrderTimeIntegrationRule {
-  /// @brief
-  /// @param theta weighting on current vs previous state value.
-  SecondOrderTimeIntegrationRule(double theta = 1.0) : theta_(theta) {}
+  /// @brief Constructor
+  SecondOrderTimeIntegrationRule() {}
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
@@ -87,9 +89,6 @@ struct SecondOrderTimeIntegrationRule {
     //  auto a_np25 = (1.0 / t.dt()) * (v_np5 - v_n);
     //  return (4.0 * a_np25) - accel_old;
   }
-
-  double theta_;  ///< parameter specifying the particular integration rule for integrating second order systems with
-                  ///< two steps
 };
 
 }  // namespace smith
