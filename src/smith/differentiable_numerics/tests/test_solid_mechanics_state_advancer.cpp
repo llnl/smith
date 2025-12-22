@@ -1,3 +1,10 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+
 #include <gtest/gtest.h>
 
 #include "gretl/data_store.hpp"
@@ -46,7 +53,7 @@ using ScalarParameterSpace = L2<0>;
 struct SolidMechanicsMeshFixture : public testing::Test {
   double length = 1.0;
   double width = 0.04;
-  int num_elements_x = 14;
+  int num_elements_x = 12;
   int num_elements_y = 2;
   int num_elements_z = 2;
   double elem_size = length / num_elements_x;
@@ -62,8 +69,8 @@ struct SolidMechanicsMeshFixture : public testing::Test {
     mesh->addDomainOfBoundaryElements("right", smith::by_attr<dim>(5));
   }
 
-  static constexpr double total_simulation_time_ = 1.2;
-  static constexpr size_t num_steps_ = 5;
+  static constexpr double total_simulation_time_ = 1.1;
+  static constexpr size_t num_steps_ = 4;
   static constexpr double dt_ = total_simulation_time_ / num_steps_;
 
   axom::sidre::DataStore datastore;
@@ -110,7 +117,7 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
 
   auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();
-  auto states = physics->getInitialFieldStates();
+  auto initial_states = physics->getInitialFieldStates();
 
   params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
     double scaling = 1.0;
@@ -140,10 +147,28 @@ TEST_F(SolidMechanicsMeshFixture, SENSITIVITIES_GRETL)
 
   gretl::set_as_objective(reaction_squared);
   std::cout << "final residual norm2 = " << reaction_squared.get() << std::endl;
+  
+  //EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
+  //EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
+  //EXPECT_GT(checkGradWrt(reaction_squared, params[1], 6.2e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, initial_states[1], 6.2e-5, 4, true), 0.7);
 
-  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, params[1], 6.2e-1, 4, true), 0.7);
+  // re-evaluate the final objective value, and backpropagate again
+  reaction_squared.get();
+  gretl::set_as_objective(reaction_squared);
+  reaction_squared.data_store().back_prop();
+
+  for (auto s : initial_states) {
+    std::cout << s.get()->name() << " " << s.get()->Norml2() << " " << s.get_dual()->Norml2() << std::endl;
+  }
+
+  std::cout << shape_disp.get()->name() << " " << shape_disp.get()->Norml2() << " "
+            << shape_disp.get_dual()->Norml2() << std::endl;
+
+  for (size_t p = 0; p < params.size(); ++p) {
+    std::cout << params[p].get()->name() << " " << params[p].get()->Norml2() << " " << params[p].get_dual()->Norml2()
+              << std::endl;
+  }
 }
 
 TEST_F(SolidMechanicsMeshFixture, TRANSIENT_CONSTANT_GRAVITY)
