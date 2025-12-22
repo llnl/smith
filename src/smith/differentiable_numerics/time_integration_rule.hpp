@@ -23,8 +23,6 @@ namespace smith {
 /// (u^{n+1}, u^n).
 struct BackwardEulerFirstOrderTimeIntegrationRule {
   /// @brief Constructor
-  /// @param theta specifies where to evaluate the value in time.  A value of 1.0 is backward-euler, 0.0 is
-  /// forward-euler.
   BackwardEulerFirstOrderTimeIntegrationRule() {}
 
   /// @brief evaluate value of the ode state as used by the integration rule
