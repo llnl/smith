@@ -104,8 +104,8 @@ class ParaviewWriter {
   StateVecs dual_states;
 };
 
-
-/// @brief Creates a ParaviewWriter from a mesh, vector of FieldState, and the name of the output paraview file.  File will be in directory filename/filename.pvd.
+/// @brief Creates a ParaviewWriter from a mesh, vector of FieldState, and the name of the output paraview file.  File
+/// will be in directory filename/filename.pvd.
 inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<FieldState>& states,
                                  std::string output_name)
 {
@@ -143,7 +143,8 @@ inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<Fiel
   return ParaviewWriter(std::move(paraview_dc), output_states, output_duals);
 }
 
-/// @brief Creates a ParaviewWriter from an mfem::ParMesh, vector of FiniteElementState pointers, and the name of the output paraview file.  File will be in directory filename/filename.pvd.
+/// @brief Creates a ParaviewWriter from an mfem::ParMesh, vector of FiniteElementState pointers, and the name of the
+/// output paraview file.  File will be in directory filename/filename.pvd.
 inline auto createParaviewWriter(const mfem::ParMesh& mesh, const std::vector<const FiniteElementState*>& states,
                                  std::string output_name)
 {

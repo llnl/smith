@@ -132,7 +132,8 @@ class DifferentiableBlockSolver {
   /// @brief Solve a set of equations with a vector of FiniteElementState as unknown
   /// @param u_guesses initial guess for solver
   /// @param residuals std::vector<std::function> for equations to be solved
-  /// @param jacobians std::vector<std::vector>> of std::function for evaluating the linearized Jacobians about the current solution
+  /// @param jacobians std::vector<std::vector>> of std::function for evaluating the linearized Jacobians about the
+  /// current solution
   /// @return std::vector of solution vectors (FiniteElementState)
   virtual std::vector<FieldPtr> solve(
       const std::vector<FieldPtr>& u_guesses,
@@ -170,8 +171,8 @@ class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
   std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
                                      std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const override;
 
-  mutable std::unique_ptr<mfem::Solver> mfem_solver; ///< stored mfem block solver
-  mutable std::unique_ptr<mfem::Solver> mfem_preconditioner; ///< stored mfem block preconditioner
+  mutable std::unique_ptr<mfem::Solver> mfem_solver;          ///< stored mfem block solver
+  mutable std::unique_ptr<mfem::Solver> mfem_preconditioner;  ///< stored mfem block preconditioner
 };
 
 /// @brief Create a differentiable linear solver
