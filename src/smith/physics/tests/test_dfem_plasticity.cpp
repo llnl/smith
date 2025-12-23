@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <cmath>
 #include <ostream>
 #include <string>
 
@@ -20,9 +21,39 @@
 #include "smith/physics/state/finite_element_state.hpp"
 #include "smith/physics/state/state_manager.hpp"
 
-auto element_shape = mfem::Element::QUADRILATERAL;
 
 namespace smith {
+
+struct UniaxialSolution {
+  double E, nu, sigma_y, Hi;
+
+  double axial_strain(double t) const { return std::sin(M_PI_2*t); };
+
+  double axial_stress(double t) const {
+    double e = axial_strain(t);
+    return E/(E + Hi)*(Hi*e + sigma_y);
+  }
+
+  tensor<double, 3> displacement(tensor<double, 3> X, double t) const
+  {
+    double ex = axial_strain(t);
+    if (ex < sigma_y/E) return {X[0]*ex, -nu*ex*X[1], -nu*ex*X[2]};
+
+    auto ep = plastic_strain(t);
+    double eex = ex - ep[0];
+    double eey = -nu*eex;
+    tensor<double, 3> strain{ex, ep[1] + eey, ep[2] + eey};
+    return {strain[0]*X[0], strain[1]*X[1], strain[2]*X[2]};
+  }
+
+  tensor<double, 3> plastic_strain(double t) const
+  {
+    double ex = axial_strain(t);
+    double epx = (E*ex - sigma_y)/(E + Hi);
+    return {epx, -0.5*epx, -0.5*epx};
+  }
+};
+
 
 struct SmoothJ2 {
   static constexpr int dim = 3;  ///< spatial dimension
@@ -165,8 +196,12 @@ TEST(Dfem, Plasticity)
   std::string filename = SMITH_REPO_DIR "/data/meshes/beam-hex.mesh";
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, "dfem_plasticity");
-  auto mfem_mesh = buildMeshFromFile(filename);
+  //auto mfem_mesh = buildMeshFromFile(filename);
+  constexpr double LENGTH = 8.0;
+  constexpr double DEPTH = 1.0;
+  auto mfem_mesh = mfem::Mesh::MakeCartesian3D(8, 1, 1, mfem::Element::HEXAHEDRON, LENGTH, DEPTH, DEPTH);
   auto mesh = std::make_shared<smith::Mesh>(std::move(mfem_mesh), "amesh", 0, 0);
+  
 
   // TODO: add these when we have a solver
   // LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG, .print_level = 0};
@@ -196,7 +231,8 @@ TEST(Dfem, Plasticity)
   const double E = 1.0e3;
   const double nu = 0.25;
   const double sigma_y = 9.0;
-  auto mat = Material{.E = E, .nu = nu, .sigma_y = sigma_y, .Hi = 40.0, .rho = 1.0};
+  const double Hi = 40.0;
+  auto mat = Material{.E = E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi, .rho = 1.0};
 
   // create fields
   using KinematicSpace = H1<disp_order, dim>;
@@ -208,6 +244,7 @@ TEST(Dfem, Plasticity)
   int ir_order = 2;
   const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
   bool use_tensor_product = false;
+  mfem::out << "nqpt: " << displacement_ir.GetNPoints() << std::endl;
   mfem::future::UniformParameterSpace internal_state_space(mesh->mfemParMesh(), displacement_ir, mat.N_INTERNAL_STATES,
                                                            use_tensor_product);
   mfem::future::ParameterFunction internal_state(internal_state_space);
@@ -218,20 +255,17 @@ TEST(Dfem, Plasticity)
   mfem::Array<int> bdr_attr_is_ess(mesh->mfemParMesh().bdr_attributes.Max());
   mfem::Array<int> left_x_tdof;
   bdr_attr_is_ess = 0; // reset
-  bdr_attr_is_ess[0] = 1; // flag boundary 0 (1 in mesh)
+  bdr_attr_is_ess[4] = 1; // flag boundary 4 (5 in mesh)
   disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, left_x_tdof, 0); // get x-dir dofs
 
   mfem::Array<int> right_x_tdof;
   bdr_attr_is_ess = 0; // reset
-  bdr_attr_is_ess[1] = 1; // flag boundary 1 (2 in mesh)
+  bdr_attr_is_ess[2] = 1; // flag boundary 2 (1 in mesh)
   disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, right_x_tdof, 0); // get x-dir dofs
 
+  UniaxialSolution exact_solution{.E= E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi};
   // set displacement to uniaxial stress solution
-  auto applied_displacement = [nu](tensor<double, dim> X) {
-    double strain = 0.01;
-    return tensor<double, dim>{strain * X[0], -nu * strain * X[1], -nu * strain * X[2]};
-  };
-  disp.setFromFieldFunction(applied_displacement);
+  disp.setFromFieldFunction([exact_solution](tensor<double, dim> X) { return exact_solution.displacement(X, 1.0); });
   velo = 0.0;
   accel = 0.0;
   coords.setFromGridFunction(static_cast<mfem::ParGridFunction&>(*mesh->mfemParMesh().GetNodes()));
@@ -246,18 +280,31 @@ TEST(Dfem, Plasticity)
   physics.setMaterial<Material, InternalVariableParameter<J2_INTERNAL_STATE, Material::N_INTERNAL_STATES>>(
       entire_domain, mat, displacement_ir);
 
-  double t = 0.0;
+  // check that integrator works
+  double t = 1.0;
   double dt = 1.0;
   FiniteElementDual reaction = StateManager::newDual(KinematicSpace{}, "reactions", mesh->tag());
   reaction = physics.residual(t, dt, &disp, {&disp, &velo, &accel, &coords}, {&internal_state});
+  
   double Fx = 0;
   for (auto td : left_x_tdof) {
     Fx += reaction[td];
   }
-  mfem::out << "x force = " << Fx << std::endl;
-  mfem::out << "reaction = \n";
-  reaction.Print();
+  double exact_resultant = exact_solution.axial_stress(t)*DEPTH*DEPTH;
+  EXPECT_NEAR(Fx, exact_resultant, 1e-10);
 
+  Fx = 0;
+  for (auto td : right_x_tdof) {
+    Fx += reaction[td];
+  }
+  EXPECT_NEAR(Fx, -exact_resultant, 1e-10);
+
+  // make a gridFunction of the reactions for plotting
+  mfem::ParGridFunction reaction_gf(&reaction.space());
+  reaction.linearForm().ParallelAssemble(reaction_gf.GetTrueVector());
+  reaction_gf.SetFromTrueVector();
+
+  // create operator to update internal state variables
   mfem::future::DifferentiableOperator update_internal_state(
       {},
       {mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::DISPLACEMENT, &disp.space()),
@@ -275,19 +322,35 @@ TEST(Dfem, Plasticity)
 
   InternalStateQFunction<Material, InternalVariableParameter<4, Material::N_INTERNAL_STATES>> update_internal_state_qf{
       .material = mat};
+  // update_internal_state.DisableTensorProductStructure(); // Disabling breaks it
   update_internal_state.AddDomainIntegrator(update_internal_state_qf, internal_state_qf_inputs,
                                             internal_state_qf_outputs, displacement_ir, entire_domain,
                                             std::index_sequence<0, 3>{});
   update_internal_state.SetParameters({&disp, &velo, &coords, &internal_state});
   mfem::future::ParameterFunction internal_state_new(internal_state_space);
   update_internal_state.Mult({}, internal_state_new);
-  mfem::out << "internal state new = \n";
-  internal_state_new.Print();
+  
+  mfem::out << "internal state data:\n";
+  mfem::out << "vdim = " << internal_state_space.GetVDim() << std::endl;
+  mfem::out << "dtq.nqpt = " << internal_state_space.GetDofToQuad().nqpt << std::endl;
+  mfem::out << "dtq.ndof = " << internal_state_space.GetDofToQuad().ndof << std::endl;
+  mfem::out << "tsize = " << internal_state_space.GetTrueVSize() << std::endl;
+  mfem::out << "vsize = " << internal_state_space.GetVSize() << std::endl;
+  mfem::out << "ne = " << internal_state_space.GetNE() << std::endl;
+  mfem::out << "dim = " << internal_state_space.Dimension() << std::endl;
+  auto pstrain = exact_solution.plastic_strain(1.0);
+  for (int e = 0, i = 0; e < internal_state_space.GetNE(); e++) {
+    for (int qp = 0; qp < displacement_ir.GetNPoints(); qp++) {
+      // plastic strain tensor
+      EXPECT_NEAR(internal_state_new[i + 0], pstrain[0], 1e-10);
+      EXPECT_NEAR(internal_state_new[i + 4], pstrain[1], 1e-10);
+      EXPECT_NEAR(internal_state_new[i + 8], pstrain[2], 1e-10);
 
-  // make a gridFunction of the reactions for plotting
-  mfem::ParGridFunction reaction_gf(&reaction.space());
-  reaction.linearForm().ParallelAssemble(reaction_gf.GetTrueVector());
-  reaction_gf.SetFromTrueVector();
+      // EQPS
+      EXPECT_NEAR(internal_state_new[i + 9], pstrain[0], 1e-10);
+      i += mat.N_INTERNAL_STATES;
+    }
+  }
 
   mfem::ParaViewDataCollection dc("dfem_plasticity_pv", &(mesh->mfemParMesh()));
   dc.SetHighOrderOutput(true);
@@ -298,6 +361,7 @@ TEST(Dfem, Plasticity)
   dc.SetCycle(0);
   dc.Save();
 
+  mfem::out << "Take VJP of internal state update" << std::endl;
   // try to take a derivative of the internal state update
   std::vector<FiniteElementState*> fields{&disp, &velo, &coords};
   std::vector<mfem::Vector*> fields_l;
