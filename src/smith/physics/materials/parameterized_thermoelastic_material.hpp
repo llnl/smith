@@ -111,7 +111,7 @@ struct ParameterizedThermalStiffeningMaterial {
   double etae;     ///< entanglement viscosity, MPa-s
 
   double C_v;      ///< net volumetric heat capacity (must account for matrix+chain+particle)
-  double kappa;    ///< net thermal conductivity (must account for matrix+chain+particle)
+  double kappa_;    ///< net thermal conductivity (must account for matrix+chain+particle)
 
   // E_a and R can be SI units since they cancel out in the exponent
   double Af;       ///< forward (low-high) exponential prefactor, 1/s
@@ -122,7 +122,7 @@ struct ParameterizedThermalStiffeningMaterial {
   double Tr;       ///< reference temperature, K
 
   double gw;       ///< particle weight fraction
-  double wm;       ///< matrix mass fraction (set to 0.5, not real for now)
+  double wm_;       ///< matrix mass fraction (set to 0.5, not real for now)
 
   /// internal variables for the material model
   struct State {
@@ -152,13 +152,6 @@ struct ParameterizedThermalStiffeningMaterial {
    * @param state State variables for this material
    * @return tuple: First Piola stress, volumetric heat capacity, heat generation rate, referential heat flux
    */
-
-  template <typename DispGradType, typename TempType, typename TempGradType, typename YoungsType, typename ConductType,
-            typename CoupleType, int dim>
-  auto operator()(State& state, const tensor<DispGradType, dim, dim>& grad_u, TempType theta,
-                  const tensor<TempGradType, dim>& grad_theta, YoungsType DeltaE, ConductType DeltaKappa,
-                  CoupleType ScaleAlpha) const
-
   template <typename DispGradType, typename VelocGradType, typename TempType, typename TempGradType, 
             typename volFracParamType, int dim>
   auto operator()(double dt, State& state, const tensor<DispGradType, dim, dim>& grad_u,
@@ -224,7 +217,8 @@ struct ParameterizedThermalStiffeningMaterial {
     state.Fesi = get_value(Fesi);
 
     // Update mass fractions
-    auto we = wep + dwe;
+    auto wm = wm_ * get<0>(volFracParam);
+    auto we = (wep + dwe) * get<0>(volFracParam);
 
     // Elastic left Cauchy-Green for entangled fraction
     auto Be = dot(Fe, transpose(Fe));
@@ -241,6 +235,7 @@ struct ParameterizedThermalStiffeningMaterial {
     const auto Piola = dot(TK, inv(transpose(F)));
 
     // Heat flux
+    auto kappa = kappa_ * get<0>(volFracParam);
     const auto q0 = -kappa * grad_theta;
 
     state.w_e = get_value(we);
@@ -259,7 +254,7 @@ struct ParameterizedThermalStiffeningMaterial {
     auto dSedT = dot(inv(F), dot(wm * dtmdT, transpose(inv(F))));
     const auto s0 = tr(dot(Sv + theta * dSedT, greenStrainRate));
 
-    return serac::tuple{Piola, C_v, s0, q0};
+    return smith::tuple{Piola, C_v, s0, q0};
   }
 };
 }  // namespace smith::thermomechanics
