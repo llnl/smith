@@ -102,13 +102,11 @@ struct ParameterizedThermalStiffeningMaterial {
   double Gm;       ///< matrix shear modulus, MPa
   double betam;    ///< matrix volumetric thermal expansion coefficient
   double rhom0;    ///< matrix initial density
-  double etam;     ///< matrix viscosity, MPa-s
 
   double Ke;       ///< entanglement bulk modulus, MPa
   double Ge;       ///< entanglement shear modulus, MPa
   double betae;    ///< entanglement volumetric thermal expansion coefficient
   double rhoe0;    ///< entanglement (chain) initial density
-  double etae;     ///< entanglement viscosity, MPa-s
 
   double C_v;      ///< net volumetric heat capacity (must account for matrix+chain+particle)
   double kappa_;    ///< net thermal conductivity (must account for matrix+chain+particle)
@@ -191,8 +189,8 @@ struct ParameterizedThermalStiffeningMaterial {
 
     // Moduli
     auto f1 = exp(-N * (theta - Tr));
-    auto Gm_eff = gw * f1;
-    auto Ge_eff = gw;
+    auto Gm_eff = Gm * gw * f1;
+    auto Ge_eff = Ge * gw;
 
     // Reaction rates
     auto kf = Af * exp(-E_af / (R * theta));
@@ -229,7 +227,7 @@ struct ParameterizedThermalStiffeningMaterial {
     auto Tm = Gm_eff * pow(J, -2.0 / 3.0) * B_bar + J * Km * (J - 1.0 - betam * (theta - Tr)) * I;
     auto Te = Ge_eff * pow(Je, -2.0 / 3.0) * Be_bar + Je * Ke * (Je - 1.0) * I;
 
-    auto TK = wm * Tm + (1.0 - wm) * we * Te + 2.0 * ((1.0 - we) * etam + we * etae) * D;
+    auto TK = wm * Tm + (1.0 - wm) * we * Te;
 
     // First Piola-Kirchhoff stress
     const auto Piola = dot(TK, inv(transpose(F)));
@@ -244,15 +242,12 @@ struct ParameterizedThermalStiffeningMaterial {
     // Internal heat power
     auto greenStrainRate = 0.5 * (grad_v + transpose(grad_v) +
         dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
-        
-    // Viscous stress
-    auto Sv = 2.0 * ((1.0 - we) * etam + we * etae) * dot(Ci, dot(greenStrainRate, Ci));
 
     // Thermal contribution to stress
     auto df1 = -N*exp(-N * (theta - Tr));
     auto dtmdT = gw * df1 * pow(J, -2.0 / 3.0) * B_bar - Km * J * betam * I;
     auto dSedT = dot(inv(F), dot(wm * dtmdT, transpose(inv(F))));
-    const auto s0 = tr(dot(Sv + theta * dSedT, greenStrainRate));
+    const auto s0 = tr(dot(theta * dSedT, greenStrainRate));
 
     return smith::tuple{Piola, C_v, s0, q0};
   }
