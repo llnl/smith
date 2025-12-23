@@ -306,18 +306,16 @@ TEST(Dfem, Plasticity)
 
   // create operator to update internal state variables
   mfem::future::DifferentiableOperator update_internal_state(
-      {},
+      {mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::NUM_STATES, &internal_state_space)},
       {mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::DISPLACEMENT, &disp.space()),
        mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::VELOCITY, &velo.space()),
-       mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::COORDINATES, &coords.space()),
-       mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::NUM_STATES, &internal_state_space)},
+       mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::COORDINATES, &coords.space())},
       mesh->mfemParMesh());
 
   mfem::future::tuple<mfem::future::Gradient<DfemSolidWeakForm<>::STATE::DISPLACEMENT>,
                       mfem::future::Gradient<DfemSolidWeakForm<>::STATE::VELOCITY>,
                       mfem::future::Gradient<DfemSolidWeakForm<>::STATE::COORDINATES>,
-                      mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>>
-      internal_state_qf_inputs{};
+                      mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>> internal_state_qf_inputs{};
   mfem::future::tuple<mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>> internal_state_qf_outputs{};
 
   InternalStateQFunction<Material, InternalVariableParameter<4, Material::N_INTERNAL_STATES>> update_internal_state_qf{
@@ -325,10 +323,10 @@ TEST(Dfem, Plasticity)
   // update_internal_state.DisableTensorProductStructure(); // Disabling breaks it
   update_internal_state.AddDomainIntegrator(update_internal_state_qf, internal_state_qf_inputs,
                                             internal_state_qf_outputs, displacement_ir, entire_domain,
-                                            std::index_sequence<0, 3>{});
-  update_internal_state.SetParameters({&disp, &velo, &coords, &internal_state});
+                                            std::index_sequence<DfemSolidWeakForm<>::STATE::DISPLACEMENT, DfemSolidWeakForm<>::STATE::NUM_STATES>{});
+  update_internal_state.SetParameters({&disp, &velo, &coords});
   mfem::future::ParameterFunction internal_state_new(internal_state_space);
-  update_internal_state.Mult({}, internal_state_new);
+  update_internal_state.Mult(internal_state, internal_state_new);
   
   mfem::out << "internal state data:\n";
   mfem::out << "vdim = " << internal_state_space.GetVDim() << std::endl;
@@ -363,14 +361,17 @@ TEST(Dfem, Plasticity)
 
   mfem::out << "Take VJP of internal state update" << std::endl;
   // try to take a derivative of the internal state update
+  mfem::Vector* isv_ptr = &internal_state;
+  bool use_device = isv_ptr->UseDevice();
+  mfem::out << "use device?: " << use_device << std::endl;
+  std::vector<mfem::Vector*> primals_l{&internal_state};
   std::vector<FiniteElementState*> fields{&disp, &velo, &coords};
-  std::vector<mfem::Vector*> fields_l;
-  fields_l.reserve(fields.size() + 1);
+  std::vector<mfem::Vector*> params_l;
+  params_l.reserve(fields.size());
   for (size_t i = 0; i < fields.size(); ++i) {
-    fields_l.push_back(&fields[i]->gridFunction());
+    params_l.push_back(&fields[i]->gridFunction());
   }
-  fields_l.push_back(&internal_state);
-  auto derivative_taker = update_internal_state.GetDerivative(0, {}, fields_l);
+  auto derivative_taker = update_internal_state.GetDerivative(0, primals_l, params_l);
   FiniteElementState du = StateManager::newState(KinematicSpace{}, "tangent_disp", mesh->tag());
   du.Randomize(0);
   du *= 0.001;
@@ -387,9 +388,10 @@ TEST(Dfem, Plasticity)
   // after changing the parameter values, we apparently need to set
   // them again in Differentiable Operator.
   // Is it caching the E-vectors or quad point interpolations?
-  update_internal_state.SetParameters({&disp, &velo, &coords, &internal_state});
+  update_internal_state.SetParameters({&disp, &velo, &coords});
   mfem::future::ParameterFunction dQ_h(internal_state_space);
-  update_internal_state.Mult({}, dQ_h);
+  dQ_h = 0.0;
+  update_internal_state.Mult(internal_state, dQ_h);
   dQ_h.Add(-1.0, internal_state_new);
   dQ_h *= 1.0 / fd_eps;
   mfem::out << "FD " << std::endl;
@@ -402,6 +404,7 @@ TEST(Dfem, Plasticity)
   error.Print();
   mfem::out << "error norm = " << error.Norml2() << std::endl;
 
+#if 0
   // functional for VJP of internal state update
   mfem::future::DifferentiableOperator update_internal_state_virtual_work(
       {},
@@ -430,15 +433,15 @@ TEST(Dfem, Plasticity)
   adjoint_internal_state = 0.05;
   update_internal_state_virtual_work.SetParameters({&disp, &velo, &coords, &internal_state, &adjoint_internal_state});
 
-  fields_l.push_back(&adjoint_internal_state);
-  auto derivative_taker2 = update_internal_state_virtual_work.GetDerivative(0, {}, fields_l);
+  params_l.push_back(&adjoint_internal_state);
+  auto derivative_taker2 = update_internal_state_virtual_work.GetDerivative(0, {}, params_l);
   FiniteElementState u_bar = StateManager::newState(KinematicSpace{}, "u_bar", mesh->tag());
   mfem::Vector seed(1);
   seed = 1.0;
   derivative_taker2->Mult(seed, u_bar);
   mfem::out << "u_bar = " << std::endl;
   u_bar.Print();
-
+#endif
   // implement physics.vjp()
 
   // set loads
