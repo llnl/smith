@@ -259,9 +259,30 @@ FieldState nonlinearSolve(const WeakForm* residual_eval, const FieldState& shape
   return sol;
 }
 
-// FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const std::vector<FieldState>& params,
-// const TimeInfo& time_info, const WeakForm& weak_form, const DifferentiableSolver& solver,
-// const DirichletBoundaryConditions& bcs, size_t unknown_index)
+
+FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const std::vector<FieldState>& params,
+                 const TimeInfo& time_info, const WeakForm& weak_form, const DifferentiableSolver& solver,
+                 const DirichletBoundaryConditions& bcs, size_t unknown_index)
+{
+  if (unknown_index == 0) {
+    std::vector<double> state_update_weights{1.0};
+    return nonlinearSolve(&weak_form, shape_disp, {x_guess}, params, state_update_weights, 0, 0, time_info, &solver,
+                          &bcs.getBoundaryConditionManager());
+  } else {
+    std::vector<double> state_update_weights(params.size() + 1);
+    state_update_weights[unknown_index] = 1.0;
+    std::vector<FieldState> inputs;
+    for (size_t i = 0; i < unknown_index; ++i) {
+      inputs.emplace_back(params[i]);
+    }
+    inputs.emplace_back(x_guess);
+    for (size_t i = unknown_index; i < params.size(); ++i) {
+      inputs.emplace_back(params[i]);
+    }
+    return nonlinearSolve(&weak_form, shape_disp, inputs, {}, state_update_weights, unknown_index, unknown_index,
+                          time_info, &solver, &bcs.getBoundaryConditionManager());
+  }
+}
 
 FieldState solve(const WeakForm& weak_form, const FieldState& shape_disp, const std::vector<FieldState>& states,
                  const std::vector<FieldState>& params, const TimeInfo& time_info, const DifferentiableSolver& solver,

@@ -71,11 +71,12 @@ struct SecondOrderTimeIntegrationRule {
                                     [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                                     [[maybe_unused]] const T4& accel_old) const
   {
-    if (method_ == SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK) {
-      return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
-    } else {
-      return (1.0 / t.dt()) * (field_new - field_old) - 0.0 * velo_old;
-    }
+    return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
+    //if (method_ == SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK) {
+    //  return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
+    //} else {
+    //  return (1.0 / t.dt()) * (field_new - field_old) - 0.0 * velo_old;
+    //}
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
@@ -85,11 +86,12 @@ struct SecondOrderTimeIntegrationRule {
                                            [[maybe_unused]] const T4& accel_old) const
   {
     auto dt = t.dt();
-    auto accel = (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
-    if (method_ == SecondOrderTimeIntegrationMethod::QUASI_STATIC) {
-      accel = accel_old + 0.0 * accel;
-    }
-    return accel;
+    return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
+    //auto accel = (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
+    //if (method_ == SecondOrderTimeIntegrationMethod::QUASI_STATIC) {
+    //  accel = accel_old + 0.0 * accel;
+    //}
+    //return accel;
   }
 
   SecondOrderTimeIntegrationMethod method_;  ///< method specifying time integration rule to inject into the q-function.
