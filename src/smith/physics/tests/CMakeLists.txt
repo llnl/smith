@@ -13,7 +13,7 @@ smith_add_library(
     HEADERS     ${physics_test_headers}
     )
       
-set(physics_test_depends smith_physics smith_physics_test_utils gtest)
+set(physics_test_depends gretl smith_physics smith_physics_test_utils gtest)
 
 set(physics_serial_test_sources
     beam_bending.cpp
@@ -34,6 +34,7 @@ set(physics_serial_test_sources
     test_functional_weak_form.cpp
     thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
+    parameterized_thermal_stiffening_finite_diff.cpp
     test_kinematic_objective.cpp
     )
 

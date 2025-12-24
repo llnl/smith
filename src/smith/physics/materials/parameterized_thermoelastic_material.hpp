@@ -93,6 +93,18 @@ struct ParameterizedThermoelasticMaterial {
   }
 };
 
+// Non-isotropic identity tensor
+template <typename T, int dim>
+SMITH_HOST_DEVICE
+constexpr tensor<T, dim, dim> make_identity_tensor()
+{
+  tensor<T, dim, dim> I{};
+  for (int i = 0; i < dim; ++i)
+    for (int j = 0; j < dim; ++j)
+      I(i, j) = (i == j) ? T(1) : T(0);
+  return I;
+}
+
 /**
  * @brief Green-Saint Venant isotropic thermoelastic material model
  *
@@ -101,12 +113,9 @@ struct ParameterizedThermalStiffeningMaterial {
   double Km;       ///< matrix bulk modulus, MPa
   double Gm;       ///< matrix shear modulus, MPa
   double betam;    ///< matrix volumetric thermal expansion coefficient
-  double rhom0;    ///< matrix initial density
 
   double Ke;       ///< entanglement bulk modulus, MPa
   double Ge;       ///< entanglement shear modulus, MPa
-  double betae;    ///< entanglement volumetric thermal expansion coefficient
-  double rhoe0;    ///< entanglement (chain) initial density
 
   double C_v;      ///< net volumetric heat capacity (must account for matrix+chain+particle)
   double kappa_;    ///< net thermal conductivity (must account for matrix+chain+particle)
@@ -123,14 +132,36 @@ struct ParameterizedThermalStiffeningMaterial {
   double wm_;       ///< matrix mass fraction (set to 0.5, not real for now)
 
   /// internal variables for the material model
+  // struct State {
+  //   double w_e = 0.0;   //entangled mass fraction
+  //   tensor<double,3,3> Cp{{{1.0, 0.0, 0.0},
+  //                          {0.0, 1.0, 0.0},
+  //                          {0.0, 0.0, 1.0}}}; // previous value of right Cauchy-Green
+  //   tensor<double,3,3> Fesi{{{1.0, 0.0, 0.0},
+  //                            {0.0, 1.0, 0.0},
+  //                            {0.0, 0.0, 1.0}}}; //Inverse of effective mapping tensor F^{es} where F=F^e \dot F^{es}
+
+  //                            constexpr auto I = Identity<dim>();
+  // };
+
+  // template <typename T, int dim>
+  // SMITH_HOST_DEVICE
+  // constexpr tensor<T, dim, dim> make_identity_tensor()
+  // {
+  //   tensor<T, dim, dim> I{};
+  //   for (int i = 0; i < dim; ++i)
+  //     for (int j = 0; j < dim; ++j)
+  //       I(i, j) = (i == j) ? T(1) : T(0);
+  //   return I;
+  // }
+
+  template <int dim>
   struct State {
-    double w_e = 0.0;   //entangled mass fraction
-    tensor<double,3,3> Cp{{{1.0, 0.0, 0.0},
-                           {0.0, 1.0, 0.0},
-                           {0.0, 0.0, 1.0}}}; // previous value of right Cauchy-Green
-    tensor<double,3,3> Fesi{{{1.0, 0.0, 0.0},
-                             {0.0, 1.0, 0.0},
-                             {0.0, 0.0, 1.0}}}; //Inverse of effective mapping tensor F^{es} where F=F^e \dot F^{es}
+    double w_e = 0.0;   // entangled mass fraction
+    
+    // SLIC_ERROR_IF(dim==3 || dim==2, "Unsupported dimensionality. Must be 2 or 3.");
+    tensor<double,dim,dim> Cp   = make_identity_tensor<double, dim>();
+    tensor<double,dim,dim> Fesi = make_identity_tensor<double, dim>();
   };
 
   /**
@@ -152,7 +183,7 @@ struct ParameterizedThermalStiffeningMaterial {
    */
   template <typename DispGradType, typename VelocGradType, typename TempType, typename TempGradType, 
             typename volFracParamType, int dim>
-  auto operator()(double dt, State& state, const tensor<DispGradType, dim, dim>& grad_u,
+  auto operator()(double dt, State<dim>& state, const tensor<DispGradType, dim, dim>& grad_u,
                   const tensor<VelocGradType, dim, dim>& grad_v, TempType theta,
                   const tensor<TempGradType, dim>& grad_theta, volFracParamType volFracParam) const
   {
