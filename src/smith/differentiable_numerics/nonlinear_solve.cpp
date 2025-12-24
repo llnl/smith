@@ -259,7 +259,6 @@ FieldState nonlinearSolve(const WeakForm* residual_eval, const FieldState& shape
   return sol;
 }
 
-
 FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const std::vector<FieldState>& params,
                  const TimeInfo& time_info, const WeakForm& weak_form, const DifferentiableSolver& solver,
                  const DirichletBoundaryConditions& bcs, size_t unknown_index)
