@@ -359,11 +359,7 @@ TEST(Dfem, Plasticity)
   dc.SetCycle(0);
   dc.Save();
 
-  mfem::out << "Take VJP of internal state update" << std::endl;
-  // try to take a derivative of the internal state update
-  mfem::Vector* isv_ptr = &internal_state;
-  bool use_device = isv_ptr->UseDevice();
-  mfem::out << "use device?: " << use_device << std::endl;
+  mfem::out << "Take JVP of internal state update" << std::endl;
   std::vector<mfem::Vector*> primals_l{&internal_state};
   std::vector<FiniteElementState*> fields{&disp, &velo, &coords};
   std::vector<mfem::Vector*> params_l;
@@ -375,34 +371,29 @@ TEST(Dfem, Plasticity)
   FiniteElementState du = StateManager::newState(KinematicSpace{}, "tangent_disp", mesh->tag());
   du.Randomize(0);
   du *= 0.001;
-  mfem::out << "du = " << std::endl;
-  du.Print();
   mfem::future::ParameterFunction dQ(internal_state_space);
   derivative_taker->Mult(du, dQ);
-  mfem::out << "dQ = " << std::endl;
-  dQ.Print();
 
   // check with directional finite difference
   double fd_eps = 1e-5;
-  disp.Add(fd_eps, du);
+  FiniteElementState disp_p = StateManager::newState(KinematicSpace{}, "displacement_perturbed", mesh->tag());
+  disp_p = disp;
+  disp_p.Add(fd_eps, du);
   // after changing the parameter values, we apparently need to set
   // them again in Differentiable Operator.
   // Is it caching the E-vectors or quad point interpolations?
-  update_internal_state.SetParameters({&disp, &velo, &coords});
-  mfem::future::ParameterFunction dQ_h(internal_state_space);
-  dQ_h = 0.0;
-  update_internal_state.Mult(internal_state, dQ_h);
+  update_internal_state.SetParameters({&disp_p, &velo, &coords});
+  mfem::future::ParameterFunction Qnew_p(internal_state_space);
+  update_internal_state.Mult(internal_state, Qnew_p);
+  mfem::future::ParameterFunction dQ_h(Qnew_p);
   dQ_h.Add(-1.0, internal_state_new);
   dQ_h *= 1.0 / fd_eps;
-  mfem::out << "FD " << std::endl;
-  dQ_h.Print();
 
   mfem::future::ParameterFunction error(internal_state_space);
   error.Set(1.0, dQ_h);
   error.Add(-1.0, dQ);
-  mfem::out << "error = " << std::endl;
-  error.Print();
   mfem::out << "error norm = " << error.Norml2() << std::endl;
+  EXPECT_LT(error.Norml2(), 1e-4*internal_state_new.Norml2());
 
 #if 0
   // functional for VJP of internal state update
