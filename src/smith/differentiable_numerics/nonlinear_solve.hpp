@@ -24,10 +24,6 @@ class DifferentiableBlockSolver;
 class BoundaryConditionManager;
 class DirichletBoundaryConditions;
 
-FieldState solve(const FieldState& x_guess, const FieldState& shape_disp, const std::vector<FieldState>& params,
-                 const TimeInfo& time_info, const WeakForm& residual_eval, const DifferentiableSolver& solver,
-                 const DirichletBoundaryConditions& bcs, size_t unknown_index = 0);
-
 /// @brief Solve a nonlinear system of equations as defined by the weak form, assuming that the field indexed by
 /// unknown_index is the unknown field
 /// @param residual_eval The weak form which defines the equations to be solved
