@@ -132,29 +132,6 @@ struct ParameterizedThermalStiffeningMaterial {
   double wm_;       ///< matrix mass fraction (set to 0.5, not real for now)
 
   /// internal variables for the material model
-  // struct State {
-  //   double w_e = 0.0;   //entangled mass fraction
-  //   tensor<double,3,3> Cp{{{1.0, 0.0, 0.0},
-  //                          {0.0, 1.0, 0.0},
-  //                          {0.0, 0.0, 1.0}}}; // previous value of right Cauchy-Green
-  //   tensor<double,3,3> Fesi{{{1.0, 0.0, 0.0},
-  //                            {0.0, 1.0, 0.0},
-  //                            {0.0, 0.0, 1.0}}}; //Inverse of effective mapping tensor F^{es} where F=F^e \dot F^{es}
-
-  //                            constexpr auto I = Identity<dim>();
-  // };
-
-  // template <typename T, int dim>
-  // SMITH_HOST_DEVICE
-  // constexpr tensor<T, dim, dim> make_identity_tensor()
-  // {
-  //   tensor<T, dim, dim> I{};
-  //   for (int i = 0; i < dim; ++i)
-  //     for (int j = 0; j < dim; ++j)
-  //       I(i, j) = (i == j) ? T(1) : T(0);
-  //   return I;
-  // }
-
   template <int dim>
   struct State {
     double w_e = 0.0;   // entangled mass fraction

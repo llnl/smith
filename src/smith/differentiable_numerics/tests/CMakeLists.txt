@@ -11,6 +11,7 @@ set(differentiable_numerics_tests
     paraview_helper.hpp
     test_explicit_dynamics.cpp
     test_solid_mechanics_state_advancer.cpp
+    parameterized_thermal_stiffening_finite_diff.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_tests}
