@@ -28,7 +28,6 @@
 namespace smith {
 
 smith::LinearSolverOptions solid_linear_options{.linear_solver = smith::LinearSolver::CG,
-                                                //
                                                 .preconditioner = smith::Preconditioner::HypreJacobi,
                                                 .relative_tol = 1e-11,
                                                 .absolute_tol = 1e-11,
@@ -254,10 +253,9 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   gretl::set_as_objective(reaction_squared);
   std::cout << "final residual norm2 = " << reaction_squared.get() << std::endl;
 
-  // EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  // EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
-  // EXPECT_GT(checkGradWrt(reaction_squared, params[1], 6.2e-1, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, initial_states[1], 6.2e-5, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[1], 6.2e-1, 4, true), 0.7);
 
   // re-evaluate the final objective value, and backpropagate again
   reaction_squared.get();
