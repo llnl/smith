@@ -323,7 +323,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, time_rule, 100, physics_name, {"bulk", "shear"});
+          mesh, d_solid_nonlinear_solver, time_rule, 200, physics_name, {"bulk", "shear"});
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
   bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
