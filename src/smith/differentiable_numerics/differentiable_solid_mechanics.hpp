@@ -6,7 +6,6 @@
 
 /**
  * @file differentiable_solid_mechanics.hpp
- * .hpp
  *
  */
 
