@@ -178,14 +178,14 @@ class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
 /// @brief Create a differentiable linear solver
 /// @param linear_opts linear options struct
 /// @param mesh mesh
-std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolve(LinearSolverOptions linear_opts,
+std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolver(LinearSolverOptions linear_opts,
                                                                            const smith::Mesh& mesh);
 
 /// @brief Create a differentiable nonlinear solver
 /// @param nonlinear_opts nonlinear options struct
 /// @param linear_opts linear options struct
 /// @param mesh mesh
-std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolve(NonlinearSolverOptions nonlinear_opts,
+std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolver(NonlinearSolverOptions nonlinear_opts,
                                                                                  LinearSolverOptions linear_opts,
                                                                                  const smith::Mesh& mesh);
 

@@ -88,7 +88,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   std::string physics_name = "solid";
 
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+      buildDifferentiableNonlinearSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   smith::SecondOrderTimeIntegrationRule time_rule(smith::SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK);
 
@@ -189,7 +189,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   std::string physics_name = "solid";
 
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+      buildDifferentiableNonlinearSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   smith::SecondOrderTimeIntegrationRule time_rule(smith::SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK);
 
@@ -317,7 +317,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
   std::string physics_name = "solid";
 
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+      buildDifferentiableNonlinearSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   smith::SecondOrderTimeIntegrationRule time_rule(SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK);
 

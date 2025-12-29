@@ -269,14 +269,14 @@ std::vector<DifferentiableBlockSolver::FieldPtr> LinearDifferentiableBlockSolver
   return u_duals;
 }
 
-std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolve(LinearSolverOptions linear_opts,
+std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolver(LinearSolverOptions linear_opts,
                                                                            const smith::Mesh& mesh)
 {
   auto [linear_solver, precond] = smith::buildLinearSolverAndPreconditioner(linear_opts, mesh.getComm());
   return std::make_shared<smith::LinearDifferentiableSolver>(std::move(linear_solver), std::move(precond));
 }
 
-std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolve(
+std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolver(
     smith::NonlinearSolverOptions nonlinear_opts, LinearSolverOptions linear_opts, const smith::Mesh& mesh)
 {
   auto solid_solver = std::make_unique<smith::EquationSolver>(nonlinear_opts, linear_opts, mesh.getComm());

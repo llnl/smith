@@ -9,8 +9,8 @@
 
 namespace smith {
 
-DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const TimeInfo& time_info,
-                              const FieldState& shape_disp, const std::vector<FieldState>& inputs)
+DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective,
+                              const FieldState& shape_disp, const std::vector<FieldState>& inputs, const TimeInfo& time_info=TimeInfo(0.0, 1.0, 0))
 {
   std::vector<gretl::StateBase> all_states{shape_disp};
   all_states.insert(all_states.end(), inputs.begin(), inputs.end());
@@ -44,13 +44,6 @@ DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const 
   });
 
   return value.finalize();
-}
-
-DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp,
-                              const std::vector<FieldState>& inputs)
-{
-  TimeInfo time_info(0.0, 1.0, 0);
-  return evaluateObjective(objective, time_info, shape_disp, inputs);
 }
 
 }  // namespace smith

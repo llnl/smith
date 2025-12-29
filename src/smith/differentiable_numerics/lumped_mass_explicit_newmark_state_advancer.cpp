@@ -93,7 +93,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
     std::vector<FieldState> state_pred{u_pred, v_half_step, zero_copy(a)};
 
     // should return the evaluation of the residual for the current state variables
-    auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, state_pred, params, time_info, ACCEL);
+    auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, state_pred, params, TimeInfo(time.get(), time_info.dt(), time_info.cycle()), ACCEL);
 
     // m_diag_inv*zero_mass_res; // calculate the acceleration
     auto a_pred = negativeComponentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
