@@ -186,9 +186,9 @@ struct ParameterizedThermalStiffeningMaterial {
     auto FeIni = dot(F, Fesip);
     auto Je = det(FeIni);
 
-    auto C = dot(transpose(F), F);
-    auto Ci = inv(C);
-    auto D = 0.5 * (grad_v + transpose(grad_v));
+    // auto C = dot(transpose(F), F);
+    // auto Ci = inv(C);
+    // auto D = 0.5 * (grad_v + transpose(grad_v));
 
     auto B = dot(F, transpose(F));
     auto trB = tr(B);

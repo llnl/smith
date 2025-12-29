@@ -50,13 +50,13 @@
 
 namespace smith {
 
-void FiniteDifferenceParameter(size_t sensitivity_parameter_index = 0)
+void FiniteDifferenceParameter()
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
   constexpr int p = 1;
-  constexpr int dim = 2;
-  int serial_refinement = 1;
+  constexpr int dim = 3;
+  int serial_refinement = 0;
   int parallel_refinement = 0;
 
   // Create DataStore
@@ -64,7 +64,7 @@ void FiniteDifferenceParameter(size_t sensitivity_parameter_index = 0)
   smith::StateManager::initialize(datastore, "thermomech_functional_parameterized_sensitivities");
 
   // Construct the appropriate dimension mesh and give it to the data store
-  std::string filename = SMITH_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";
+  std::string filename = SMITH_REPO_DIR "/data/meshes/2d_plate.g"; //50x50x1 unit plate
   std::string mesh_tag("mesh");
   auto mesh = std::make_shared<smith::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
@@ -300,7 +300,7 @@ void FiniteDifferenceParameter(size_t sensitivity_parameter_index = 0)
   //   EXPECT_NEAR(relative_error, 0.0, 5.0e-4);
 }
 
-TEST(ThermomechanicsFictDensParameter, Source) { FiniteDifferenceParameter(0); }
+TEST(ThermomechanicsFictDensParameter, Source) { FiniteDifferenceParameter(); }
 
 // /**
 //  * @brief A driver for a shape sensitivity test
