@@ -32,7 +32,7 @@ struct TimeInfo {
   size_t cycle() const { return cycle_; }
 
   /// @brief return the time info corresponding to the end of this cycle (time + dt, dt, cycle)
-  TimeInfo end_time_info() const { return TimeInfo(time()+dt(), dt(), cycle()); }
+  TimeInfo end_time_info() const { return TimeInfo(time() + dt(), dt(), cycle()); }
 
   std::pair<double, double> time_;  ///< time and its dual
   std::pair<double, double> dt_;    ///< timestep and its dual

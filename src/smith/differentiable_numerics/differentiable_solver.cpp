@@ -270,7 +270,7 @@ std::vector<DifferentiableBlockSolver::FieldPtr> LinearDifferentiableBlockSolver
 }
 
 std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolver(LinearSolverOptions linear_opts,
-                                                                           const smith::Mesh& mesh)
+                                                                            const smith::Mesh& mesh)
 {
   auto [linear_solver, precond] = smith::buildLinearSolverAndPreconditioner(linear_opts, mesh.getComm());
   return std::make_shared<smith::LinearDifferentiableSolver>(std::move(linear_solver), std::move(precond));
