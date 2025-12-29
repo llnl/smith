@@ -18,8 +18,8 @@
 
 namespace smith {
 
-/// @brief Evaluates a DoubleState using a provided ScalarObjective instance, and the input arguments to that objective.
+/// @brief Evaluates a DoubleState using a provided ScalarObjective reference, and the input arguments to that objective.
 /// This operation is tracked on the gretl graph.
-DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp, const std::vector<FieldState>& inputs, const TimeInfo& time_info=TimeInfo(0.0, 1.0, 0));
+DoubleState evaluateObjective(const ScalarObjective& objective, const FieldState& shape_disp, const std::vector<FieldState>& inputs, const TimeInfo& time_info=TimeInfo(0.0, 1.0, 0));
 
 }  // namespace smith

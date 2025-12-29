@@ -314,7 +314,7 @@ TEST_F(MeshFixture, TransientDynamicsGretl)
   auto all_fields = mechanics_->getFieldStatesAndParamStates();
 
   gretl::State<double> gretl_qoi =
-      0.0 * smith::evaluateObjective(objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
+      0.0 * smith::evaluateObjective(*objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
 
   std::string pv_dir = std::string("paraview_") + mechanics_->name();
   auto pv_writer = smith::createParaviewWriter(*mesh_, all_fields, pv_dir);
@@ -323,7 +323,7 @@ TEST_F(MeshFixture, TransientDynamicsGretl)
     mechanics_->advanceTimestep(dt);
     all_fields = mechanics_->getFieldStatesAndParamStates();
     gretl_qoi =
-        gretl_qoi + smith::evaluateObjective(objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
+        gretl_qoi + smith::evaluateObjective(*objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
     pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
   }
 
