@@ -10,7 +10,7 @@
 namespace smith {
 
 DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective,
-                              const FieldState& shape_disp, const std::vector<FieldState>& inputs, const TimeInfo& time_info=TimeInfo(0.0, 1.0, 0))
+                              const FieldState& shape_disp, const std::vector<FieldState>& inputs, const TimeInfo& time_info)
 {
   std::vector<gretl::StateBase> all_states{shape_disp};
   all_states.insert(all_states.end(), inputs.begin(), inputs.end());
