@@ -27,7 +27,7 @@ namespace smith {
 
 class DifferentiableSolver;
 class DirichletBoundaryConditions;
-class WeakForm;
+class SecondOrderTimeDiscretizedWeakForms;
 
 /// @brief Implementation of the StateAdvancer interface for advancing the solution of solid mechanics problems
 class SolidMechanicsStateAdvancer : public StateAdvancer {
@@ -35,11 +35,12 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   /// @brief Constructor
   /// @param solid_solver differentiable solve
   /// @param vector_bcs Dirichlet boundary conditions that can be applies to vector unknowns
-  /// @param solid_weak_form The weak-form for solid mechanics equations
+  /// @param solid_dynamic_weak_forms The weak-forms for time discretized solid mechanics equations
   /// @param time_rule The specific time-integration rule, typically Implicit Newmark or Quasi-static
   SolidMechanicsStateAdvancer(std::shared_ptr<DifferentiableSolver> solid_solver,
                               std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
-                              std::shared_ptr<WeakForm> solid_weak_form, SecondOrderTimeIntegrationRule time_rule);
+                              std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_dynamic_weak_forms,
+                              SecondOrderTimeIntegrationRule time_rule);
 
   /// State enum for indexing convenience
   enum STATE
@@ -100,14 +101,15 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
 
   /// @overload
   std::vector<ResultantState> computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                                                const std::vector<FieldState>& states_old,
                                                 const std::vector<FieldState>& params,
                                                 const TimeInfo& time_info) const override;
 
  private:
   std::shared_ptr<DifferentiableSolver> solver_;             ///< Differentiable solver
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;  ///< Dirichlet boundary conditions on a vector-field
-  std::shared_ptr<WeakForm> weak_form_;       ///< Solid mechanics weak form, user must setup the appropriate integrals
+  std::shared_ptr<SecondOrderTimeDiscretizedWeakForms>
+      solid_dynamic_weak_forms_;  ///< Solid mechanics time discretized weak forms, user must setup the appropriate
+                                  ///< integrals.  Has both the time discretized and the undiscretized weak forms.
   SecondOrderTimeIntegrationRule time_rule_;  ///< second order time integration rule.  Can compute u, u_dot, u_dot_dot,
                                               ///< given the current predicted u and the previous u, u_dot, u_dot_dot
 };

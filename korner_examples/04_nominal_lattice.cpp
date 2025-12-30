@@ -145,8 +145,8 @@ int main(int argc, char* argv[])
     physics->advanceTimestep(time_increment);
 
     TimeInfo time_info(physics->time() - time_increment, time_increment);
-    auto reactions = physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(),
-                                                                    physics->getFieldStatesOld(), params, time_info);
+    auto reactions =
+        physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(), params, time_info);
     double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
     if (mfem::Mpi::Root()) {
       std::cout << "Reaction: " << reaction << std::endl;
@@ -157,11 +157,10 @@ int main(int argc, char* argv[])
   TimeInfo time_info(physics->time() - time_increment, time_increment);
 
   auto final_states = physics->getFieldStates();
-  auto previous_to_final_states = physics->getFieldStatesOld();
+  // auto previous_to_final_states = physics->getFieldStatesOld();
 
   auto state_advancer = physics->getStateAdvancer();
-  auto reactions =
-      state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
+  auto reactions = state_advancer->computeResultants(shape_disp, final_states, params, time_info);
 
   auto disp_squared = innerProduct(reactions[0], reactions[0]);
 

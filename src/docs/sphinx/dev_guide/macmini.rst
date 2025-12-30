@@ -51,7 +51,7 @@ how to do this, instructions can be found on
 7. **Install Smith**
 
 You're now able to clone Smith and get started with the installation process. Further instructions for doing so are currently on 
-the `quickstart page <https://serac.readthedocs.io/en/latest/sphinx/quickstart.html#quickstart-label>`_ of the Smith documentation.
+the `quickstart page <https://llnlsmith.readthedocs.io/en/latest/sphinx/quickstart.html#quickstart-label>`_ of the Smith documentation.
 
 ----------------
 Cron Job Example

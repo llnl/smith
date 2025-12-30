@@ -17,9 +17,10 @@
 
 namespace smith {
 
-/// @brief encodes rules for 2-point integration rules for a first order ode discretization.
-/// When solving u_dot = f(u, t),
-/// this discretizes as derivative(u,u_old) = f(value(u,u_old,t)).
+/// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
+/// When solving f(u, u_dot, u_dot_dot, t) = 0
+/// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of
+/// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
 struct SecondOrderTimeIntegrationRule {
   /// @brief
   /// @param theta weighting on current vs previous state value.
@@ -40,8 +41,11 @@ struct SecondOrderTimeIntegrationRule {
                                     [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                                     [[maybe_unused]] const T4& accel_old) const
   {
-    // return velo_old;  //(1.0 / t.dt()) * (field_new - field_old);
-    return (1.0 / t.dt()) * (field_new - field_old);
+    // auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
+    // auto v_n = velo_old;
+    // return (2.0 * v_np5) - v_n;
+    // return v_fd;
+    return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
@@ -50,7 +54,16 @@ struct SecondOrderTimeIntegrationRule {
                                            [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                                            [[maybe_unused]] const T4& accel_old) const
   {
-    return accel_old;
+    // auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
+    // auto v_n = velo_old;
+    // auto a_np25 = (1.0 / t.dt()) * (v_np5 - v_n);
+    // return (4.0 * a_np25) - accel_old;
+    auto dt = t.dt();
+    return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
+    // auto v_np5 = (1.0 / t.dt()) * (field_new - field_old);
+    //  auto v_n = velo_old;
+    //  auto a_np25 = (1.0 / t.dt()) * (v_np5 - v_n);
+    //  return (4.0 * a_np25) - accel_old;
   }
 
   double theta_;  ///< parameter specifying the particular integration rule for integrating second order systems with

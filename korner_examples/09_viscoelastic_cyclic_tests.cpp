@@ -211,8 +211,8 @@ int SolveProblem(const Problem_Params& problem_params)
     physics->advanceTimestep(time_increment);
 
     TimeInfo time_info(physics->time(), time_increment);
-    auto reactions = physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(),
-                                                                    physics->getFieldStatesOld(), params, time_info);
+    auto reactions =
+        physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(), params, time_info);
     double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
     if (mfem::Mpi::Root()) {
       std::cout << "Reaction: " << reaction << std::endl;
