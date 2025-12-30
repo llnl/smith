@@ -217,6 +217,7 @@ class BeamMeshFixture : public testing::Test {
 class DfemTest : public BeamMeshFixture {
   public: 
     static constexpr int disp_order = 1;
+    static constexpr int ir_order = 2;
     
     using KinematicSpace = H1<disp_order, dim>;
   
@@ -226,10 +227,12 @@ class DfemTest : public BeamMeshFixture {
     static constexpr double sigma_y = 9.0;
     static constexpr double Hi = 40.0;
 
-  enum PARAMS
-  {
-    J2_INTERNAL_STATE
-  };
+    enum PARAMS
+    {
+      J2_INTERNAL_STATE
+    };
+
+    static constexpr bool use_tensor_product = false;
 
   protected:
     DfemTest() :
@@ -237,17 +240,22 @@ class DfemTest : public BeamMeshFixture {
       disp(StateManager::newState(KinematicSpace{}, "displacement", mesh->tag())),
       velo(StateManager::newState(KinematicSpace{}, "velocity", mesh->tag())),
       accel(StateManager::newState(KinematicSpace{}, "acceleration", mesh->tag())),
-      coords(StateManager::newState(KinematicSpace{}, "coordinates", mesh->tag()))
+      coords(StateManager::newState(KinematicSpace{}, "coordinates", mesh->tag())),
+      ir(mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order)),
+      internal_state_space(mesh->mfemParMesh(), ir, mat.N_INTERNAL_STATES, use_tensor_product),
+      internal_state(internal_state_space)
     {
-      
+      // empty
     }
 
     Material mat;
-
     FiniteElementState disp;
     FiniteElementState velo;
     FiniteElementState accel;
     FiniteElementState coords;
+    const mfem::IntegrationRule ir;
+    mfem::future::UniformParameterSpace internal_state_space;
+    mfem::future::ParameterFunction internal_state;
 };
 
 
@@ -272,13 +280,7 @@ TEST_F(DfemTest, Plasticity)
   //   COORDINATES
   // };
 
-  int ir_order = 2;
-  const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
-  bool use_tensor_product = false;
-  mfem::out << "nqpt: " << displacement_ir.GetNPoints() << std::endl;
-  mfem::future::UniformParameterSpace internal_state_space(mesh->mfemParMesh(), displacement_ir, mat.N_INTERNAL_STATES,
-                                                           use_tensor_product);
-  mfem::future::ParameterFunction internal_state(internal_state_space);
+  mfem::out << "nqpt: " << ir.GetNPoints() << std::endl;
 
   // initialize fields
 
@@ -309,7 +311,7 @@ TEST_F(DfemTest, Plasticity)
   auto physics = SolidT("plasticity", mesh, disp.space(), {&internal_state_space}, {});
   mfem::Array<int> entire_domain{1, 2};
   physics.setMaterial<Material, InternalVariableParameter<J2_INTERNAL_STATE, Material::N_INTERNAL_STATES>>(
-      entire_domain, mat, displacement_ir);
+      entire_domain, mat, ir);
 
   // check that integrator works
   double t = 1.0;
@@ -353,7 +355,7 @@ TEST_F(DfemTest, Plasticity)
       .material = mat};
   // update_internal_state.DisableTensorProductStructure(); // Disabling breaks it
   update_internal_state.AddDomainIntegrator(update_internal_state_qf, internal_state_qf_inputs,
-                                            internal_state_qf_outputs, displacement_ir, entire_domain,
+                                            internal_state_qf_outputs, ir, entire_domain,
                                             std::index_sequence<DfemSolidWeakForm<>::STATE::DISPLACEMENT, DfemSolidWeakForm<>::STATE::NUM_STATES>{});
   update_internal_state.SetParameters({&disp, &velo, &coords});
   mfem::future::ParameterFunction internal_state_new(internal_state_space);
@@ -369,7 +371,7 @@ TEST_F(DfemTest, Plasticity)
   mfem::out << "dim = " << internal_state_space.Dimension() << std::endl;
   auto pstrain = exact_solution.plastic_strain(1.0);
   for (int e = 0, i = 0; e < internal_state_space.GetNE(); e++) {
-    for (int qp = 0; qp < displacement_ir.GetNPoints(); qp++) {
+    for (int qp = 0; qp < ir.GetNPoints(); qp++) {
       // plastic strain tensor
       EXPECT_NEAR(internal_state_new[i + 0], pstrain[0], 1e-10);
       EXPECT_NEAR(internal_state_new[i + 4], pstrain[1], 1e-10);
@@ -456,7 +458,7 @@ TEST_F(DfemTest, Plasticity)
       update_internal_state_virtual_work_qf{.material = mat};
   update_internal_state_virtual_work.AddDomainIntegrator(
       update_internal_state_virtual_work_qf, update_internal_state_virtual_work_qf_inputs,
-      update_internal_state_virtual_work_outputs, displacement_ir, entire_domain, std::index_sequence<IsvStates::INTERNAL_VARIABLES, IsvStates::DISPLACEMENT>{});
+      update_internal_state_virtual_work_outputs, ir, entire_domain, std::index_sequence<IsvStates::INTERNAL_VARIABLES, IsvStates::DISPLACEMENT>{});
 
   update_internal_state_virtual_work.SetParameters({&disp, &velo, &coords, &Q_bar});
 
