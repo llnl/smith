@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <cmath>
+#include <map>
 #include <memory>
 #include <ostream>
 #include <string>
@@ -147,7 +148,8 @@ struct SmoothJ2 {
     return internal_state_new;
   }
 
-  SMITH_HOST_DEVICE double density() const { return rho; }
+  template <typename... Parameters>
+  SMITH_HOST_DEVICE double density(Parameters...) const { return rho; }
 };
 
 /* q-function for internal state update. Located here in the test for development.
@@ -207,10 +209,15 @@ class BeamMeshFixture : public testing::Test {
       mfem::ParMesh& setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag);
       auto mfem_mesh = mfem::Mesh::MakeCartesian3D(8, 1, 1, mfem::Element::HEXAHEDRON, LENGTH, DEPTH, DEPTH);
       mesh = std::make_shared<smith::Mesh>(std::move(mfem_mesh), "amesh", 0, 0);
+      entire_domain = mesh->mfemParMesh().attributes;
+      boundaries["left_end"] = 4;
+      boundaries["right_end"] = 2;
     }
 
     axom::sidre::DataStore datastore;
     std::shared_ptr<smith::Mesh> mesh;
+    mfem::Array<int> entire_domain;
+    std::map<std::string, int> boundaries;
 };
 
 
@@ -243,9 +250,11 @@ class DfemTest : public BeamMeshFixture {
       coords(StateManager::newState(KinematicSpace{}, "coordinates", mesh->tag())),
       ir(mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order)),
       internal_state_space(mesh->mfemParMesh(), ir, mat.N_INTERNAL_STATES, use_tensor_product),
-      internal_state(internal_state_space)
+      internal_state(internal_state_space),
+      physics(DfemSolidWeakForm("plasticity", mesh, disp.space(), {&internal_state_space}, {}))
     {
-      // empty
+      physics.setMaterial<Material, InternalVariableParameter<J2_INTERNAL_STATE, Material::N_INTERNAL_STATES>>(
+        entire_domain, mat, ir);
     }
 
     Material mat;
@@ -256,6 +265,7 @@ class DfemTest : public BeamMeshFixture {
     const mfem::IntegrationRule ir;
     mfem::future::UniformParameterSpace internal_state_space;
     mfem::future::ParameterFunction internal_state;
+    DfemSolidWeakForm<false, false> physics;
 };
 
 
@@ -303,15 +313,6 @@ TEST_F(DfemTest, Plasticity)
   accel = 0.0;
   coords.setFromGridFunction(static_cast<mfem::ParGridFunction&>(*mesh->mfemParMesh().GetNodes()));
   internal_state = 0.0;
-
-  // set up physics
-  constexpr bool is_quasi_static = true;
-  constexpr bool use_lumped_mass = false;
-  using SolidT = DfemSolidWeakForm<is_quasi_static, use_lumped_mass>;
-  auto physics = SolidT("plasticity", mesh, disp.space(), {&internal_state_space}, {});
-  mfem::Array<int> entire_domain{1, 2};
-  physics.setMaterial<Material, InternalVariableParameter<J2_INTERNAL_STATE, Material::N_INTERNAL_STATES>>(
-      entire_domain, mat, ir);
 
   // check that integrator works
   double t = 1.0;
