@@ -65,6 +65,10 @@ void finalizer()
 #endif
 #endif
 
+#ifdef SERAC_USE_SUNDIALS
+  mfem::Sundials::Finalize();
+#endif
+
   profiling::finalize();
 
   int mpi_initialized = 0;
