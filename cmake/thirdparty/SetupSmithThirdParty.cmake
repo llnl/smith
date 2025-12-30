@@ -45,10 +45,8 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # Can be removed once this BLT PR is merged https://github.com/LLNL/blt/pull/585 (?)
         find_package(CUDAToolkit REQUIRED)
         set(smith_device_depends blt::cuda CUDA::cublasLt CACHE STRING "" FORCE)
-        set(SMITH_ENABLE_CONTINUATION FALSE)
     elseif(SMITH_ENABLE_HIP)
         set(smith_device_depends blt::hip CACHE STRING "" FORCE)
-        set(SMITH_ENABLE_CONTINUATION FALSE)
     else()
         set(smith_device_depends "" CACHE STRING "" FORCE)
     endif()
@@ -417,9 +415,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # ContinuationSolvers
     #------------------------------------------------------------------------------
-    if (NOT DEFINED SMITH_ENABLE_CONTINUATION)
-        set(SMITH_ENABLE_CONTINUATION ON)
-    endif()
     message(STATUS "Smith Enable Continuation: ${SMITH_ENABLE_CONTINUATION}")
     
     if(SMITH_ENABLE_CONTINUATION)
