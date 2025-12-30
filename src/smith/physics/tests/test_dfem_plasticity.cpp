@@ -251,10 +251,33 @@ class DfemTest : public BeamMeshFixture {
       ir(mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order)),
       internal_state_space(mesh->mfemParMesh(), ir, mat.N_INTERNAL_STATES, use_tensor_product),
       internal_state(internal_state_space),
-      physics(DfemSolidWeakForm("plasticity", mesh, disp.space(), {&internal_state_space}, {}))
+      physics(DfemSolidWeakForm("plasticity", mesh, disp.space(), {&internal_state_space}, {})),
+      update_internal_state(
+        {mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::NUM_STATES, &internal_state_space)},
+        {mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::DISPLACEMENT, &disp.space()),
+        mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::VELOCITY, &velo.space()),
+        mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::COORDINATES, &coords.space())},
+        mesh->mfemParMesh())
     {
+      coords.setFromGridFunction(static_cast<mfem::ParGridFunction&>(*mesh->mfemParMesh().GetNodes()));
+
       physics.setMaterial<Material, InternalVariableParameter<J2_INTERNAL_STATE, Material::N_INTERNAL_STATES>>(
         entire_domain, mat, ir);
+
+      mfem::future::tuple<mfem::future::Gradient<DfemSolidWeakForm<>::STATE::DISPLACEMENT>,
+                          mfem::future::Gradient<DfemSolidWeakForm<>::STATE::VELOCITY>,
+                          mfem::future::Gradient<DfemSolidWeakForm<>::STATE::COORDINATES>,
+                          mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>> internal_state_qf_inputs{};
+
+      mfem::future::tuple<mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>> internal_state_qf_outputs{};
+
+      InternalStateQFunction<Material, InternalVariableParameter<4, Material::N_INTERNAL_STATES>> update_internal_state_qf{
+        .material = mat};
+      // update_internal_state.DisableTensorProductStructure(); // Disabling breaks it
+      update_internal_state.AddDomainIntegrator(
+        update_internal_state_qf, internal_state_qf_inputs, internal_state_qf_outputs, ir,
+        entire_domain, 
+        std::index_sequence<DfemSolidWeakForm<>::STATE::DISPLACEMENT, DfemSolidWeakForm<>::STATE::NUM_STATES>{});
     }
 
     Material mat;
@@ -265,66 +288,45 @@ class DfemTest : public BeamMeshFixture {
     const mfem::IntegrationRule ir;
     mfem::future::UniformParameterSpace internal_state_space;
     mfem::future::ParameterFunction internal_state;
-    DfemSolidWeakForm<false, false> physics;
+    DfemSolidWeakForm<false, false> physics; //< operator to compute force residual
+    mfem::future::DifferentiableOperator update_internal_state; //< operator to compute new internal state vars
 };
 
 
 TEST_F(DfemTest, Plasticity)
 {
-  
-  // TODO: add these when we have a solver
-  // LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG, .print_level = 0};
-
-  // NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
-  //                                          .relative_tol = 1.0e-13,
-  //                                          .absolute_tol = 1.0e-13,
-  //                                          .max_iterations = 20,
-  //                                          .print_level = 1};
-
-  // NOTE: we can grab STATE from SolidT::STATE
-  // enum STATE
-  // {
-  //   DISPLACEMENT,
-  //   VELOCITY,
-  //   ACCELERATION,
-  //   COORDINATES
-  // };
-
-  mfem::out << "nqpt: " << ir.GetNPoints() << std::endl;
-
-  // initialize fields
-
-  // Get boundary dofs for computing reactions
-  mfem::Array<int> bdr_attr_is_ess(mesh->mfemParMesh().bdr_attributes.Max());
-  mfem::Array<int> left_x_tdof;
-  bdr_attr_is_ess = 0; // reset
-  bdr_attr_is_ess[4] = 1; // flag boundary 4 (5 in mesh)
-  disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, left_x_tdof, 0); // get x-dir dofs
-
-  mfem::Array<int> right_x_tdof;
-  bdr_attr_is_ess = 0; // reset
-  bdr_attr_is_ess[2] = 1; // flag boundary 2 (1 in mesh)
-  disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, right_x_tdof, 0); // get x-dir dofs
-
-  UniaxialSolution exact_solution{.E= E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi};
   // set displacement to uniaxial stress solution
+  UniaxialSolution exact_solution{.E= E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi};
   disp.setFromFieldFunction([exact_solution](tensor<double, dim> X) { return exact_solution.displacement(X, 1.0); });
   velo = 0.0;
   accel = 0.0;
-  coords.setFromGridFunction(static_cast<mfem::ParGridFunction&>(*mesh->mfemParMesh().GetNodes()));
   internal_state = 0.0;
 
-  // check that integrator works
+  // Use dFEM-basedweak form to compute reactions
   double t = 1.0;
   double dt = 1.0;
   FiniteElementDual reaction = StateManager::newDual(KinematicSpace{}, "reactions", mesh->tag());
   reaction = physics.residual(t, dt, &disp, {&disp, &velo, &accel, &coords}, {&internal_state});
   
+  // Get boundary dofs for computing resultants
+  mfem::Array<int> bdr_attr_is_ess(mesh->mfemParMesh().bdr_attributes.Max());
+  bdr_attr_is_ess = 0; // reset
+  
+  bdr_attr_is_ess[boundaries["left_end"]] = 1;
+  mfem::Array<int> left_x_tdof;
+  disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, left_x_tdof, 0); // get x-dir dofs
+
+  bdr_attr_is_ess = 0; // reset
+  bdr_attr_is_ess[boundaries["right_end"]] = 1; // flag boundary 2 (1 in mesh)
+  mfem::Array<int> right_x_tdof;
+  disp.space().GetEssentialTrueDofs(bdr_attr_is_ess, right_x_tdof, 0); // get x-dir dofs
+
   double Fx = 0;
   for (auto td : left_x_tdof) {
     Fx += reaction[td];
   }
   double exact_resultant = exact_solution.axial_stress(t)*DEPTH*DEPTH;
+  ASSERT_GT(std::abs(exact_resultant), 0.0); // ensure test is not trivial
   EXPECT_NEAR(Fx, exact_resultant, 1e-10);
 
   Fx = 0;
@@ -338,28 +340,8 @@ TEST_F(DfemTest, Plasticity)
   reaction.linearForm().ParallelAssemble(reaction_gf.GetTrueVector());
   reaction_gf.SetFromTrueVector();
 
-  // create operator to update internal state variables
-  mfem::future::DifferentiableOperator update_internal_state(
-      {mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::NUM_STATES, &internal_state_space)},
-      {mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::DISPLACEMENT, &disp.space()),
-       mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::VELOCITY, &velo.space()),
-       mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::COORDINATES, &coords.space())},
-      mesh->mfemParMesh());
-
-  mfem::future::tuple<mfem::future::Gradient<DfemSolidWeakForm<>::STATE::DISPLACEMENT>,
-                      mfem::future::Gradient<DfemSolidWeakForm<>::STATE::VELOCITY>,
-                      mfem::future::Gradient<DfemSolidWeakForm<>::STATE::COORDINATES>,
-                      mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>> internal_state_qf_inputs{};
-  mfem::future::tuple<mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>> internal_state_qf_outputs{};
-
-  InternalStateQFunction<Material, InternalVariableParameter<4, Material::N_INTERNAL_STATES>> update_internal_state_qf{
-      .material = mat};
-  // update_internal_state.DisableTensorProductStructure(); // Disabling breaks it
-  update_internal_state.AddDomainIntegrator(update_internal_state_qf, internal_state_qf_inputs,
-                                            internal_state_qf_outputs, ir, entire_domain,
-                                            std::index_sequence<DfemSolidWeakForm<>::STATE::DISPLACEMENT, DfemSolidWeakForm<>::STATE::NUM_STATES>{});
-  update_internal_state.SetParameters({&disp, &velo, &coords});
   mfem::future::ParameterFunction internal_state_new(internal_state_space);
+  update_internal_state.SetParameters({&disp, &velo, &coords});
   update_internal_state.Mult(internal_state, internal_state_new);
   
   mfem::out << "internal state data:\n";
@@ -370,7 +352,7 @@ TEST_F(DfemTest, Plasticity)
   mfem::out << "vsize = " << internal_state_space.GetVSize() << std::endl;
   mfem::out << "ne = " << internal_state_space.GetNE() << std::endl;
   mfem::out << "dim = " << internal_state_space.Dimension() << std::endl;
-  auto pstrain = exact_solution.plastic_strain(1.0);
+  auto pstrain = exact_solution.plastic_strain(t);
   for (int e = 0, i = 0; e < internal_state_space.GetNE(); e++) {
     for (int qp = 0; qp < ir.GetNPoints(); qp++) {
       // plastic strain tensor
