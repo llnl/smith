@@ -284,34 +284,6 @@ int main(int argc, char* argv[])
     // Compute reactions
 
     pv_writer.write(m + 1, physics->time(), physics->getFieldStatesAndParamStates());
-
-    // // Get reaction force
-    // const FiniteElementDual& all_reactions = solid_solver.dual("reactions");
-    
-    // auto X_Dir = createReactionDirection(solid_solver, 0, mesh, dim);
-    // auto Y_Dir = createReactionDirection(solid_solver, 1, mesh, dim);
-    // auto Z_Dir = createReactionDirection(solid_solver, 2, mesh, dim);
-
-    // auto contact_reaction_X = innerProduct(all_reactions, X_Dir);
-    // auto contact_reaction_Y = innerProduct(all_reactions, Y_Dir);
-    // auto contact_reaction_Z = innerProduct(all_reactions, Z_Dir);
-
-    // auto total_reaction = std::pow(std::pow(contact_reaction_X, 2.0) + std::pow(contact_reaction_Y, 2.0) + std::pow(contact_reaction_Z, 2.0), 0.5);
-
-    // // Compute applied displacement at this time (Y component)
-    // auto current_time = solid_solver.time();
-    // auto applied_dip = contact_displacement_per_step * current_time;
-
-    // // Write to file (only on rank 0)
-    // if (myid == 0) {
-    //     std::cout << "... i = " << i 
-    //     << ", time = " << current_time 
-    //     << ", applied_dip = " << applied_dip 
-    //     << ", total_reaction = " << total_reaction 
-    //     << std::endl;
-
-    //     outputFile << i << ", " << current_time << ", " << applied_dip << ", " << total_reaction << std::endl;
-    // }
   }
 
   /// ==================================================================
