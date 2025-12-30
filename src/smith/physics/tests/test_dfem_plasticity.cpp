@@ -170,13 +170,14 @@ struct InternalStateQFunction {
   Material material;  ///< the material model to use for computing the stress
 };
 
-template <typename Material, typename... Parameters>
+template <typename Material>
 struct InternalStateVirtualWorkQFunction {
   SMITH_HOST_DEVICE inline auto operator()(
       const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& du_dxi,
       const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dv_dxi,
       const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dX_dxi,
-      const mfem::future::tensor<mfem::real_t, 10>& Q, const mfem::future::tensor<mfem::real_t, 10>& Q_bar) const
+      const mfem::future::tensor<mfem::real_t, 10>& Q,
+      const mfem::future::tensor<mfem::real_t, 10>& Q_bar) const
   {
     auto dxi_dX = mfem::future::inv(dX_dxi);
     auto du_dX = mfem::future::dot(du_dxi, dxi_dX);
@@ -395,45 +396,72 @@ TEST(Dfem, Plasticity)
   mfem::out << "error norm = " << error.Norml2() << std::endl;
   EXPECT_LT(error.Norml2(), 1e-4*internal_state_new.Norml2());
 
-#if 0
-  // functional for VJP of internal state update
+  //
+  // VJP of internal state update
+  //
+  enum IsvStates {COORDINATES, DISPLACEMENT, VELOCITY, INTERNAL_VARIABLES, DUAL_INTERNAL_VARIABLES};
+
+  mfem::future::ParameterFunction Q_bar(internal_state_space);
+  const int rand_seed = 1;
+  Q_bar.Randomize(rand_seed);
+
   mfem::future::DifferentiableOperator update_internal_state_virtual_work(
-      {},
-      {mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::DISPLACEMENT, &disp.space()),
-       mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::VELOCITY, &velo.space()),
-       mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::COORDINATES, &coords.space()),
-       mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::NUM_STATES, &internal_state_space),
-       mfem::future::FieldDescriptor(DfemSolidWeakForm<>::STATE::NUM_STATES + 1, &internal_state_space)},
+      {mfem::future::FieldDescriptor(IsvStates::INTERNAL_VARIABLES, &internal_state_space)},
+      {mfem::future::FieldDescriptor(IsvStates::DISPLACEMENT, &disp.space()),
+       mfem::future::FieldDescriptor(IsvStates::VELOCITY, &velo.space()),
+       mfem::future::FieldDescriptor(IsvStates::COORDINATES, &coords.space()),
+       mfem::future::FieldDescriptor(IsvStates::DUAL_INTERNAL_VARIABLES, &internal_state_space)},
       mesh->mfemParMesh());
   update_internal_state_virtual_work.DisableTensorProductStructure();
 
-  mfem::future::tuple<mfem::future::Gradient<DfemSolidWeakForm<>::STATE::DISPLACEMENT>,
-                      mfem::future::Gradient<DfemSolidWeakForm<>::STATE::VELOCITY>,
-                      mfem::future::Gradient<DfemSolidWeakForm<>::STATE::COORDINATES>,
-                      mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES>,
-                      mfem::future::Identity<DfemSolidWeakForm<>::STATE::NUM_STATES + 1>>
+  mfem::future::tuple<mfem::future::Gradient<IsvStates::DISPLACEMENT>,
+                      mfem::future::Gradient<IsvStates::VELOCITY>,
+                      mfem::future::Gradient<IsvStates::COORDINATES>,
+                      mfem::future::Identity<IsvStates::INTERNAL_VARIABLES>,
+                      mfem::future::Identity<IsvStates::DUAL_INTERNAL_VARIABLES>>
       update_internal_state_virtual_work_qf_inputs{};
-  mfem::future::tuple<mfem::future::Sum<DfemSolidWeakForm<>::STATE::NUM_STATES + 1>>
+  mfem::future::tuple<mfem::future::Sum<IsvStates::INTERNAL_VARIABLES>>
       update_internal_state_virtual_work_outputs{};
-  InternalStateVirtualWorkQFunction<Material, InternalVariableParameter<4, Material::N_INTERNAL_STATES>>
+  InternalStateVirtualWorkQFunction<Material>
       update_internal_state_virtual_work_qf{.material = mat};
   update_internal_state_virtual_work.AddDomainIntegrator(
       update_internal_state_virtual_work_qf, update_internal_state_virtual_work_qf_inputs,
-      update_internal_state_virtual_work_outputs, displacement_ir, entire_domain, std::index_sequence<0, 3>{});
-  mfem::future::ParameterFunction adjoint_internal_state(internal_state_space);
-  adjoint_internal_state = 0.05;
-  update_internal_state_virtual_work.SetParameters({&disp, &velo, &coords, &internal_state, &adjoint_internal_state});
+      update_internal_state_virtual_work_outputs, displacement_ir, entire_domain, std::index_sequence<IsvStates::INTERNAL_VARIABLES, IsvStates::DISPLACEMENT>{});
 
-  params_l.push_back(&adjoint_internal_state);
-  auto derivative_taker2 = update_internal_state_virtual_work.GetDerivative(0, {}, params_l);
-  FiniteElementState u_bar = StateManager::newState(KinematicSpace{}, "u_bar", mesh->tag());
+  update_internal_state_virtual_work.SetParameters({&disp, &velo, &coords, &Q_bar});
+
+  params_l.push_back(&Q_bar);
+
+  // For reverse mode, it doesn't make sense to ask for a single upstream variable.
+  // We don't want to re-compute all the quadrature point jacobians to get upstream derivatives for another variable.
+  auto Q_vjp_u = update_internal_state_virtual_work.GetDerivative(IsvStates::DISPLACEMENT, primals_l, params_l);
+
+  FiniteElementDual u_bar = StateManager::newDual(KinematicSpace{}, "u_bar", mesh->tag());
+
+  // This is the code we want to write, but MultTranspose is not implemented yet.
+#if 0
   mfem::Vector seed(1);
   seed = 1.0;
-  derivative_taker2->Mult(seed, u_bar);
+  Q_vjp_u->MultTranspose(seed, u_bar);
+#endif
+  
+  // This is a temporary hack because the action of the Jacobian transpose is not yet implemented in ∂FEM.
+  mfem::Vector direction(disp.Size());
+  direction = 0.0;
+  mfem::Vector u_bar_i(1);
+  for (int i = 0; i < disp.Size(); i++) {
+    direction[i] = 1.0;
+    Q_vjp_u->Mult(direction, u_bar_i);
+    u_bar[i] = u_bar_i[0];
+    direction[i] = 0.0;
+  }
+
+  // TODO: make above work in parallel
   mfem::out << "u_bar = " << std::endl;
   u_bar.Print();
-#endif
-  // implement physics.vjp()
+
+  // test directional derivative
+
 
   // set loads
 
@@ -451,3 +479,7 @@ int main(int argc, char* argv[])
   smith::ApplicationManager applicationManager(argc, argv);
   return RUN_ALL_TESTS();
 }
+
+// Questions for dFEM team:
+// For reverse mode, it doesn't make sense to ask for a single upstream variable.
+// We don't want to re-compute all the quadrature point jacobians to get upstream derivatives for another variable.
