@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <cmath>
+#include <memory>
 #include <ostream>
 #include <string>
 
@@ -190,20 +191,69 @@ struct InternalStateVirtualWorkQFunction {
   Material material;  ///< the material model to use for computing the stress
 };
 
-TEST(Dfem, Plasticity)
-{
-  constexpr int dim = 3;
-  constexpr int disp_order = 1;
-  std::string filename = SMITH_REPO_DIR "/data/meshes/beam-hex.mesh";
-  axom::sidre::DataStore datastore;
-  smith::StateManager::initialize(datastore, "dfem_plasticity");
-  //auto mfem_mesh = buildMeshFromFile(filename);
-  constexpr double LENGTH = 8.0;
-  constexpr double DEPTH = 1.0;
-  auto mfem_mesh = mfem::Mesh::MakeCartesian3D(8, 1, 1, mfem::Element::HEXAHEDRON, LENGTH, DEPTH, DEPTH);
-  auto mesh = std::make_shared<smith::Mesh>(std::move(mfem_mesh), "amesh", 0, 0);
-  
 
+class BeamMeshFixture : public testing::Test {
+  public: 
+    static constexpr int dim = 3;
+    static constexpr double LENGTH = 8.0;
+    static constexpr double DEPTH = 1.0;
+
+  protected:
+    BeamMeshFixture()
+    {
+      StateManager::initialize(datastore, "beam_problem");
+
+      std::string filename = SMITH_REPO_DIR "/data/meshes/beam-hex.mesh";
+      mfem::ParMesh& setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag);
+      auto mfem_mesh = mfem::Mesh::MakeCartesian3D(8, 1, 1, mfem::Element::HEXAHEDRON, LENGTH, DEPTH, DEPTH);
+      mesh = std::make_shared<smith::Mesh>(std::move(mfem_mesh), "amesh", 0, 0);
+    }
+
+    axom::sidre::DataStore datastore;
+    std::shared_ptr<smith::Mesh> mesh;
+};
+
+
+class DfemTest : public BeamMeshFixture {
+  public: 
+    static constexpr int disp_order = 1;
+    
+    using KinematicSpace = H1<disp_order, dim>;
+  
+    using Material = SmoothJ2;
+    static constexpr double E = 1.0e3;
+    static constexpr double nu = 0.25;
+    static constexpr double sigma_y = 9.0;
+    static constexpr double Hi = 40.0;
+
+  enum PARAMS
+  {
+    J2_INTERNAL_STATE
+  };
+
+  protected:
+    DfemTest() :
+      mat{.E = E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi, .rho = 1.0},
+      disp(StateManager::newState(KinematicSpace{}, "displacement", mesh->tag())),
+      velo(StateManager::newState(KinematicSpace{}, "velocity", mesh->tag())),
+      accel(StateManager::newState(KinematicSpace{}, "acceleration", mesh->tag())),
+      coords(StateManager::newState(KinematicSpace{}, "coordinates", mesh->tag()))
+    {
+      
+    }
+
+    Material mat;
+
+    FiniteElementState disp;
+    FiniteElementState velo;
+    FiniteElementState accel;
+    FiniteElementState coords;
+};
+
+
+TEST_F(DfemTest, Plasticity)
+{
+  
   // TODO: add these when we have a solver
   // LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG, .print_level = 0};
 
@@ -221,26 +271,6 @@ TEST(Dfem, Plasticity)
   //   ACCELERATION,
   //   COORDINATES
   // };
-
-  enum PARAMS
-  {
-    J2_INTERNAL_STATE
-  };
-
-  // create material
-  using Material = SmoothJ2;
-  const double E = 1.0e3;
-  const double nu = 0.25;
-  const double sigma_y = 9.0;
-  const double Hi = 40.0;
-  auto mat = Material{.E = E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi, .rho = 1.0};
-
-  // create fields
-  using KinematicSpace = H1<disp_order, dim>;
-  FiniteElementState disp = StateManager::newState(KinematicSpace{}, "displacement", mesh->tag());
-  FiniteElementState velo = StateManager::newState(KinematicSpace{}, "velocity", mesh->tag());
-  FiniteElementState accel = StateManager::newState(KinematicSpace{}, "acceleration", mesh->tag());
-  FiniteElementState coords = StateManager::newState(KinematicSpace{}, "coordinates", mesh->tag());
 
   int ir_order = 2;
   const mfem::IntegrationRule& displacement_ir = mfem::IntRules.Get(disp.space().GetFE(0)->GetGeomType(), ir_order);
@@ -470,6 +500,7 @@ TEST(Dfem, Plasticity)
   //    residual and jvp
   //  use u to update internal
 }
+
 
 }  // namespace smith
 
