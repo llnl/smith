@@ -293,7 +293,7 @@ class DfemTest : public BeamMeshFixture {
 };
 
 
-TEST_F(DfemTest, Plasticity)
+TEST_F(DfemTest, PlasticityPatchTest)
 {
   // set displacement to uniaxial stress solution
   UniaxialSolution exact_solution{.E= E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi};
@@ -374,8 +374,25 @@ TEST_F(DfemTest, Plasticity)
   // dc.RegisterQField("internal_state", &output_internal_state);
   dc.SetCycle(0);
   dc.Save();
+}
 
-  mfem::out << "Take JVP of internal state update" << std::endl;
+
+TEST_F(DfemTest, DifferentiateInternalStateUpdate)
+{
+  // set displacement to uniaxial stress solution
+  UniaxialSolution exact_solution{.E= E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi};
+  disp.setFromFieldFunction([exact_solution](tensor<double, dim> X) { return exact_solution.displacement(X, 1.0); });
+  velo = 0.0;
+  accel = 0.0;
+  internal_state = 0.0;
+
+  double t = 1.0;
+  double dt = 1.0;
+
+  mfem::future::ParameterFunction internal_state_new(internal_state_space);
+  update_internal_state.SetParameters({&disp, &velo, &coords});
+  update_internal_state.Mult(internal_state, internal_state_new);
+
   std::vector<mfem::Vector*> primals_l{&internal_state};
   std::vector<FiniteElementState*> fields{&disp, &velo, &coords};
   std::vector<mfem::Vector*> params_l;
