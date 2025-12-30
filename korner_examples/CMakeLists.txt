@@ -1,7 +1,7 @@
 set (korner_examples
   01_test
-  02_implicit_velocity
-  03_implicit_velocity_but_better
+  # 02_implicit_velocity
+  # 03_implicit_velocity_but_better
   04_nominal_lattice
   05_optimal_lattice
   06_snap_array_nominal

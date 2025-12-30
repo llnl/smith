@@ -89,7 +89,8 @@ class SolidMechanicsStateAdvancer2 : public StateAdvancer {
  public:
   SolidMechanicsStateAdvancer2(std::shared_ptr<DifferentiableSolver> solid_solver,
                                std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
-                               std::shared_ptr<WeakForm> weak_form, SecondOrderTimeIntegrationRule time_rule)
+                               std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> weak_form,
+                               SecondOrderTimeIntegrationRule time_rule)
       : solver_(solid_solver), vector_bcs_(vector_bcs), weak_form_(weak_form), time_rule_(time_rule)
   {
   }
@@ -158,36 +159,47 @@ class SolidMechanicsStateAdvancer2 : public StateAdvancer {
     std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[VELOCITY], states_old[ACCELERATION]};
     solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
 
-    auto displacement =
-        solve(displacement_guess, shape_disp, solid_inputs, final_time_info, *weak_form_, *solver_, *vector_bcs_);
+    auto displacement = solve(displacement_guess, shape_disp, solid_inputs, final_time_info,
+                              *weak_form_->time_discretized_weak_form, *solver_, *vector_bcs_);
 
     std::vector<FieldState> states = states_old;
 
     states[DISPLACEMENT] = displacement;
     // states[VELOCITY] = time_rule_.derivative(final_time_info, displacement, states_old[DISPLACEMENT],
     //                                          states_old[VELOCITY], states_old[ACCELERATION]);
-    states[VELOCITY] = (1.0 / final_time_info.dt()) * (displacement - states_old[DISPLACEMENT]);
+    // states[VELOCITY] = (1.0 / final_time_info.dt()) * (displacement - states_old[DISPLACEMENT]);
+    states[VELOCITY] = time_rule_.derivative(final_time_info, displacement, states_old[DISPLACEMENT],
+                                             states_old[VELOCITY], states_old[ACCELERATION]);
     states[ACCELERATION] = time_rule_.second_derivative(final_time_info, displacement, states_old[DISPLACEMENT],
                                                         states_old[VELOCITY], states_old[ACCELERATION]);
 
     return states;
   }
+  //
+  // std::vector<ResultantState> computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
+  //                                               const std::vector<FieldState>& params,
+  //                                               const TimeInfo& time_info) const override
+  // {
+  //   std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]};
+  //   solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
+  //   return {evaluateWeakForm(*weak_form_->quasi_static_weak_form, time_info, shape_disp, solid_inputs,
+  //                            states[DISPLACEMENT])};
+  // }
 
   std::vector<ResultantState> computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                                                const std::vector<FieldState>& states_old,
                                                 const std::vector<FieldState>& params,
                                                 const TimeInfo& time_info) const override
   {
-    std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
-                                         states_old[ACCELERATION]};
+    std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]};
     solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-    return {evaluateWeakForm(weak_form_, time_info, shape_disp, solid_inputs, states[DISPLACEMENT])};
+    return {evaluateWeakForm(weak_form_->quasi_static_weak_form, time_info, shape_disp, solid_inputs,
+                             states[DISPLACEMENT])};
   }
 
  private:
   std::shared_ptr<DifferentiableSolver> solver_;
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;
-  std::shared_ptr<WeakForm> weak_form_;
+  std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> weak_form_;
   SecondOrderTimeIntegrationRule time_rule_;
 };
 
@@ -265,7 +277,7 @@ int main(int argc, char* argv[])
   auto K = E / (3.0 * (1.0 - 2 * nu));
   auto G = E / (2.0 * (1.0 + nu));
   using MaterialType = ParameterizedNeoHookeanWithViscosity;
-  MaterialType material{.density = 10.0, .K0 = K, .G0 = G, .eta = 1.0e-4};
+  MaterialType material{.density = 10.0, .K0 = K, .G0 = G, .eta = 1.0e-1};
 
   weak_form->addBodyIntegral(
       smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
@@ -308,11 +320,12 @@ int main(int argc, char* argv[])
   TimeInfo time_info(physics->time() - time_increment, time_increment);
 
   auto final_states = physics->getFieldStates();
-  auto previous_to_final_states = physics->getFieldStatesOld();
+  // auto previous_to_final_states = physics->getFieldStatesOld();
 
   auto state_advancer = physics->getStateAdvancer();
   auto reactions =
-      state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
+      // state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
+      state_advancer->computeResultants(shape_disp, final_states, params, time_info);
 
   auto disp_squared = innerProduct(reactions[0], reactions[0]);
 
