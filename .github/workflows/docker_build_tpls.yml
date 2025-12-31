@@ -11,7 +11,7 @@ jobs:
     name: Docker TPL build
     strategy:
       matrix:
-        dockerfile_suffix: [clang-19, gcc-14, cuda-12]
+        dockerfile_suffix: [clang-19, gcc-14] #, cuda-12]
     env:
       REPO: seracllnl/tpls
       HOSTCONFIG_LOC: /home/smith/export_hostconfig
