@@ -68,6 +68,12 @@ spack:
         tbb: [intel-tbb]
         jpeg: [libjpeg-turbo, libjpeg]
 
+    # Prevent building other blas/ lapack providers
+    amdblis:
+      buildable: false
+    amdlibflame:
+      buildable: false
+
     # Compiler packages
     gcc:
       externals:
@@ -126,8 +132,8 @@ spack:
     cuda:
       buildable: false
       externals:
-        - spec: cuda@12.5.82
-          prefix: /usr/local/cuda-12.5
+      - spec: cuda@12.5.82
+        prefix: /usr/local/cuda-12.5
     curl:
       buildable: false
       externals:
