@@ -175,6 +175,30 @@ class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
   mutable std::unique_ptr<mfem::Solver> mfem_preconditioner;  ///< stored mfem block preconditioner
 };
 
+/// @brief Implementation of the DifferentiableBlockSolver interface for the special case of nonlinear solves with linear
+/// adjoint solves
+class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
+ public:
+  /// @brief Construct from a linear solver and linear block precondition which may be used by the linear solver
+  NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s);
+
+  /// @overload
+  void completeSetup(const std::vector<FieldT>& us) override;
+
+  /// @overload
+  std::vector<FieldPtr> solve(
+      const std::vector<FieldPtr>& u_guesses,
+      std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> residuals,
+      std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobians) const override;
+
+  /// @overload
+  std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
+                                     std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const override;
+
+  mutable std::unique_ptr<EquationSolver>
+      nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
+};
+
 /// @brief Create a differentiable linear solver
 /// @param linear_opts linear options struct
 /// @param mesh mesh
@@ -188,5 +212,11 @@ std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolver(Line
 std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolver(NonlinearSolverOptions nonlinear_opts,
                                                                                   LinearSolverOptions linear_opts,
                                                                                   const smith::Mesh& mesh);
+
+/// @brief Create a differentiable nonlinear block solver
+/// @param nonlinear_opts nonlinear options struct
+/// @param linear_opts linear options struct
+/// @param mesh mesh
+std::shared_ptr<NonlinearDifferentiableBlockSolver> buildDifferentiableNonlinearBlockSolver(NonlinearSolverOptions nonlinear_opts, LinearSolverOptions linear_opts, const smith::Mesh& mesh);
 
 }  // namespace smith
