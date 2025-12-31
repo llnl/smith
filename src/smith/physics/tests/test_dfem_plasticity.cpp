@@ -221,7 +221,7 @@ class BeamMeshFixture : public testing::Test {
 };
 
 
-class DfemTest : public BeamMeshFixture {
+class DfemSolidTest : public BeamMeshFixture {
   public: 
     static constexpr int disp_order = 1;
     static constexpr int ir_order = 2;
@@ -241,8 +241,10 @@ class DfemTest : public BeamMeshFixture {
 
     static constexpr bool use_tensor_product = false;
 
+    enum IsvStates {COORDINATES, DISPLACEMENT, VELOCITY, INTERNAL_VARIABLES, DUAL_INTERNAL_VARIABLES};
+
   protected:
-    DfemTest() :
+    DfemSolidTest() :
       mat{.E = E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi, .rho = 1.0},
       disp(StateManager::newState(KinematicSpace{}, "displacement", mesh->tag())),
       velo(StateManager::newState(KinematicSpace{}, "velocity", mesh->tag())),
@@ -293,7 +295,7 @@ class DfemTest : public BeamMeshFixture {
 };
 
 
-TEST_F(DfemTest, PlasticityPatchTest)
+TEST_F(DfemSolidTest, PlasticityPatchTest)
 {
   // set displacement to uniaxial stress solution
   UniaxialSolution exact_solution{.E= E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi};
@@ -366,18 +368,20 @@ TEST_F(DfemTest, PlasticityPatchTest)
     }
   }
 
-  mfem::ParaViewDataCollection dc("dfem_plasticity_pv", &(mesh->mfemParMesh()));
-  dc.SetHighOrderOutput(true);
-  dc.SetLevelsOfDetail(1);
-  dc.RegisterField("displacement", &disp.gridFunction());
-  dc.RegisterField("reaction", &reaction_gf);
-  // dc.RegisterQField("internal_state", &output_internal_state);
-  dc.SetCycle(0);
-  dc.Save();
+  // uncomment to view output
+  //
+  // mfem::ParaViewDataCollection dc("dfem_plasticity_pv", &(mesh->mfemParMesh()));
+  // dc.SetHighOrderOutput(true);
+  // dc.SetLevelsOfDetail(1);
+  // dc.RegisterField("displacement", &disp.gridFunction());
+  // dc.RegisterField("reaction", &reaction_gf);
+  // // dc.RegisterQField("internal_state", &output_internal_state);
+  // dc.SetCycle(0);
+  // dc.Save();
 }
 
 
-TEST_F(DfemTest, DifferentiateInternalStateUpdate)
+TEST_F(DfemSolidTest, DifferentiateInternalStateUpdate)
 {
   // set displacement to uniaxial stress solution
   UniaxialSolution exact_solution{.E= E, .nu = nu, .sigma_y = sigma_y, .Hi = Hi};
@@ -393,6 +397,9 @@ TEST_F(DfemTest, DifferentiateInternalStateUpdate)
   update_internal_state.SetParameters({&disp, &velo, &coords});
   update_internal_state.Mult(internal_state, internal_state_new);
 
+  //
+  // VJP of internal state update
+  //
   std::vector<mfem::Vector*> primals_l{&internal_state};
   std::vector<FiniteElementState*> fields{&disp, &velo, &coords};
   std::vector<mfem::Vector*> params_l;
@@ -412,9 +419,6 @@ TEST_F(DfemTest, DifferentiateInternalStateUpdate)
   FiniteElementState disp_p = StateManager::newState(KinematicSpace{}, "displacement_perturbed", mesh->tag());
   disp_p = disp;
   disp_p.Add(fd_eps, du);
-  // after changing the parameter values, we apparently need to set
-  // them again in Differentiable Operator.
-  // Is it caching the E-vectors or quad point interpolations?
   update_internal_state.SetParameters({&disp_p, &velo, &coords});
   mfem::future::ParameterFunction Qnew_p(internal_state_space);
   update_internal_state.Mult(internal_state, Qnew_p);
@@ -431,7 +435,7 @@ TEST_F(DfemTest, DifferentiateInternalStateUpdate)
   //
   // VJP of internal state update
   //
-  enum IsvStates {COORDINATES, DISPLACEMENT, VELOCITY, INTERNAL_VARIABLES, DUAL_INTERNAL_VARIABLES};
+  
 
   mfem::future::ParameterFunction Q_bar(internal_state_space);
   const int rand_seed = 1;
@@ -464,8 +468,9 @@ TEST_F(DfemTest, DifferentiateInternalStateUpdate)
 
   params_l.push_back(&Q_bar);
 
-  // For reverse mode, it doesn't make sense to ask for a single upstream variable.
-  // We don't want to re-compute all the quadrature point jacobians to get upstream derivatives for another variable.
+  // For reverse mode, we should be able to ask for ALL upstream derivatives at once,
+  // but dFEM makes you choose one upstream.
+  // (This is likely because it is computing the full Jacobian wrt that variable at quad points)
   auto Q_vjp_u = update_internal_state_virtual_work.GetDerivative(IsvStates::DISPLACEMENT, primals_l, params_l);
 
   FiniteElementDual u_bar = StateManager::newDual(KinematicSpace{}, "u_bar", mesh->tag());
@@ -477,7 +482,7 @@ TEST_F(DfemTest, DifferentiateInternalStateUpdate)
   Q_vjp_u->MultTranspose(seed, u_bar);
 #endif
   
-  // This is a temporary hack because the action of the Jacobian transpose is not yet implemented in ∂FEM.
+  // Instead, we have to do this until MultTranspose is implmented
   mfem::Vector direction(disp.Size());
   direction = 0.0;
   mfem::Vector u_bar_i(1);
@@ -491,16 +496,6 @@ TEST_F(DfemTest, DifferentiateInternalStateUpdate)
   // TODO: make above work in parallel
   mfem::out << "u_bar = " << std::endl;
   u_bar.Print();
-
-  // test directional derivative
-
-
-  // set loads
-
-  // advance
-  //  solve for u
-  //    residual and jvp
-  //  use u to update internal
 }
 
 
