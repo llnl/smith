@@ -65,7 +65,7 @@ void finalizer()
 #endif
 #endif
 
-#ifdef SERAC_USE_SUNDIALS
+#ifdef SMITH_USE_SUNDIALS
   mfem::Sundials::Finalize();
 #endif
 
