@@ -26,6 +26,108 @@
 
 namespace smith {
 
+struct NewtonSettings {
+  int max_iters;
+  double residual_abs_tol;
+  double residual_rel_tol;
+};
+
+
+template <auto f>
+__attribute__((noinline))
+double newton_scalar_impl(double x0, double p) {
+  auto fprime = [&](double x) {
+    double dx = 1.0;
+    return __enzyme_fwddiff<double>((void*)+f, x, dx, p, 0.0);
+  };
+
+  NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 0.0, .residual_rel_tol = 1e-10};
+
+  double x = x0;
+  double r0 = f(x, p);
+  int iters = 0;
+  for (int i = 0; i < settings.max_iters; i++, iters++) {
+        double r = f(x, p);
+        if (std::abs(r) < settings.residual_abs_tol || std::abs(r/r0) < settings.residual_rel_tol) {
+            break;
+        }
+        double J = fprime(x);
+        x -= r/J;
+    }
+    mfem::out << "Took " << iters << " iters" << std::endl;
+    return x;
+}
+
+
+template<auto f>
+double newton_scalar(double x0, double p) {
+  return newton_scalar_impl<f>(x0, p);
+}
+
+
+template <auto f>
+double newton_scalar_impl_fwddiff(double x0, double p, double dp)
+{
+    double x = newton_scalar<f>(x0, p);
+    double dfdx = __enzyme_fwddiff<double>((void*)+f, enzyme_dup, x, 1.0, enzyme_const, p);
+    double dfdp = __enzyme_fwddiff<double>((void*)+f, enzyme_const, x, enzyme_dup, p, dp);
+    std::cout << "Custom diff is being called" << std::endl;
+    return -dfdp/dfdx;
+}
+
+// __attribute__((used))
+// void *  __enzyme_register_derivative_newtons_method_impl[2] = { 
+//   (void*) newton_scalar_impl<foo>, 
+//   (void*) newton_scalar_impl_fwddiff<foo> 
+// };
+
+double foo(double x, double a) {
+    return x*x - a;
+};
+
+/* Example of a custom derivative that works. */
+__attribute__((noinline))
+void square_impl(double* x, double* out) {
+  double& y = *x;
+  *out = y*y;
+}
+
+void square_fwddiff(double* x, double* dx, double* out, double* dout) {
+  mfem::out << "Calling custom derivative" << std::endl;
+  *out = (*x) * (*x);
+  *dout = (*dx) * 100.0;
+}
+
+double square(double x) {
+  double y;
+  square_impl(&x, &y);
+  return y;
+}
+
+__attribute__((used))
+void *  __enzyme_register_derivative_square_impl[2] = { 
+  (void*) square_impl, 
+  (void*) square_fwddiff 
+};
+
+
+TEST(Enz, Newton) {
+  double z = 2.0;
+  //NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 0.0, .residual_rel_tol = 1e-10};
+  double x0 = 0.5*z;
+  double x = newton_scalar<foo>(x0, z);
+  EXPECT_NEAR(x, std::sqrt(z), 1e-9);
+
+  double dz = 1.0;
+  double dz_dx = __enzyme_fwddiff<double>((void*) square, enzyme_dup, z, dz);
+  EXPECT_EQ(dz_dx, 100.0);
+
+  // double dz = 1.0;
+  // double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<foo>, enzyme_const, x0, enzyme_dup, z, dz);
+  // double gold = 0.5/x;
+  // EXPECT_NEAR(dx_dz, gold, 1e-9);
+}
+
 struct UniaxialSolution {
   double E, nu, sigma_y, Hi;
 
@@ -56,8 +158,7 @@ struct UniaxialSolution {
   }
 };
 
-
-struct SmoothJ2 {
+struct J2Linear {
   static constexpr int dim = 3;  ///< spatial dimension
   static constexpr int N_INTERNAL_STATES = 10;
   static constexpr double tol = 1e-10;  ///< relative tolerance on residual mag to judge convergence of return map
@@ -152,6 +253,7 @@ struct SmoothJ2 {
   SMITH_HOST_DEVICE double density(Parameters...) const { return rho; }
 };
 
+
 /* q-function for internal state update. Located here in the test for development.
    This should be moved inside a weak form class. */
 template <typename Material, typename... Parameters>
@@ -228,7 +330,7 @@ class DfemSolidTest : public BeamMeshFixture {
     
     using KinematicSpace = H1<disp_order, dim>;
   
-    using Material = SmoothJ2;
+    using Material = J2Linear;
     static constexpr double E = 1.0e3;
     static constexpr double nu = 0.25;
     static constexpr double sigma_y = 9.0;
