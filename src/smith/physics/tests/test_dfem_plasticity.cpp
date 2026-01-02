@@ -62,6 +62,15 @@ TEST(Enzyme, CustomDerivative) {
   EXPECT_EQ(dy_dx, 100.0);
 }
 
+TEST(Enzyme, DifferentiatesLambdas) {
+  auto f = [](double x, double p) { return p*x*x; };
+  double x = 2.0;
+  double p = 0.5;
+  double y = f(x, p);
+  EXPECT_DOUBLE_EQ(y, 2.0);
+  double dy_dx = __enzyme_fwddiff<double>((void*) +f, x, 1.0, p, 0.0);
+  EXPECT_DOUBLE_EQ(dy_dx, 2.0);
+}
 
 struct NewtonSettings {
   int max_iters;
