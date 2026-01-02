@@ -35,15 +35,15 @@ struct NewtonSettings {
 
 template <auto f>
 __attribute__((noinline))
-void newton_scalar_impl(const double* x0_ptr, const double* p_ptr, double* x_ptr) {
+void newton_scalar_impl(const double* x0_ptr, const NewtonSettings* settings_ptr, const double* p_ptr, double* x_ptr) {
   const double& x0 = *x0_ptr;
+  const NewtonSettings& settings = *settings_ptr;
   const double& p = *p_ptr;
+
   auto fprime = [&](double x) {
     double dx = 1.0;
     return __enzyme_fwddiff<double>((void*)+f, x, dx, p, 0.0);
   };
-
-  NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 0.0, .residual_rel_tol = 1e-10};
 
   double x = x0;
   double r0 = f(x, p);
@@ -61,33 +61,34 @@ void newton_scalar_impl(const double* x0_ptr, const double* p_ptr, double* x_ptr
 }
 
 
+template <auto f>
+void newton_scalar_impl_fwddiff(const double* x0, const double* /* dx0 */, NewtonSettings* settings, NewtonSettings* /* dummy dual settings */, const double* p, const double* dp, double* x, double* dx)
+{
+  newton_scalar_impl<f>(x0, settings, p, x);
+  double dfdx = __enzyme_fwddiff<double>((void*)+f, enzyme_dup, *x, 1.0, enzyme_const, *p);
+  double dfdp = __enzyme_fwddiff<double>((void*)+f, enzyme_const, *x, enzyme_dup, *p, *dp);
+  std::cout << "Custom diff is being called" << std::endl;
+  *dx = -dfdp/dfdx;
+}
+
+
 template<auto f>
-double newton_scalar(double x0, double p) {
+double newton_scalar(double x0, NewtonSettings settings, double p) {
   double x;
-  newton_scalar_impl<f>(&x0, &p, &x);
+  newton_scalar_impl<f>(&x0, &settings, &p, &x);
   return x;
 }
 
 
-template <auto f>
-void newton_scalar_impl_fwddiff(const double* x0, const double* /* dx0 */, const double* p, const double* dp, double* x, double* dx)
-{
-    newton_scalar_impl<f>(x0, p, x);
-    double dfdx = __enzyme_fwddiff<double>((void*)+f, enzyme_dup, *x, 1.0, enzyme_const, *p);
-    double dfdp = __enzyme_fwddiff<double>((void*)+f, enzyme_const, *x, enzyme_dup, *p, *dp);
-    std::cout << "Custom diff is being called" << std::endl;
-    *dx = -dfdp/dfdx;
-}
-
-double foo(double x, double a) {
+double sqrt_residual(double x, double a) {
     return x*x - a;
 };
 
 
 __attribute__((used))
 void *  __enzyme_register_derivative_newtons_method_impl[2] = { 
-  (void*) newton_scalar_impl<foo>, 
-  (void*) newton_scalar_impl_fwddiff<foo> 
+  (void*) newton_scalar_impl<sqrt_residual>, 
+  (void*) newton_scalar_impl_fwddiff<sqrt_residual> 
 };
 
 
@@ -119,16 +120,25 @@ void *  __enzyme_register_derivative_square_impl[2] = {
 
 TEST(Enz, Newton) {
   double z = 2.0;
-  //NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 0.0, .residual_rel_tol = 1e-10};
+  NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 0.0, .residual_rel_tol = 1e-10};
   double x0 = 0.5*z;
-  double x = newton_scalar<foo>(x0, z);
+  double x = newton_scalar<sqrt_residual>(x0, settings, z);
   EXPECT_NEAR(x, std::sqrt(z), 1e-9);
 
   double dz = 1.0;
   double dz_dx = __enzyme_fwddiff<double>((void*) square, enzyme_dup, z, dz);
   EXPECT_EQ(dz_dx, 100.0);
 
-  double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<foo>, enzyme_const, x0, enzyme_dup, z, dz);
+  /* QUESTION FOR BILL:
+  I would like to use the commented code below (where the settings struct is marked enzyme_const).
+  However, this causes enzyme to fail to register the custom derivative rule for newton_scalar.
+  The problem is the integer field in the struct. If I make it type double, the line below works.
+  Are custom derivatives forced to use the default activity rules?
+  */
+  //double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual>, enzyme_const, x0, enzyme_const, settings, enzyme_dup, z, dz);
+  
+  NewtonSettings dummy_settings_dual{};
+  double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual>, enzyme_const, x0, enzyme_dup, settings, dummy_settings_dual, enzyme_dup, z, dz);
   double gold = 0.5/x;
   EXPECT_NEAR(dx_dz, gold, 1e-9);
 }
