@@ -26,12 +26,48 @@
 
 namespace smith {
 
+/* Example of a custom derivative that works. */
+__attribute__((noinline))
+void square_impl(double* x, double* out) {
+  double& y = *x;
+  *out = y*y;
+}
+
+void square_fwddiff(double* x, double* dx, double* out, double* dout) {
+  mfem::out << "Calling custom derivative" << std::endl;
+  *out = (*x) * (*x);
+  // Intentionally incorrect, used to verify custom derivative rule is called
+  *dout = (*dx) * 100.0;
+}
+
+double square(double x) {
+  double y;
+  square_impl(&x, &y);
+  return y;
+}
+
+__attribute__((used))
+void *  __enzyme_register_derivative_square_impl[2] = { 
+  (void*) square_impl,
+  (void*) square_fwddiff
+};
+
+TEST(Enzyme, CustomDerivative) {
+  double x = 2.0;
+  double y = square(x);
+  EXPECT_DOUBLE_EQ(y, 4.0);
+  double x_dot = 1.0;
+  double dy_dx = __enzyme_fwddiff<double>((void*) square, enzyme_dup, x, x_dot);
+  // Custom derivative rule should be defined to this value
+  EXPECT_EQ(dy_dx, 100.0);
+}
+
+
 struct NewtonSettings {
   int max_iters;
   double residual_abs_tol;
   double residual_rel_tol;
 };
-
 
 template <auto f>
 __attribute__((noinline))
@@ -56,18 +92,19 @@ void newton_scalar_impl(const double* x0_ptr, const NewtonSettings* settings_ptr
         double J = fprime(x);
         x -= r/J;
     }
-    mfem::out << "Took " << iters << " iters" << std::endl;
     *x_ptr = x;
 }
 
 
 template <auto f>
-void newton_scalar_impl_fwddiff(const double* x0, const double* /* dx0 */, NewtonSettings* settings, NewtonSettings* /* dummy dual settings */, const double* p, const double* dp, double* x, double* dx)
+void newton_scalar_impl_fwddiff(const double* x0, const double* /* dx0 */,
+                                NewtonSettings* settings, NewtonSettings* /* dummy dual settings */,
+                                const double* p, const double* dp,
+                                double* x, double* dx)
 {
   newton_scalar_impl<f>(x0, settings, p, x);
   double dfdx = __enzyme_fwddiff<double>((void*)+f, enzyme_dup, *x, 1.0, enzyme_const, *p);
   double dfdp = __enzyme_fwddiff<double>((void*)+f, enzyme_const, *x, enzyme_dup, *p, *dp);
-  std::cout << "Custom diff is being called" << std::endl;
   *dx = -dfdp/dfdx;
 }
 
@@ -86,48 +123,18 @@ double sqrt_residual(double x, double a) {
 
 
 __attribute__((used))
-void *  __enzyme_register_derivative_newtons_method_impl[2] = { 
+void *  __enzyme_register_derivative_newton_scalar_on_sqrt[2] = {
   (void*) newton_scalar_impl<sqrt_residual>, 
   (void*) newton_scalar_impl_fwddiff<sqrt_residual> 
 };
 
 
-/* Example of a custom derivative that works. */
-__attribute__((noinline))
-void square_impl(double* x, double* out) {
-  double& y = *x;
-  *out = y*y;
-}
-
-void square_fwddiff(double* x, double* dx, double* out, double* dout) {
-  mfem::out << "Calling custom derivative" << std::endl;
-  *out = (*x) * (*x);
-  *dout = (*dx) * 100.0;
-}
-
-double square(double x) {
-  double y;
-  square_impl(&x, &y);
-  return y;
-}
-
-__attribute__((used))
-void *  __enzyme_register_derivative_square_impl[2] = { 
-  (void*) square_impl, 
-  (void*) square_fwddiff 
-};
-
-
-TEST(Enz, Newton) {
+TEST(Enzyme, Newton) {
   double z = 2.0;
   NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 0.0, .residual_rel_tol = 1e-10};
   double x0 = 0.5*z;
   double x = newton_scalar<sqrt_residual>(x0, settings, z);
   EXPECT_NEAR(x, std::sqrt(z), 1e-9);
-
-  double dz = 1.0;
-  double dz_dx = __enzyme_fwddiff<double>((void*) square, enzyme_dup, z, dz);
-  EXPECT_EQ(dz_dx, 100.0);
 
   /* QUESTION FOR BILL:
   I would like to use the commented code below (where the settings struct is marked enzyme_const).
@@ -138,9 +145,10 @@ TEST(Enz, Newton) {
   //double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual>, enzyme_const, x0, enzyme_const, settings, enzyme_dup, z, dz);
   
   NewtonSettings dummy_settings_dual{};
-  double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual>, enzyme_const, x0, enzyme_dup, settings, dummy_settings_dual, enzyme_dup, z, dz);
-  double gold = 0.5/x;
-  EXPECT_NEAR(dx_dz, gold, 1e-9);
+  double z_dot = 1.0;
+  double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual>, enzyme_const, x0, enzyme_dup, settings, dummy_settings_dual, enzyme_dup, z, z_dot);
+  double dx_dz_gold = 0.5/x;
+  EXPECT_NEAR(dx_dz, dx_dz_gold, 1e-9);
 }
 
 struct UniaxialSolution {
