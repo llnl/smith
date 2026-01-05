@@ -1,5 +1,5 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -60,7 +60,7 @@ dimensionality). Here, we use :math:`s` to denote the "source" term
       [](auto x, auto ... args){
       	auto s = ...;
       	auto f = ...;
-      	return serac::tuple{s, f};
+      	return smith::tuple{s, f};
       }, 
       domain_of_integration
     );
@@ -75,7 +75,7 @@ dimensionality). Here, we use :math:`s` to denote the "source" term
       [](auto x, auto ... args){
       	auto s = ...;
       	auto f = ...;
-      	return serac::tuple{s, f};
+      	return smith::tuple{s, f};
       }, 
       domain_of_integration
     );
@@ -128,7 +128,7 @@ the stress response term:
       // Functional::AddVolumeIntegral() expects us to return a tuple of the form {s, f},
       // but this integral has no term that get integrated against the test functions,
       // so the "source" term is just zero
-      return serac::tuple{zero{}, stress};
+      return smith::tuple{zero{}, stress};
      
     }, 
     mesh
@@ -199,7 +199,7 @@ Putting these snippets together without the verbose comments, we have (note: the
       DependsOn<0>{}, // depends on the displacement field
       [](auto x, auto disp){
         auto [u, grad_u] = disp;
-        return serac::tuple{b(x), material_model(grad_u)};
+        return smith::tuple{b(x), material_model(grad_u)};
       }, 
       mesh
     );
@@ -457,7 +457,7 @@ As a simple example, consider the implementation of two quantities of interest:
   
   \mbox{average}(u) = \frac{\int_{\Omega_p} u\, dx }{\int_{\Omega_p} dx}  
 
-.. literalinclude:: ../../../../src/serac/numerics/functional/tests/functional_qoi.cpp
+.. literalinclude:: ../../../../src/smith/numerics/functional/tests/functional_qoi.cpp
    :start-after: _average_start
    :end-before: _average_end
    :language: C++
@@ -468,7 +468,7 @@ As a simple example, consider the implementation of two quantities of interest:
   
   \mbox{boundary average}(| \mathbf{u} \cdot n |) = \frac{\int_{\Gamma_p} | \mathbf{u} \cdot n | \, dS }{\int_{\Gamma_p} dS}
 
-.. literalinclude:: ../../../../src/serac/numerics/functional/tests/functional_qoi.cpp
+.. literalinclude:: ../../../../src/smith/numerics/functional/tests/functional_qoi.cpp
  :start-after: _boundary_start
  :end-before: _boundary_end
  :language: C++

@@ -1,7 +1,7 @@
 #!/bin/bash
 ##############################################################################
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level COPYRIGHT file for details.
+# other Smith Project Developers. See the top-level COPYRIGHT file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 ##############################################################################
@@ -21,7 +21,7 @@ echo HOST_CONFIG
 echo $HOST_CONFIG
 
 echo "~~~~~~ RUNNING CMAKE ~~~~~~~~"
-cmake_args="-DENABLE_CLANGTIDY=OFF -DSERAC_ENABLE_CODE_CHECKS=ON"
+cmake_args="-DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=ON -DENABLE_CLANGTIDY=OFF -DSMITH_ENABLE_CODE_CHECKS=ON"
 
 if [[ "$CHECK_TYPE" == "coverage" ]] ; then
     # Alias llvm-cov to gcov so it acts like gcov
@@ -57,10 +57,9 @@ or_die cd build-check-debug
 
 if [[ "$CHECK_TYPE" == "coverage" ]] ; then
     or_die make -j4
-    or_die make serac_coverage
-    # Rename to file expected by codecov
-    cp serac_coverage.info.cleaned lcov.info
-    or_die curl -s https://codecov.io/bash | bash /dev/stdin -X gcov
+    or_die make smith_coverage
+    # Move cov report to repo dir, so that Github Actions can find it
+    mv smith_coverage.info.cleaned ..
 fi
 
 if [[ "$CHECK_TYPE" == "docs" ]] ; then

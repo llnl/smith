@@ -1,11 +1,11 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 #------------------------------------------------------------------------------
 # Host-config for example. 
-# Defines configuration variables from Serac's build.
+# Defines configuration variables from Smith's build.
 #------------------------------------------------------------------------------
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE                       CACHE BOOL "")
@@ -30,6 +30,10 @@ set(MPIEXEC_EXECUTABLE "@MPIEXEC_EXECUTABLE@" CACHE PATH "")
 set(MPIEXEC_NUMPROC_FLAG "@MPIEXEC_NUMPROC_FLAG@" CACHE STRING "")
 
 
+# OpenMP
+set(ENABLE_OPENMP @ENABLE_OPENMP@ CACHE BOOL "")
+
+
 # CUDA
 set(ENABLE_CUDA                @ENABLE_CUDA@                  CACHE BOOL "")
 
@@ -44,5 +48,19 @@ if(ENABLE_CUDA)
 endif()
 
 
-# Path to Serac
-set(SERAC_DIR        "@CMAKE_INSTALL_PREFIX@" CACHE PATH "")
+# HIP/ ROCm
+set(ENABLE_HIP @ENABLE_HIP@ CACHE BOOL "")
+
+if(ENABLE_HIP)
+  set(ROCM_PATH               "@ROCM_PATH@"               CACHE PATH "")
+  set(CMAKE_HIP_ARCHITECTURES "@CMAKE_HIP_ARCHITECTURES@" CACHE STRING "")
+  set(CMAKE_HIP_COMPILER      "@CMAKE_HIP_COMPILER@"      CACHE FILEPATH "")
+  set(HIP_ROOT_DIR            "@HIP_ROOT_DIR@"            CACHE PATH "")
+  set(AMDGPU_TARGETS          "@AMDGPU_TARGETS@"          CACHE STRING "")
+  set(GPU_TARGETS             "@GPU_TARGETS@"             CACHE STRING "")
+  set(ROCM_ROOT_DIR           "@ROCM_ROOT_DIR@"           CACHE PATH "")
+endif()
+
+
+# Path to Smith
+set(SMITH_DIR        "@CMAKE_INSTALL_PREFIX@" CACHE PATH "")

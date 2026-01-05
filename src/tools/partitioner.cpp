@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -15,8 +15,8 @@
 #include "axom/CLI11.hpp"
 #include "axom/core/utilities/Timer.hpp"
 
-#include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/serac_config.hpp"
+#include "smith/mesh_utils/mesh_utils.hpp"
+#include "smith/smith_config.hpp"
 
 using timer = axom::utilities::Timer;
 

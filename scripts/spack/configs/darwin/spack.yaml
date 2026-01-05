@@ -1,0 +1,224 @@
+spack:
+  config:
+    install_tree:
+      root: $spack/..
+      projections:
+        all: '{compiler.name}-{compiler.version}/{name}-{version}-{hash}'
+    misc_cache: $spack/../misc_cache
+    test_stage: $spack/../test_stage
+    build_stage::
+    - $spack/../build_stage
+
+  view: false
+
+  include:
+    - ../defaults.yaml
+    - ../versions.yaml
+
+  toolchains:
+    clang_19:
+    - spec: '%c=llvm'
+      when: '%c'
+    - spec: '%cxx=llvm'
+      when: '%cxx'
+    - spec: '%fortran=gcc'
+      when: '%fortran'
+    - spec: '%openmpi@5.0.8.clang_19'
+      when: '%mpi'
+
+  packages:
+    all:
+      target: [aarch64]
+      providers:
+        blas: [openblas]
+        lapack: [netlib-lapack]
+        mpi: [openmpi]
+        zlib-api: [zlib]
+
+    #Compiler packages
+    gcc:
+      externals:
+      - spec: gcc@15.1.0 languages:=c,c++,fortran
+        prefix: /opt/homebrew/opt/gcc@15
+        extra_attributes:
+          compilers:
+            c: /opt/homebrew/opt/gcc@15/bin/gcc-15
+            cxx: /opt/homebrew/opt/gcc@15/bin/g++-15
+            fortran: /opt/homebrew/opt/gcc@15/bin/gfortran
+    llvm:
+      externals:
+      - spec: llvm@19.1.7+clang~lld~lldb
+        prefix: /opt/homebrew/opt/llvm@19
+        extra_attributes:
+          compilers:
+            c: /opt/homebrew/opt/llvm@19/bin/clang
+            cxx: /opt/homebrew/opt/llvm@19/bin/clang++
+          flags:
+            fflags: -fPIC
+          extra_rpaths:
+          - /opt/homebrew/lib/gcc/15
+
+    # Providers
+    mpi:
+      buildable: false
+    openmpi:
+      buildable: false
+      externals:
+      - spec: openmpi@5.0.8.clang_19
+        prefix: /opt/homebrew
+    openblas:
+      buildable: false
+      externals:
+      - spec: openblas@0.3.30
+        prefix: /opt/homebrew
+    netlib-lapack:
+      buildable: false
+      externals:
+      - spec: netlib-lapack@3.12.0
+        prefix: /opt/homebrew/opt/lapack
+    zlib:
+      buildable: false
+      externals:
+      - spec: zlib@1.3.1
+        prefix: /opt/homebrew/opt/zlib
+
+    # External packages from Homebrew
+    automake:
+      buildable: false
+      externals:
+      - spec: automake@1.17
+        prefix: /opt/homebrew
+    bzip2:
+      buildable: false
+      externals:
+      - spec: bzip2@1.0.8
+        prefix: /opt/homebrew/opt/bzip2
+    # NOTE: CMake v4.0 causes metis and other package to fail. Brew doesn't allow older versions
+    # of CMake to be installed, so I installed CMake manually https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg
+    cmake:
+      version: [3.23.5]
+      buildable: false
+      externals:
+      - spec: cmake@3.23.5
+        prefix: /Applications/CMake.app/Contents
+    diffutils:
+      buildable: false
+      externals:
+      - spec: diffutils@3.12
+        prefix: /opt/homebrew
+    expat:
+      buildable: false
+      externals:
+      - spec: expat@2.7.1
+        prefix: /opt/homebrew
+    gettext:
+      buildable: false
+      externals:
+      - spec: gettext@0.24
+        prefix: /opt/homebrew
+    graphviz:
+      buildable: false
+      externals:
+      - spec: graphviz@12.2.1
+        prefix: /opt/homebrew
+    libtool:
+      buildable: false
+      externals:
+      - spec: libtool@2.5.4
+        prefix: /opt/homebrew
+    libx11:
+      buildable: false
+      externals:
+      - spec: libx11@1.8.12
+        prefix: /opt/homebrew
+    lua:
+      buildable: false
+      externals:
+      - spec: lua@5.4.7
+        prefix: /opt/homebrew
+    m4:
+      buildable: false
+      externals:
+      - spec: m4@1.4.19
+        prefix: /opt/homebrew/opt/m4
+    ninja:
+      buildable: false
+      externals:
+      - spec: ninja@1.12.1
+        prefix: /opt/homebrew
+    pkgconf:
+      buildable: false
+      externals:
+      - spec: pkgconf@2.4.3
+        prefix: /opt/homebrew
+    readline:
+      buildable: false
+      externals:
+      - spec: readline@8.2.13
+        prefix: /opt/homebrew
+    sqlite:
+      buildable: false
+      externals:
+      - spec: sqlite@3.49.1
+        prefix: /opt/homebrew
+    xz:
+      buildable: false
+      externals:
+      - spec: xz@5.8.1
+        prefix: /opt/homebrew 
+
+    # External packages in /usr
+    curl:
+      buildable: false
+      externals:
+      - spec: curl@8.7.1
+        prefix: /usr
+    git:
+      buildable: false
+      externals:
+      - spec: git@2.39.5
+        prefix: /usr
+    gmake:
+      buildable: false
+      externals:
+      - spec: gmake@3.81
+        prefix: /usr
+    perl:
+      buildable: false
+      externals:
+      - spec: perl@5.34.1~cpanm+opcode+open+shared+threads
+        prefix: /usr
+    python:
+      buildable: false
+      externals:
+      - spec: python@3.9.6
+        prefix: /usr
+    tar:
+      buildable: false
+      externals:
+      - spec: tar@3.5.3
+        prefix: /usr
+    unzip:
+      buildable: false
+      externals:
+      - spec: unzip@6.00
+        prefix: /usr
+    
+    # Devtools (optional)
+    cppcheck:
+      version: [2.17.1_2]
+      buildable: false
+      externals:
+      - spec: cppcheck@2.17.1_2
+        prefix: /opt/homebrew
+    doxygen:
+      version: [1.13.2]
+      buildable: false
+      externals:
+      - spec: doxygen@1.13.2
+        prefix: /opt/homebrew
+    py-sphinx:
+      buildable: false
+      externals:
+      - spec: py-sphinx@7.4.7
+        prefix: /Users/chapman39/dev/smith/venv

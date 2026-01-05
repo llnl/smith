@@ -1,4 +1,4 @@
 Other
 -----
 
-The following host-config(s) are for reference, documentation, and/ or Serac-internal purposes only.
+The following host-config(s) are for reference, documentation, and/ or Smith internal purposes only.

@@ -1,10 +1,10 @@
-# Contributing to Serac
+# Contributing to Smith
 
-We welcome contributions to Serac. To do so please submit a pull request through our
-Serac github page at https://github.com/LLNL/serac.
+We welcome contributions to Smith. To do so please submit a pull request through our
+Smith Github page at https://github.com/LLNL/smith.
 
-All contributions to Serac must be made under the BSD License.
+All contributions to Smith must be made under the BSD License.
 
 # Attribution
 
-The Serac project uses git's commit history to track contributions from individual developers.
+The Smith project uses git's commit history to track contributions from individual developers.
