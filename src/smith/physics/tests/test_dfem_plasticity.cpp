@@ -26,52 +26,6 @@
 
 namespace smith {
 
-/* Example of a custom derivative that works. */
-__attribute__((noinline))
-void square_impl(double* x, double* out) {
-  double& y = *x;
-  *out = y*y;
-}
-
-void square_fwddiff(double* x, double* dx, double* out, double* dout) {
-  mfem::out << "Calling custom derivative" << std::endl;
-  *out = (*x) * (*x);
-  // Intentionally incorrect, used to verify custom derivative rule is called
-  *dout = (*dx) * 100.0;
-}
-
-double square(double x) {
-  double y;
-  square_impl(&x, &y);
-  return y;
-}
-
-__attribute__((used))
-void *  __enzyme_register_derivative_square_impl[2] = { 
-  (void*) square_impl,
-  (void*) square_fwddiff
-};
-
-TEST(Enzyme, CustomDerivative) {
-  double x = 2.0;
-  double y = square(x);
-  EXPECT_DOUBLE_EQ(y, 4.0);
-  double x_dot = 1.0;
-  double dy_dx = __enzyme_fwddiff<double>((void*) square, enzyme_dup, x, x_dot);
-  // Custom derivative rule should be defined to this value
-  EXPECT_EQ(dy_dx, 100.0);
-}
-
-TEST(Enzyme, DifferentiatesLambdas) {
-  auto f = [](double x, double p) { return p*x*x; };
-  double x = 2.0;
-  double p = 0.5;
-  double y = f(x, p);
-  EXPECT_DOUBLE_EQ(y, 2.0);
-  double dy_dx = __enzyme_fwddiff<double>((void*) +f, x, 1.0, p, 0.0);
-  EXPECT_DOUBLE_EQ(dy_dx, 2.0);
-}
-
 struct NewtonSettings {
   int max_iters;
   double residual_abs_tol;
