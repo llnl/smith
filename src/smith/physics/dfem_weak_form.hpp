@@ -150,6 +150,8 @@ class DfemWeakForm : public WeakForm {
   {
     // sum field operator doesn't work with sum factorization
     v_dot_weak_form_residual_.DisableTensorProductStructure();
+    // use TVECTORs where we can in dFEM
+    weak_form_.SetMultLevel(mfem::future::DifferentiableOperator::MultLevel::TVECTOR);
     residual_vector_.UseDevice(true);
   }
 
@@ -205,16 +207,45 @@ class DfemWeakForm : public WeakForm {
 
   /// @overload
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double /*time*/, double dt, ConstFieldPtr /*shape_disp*/,
-                                                 const std::vector<ConstFieldPtr>& /*fields*/,
-                                                 const std::vector<double>& /*jacobian_weights*/,
+                                                 const std::vector<ConstFieldPtr>& fields,
+                                                 const std::vector<double>& jacobian_weights,
                                                  const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {},
-                                                 int /*block_row*/ = 0) const override
+                                                 int block_row = 0) const override
   {
-    SLIC_ERROR_ROOT("DfemWeakForm does not support matrix assembly");
+    SLIC_ERROR_ROOT_IF(block_row != 0, "Invalid block row and column requested in fieldJacobian for DfemWeakForm");
 
     dt_ = dt;
 
-    return std::make_unique<mfem::HypreParMatrix>();
+    std::unique_ptr<mfem::HypreParMatrix> J;
+
+    auto addToJ = [&J](double factor, std::unique_ptr<mfem::HypreParMatrix> jac_contrib) {
+      if (J) {
+        SLIC_ERROR_IF(J->N() != jac_contrib->N(),
+                      "Multiple nonzero jacobian weights are being used on inconsistently sized input arguments.");
+        SLIC_ERROR_IF(J->M() != jac_contrib->M(),
+                      "Multiple nonzero jacobian weights are being used on inconsistently sized input arguments.");
+        J->Add(factor, *jac_contrib);
+      } else {
+        J.reset(jac_contrib.release());
+        if (factor != 1.0) (*J) *= factor;
+      }
+    };
+
+    mfem::Vector empty_residual_l(output_mfem_space_.GetVSize());
+    std::vector<mfem::Vector*> test_par_gf({&empty_residual_l});
+    std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
+
+    for (size_t input_col = 0; input_col < jacobian_weights.size(); ++input_col) {
+      if (jacobian_weights[input_col] != 0.0) {
+        auto deriv_op = weak_form_.GetDerivative(input_col, test_par_gf, field_par_gf);
+        auto jac_contrib = std::make_unique<mfem::HypreParMatrix>();
+        auto jac_contrib_ptr = jac_contrib.get();
+        deriv_op->Assemble(jac_contrib_ptr);
+        addToJ(jacobian_weights[input_col], std::move(jac_contrib));
+      }
+    }
+
+    return J;
   }
 
   /// @overload
@@ -260,16 +291,11 @@ class DfemWeakForm : public WeakForm {
 
     std::vector<mfem::Vector*> test_par_gf({&v_fields[0]->gridFunction()});
     std::vector<mfem::Vector*> field_par_gf = getLVectors(fields);
-    // field_par_gf.push_back(&v_fields[0]->gridFunction());
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (vjp_sensitivities[input_col] != nullptr) {
-        auto deriv_op = v_dot_weak_form_residual_.GetDerivative(input_col, test_par_gf, field_par_gf);
-        mfem::Vector vec_jac_mfem_vector(vjp_sensitivities[input_col]->Size());
-        vec_jac_mfem_vector = 0.0;
-        // NOTE: this is happening entry by entry inside this (temporary) dfem function
-        deriv_op->Assemble(vec_jac_mfem_vector);
-        (*vjp_sensitivities[input_col]) += vec_jac_mfem_vector;
+        auto deriv_op = weak_form_.GetDerivative(input_col, test_par_gf, field_par_gf);
+        deriv_op->MultTranspose(*v_fields[0], *vjp_sensitivities[input_col]);
       }
     }
   }
