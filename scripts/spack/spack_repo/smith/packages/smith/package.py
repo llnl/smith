@@ -344,7 +344,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         # required
         depends_on(f"axom {ext_rocm_dep}", when=f"{ext_rocm_dep}")
         depends_on(f"mfem+raja+umpire {ext_rocm_dep}", when=f"{ext_rocm_dep}")
-        depends_on(f"hypre+umpire {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"hypre {ext_rocm_dep}", when=f"{ext_rocm_dep}")
 
         # optional
         depends_on(f"caliper {ext_rocm_dep}", when=f"^caliper {ext_rocm_dep}")

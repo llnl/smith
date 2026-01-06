@@ -15,6 +15,10 @@ packages:
   conduit:
     require:
     - spec: "@0.9.5"
+  # Hypre v3 causes equationsolver to fail TOSS 4
+  hypre:
+    require:
+    - spec: "@2.33.0"
   mfem:
     require:
     - spec: "@4.9.0.3"
