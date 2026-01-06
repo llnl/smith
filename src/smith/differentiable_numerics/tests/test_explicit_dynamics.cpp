@@ -20,7 +20,7 @@
 #include "smith/differentiable_numerics/timestep_estimator.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/evaluate_objective.hpp"
-#include "smith/differentiable_numerics/tests/differentiable_test_utils.hpp"
+#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
 // This tests the interface between the new smith::WeakForm with gretl and its conformity to the existing base_physics
 // interface

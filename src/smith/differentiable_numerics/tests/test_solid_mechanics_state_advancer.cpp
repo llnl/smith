@@ -23,7 +23,7 @@
 #include "smith/differentiable_numerics/differentiable_solid_mechanics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
-#include "smith/differentiable_numerics/tests/differentiable_test_utils.hpp"
+#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
 namespace smith {
 

@@ -11,7 +11,7 @@
 
 #include "gretl/data_store.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
-#include "smith/differentiable_numerics/tests/differentiable_test_utils.hpp"
+#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
 // This tests the interface between the new smith::WeakForm with gretl and its conformity to the existing base_physics
 // interface
