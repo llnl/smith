@@ -68,12 +68,6 @@ spack:
         tbb: [intel-tbb]
         jpeg: [libjpeg-turbo, libjpeg]
 
-    # Prevent building other blas/ lapack providers
-    amdblis:
-      buildable: false
-    amdlibflame:
-      buildable: false
-
     # Compiler packages
     gcc:
       externals:
@@ -200,7 +194,8 @@ spack:
       - spec: graphviz@2.43.0
         prefix: /usr
     openblas:
-      buildable: false
+      # Spack is insistent on building openblas in the CUDA container, so allow building from source
+      buildable: true
       externals:
       - spec: openblas@0.3.26
         prefix: /usr
