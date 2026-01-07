@@ -67,7 +67,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   }
 
   /// @brief Utility function to consistently construct all the weak forms and FieldStates for a solid mechanics
-  /// application You will get back: shape_disp, states, params, time, and solid_mechanics_weak_form
+  /// application you will get back: shape_disp, states, params, time, and solid_mechanics_weak_form
   template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
   static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<gretl::DataStore>& graph,
                                      SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
