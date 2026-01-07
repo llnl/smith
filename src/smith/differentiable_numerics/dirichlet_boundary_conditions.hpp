@@ -71,7 +71,7 @@ class DirichletBoundaryConditions {
   }
 
   /// @brief Specify time and space varying Dirichlet boundary conditions over a domain.
-  /// @param domain domain All dofs in this domain have boundary conditions applied to it.
+  /// @param domain All dofs in this domain have boundary conditions applied to it.
   /// @param component component direction to apply boundary condition to if the underlying field is a vector-field.
   /// @param applied_displacement applied_displacement is a functor which takes time, and a
   /// smith::tensor<double,spatial_dim> corresponding to the spatial coordinate.  The functor must return a double.  For
