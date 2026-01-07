@@ -1,3 +1,9 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
