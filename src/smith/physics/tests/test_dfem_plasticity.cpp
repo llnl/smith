@@ -34,15 +34,16 @@ struct NewtonSettings {
 
 template <auto f>
 __attribute__((noinline))
-void newton_scalar_impl(const double* x0_ptr, const NewtonSettings* settings_ptr, const double* p_ptr, double* x_ptr) {
+void newton_scalar_impl(const double* x0_ptr, const double* p_ptr, double* x_ptr) {
   const double& x0 = *x0_ptr;
-  const NewtonSettings& settings = *settings_ptr;
   const double& p = *p_ptr;
 
   auto fprime = [&](double x) {
     double dx = 1.0;
     return __enzyme_fwddiff<double>((void*)+f, x, dx, p, 0.0);
   };
+
+  NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 1e-10, .residual_rel_tol = 0.0};
 
   double x = x0;
   double r0 = f(x, p);
@@ -61,11 +62,10 @@ void newton_scalar_impl(const double* x0_ptr, const NewtonSettings* settings_ptr
 
 template <auto f>
 void newton_scalar_impl_fwddiff(const double* x0, const double* /* dx0 */,
-                                NewtonSettings* settings, NewtonSettings* /* dummy dual settings */,
                                 const double* p, const double* dp,
                                 double* x, double* dx)
 {
-  newton_scalar_impl<f>(x0, settings, p, x);
+  newton_scalar_impl<f>(x0, p, x);
   double dfdx = __enzyme_fwddiff<double>((void*)+f, enzyme_dup, *x, 1.0, enzyme_const, *p);
   double dfdp = __enzyme_fwddiff<double>((void*)+f, enzyme_const, *x, enzyme_dup, *p, *dp);
   *dx = -dfdp/dfdx;
@@ -73,9 +73,9 @@ void newton_scalar_impl_fwddiff(const double* x0, const double* /* dx0 */,
 
 
 template<auto f>
-double newton_scalar(double x0, NewtonSettings settings, double p) {
+double newton_scalar(double x0, double p) {
   double x;
-  newton_scalar_impl<f>(&x0, &settings, &p, &x);
+  newton_scalar_impl<f>(&x0, &p, &x);
   return x;
 }
 
@@ -94,9 +94,9 @@ void *  __enzyme_register_derivative_newton_scalar_on_sqrt[2] = {
 
 TEST(Enzyme, Newton) {
   double z = 2.0;
-  NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 0.0, .residual_rel_tol = 1e-10};
+  //NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 0.0, .residual_rel_tol = 1e-10};
   double x0 = 0.5*z;
-  double x = newton_scalar<sqrt_residual>(x0, settings, z);
+  double x = newton_scalar<sqrt_residual>(x0, z);
   EXPECT_NEAR(x, std::sqrt(z), 1e-9);
 
   /* QUESTION FOR BILL:
@@ -109,7 +109,7 @@ TEST(Enzyme, Newton) {
   
   NewtonSettings dummy_settings_dual{};
   double z_dot = 1.0;
-  double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual>, enzyme_const, x0, enzyme_dup, settings, dummy_settings_dual, enzyme_dup, z, z_dot);
+  double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual>, enzyme_const, x0, enzyme_dup, z, z_dot);
   double dx_dz_gold = 0.5/x;
   EXPECT_NEAR(dx_dz, dx_dz_gold, 1e-9);
 }
