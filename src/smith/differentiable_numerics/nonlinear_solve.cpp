@@ -357,7 +357,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     auto eval_residuals = [=](const std::vector<FEFieldPtr>& unknowns) {
       SLIC_ERROR_IF(unknowns.size() != num_rows,
-                    "block solver unknown size must match the number or residuals in block_solve");
+                    "block solver unknowns size must match the number or residuals in block_solve");
       std::vector<mfem::Vector> residuals(num_rows);
 
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
