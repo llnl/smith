@@ -38,7 +38,7 @@ class DifferentiableSolver {
   /// @brief destructor
   virtual ~DifferentiableSolver() {}
 
-  /// @brief required for certain solvers/preconditions, e.g. when multigrid algorithms want a near null-space
+  /// @brief required for certain solvers/preconditioners, e.g. when multigrid algorithms want a near null-space
   /// For these cases, it should be called before solve
   virtual void completeSetup(const smith::FiniteElementState& u) = 0;
 
