@@ -125,7 +125,7 @@ class DifferentiableBlockSolver {
   using DualPtr = std::shared_ptr<FieldD>;                  ///< using
   using MatrixPtr = std::unique_ptr<mfem::HypreParMatrix>;  ///< using
 
-  /// @brief required for certain solvers/preconditions, e.g. when multigrid algorithms want a near null-space
+  /// @brief Required for certain solvers/preconditions, e.g. when multigrid algorithms want a near null-space
   /// For these cases, it should be called before solve
   virtual void completeSetup(const std::vector<FieldT>& us) = 0;
 
