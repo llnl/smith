@@ -94,8 +94,9 @@ auto uniaxial_stress_test_rate_dependent(double t_max, size_t num_steps, const M
                                          const parameter_types... parameter_functions)
 {
   const double dt = t_max / double(num_steps - 1);
-  auto mat_with_dt = [&material, dt](auto& state, auto du_dx, parameter_types... parameters) {
-    return material(state, dt, du_dx, parameters...);
+  // Make the lambda a generic callable that forwards all extra parameters
+  auto mat_with_dt = [&material, dt](auto& state, auto du_dx, auto &&... params) {
+    return material(state, dt, du_dx, std::forward<decltype(params)>(params)...);
   };
   return uniaxial_stress_test(t_max, num_steps, mat_with_dt, initial_state, epsilon_xx, parameter_functions...);
 }
