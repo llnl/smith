@@ -8,7 +8,7 @@
  * @file solid_mechanics_state_advancer.hpp
  * .hpp
  *
- * @brief Specifies parametrized residuals and various linearized evaluations for arbitrary nonlinear systems of
+ * @brief Specifies parameterized residuals and various linearized evaluations for arbitrary nonlinear systems of
  * equations
  */
 
