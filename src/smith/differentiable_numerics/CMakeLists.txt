@@ -31,7 +31,7 @@ set(differentiable_numerics_depends
     smith_physics
     )
 
-blt_add_library(
+smith_add_library(
     NAME        smith_differentiable_numerics
     SOURCES     ${differentiable_numerics_sources}
     HEADERS     ${differentiable_numerics_headers}
