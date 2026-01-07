@@ -31,7 +31,7 @@ class Mesh;
 struct NonlinearSolverOptions;
 struct LinearSolverOptions;
 
-/// @brief Abstract interface to DifferentiableSolver inteface.  Each dfferenriable solve should provide both its
+/// @brief Abstract interface to DifferentiableSolver interface.  Each differentiable solve should provide both its
 /// forward solve and an adjoint solve
 class DifferentiableSolver {
  public:
@@ -66,7 +66,7 @@ class DifferentiableSolver {
 /// adjoint solves
 class LinearDifferentiableSolver : public DifferentiableSolver {
  public:
-  /// @brief Construct from a linear solver and linear precondition which may be used by the linear solver
+  /// @brief Construct from a linear solver and linear precondition which may also be used by a nonlinear solver
   LinearDifferentiableSolver(std::unique_ptr<mfem::Solver> s, std::unique_ptr<mfem::Solver> p);
 
   /// @overload

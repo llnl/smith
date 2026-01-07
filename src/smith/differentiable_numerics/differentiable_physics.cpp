@@ -111,8 +111,6 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
       state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
       axom::fmt::format("Could not find field named {0} in mesh with tag \"{1}\" to get", field_name, mesh_->tag()));
   size_t state_index = state_name_to_field_index_.at(field_name);
-  SLIC_ERROR_IF(state_index >= field_states_.size(),
-                "Field states not correctly allocated yet, cannot get state until after initializationStep is called.");
   return *field_states_[state_index].get();
 }
 
@@ -126,7 +124,7 @@ const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_nam
       reaction_index >= reaction_names_.size(),
       "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
 
-  TimeInfo time_info(time_old_, dt_old_, static_cast<size_t>(cycle_old_));
+  TimeInfo time_info(time_prev_, dt_prev_, static_cast<size_t>(cycle_prev_));
   reaction_states_ = advancer_->computeReactions(time_info, *field_shape_displacement_, field_states_, field_params_);
   return *reaction_states_[reaction_index].get();
 }
@@ -222,9 +220,9 @@ void DifferentiablePhysics::advanceTimestep(double dt)
     milestones_.push_back(make_milestone(field_states_).step());
   }
 
-  cycle_old_ = cycle_;
-  time_old_ = time_;
-  dt_old_ = dt;
+  cycle_prev_ = cycle_;
+  time_prev_ = time_;
+  dt_prev_ = dt;
 
   TimeInfo time_info(time_, dt, static_cast<size_t>(cycle_));
   field_states_ = advancer_->advanceState(time_info, *field_shape_displacement_, field_states_, field_params_);

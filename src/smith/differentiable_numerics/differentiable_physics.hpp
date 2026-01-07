@@ -156,9 +156,12 @@ class DifferentiablePhysics : public BasePhysics {
                                         ///< back-propagating to allow users of reverseAdjointTimestep to specify
                                         ///< adjoint loads and to retrieve timestep sensitivity information.
 
-  double time_old_ = 0.0;
-  double dt_old_ = 0.0;
-  int cycle_old_ = 0;
+  double time_prev_ =
+      0.0;  ///< previous time, saved to reconstruct the start of step time used in computing reaction forces
+  double dt_prev_ =
+      0.0;  ///< previous time increment, saved to reconstruct the start of step time used in computing reaction forces
+  int cycle_prev_ =
+      0;  ///< previous cycle, saved to reconstruct the start of step time used in computing reaction forces
 };
 
 }  // namespace smith
