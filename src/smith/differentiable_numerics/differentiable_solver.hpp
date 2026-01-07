@@ -112,7 +112,7 @@ class NonlinearDifferentiableSolver : public DifferentiableSolver {
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 };
 
-/// @brief Abstract interface to DifferentiableBlockSolver inteface. Each dfferenriable block solve should provide
+/// @brief Abstract interface to DifferentiableBlockSolver interface. Each differentiable block solve should provide
 /// both its forward solve and an adjoint solve
 class DifferentiableBlockSolver {
  public:
