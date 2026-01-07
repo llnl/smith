@@ -28,7 +28,7 @@ class DirichletBoundaryConditions {
   DirichletBoundaryConditions(const Mesh& mesh, mfem::ParFiniteElementSpace& space);
 
   /// @brief Specify time and space varying Dirichlet boundary conditions over a domain.
-  /// @param domain domain All dofs in this domain have boundary conditions applied to it.
+  /// @param domain All dofs in this domain have boundary conditions applied to it.
   /// @param components vectors of computents.  The applied_displacement function returns the full vector, this
   /// specifies which subset of those should have dirichlet boundary conditions applied.  direction to apply boundary
   /// condition to if the underlying field is a vector-field.
