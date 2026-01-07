@@ -284,7 +284,6 @@ class ShapeAwareFunctional;
  */
 template <typename test, typename shape, typename... trials, ExecutionSpace exec>
 class ShapeAwareFunctional<shape, test(trials...), exec> {
-
   /// @brief The compile-time test function finite element space
   static constexpr test test_space{};
 
