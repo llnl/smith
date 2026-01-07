@@ -284,8 +284,6 @@ class ShapeAwareFunctional;
  */
 template <typename test, typename shape, typename... trials, ExecutionSpace exec>
 class ShapeAwareFunctional<shape, test(trials...), exec> {
-  /// @brief The compile-time trial function finite element spaces
-  static constexpr tuple<trials...> trial_spaces{};
 
   /// @brief The compile-time test function finite element space
   static constexpr test test_space{};
@@ -377,7 +375,8 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
                                       QFuncArgs... qfunc_args) const
     {
       auto qfunc_tuple = make_tuple(qfunc_args...);
-      auto reduced_trial_space_tuple = make_tuple(get<args>(trial_spaces)...);
+      smith::tuple<trials...> local_trial_spaces{};
+      auto reduced_trial_space_tuple = make_tuple(get<args>(local_trial_spaces)...);
 
       detail::ShapeCorrection shape_correction(Dimension<dim>{}, shape_val);
       // TODO(CUDA): When this is compiled to device code, the below make_integer_sequence will
@@ -418,7 +417,8 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
                                       QFuncArgs... qfunc_args) const
     {
       auto qfunc_tuple = make_tuple(qfunc_args...);
-      auto reduced_trial_space_tuple = make_tuple(get<args>(trial_spaces)...);
+      smith::tuple<trials...> local_trial_spaces{};
+      auto reduced_trial_space_tuple = make_tuple(get<args>(local_trial_spaces)...);
 
       detail::ShapeCorrection shape_correction(Dimension<dim>{}, shape_val);
       // TODO(CUDA): When this is compiled to device code, the below make_integer_sequence will
