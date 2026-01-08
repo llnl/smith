@@ -72,39 +72,21 @@ class DirichletBoundaryConditions {
 
   /// @brief Specify time and space varying Dirichlet boundary conditions over a domain.
   /// @param domain All dofs in this domain have boundary conditions applied to it.
-  /// @param component component direction to apply boundary condition to if the underlying field is a vector-field.
-  /// @param applied_displacement applied_displacement is a functor which takes time, and a
-  /// smith::tensor<double,spatial_dim> corresponding to the spatial coordinate.  The functor must return a double.  For
-  /// example: [](double t, smith::tensor<double, dim> X) { return 1.0; }
-  template <int spatial_dim, typename AppliedDisplacementFunction>
-  void setVectorBCs(const Domain& domain, int component, AppliedDisplacementFunction applied_displacement)
-  {
-    const int field_dim = space_.GetVDim();
-    SLIC_ERROR_IF(component >= field_dim,
-                  axom::fmt::format("Trying to set boundary conditions on a field with dim {}, using component {}",
-                                    field_dim, component));
-    auto mfem_coefficient_function = [applied_displacement](const mfem::Vector& X_mfem, double t) {
-      auto X = make_tensor<spatial_dim>([&X_mfem](int k) { return X_mfem[k]; });
-      return applied_displacement(t, X);
-    };
-
-    auto dof_list = domain.dof_list(&space_);
-    // scalar ldofs -> vector ldofs
-    space_.DofsToVDofs(component, dof_list);
-
-    auto component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
-    bcs_.addEssential(dof_list, component_disp_bdr_coef_, space_, component);
-  }
-
-  /// @brief Specify time and space varying Dirichlet boundary conditions over a domain.
-  /// @param domain All dofs in this domain have boundary conditions applied to it.
   /// @param applied_displacement applied_displacement is a functor which takes time, and a
   /// smith::tensor<double,spatial_dim> corresponding to the spatial coordinate.  The functor must return a double.  For
   /// example: [](double t, smith::tensor<double, dim> X) { return 1.0; }
   template <int spatial_dim, typename AppliedDisplacementFunction>
   void setScalarBCs(const Domain& domain, AppliedDisplacementFunction applied_displacement)
   {
-    setScalarBCs<spatial_dim>(domain, 0, applied_displacement);
+    auto mfem_coefficient_function = [applied_displacement](const mfem::Vector& X_mfem, double t) {
+      auto X = make_tensor<spatial_dim>([&X_mfem](int k) { return X_mfem[k]; });
+      return applied_displacement(t, X);
+    };
+
+    auto dof_list = domain.dof_list(&space_);
+
+    auto component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
+    bcs_.addEssential(dof_list, component_disp_bdr_coef_, space_);
   }
 
   /// @brief Constrain the dofs of a scalar field over a domain
