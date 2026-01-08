@@ -41,7 +41,7 @@ void newton_scalar_impl(const double* x0_ptr, const T* p_ptr, double* x_ptr) {
 
   auto fprime = [&p](double x) {
     double dx = 1.0;
-    return __enzyme_fwddiff<double>((void*)+f, x, dx, p, T{});
+    return __enzyme_fwddiff<double>((void*)+f, enzyme_dup, x, dx, enzyme_const, p);
   };
 
   NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 1e-10, .residual_rel_tol = 0.0};
