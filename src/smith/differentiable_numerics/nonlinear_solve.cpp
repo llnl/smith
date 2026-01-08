@@ -274,7 +274,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
                                     const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const DifferentiableBlockSolver* solver,
-                                    const std::vector<BoundaryConditionManager*> bc_managers)
+                                    const std::vector<const BoundaryConditionManager*> bc_managers)
 {
   SMITH_MARK_FUNCTION;
   size_t num_rows_ = residual_evals.size();
@@ -326,10 +326,10 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     SMITH_MARK_BEGIN("solve forward");
     const size_t num_rows = num_state_inputs.size();
     std::vector<std::vector<FEFieldPtr>> input_fields(num_rows);
-    SLIC_ERROR_IF(num_rows != num_param_inputs.size(), "row count for params and columns are inconsistent");
+    SLIC_ERROR_IF(num_rows != num_param_inputs.size(), "row count for params and states are inconsistent");
 
-    // The order of inputs in upstreams seems to be:
-    // states of residual 0 -> states of residual 1 -> params of residual 0 -> params of residual 1
+    // The order of inputs in upstreams is:
+    // states of residual 0, states of residual 1, ... , params of residual 0, params of residual 1, ...
     size_t field_count = 0;
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       for (size_t state_i = 0; state_i < num_state_inputs[row_i]; ++state_i) {
@@ -344,12 +344,18 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     std::vector<FEFieldPtr> diagonal_fields(num_rows);
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-      diagonal_fields[row_i] = std::make_shared<FiniteElementState>(*input_fields[row_i][block_indices[row_i][row_i]]);
+      size_t prime_unknown_row_i = block_indices[row_i][row_i];
+      SLIC_ERROR_IF(prime_unknown_row_i == invalid_block_index,
+                    "The primary unknown field (field index for block_index[n][n], must not be invalid)");
+      diagonal_fields[row_i] = std::make_shared<FiniteElementState>(*input_fields[row_i][prime_unknown_row_i]);
     }
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       for (size_t col_j = 0; col_j < num_rows; ++col_j) {
-        input_fields[row_i][block_indices[row_i][col_j]] = diagonal_fields[col_j];
+        size_t prime_unknown_ij = block_indices[row_i][col_j];
+        if (prime_unknown_ij != invalid_block_index) {
+          input_fields[row_i][block_indices[row_i][col_j]] = diagonal_fields[col_j];
+        }
       }
     }
 
@@ -371,7 +377,6 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
                                                            getConstFieldPointers(input_fields[row_i]));
         residuals[row_i].SetSubVector(bc_managers[row_i]->allEssentialTrueDofs(), 0.0);
       }
-
       return residuals;
     };
 
@@ -391,32 +396,39 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
         std::vector<double> tangent_weights(row_field_inputs.size(), 0.0);
         for (size_t col_j = 0; col_j < num_rows; ++col_j) {
           size_t field_index_to_diff = block_indices[row_i][col_j];
-          tangent_weights[field_index_to_diff] = 1.0;
-          auto jac_ij = residual_evals[row_i]->jacobian(time_info, shape_disp_ptr.get(),
-                                                        getConstFieldPointers(row_field_inputs), tangent_weights);
-          jacobians[row_i].emplace_back(std::move(jac_ij));
-          tangent_weights[field_index_to_diff] = 0.0;
+          if (field_index_to_diff != invalid_block_index) {
+            tangent_weights[field_index_to_diff] = 1.0;
+            auto jac_ij = residual_evals[row_i]->jacobian(time_info, shape_disp_ptr.get(),
+                                                          getConstFieldPointers(row_field_inputs), tangent_weights);
+            jacobians[row_i].emplace_back(std::move(jac_ij));
+            tangent_weights[field_index_to_diff] = 0.0;
+          } else {
+            jacobians[row_i].emplace_back(nullptr);
+          }
         }
       }
 
       // Apply BCs to the block system
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-        mfem::HypreParMatrix* Jii =
-            jacobians[row_i][row_i]->EliminateRowsCols(bc_managers[row_i]->allEssentialTrueDofs());
-        delete Jii;
+        if (jacobians[row_i][row_i]) {
+          jacobians[row_i][row_i]->EliminateBC(bc_managers[row_i]->allEssentialTrueDofs(),
+                                               mfem::Operator::DiagonalPolicy::DIAG_ONE);
+        }
         for (size_t col_j = 0; col_j < num_rows; ++col_j) {
           if (col_j != row_i) {
-            jacobians[row_i][col_j]->EliminateRows(bc_managers[row_i]->allEssentialTrueDofs());
-            mfem::HypreParMatrix* Jji =
-                jacobians[col_j][row_i]->EliminateCols(bc_managers[row_i]->allEssentialTrueDofs());
-            delete Jji;
+            if (jacobians[row_i][col_j]) {
+              jacobians[row_i][col_j]->EliminateRows(bc_managers[row_i]->allEssentialTrueDofs());
+            }
+            if (jacobians[col_j][row_i]) {
+              mfem::HypreParMatrix* Jji =
+                  jacobians[col_j][row_i]->EliminateCols(bc_managers[row_i]->allEssentialTrueDofs());
+              delete Jji;
+            }
           }
         }
       }
-
       return jacobians;
     };
-
     diagonal_fields = solver->solve(diagonal_fields, eval_residuals, eval_jacobians);
 
     downstream.set<std::vector<FEFieldPtr>, std::vector<FEDualPtr>>(diagonal_fields);
