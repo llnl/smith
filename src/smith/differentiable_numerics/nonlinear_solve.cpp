@@ -12,8 +12,8 @@ namespace smith {
 void applyBoundaryConditions(double time, const smith::BoundaryConditionManager* bc_manager,
                              smith::FEFieldPtr& primal_field, const smith::FEFieldPtr& bc_field_ptr)
 {
-  auto constrained_dofs = bc_manager->allEssentialTrueDofs();
   if (bc_field_ptr) {
+    auto constrained_dofs = bc_manager->allEssentialTrueDofs();
     for (int i = 0; i < constrained_dofs.Size(); i++) {
       int j = constrained_dofs[i];
       (*primal_field)[j] = (*bc_field_ptr)(j);
@@ -52,8 +52,6 @@ FieldState nonlinearSolve(const WeakForm* residual_eval, const FieldState& shape
                           const BoundaryConditionManager* bc_manager, const FieldState* bc_field = nullptr)
 {
   SMITH_MARK_FUNCTION;
-  // there should be one less input state, as the higher time derivative term (e.g., acceleration), does not have a
-  // predictor
   SLIC_ERROR_IF(states.size() != state_update_weights.size(), "State and state weight fields are inconsistent");
   SLIC_ERROR_IF(state_update_weights[primal_solve_state_index] != 1.0, "Primal state must have a weight of 1.0");
 
@@ -363,7 +361,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     auto eval_residuals = [=](const std::vector<FEFieldPtr>& unknowns) {
       SLIC_ERROR_IF(unknowns.size() != num_rows,
-                    "block solver unknown size must match the number or residuals in block_solve");
+                    "block solver unknowns size must match the number or residuals in block_solve");
       std::vector<mfem::Vector> residuals(num_rows);
 
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {

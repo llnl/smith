@@ -1,3 +1,9 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #include "smith/physics/weak_form.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
@@ -29,7 +35,7 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const TimeInfo
                                      params, time_info, *solver_, *vector_bcs_, ACCELERATION);
   }
 
-  TimeInfo final_time_info = time_info.end_time_info();
+  TimeInfo final_time_info = time_info.endTimeInfo();
 
   std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
                                        states_old[ACCELERATION]};

@@ -33,6 +33,7 @@ set(differentiable_numerics_headers
     time_discretized_weak_form.hpp
     differentiable_solid_mechanics.hpp
     paraview_writer.hpp
+    differentiable_test_utils.hpp
     )
 
 set(differentiable_numerics_depends

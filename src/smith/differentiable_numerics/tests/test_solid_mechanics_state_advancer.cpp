@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <gtest/gtest.h>
+#include "gtest/gtest.h"
 
 #include "gretl/data_store.hpp"
 
@@ -23,7 +23,7 @@
 #include "smith/differentiable_numerics/differentiable_solid_mechanics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
-#include "smith/differentiable_numerics/tests/differentiable_test_utils.hpp"
+#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
 namespace smith {
 
@@ -146,7 +146,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   double v_exact = gravity * total_simulation_time_;
   double u_exact = 0.5 * gravity * total_simulation_time_ * total_simulation_time_;
 
-  TimeInfo end_time_info(physics->time(), dt_, static_cast<size_t>(physics->cycle()));
+  TimeInfo endTimeInfo(physics->time(), dt_, static_cast<size_t>(physics->cycle()));
 
   FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({all_fields[ACCEL]}));
   accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
@@ -155,8 +155,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
     auto da1 = a[1] - a_exact;
     return da0 * da0 + da1 * da1;
   });
-  double a_err =
-      accel_error.evaluate(end_time_info, shape_disp.get().get(), getConstFieldPointers({all_fields[ACCEL]}));
+  double a_err = accel_error.evaluate(endTimeInfo, shape_disp.get().get(), getConstFieldPointers({all_fields[ACCEL]}));
   EXPECT_NEAR(0.0, a_err, 1e-14);
 
   FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh, spaces({all_fields[VELO]}));
@@ -251,7 +250,6 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
 
   gretl::set_as_objective(reaction_squared);
-  std::cout << "final residual norm2 = " << reaction_squared.get() << std::endl;
 
   EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
   EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
@@ -263,15 +261,15 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   reaction_squared.data_store().back_prop();
 
   for (auto s : initial_states) {
-    std::cout << s.get()->name() << " " << s.get()->Norml2() << " " << s.get_dual()->Norml2() << std::endl;
+    SLIC_INFO_ROOT(axom::fmt::format("{} {} {}", s.get()->name(), s.get()->Norml2(), s.get_dual()->Norml2()));
   }
 
-  std::cout << shape_disp.get()->name() << " " << shape_disp.get()->Norml2() << " " << shape_disp.get_dual()->Norml2()
-            << std::endl;
+  SLIC_INFO_ROOT(axom::fmt::format("{} {} {}", shape_disp.get()->name(), shape_disp.get()->Norml2(),
+                                   shape_disp.get_dual()->Norml2()));
 
   for (size_t p = 0; p < params.size(); ++p) {
-    std::cout << params[p].get()->name() << " " << params[p].get()->Norml2() << " " << params[p].get_dual()->Norml2()
-              << std::endl;
+    SLIC_INFO_ROOT(axom::fmt::format("{} {} {}", params[p].get()->name(), params[p].get()->Norml2(),
+                                     params[p].get_dual()->Norml2()));
   }
 }
 
@@ -365,7 +363,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
   physics->resetStates();
 
   double qoi = integrateForward(physics, num_steps_, dt_);
-  std::cout << "qoi = " << qoi << std::endl;
+  SLIC_INFO_ROOT(axom::fmt::format("{}", qoi));
 
   size_t num_params = physics->parameterNames().size();
 
@@ -379,13 +377,14 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 
   auto state_sensitivities = physics->computeInitialConditionSensitivity();
   for (auto name_and_state_sensitivity : state_sensitivities) {
-    std::cout << name_and_state_sensitivity.first << " " << name_and_state_sensitivity.second.Norml2() << std::endl;
+    SLIC_INFO_ROOT(
+        axom::fmt::format("{} {}", name_and_state_sensitivity.first, name_and_state_sensitivity.second.Norml2()));
   }
 
-  std::cout << shape_sensitivity.name() << " " << shape_sensitivity.Norml2() << std::endl;
+  SLIC_INFO_ROOT(axom::fmt::format("{} {}", shape_sensitivity.name(), shape_sensitivity.Norml2()));
 
   for (size_t p = 0; p < num_params; ++p) {
-    std::cout << parameter_sensitivities[p].name() << " " << parameter_sensitivities[p].Norml2() << std::endl;
+    SLIC_INFO_ROOT(axom::fmt::format("{} {}", parameter_sensitivities[p].name(), parameter_sensitivities[p].Norml2()));
   }
 }
 

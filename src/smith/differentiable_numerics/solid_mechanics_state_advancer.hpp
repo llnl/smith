@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -8,7 +8,7 @@
  * @file solid_mechanics_state_advancer.hpp
  * .hpp
  *
- * @brief Specifies parametrized residuals and various linearized evaluations for arbitrary nonlinear systems of
+ * @brief Specifies parameterized residuals and various linearized evaluations for arbitrary nonlinear systems of
  * equations
  */
 
@@ -57,7 +57,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
                                               const std::vector<std::string>& param_names, const std::string& tag,
                                               size_t index = 0)
   {
-    FieldState newParam = create_field_state(graph, FirstParamSpace{}, name + "_" + param_names[index], tag);
+    FieldState newParam = createFieldState(graph, FirstParamSpace{}, name + "_" + param_names[index], tag);
     std::vector<FieldState> end_spaces{};
     if constexpr (sizeof...(ParamSpaces) > 0) {
       end_spaces = createParams<ParamSpaces...>(graph, name, param_names, tag, ++index);
@@ -67,16 +67,16 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   }
 
   /// @brief Utility function to consistently construct all the weak forms and FieldStates for a solid mechanics
-  /// application You will get back: shape_disp, states, params, time, and solid_mechanics_weak_form
+  /// application you will get back: shape_disp, states, params, time, and solid_mechanics_weak_form
   template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
   static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<gretl::DataStore>& graph,
                                      SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
                                      const std::vector<std::string>& param_names, double initial_time = 0.0)
   {
-    auto shape_disp = create_field_state(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
-    auto disp = create_field_state(*graph, VectorSpace{}, physics_name + "_displacement", mesh->tag());
-    auto velo = create_field_state(*graph, VectorSpace{}, physics_name + "_velocity", mesh->tag());
-    auto acceleration = create_field_state(*graph, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
+    auto shape_disp = createFieldState(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
+    auto disp = createFieldState(*graph, VectorSpace{}, physics_name + "_displacement", mesh->tag());
+    auto velo = createFieldState(*graph, VectorSpace{}, physics_name + "_velocity", mesh->tag());
+    auto acceleration = createFieldState(*graph, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
     auto time = graph->create_state<double, double>(initial_time);
     std::vector<FieldState> params =
         createParams<ParamSpaces...>(*graph, physics_name + "_param", param_names, mesh->tag());

@@ -11,7 +11,7 @@
 
 #include "gretl/data_store.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
-#include "smith/differentiable_numerics/tests/differentiable_test_utils.hpp"
+#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
 // This tests the interface between the new smith::WeakForm with gretl and its conformity to the existing base_physics
 // interface
@@ -36,9 +36,9 @@ struct MeshFixture : public ::testing::Test {
     checkpointer_ = std::make_shared<gretl::DataStore>(5);
 
     std::string physics_name = "generic";
-    auto disp = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh_->tag());
-    auto velo = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_velocity", mesh_->tag());
-    auto accel = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_acceleration", mesh_->tag());
+    auto disp = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh_->tag());
+    auto velo = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_velocity", mesh_->tag());
+    auto accel = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_acceleration", mesh_->tag());
     dt_ = std::make_unique<gretl::State<double, double>>(checkpointer_->create_state<double, double>(0.9));
     h_ = std::make_unique<gretl::State<double, double>>(checkpointer_->create_state<double, double>(0.7));
 

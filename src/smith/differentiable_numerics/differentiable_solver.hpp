@@ -32,14 +32,14 @@ class Mesh;
 struct NonlinearSolverOptions;
 struct LinearSolverOptions;
 
-/// @brief Abstract interface to DifferentiableSolver inteface.  Each dfferenriable solve should provide both its
+/// @brief Abstract interface to DifferentiableSolver interface.  Each differentiable solve should provide both its
 /// forward solve and an adjoint solve
 class DifferentiableSolver {
  public:
   /// @brief destructor
   virtual ~DifferentiableSolver() {}
 
-  /// @brief required for certain solvers/preconditions, e.g. when multigrid algorithms want a near null-space
+  /// @brief Required for certain solvers/preconditioners, e.g. when multigrid algorithms want a near null-space
   /// For these cases, it should be called before solve
   virtual void completeSetup(const smith::FiniteElementState& u) = 0;
 
@@ -67,7 +67,7 @@ class DifferentiableSolver {
 /// adjoint solves
 class LinearDifferentiableSolver : public DifferentiableSolver {
  public:
-  /// @brief Construct from a linear solver and linear precondition which may be used by the linear solver
+  /// @brief Construct from a linear solver and linear precondition which may also be used by a nonlinear solver
   LinearDifferentiableSolver(std::unique_ptr<mfem::Solver> s, std::unique_ptr<mfem::Solver> p);
 
   /// @overload
@@ -113,7 +113,7 @@ class NonlinearDifferentiableSolver : public DifferentiableSolver {
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 };
 
-/// @brief Abstract interface to DifferentiableBlockSolver inteface. Each dfferenriable block solve should provide
+/// @brief Abstract interface to DifferentiableBlockSolver interface. Each differentiable block solve should provide
 /// both its forward solve and an adjoint solve
 class DifferentiableBlockSolver {
  public:
@@ -126,7 +126,7 @@ class DifferentiableBlockSolver {
   using DualPtr = std::shared_ptr<FieldD>;                  ///< using
   using MatrixPtr = std::unique_ptr<mfem::HypreParMatrix>;  ///< using
 
-  /// @brief required for certain solvers/preconditions, e.g. when multigrid algorithms want a near null-space
+  /// @brief Required for certain solvers/preconditions, e.g. when multigrid algorithms want a near null-space
   /// For these cases, it should be called before solve
   virtual void completeSetup(const std::vector<FieldT>& us) = 0;
 

@@ -1,3 +1,9 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
@@ -14,7 +20,7 @@ using smith::FiniteElementDual;
 using smith::FiniteElementState;
 
 /// @brief Utility to compute the matrix norm
-inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
+double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 {
   mfem::HypreParMatrix* H = K.get();
   hypre_ParCSRMatrix* Hhypre = static_cast<hypre_ParCSRMatrix*>(*H);
@@ -24,7 +30,7 @@ inline double matrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 }
 
 /// @brief Utility to compute 0.5*norm(K-K.T)
-inline double skewMatrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
+double skewMatrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
 {
   auto K_T = std::unique_ptr<mfem::HypreParMatrix>(K->Transpose());
   K_T->Add(-1.0, *K);
@@ -43,13 +49,6 @@ void initializeSolver(mfem::Solver* mfem_solver, const smith::FiniteElementState
   // to be the displacement
   auto* amg_prec = dynamic_cast<mfem::HypreBoomerAMG*>(mfem_solver);
   if (amg_prec) {
-    // ZRA - Iterative refinement tends to be more expensive than it is worth
-    // We should add a flag allowing users to enable it
-
-    // bool iterative_refinement = false;
-    // amg_prec->SetElasticityOptions(&displacement_.space(), iterative_refinement);
-
-    // SetElasticityOptions only works with byVDIM ordering, some evidence that it is not often optimal
     amg_prec->SetSystemsOptions(u.space().GetVDim(), smith::ordering == mfem::Ordering::byNODES);
   }
 
