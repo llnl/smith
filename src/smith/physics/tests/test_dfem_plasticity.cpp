@@ -32,15 +32,15 @@ struct NewtonSettings {
   double residual_rel_tol;
 };
 
-template <auto f>
+template <auto f, typename T>
 __attribute__((noinline))
-void newton_scalar_impl(const double* x0_ptr, const double* p_ptr, double* x_ptr) {
+void newton_scalar_impl(const double* x0_ptr, const T* p_ptr, double* x_ptr) {
   const double& x0 = *x0_ptr;
-  const double& p = *p_ptr;
+  const T& p = *p_ptr;
 
-  auto fprime = [&](double x) {
+  auto fprime = [&p](double x) {
     double dx = 1.0;
-    return __enzyme_fwddiff<double>((void*)+f, x, dx, p, 0.0);
+    return __enzyme_fwddiff<double>((void*)+f, x, dx, p, T{});
   };
 
   NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 1e-10, .residual_rel_tol = 0.0};
@@ -60,9 +60,9 @@ void newton_scalar_impl(const double* x0_ptr, const double* p_ptr, double* x_ptr
 }
 
 
-template <auto f>
+template <auto f, typename T>
 void newton_scalar_impl_fwddiff(const double* x0, const double* /* dx0 */,
-                                const double* p, const double* dp,
+                                const T* p, const T* dp,
                                 double* x, double* dx)
 {
   newton_scalar_impl<f>(x0, p, x);
@@ -72,8 +72,8 @@ void newton_scalar_impl_fwddiff(const double* x0, const double* /* dx0 */,
 }
 
 
-template<auto f>
-double newton_scalar(double x0, double p) {
+template<auto f, typename T>
+double newton_scalar(double x0, T p) {
   double x;
   newton_scalar_impl<f>(&x0, &p, &x);
   return x;
@@ -87,8 +87,8 @@ double sqrt_residual(double x, double a) {
 
 __attribute__((used))
 void *  __enzyme_register_derivative_newton_scalar_on_sqrt[2] = {
-  (void*) newton_scalar_impl<sqrt_residual>, 
-  (void*) newton_scalar_impl_fwddiff<sqrt_residual> 
+  (void*) newton_scalar_impl<sqrt_residual, double>, 
+  (void*) newton_scalar_impl_fwddiff<sqrt_residual, double> 
 };
 
 
@@ -107,12 +107,39 @@ TEST(Enzyme, Newton) {
   */
   //double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual>, enzyme_const, x0, enzyme_const, settings, enzyme_dup, z, dz);
   
-  NewtonSettings dummy_settings_dual{};
+  //NewtonSettings dummy_settings_dual{};
   double z_dot = 1.0;
-  double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual>, enzyme_const, x0, enzyme_dup, z, z_dot);
+  double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual, double>, enzyme_const, x0, enzyme_dup, z, z_dot);
   double dx_dz_gold = 0.5/x;
   EXPECT_NEAR(dx_dz, dx_dz_gold, 1e-9);
 }
+
+
+double nthroot_residual(double x, mfem::future::tuple<double, double> p) {
+  auto power = mfem::future::get<0>(p);
+  auto a = mfem::future::get<1>(p);
+  return std::pow(x, power) - a;
+}
+
+__attribute__((used))
+void *  __enzyme_register_derivative_newton_scalar_on_nthrt[2] = {
+  (void*) newton_scalar_impl<nthroot_residual, mfem::future::tuple<double, double>>, 
+  (void*) newton_scalar_impl_fwddiff<nthroot_residual, mfem::future::tuple<double, double>> 
+};
+
+TEST(Enzyme, NewtonWithTupleParams) {
+  double index = 3.0;
+  double radicand = 8.0;
+  mfem::future::tuple params{index, radicand};
+  double x0 = radicand / 2.0;
+  double y = newton_scalar<nthroot_residual>(x0, params);
+  EXPECT_NEAR(y, 2.0, 1e-9);
+
+  mfem::future::tuple params_dot{0.0, 1.0};
+  double dy_da = __enzyme_fwddiff<double>((void*) newton_scalar<nthroot_residual, mfem::future::tuple<double, double>>, enzyme_const, x0, enzyme_dup, params, params_dot);
+  EXPECT_NEAR(dy_da, 1.0/3.0*std::pow(radicand, -2.0/3.0), 1e-9);
+}
+
 
 struct UniaxialSolution {
   double E, nu, sigma_y, Hi;
