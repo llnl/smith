@@ -9,6 +9,7 @@
 #include <memory>
 #include <ostream>
 #include <string>
+#include <fstream> // for debugging, remove in final
 
 #include <gtest/gtest.h>
 #include "mfem.hpp"
@@ -239,6 +240,136 @@ struct J2Linear {
       plastic_strain += delta_eqps * Np;
       accumulated_plastic_strain += delta_eqps;
     }
+    auto stress = s + p * I;
+    auto internal_state_new = pack_internal_state(plastic_strain, accumulated_plastic_strain);
+    return mfem::future::make_tuple(stress, internal_state_new);
+  }
+
+  SMITH_HOST_DEVICE auto pkStress(double, const mfem::future::tensor<double, dim, dim>& du_dX,
+                                  const mfem::future::tensor<double, dim, dim>&,
+                                  const mfem::future::tensor<double, N_INTERNAL_STATES>& internal_state) const
+  {
+    const double dt = 1.0;
+    auto [stress, internal_state_new] = update(dt, du_dX, internal_state);
+    return stress;
+  }
+
+  SMITH_HOST_DEVICE auto internalStateNew(double, const mfem::future::tensor<double, dim, dim>& du_dX,
+                                          const mfem::future::tensor<double, dim, dim>&,
+                                          const mfem::future::tensor<double, N_INTERNAL_STATES>& internal_state) const
+  {
+    const double dt = 1.0;
+    auto [stress, internal_state_new] = update(dt, du_dX, internal_state);
+    return internal_state_new;
+  }
+
+  template <typename... Parameters>
+  SMITH_HOST_DEVICE double density(Parameters...) const { return rho; }
+};
+
+
+double static_flow_strength(double eqps, double sigma_y, double Hi) {
+  return sigma_y + Hi*eqps;
+}
+
+double flow_strength(double eqps, double dt, double eqps_old, double sigma_y, double Hi, double m, double eqps_dot_0) {
+  double S = static_flow_strength(sigma_y, Hi, eqps);
+  double C = std::pow(2.0, 1.0/m) - 1.0;
+  double eqps_dot = (eqps - eqps_old)/dt;
+  return S*(std::pow(1.0 + C*eqps_dot/eqps_dot_0, m) - 1.0);
+}
+
+double potential(double eqps, double dt, double eqps_old, double sigma_y, double Hi, double m, 
+                 double eqps_dot_0) {
+    const double alpha = 1.0;
+    double eqps_a = (1.0 - alpha)*eqps_old + alpha*eqps;
+    double eqps_dot = (eqps - eqps_old)/dt;
+    double S = static_flow_strength(eqps_a, sigma_y, Hi);
+    double C = std::pow(2.0, 1.0/m) - 1.0;
+    double pfactor = std::pow(1 + C*eqps_dot/eqps_dot_0, m + 1) - 1.0;
+    return dt*S*(eqps_dot_0/(C*(m + 1))*pfactor - eqps_dot);
+}
+
+
+using J2ResidualParams = mfem::future::tuple<double, double, double, double, double, double, double, double>;
+
+double j2_rate_dependent_residual(double eqps, J2ResidualParams p) {
+  auto [sigma_eff_trial, dt, mu, eqps_old, sigma_y, Hi, m, eqps_dot_0] = p;
+  return sigma_eff_trial - 3*mu*(eqps - eqps_old) - flow_strength(eqps, dt, eqps_old, sigma_y, Hi, m, eqps_dot_0);
+}
+
+__attribute__((used))
+void *  __enzyme_register_derivative_newton_scalar_on_j2[2] = {
+  (void*) newton_scalar_impl<j2_rate_dependent_residual, J2ResidualParams>,
+  (void*) newton_scalar_impl_fwddiff<j2_rate_dependent_residual, J2ResidualParams>
+};
+
+struct J2Smooth {
+  static constexpr int dim = 3;  ///< spatial dimension
+  static constexpr int N_INTERNAL_STATES = 10;
+  static constexpr double tol = 1e-10;  ///< relative tolerance on residual mag to judge convergence of return map
+
+  double E;        ///< Young's modulus
+  double nu;       ///< Poisson's ratio
+  double sigma_y;  ///< Yield strength
+  double Hi;       ///< Isotropic hardening modulus
+  double m;        ///< Rate sensitivity
+  double edot_0;   ///< Reference plasticic strain rate
+  double rho;      ///< Mass density
+  
+  /// @brief variables required to characterize the hysteresis response
+  struct InternalState {
+    mfem::future::tensor<double, dim, dim> plastic_strain;  ///< plastic strain
+    double accumulated_plastic_strain;                      ///< uniaxial equivalent plastic strain
+  };
+
+  MFEM_HOST_DEVICE inline InternalState unpack_internal_state(
+      const mfem::future::tensor<double, N_INTERNAL_STATES>& packed_state) const
+  {
+    // we could use type punning here to avoid copies
+    auto plastic_strain =
+        mfem::future::make_tensor<dim, dim>([&packed_state](int i, int j) { return packed_state[dim * i + j]; });
+    double accumulated_plastic_strain = packed_state[N_INTERNAL_STATES - 1];
+    return {plastic_strain, accumulated_plastic_strain};
+  }
+
+  MFEM_HOST_DEVICE inline mfem::future::tensor<double, N_INTERNAL_STATES> pack_internal_state(
+      const mfem::future::tensor<double, dim, dim>& plastic_strain, double accumulated_plastic_strain) const
+  {
+    mfem::future::tensor<double, N_INTERNAL_STATES> packed_state{};
+    for (int i = 0, ij = 0; i < dim; i++) {
+      for (int j = 0; j < dim; j++, ij++) {
+        packed_state[ij] = plastic_strain[i][j];
+      }
+    }
+    packed_state[N_INTERNAL_STATES - 1] = accumulated_plastic_strain;
+    return packed_state;
+  }
+
+  MFEM_HOST_DEVICE inline mfem::future::tuple<mfem::future::tensor<double, dim, dim>,
+                                              mfem::future::tensor<double, N_INTERNAL_STATES>>
+  update(double dt, const mfem::future::tensor<double, dim, dim>& dudX,
+         const mfem::future::tensor<double, N_INTERNAL_STATES>& internal_state) const
+  {
+    auto I = mfem::future::IdentityMatrix<dim>();
+    const double K = E / (3.0 * (1.0 - 2.0 * nu));
+    const double G = 0.5 * E / (1.0 + nu);
+
+    auto [plastic_strain, accumulated_plastic_strain_old] = unpack_internal_state(internal_state);
+
+    // (i) elastic predictor
+    auto el_strain = mfem::future::sym(dudX) - plastic_strain;
+    auto p = K * tr(el_strain);
+    auto s = 2.0 * G * mfem::future::dev(el_strain);
+    auto q = std::sqrt(1.5) * mfem::future::norm(s);
+
+    double accumulated_plastic_strain = newton_scalar<j2_rate_dependent_residual, J2ResidualParams>(accumulated_plastic_strain_old, mfem::future::make_tuple(q, dt, G, accumulated_plastic_strain_old, sigma_y, Hi, m, edot_0));
+    double delta_eqps = accumulated_plastic_strain - accumulated_plastic_strain_old;
+    mfem::future::tensor<double, 3, 3> Np = {{{0.0, 0.5, 0.5}, {0.5, 0.0, 0.5}, {0.5, 0.5, 0.0}}};
+    Np = q > 0.0? 1.5 * s / q : Np;
+    s -= 2.0 * G * delta_eqps * Np;
+    plastic_strain += delta_eqps * Np;
+
     auto stress = s + p * I;
     auto internal_state_new = pack_internal_state(plastic_strain, accumulated_plastic_strain);
     return mfem::future::make_tuple(stress, internal_state_new);
@@ -613,6 +744,26 @@ TEST_F(DfemSolidTest, DifferentiateInternalStateUpdate)
   u_bar.Print();
 }
 
+
+TEST(EnzymeMaterial, Stress) {
+  J2Smooth material{.E = 1.0e3, .nu=0.45, .sigma_y = 1.0, .Hi = 1e3/40.0, .m = 0.25, .edot_0 = 250e-6, .rho = 1.0};
+  mfem::future::tensor<double, 3, 3> disp_grad{};
+  mfem::future::tensor<double, 3, 3> vel_grad{};
+  mfem::future::tensor<double, 10> q_old{}, q{};
+  std::ofstream stress_file("stress_strain.csv");
+  const double strain_inc = 250e-6;
+  for (int i = 0; i < 200; i++) {
+    auto stress = material.pkStress(1.0, disp_grad, vel_grad, q_old);
+    stress_file << disp_grad[0][0] << " " << stress[0][0] << "\n";
+    q = material.internalStateNew(1.0, disp_grad, vel_grad, q_old);
+    q_old = q;
+    disp_grad[0][0] += strain_inc;
+    disp_grad[1][1] -= 0.5*strain_inc;
+    disp_grad[2][2] -= 0.5*strain_inc;
+
+  }
+  stress_file.close();
+}
 
 }  // namespace smith
 
