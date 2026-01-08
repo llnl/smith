@@ -146,7 +146,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   double v_exact = gravity * total_simulation_time_;
   double u_exact = 0.5 * gravity * total_simulation_time_ * total_simulation_time_;
 
-  TimeInfo end_time_info(physics->time(), dt_, static_cast<size_t>(physics->cycle()));
+  TimeInfo endTimeInfo(physics->time(), dt_, static_cast<size_t>(physics->cycle()));
 
   FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({all_fields[ACCEL]}));
   accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
@@ -155,8 +155,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
     auto da1 = a[1] - a_exact;
     return da0 * da0 + da1 * da1;
   });
-  double a_err =
-      accel_error.evaluate(end_time_info, shape_disp.get().get(), getConstFieldPointers({all_fields[ACCEL]}));
+  double a_err = accel_error.evaluate(endTimeInfo, shape_disp.get().get(), getConstFieldPointers({all_fields[ACCEL]}));
   EXPECT_NEAR(0.0, a_err, 1e-14);
 
   FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh, spaces({all_fields[VELO]}));

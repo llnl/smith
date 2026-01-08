@@ -49,13 +49,6 @@ void initializeSolver(mfem::Solver* mfem_solver, const smith::FiniteElementState
   // to be the displacement
   auto* amg_prec = dynamic_cast<mfem::HypreBoomerAMG*>(mfem_solver);
   if (amg_prec) {
-    // ZRA - Iterative refinement tends to be more expensive than it is worth
-    // We should add a flag allowing users to enable it
-
-    // bool iterative_refinement = false;
-    // amg_prec->SetElasticityOptions(&displacement_.space(), iterative_refinement);
-
-    // SetElasticityOptions only works with byVDIM ordering, some evidence that it is not often optimal
     amg_prec->SetSystemsOptions(u.space().GetVDim(), smith::ordering == mfem::Ordering::byNODES);
   }
 
@@ -146,8 +139,6 @@ std::shared_ptr<FiniteElementState> NonlinearDifferentiableSolver::solve(
 
   nonlinear_solver_->setOperator(*residual_op_);
   nonlinear_solver_->solve(*u);
-
-  // std::cout << "solution norm = " << u->Norml2() << std::endl;
 
   return u;
 }

@@ -35,7 +35,7 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const TimeInfo
                                      params, time_info, *solver_, *vector_bcs_, ACCELERATION);
   }
 
-  TimeInfo final_time_info = time_info.end_time_info();
+  TimeInfo final_time_info = time_info.endTimeInfo();
 
   std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
                                        states_old[ACCELERATION]};

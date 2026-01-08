@@ -12,8 +12,8 @@ namespace smith {
 void applyBoundaryConditions(double time, const smith::BoundaryConditionManager* bc_manager,
                              smith::FEFieldPtr& primal_field, const smith::FEFieldPtr& bc_field_ptr)
 {
-  auto constrained_dofs = bc_manager->allEssentialTrueDofs();
   if (bc_field_ptr) {
+    auto constrained_dofs = bc_manager->allEssentialTrueDofs();
     for (int i = 0; i < constrained_dofs.Size(); i++) {
       int j = constrained_dofs[i];
       (*primal_field)[j] = (*bc_field_ptr)(j);
@@ -52,8 +52,6 @@ FieldState nonlinearSolve(const WeakForm* residual_eval, const FieldState& shape
                           const BoundaryConditionManager* bc_manager, const FieldState* bc_field = nullptr)
 {
   SMITH_MARK_FUNCTION;
-  // there should be one less input state, as the higher time derivative term (e.g., acceleration), does not have a
-  // predictor
   SLIC_ERROR_IF(states.size() != state_update_weights.size(), "State and state weight fields are inconsistent");
   SLIC_ERROR_IF(state_update_weights[primal_solve_state_index] != 1.0, "Primal state must have a weight of 1.0");
 
