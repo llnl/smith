@@ -16,10 +16,11 @@
 
 #include "smith/differentiable_numerics/lumped_mass_explicit_newmark_state_advancer.hpp"
 #include "smith/differentiable_numerics/lumped_mass_weak_form.hpp"
-#include "smith/differentiable_numerics/tests/paraview_helper.hpp"
-#include "smith/differentiable_numerics/differentiable_utils.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/timestep_estimator.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
+#include "smith/differentiable_numerics/evaluate_objective.hpp"
+#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
 // This tests the interface between the new smith::WeakForm with gretl and its conformity to the existing base_physics
 // interface
@@ -112,8 +113,13 @@ struct MeshFixture : public testing::Test {
     auto mfem_shape = mfem::Element::QUADRILATERAL;  // mfem::Element::TRIANGLE;
     double length = 0.5;
     double width = 2.0;
-    mesh_ = std::make_shared<smith::Mesh>(mfem::Mesh::MakeCartesian2D(5, 5, mfem_shape, true, length, width), MESHTAG,
-                                          0, 0);
+    int num_elems_x = 5;
+    int num_elems_y = 4;
+    int num_refine_serial = 0;
+    int num_refine_parallel = 0;
+    mesh_ = std::make_shared<smith::Mesh>(
+        mfem::Mesh::MakeCartesian2D(num_elems_x, num_elems_y, mfem_shape, true, length, width), MESHTAG,
+        num_refine_serial, num_refine_parallel);
     // checkpointing graph
     checkpointer_ = std::make_shared<gretl::DataStore>(200);
 
@@ -122,11 +128,11 @@ struct MeshFixture : public testing::Test {
     std::string physics_name = "solid";
 
     shape_disp_ = std::make_unique<smith::FieldState>(
-        create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_shape_displacement", mesh_->tag()));
-    auto disp = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh_->tag());
-    auto velo = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_velocity", mesh_->tag());
-    auto accel = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_acceleration", mesh_->tag());
-    auto density0 = create_field_state(*checkpointer_, DensitySpace{}, physics_name + "_density", mesh_->tag());
+        createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_shape_displacement", mesh_->tag()));
+    auto disp = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh_->tag());
+    auto velo = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_velocity", mesh_->tag());
+    auto accel = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_acceleration", mesh_->tag());
+    auto density0 = createFieldState(*checkpointer_, DensitySpace{}, physics_name + "_density", mesh_->tag());
 
     *disp.get() = 0.0;
     *velo.get() = 0.0;
@@ -161,7 +167,8 @@ struct MeshFixture : public testing::Test {
     // specify dirichlet bcs
     bc_manager_ = std::make_shared<smith::BoundaryConditionManager>(mesh_->mfemParMesh());
 
-    auto dt_estimator = std::make_shared<smith::ConstantTimeStepEstimator>(dt / double(dt_reduction));
+    auto dt_estimator =
+        std::make_shared<smith::ConstantTimeStepEstimator>(dt / 10.0);  // reduce the timestep a bit, so it subcycles
     std::shared_ptr<smith::StateAdvancer> time_integrator =
         std::make_shared<smith::LumpedMassExplicitNewmarkStateAdvancer>(solid_mechanics_residual, solid_mass_residual,
                                                                         dt_estimator, bc_manager_);
@@ -204,14 +211,14 @@ struct MeshFixture : public testing::Test {
   double integrateForward()
   {
     resetAndApplyInitialConditions();
-    double lido_qoi = 0.0;
+    double base_physics_qoi = 0.0;
     for (size_t m = 0; m < num_steps; ++m) {
       physics_->advanceTimestep(dt);
-      lido_qoi += (*kinetic_energy_integrator_)(physics_->time(), physics_->shapeDisplacement(),
-                                                physics_->state(velo_name), physics_->parameter(DENSITY));
+      base_physics_qoi += (*kinetic_energy_integrator_)(physics_->time(), physics_->shapeDisplacement(),
+                                                        physics_->state(velo_name), physics_->parameter(DENSITY));
     }
 
-    return lido_qoi;
+    return base_physics_qoi;
   }
 
   void adjointBackward(smith::FiniteElementDual& shape_sensitivity,
@@ -263,12 +270,12 @@ struct MeshFixture : public testing::Test {
 
   std::shared_ptr<smith::BoundaryConditionManager> bc_manager_;
 
-  const double dt = 1e-2;
-  const size_t dt_reduction = 10;
-  const size_t num_steps = 4;
+  static constexpr double total_simulation_time = 0.005;
+  static constexpr size_t num_steps = 10;
+  static constexpr double dt = total_simulation_time / num_steps;
 };
 
-TEST_F(MeshFixture, TRANSIENT_DYNAMICS_LIDO)
+TEST_F(MeshFixture, TransientDynamicsBasePhysics)
 {
   SMITH_MARK_FUNCTION;
 
@@ -300,7 +307,7 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_LIDO)
   }
 }
 
-TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
+TEST_F(MeshFixture, TransientDynamicsGretl)
 {
   SMITH_MARK_FUNCTION;
 
@@ -309,21 +316,19 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
 
   resetAndApplyInitialConditions();
 
-  auto all_fields = mechanics_->getAllFieldStates();
+  auto all_fields = mechanics_->getFieldStatesAndParamStates();
 
   gretl::State<double> gretl_qoi =
-      0.0 * smith::evaluateObjective(objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
+      0.0 * smith::evaluateObjective(*objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
 
   std::string pv_dir = std::string("paraview_") + mechanics_->name();
-  auto pv_writer = smith::createParaviewOutput(*mesh_, all_fields, pv_dir);
+  auto pv_writer = smith::createParaviewWriter(*mesh_, all_fields, pv_dir);
   pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
   for (size_t m = 0; m < num_steps; ++m) {
-    for (size_t n = 0; n < dt_reduction; ++n) {
-      mechanics_->advanceTimestep(dt / double(dt_reduction));
-    }
-    all_fields = mechanics_->getAllFieldStates();
+    mechanics_->advanceTimestep(dt);
+    all_fields = mechanics_->getFieldStatesAndParamStates();
     gretl_qoi =
-        gretl_qoi + smith::evaluateObjective(objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
+        gretl_qoi + smith::evaluateObjective(*objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
     pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
   }
 
@@ -344,29 +349,28 @@ TEST_F(MeshFixture, TRANSIENT_DYNAMICS_GRETL)
               << std::endl;
   }
 
-  EXPECT_GT(smith::checkGradWrt(gretl_qoi, *shape_disp_, *checkpointer_, 0.01, 4, true), 0.8);
-  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[DISP], *checkpointer_, 0.01, 4, true), 0.8);
-  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[VELO], *checkpointer_, 0.01, 4, true), 0.8);
-  // EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states[ACCEL], *checkpointer_, 1.0, 4, true), 0.8);
-  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[DENSITY], *checkpointer_, 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, *shape_disp_, 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[DISP], 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[VELO], 0.01, 4, true), 0.8);
+  EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[DENSITY], 0.01, 4, true), 0.8);
 }
 
-TEST_F(MeshFixture, TRANSIENT_CONSTANT_GRAVITY)
+TEST_F(MeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;
 
   mechanics_->resetStates();
-  auto all_fields = mechanics_->getAllFieldStates();
+  auto all_fields = mechanics_->getFieldStatesAndParamStates();
 
   std::string pv_dir = std::string("paraview_") + mechanics_->name();
   std::cout << "Writing output to " << pv_dir << std::endl;
-  auto pv_writer = smith::createParaviewOutput(*mesh_, all_fields, pv_dir);
+  auto pv_writer = smith::createParaviewWriter(*mesh_, all_fields, pv_dir);
   pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
   double time = 0.0;
-  for (size_t m = 0; m < dt_reduction * num_steps; ++m) {
-    double timestep = dt / double(dt_reduction);
+  for (size_t m = 0; m < num_steps; ++m) {
+    double timestep = dt / double(num_steps);
     mechanics_->advanceTimestep(timestep);
-    all_fields = mechanics_->getAllFieldStates();
+    all_fields = mechanics_->getFieldStatesAndParamStates();
     pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
     time += timestep;
   }
