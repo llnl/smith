@@ -90,7 +90,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
     // zeroing out u predictor dofs associated with zero BCs
     u_pred = applyZeroBoundaryConditions(u_pred, bc_manager_.get());
     // create a vector of type FieldState called state_pred and put the u and v predictors into it
-    std::vector<FieldState> state_pred{u_pred, v_half_step, zero_copy(a)};
+    std::vector<FieldState> state_pred{u_pred, v_half_step, zeroCopy(a)};
 
     // should return the evaluation of the residual for the current state variables
     auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, state_pred, params,

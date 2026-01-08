@@ -45,33 +45,33 @@ struct zero_state_from_dual {
 };
 
 /// @brief initialize on the gretl::DataStore a FieldState with values from s
-inline FieldState create_field_state(gretl::DataStore& dataStore, const smith::FEFieldPtr& s)
+inline FieldState createFieldState(gretl::DataStore& dataStore, const smith::FEFieldPtr& s)
 {
   return dataStore.create_state<smith::FEFieldPtr, smith::FEDualPtr>(s, zero_dual_from_state());
 }
 
 /// @brief initialize on the gretl::DataStore a FieldState from a FiniteElementState of given space, name and mesh.
 template <typename function_space>
-FieldState create_field_state(gretl::DataStore& dataStore, function_space space, const std::string& name,
-                              const std::string& mesh_tag)
+FieldState createFieldState(gretl::DataStore& dataStore, function_space space, const std::string& name,
+                            const std::string& mesh_tag)
 {
   auto f = std::make_shared<FiniteElementState>(StateManager::newState(space, name, mesh_tag));
-  return create_field_state(dataStore, f);
+  return createFieldState(dataStore, f);
 }
 
 /// @brief initialize on the gretl::DataStore a ReactionState with values from s
-inline ReactionState create_reaction_state(gretl::DataStore& dataStore, const smith::FEDualPtr& s)
+inline ReactionState createReactionState(gretl::DataStore& dataStore, const smith::FEDualPtr& s)
 {
   return dataStore.create_state<smith::FEDualPtr, smith::FEFieldPtr>(s, zero_state_from_dual());
 }
 
 /// @brief initialize on the gretl::DataStore a ReactionState from a FiniteElementDual of given space, name and mesh.
 template <typename function_space>
-ReactionState create_reaction_state(gretl::DataStore& dataStore, function_space space, const std::string& name,
-                                    const std::string& mesh_tag)
+ReactionState createReactionState(gretl::DataStore& dataStore, function_space space, const std::string& name,
+                                  const std::string& mesh_tag)
 {
   auto f = std::make_shared<FiniteElementDual>(StateManager::newDual(space, name, mesh_tag));
-  return create_reaction_state(dataStore, f);
+  return createReactionState(dataStore, f);
 }
 
 /// @brief gretl-function to square (x^2) every component of the Field
@@ -87,7 +87,7 @@ gretl::State<double> innerProduct(const ReactionState& a, const ReactionState& b
 FieldState axpby(double a, const FieldState& x, double b, const FieldState& y);
 
 /// @brief gretl-function to make a deep-copy of a FieldState and initialize it to 0.
-FieldState zero_copy(const FieldState& x);
+FieldState zeroCopy(const FieldState& x);
 
 /// @brief gretl-function to compute the weighted average a * weight + b * (1-weight)
 inline FieldState weighted_average(const FieldState& a, const FieldState& b, double weight)

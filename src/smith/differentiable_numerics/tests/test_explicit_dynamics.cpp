@@ -113,8 +113,13 @@ struct MeshFixture : public testing::Test {
     auto mfem_shape = mfem::Element::QUADRILATERAL;  // mfem::Element::TRIANGLE;
     double length = 0.5;
     double width = 2.0;
-    mesh_ = std::make_shared<smith::Mesh>(mfem::Mesh::MakeCartesian2D(5, 4, mfem_shape, true, length, width), MESHTAG,
-                                          0, 0);
+    int num_elems_x = 5;
+    int num_elems_y = 4;
+    int num_refine_serial = 0;
+    int num_refine_parallel = 0;
+    mesh_ = std::make_shared<smith::Mesh>(
+        mfem::Mesh::MakeCartesian2D(num_elems_x, num_elems_y, mfem_shape, true, length, width), MESHTAG,
+        num_refine_serial, num_refine_parallel);
     // checkpointing graph
     checkpointer_ = std::make_shared<gretl::DataStore>(200);
 
@@ -123,11 +128,11 @@ struct MeshFixture : public testing::Test {
     std::string physics_name = "solid";
 
     shape_disp_ = std::make_unique<smith::FieldState>(
-        create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_shape_displacement", mesh_->tag()));
-    auto disp = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh_->tag());
-    auto velo = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_velocity", mesh_->tag());
-    auto accel = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_acceleration", mesh_->tag());
-    auto density0 = create_field_state(*checkpointer_, DensitySpace{}, physics_name + "_density", mesh_->tag());
+        createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_shape_displacement", mesh_->tag()));
+    auto disp = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh_->tag());
+    auto velo = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_velocity", mesh_->tag());
+    auto accel = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_acceleration", mesh_->tag());
+    auto density0 = createFieldState(*checkpointer_, DensitySpace{}, physics_name + "_density", mesh_->tag());
 
     *disp.get() = 0.0;
     *velo.get() = 0.0;

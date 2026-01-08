@@ -47,12 +47,6 @@ inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const T
     FEDualPtr R = std::make_shared<FiniteElementDual>(field_for_residual_space_->space(),
                                                       "residual");  // set up output pointer
     // evaluate the residual with zero acceleration contribution
-    // std::cout << "time info = " << time_info.time() << std::endl;
-    // std::cout << "num fields = " << fields.size() << std::endl;
-    // std::cout << "shape disp name = " << inputs[0].get<FEFieldPtr>().get()->name() << std::endl;
-    // for (auto& f : fields) {
-    //   std::cout << "name = " << f->name() << std::endl;
-    // }
     *R = weak_form->residual(time_info, shape_disp_, fields);
     output.set<FEDualPtr, FEFieldPtr>(R);
   });

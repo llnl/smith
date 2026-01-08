@@ -57,7 +57,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
                                               const std::vector<std::string>& param_names, const std::string& tag,
                                               size_t index = 0)
   {
-    FieldState newParam = create_field_state(graph, FirstParamSpace{}, name + "_" + param_names[index], tag);
+    FieldState newParam = createFieldState(graph, FirstParamSpace{}, name + "_" + param_names[index], tag);
     std::vector<FieldState> end_spaces{};
     if constexpr (sizeof...(ParamSpaces) > 0) {
       end_spaces = createParams<ParamSpaces...>(graph, name, param_names, tag, ++index);
@@ -73,10 +73,10 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
                                      SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
                                      const std::vector<std::string>& param_names, double initial_time = 0.0)
   {
-    auto shape_disp = create_field_state(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
-    auto disp = create_field_state(*graph, VectorSpace{}, physics_name + "_displacement", mesh->tag());
-    auto velo = create_field_state(*graph, VectorSpace{}, physics_name + "_velocity", mesh->tag());
-    auto acceleration = create_field_state(*graph, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
+    auto shape_disp = createFieldState(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
+    auto disp = createFieldState(*graph, VectorSpace{}, physics_name + "_displacement", mesh->tag());
+    auto velo = createFieldState(*graph, VectorSpace{}, physics_name + "_velocity", mesh->tag());
+    auto acceleration = createFieldState(*graph, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
     auto time = graph->create_state<double, double>(initial_time);
     std::vector<FieldState> params =
         createParams<ParamSpaces...>(*graph, physics_name + "_param", param_names, mesh->tag());
