@@ -196,8 +196,11 @@ class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
   std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
                                      std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const override;
 
-  mutable std::unique_ptr<mfem::BlockOperator> block_jac_;
-  mutable std::vector<std::vector<MatrixPtr>> matrix_of_jacs_;
+  mutable std::unique_ptr<mfem::BlockOperator>
+      block_jac_;  ///< Need to hold an instance of a block operator to work with the mfem solver interface
+  mutable std::vector<std::vector<MatrixPtr>>
+      matrix_of_jacs_;  ///< Holding vectors of block matrices to that do not going out of scope before the mfem solver
+                        ///< is done with using them in the block_jac_
 
   mutable std::unique_ptr<EquationSolver>
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
