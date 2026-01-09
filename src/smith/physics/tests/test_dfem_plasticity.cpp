@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <cmath>
-#include <map>
 #include <memory>
 #include <ostream>
 #include <string>
@@ -273,7 +272,7 @@ double static_flow_strength(double eqps, double sigma_y, double Hi) {
 }
 
 double flow_strength(double eqps, double dt, double eqps_old, double sigma_y, double Hi, double m, double eqps_dot_0) {
-  double S = static_flow_strength(sigma_y, Hi, eqps);
+  double S = static_flow_strength(eqps, sigma_y, Hi);
   double C = std::pow(2.0, 1.0/m) - 1.0;
   double eqps_dot = (eqps - eqps_old)/dt;
   return S*(std::pow(1.0 + C*eqps_dot/eqps_dot_0, m) - 1.0);
@@ -314,7 +313,7 @@ struct J2Smooth {
   double sigma_y;  ///< Yield strength
   double Hi;       ///< Isotropic hardening modulus
   double m;        ///< Rate sensitivity
-  double edot_0;   ///< Reference plasticic strain rate
+  double edot_0;   ///< Reference plastic strain rate
   double rho;      ///< Mass density
   
   /// @brief variables required to characterize the hysteresis response
@@ -744,23 +743,35 @@ TEST_F(DfemSolidTest, DifferentiateInternalStateUpdate)
   u_bar.Print();
 }
 
+using Tensor3D = mfem::future::tensor<mfem::real_t, 3, 3>;
+using InternalVars = mfem::future::tensor<mfem::real_t, 10>;
+
+double transverse_stress(double e22, mfem::future::tuple<J2Smooth*, double, Tensor3D, Tensor3D, InternalVars> p) {
+  auto material = *mfem::future::get<0>(p);
+  auto dt = mfem::future::get<1>(p);
+  auto du_dX = mfem::future::get<2>(p);
+  auto dv_dX = mfem::future::get<3>(p);
+  auto Q = mfem::future::get<4>(p);
+  du_dX[1][1] = du_dX[2][2] = e22;
+  auto sigma = material.pkStress(dt, du_dX, dv_dX, Q);
+  return sigma[1][1];
+}
 
 TEST(EnzymeMaterial, Stress) {
-  J2Smooth material{.E = 1.0e3, .nu=0.45, .sigma_y = 1.0, .Hi = 1e3/40.0, .m = 0.25, .edot_0 = 250e-6, .rho = 1.0};
-  mfem::future::tensor<double, 3, 3> disp_grad{};
-  mfem::future::tensor<double, 3, 3> vel_grad{};
-  mfem::future::tensor<double, 10> q_old{}, q{};
+  J2Smooth material{.E = 70.0e3, .nu=0.34, .sigma_y = 240.0, .Hi = 1750.0, .m = 0.25, .edot_0 = 250e-6, .rho = 1.0};
+  Tensor3D disp_grad{};
+  Tensor3D vel_grad{};
+  InternalVars q_old{};
   std::ofstream stress_file("stress_strain.csv");
   const double strain_inc = 250e-6;
+  double dt = 1.0;
   for (int i = 0; i < 200; i++) {
-    auto stress = material.pkStress(1.0, disp_grad, vel_grad, q_old);
-    stress_file << disp_grad[0][0] << " " << stress[0][0] << "\n";
-    q = material.internalStateNew(1.0, disp_grad, vel_grad, q_old);
+    double e22 = newton_scalar<transverse_stress>(disp_grad[1][1], mfem::future::make_tuple(&material, dt, disp_grad, vel_grad, q_old));
+    disp_grad[1][1] = disp_grad[2][2] = e22;
+    auto [sigma, q] = material.update(dt, disp_grad, q_old);
+    stress_file << disp_grad[0][0] << " " << sigma[0][0] << " " << sigma[1][1] << "\n";
     q_old = q;
     disp_grad[0][0] += strain_inc;
-    disp_grad[1][1] -= 0.5*strain_inc;
-    disp_grad[2][2] -= 0.5*strain_inc;
-
   }
   stress_file.close();
 }
