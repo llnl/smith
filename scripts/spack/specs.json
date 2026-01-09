@@ -18,7 +18,7 @@
       "+devtools+adiak+caliper~enzyme %gcc_13" ],
 
     "toss_4_x86_64_ib_cray":
-    [ "~devtools+adiak+caliper~openmp+rocm~petsc~slepc~enzyme~sundials amdgpu_target=gfx942,gfx90a %rocm_6_4_2"],
+    [ "~devtools+adiak+caliper~openmp+rocm~enzyme amdgpu_target=gfx942,gfx90a %rocm_6_4_2"],
 
     "blueos_3_ppc64le_ib_p9":
     [ "+devtools+cuda+adiak+caliper~strumpack %clang_gfortran cuda_arch=70" ],
