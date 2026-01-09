@@ -11,7 +11,7 @@ class Mfem(BuiltinMfem):
     # Note: Make sure this sha coincides with the git submodule
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
-    version("4.9.0.3", commit="5731d2f22bed549639a4d41895479ae698849afc")
+    version("4.9.0.3", commit="232853214d99a7ef7a8fb85bcf7a28ee92131115")
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 
@@ -47,4 +47,3 @@ class Mfem(BuiltinMfem):
                 env.append_flags(flag, "-fno-omit-frame-pointer")
                 if '+debug' in self.spec:
                     env.append_flags(flag, "-fno-optimize-sibling-calls")
-

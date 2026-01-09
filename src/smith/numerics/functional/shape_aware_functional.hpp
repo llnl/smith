@@ -374,7 +374,7 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
                                       QFuncArgs... qfunc_args) const
     {
       auto qfunc_tuple = make_tuple(qfunc_args...);
-      smith::tuple<trials...> local_trial_spaces{};
+      [[maybe_unused]] smith::tuple<trials...> local_trial_spaces{};
       auto reduced_trial_space_tuple = make_tuple(get<args>(local_trial_spaces)...);
 
       detail::ShapeCorrection shape_correction(Dimension<dim>{}, shape_val);
@@ -416,7 +416,7 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
                                       QFuncArgs... qfunc_args) const
     {
       auto qfunc_tuple = make_tuple(qfunc_args...);
-      smith::tuple<trials...> local_trial_spaces{};
+      [[maybe_unused]] smith::tuple<trials...> local_trial_spaces{};
       auto reduced_trial_space_tuple = make_tuple(get<args>(local_trial_spaces)...);
 
       detail::ShapeCorrection shape_correction(Dimension<dim>{}, shape_val);

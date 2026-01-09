@@ -1,7 +1,6 @@
 FROM ghcr.io/llnl/radiuss:gcc-14-ubuntu-24.04
 LABEL maintainer="chapman39@llnl.gov"
 ARG branch=develop
-ENV llvm_version="19"
 ENV spec="~devtools~enzyme %gcc_14"
 
 SHELL ["/bin/bash", "-c"]
