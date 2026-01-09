@@ -427,7 +427,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
             hip_link_flags = ""
 
-            rocm_root = os.path.dirname(spec["llvm-amdgpu"].prefix)
+            rocm_root = spec["llvm-amdgpu"].prefix
             entries.append(cmake_cache_path("ROCM_ROOT_DIR", rocm_root))
 
             # Recommended MPI flags

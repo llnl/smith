@@ -39,7 +39,7 @@ spack:
     llvm-amdgpu:
       externals:
       - spec: llvm-amdgpu@6.4.2
-        prefix: /opt/rocm-6.4.2/llvm
+        prefix: /opt/rocm-6.4.2
         extra_attributes:
           compilers:
             c: /opt/rocm-6.4.2/llvm/bin/amdclang
