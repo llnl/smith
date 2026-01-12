@@ -31,6 +31,9 @@ struct TimeInfo {
   /// @brief accessor for cycle
   size_t cycle() const { return cycle_; }
 
+  /// @brief return the time info corresponding to the end of this cycle (time + dt, dt, cycle)
+  TimeInfo endTimeInfo() const { return TimeInfo(time() + dt(), dt(), cycle()); }
+
   std::pair<double, double> time_;  ///< time and its dual
   std::pair<double, double> dt_;    ///< timestep and its dual
   size_t cycle_;                    ///< cycle, step, iteration count
