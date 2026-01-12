@@ -65,12 +65,20 @@ jobs:
       # Required - default is set to user "smith"
       options: --user root
     steps:
-      - name: Show disk usage
-        run: df -h && du -h -d1 .
       - name: Checkout Smith
         uses: actions/checkout@v4
-        with: 
+        with:
           submodules: recursive
+      - name: Attempt to save disk space
+        # CUDA library is 5GB, so requires more cleaning up
+        if: ${{ matrix.config.compiler_image != needs.set_image_vars.outputs.cuda_docker_image }}
+        run: |
+          df -h && du -h -d2 .. | sort -h -r
+          pwd
+          ls -la
+          rm -rf ../smith_tpls/builtin_spack_packages_repo
+          rm -rf .git axom mfem tribol
+          df -h && du -h -d2 .. | sort -h -r
       - name: Print Matrix Variables
         run: |
           echo "build_src_opts ${{ matrix.config.build_src_opts }}"
