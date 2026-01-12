@@ -71,7 +71,7 @@ jobs:
           submodules: recursive
       - name: Attempt to save disk space
         # CUDA library is 5GB, so requires more cleaning up
-        if: ${{ matrix.config.compiler_image != needs.set_image_vars.outputs.cuda_docker_image }}
+        if: ${{ matrix.config.compiler_image == needs.set_image_vars.outputs.cuda_docker_image }}
         run: |
           df -h && du -h -d2 .. | sort -h -r
           pwd
