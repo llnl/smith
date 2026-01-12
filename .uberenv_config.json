@@ -6,7 +6,7 @@
 "spack_url": "https://github.com/spack/spack.git",
 "spack_commit": "0154734bd44cb9230fcadecf2e6567c9d22ce5ab",
 "spack_packages_url": "https://github.com/spack/spack-packages.git",
-"spack_packages_commit": "2086492da69419215d1617a22fb23d677d99fee1",
+"spack_packages_commit": "88ce9cc7d9f1cad16375ef90825cb1d3098eeb73",
 "spack_configs_path": "scripts/spack/configs",
 "spack_packages_path": ["scripts/spack/spack_repo/smith/packages"]
 }
