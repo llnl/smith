@@ -76,8 +76,9 @@ jobs:
           df -h && du -h -d2 .. | sort -h -r
           pwd
           ls -la
-          rm -rf ../smith_tpls/builtin_spack_packages_repo
-          rm -rf .git axom mfem tribol
+          rm -rf ../smith_tpls/builtin_spack_packages_repo \
+                 .git axom mfem tribol /usr/lib/jvm /usr/lib/ruby /usr/share/vim \
+                 /usr/share/perl5 /usr/share/perl /tmp/*
           df -h && du -h -d2 .. | sort -h -r
       - name: Print Matrix Variables
         run: |
