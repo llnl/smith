@@ -65,6 +65,8 @@ jobs:
       # Required - default is set to user "smith"
       options: --user root
     steps:
+      - name: Show disk usage
+        run: df -h && du -h -d1 .
       - name: Checkout Smith
         uses: actions/checkout@v4
         with: 
