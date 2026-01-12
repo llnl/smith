@@ -12,9 +12,9 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/develop' }}
 
 env:
-  CLANG_DOCKER_IMAGE: seracllnl/tpls:clang-19_11-24-25_18h-57m
-  CUDA_DOCKER_IMAGE: seracllnl/tpls:cuda-12_04-16-25_20h-55m
-  GCC_DOCKER_IMAGE: seracllnl/tpls:gcc-14_11-24-25_18h-57m
+  CLANG_DOCKER_IMAGE: seracllnl/tpls:clang-19_01-09-26_03h-59m
+  CUDA_DOCKER_IMAGE: seracllnl/tpls:cuda-12_01-09-26_02h-37m
+  GCC_DOCKER_IMAGE: seracllnl/tpls:gcc-14_01-09-26_03h-42m
 
 jobs:
   # Hacky solution to reference env variables outside of `run` steps https://stackoverflow.com/a/74217028
@@ -40,13 +40,11 @@ jobs:
           host_config: llvm@19.1.1.cmake
           compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
           cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF"
-        # TODO re-add cuda testing
-        # https://github.com/LLNL/smith/issues/1479
-        # - job_name: gcc@12.3.0, shared, cuda, no tests/install/warnings as errors
-        #   host_config: gcc@12.3.0_cuda.cmake
-        #   compiler_image: ${{ needs.set_image_vars.outputs.cuda_docker_image }}
-        #   cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF -DENABLE_WARNINGS_AS_ERRORS=OFF"
-        #   build_src_opts: "--skip-install --skip-tests"
+        - job_name: gcc@13.3.0, shared, cuda, no tests/install/warnings as errors
+          host_config: gcc@13.3.0_cuda.cmake
+          compiler_image: ${{ needs.set_image_vars.outputs.cuda_docker_image }}
+          cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF -DENABLE_WARNINGS_AS_ERRORS=OFF"
+          build_src_opts: "--skip-install --skip-tests"
         - job_name: gcc@14.2.0, shared
           host_config: gcc@14.2.0.cmake
           compiler_image: ${{ needs.set_image_vars.outputs.gcc_docker_image }}
