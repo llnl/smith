@@ -303,7 +303,7 @@ std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSol
 
   auto residual_op_ = std::make_unique<mfem_ext::StdFunctionOperator>(
       block_u->Size(),
-      [residual_funcs, num_rows, &u_guesses, &block_r](const mfem::Vector& u_, mfem::Vector& r_) {
+      [&residual_funcs, num_rows, &u_guesses, &block_r](const mfem::Vector& u_, mfem::Vector& r_) {
         const mfem::BlockVector* u = dynamic_cast<const mfem::BlockVector*>(&u_);
         SLIC_ERROR_IF(!u, "Invalid u cast in block differentiable solver to a blocl vector");
         for (int row_i = 0; row_i < num_rows; ++row_i) {
@@ -337,7 +337,6 @@ std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSol
         }
         return *block_jac_;
       });
-
   nonlinear_solver_->setOperator(*residual_op_);
   nonlinear_solver_->solve(*block_u);
 

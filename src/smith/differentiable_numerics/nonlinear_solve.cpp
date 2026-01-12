@@ -305,7 +305,6 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     }
   }
   allFields.push_back(shape_disp);
-
   struct ZeroDualVectors {
     std::vector<FEDualPtr> operator()(const std::vector<FEFieldPtr>& fs)
     {
@@ -319,7 +318,6 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
   FieldVecState sol =
       shape_disp.create_state<std::vector<FEFieldPtr>, std::vector<FEDualPtr>>(allFields, ZeroDualVectors());
-
   sol.set_eval([=](const gretl::UpstreamStates& upstreams, gretl::DownstreamState& downstream) {
     SMITH_MARK_BEGIN("solve forward");
     const size_t num_rows = num_state_inputs.size();
@@ -371,6 +369,11 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       }
 
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+        //std::cout << "r " << row_i << " inputs = ";
+        //for (auto& f : input_fields[row_i]) {
+        //  std::cout << f->name() << " " << f->Size() << " ";
+        //}
+        //std::cout << std::endl;
         residuals[row_i] = residual_evals[row_i]->residual(time_info, shape_disp_ptr.get(),
                                                            getConstFieldPointers(input_fields[row_i]));
         residuals[row_i].SetSubVector(bc_managers[row_i]->allEssentialTrueDofs(), 0.0);
@@ -427,6 +430,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       }
       return jacobians;
     };
+
     diagonal_fields = solver->solve(diagonal_fields, eval_residuals, eval_jacobians);
 
     downstream.set<std::vector<FEFieldPtr>, std::vector<FEDualPtr>>(diagonal_fields);

@@ -84,9 +84,10 @@ class DirichletBoundaryConditions {
     };
 
     auto dof_list = domain.dof_list(&space_);
+    space_.DofsToVDofs(static_cast<int>(0), dof_list);
 
     auto component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
-    bcs_.addEssential(dof_list, component_disp_bdr_coef_, space_);
+    bcs_.addEssential(dof_list, component_disp_bdr_coef_, space_, 0);
   }
 
   /// @brief Constrain the dofs of a scalar field over a domain
