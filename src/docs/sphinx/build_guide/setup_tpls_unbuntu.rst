@@ -3,7 +3,7 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
-.. _setup_tpl_ubuntu-label:
+.. _setup_tpls_ubuntu-label:
 
 =========================================
 Third-party Library (TPL) Ubuntu 24 Build
