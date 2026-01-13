@@ -50,16 +50,16 @@ The following pages provide basic guidance on the following platforms:
 .. note::
 
    Smith uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
-   automatic differentiation. Due to this you have to compile with an LLVM-based compiler.
-   We recommend ``clang``.
+   automatic differentiation. To enable this functionality, you have to compile with an
+   LLVM-based compiler. We recommend ``clang``.
 
 .. toctree::
    :hidden:
    :maxdepth: 2
 
-   setup_ubuntu
-   setup_mac
-   setup_lc
+   setup_tpl_lc
+   setup_tpl_mac
+   setup_tpl_ubuntu
    building_tpls
    build
 
