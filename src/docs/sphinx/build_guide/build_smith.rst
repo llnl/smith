@@ -3,7 +3,7 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
-.. _build-label:
+.. _build_smith-label:
 
 =========================
 Building Smith with CMake

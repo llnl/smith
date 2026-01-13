@@ -5,9 +5,9 @@
 
 .. _building_tpls-label:
 
-========================================================
+======================================
 Building Smith's Third-party Libraries
-========================================================
+======================================
 
 It is now time to build Smith's Third-party Libraries (TPLs). Run the command with the compiler
 that you want to develop with:

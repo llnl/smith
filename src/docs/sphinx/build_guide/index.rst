@@ -43,9 +43,9 @@ amount of packages that Spack will build.
 
 The following pages provide basic guidance on the following platforms:
 
-* :ref:`Livermore Computing (LC) <setup_tpl_lc-label>`
-* :ref:`macOS <setup_tpl_mac-label>`
-* :ref:`Ubuntu 24 <setup_tpl_ubuntu-label>`
+* :ref:`Livermore Computing (LC) <setup_tpls_lc-label>`
+* :ref:`macOS <setup_tpls_macos-label>`
+* :ref:`Ubuntu 24 <setup_tpls_ubuntu-label>`
 
 .. note::
 
@@ -57,10 +57,10 @@ The following pages provide basic guidance on the following platforms:
    :hidden:
    :maxdepth: 2
 
-   setup_tpl_lc
-   setup_tpl_mac
-   setup_tpl_ubuntu
-   building_tpls
-   build
+   setup_tpls_lc
+   setup_tpls_macos
+   setup_tpls_ubuntu
+   build_tpls
+   build_smith
 
 
