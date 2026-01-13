@@ -45,7 +45,7 @@ The following pages provide basic guidance on the following platforms:
 
 * :ref:`Livermore Computing (LC) <setup_tpl_lc-label>`
 * :ref:`macOS <setup_tpl_mac-label>`
-* :ref:`Ubuntu 24 LTS <setup_tpl_ubuntu-label>`
+* :ref:`Ubuntu 24 <setup_tpl_ubuntu-label>`
 
 .. note::
 
