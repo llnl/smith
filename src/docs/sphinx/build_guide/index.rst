@@ -54,7 +54,6 @@ The following pages provide basic guidance on the following platforms:
    LLVM-based compiler. We recommend ``clang``.
 
 .. toctree::
-   :hidden:
    :maxdepth: 2
 
    setup_tpls_lc
