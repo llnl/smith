@@ -3,7 +3,7 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
-.. _setup_tpls_mac-label:
+.. _setup_tpls_macos-label:
 
 ===========================================
 Setup Third-party Library (TPL) macOS Build
