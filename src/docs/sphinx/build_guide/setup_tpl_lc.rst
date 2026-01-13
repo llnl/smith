@@ -3,7 +3,7 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
-.. _tpl_lc-label:
+.. _setup_tpl_lc-label:
 
 ========================================================
 Third-party Library (TPL) Livermore Computing (LC) Build
