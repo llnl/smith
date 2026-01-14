@@ -10,6 +10,7 @@
 #include <string>
 #include <fstream> // for debugging, remove in final
 
+#include <axom/slic/interface/slic_macros.hpp>
 #include <gtest/gtest.h>
 #include "mfem.hpp"
 
@@ -57,6 +58,7 @@ void newton_scalar_impl(const double* x0_ptr, const T* p_ptr, double* x_ptr) {
         x -= r/J;
     }
     *x_ptr = x;
+    SLIC_WARNING_IF(iters == settings.max_iters, axom::fmt::format("Scalar nonlinear solver failed to converge in alloted iterations ({}), abs(r) = {}", settings.max_iters, std::abs(f(x, p))));
 }
 
 
@@ -137,6 +139,32 @@ TEST(Enzyme, NewtonWithTupleParams) {
 
   mfem::future::tuple params_dot{0.0, 1.0};
   double dy_da = __enzyme_fwddiff<double>((void*) newton_scalar<nthroot_residual, mfem::future::tuple<double, double>>, enzyme_const, x0, enzyme_dup, params, params_dot);
+  EXPECT_NEAR(dy_da, 1.0/3.0*std::pow(radicand, -2.0/3.0), 1e-9);
+}
+
+
+double nthroot_residual_with_vector(double x, std::vector<double> p) {
+  auto power = p[0];
+  auto a = p[1];
+  return std::pow(x, power) - a;
+}
+
+__attribute__((used))
+void *  __enzyme_register_derivative_nthroot_residual_with_vector[2] = {
+  (void*) newton_scalar_impl<nthroot_residual_with_vector, std::vector<double>>, 
+  (void*) newton_scalar_impl_fwddiff<nthroot_residual_with_vector, std::vector<double>> 
+};
+
+TEST(Enzyme, NewtonWithVectorParams) {
+  double index = 3.0;
+  double radicand = 8.0;
+  std::vector<double> params{index, radicand};
+  double x0 = radicand / 2.0;
+  double y = newton_scalar<nthroot_residual_with_vector>(x0, params);
+  EXPECT_NEAR(y, 2.0, 1e-9);
+
+  std::vector<double> params_dot{0.0, 1.0};
+  double dy_da = __enzyme_fwddiff<double>((void*) newton_scalar<nthroot_residual_with_vector, std::vector<double>>, enzyme_const, x0, enzyme_dup, params, params_dot);
   EXPECT_NEAR(dy_da, 1.0/3.0*std::pow(radicand, -2.0/3.0), 1e-9);
 }
 
@@ -285,8 +313,8 @@ double potential(double eqps, double dt, double eqps_old, double sigma_y, double
     double eqps_dot = (eqps - eqps_old)/dt;
     double S = static_flow_strength(eqps_a, sigma_y, Hi);
     double C = std::pow(2.0, 1.0/m) - 1.0;
-    double pfactor = std::pow(1 + C*eqps_dot/eqps_dot_0, m + 1) - 1.0;
-    return dt*S*(eqps_dot_0/(C*(m + 1))*pfactor - eqps_dot);
+    double pfactor = std::pow(1.0 + C*eqps_dot/eqps_dot_0, m + 1.0) - 1.0;
+    return dt*S*(eqps_dot_0/(C*(m + 1.0))*pfactor - eqps_dot);
 }
 
 
@@ -294,7 +322,9 @@ using J2ResidualParams = mfem::future::tuple<double, double, double, double, dou
 
 double j2_rate_dependent_residual(double eqps, J2ResidualParams p) {
   auto [sigma_eff_trial, dt, mu, eqps_old, sigma_y, Hi, m, eqps_dot_0] = p;
-  return sigma_eff_trial - 3*mu*(eqps - eqps_old) - flow_strength(eqps, dt, eqps_old, sigma_y, Hi, m, eqps_dot_0);
+  //double strength = __enzyme_fwddiff<double>((void*) potential, enzyme_dup, eqps, 1.0, enzyme_const, dt, enzyme_const, eqps_old, enzyme_const, sigma_y, enzyme_const, Hi, enzyme_const, m, enzyme_const, eqps_dot_0);
+  double strength = flow_strength(eqps, dt, eqps_old, sigma_y, Hi, m, eqps_dot_0);
+  return sigma_eff_trial - 3*mu*(eqps - eqps_old) - strength;
 }
 
 __attribute__((used))
@@ -355,17 +385,16 @@ struct J2Smooth {
     const double G = 0.5 * E / (1.0 + nu);
 
     auto [plastic_strain, accumulated_plastic_strain_old] = unpack_internal_state(internal_state);
-
-    // (i) elastic predictor
+    
     auto el_strain = mfem::future::sym(dudX) - plastic_strain;
     auto p = K * tr(el_strain);
     auto s = 2.0 * G * mfem::future::dev(el_strain);
     auto q = std::sqrt(1.5) * mfem::future::norm(s);
+    double denom = q > 0.0? q : 1.0;
+    auto Np = 1.5 * s / denom;
 
     double accumulated_plastic_strain = newton_scalar<j2_rate_dependent_residual, J2ResidualParams>(accumulated_plastic_strain_old, mfem::future::make_tuple(q, dt, G, accumulated_plastic_strain_old, sigma_y, Hi, m, edot_0));
     double delta_eqps = accumulated_plastic_strain - accumulated_plastic_strain_old;
-    mfem::future::tensor<double, 3, 3> Np = {{{0.0, 0.5, 0.5}, {0.5, 0.0, 0.5}, {0.5, 0.5, 0.0}}};
-    Np = q > 0.0? 1.5 * s / q : Np;
     s -= 2.0 * G * delta_eqps * Np;
     plastic_strain += delta_eqps * Np;
 
@@ -757,24 +786,100 @@ double transverse_stress(double e22, mfem::future::tuple<J2Smooth*, double, Tens
   return sigma[1][1];
 }
 
+
+Tensor3D compute_stress(J2Smooth* mat, Tensor3D du_dX, InternalVars Q) {
+  return mat->pkStress(1.0, du_dX, Tensor3D{}, Q);
+}
+
+mfem::future::tensor<double, 9, 9> tangent(J2Smooth* mat, Tensor3D du_dX, InternalVars Q) {
+  mfem::future::tensor<double, 9, 9> C;
+  for (int k = 0, kl = 0; k < 3; k++) {
+    for (int l = 0; l < 3; l++, kl++) {
+      Tensor3D direction{};
+      direction[k][l] = 1.0;
+      auto ds = __enzyme_fwddiff<Tensor3D>((void*) compute_stress, enzyme_const, mat, enzyme_dup, du_dX, direction, enzyme_dup, Q, InternalVars{});
+      for (int i = 0, ij = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++, ij++) {
+          C[ij][kl] = ds[i][j];
+        }
+      }
+    } 
+  }
+  return C;
+}
+
 TEST(EnzymeMaterial, Stress) {
   J2Smooth material{.E = 70.0e3, .nu=0.34, .sigma_y = 240.0, .Hi = 1750.0, .m = 0.25, .edot_0 = 250e-6, .rho = 1.0};
   Tensor3D disp_grad{};
   Tensor3D vel_grad{};
-  InternalVars q_old{};
+  InternalVars q{}, q_old{};
   std::ofstream stress_file("stress_strain.csv");
+  stress_file << 0.0 << " " << 0.0 << " " << 0.0 << "\n";
   const double strain_inc = 250e-6;
   double dt = 1.0;
   for (int i = 0; i < 200; i++) {
-    double e22 = newton_scalar<transverse_stress>(disp_grad[1][1], mfem::future::make_tuple(&material, dt, disp_grad, vel_grad, q_old));
-    disp_grad[1][1] = disp_grad[2][2] = e22;
-    auto [sigma, q] = material.update(dt, disp_grad, q_old);
-    stress_file << disp_grad[0][0] << " " << sigma[0][0] << " " << sigma[1][1] << "\n";
     q_old = q;
     disp_grad[0][0] += strain_inc;
+    double e22 = newton_scalar<transverse_stress>(disp_grad[1][1], mfem::future::make_tuple(&material, dt, disp_grad, vel_grad, q_old));
+    disp_grad[1][1] = disp_grad[2][2] = e22;
+    auto [sigma, q_new] = material.update(dt, disp_grad, q_old);
+    q = q_new;
+    stress_file << disp_grad[0][0] << " " << sigma[0][0] << " " << sigma[1][1] << "\n";
   }
   stress_file.close();
+
+  mfem::out << "Final disp grad = " << disp_grad << std::endl;
+  mfem::out << "Final q_old = " << q_old << std::endl;
+  auto [sigma, q_new] = material.update(dt, disp_grad, q_old);
+  mfem::out << "stress = \n" << sigma << std::endl;
+  mfem::out << "Q = \n" << q_new << std::endl;
+
+  Tensor3D H{{{0.05, 0, 0}, {0, -0.0242778, 0}, {0, 0, -0.0242778}}};
+  InternalVars Q_old{{0.0452424, 0, 0, 0, -0.0226212, 0, 0, 0, -0.0226212, 0.0452424}};
+  auto A = tangent(&material, H, Q_old);
+  mfem::out << "Tangent = \n" << A << std::endl;
+
+  double lm = (A[8][4]*A[0][8] - A[0][4]*A[8][8])/(A[4][4]*A[8][8] - A[8][4]*A[4][8]);
+  double uniaxial_mod = A[0][0] + 2*lm*A[4][0];
+  mfem::out << "Uniaxial stress tangent modulus = " << uniaxial_mod << std::endl;
+
+
+  auto f = [](J2Smooth* mat, Tensor3D H, InternalVars Q, Tensor3D& stress_out) {
+    stress_out = compute_stress(mat, H, Q);
+  };
+  Tensor3D stress_out;
+  f(&material, disp_grad, q_old, stress_out);
+  mfem::out << "result of f(H, q) = " << stress_out << std::endl;
+  // Tensor3D sigma_bar = H_dot;
+  // auto H_bar = __enzyme_autodiff<Tensor3D>((void*) +f, enzyme_const, &material, enzyme_out, disp_grad, enzyme_const, q_old, enzyme_dup, &stress_out, &sigma_bar);
+  // mfem::out << "VJP = \n" << H_bar << std::endl;
 }
+
+TEST(J2Smooth, FDTangent) {
+  Tensor3D H{{{0.05, 0, 0}, {0, -0.0242778, 0}, {0, 0, -0.0242778}}};
+  InternalVars q_old{{0.0452424, 0, 0, 0, -0.0226212, 0, 0, 0, -0.0226212, 0.0452424}};
+  J2Smooth material{.E = 70.0e3, .nu=0.34, .sigma_y = 240.0, .Hi = 1750.0, .m = 0.25, .edot_0 = 250e-6, .rho = 1.0};
+  double dt = 1.0;
+  auto stress = material.pkStress(dt, H, Tensor3D{}, q_old);
+  mfem::out << "stress = \n" << stress << std::endl;
+
+  mfem::future::tensor<double, 9, 9> A;
+  double epsilon = -1e-5;
+  for (int k = 0, kl = 0; k < 3; k++) {
+    for (int l = 0; l < 3; l++, kl++) {
+      Tensor3D dH{};
+      dH[k][l] = 1.0;
+      auto stress_p = material.pkStress(dt, H + epsilon*dH, Tensor3D{}, q_old);
+      for (int i = 0, ij = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++, ij++) {
+          A[ij][kl] = (stress_p[i][j] - stress[i][j])/epsilon;
+        }
+      }
+    } 
+  }
+  mfem::out << "Tangent = \n" << A << std::endl;
+}
+
 
 }  // namespace smith
 
