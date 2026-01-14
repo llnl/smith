@@ -3,11 +3,11 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
-.. _setup_tpls_lc-label:
+.. _setup_lc_tpl_build-label:
 
-========================================================
-Third-party Library (TPL) Livermore Computing (LC) Build
-========================================================
+========================================
+Setup Livermore Computing (LC) TPL Build
+========================================
 
 We provide Spack Environment files for each of LC's systems:
 
@@ -142,5 +142,5 @@ by another package, so you can also add it with this yaml section:
 Building Smith's Third-party Libraries
 --------------------------------------
 
-It is now time to build Smith's Third-party Libraries (TPLs). For detailed instructions see :ref:`building_tpls-label`.
+It is now time to build Smith's Third-party Libraries (TPLs). For detailed instructions see :ref:`build_tpls-label`.
 

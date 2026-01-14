@@ -49,9 +49,9 @@ amount of packages that Spack will build.
 The following pages provide basic guidance on the following platforms and is where you should
 start:
 
-* :ref:`Livermore Computing (LC) <setup_tpls_lc-label>`
-* :ref:`macOS <setup_tpls_macos-label>`
-* :ref:`Ubuntu 24 <setup_tpls_ubuntu-label>`
+* :ref:`Livermore Computing (LC) <setup_lc_tpl_build-label>`
+* :ref:`macOS <setup_macos_tpl_build-label>`
+* :ref:`Ubuntu 24 <setup_ubuntu_tpl_build-label>`
 
 At the end of each Setup guide, it has a link to the page that shows you how to build
 the minimal set of TPLs for Smith; followed by a page on how to build
@@ -66,9 +66,9 @@ Smith from the generated host-config file via CMake.
 .. toctree::
    :maxdepth: 1
 
-   setup_tpls_lc
-   setup_tpls_macos
-   setup_tpls_ubuntu
+   setup_lc_tpl_build
+   setup_macos_tpl_build
+   setup_ubuntu_tpl_build
    build_tpls
    build_smith
 

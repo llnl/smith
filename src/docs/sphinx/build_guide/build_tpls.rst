@@ -3,7 +3,7 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
-.. _building_tpls-label:
+.. _build_tpls-label:
 
 ======================================
 Building Smith's Third-party Libraries
