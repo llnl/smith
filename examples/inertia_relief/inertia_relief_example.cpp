@@ -80,37 +80,6 @@ class ParaviewWriter {
   StateVecs dual_states;
 };
 
-auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<smith::FiniteElementState const*>& states,
-                          std::string output_name)
-{
-  if (output_name == "") {
-    output_name = "default";
-  }
-
-  ParaviewWriter::StateVecs output_states;
-  for (const auto& s : states) {
-    output_states.push_back(std::make_shared<smith::FiniteElementState>(s->space(), s->name()));
-  }
-
-  auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
-  auto paraview_dc = std::make_unique<mfem::ParaViewDataCollection>(output_name, non_const_mesh);
-  int max_order_in_fields = 0;
-
-  // Find the maximum polynomial order in the physics module's states
-  for (const auto& state : output_states) {
-    paraview_dc->RegisterField(state->name(), &state->gridFunction());
-    max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
-  }
-
-  // Set the options for the paraview output files
-  paraview_dc->SetLevelsOfDetail(max_order_in_fields);
-  paraview_dc->SetHighOrderOutput(true);
-  paraview_dc->SetDataFormat(mfem::VTKFormat::BINARY);
-  paraview_dc->SetCompression(true);
-
-  return ParaviewWriter(std::move(paraview_dc), output_states, {});
-}
-
 /* Nonlinear problem of the form
  * F(X) = [ r(u) + (dc/du)^T l ] = [ 0 ]
  *        [ -c(u)              ]   [ 0 ]
@@ -302,7 +271,7 @@ int main(int argc, char* argv[])
     return u;
   });
 
-  auto writer = createParaviewOutput(mesh->mfemParMesh(), objective_states, "inertia_relief");
+  auto writer = createParaviewWriter(mesh->mfemParMesh(), objective_states, "inertia_relief");
   if (visualize) {
     writer.write(0, 0.0, objective_states);
   }
