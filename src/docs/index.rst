@@ -15,7 +15,8 @@ computing architectures. It heavily leverages the `MFEM finite element library <
    This project is under heavy development and is currently a pre-alpha release. Functionality and interfaces may change rapidly
    as development progresses.
 
-*  :ref:`Quickstart/Build Instructions <quickstart-label>`
+*  :ref:`Quickstart <quickstart-label>`
+*  :ref:`build_guide-label`
 *  `Source Documentation <doxygen/html/index.html>`_
 
 

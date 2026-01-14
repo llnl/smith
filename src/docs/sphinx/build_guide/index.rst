@@ -13,14 +13,14 @@ This guide provides instructions on how to build or install all dependencies of 
 how to build Smith from source. The process consists of the following high-level phases:
 
 #. Setup the machine by installing the required system-level packages and generating a Spack environment file
-#. Build third-party libraries using Spack and Uberenv to provide a consistent dependency stack
+#. Build Third-party Libraries (TPLs) using Spack and Uberenv to provide a consistent dependency stack
 #. Build Smith itself using CMake once all dependencies are in place
 
 -----------------
 Spack and Uberenv
 -----------------
 
-Smith uses `Spack <https://github.com/spack/spack>`_ to build it's Third-party Libraries (TPLs).
+Smith uses `Spack <https://github.com/spack/spack>`_ to build it's TPLs.
 This has been encapsulated using `Uberenv <https://github.com/LLNL/uberenv>`_.
 Uberenv helps by doing the following:
 
@@ -65,7 +65,21 @@ Smith from the generated host-config file via CMake.
    automatic differentiation. To enable this functionality, you have to compile with an
    LLVM-based compiler. We recommend ``clang``.
 
+---------------------------
+Build Third-party Libraries
+---------------------------
+
+For more information see :ref:`build_tpls-label`.
+
+----------------------
+Build Smith with CMake
+----------------------
+
+For more information see :ref:`build_smith-label`.
+
+
 .. toctree::
+   :hidden:
    :maxdepth: 1
 
    setup_lc_tpl_build
