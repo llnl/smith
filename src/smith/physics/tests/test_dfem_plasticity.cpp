@@ -15,10 +15,7 @@
 #include "mfem.hpp"
 
 #include "smith/infrastructure/application_manager.hpp"
-#include "smith/mesh_utils/mesh_utils_base.hpp"
-#include "smith/numerics/functional/tensor.hpp"
 #include "smith/physics/dfem_solid_weak_form.hpp"
-#include "smith/physics/field_types.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/state/finite_element_dual.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
@@ -44,6 +41,7 @@ void newton_scalar_impl(const double* x0_ptr, const T* p_ptr, double* x_ptr) {
     return __enzyme_fwddiff<double>((void*)+f, enzyme_dup, x, dx, enzyme_const, p);
   };
 
+  // TODO: make this in input argument. Have to deal with making this a non-differentiated argument.
   NewtonSettings settings{.max_iters = 50, .residual_abs_tol = 1e-10, .residual_rel_tol = 0.0};
 
   double x = x0;
@@ -104,7 +102,7 @@ TEST(Enzyme, Newton) {
   /* QUESTION FOR BILL:
   I would like to use the commented code below (where the settings struct is marked enzyme_const).
   However, this causes enzyme to fail to register the custom derivative rule for newton_scalar.
-  The problem is the integer field in the struct. If I make it type double, the line below works.
+  The problem is the integer field in the `settings` struct. If I make it a double, the line below works.
   Are custom derivatives forced to use the default activity rules?
   */
   //double dx_dz = __enzyme_fwddiff<double>((void*) newton_scalar<sqrt_residual>, enzyme_const, x0, enzyme_const, settings, enzyme_dup, z, dz);
