@@ -44,41 +44,23 @@ enum ContactFields
 
 /** @brief Interface for extracting the iblock, jblock block from a std::unique_ptr<mfem::BlockOperator>
  *         said block is returned as a std::unique_ptr<mfem::HypreParMatrix> if possible
- *         All other blocks are deleted
  *
  * @param block_operator the block operator
  * @param iblock row block index
  * @param jblock column block index
  * @return std::unique_ptr<mfem::HypreParMatrix> The requested block of block_operator
  */
-static std::unique_ptr<mfem::HypreParMatrix> safelyObtainBlock(mfem::BlockOperator* block_operator, int iblock,
-                                                               int jblock, bool own_blocks = false)
+static std::unique_ptr<mfem::HypreParMatrix> obtainBlock(mfem::BlockOperator* block_operator, int iblock, int jblock)
 {
   SLIC_ERROR_IF(iblock < 0 || jblock < 0, "block indicies must be non-negative");
   SLIC_ERROR_IF(iblock > block_operator->NumRowBlocks() || jblock > block_operator->NumColBlocks(),
                 "one or more block indicies are too large and the requested block does not exist");
   SLIC_ERROR_IF(block_operator->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
-  block_operator->owns_blocks = false;
-  for (int i = 0; i < block_operator->NumRowBlocks(); i++) {
-    for (int j = 0; j < block_operator->NumColBlocks(); j++) {
-      if (i == iblock && j == jblock) {
-        continue;
-      }
-      if (!block_operator->IsZeroBlock(i, j) && !own_blocks) {
-        delete &block_operator->GetBlock(i, j);
-      }
-    }
-  }
   auto Ablk = dynamic_cast<mfem::HypreParMatrix*>(&block_operator->GetBlock(iblock, jblock));
   SLIC_ERROR_IF(!Ablk, "failed cast block to mfem::HypreParMatrix");
-  if (own_blocks) {
-    // deep copy --> unique_ptr
-    auto Ablk_unique = std::make_unique<mfem::HypreParMatrix>(*Ablk);
-    return Ablk_unique;
-  } else {
-    std::unique_ptr<mfem::HypreParMatrix> Ablk_unique(Ablk);
-    return Ablk_unique;
-  }
+  // deep copy --> unique_ptr
+  auto Ablk_unique = std::make_unique<mfem::HypreParMatrix>(*Ablk);
+  return Ablk_unique;
 };
 
 class FiniteElementState;
@@ -111,6 +93,7 @@ class ContactConstraint : public Constraint {
     contact_opts_.enforcement = ContactEnforcement::LagrangeMultiplier;
     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts_);
     interaction_id_ = interaction_id;
+    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
   }
 
   /// @brief destructor
@@ -128,10 +111,8 @@ class ContactConstraint : public Constraint {
   mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields,
                         bool fresh_evaluation = true) const override
   {
-    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
-
     if (fresh_evaluation) {
+      contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       // note: Tribol does not use cycle.
       int cycle = 0;
       contact_.update(cycle, time, dt);
@@ -157,18 +138,16 @@ class ContactConstraint : public Constraint {
                                                  int direction, bool fresh_evaluation = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
-    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
     if (fresh_evaluation) {
+      contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       int cycle = 0;
       contact_.update(cycle, time, dt);
       J_contact_ = contact_.mergedJacobian();
       pressures_set_ = false;
     }
-    int iblock = 1;
-    int jblock = 0;
-    auto dgdu = safelyObtainBlock(J_contact_.get(), iblock, jblock, own_blocks_);
+    // obtain (1, 0) block entry from the 2 x 2 block contact linear system
+    auto dgdu = obtainBlock(J_contact_.get(), 1, 0);
     return dgdu;
   };
 
@@ -188,12 +167,11 @@ class ContactConstraint : public Constraint {
                                      bool fresh_evaluation = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
-    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
 
     int cycle = 0;
     if (fresh_evaluation) {
-      // we need to call update first to update gaps
+      contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
+      // first update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
         interaction.evalJacobian(false);
       }
@@ -201,7 +179,7 @@ class ContactConstraint : public Constraint {
       pressures_set_ = false;
     }
     if (!pressures_set_) {
-      // with updated gaps, we can update pressure for contact interactions with penalty enforcement
+      // with updated gaps, then update pressure for contact interactions with penalty enforcement
       contact_.setPressures(multipliers);
       // call update again with the right pressures
       for (auto& interaction : contact_.getContactInteractions()) {
@@ -231,12 +209,11 @@ class ContactConstraint : public Constraint {
                                                                        bool fresh_evaluation = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
-    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
     int cycle = 0;
     if (fresh_evaluation) {
-      // we need to call update first to update gaps
+      contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
+      // first update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
         interaction.evalJacobian(false);
       }
@@ -254,9 +231,8 @@ class ContactConstraint : public Constraint {
       J_contact_ = contact_.mergedJacobian();
       pressures_set_ = true;
     }
-    int iblock = 0;
-    int jblock = 0;
-    auto Hessian = safelyObtainBlock(J_contact_.get(), iblock, jblock, own_blocks_);
+    // obtain (0, 0) block entry from the 2 x 2 block contact linear system
+    auto Hessian = obtainBlock(J_contact_.get(), 0, 0);
     return Hessian;
   };
 
@@ -273,19 +249,19 @@ class ContactConstraint : public Constraint {
                                                        int direction, bool fresh_evaluation = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
-    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
 
     int cycle = 0;
     if (fresh_evaluation) {
+      contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       contact_.update(cycle, time, dt);
       J_contact_.reset();
       J_contact_ = contact_.mergedJacobian();
       pressures_set_ = false;
     }
-    int iblock = 0;
-    int jblock = 1;
-    auto dgduT = safelyObtainBlock(J_contact_.get(), iblock, jblock, own_blocks_);
+    // obtain (0, 1) block entry from the 2 x 2 block contact linear system
+    auto dgduT = obtainBlock(J_contact_.get(), 0,
+                             1);  // TODO: do we really need to do transpose here? Is another transpose done in the
+                                  // other HomotopySolver or problem class codes? Would a utility function be helpful?
     std::unique_ptr<mfem::HypreParMatrix> dgdu(dgduT->Transpose());
     return dgdu;
   };
@@ -314,7 +290,9 @@ class ContactConstraint : public Constraint {
   mutable std::unique_ptr<mfem::BlockOperator> J_contact_;
 
   /**
-   * @brief own_blocks_ temporary boolean
+   * @brief own_blocks_ boolean, specifying whether the ContactConstraint class
+   *                    will own the derivative blocks of J_contact_ and be responsible
+   *                    for managing the associated memory.
    */
   const bool own_blocks_ = true;
 
