@@ -458,9 +458,9 @@ mfem::Vector InertialReliefProblem::constraint(const mfem::Vector& u, bool fresh
 // Jacobian of the constraint
 mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vector& u, bool fresh_evaluation)
 {
-  int dim_constraints = GetMultiplierDim();
-  int glbdim_displacement = GetGlobalDisplacementDim();
   if (fresh_evaluation) {
+    int dim_constraints = GetMultiplierDim();
+    int glbdim_displacement = GetGlobalDisplacementDim();
     obj_states_[FIELD::DISP]->Set(1.0, u);
     // dense rows
     int nentries = glbdim_displacement;
