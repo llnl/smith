@@ -7,10 +7,14 @@
 Build Guide
 ===========
 
--------------------------------
-Third-party Library (TPL) Build
--------------------------------
+This guide provides instructions on how to build or install all dependencies of Smith, followed by 
+how to build Smith from source. The process consists of the following high-level phases:
 
+#. Setup the machine by installing the required system-level packages and generating a Spack environment file
+#. Build third-party libraries using Spack and Uberenv to provide a consistent dependency stack
+#. Build Smith itself using CMake once all dependencies are in place
+
+-----------------
 Spack and Uberenv
 -----------------
 
@@ -35,17 +39,23 @@ It also generates a host-config file (``<config_dependent_name>.cmake``)
 at the root of Smith repository. This host-config defines all the required information for building
 Smith.
 
+------------------
 Basic System Setup
 ------------------
 
 We recommend installing some basic system-level development packages to minimize the
 amount of packages that Spack will build.
 
-The following pages provide basic guidance on the following platforms:
+The following pages provide basic guidance on the following platforms and is where you should
+start:
 
 * :ref:`Livermore Computing (LC) <setup_tpls_lc-label>`
 * :ref:`macOS <setup_tpls_macos-label>`
 * :ref:`Ubuntu 24 <setup_tpls_ubuntu-label>`
+
+At the end of each Setup guide, it has a link to the page that shows you how to build
+the minimal set of Third-party Libraries for Smith; followed by a page on how to build
+Smith from the generated host-config file via CMake.
 
 .. note::
 
@@ -54,7 +64,7 @@ The following pages provide basic guidance on the following platforms:
    LLVM-based compiler. We recommend ``clang``.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    setup_tpls_lc
    setup_tpls_macos
