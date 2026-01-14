@@ -79,7 +79,7 @@ build with that compiler.
 Building Smith's Dependencies via Spack/uberenv
 -----------------------------------------------
 
-For detailed instructions see :ref:`tpl_builds-label`.
+For detailed instructions see :ref:`build_guide-label`.
 
 .. note::
   This is optional if you are on an LC machine and are in the ``smithdev`` group as we have

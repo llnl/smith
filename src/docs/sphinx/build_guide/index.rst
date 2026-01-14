@@ -3,6 +3,8 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
+.. _build_guide-label:
+
 ===========
 Build Guide
 ===========
