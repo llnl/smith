@@ -787,27 +787,6 @@ double transverse_stress(double e22, mfem::future::tuple<J2Smooth*, double, Tens
 }
 
 
-Tensor3D compute_stress(J2Smooth* mat, Tensor3D du_dX, InternalVars Q) {
-  return mat->pkStress(1.0, du_dX, Tensor3D{}, Q);
-}
-
-mfem::future::tensor<double, 9, 9> tangent(J2Smooth* mat, Tensor3D du_dX, InternalVars Q) {
-  mfem::future::tensor<double, 9, 9> C;
-  for (int k = 0, kl = 0; k < 3; k++) {
-    for (int l = 0; l < 3; l++, kl++) {
-      Tensor3D direction{};
-      direction[k][l] = 1.0;
-      auto ds = __enzyme_fwddiff<Tensor3D>((void*) compute_stress, enzyme_const, mat, enzyme_dup, du_dX, direction, enzyme_dup, Q, InternalVars{});
-      for (int i = 0, ij = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++, ij++) {
-          C[ij][kl] = ds[i][j];
-        }
-      }
-    } 
-  }
-  return C;
-}
-
 TEST(EnzymeMaterial, Stress) {
   J2Smooth material{.E = 70.0e3, .nu=0.34, .sigma_y = 240.0, .Hi = 1750.0, .m = 0.25, .edot_0 = 250e-6, .rho = 1.0};
   Tensor3D disp_grad{};
@@ -827,57 +806,62 @@ TEST(EnzymeMaterial, Stress) {
     stress_file << disp_grad[0][0] << " " << sigma[0][0] << " " << sigma[1][1] << "\n";
   }
   stress_file.close();
-
-  mfem::out << "Final disp grad = " << disp_grad << std::endl;
-  mfem::out << "Final q_old = " << q_old << std::endl;
-  auto [sigma, q_new] = material.update(dt, disp_grad, q_old);
-  mfem::out << "stress = \n" << sigma << std::endl;
-  mfem::out << "Q = \n" << q_new << std::endl;
-
-  Tensor3D H{{{0.05, 0, 0}, {0, -0.0242778, 0}, {0, 0, -0.0242778}}};
-  InternalVars Q_old{{0.0452424, 0, 0, 0, -0.0226212, 0, 0, 0, -0.0226212, 0.0452424}};
-  auto A = tangent(&material, H, Q_old);
-  mfem::out << "Tangent = \n" << A << std::endl;
-
-  double lm = (A[8][4]*A[0][8] - A[0][4]*A[8][8])/(A[4][4]*A[8][8] - A[8][4]*A[4][8]);
-  double uniaxial_mod = A[0][0] + 2*lm*A[4][0];
-  mfem::out << "Uniaxial stress tangent modulus = " << uniaxial_mod << std::endl;
-
-
-  auto f = [](J2Smooth* mat, Tensor3D H, InternalVars Q, Tensor3D& stress_out) {
-    stress_out = compute_stress(mat, H, Q);
-  };
-  Tensor3D stress_out;
-  f(&material, disp_grad, q_old, stress_out);
-  mfem::out << "result of f(H, q) = " << stress_out << std::endl;
-  // Tensor3D sigma_bar = H_dot;
-  // auto H_bar = __enzyme_autodiff<Tensor3D>((void*) +f, enzyme_const, &material, enzyme_out, disp_grad, enzyme_const, q_old, enzyme_dup, &stress_out, &sigma_bar);
-  // mfem::out << "VJP = \n" << H_bar << std::endl;
 }
 
+
+Tensor3D compute_stress(J2Smooth* mat, Tensor3D du_dX, InternalVars Q) {
+  return mat->pkStress(1.0, du_dX, Tensor3D{}, Q);
+}
+
+mfem::future::tensor<double, 3, 3, 3, 3> compute_tangent(J2Smooth* mat, Tensor3D du_dX, InternalVars Q) {
+  mfem::future::tensor<double, 3, 3, 3, 3> C;
+  for (int k = 0; k < 3; k++) {
+    for (int l = 0; l < 3; l++) {
+      Tensor3D direction{};
+      direction[k][l] = 1.0;
+      auto ds = __enzyme_fwddiff<Tensor3D>((void*)compute_stress, enzyme_const, mat, enzyme_dup, du_dX, direction, enzyme_dup, Q, InternalVars{});
+      for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+          C[i][j][k][l] = ds[i][j];
+        }
+      }
+    }
+  }
+  return C;
+}
+
+
 TEST(J2Smooth, FDTangent) {
+  // compare Elastic-plastic tangents computed with Enzyme with finite differences
   Tensor3D H{{{0.05, 0, 0}, {0, -0.0242778, 0}, {0, 0, -0.0242778}}};
   InternalVars q_old{{0.0452424, 0, 0, 0, -0.0226212, 0, 0, 0, -0.0226212, 0.0452424}};
   J2Smooth material{.E = 70.0e3, .nu=0.34, .sigma_y = 240.0, .Hi = 1750.0, .m = 0.25, .edot_0 = 250e-6, .rho = 1.0};
   double dt = 1.0;
   auto stress = material.pkStress(dt, H, Tensor3D{}, q_old);
-  mfem::out << "stress = \n" << stress << std::endl;
 
-  mfem::future::tensor<double, 9, 9> A;
+  auto A = compute_tangent(&material, H, q_old);
+  // mfem::out << "Enzyme tangent = \n" << A << std::endl;
+
+  mfem::future::tensor<double, 3, 3, 3, 3> A_h;
   double epsilon = -1e-5;
-  for (int k = 0, kl = 0; k < 3; k++) {
-    for (int l = 0; l < 3; l++, kl++) {
+  for (int k = 0; k < 3; k++) {
+    for (int l = 0; l < 3; l++) {
       Tensor3D dH{};
       dH[k][l] = 1.0;
       auto stress_p = material.pkStress(dt, H + epsilon*dH, Tensor3D{}, q_old);
-      for (int i = 0, ij = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++, ij++) {
-          A[ij][kl] = (stress_p[i][j] - stress[i][j])/epsilon;
+      for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+          A_h[i][j][k][l] = (stress_p[i][j] - stress[i][j])/epsilon;
+          EXPECT_NEAR(A_h[i][j][k][l], A[i][j][k][l], 1e-4*material.E);
         }
       }
     } 
   }
-  mfem::out << "Tangent = \n" << A << std::endl;
+  // mfem::out << "finite difference tangent = \n" << A_h << std::endl;
+
+  // double lm = (A[8][4]*A[0][8] - A[0][4]*A[8][8])/(A[4][4]*A[8][8] - A[8][4]*A[4][8]);
+  // double uniaxial_mod = A[0][0] + 2*lm*A[4][0];
+  // mfem::out << "Uniaxial stress tangent modulus = " << uniaxial_mod << std::endl;
 }
 
 
