@@ -18,7 +18,7 @@ how to build Smith from source. The process consists of the following high-level
 Spack and Uberenv
 -----------------
 
-Smith uses `Spack <https://github.com/spack/spack>`_ to build it's TPLs.
+Smith uses `Spack <https://github.com/spack/spack>`_ to build it's Third-party Libraries (TPLs).
 This has been encapsulated using `Uberenv <https://github.com/LLNL/uberenv>`_.
 Uberenv helps by doing the following:
 
@@ -54,7 +54,7 @@ start:
 * :ref:`Ubuntu 24 <setup_tpls_ubuntu-label>`
 
 At the end of each Setup guide, it has a link to the page that shows you how to build
-the minimal set of Third-party Libraries for Smith; followed by a page on how to build
+the minimal set of TPLs for Smith; followed by a page on how to build
 Smith from the generated host-config file via CMake.
 
 .. note::
