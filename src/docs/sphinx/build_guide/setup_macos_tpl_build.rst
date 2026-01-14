@@ -44,7 +44,7 @@ This is also useful for a few additional packages:
 .. note::
 
     We provide a basic MacOS Spack environment file that
-    may work for most people. If you want to try using that, skip to :ref:`building_tpls-label`
+    may work for most people. If you want to try using that, skip to :ref:`build_tpls-label`
     below and use this command line option instead ``--spack-env-file=scripts/spack/configs/darwin/spack.yaml``. You will likely
     need to update the versions of packages to match the versions installed by Homebrew. The versions for all installed packages can be listed via
     the command ``brew list --versions``.
@@ -119,7 +119,7 @@ Unless otherwise specified, Spack will default to a compiler.  This is generally
 developing large codes. To specify which compiler to use add the compiler specification to the ``--spec`` Uberenv
 command line option. We provide recommended Spack specs for LC in ``scripts/spack/specs.json``.
 
-You can use these directly in the ``uberenv.py`` command in the :ref:`building_tpls-label`
+You can use these directly in the ``uberenv.py`` command in the :ref:`build_tpls-label`
 section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang_19"``.
 
 .. note::

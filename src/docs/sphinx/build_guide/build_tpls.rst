@@ -43,5 +43,5 @@ Building Smith
 --------------
 
 Finally, with the TPL's built and the host-config file, you can build Smith
-for more detail instructions on how to build Smith, see :ref:`build-label`.
+for more detail instructions on how to build Smith, see :ref:`build_smith-label`.
 

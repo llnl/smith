@@ -40,7 +40,7 @@ Optionally you can install packages to generate documentation:
 .. note::
 
     We provide a basic Ubuntu 24 Spack environment file in ``scripts/spack/configs/linux_ubuntu_24`` that
-    may work for most people. If you want to try using that, skip to :ref:`building_tpls-label`
+    may work for most people. If you want to try using that, skip to :ref:`build_tpls-label`
     below and use this command line option instead ``--spack-env-file=scripts/spack/configs/linux_ubuntu_24/spack.yaml``
 
 

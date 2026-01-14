@@ -18,7 +18,7 @@ Unless otherwise specified, Spack will default to a compiler.  This is generally
 developing large codes. To specify which compiler to use add the compiler specification to the ``--spec`` Uberenv
 command line option. We provide recommended Spack specs for LC in ``scripts/spack/specs.json``.
 
-You can use these directly in the ``uberenv.py`` command in the :ref:`building_tpls-label`
+You can use these directly in the ``uberenv.py`` command in the :ref:`build_tpls-label`
 section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang_19"``.
 
 .. note::
