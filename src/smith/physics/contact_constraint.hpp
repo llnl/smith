@@ -116,13 +116,13 @@ class ContactConstraint : public Constraint {
       // note: Tribol does not use cycle.
       int cycle = 0;
       contact_.update(cycle, time, dt);
-      pressures_set_ = false;
+      auto gaps_hpv = contact_.mergedGaps(false);
+      // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
+      // https://github.com/mfem/mfem/issues/5029
+      cached_gap_.SetSize(gaps_hpv.Size());
+      cached_gap_.Set(1.0, gaps_hpv);
     }
-    auto gaps_hpv = contact_.mergedGaps(false);
-    // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
-    // https://github.com/mfem/mfem/issues/5029
-    mfem::Vector gaps = gaps_hpv;
-    return gaps;
+    return cached_gap_;
   };
 
   /** @brief Interface for computing contact gap constraint Jacobian from a vector of smith::FiniteElementState*
@@ -132,19 +132,24 @@ class ContactConstraint : public Constraint {
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
    * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with fresh_evaluation if we re-evaluate or use previously cached
+   * evaluation
    * @return std::unique_ptr<mfem::HypreParMatrix> The true Jacobian
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                 int direction, bool fresh_evaluation = true) const override
+                                                 int direction, bool fresh_evaluation = true,
+                                                 [[maybe_unused]] bool fresh_derivative = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
-
+    /* If this is not a new evaluation point e.g.,
+       if the constraint was evaluated at this point
+       then the derivatives have already been computed
+       and we do not need to recompute them.*/
     if (fresh_evaluation) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       int cycle = 0;
       contact_.update(cycle, time, dt);
       J_contact_ = contact_.mergedJacobian();
-      pressures_set_ = false;
     }
     // obtain (1, 0) block entry from the 2 x 2 block contact linear system
     auto dgdu = obtainBlock(J_contact_.get(), 1, 0);
@@ -160,34 +165,32 @@ class ContactConstraint : public Constraint {
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
    * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with fresh_evaluation if we re-evaluate or use previously cached
+   * evaluation
    * @return std::Vector
    */
   mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                     const mfem::Vector& multipliers, int direction,
-                                     bool fresh_evaluation = true) const override
+                                     const mfem::Vector& multipliers, int direction, bool fresh_evaluation = true,
+                                     bool fresh_derivative = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
-
+    // TODO: include more fine scale caching control
     int cycle = 0;
-    if (fresh_evaluation) {
+    if (fresh_evaluation || fresh_derivative) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       // first update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
         interaction.evalJacobian(false);
       }
       contact_.update(cycle, time, dt);
-      pressures_set_ = false;
     }
-    if (!pressures_set_) {
-      // with updated gaps, then update pressure for contact interactions with penalty enforcement
-      contact_.setPressures(multipliers);
-      // call update again with the right pressures
-      for (auto& interaction : contact_.getContactInteractions()) {
-        interaction.evalJacobian(true);
-      }
-      contact_.update(cycle, time, dt);
-      pressures_set_ = true;
+    // with updated gaps, then update pressure for contact interactions with penalty enforcement
+    contact_.setPressures(multipliers);
+    // call update again with the right pressures
+    for (auto& interaction : contact_.getContactInteractions()) {
+      interaction.evalJacobian(true);
     }
+    contact_.update(cycle, time, dt);
 
     return contact_.forces();
   };
@@ -206,31 +209,30 @@ class ContactConstraint : public Constraint {
   std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
                                                                        const std::vector<ConstFieldPtr>& fields,
                                                                        const mfem::Vector& multipliers, int direction,
-                                                                       bool fresh_evaluation = true) const override
+                                                                       bool fresh_evaluation = true,
+                                                                       bool fresh_derivative = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
 
     int cycle = 0;
-    if (fresh_evaluation) {
+    // TODO: include more fine scale caching control
+    if (fresh_evaluation || fresh_derivative) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       // first update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
         interaction.evalJacobian(false);
       }
       contact_.update(cycle, time, dt);
-      pressures_set_ = false;
     }
-    if (!pressures_set_) {
-      // with updated gaps, we can update pressure for contact interactions with penalty enforcement
-      contact_.setPressures(multipliers);
-      // call update again with the right pressures
-      for (auto& interaction : contact_.getContactInteractions()) {
-        interaction.evalJacobian(true);
-      }
-      contact_.update(cycle, time, dt);
-      J_contact_ = contact_.mergedJacobian();
-      pressures_set_ = true;
+    // with updated gaps, we can update pressure for contact interactions with penalty enforcement
+    contact_.setPressures(multipliers);
+    // call update again with the right pressures
+    for (auto& interaction : contact_.getContactInteractions()) {
+      interaction.evalJacobian(true);
     }
+    contact_.update(cycle, time, dt);
+    J_contact_ = contact_.mergedJacobian();
+
     // obtain (0, 0) block entry from the 2 x 2 block contact linear system
     auto Hessian = obtainBlock(J_contact_.get(), 0, 0);
     return Hessian;
@@ -246,7 +248,8 @@ class ContactConstraint : public Constraint {
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                       int direction, bool fresh_evaluation = true) const override
+                                                       int direction, bool fresh_evaluation = true,
+                                                       [[maybe_unused]] bool fresh_derivative = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
 
@@ -256,12 +259,11 @@ class ContactConstraint : public Constraint {
       contact_.update(cycle, time, dt);
       J_contact_.reset();
       J_contact_ = contact_.mergedJacobian();
-      pressures_set_ = false;
     }
     // obtain (0, 1) block entry from the 2 x 2 block contact linear system
-    auto dgduT = obtainBlock(J_contact_.get(), 0,
-                             1);  // TODO: do we really need to do transpose here? Is another transpose done in the
-                                  // other HomotopySolver or problem class codes? Would a utility function be helpful?
+    auto dgduT = obtainBlock(J_contact_.get(), 0, 1);
+    // TODO: do we really need to do transpose here? Is another transpose done in the
+    // other HomotopySolver or problem class codes? Would a utility function be helpful?
     std::unique_ptr<mfem::HypreParMatrix> dgdu(dgduT->Transpose());
     return dgdu;
   };
@@ -297,9 +299,9 @@ class ContactConstraint : public Constraint {
   const bool own_blocks_ = true;
 
   /**
-   * @brief pressures_set_ are the Lagrange multipliers set
+   * @brief cached_gap_ gap function cached in order to not redo any unnecessary computations
    */
-  mutable bool pressures_set_ = false;
+  mutable mfem::Vector cached_gap_;
 };
 
 }  // namespace smith
