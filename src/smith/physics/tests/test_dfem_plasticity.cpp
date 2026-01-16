@@ -173,9 +173,23 @@ struct InternalState {
 
 using ConstitutiveOutput = mfem::future::tuple<mfem::future::tensor<double, 3, 3>, InternalState>;
 
+// InternalState unpack_internal_state(const mfem::future::tensor<double, 10>& packed_state) {
+//   auto plastic_strain =
+//       mfem::future::make_tensor<3, 3>([&packed_state](int i, int j) { return packed_state[3 * i + j]; });
+//   double accumulated_plastic_strain = packed_state[10 - 1];
+//   return {plastic_strain, accumulated_plastic_strain};
+// }
+
+/* This unpack function also leads to the Enzyme bug, so it's not the lambda capture above that
+   causes the problem.
+*/
 InternalState unpack_internal_state(const mfem::future::tensor<double, 10>& packed_state) {
-  auto plastic_strain =
-      mfem::future::make_tensor<3, 3>([&packed_state](int i, int j) { return packed_state[3 * i + j]; });
+  mfem::future::tensor<double, 3, 3> plastic_strain;
+  for (int i = 0, ij = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++, ij++) {
+      plastic_strain[i][j] = packed_state[ij];
+    }
+  }
   double accumulated_plastic_strain = packed_state[10 - 1];
   return {plastic_strain, accumulated_plastic_strain};
 }
