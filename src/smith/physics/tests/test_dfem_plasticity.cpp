@@ -173,15 +173,15 @@ struct InternalState {
 
 using ConstitutiveOutput = mfem::future::tuple<mfem::future::tensor<double, 3, 3>, InternalState>;
 
-MFEM_HOST_DEVICE inline InternalState unpack_internal_state(const mfem::future::tensor<double, 10>& packed_state) {
+InternalState unpack_internal_state(const mfem::future::tensor<double, 10>& packed_state) {
   auto plastic_strain =
       mfem::future::make_tensor<3, 3>([&packed_state](int i, int j) { return packed_state[3 * i + j]; });
   double accumulated_plastic_strain = packed_state[10 - 1];
   return {plastic_strain, accumulated_plastic_strain};
 }
 
-MFEM_HOST_DEVICE inline mfem::future::tuple<mfem::future::tensor<double, 3, 3>,
-                                            mfem::future::tensor<double, 10>>
+mfem::future::tuple<mfem::future::tensor<double, 3, 3>,
+                    mfem::future::tensor<double, 10>>
 repro(const mfem::future::tensor<double, 3, 3>& dudX,
       const mfem::future::tensor<double, 10>& internal_state) {
 
@@ -200,6 +200,9 @@ TEST(Enzyme, ErrorRepro) {
 
   mfem::future::tensor<double, 3, 3> dir{};
   dir[0][1] = 1;
+  auto f = [](const mfem::future::tensor<double, 3, 3>& H) -> mfem::future::tensor<double, 3, 3> { return mfem::future::sym(H); };
+  auto expected = __enzyme_fwddiff<mfem::future::tensor<double, 3, 3>>((void*)+f, dudX, dir);
+  mfem::out<< expected << std::endl;
   auto [Hdot, qdot] = __enzyme_fwddiff<ConstitutiveOutput>((void*)repro, enzyme_dup, enzyme_dup, dudX, dir, enzyme_const, q_old);
   mfem::out<< Hdot << std::endl;
 }
