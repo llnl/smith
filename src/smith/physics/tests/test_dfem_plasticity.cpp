@@ -22,6 +22,7 @@
 #include "smith/physics/state/state_manager.hpp"
 
 
+
 namespace smith {
 
 struct NewtonSettings {
@@ -399,20 +400,21 @@ struct J2Smooth {
     double accumulated_plastic_strain;                      ///< uniaxial equivalent plastic strain
   };
 
-  MFEM_HOST_DEVICE inline InternalState unpack_internal_state(
-      const mfem::future::tensor<double, N_INTERNAL_STATES>& packed_state) const
+  using PackedInternalState = mfem::future::tensor<double, N_INTERNAL_STATES>;
+
+  MFEM_HOST_DEVICE static inline InternalState unpack_internal_state(
+      const mfem::future::tensor<double, N_INTERNAL_STATES>& packed_state)
   {
-    // we could use type punning here to avoid copies
     auto plastic_strain =
         mfem::future::make_tensor<dim, dim>([&packed_state](int i, int j) { return packed_state[dim * i + j]; });
     double accumulated_plastic_strain = packed_state[N_INTERNAL_STATES - 1];
     return {plastic_strain, accumulated_plastic_strain};
   }
 
-  MFEM_HOST_DEVICE inline mfem::future::tensor<double, N_INTERNAL_STATES> pack_internal_state(
-      const mfem::future::tensor<double, dim, dim>& plastic_strain, double accumulated_plastic_strain) const
+  MFEM_HOST_DEVICE static inline PackedInternalState pack_internal_state(
+      const mfem::future::tensor<double, dim, dim>& plastic_strain, double accumulated_plastic_strain)
   {
-    mfem::future::tensor<double, N_INTERNAL_STATES> packed_state{};
+    PackedInternalState packed_state{};
     for (int i = 0, ij = 0; i < dim; i++) {
       for (int j = 0; j < dim; j++, ij++) {
         packed_state[ij] = plastic_strain[i][j];
@@ -422,10 +424,9 @@ struct J2Smooth {
     return packed_state;
   }
 
-  MFEM_HOST_DEVICE inline mfem::future::tuple<mfem::future::tensor<double, dim, dim>,
-                                              mfem::future::tensor<double, N_INTERNAL_STATES>>
+  MFEM_HOST_DEVICE inline mfem::future::tuple<mfem::future::tensor<double, dim, dim>, PackedInternalState>
   update(double dt, const mfem::future::tensor<double, dim, dim>& dudX,
-         const mfem::future::tensor<double, N_INTERNAL_STATES>& internal_state) const
+         const PackedInternalState& internal_state) const
   {
     auto I = mfem::future::IdentityMatrix<dim>();
     const double K = E / (3.0 * (1.0 - 2.0 * nu));
@@ -452,7 +453,7 @@ struct J2Smooth {
 
   SMITH_HOST_DEVICE auto pkStress(double, const mfem::future::tensor<double, dim, dim>& du_dX,
                                   const mfem::future::tensor<double, dim, dim>&,
-                                  const mfem::future::tensor<double, N_INTERNAL_STATES>& internal_state) const
+                                  const PackedInternalState& internal_state) const
   {
     const double dt = 1.0;
     auto [stress, internal_state_new] = update(dt, du_dX, internal_state);
@@ -461,7 +462,7 @@ struct J2Smooth {
 
   SMITH_HOST_DEVICE auto internalStateNew(double, const mfem::future::tensor<double, dim, dim>& du_dX,
                                           const mfem::future::tensor<double, dim, dim>&,
-                                          const mfem::future::tensor<double, N_INTERNAL_STATES>& internal_state) const
+                                          const PackedInternalState& internal_state) const
   {
     const double dt = 1.0;
     auto [stress, internal_state_new] = update(dt, du_dX, internal_state);
