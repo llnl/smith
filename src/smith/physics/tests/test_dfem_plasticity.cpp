@@ -166,63 +166,50 @@ TEST(Enzyme, NewtonWithVectorParams) {
   EXPECT_NEAR(dy_da, 1.0/3.0*std::pow(radicand, -2.0/3.0), 1e-9);
 }
 
-struct InternalState {
-    mfem::future::tensor<double, 3, 3> plastic_strain;  ///< plastic strain
-    double accumulated_plastic_strain;                      ///< uniaxial equivalent plastic strain
-  };
+double square_and_shift(double x, double p) {
+  return x*x - p;
+}
 
-using ConstitutiveOutput = mfem::future::tuple<mfem::future::tensor<double, 3, 3>, InternalState>;
-
-// InternalState unpack_internal_state(const mfem::future::tensor<double, 10>& packed_state) {
-//   auto plastic_strain =
-//       mfem::future::make_tensor<3, 3>([&packed_state](int i, int j) { return packed_state[3 * i + j]; });
-//   double accumulated_plastic_strain = packed_state[10 - 1];
-//   return {plastic_strain, accumulated_plastic_strain};
-// }
-
-/* This unpack function also leads to the Enzyme bug, so it's not the lambda capture above that
-   causes the problem.
-*/
-InternalState unpack_internal_state(const mfem::future::tensor<double, 10>& packed_state) {
-  mfem::future::tensor<double, 3, 3> plastic_strain;
-  for (int i = 0, ij = 0; i < 3; i++) {
-    for (int j = 0; j < 3; j++, ij++) {
-      plastic_strain[i][j] = packed_state[ij];
-    }
-  }
-  double accumulated_plastic_strain = packed_state[10 - 1];
-  return {plastic_strain, accumulated_plastic_strain};
+mfem::future::tensor<double, 3, 3> sym_and_shift(
+    const mfem::future::tensor<double, 3, 3>& X, const mfem::future::tensor<double, 3, 3>& p)
+{
+  return mfem::future::sym(X) - p;
 }
 
 
-mfem::future::tensor<double, 3, 3> repro(
-    const mfem::future::tensor<double, 3, 3>& dudX,
-    const mfem::future::tensor<double, 10>& internal_state) {
+mfem::future::tensor<double, 3, 3> sym_only(const mfem::future::tensor<double, 3, 3>& dudX) {
+  return mfem::future::sym(dudX);
+}
 
-  mfem::future::tensor<double, 3, 3> plastic_strain;
-  for (int i = 0, ij = 0; i < 3; i++) {
-    for (int j = 0; j < 3; j++, ij++) {
-      plastic_strain[i][j] = internal_state[ij];
+
+TEST(Enzyme, ConstTensorDifferentiatesCorrectly) {
+  double x = 2.0;
+  double x_dot = 1.0;
+  double q = 3.0;
+  double dydx = __enzyme_fwddiff<double>((void*)square_and_shift, enzyme_dup, x, x_dot, enzyme_const, q);
+  EXPECT_DOUBLE_EQ(dydx, 4.0);
+
+  // Checks that fucntions are differentiated correctly when tensor arguments are marked enzyme_const
+  mfem::future::tensor<double, 3, 3> H{{{1.0, 0, 0}, {0, -0.5, 0}, {0, 0, -0.25}}};
+  mfem::future::tensor<double, 3,3 > p{{{1.0, 0, 0}, {0, 2.0, 0}, {0, 0, 3.0}}};
+  mfem::future::tensor<double, 3, 3> H_dot{{{0, 1, 0}, {0, 0, 0}, {0, 0, 0}}};
+  auto z_dot = __enzyme_fwddiff<mfem::future::tensor<double, 3, 3>>((void*)sym_and_shift, enzyme_dup, enzyme_dup, H, H_dot, enzyme_const, p);
+  
+  mfem::future::tensor<double, 3, 3> expected_z_dot{{{0, 0.5, 0}, {0.5, 0, 0}, {0, 0, 0}}};
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      EXPECT_DOUBLE_EQ(z_dot[i][j], expected_z_dot.values[i][j]);
     }
   }
   
-  return mfem::future::sym(dudX) - plastic_strain;
-}
-
-TEST(Enzyme, ErrorRepro) {
-  mfem::future::tensor<double, 3, 3> dudX{{{0.05, 0, 0}, {0, -0.0242778, 0}, {0, 0, -0.0242778}}};
-  mfem::future::tensor<double, 10> q_old{{0.0452424, 0, 0, 0, -0.0226212, 0, 0, 0, -0.0226212, 0.0452424}};
-
-  auto el = repro(dudX, q_old);
-  mfem::out << el << std::endl;
-
-  mfem::future::tensor<double, 3, 3> dir{};
-  dir[0][1] = 1;
-  auto f = [](const mfem::future::tensor<double, 3, 3>& H) -> mfem::future::tensor<double, 3, 3> { return mfem::future::sym(H); };
-  auto expected = __enzyme_fwddiff<mfem::future::tensor<double, 3, 3>>((void*)+f, dudX, dir);
-  mfem::out<< expected << std::endl;
-  auto Hdot = __enzyme_fwddiff<mfem::future::tensor<double, 3, 3>>((void*)repro, enzyme_dup, enzyme_dup, dudX, dir, enzyme_const, q_old);
-  mfem::out<< Hdot << std::endl;
+  // This is ok, so the problem is definitely with enzyme_const. 
+  // this confirms the sym() function is differentiated corectly
+  auto ok = __enzyme_fwddiff<mfem::future::tensor<double, 3, 3>>((void*)sym_only, enzyme_dup, H, H_dot);
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      EXPECT_DOUBLE_EQ(ok[i][j], expected_z_dot.values[i][j]);
+    }
+  }
 }
 
 
