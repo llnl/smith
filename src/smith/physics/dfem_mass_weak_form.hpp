@@ -12,7 +12,7 @@
 
 #include "smith/smith_config.hpp"
 
-#ifdef SMITH_USE_DFEM
+#ifdef SMITH_USE_ENZYME
 
 #include "mfem.hpp"
 
