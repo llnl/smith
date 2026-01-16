@@ -166,6 +166,50 @@ TEST(Enzyme, NewtonWithVectorParams) {
   EXPECT_NEAR(dy_da, 1.0/3.0*std::pow(radicand, -2.0/3.0), 1e-9);
 }
 
+struct InternalState {
+    mfem::future::tensor<double, 3, 3> plastic_strain;  ///< plastic strain
+    double accumulated_plastic_strain;                      ///< uniaxial equivalent plastic strain
+  };
+
+using ConstitutiveOutput = mfem::future::tuple<mfem::future::tensor<double, 3, 3>, InternalState>;
+
+MFEM_HOST_DEVICE inline InternalState unpack_internal_state(const mfem::future::tensor<double, 10>& packed_state) {
+  auto plastic_strain =
+      mfem::future::make_tensor<3, 3>([&packed_state](int i, int j) { return packed_state[3 * i + j]; });
+  double accumulated_plastic_strain = packed_state[10 - 1];
+  return {plastic_strain, accumulated_plastic_strain};
+}
+
+MFEM_HOST_DEVICE inline mfem::future::tuple<mfem::future::tensor<double, 3, 3>,
+                                            mfem::future::tensor<double, 10>>
+repro(double dt, const mfem::future::tensor<double, 3, 3>& dudX,
+      const mfem::future::tensor<double, 10>& internal_state) {
+  const double E = 70e3;
+  const double nu = 0.34;
+  auto I = mfem::future::IdentityMatrix<3>();
+  const double K = E / (3.0 * (1.0 - 2.0 * nu));
+  const double G = 0.5 * E / (1.0 + nu);
+
+  auto [plastic_strain, accumulated_plastic_strain_old] = unpack_internal_state(internal_state);
+  
+  auto el_strain = mfem::future::sym(dudX) - plastic_strain;
+  return mfem::future::make_tuple(el_strain, internal_state);
+}
+
+TEST(Enzyme, ErrorRepro) {
+  mfem::future::tensor<double, 3, 3> dudX{{{0.05, 0, 0}, {0, -0.0242778, 0}, {0, 0, -0.0242778}}};
+  mfem::future::tensor<double, 10> q_old{{0.0452424, 0, 0, 0, -0.0226212, 0, 0, 0, -0.0226212, 0.0452424}};
+  double dt = 1.0;
+
+  auto el = repro(dt, dudX, q_old);
+  mfem::out << el << std::endl;
+
+  mfem::future::tensor<double, 3, 3> dir{};
+  dir[0][1] = 1;
+  auto [Hdot, qdot] = __enzyme_fwddiff<ConstitutiveOutput>((void*)repro, enzyme_dup, dt, 0.0, enzyme_dup, dudX, dir, enzyme_const, q_old);
+  mfem::out<< Hdot << std::endl;
+}
+
 
 struct UniaxialSolution {
   double E, nu, sigma_y, Hi;
