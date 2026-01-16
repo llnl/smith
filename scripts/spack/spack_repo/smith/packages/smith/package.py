@@ -193,8 +193,10 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("conduit~python~test~silo")
 
     depends_on("adiak+mpi", when="+adiak")
-    depends_on("caliper+mpi~papi", when="+caliper")
-    depends_on("caliper+adiak", when="+caliper+adiak")
+
+    with when("+caliper")
+        depends_on("caliper+mpi~papi")
+        depends_on("caliper+adiak", when="+adiak")
 
     depends_on("superlu-dist@8.1.2")
 
