@@ -193,7 +193,10 @@ TEST(Enzyme, ConstTensorDifferentiatesCorrectly) {
   mfem::future::tensor<double, 3, 3> H{{{1.0, 0, 0}, {0, -0.5, 0}, {0, 0, -0.25}}};
   mfem::future::tensor<double, 3,3 > p{{{1.0, 0, 0}, {0, 2.0, 0}, {0, 0, 3.0}}};
   mfem::future::tensor<double, 3, 3> H_dot{{{0, 1, 0}, {0, 0, 0}, {0, 0, 0}}};
+  // Adding `enzyme_runtime_activity` to the argument list makes the test pass, but I don't know why yet.
   auto z_dot = __enzyme_fwddiff<mfem::future::tensor<double, 3, 3>>((void*)sym_and_shift, enzyme_dup, enzyme_dup, H, H_dot, enzyme_const, p);
+
+  mfem::out << "sym and shift output " << z_dot << std::endl;
   
   mfem::future::tensor<double, 3, 3> expected_z_dot{{{0, 0.5, 0}, {0.5, 0, 0}, {0, 0, 0}}};
   for (int i = 0; i < 3; i++) {
