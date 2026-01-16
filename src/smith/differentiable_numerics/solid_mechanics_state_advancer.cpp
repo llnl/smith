@@ -31,7 +31,7 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const TimeInfo
 {
   std::vector<FieldState> states_old = states_old_;
   if (time_info.cycle() == 0) {
-    states_old[ACCELERATION] = solve(*solid_dynamic_weak_forms_->quasi_static_weak_form, shape_disp, states_old_,
+    states_old[ACCELERATION] = solve(*solid_dynamic_weak_forms_->final_reaction_weak_form, shape_disp, states_old_,
                                      params, time_info, *solver_, *vector_bcs_, ACCELERATION);
   }
 
@@ -61,7 +61,7 @@ std::vector<ReactionState> SolidMechanicsStateAdvancer::computeReactions(const T
 {
   std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]};
   solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-  return {evaluateWeakForm(solid_dynamic_weak_forms_->quasi_static_weak_form, time_info, shape_disp, solid_inputs,
+  return {evaluateWeakForm(solid_dynamic_weak_forms_->final_reaction_weak_form, time_info, shape_disp, solid_inputs,
                            states[DISPLACEMENT])};
 }
 

@@ -347,6 +347,11 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     }
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
+      applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, nullptr);
+    }
+
+    for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       for (size_t col_j = 0; col_j < num_rows; ++col_j) {
         size_t prime_unknown_ij = block_indices[row_i][col_j];
         if (prime_unknown_ij != invalid_block_index) {
@@ -367,13 +372,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
         *primal_field_row_i = *unknowns[row_i];
         applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, nullptr);
       }
-
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-        //std::cout << "r " << row_i << " inputs = ";
-        //for (auto& f : input_fields[row_i]) {
-        //  std::cout << f->name() << " " << f->Size() << " ";
-        //}
-        //std::cout << std::endl;
         residuals[row_i] = residual_evals[row_i]->residual(time_info, shape_disp_ptr.get(),
                                                            getConstFieldPointers(input_fields[row_i]));
         residuals[row_i].SetSubVector(bc_managers[row_i]->allEssentialTrueDofs(), 0.0);
@@ -574,7 +573,11 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
   for (size_t i = 0; i < num_rows_; ++i) {
     FieldState s = gretl::create_state<FEFieldPtr, FEDualPtr>(
         zero_dual_from_state(),
-        [i](const std::vector<FEFieldPtr>& sols) { return std::make_shared<FiniteElementState>(*sols[i]); },
+        [i](const std::vector<FEFieldPtr>& sols) {
+          auto state_copy = std::make_shared<FiniteElementState>(sols[i]->space(), sols[i]->name());
+          *state_copy = *sols[i];
+          return state_copy;
+        },
         [i](const std::vector<FEFieldPtr>&, const FEFieldPtr&, std::vector<FEDualPtr>& sols_,
             const FEDualPtr& output_) { *sols_[i] += *output_; },
         sol);
