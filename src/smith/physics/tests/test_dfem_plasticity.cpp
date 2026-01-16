@@ -195,13 +195,18 @@ InternalState unpack_internal_state(const mfem::future::tensor<double, 10>& pack
 }
 
 
-mfem::future::tensor<double, 3, 3> repro(const mfem::future::tensor<double, 3, 3>& dudX,
-      const mfem::future::tensor<double, 10>& internal_state) {
+mfem::future::tensor<double, 3, 3> repro(
+    const mfem::future::tensor<double, 3, 3>& dudX,
+    const mfem::future::tensor<double, 10>& internal_state) {
 
-  auto [plastic_strain, accumulated_plastic_strain_old] = unpack_internal_state(internal_state);
+  mfem::future::tensor<double, 3, 3> plastic_strain;
+  for (int i = 0, ij = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++, ij++) {
+      plastic_strain[i][j] = internal_state[ij];
+    }
+  }
   
-  auto el_strain = mfem::future::sym(dudX) - plastic_strain;
-  return el_strain;
+  return mfem::future::sym(dudX) - plastic_strain;
 }
 
 TEST(Enzyme, ErrorRepro) {
