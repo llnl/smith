@@ -21,7 +21,10 @@
 #include "smith/physics/state/finite_element_state.hpp"
 #include "smith/physics/state/state_manager.hpp"
 
-
+// Temporarily silence warning about old style casts. The Enzyme interface
+// encourages use of these.
+// TODO (BT): Look into replacing old casts with reinterpret_cast
+#pragma GCC diagnostic ignored "-Wold-style-cast"
 
 namespace smith {
 
