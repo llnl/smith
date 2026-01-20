@@ -212,21 +212,27 @@ inline std::vector<const mfem::ParFiniteElementSpace*> spaces(const std::vector<
 };
 
 /// @brief Get a vector of FieldPtr or DualFieldPtr from a vector of FieldState
-inline std::vector<FiniteElementState*> getFieldPointers(std::vector<FieldState>& states)
+inline std::vector<FiniteElementState*> getFieldPointers(std::vector<FieldState>& states, std::vector<FieldState> params = {})
 {
   std::vector<FiniteElementState*> pointers;
   for (auto& t : states) {
     pointers.push_back(t.get().get());
   }
+  for (auto& p : params) {
+    pointers.push_back(p.get().get());
+  }
   return pointers;
 }
 
 /// @brief Get a vector of ConstFieldPtr or ConstDualFieldPtr from a vector of FieldState
-inline std::vector<const FiniteElementState*> getConstFieldPointers(const std::vector<FieldState>& states)
+inline std::vector<const FiniteElementState*> getConstFieldPointers(const std::vector<FieldState>& states, const std::vector<FieldState>& params = {})
 {
   std::vector<const FiniteElementState*> pointers;
   for (auto& t : states) {
     pointers.push_back(t.get().get());
+  }
+  for (auto& p : params) {
+    pointers.push_back(p.get().get());
   }
   return pointers;
 }
