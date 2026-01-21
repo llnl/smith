@@ -157,7 +157,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
             // take ownership of blocks
             J_constraint_->owns_blocks = false;
-            J_.reset();
             J_ = std::unique_ptr<mfem::HypreParMatrix>(
                 static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(0, 0)));
             J_12_ = std::unique_ptr<mfem::HypreParMatrix>(
@@ -193,7 +192,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
             block_J->owns_blocks = false;
             J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 
-            J_e_.reset();
             J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
 
             J_operator_ = J_.get();
@@ -361,10 +359,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
         // get 11-block holding jacobian contributions
         auto block_J = contact_.jacobianFunction(assemble(drdu));
         block_J->owns_blocks = false;
-        J_.reset();
         J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 
-        J_e_.reset();
         J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
 
         J_operator_ = J_.get();
