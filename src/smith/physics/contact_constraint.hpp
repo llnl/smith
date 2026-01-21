@@ -262,8 +262,6 @@ class ContactConstraint : public Constraint {
     }
     // obtain (0, 1) block entry from the 2 x 2 block contact linear system
     auto dgduT = obtainBlock(J_contact_.get(), 0, 1);
-    // TODO: do we really need to do transpose here? Is another transpose done in the
-    // other HomotopySolver or problem class codes? Would a utility function be helpful?
     std::unique_ptr<mfem::HypreParMatrix> dgdu(dgduT->Transpose());
     return dgdu;
   };
