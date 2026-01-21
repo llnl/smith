@@ -56,11 +56,17 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
   }
 
   /// @overload
-  template <typename BodyForceType> // int... all_active_parameters>
+  template <typename BodyForceType, int... all_active_parameters>
+  void addBodyIntegralImpl(std::string body_name, BodyForceType body_integral, std::integer_sequence<int, all_active_parameters...>)
+  {
+    addBodyIntegral(DependsOn<all_active_parameters...>{}, body_name, body_integral);
+  }
+
+  /// @overload
+  template <typename BodyForceType>
   void addBodyIntegral(std::string body_name, BodyForceType body_integral)
   {
-    auto input_indices = std::make_integer_sequence<int, sizeof...(InputSpaces)>{};
-    addBodyIntegral(DependsOn<>{}, body_name, body_integral);
+    addBodyIntegralImpl(body_name, body_integral, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 };
 
@@ -128,8 +134,8 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
         [integrand, time_rule](const TimeInfo& t, auto X, auto U, auto U_old, auto U_dot_old, auto U_dot_dot_old,
                                auto... inputs) {
           return integrand(t, X, time_rule.value(t, U, U_old, U_dot_old, U_dot_dot_old),
-                           time_rule.derivative(t, U, U_old, U_dot_old, U_dot_dot_old),
-                           time_rule.second_derivative(t, U, U_old, U_dot_old, U_dot_dot_old), inputs...);
+                           time_rule.dot(t, U, U_old, U_dot_old, U_dot_dot_old),
+                           time_rule.ddot(t, U, U_old, U_dot_old, U_dot_dot_old), inputs...);
         });
     final_reaction_weak_form_->addBodyIntegral(DependsOn<0, 1, 2, NUM_STATE_VARS - 1 + active_parameters...>{},
                                                body_name, integrand);

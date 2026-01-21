@@ -16,6 +16,8 @@
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
+#include "smith/differentiable_numerics/time_integration_rule.hpp"
+#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
@@ -64,7 +66,7 @@ struct SolidMechanicsMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh;
 };
 
-template <typename Space>
+template <typename Space, typename Time=void*>
 struct FieldType {
   FieldType(std::string n) : name(n) {}
   std::string name;
@@ -97,34 +99,16 @@ struct FieldStore {
   template <typename Space>
   void addUnknown(FieldType<Space> type)
   {
-    to_unknowns_[type.name] = unknowns_.size();
-    unknowns_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, type.name, mesh_->tag()));
+    to_fields_[type.name] = fields_.size();
+    fields_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, type.name, mesh_->tag()));
   }
 
   template <typename Space>
-  void addDerived(FieldType<Space> type, SecondOrderTimeDiscretization time_discretization, std::vector<std::string> custom_names = {})
+  auto addDerived(FieldType<Space> type, std::string name)
   {
-    if (!custom_names.size()) {
-      custom_names.push_back(type.name + "_dot");
-      custom_names.push_back(type.name + "_ddot");
-    }
-    SLIC_ERROR_IF(custom_names.size()!=2, "Second order time discretized fields must add two derived fields f_dot and f_ddot");
-    to_derived_[custom_names[0]] = derived_.size();
-    derived_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, custom_names[0], mesh_->tag()));
-
-    to_derived_[custom_names[1]] = derived_.size();
-    derived_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, custom_names[1], mesh_->tag()));
-  }
-
-  template <typename Space>
-  void addDerived(FieldType<Space> type, FirstOrderTimeDiscretization time_discretization, std::vector<std::string> custom_names = {})
-  {
-    if (!custom_names.size()) {
-      custom_names.push_back(type.name + "_dot");
-    }
-    SLIC_ERROR_IF(custom_names.size()!=1, "First order time discretized fields must add exactly one derived field: f_dot");
-    to_derived_[custom_names[0]] = derived_.size();
-    derived_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, custom_names[0], mesh_->tag()));
+    to_fields_[name] = fields_.size();
+    fields_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, name, mesh_->tag()));
+    return FieldType<Space>(name);
   }
 
   std::shared_ptr<Mesh> mesh_;
@@ -132,13 +116,8 @@ struct FieldStore {
 
   std::vector<FieldState> shape_disp_;
 
-  std::vector<FieldState> unknowns_;
-  std::vector<FieldState> derived_;
-  std::vector<FieldState> params_;
-
-  std::map<std::string, size_t> to_unknowns_;
-  std::map<std::string, size_t> to_derived_;
-  std::map<std::string, size_t> to_params_;
+  std::vector<FieldState> fields_;
+  std::map<std::string, size_t> to_fields_;
 };
 
 struct NewmarkDot 
@@ -154,30 +133,31 @@ struct NewmarkDot
 
 
 template <typename FirstType>
-void createSpaces(const FieldStore& field_store, std::vector<const mfem::ParFiniteElementSpace*>& spaces, FirstType type)
+void createSpaces(const FieldStore& field_store, std::vector<const mfem::ParFiniteElementSpace*>& spaces, FieldType<FirstType> type)
 {
-  const size_t test_index = field_store.to_unknowns_.at(type.name);
-  spaces.push_back(&field_store.unknowns_[test_index].get()->space());
+  const size_t test_index = field_store.to_fields_.at(type.name);
+  spaces.push_back(&field_store.fields_[test_index].get()->space());
 }
 
 
 template <typename FirstType, typename... Types>
 void createSpaces(const FieldStore& field_store, std::vector<const mfem::ParFiniteElementSpace*>& spaces, FirstType type, Types... types)
 {
-  const size_t test_index = field_store.to_unknowns_.at(type.name);
-  spaces.insert(spaces.begin(), &field_store.unknowns_[test_index].get()->space());
+  const size_t test_index = field_store.to_fields_.at(type.name);
+  spaces.insert(spaces.begin(), &field_store.fields_[test_index].get()->space());
   createSpaces(field_store, spaces, types...);
 }
 
 
 template <int spatial_dim, typename TestSpaceType, typename... InputSpaceTypes>
-auto createWeakForm(const FieldStore& field_store, std::string name, FieldType<TestSpaceType> test_type, FieldType<InputSpaceTypes>... field_types)
+auto createWeakForm(std::string name, FieldStore& field_store, FieldType<TestSpaceType> test_type, FieldType<InputSpaceTypes>... field_types)
 {
-  const size_t test_index = field_store.to_unknowns_.at(test_type.name);
-  const mfem::ParFiniteElementSpace& test_space = field_store.unknowns_[test_index].get()->space();
+  const size_t test_index = field_store.to_fields_.at(test_type.name);
+  const mfem::ParFiniteElementSpace& test_space = field_store.fields_[test_index].get()->space();
   std::vector<const mfem::ParFiniteElementSpace*> input_spaces;
   createSpaces(field_store, input_spaces, field_types...);
-  auto weak_form = std::make_shared<FunctionalWeakForm<spatial_dim, TestSpaceType, Parameters<InputSpaceTypes...> > >(name, field_store.mesh_, test_space, input_spaces);
+  // std::cout << "num spaces = " << input_spaces.size() << std::endl;
+  auto weak_form = std::make_shared<TimeDiscretizedWeakForm<spatial_dim, TestSpaceType, Parameters<InputSpaceTypes...> > >(name, field_store.mesh_, test_space, input_spaces);
   return weak_form;
 }
 
@@ -197,18 +177,32 @@ TEST_F(SolidMechanicsMeshFixture, A)
   field_store.addUnknown(disp_type);
   field_store.addUnknown(temperature_type);
 
-  field_store.addDerived(disp_type, SecondOrderTimeDiscretization::ImplicitNewmark, {"velocity", "acceleration"});
-  field_store.addDerived(temperature_type, FirstOrderTimeDiscretization::BackwardEuler);
+  auto disp_old_type = field_store.addDerived(disp_type, "displacement_old");
+  auto velo_old_type = field_store.addDerived(disp_type, "velocity_old");
+  auto accel_old_type = field_store.addDerived(disp_type, "acceleration_old");
+  auto temperature_old_type = field_store.addDerived(temperature_type, "temperature_old");
 
-  auto weak_form = createWeakForm<dim>(field_store, "solid", disp_type, disp_type, temperature_type);
+  auto disp_time_rule = SecondOrderTimeIntegrationRule(SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK);
+  auto temperature_time_rule = BackwardEulerFirstOrderTimeIntegrationRule();
 
-  weak_form->addBodyIntegral(smith::DependsOn<0,1>{}, mesh->entireBodyName(), [](auto /*t*/, auto /*X*/, auto u, auto temperature) {
-    auto ones = 0.0*get<VALUE>(u);
-    ones[0] = 1.0;
-    return smith::tuple{get<VALUE>(u) + ones, get<DERIVATIVE>(u)};
+  auto solid_weak_form = createWeakForm<dim>("solid", field_store, disp_type, disp_type, temperature_type, disp_old_type, velo_old_type, accel_old_type, temperature_old_type);
+
+  solid_weak_form->addBodyIntegral(mesh->entireBodyName(), [=](auto time_info, auto /*X*/, auto disp, auto temperature, auto disp_old, auto velo_old, auto accel_old, auto temperature_old) {
+    auto u = disp_time_rule.value(time_info, disp, disp_old, velo_old, accel_old);
+    auto a = disp_time_rule.ddot(time_info, disp, disp_old, velo_old, accel_old);
+    auto theta_dot = temperature_time_rule.dot(time_info, temperature, temperature_old);
+    return smith::tuple{2.0 * get<VALUE>(a), get<DERIVATIVE>(u) * get<VALUE>(theta_dot)};
   });
 
-  auto r = weak_form->residual(TimeInfo(0.0,0.0,0), field_store.shape_disp_[0].get().get(), getConstFieldPointers(field_store.unknowns_, field_store.derived_));
+  // auto thermal_weak_form = createWeakForm<dim>("thermal", field_store, UnknownArgs<UnknownFields::TEMPERATURE,UnknownFields::DISP>{}, DerivedArgs<>{}, ParameterArgs<>{});
+  // thermal_weak_form->addBodyIntegral(mesh->entireBodyName(), [](auto /*t*/, auto /*X*/, auto temperature, auto u) {
+  //   auto ones = 0.0*get<VALUE>(u);
+  //   ones[0] = 1.0;
+  //   return smith::tuple{get<VALUE>(u) + ones, get<DERIVATIVE>(u)};
+  // });
+
+  // solve({wf_1, wf_2}, field_store, solver, bcs, ...);
+  //auto r = weak_form->residual(TimeInfo(0.0,0.0,0), field_store.shape_disp_[0].get().get(), getConstFieldPointers(field_store.unknowns_, field_store.derived_));
   // std::cout << "norm = " << r.Norml2() << std::endl;
 
   EXPECT_EQ(0,0);

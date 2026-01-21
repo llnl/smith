@@ -46,9 +46,9 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const TimeInfo
   std::vector<FieldState> states = states_old;
 
   states[DISPLACEMENT] = displacement;
-  states[VELOCITY] = time_rule_.derivative(final_time_info, displacement, states_old[DISPLACEMENT],
+  states[VELOCITY] = time_rule_.dot(final_time_info, displacement, states_old[DISPLACEMENT],
                                            states_old[VELOCITY], states_old[ACCELERATION]);
-  states[ACCELERATION] = time_rule_.second_derivative(final_time_info, displacement, states_old[DISPLACEMENT],
+  states[ACCELERATION] = time_rule_.ddot(final_time_info, displacement, states_old[DISPLACEMENT],
                                                       states_old[VELOCITY], states_old[ACCELERATION]);
 
   return states;
