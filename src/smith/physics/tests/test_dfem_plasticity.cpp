@@ -715,15 +715,12 @@ TEST_F(DfemSolidTest, DifferentiateInternalStateUpdate)
   accel = 0.0;
   internal_state = 0.0;
 
-  double t = 1.0;
-  double dt = 1.0;
-
   mfem::future::ParameterFunction internal_state_new(internal_state_space);
   update_internal_state.SetParameters({&disp, &velo, &coords});
   update_internal_state.Mult(internal_state, internal_state_new);
 
   //
-  // VJP of internal state update
+  // JVP of internal state update
   //
   std::vector<mfem::Vector*> primals_l{&internal_state};
   std::vector<FiniteElementState*> fields{&disp, &velo, &coords};
@@ -732,12 +729,12 @@ TEST_F(DfemSolidTest, DifferentiateInternalStateUpdate)
   for (size_t i = 0; i < fields.size(); ++i) {
     params_l.push_back(&fields[i]->gridFunction());
   }
-  auto derivative_taker = update_internal_state.GetDerivative(0, primals_l, params_l);
+  auto derivative_operator = update_internal_state.GetDerivative(0, primals_l, params_l);
   FiniteElementState du = StateManager::newState(KinematicSpace{}, "tangent_disp", mesh->tag());
   du.Randomize(0);
   du *= 0.001;
   mfem::future::ParameterFunction dQ(internal_state_space);
-  derivative_taker->Mult(du, dQ);
+  derivative_operator->Mult(du, dQ);
 
   // check with directional finite difference
   double fd_eps = 1e-5;
@@ -761,10 +758,12 @@ TEST_F(DfemSolidTest, DifferentiateInternalStateUpdate)
   // VJP of internal state update
   //
   
-
+  // Set 0.5*<Q, Q> as the objective.
+  double Q_norm = internal_state_new.Norml2();
+  double objective = 0.5*Q_norm*Q_norm;
   mfem::future::ParameterFunction Q_bar(internal_state_space);
-  const int rand_seed = 1;
-  Q_bar.Randomize(rand_seed);
+  // d_theta_dQ = Q
+  Q_bar.Set(1.0, internal_state_new);
 
   mfem::future::DifferentiableOperator update_internal_state_virtual_work(
       {mfem::future::FieldDescriptor(IsvStates::INTERNAL_VARIABLES, &internal_state_space)},
@@ -818,9 +817,22 @@ TEST_F(DfemSolidTest, DifferentiateInternalStateUpdate)
     direction[i] = 0.0;
   }
 
+  // Seg faults because you can't assemble a quadrature field
+  // mfem::HypreParMatrix A;
+  // auto A_ptr = &A;
+  // derivative_operator->Assemble(A_ptr);
+  // mfem::Vector seed(1);
+  // seed = 1.0;
+  // A.MultTranspose(seed, u_bar);
+
   // TODO: make above work in parallel
   mfem::out << "u_bar = " << std::endl;
   u_bar.Print();
+
+  double Q_p_norm = Qnew_p.Norml2();
+  double objective_p = 0.5*Q_p_norm*Q_p_norm;
+  double ip = innerProduct(u_bar, du)*fd_eps;
+  mfem::out << "ip = " << ip << " delta_theta = " << (objective_p - objective) << std::endl;
 }
 
 using Tensor3D = mfem::future::tensor<mfem::real_t, 3, 3>;
