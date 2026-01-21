@@ -41,6 +41,7 @@ jobs:
           compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
           cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF"
         # # Not enough disk space to run CUDA container
+        # https://github.com/LLNL/smith/issues/1479
         # - job_name: gcc@13.3.0, shared, cuda, no tests/install/warnings as errors
         #   host_config: gcc@13.3.0_cuda.cmake
         #   compiler_image: ${{ needs.set_image_vars.outputs.cuda_docker_image }}
