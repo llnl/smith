@@ -423,7 +423,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
     auto block_J = contact_.jacobianFunction(assemble(drdshape));
     block_J->owns_blocks = false;
-    auto drdshape_mat = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
+    auto drdshape_mat =
+        std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 
     drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_dual_);
 
