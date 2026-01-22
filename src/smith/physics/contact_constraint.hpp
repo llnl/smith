@@ -174,9 +174,8 @@ class ContactConstraint : public Constraint {
                                      bool fresh_derivative = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
-    // TODO: include more fine scale caching control
     int cycle = 0;
-    if (fresh_evaluation || fresh_derivative) {
+    if (fresh_evaluation) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       // first update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
@@ -184,14 +183,15 @@ class ContactConstraint : public Constraint {
       }
       contact_.update(cycle, time, dt);
     }
-    // with updated gaps, then update pressure for contact interactions with penalty enforcement
-    contact_.setPressures(multipliers);
-    // call update again with the right pressures
-    for (auto& interaction : contact_.getContactInteractions()) {
-      interaction.evalJacobian(true);
+    if (fresh_evaluation || fresh_derivative) {
+      // with updated gaps, then update pressure for contact interactions with penalty enforcement
+      contact_.setPressures(multipliers);
+      // call update again with the right pressures
+      for (auto& interaction : contact_.getContactInteractions()) {
+        interaction.evalJacobian(true);
+      }
+      contact_.update(cycle, time, dt);
     }
-    contact_.update(cycle, time, dt);
-
     return contact_.forces();
   };
 
@@ -215,8 +215,7 @@ class ContactConstraint : public Constraint {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
 
     int cycle = 0;
-    // TODO: include more fine scale caching control
-    if (fresh_evaluation || fresh_derivative) {
+    if (fresh_evaluation) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       // first update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
@@ -224,15 +223,16 @@ class ContactConstraint : public Constraint {
       }
       contact_.update(cycle, time, dt);
     }
-    // with updated gaps, we can update pressure for contact interactions with penalty enforcement
-    contact_.setPressures(multipliers);
-    // call update again with the right pressures
-    for (auto& interaction : contact_.getContactInteractions()) {
-      interaction.evalJacobian(true);
+    if (fresh_evaluation || fresh_derivative) {
+      // with updated gaps, we can update pressure for contact interactions with penalty enforcement
+      contact_.setPressures(multipliers);
+      // call update again with the right pressures
+      for (auto& interaction : contact_.getContactInteractions()) {
+        interaction.evalJacobian(true);
+      }
+      contact_.update(cycle, time, dt);
+      J_contact_ = contact_.mergedJacobian();
     }
-    contact_.update(cycle, time, dt);
-    J_contact_ = contact_.mergedJacobian();
-
     // obtain (0, 0) block entry from the 2 x 2 block contact linear system
     auto Hessian = obtainBlock(J_contact_.get(), 0, 0);
     return Hessian;
@@ -257,7 +257,6 @@ class ContactConstraint : public Constraint {
     if (fresh_evaluation) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       contact_.update(cycle, time, dt);
-      J_contact_.reset();
       J_contact_ = contact_.mergedJacobian();
     }
     // obtain (0, 1) block entry from the 2 x 2 block contact linear system
@@ -288,13 +287,6 @@ class ContactConstraint : public Constraint {
    * @brief J_contact_ to hold contact derivatives
    */
   mutable std::unique_ptr<mfem::BlockOperator> J_contact_;
-
-  /**
-   * @brief own_blocks_ boolean, specifying whether the ContactConstraint class
-   *                    will own the derivative blocks of J_contact_ and be responsible
-   *                    for managing the associated memory.
-   */
-  const bool own_blocks_ = true;
 
   /**
    * @brief cached_gap_ gap function cached in order to not redo any unnecessary computations
