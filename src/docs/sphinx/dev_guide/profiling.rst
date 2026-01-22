@@ -34,7 +34,7 @@ TPL Build Instructions
 ----------------------
 
 To use Adiak and Caliper with Smith, install the ``profiling`` variant of ``smith``
-with Spack, i.e., ``smith+profiling``. Note that these libraries are pre-built as
+with Spack, i.e., ``smith+caliper+adiak``. Note that these libraries are pre-built as
 part of the installed set of libraries on LC.
 
 Instrumenting Code

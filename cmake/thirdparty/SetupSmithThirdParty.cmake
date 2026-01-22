@@ -606,6 +606,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(TRIBOL_ENABLE_TESTS OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_EXAMPLES OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_DOCS OFF CACHE BOOL "")
+        set(TRIBOL_ENABLE_PROFILING ${SMITH_ENABLE_PROFILING} CACHE BOOL "")
 
         if(EXISTS "${PROJECT_SOURCE_DIR}/smith/tribol")
             set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/smith/tribol")
@@ -709,7 +710,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     if(SMITH_ENABLE_PROFILING AND NOT ADIAK_DIR)
         message(FATAL_ERROR "SMITH_ENABLE_PROFILING cannot be ON without ADIAK_DIR defined. Either specify a host \
-                             config with ADIAK_DIR, or rebuild Smith TPLs with +profiling variant.")
+                             config with ADIAK_DIR, or rebuild Smith TPLs with +adiak variant.")
     endif()
 
     if(ADIAK_DIR AND SMITH_ENABLE_PROFILING)
@@ -731,7 +732,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     if(SMITH_ENABLE_PROFILING AND NOT CALIPER_DIR)
         message(FATAL_ERROR "SMITH_ENABLE_PROFILING cannot be ON without CALIPER_DIR defined. Either specify a host \
-                             config with CALIPER_DIR, or rebuild Smith TPLs with +profiling variant.")
+                             config with CALIPER_DIR, or rebuild Smith TPLs with +caliper variant.")
     endif()
 
     if(CALIPER_DIR AND SMITH_ENABLE_PROFILING)

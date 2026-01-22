@@ -139,7 +139,7 @@ This is also useful for a few additional packages:
     The invocation of ``uberenv.py`` is slightly modified from the standard instructions below
     in order to force the use of the Homebrew-installed MPI and compilers. The spec command line option
     should be ``--spec="^openmpi@5 %clang_19"`` and to build with devtools and profiling enabled,
-    change the spec to ``"+devtools+profiling ^openmpi@5 %clang_19"``
+    change the spec to ``"+devtools+caliper+adiak ^openmpi@5 %clang_19"``
 
 Given that Homebrew can only install CMake version 4.0 and it breaks some TPL builds (e.g. metis), its recommended to install an older version of CMake
 manually. You can do this by downloading from `CMake's official archive <https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg>`_. After installing
@@ -342,7 +342,7 @@ that you want to develop with:
 Some helpful uberenv options include :
 
 * ``--spec=" build_type=Debug"`` (build core TPLs, such as MFEM and Hypre, with debug symbols)
-* ``--spec=+profiling`` (build the Adiak and Caliper libraries)
+* ``--spec=+caliper+adiak`` (build the Adiak and Caliper libraries)
 * ``--spec=+devtools`` (also build the devtools with one command)
 * ``--spec=%clang_19`` (build with a specific compiler as defined in the ``spack.yaml`` file)
 * ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
@@ -376,6 +376,3 @@ command:
     make -j8 test
 
 For more detail instructions on how to build Smith, see :ref:`build-label`.
-
-
-
