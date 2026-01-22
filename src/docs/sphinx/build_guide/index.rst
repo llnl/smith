@@ -48,8 +48,8 @@ at the root of Smith repository. This host-config defines all the required infor
 Smith.
 
 
-Basic System Setup
-------------------
+Phase 1: Basic System Setup
+---------------------------
 
 We recommend installing some basic system-level development packages to minimize the
 amount of packages that Spack will build.
@@ -66,14 +66,14 @@ the minimal set of TPLs for Smith; followed by a page on how to build
 Smith from the generated host-config file via CMake.
 
 
-Build Third-party Libraries
----------------------------
+Phase 2: Build Third-party Libraries
+------------------------------------
 
 For more information see :ref:`build_tpls-label`.
 
 
-Build Smith with CMake
-----------------------
+Phase 3: Build Smith with CMake
+-------------------------------
 
 For more information see :ref:`build_smith-label`.
 
