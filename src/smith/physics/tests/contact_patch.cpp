@@ -18,9 +18,7 @@
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/materials/solid_material.hpp"
-#include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
-#include "smith/mesh_utils/mesh_utils.hpp"
 #include "smith/numerics/functional/tensor.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/physics/contact/contact_config.hpp"
@@ -45,7 +43,7 @@ TEST_P(ContactTest, patch)
   StateManager::initialize(datastore, name + "_data");
 
   // clang-format off
-  auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
+  auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
     shared::MeshBuilder::CubeMesh(1, 1, 1, std::get<3>(GetParam()))
       .updateBdrAttrib(3, 7)
       .updateBdrAttrib(1, 3)
