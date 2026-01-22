@@ -3,32 +3,46 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
-.. _setup_lc_tpl_build-label:
+.. _setup_ubuntu-label:
 
-========================================
-Setup Livermore Computing (LC) TPL Build
-========================================
+=========================
+Setup Ubuntu 24 TPL Build
+=========================
 
-We provide Spack Environment files for each of LC's systems:
 
- * TOSS4: ``scripts/spack/configs/toss_4_x86_64_ib/spack.yaml``
- * TOSS4 Cray: ``scripts/spack/configs/toss_4_x86_64_ib_cray/spack.yaml``
+Install clang version 19 and make it the default compiler:
 
-Unless otherwise specified, Spack will default to a compiler.  This is generally not a good idea when
-developing large codes. To specify which compiler to use add the compiler specification to the ``--spec`` Uberenv
-command line option. We provide recommended Spack specs for LC in ``scripts/spack/specs.json``.
+.. code-block:: bash
 
-You can use these directly in the ``uberenv.py`` command in the :ref:`build_tpls-label`
-section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang_19"``.
+    sudo apt install -y --no-install-recommends clang-19 libclang-19-dev clang-format-19 llvm-19 llvm-19-dev libzstd-dev libomp-19-dev gfortran-13
+    # Set clang-19 as the default clang
+    sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-19 101 \
+    && sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 101 \
+    && sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-19 101
+
+Install required build packages to minimize what Spack will build:
+
+.. code-block:: bash
+
+    sudo apt install -y --no-install-recommends build-essential bzip2 cmake libopenblas-dev \
+    lua5.2 liblua5.2-dev openmpi-bin libopenmpi-dev unzip
+
+Optionally you can install packages to generate documentation:
+
+.. code-block:: bash
+
+    sudo apt install -y --no-install-recommends graphviz python3-sphinx texlive-full doxygen
 
 .. note::
-  On LC machines, it is good practice to do the build step in parallel on a compute node.
-  You should add the following to the start of your commands: ``salloc -ppdebug -N1 --exclusive python3 scripts/uberenv/uberenv.py``
+
+    The documentation packages require a lot of disk space.
 
 .. note::
-   If you do not have access to the ``smithdev`` linux group. You cannot currently use our prebuilt Dev Tools
-   referenced in the Spack Environment files listed above. You will be required to turn off the devtool variant
-   on your Spack spec by adding ``~devtools`` to your uberenv or Spack spec.
+
+    We provide a basic Ubuntu 24 Spack environment file in ``scripts/spack/configs/linux_ubuntu_24`` that
+    may work for most people. If you want to try using that, skip to :ref:`build_tpls-label`
+    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/linux_ubuntu_24/spack.yaml``
+
 
 -------------------------------
 Generate Spack Environment File
@@ -138,9 +152,9 @@ by another package, so you can also add it with this yaml section:
     Uberenv will override existing ``spack.yaml`` files in the current working directory. Now that we have made modifications,
     you should rename/move the file so the changes are not lost and adjust the `uberenv.py` commands to reflect the new file name.
 
+
 --------------------------------------
 Building Smith's Third-party Libraries
 --------------------------------------
 
 It is now time to build Smith's Third-party Libraries (TPLs). For detailed instructions see :ref:`build_tpls-label`.
-

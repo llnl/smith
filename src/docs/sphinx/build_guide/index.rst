@@ -16,7 +16,13 @@ how to build Smith from source. The process consists of the following high-level
 #. Build Third-party Libraries (TPLs) using Spack and Uberenv to provide a consistent dependency stack
 #. Build Smith itself using CMake once all dependencies are in place
 
------------------
+.. note::
+
+   Smith uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
+   automatic differentiation. To enable this functionality, you have to compile with an
+   LLVM-based compiler. We recommend ``clang``.
+
+
 Spack and Uberenv
 -----------------
 
@@ -41,7 +47,7 @@ It also generates a host-config file (``<config_dependent_name>.cmake``)
 at the root of Smith repository. This host-config defines all the required information for building
 Smith.
 
-------------------
+
 Basic System Setup
 ------------------
 
@@ -51,27 +57,21 @@ amount of packages that Spack will build.
 The following pages provide basic guidance on the following platforms and is where you should
 start:
 
-* :ref:`Livermore Computing (LC) <setup_lc_tpl_build-label>`
-* :ref:`macOS <setup_macos_tpl_build-label>`
-* :ref:`Ubuntu 24 <setup_ubuntu_tpl_build-label>`
+* :ref:`Livermore Computing (LC) <setup_lc-label>`
+* :ref:`macOS <setup_macos-label>`
+* :ref:`Ubuntu 24 <setup_ubuntu-label>`
 
 At the end of each Setup guide, it has a link to the page that shows you how to build
 the minimal set of TPLs for Smith; followed by a page on how to build
 Smith from the generated host-config file via CMake.
 
-.. note::
 
-   Smith uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
-   automatic differentiation. To enable this functionality, you have to compile with an
-   LLVM-based compiler. We recommend ``clang``.
-
----------------------------
 Build Third-party Libraries
 ---------------------------
 
 For more information see :ref:`build_tpls-label`.
 
-----------------------
+
 Build Smith with CMake
 ----------------------
 
@@ -80,11 +80,9 @@ For more information see :ref:`build_smith-label`.
 
 .. toctree::
    :hidden:
-   :maxdepth: 1
+   :maxdepth: 2
 
-   setup_lc_tpl_build
-   setup_macos_tpl_build
-   setup_ubuntu_tpl_build
+   setup_system/index
    build_tpls
    build_smith
 
