@@ -11,7 +11,7 @@
 
 #include "gretl/data_store.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
-#include "smith/differentiable_numerics/differentiable_utils.hpp"
+#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 
 // This tests the interface between the new smith::WeakForm with gretl and its conformity to the existing base_physics
 // interface
@@ -36,9 +36,9 @@ struct MeshFixture : public ::testing::Test {
     checkpointer_ = std::make_shared<gretl::DataStore>(5);
 
     std::string physics_name = "generic";
-    auto disp = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh_->tag());
-    auto velo = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_velocity", mesh_->tag());
-    auto accel = create_field_state(*checkpointer_, VectorSpace{}, physics_name + "_acceleration", mesh_->tag());
+    auto disp = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh_->tag());
+    auto velo = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_velocity", mesh_->tag());
+    auto accel = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_acceleration", mesh_->tag());
     dt_ = std::make_unique<gretl::State<double, double>>(checkpointer_->create_state<double, double>(0.9));
     h_ = std::make_unique<gretl::State<double, double>>(checkpointer_->create_state<double, double>(0.7));
 
@@ -86,17 +86,15 @@ TEST_F(MeshFixture, FieldStateWithDifferentiable_axpby)
   auto u = axpby(dt, disp, dt, velo);
   auto u_exact = axpby(dt_f, disp, dt_f, velo);
 
-  auto uu_exact = smith::inner_product(u_exact, u_exact);
-  auto uu = smith::inner_product(u, u);
+  auto uu_exact = smith::innerProduct(u_exact, u_exact);
+  auto uu = smith::innerProduct(u, u);
   gretl::set_as_objective(uu);
 
   EXPECT_EQ(uu.get(), uu_exact.get());
 
-  checkpointer_->back_prop();
-
-  EXPECT_GT(smith::checkGradWrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::checkGradWrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::checkGradWrt(uu, dt, *checkpointer_, 1e-7, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, disp, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, velo, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, dt, 1e-7, 4, true), 0.95);
 }
 
 TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
@@ -133,8 +131,8 @@ TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
   u_exact = axpby(2.0, velo, -2.0, u_exact);
   u_exact = axpby(initial_dt * initial_h, u_exact, 0.0, u_exact);
 
-  auto uu_exact = smith::inner_product(u_exact, u_exact);
-  auto uu = smith::inner_product(u, u);
+  auto uu_exact = smith::innerProduct(u_exact, u_exact);
+  auto uu = smith::innerProduct(u, u);
 
   gretl::set_as_objective(uu);
 
@@ -142,11 +140,11 @@ TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
 
   checkpointer_->back_prop();
 
-  EXPECT_GT(smith::checkGradWrt(uu, disp, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::checkGradWrt(uu, velo, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::checkGradWrt(uu, accel, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::checkGradWrt(uu, dt, *checkpointer_, 1e-5, 4, true), 0.95);
-  EXPECT_GT(smith::checkGradWrt(uu, h, *checkpointer_, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, disp, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, velo, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, accel, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, dt, 1e-5, 4, true), 0.95);
+  EXPECT_GT(smith::checkGradWrt(uu, h, 1e-5, 4, true), 0.95);
 }
 
 int main(int argc, char* argv[])

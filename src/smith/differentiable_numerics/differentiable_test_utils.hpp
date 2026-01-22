@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file differentiable_utils.hpp
+ * @file differentiable_test_utils.hpp
  *
  * @brief Utility functions for testing.
  */
@@ -17,15 +17,6 @@
 #include "smith/physics/scalar_objective.hpp"
 
 namespace smith {
-
-/// @brief Evaluates a DoubleState using a provided ScalarObjective instance, and the input arguments to that objective.
-/// This operation is tracked on the gretl graph.
-DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const TimeInfo& time_info,
-                              const FieldState& shape_disp, const std::vector<FieldState>& inputs);
-
-/// @brief operation is tracked on the gretl graph.
-DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp,
-                              const std::vector<FieldState>& inputs);
 
 /// @brief Utility function to construct a smith::functional which evaluates the total kinetic energy
 template <typename DispSpace, typename DensitySpace>
@@ -125,9 +116,11 @@ inline auto checkGradients(const gretl::State<double>& objectiveState, gretl::St
 /// @brief Testing utility function which runs a gretl graph num_fd_steps (with increasingly smaller finite difference
 /// steps) to check if the computed graph gradients are converging to the finite differenced gradients at the expected
 /// rate
-inline double checkGradWrt(const gretl::State<double>& objective, smith::FieldState& input, gretl::DataStore& graph,
-                           double eps, size_t num_fd_steps = 4, bool printmore = false)
+inline double checkGradWrt(const gretl::State<double>& objective, smith::FieldState& input, double eps,
+                           size_t num_fd_steps = 4, bool printmore = false)
 {
+  auto& graph = objective.data_store();
+
   // reset each time, just to be sure
   graph.reset();
 
@@ -165,9 +158,11 @@ inline double checkGradWrt(const gretl::State<double>& objective, smith::FieldSt
 /// @brief Testing utility function which runs a gretl graph num_fd_steps (with increasingly smaller finite difference
 /// steps) to check if the computed graph gradients are converging to the finite differenced gradients at the expected
 /// rate
-inline double checkGradWrt(const gretl::State<double>& objective, gretl::State<double, double>& input,
-                           gretl::DataStore& graph, double eps, size_t num_fd_steps = 4, bool printmore = false)
+inline double checkGradWrt(const gretl::State<double>& objective, gretl::State<double, double>& input, double eps,
+                           size_t num_fd_steps = 4, bool printmore = false)
 {
+  auto& graph = objective.data_store();
+
   // reset each time, just to be sure
   graph.reset();
 
