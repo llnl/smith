@@ -216,16 +216,10 @@ spack:
       externals:
       - spec: llvm@14.0.5+clang+python
         prefix: /usr/tce/packages/clang/clang-14.0.5
-    py-ats:
-      version: [7.0.105]
-      externals:
-        - spec: py-ats@7.0.105
-          prefix: /usr/workspace/smithdev/devtools/blueos_3_ppc64le_ib_p9/latest/python-3.11.7
-      buildable: false
     py-sphinx:
       version: [7.2.6]
       externals:
-        - spec: py-sphinx@7.2.6
+        - spec: py-sphinx@7.2.6 ^python
           prefix: /usr/workspace/smithdev/devtools/blueos_3_ppc64le_ib_p9/latest/python-3.11.7
       buildable: false
     python:
