@@ -32,8 +32,6 @@ set(functional_serial_test_sources
 smith_add_tests(SOURCES    ${functional_serial_test_sources}
                 DEPENDS_ON ${functional_test_depends})
 
-set_source_files_properties(functional_tet_quality PROPERTIES LANGUAGE CXX)
-
 # Then add the examples/tests
 set(functional_parallel_test_sources
     #functional_basic_hcurl.cpp
@@ -53,10 +51,6 @@ set(functional_parallel_test_sources
 smith_add_tests(SOURCES       ${functional_parallel_test_sources}
                 DEPENDS_ON    ${functional_test_depends}
                 NUM_MPI_TASKS 4 )
-
-foreach(filename ${functional_parallel_test_sources})
-    set_source_files_properties(${filename} PROPERTIES LANGUAGE CXX)
-endforeach()
 
 target_link_libraries(bug_boundary_qoi PUBLIC smith_physics)
 

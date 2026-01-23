@@ -22,14 +22,7 @@ if (NOT SMITH_BASICS_SETUP)
         "Enable Smith's codevelop build (MFEM and Axom included as CMake subdirectories)"
         OFF)
 
-    # Only enable Smith's code checks by default if it is the top-level project
-    # or a user overrides it
-    if("${CMAKE_PROJECT_NAME}" STREQUAL "smith")
-        set(_enable_smith_code_checks ON)
-    else()
-        set(_enable_smith_code_checks OFF)
-    endif()
-    option(SMITH_ENABLE_CODE_CHECKS "Enable Smith's code checks" ${_enable_smith_code_checks})
+    option(SMITH_ENABLE_CODE_CHECKS "Enable Smith's code checks" ON)
 
     cmake_dependent_option(SMITH_ENABLE_TESTS "Enables Smith Tests" ON "ENABLE_TESTS" OFF)
     cmake_dependent_option(SMITH_ENABLE_CUDA "Enables Smith with CUDA support" ON "ENABLE_CUDA" OFF)

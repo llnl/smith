@@ -2,7 +2,7 @@
 packages:
   axom:
     require:
-    - spec: "@0.12.0.0"
+    - spec: "@0.12.0.1"
   adiak:
     require:
     - spec: "@0.4.1"
@@ -15,9 +15,13 @@ packages:
   conduit:
     require:
     - spec: "@0.9.5"
+  # Hypre v3 causes equationsolver to fail TOSS 4
+  hypre:
+    require:
+    - spec: "@2.33.0"
   mfem:
     require:
-    - spec: "@4.9.0.2"
+    - spec: "@4.9.0.3"
   petsc:
     require:
     - spec: "@3.21.6"
@@ -26,10 +30,10 @@ packages:
     - spec: "@2025.09.0"
   sundials:
     require:
-    - spec: "@6.7.0"
+    - spec: "@7.5.0"
   tribol:
     require:
-    - spec: "@0.1.0.23"
+    - spec: "@0.1.0.24"
   umpire:
     require:
     - spec: "@2025.09.0"
