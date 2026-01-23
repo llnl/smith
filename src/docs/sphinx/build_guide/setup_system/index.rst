@@ -23,12 +23,3 @@ At the end of each Setup guide, it has a link to the page that shows you how to 
 the minimal set of TPLs for Smith; followed by a page on how to build
 Smith from the generated host-config file via CMake.
 
-.. toctree::
-   :hidden:
-   :maxdepth: 1
-
-   setup_lc
-   setup_macos
-   setup_ubuntu
-
-
