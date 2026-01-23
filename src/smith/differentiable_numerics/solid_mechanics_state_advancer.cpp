@@ -35,21 +35,19 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const TimeInfo
                                      params, time_info, *solver_, *vector_bcs_, ACCELERATION);
   }
 
-  TimeInfo final_time_info = time_info.endTimeInfo();
-
   std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
                                        states_old[ACCELERATION]};
 
   auto displacement = solve(*solid_dynamic_weak_forms_->time_discretized_weak_form, shape_disp, solid_inputs, params,
-                            final_time_info, *solver_, *vector_bcs_);
+                            time_info, *solver_, *vector_bcs_);
 
   std::vector<FieldState> states = states_old;
 
   states[DISPLACEMENT] = displacement;
-  states[VELOCITY] = time_rule_.dot(final_time_info, displacement, states_old[DISPLACEMENT],
-                                           states_old[VELOCITY], states_old[ACCELERATION]);
-  states[ACCELERATION] = time_rule_.ddot(final_time_info, displacement, states_old[DISPLACEMENT],
-                                                      states_old[VELOCITY], states_old[ACCELERATION]);
+  states[VELOCITY] =
+      time_rule_.dot(time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY], states_old[ACCELERATION]);
+  states[ACCELERATION] = time_rule_.ddot(time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY],
+                                         states_old[ACCELERATION]);
 
   return states;
 }

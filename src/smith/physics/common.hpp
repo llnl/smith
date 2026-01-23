@@ -22,8 +22,11 @@ struct TimeInfo {
   {
   }
 
-  /// @brief accessor for time
-  double time() const { return time_.first; }
+  /// @brief accessor for time previous time
+  double time_old() const { return time_.first; }
+
+  /// @brief accessor for the current time
+  double time() const { return time_.first + dt_.first; }
 
   /// @brief accessor for dt
   double dt() const { return dt_.first; }
@@ -31,9 +34,7 @@ struct TimeInfo {
   /// @brief accessor for cycle
   size_t cycle() const { return cycle_; }
 
-  /// @brief return the time info corresponding to the end of this cycle (time + dt, dt, cycle)
-  TimeInfo endTimeInfo() const { return TimeInfo(time() + dt(), dt(), cycle()); }
-
+ private:
   std::pair<double, double> time_;  ///< time and its dual
   std::pair<double, double> dt_;    ///< timestep and its dual
   size_t cycle_;                    ///< cycle, step, iteration count

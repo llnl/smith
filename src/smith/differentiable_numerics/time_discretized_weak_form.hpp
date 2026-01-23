@@ -57,7 +57,8 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
 
   /// @overload
   template <typename BodyForceType, int... all_active_parameters>
-  void addBodyIntegralImpl(std::string body_name, BodyForceType body_integral, std::integer_sequence<int, all_active_parameters...>)
+  void addBodyIntegralImpl(std::string body_name, BodyForceType body_integral,
+                           std::integer_sequence<int, all_active_parameters...>)
   {
     addBodyIntegral(DependsOn<all_active_parameters...>{}, body_name, body_integral);
   }

@@ -272,7 +272,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
                                     const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const DifferentiableBlockSolver* solver,
-                                    const std::vector<const BoundaryConditionManager*> bc_managers)
+                                    const std::vector<const BoundaryConditionManager*>& bc_managers)
 {
   SMITH_MARK_FUNCTION;
   size_t num_rows_ = residual_evals.size();

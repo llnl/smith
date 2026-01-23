@@ -68,8 +68,8 @@ struct SecondOrderTimeIntegrationRule {
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
   SMITH_HOST_DEVICE auto dot([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
-                                    [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
-                                    [[maybe_unused]] const T4& accel_old) const
+                             [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                             [[maybe_unused]] const T4& accel_old) const
   {
     return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
   }
@@ -77,8 +77,8 @@ struct SecondOrderTimeIntegrationRule {
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
   SMITH_HOST_DEVICE auto ddot([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
-                                           [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
-                                           [[maybe_unused]] const T4& accel_old) const
+                              [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                              [[maybe_unused]] const T4& accel_old) const
   {
     auto dt = t.dt();
     return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
