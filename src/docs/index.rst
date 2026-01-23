@@ -37,6 +37,17 @@ LLNL-CODE-805541
 
    sphinx/quickstart
    sphinx/user_guide/index
+
+.. toctree::
+   :hidden:
+   :titlesonly:
+   :maxdepth: 2
+
    sphinx/build_guide/index
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+
    sphinx/dev_guide/index
    sphinx/theory_reference/index
