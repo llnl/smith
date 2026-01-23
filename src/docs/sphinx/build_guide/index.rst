@@ -22,6 +22,14 @@ how to build Smith from source. The process consists of the following high-level
    automatic differentiation. To enable this functionality, you have to compile with an
    LLVM-based compiler. We recommend ``clang``.
 
+.. toctree::
+   :hidden:
+   :titlesonly:
+   :maxdepth: 2
+
+   setup_system/index
+   build_tpls
+   build_smith
 
 Spack and Uberenv
 -----------------
@@ -76,14 +84,4 @@ Phase 3: Build Smith with CMake
 -------------------------------
 
 For more information see :ref:`build_smith-label`.
-
-
-.. toctree::
-   :hidden:
-   :maxdepth: 2
-
-   setup_system/index
-   build_tpls
-   build_smith
-
 
