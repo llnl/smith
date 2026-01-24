@@ -408,11 +408,11 @@ void ContactData::residualFunction([[maybe_unused]] const mfem::Vector& u_shape,
 {
 }
 
-std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(mfem::HypreParMatrix* orig_J) const
+std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(std::unique_ptr<mfem::HypreParMatrix> orig_J) const
 {
   auto J_contact = mergedJacobian();
   if (J_contact->IsZeroBlock(0, 0)) {
-    J_contact->SetBlock(0, 0, orig_J);
+    J_contact->SetBlock(0, 0, orig_J.release());
   } else {
     J_contact->SetBlock(0, 0,
                         mfem::Add(1.0, *orig_J, 1.0, static_cast<mfem::HypreParMatrix&>(J_contact->GetBlock(0, 0))));
