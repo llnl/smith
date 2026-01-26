@@ -11,6 +11,7 @@ Building Smith's Third-party Libraries
 
 It is now time to build Smith's Third-party Libraries (TPLs) and optionally our Developer Tools.
 
+.. _devtools-label:
 
 Building Developer Tools
 ------------------------
