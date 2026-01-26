@@ -16,6 +16,18 @@ how to build Smith from source. The process consists of the following high-level
 #. Build Third-party Libraries (TPLs) using Spack and Uberenv to provide a consistent dependency stack
 #. Build Smith itself using CMake once all dependencies are in place
 
+.. tip::
+
+   If you are on a LC machine and are in the ``smithdev`` LC linux group, we have a variety of pre-installed
+   TPLs and configurations. If these are sufficient for you, you can skip to :ref:`build_smith-label`.
+   You can see these machines and configurations in the ``host-configs`` repository directory.
+
+.. tip::
+
+   Alternatively, you can build Smith using preinstalled dependencies inside our existing Docker
+   containers. This may have runtime speed considerations. Instructions for this process are
+   located :ref:`here <docker-label>`.
+
 .. note::
 
    Smith uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
@@ -30,6 +42,7 @@ how to build Smith from source. The process consists of the following high-level
    setup_system/index
    build_tpls
    build_smith
+
 
 Spack and Uberenv
 -----------------
@@ -54,6 +67,22 @@ TPLs installed.
 It also generates a host-config file (``<config_dependent_name>.cmake``)
 at the root of Smith repository. This host-config defines all the required information for building
 Smith.
+
+
+Cloning Smith
+-------------
+
+Smith is hosted on `GitHub <https://github.com/LLNL/smith>`_. Smith uses git submodules, so the project must be cloned
+recursively. Use either of the following commands to pull Smith's repository:
+
+.. code-block:: bash
+
+   # Using SSH keys setup with GitHub
+   $ git clone --recursive git@github.com:LLNL/smith.git
+
+   # Using HTTPS which works for everyone but is slightly slower and will require username/password
+   # for some commands
+   $ git clone --recursive https://github.com/LLNL/smith.git
 
 
 Phase 1: Basic System Setup

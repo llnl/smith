@@ -33,13 +33,6 @@ LLNL-CODE-805541
 
 .. toctree::
    :hidden:
-   :maxdepth: 2
-
-   sphinx/quickstart
-   sphinx/user_guide/index
-
-.. toctree::
-   :hidden:
    :titlesonly:
    :maxdepth: 2
 
@@ -49,5 +42,6 @@ LLNL-CODE-805541
    :hidden:
    :maxdepth: 2
 
+   sphinx/user_guide/index
    sphinx/dev_guide/index
    sphinx/theory_reference/index

@@ -106,30 +106,6 @@ Versions and prefixes may vary.
       - spec: py-sphinx@7.4.7
         prefix: /path/to/venv
 
-Livermore Computing (LC)
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-We provide Spack Environment files for each of LC's systems:
-
- * TOSS4: ``scripts/spack/configs/toss_4_x86_64_ib/spack.yaml``
- * BlueOS: ``scripts/spack/configs/blueos_3_ppc64le_p9/spack.yaml``
- * TOSS4 Cray: ``scripts/spack/configs/toss_4_x86_64_ib_cray/spack.yaml``
-
-Unless otherwise specified, Spack will default to a compiler.  This is generally not a good idea when
-developing large codes. To specify which compiler to use add the compiler specification to the ``--spec`` Uberenv
-command line option. We provide recommended Spack specs for LC in ``scripts/spack/specs.json``.
-
-You can use these directly in the ``uberenv.py`` command in the :ref:`build_tpls-label`
-section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang_19"``.
-
-.. note::
-  On LC machines, it is good practice to do the build step in parallel on a compute node.
-  You should add the following to the start of your commands: ``salloc -ppdebug -N1 --exclusive python3 scripts/uberenv/uberenv.py``
-
-.. note::
-   If you do not have access to the ``smithdev`` linux group. You cannot currently use our prebuilt Dev Tools
-   referenced in the Spack Environment files listed above. You will be required to turn off the devtool variant
-   on your Spack spec by adding ``~devtools`` to your uberenv or Spack spec.
 
 -------------------------------
 Generate Spack Environment File
