@@ -178,12 +178,12 @@ struct FieldStore {
   void addWeakFormArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
   {
     size_t field_index = to_fields_index_.at(argument_name);
-    if (weak_form_name_to_field_indices.count(weak_form_name)) {
-      weak_form_name_to_field_indices.at(weak_form_name).push_back(field_index);
+    if (weak_form_name_to_field_indices_.count(weak_form_name)) {
+      weak_form_name_to_field_indices_.at(weak_form_name).push_back(field_index);
     } else {
-      weak_form_name_to_field_indices[weak_form_name] = std::vector<size_t>{field_index};
+      weak_form_name_to_field_indices_[weak_form_name] = std::vector<size_t>{field_index};
     }
-    SLIC_ERROR_IF(argument_index + 1 != weak_form_name_to_field_indices.at(weak_form_name).size(),
+    SLIC_ERROR_IF(argument_index + 1 != weak_form_name_to_field_indices_.at(weak_form_name).size(),
                   "Invalid order for adding weak form arguments.");
   }
 
@@ -234,7 +234,15 @@ struct FieldStore {
 
   const FieldState& getShapeDisp() const { return shape_disp_[0]; }
 
-  const std::vector<FieldState>& getFields() const { return fields_; }
+  std::vector<FieldState> getFields(const std::string& weak_form_name) const
+  {
+    auto unknown_field_indices = weak_form_name_to_field_indices_.at(weak_form_name);
+    std::vector<FieldState> fields_for_residual;
+    for (auto& i : unknown_field_indices) {
+      fields_for_residual.push_back(fields_[i]);
+    }
+    return fields_for_residual;
+  }
 
   const std::shared_ptr<smith::Mesh>& getMesh() const { return mesh_; }
 
@@ -258,7 +266,7 @@ struct FieldStore {
 
   std::map<std::string, std::vector<FieldLabel>> weak_form_name_to_unknown_name_index_;
 
-  std::map<std::string, std::vector<size_t>> weak_form_name_to_field_indices;
+  std::map<std::string, std::vector<size_t>> weak_form_name_to_field_indices_;
 };
 
 template <typename FirstType, typename... Types>
@@ -299,18 +307,13 @@ std::vector<FieldState> solve(const std::vector<WeakForm*>& weak_forms, const Fi
   }
   std::vector<std::vector<size_t>> index_map = field_store.indexMap(weak_form_names);
 
-  for (auto is : index_map) {
-    for (auto i : is) {
-      std::cout << i << " ";
-    }
-    std::cout << std::endl;
+  std::vector<std::vector<FieldState>> inputs;
+  for (size_t i = 0; i < weak_forms.size(); ++i) {
+    std::string wf_name = weak_forms[i]->name();
+    std::vector<FieldState> fields_for_wk = field_store.getFields(wf_name);
+    inputs.push_back(fields_for_wk);
   }
-
   std::vector<std::vector<FieldState>> params(weak_forms.size());
-  std::vector<std::vector<FieldState>> inputs(weak_forms.size());
-  for (auto& s : inputs) {
-    s = field_store.getFields();
-  }
 
   return block_solve(weak_forms, index_map, field_store.getShapeDisp(), inputs, params, time_info, solver,
                      field_store.getBoundaryConditionManagers());
@@ -332,20 +335,21 @@ TEST_F(SolidMechanicsMeshFixture, A)
 
   field_store.addShapeDisp(shape_disp_type);
 
-  // addIndependentField, addDependantField
   std::shared_ptr<DirichletBoundaryConditions>& disp_bc = field_store.addUnknown(disp_type);
-  disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
+  disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
     bc[0] = 0.01 * t;
     return bc;
   });
-  vector_bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
+  disp_bc->setFixedVectorBCs<dim,dim>(mesh_->domain("right"));
 
   auto disp_old_type = field_store.addDerived(disp_type, "displacement_old");
   auto velo_old_type = field_store.addDerived(disp_type, "velocity_old");
   auto accel_old_type = field_store.addDerived(disp_type, "acceleration_old");
 
   std::shared_ptr<DirichletBoundaryConditions>& temperature_bc = field_store.addUnknown(temperature_type);
+  temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+  temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
 
   auto temperature_old_type = field_store.addDerived(temperature_type, "temperature_old");
 
