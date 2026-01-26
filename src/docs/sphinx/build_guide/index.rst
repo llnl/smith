@@ -64,9 +64,13 @@ TPLs installed.
    This directory **must not** be within the Smith repo - the example below
    controls this with the ``--prefix`` command line argument which is required.
 
-It also generates a host-config file (``<config_dependent_name>.cmake``)
+
+Host-configs
+------------
+
+Our Spack package recipe generates a file we call a host-config (``<config_dependent_name>.cmake``)
 at the root of Smith repository. This host-config defines all the required information for building
-Smith.
+Smith including paths to compilers, TPLs, Developer Tools, and machine specific options.
 
 
 Cloning Smith
