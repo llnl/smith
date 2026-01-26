@@ -126,8 +126,8 @@ spack:
     cuda:
       buildable: false
       externals:
-        - spec: cuda@12.5.82
-          prefix: /usr/local/cuda-12.5
+      - spec: cuda@12.5.82
+        prefix: /usr/local/cuda-12.5
     curl:
       buildable: false
       externals:
@@ -194,7 +194,8 @@ spack:
       - spec: graphviz@2.43.0
         prefix: /usr
     openblas:
-      buildable: false
+      # Spack is insistent on building openblas in the CUDA container, so allow building from source
+      buildable: true
       externals:
       - spec: openblas@0.3.26
         prefix: /usr
@@ -206,10 +207,10 @@ spack:
 
     # Globally lock in version of CMake
     cmake:
-      version: [3.23.1]
+      version: [3.24.2]
       buildable: false
       externals:
-      - spec: cmake@3.23.1
+      - spec: cmake@3.24.2
         prefix: /usr/local
     doxygen:
       version: [1.9.8]
@@ -221,7 +222,7 @@ spack:
       version: [4.3.2]
       buildable: false
       externals:
-      - spec: py-sphinx@4.3.2
+      - spec: py-sphinx@4.3.2 ^python
         prefix: /usr
     cppcheck:
       version: [2.13.0]

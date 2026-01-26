@@ -102,9 +102,13 @@ struct IsotropicConductorWithLinearConductivityVsTemperature {
   SMITH_HOST_DEVICE auto operator()(const T1& /* x */, const T2& temperature, const T3& temperature_gradient) const
   {
     const auto currentConductivity = reference_conductivity_ + d_conductivity_d_temperature_ * temperature;
+#if defined(SMITH_USE_CUDA) || defined(SMITH_USE_HIP)
+    assert(smith::get_value(currentConductivity) >= 0.0);
+#else
     SLIC_ERROR_ROOT_IF(
         smith::get_value(currentConductivity) < 0.0,
         "Conductivity in the IsotropicConductorWithLinearConductivityVsTemperature model has gone negative.");
+#endif
     return smith::tuple{density_ * specific_heat_capacity_, -1.0 * currentConductivity * temperature_gradient};
   }
 

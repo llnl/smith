@@ -4,9 +4,9 @@
 "package_final_phase" : "initconfig",
 "package_source_dir" : "../..",
 "spack_url": "https://github.com/spack/spack.git",
-"spack_commit": "734c5db2121b01c373eed6538e452f18887e9e44",
+"spack_commit": "0154734bd44cb9230fcadecf2e6567c9d22ce5ab",
 "spack_packages_url": "https://github.com/spack/spack-packages.git",
-"spack_packages_commit": "a75a7f75182ffc7a51c6ca7f0fec4bf9b2705be8",
+"spack_packages_commit": "88ce9cc7d9f1cad16375ef90825cb1d3098eeb73",
 "spack_configs_path": "scripts/spack/configs",
-"spack_packages_path": ["scripts/spack/radiuss-spack-configs/spack_repo/llnl_radiuss/packages", "scripts/spack/spack_repo/smith/packages"]
+"spack_packages_path": ["scripts/spack/spack_repo/smith/packages"]
 }
