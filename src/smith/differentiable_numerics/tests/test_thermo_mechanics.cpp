@@ -341,7 +341,7 @@ TEST_F(SolidMechanicsMeshFixture, A)
     bc[0] = 0.01 * t;
     return bc;
   });
-  disp_bc->setFixedVectorBCs<dim,dim>(mesh_->domain("right"));
+  disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
 
   auto disp_old_type = field_store.addDerived(disp_type, "displacement_old");
   auto velo_old_type = field_store.addDerived(disp_type, "velocity_old");

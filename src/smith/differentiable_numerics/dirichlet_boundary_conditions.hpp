@@ -113,11 +113,10 @@ class DirichletBoundaryConditions {
   }
 
   /// @brief Constrain all the vector dofs over a domain
-  template <int spatial_dim, int field_dim>
+  template <int spatial_dim, int field_dim = spatial_dim>
   void setFixedVectorBCs(const Domain& domain)
   {
-    SLIC_ERROR_IF(field_dim != space_.GetVDim(),
-                  "Vector boundary condition field_dim does not match the fields vdim");
+    SLIC_ERROR_IF(field_dim != space_.GetVDim(), "Vector boundary condition field_dim does not match the fields vdim");
     std::vector<int> components(static_cast<size_t>(field_dim));
     for (int component = 0; component < field_dim; ++component) {
       components[static_cast<size_t>(component)] = component;
