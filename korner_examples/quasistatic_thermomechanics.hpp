@@ -208,4 +208,32 @@ auto buildThermoMechanics(std::shared_ptr<smith::Mesh> mesh,
   return std::make_tuple(physics, solid_mechanics_weak_form, thermal_mechanics_weak_form, vector_bcs, scalar_bcs);
 }
 
+template <int dim, typename ShapeDispSpace, typename VectorSpace, typename ScalarSpace, typename... ParamSpaces>
+auto buildThermoMechanicsForOptimization(std::shared_ptr<smith::Mesh> mesh,
+                          std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
+                          std::shared_ptr<DifferentiableSolver> d_thermal_solver,
+                          smith::SecondOrderTimeIntegrationRule solid_time_rule,
+                          smith::SecondOrderTimeIntegrationRule thermal_time_rule, std::string physics_name,
+                          const std::vector<std::string>& param_names = {})
+{
+  auto graph = std::make_shared<gretl::DataStore>(100);
+  auto [shape_disp, states, params, time, solid_mechanics_weak_form, thermal_mechanics_weak_form] =
+      QuasistaticSolidThermoMechanicsStateAdvancer::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace,
+                                                                           ScalarSpace, ParamSpaces...>(
+          mesh, graph, solid_time_rule, thermal_time_rule, physics_name, param_names);
+
+  auto vector_bcs = std::make_shared<DirichletBoundaryConditions>(
+      mesh->mfemParMesh(), space(states[QuasistaticSolidThermoMechanicsStateAdvancer::DISPLACEMENT]));
+
+  auto scalar_bcs = std::make_shared<DirichletBoundaryConditions>(
+      mesh->mfemParMesh(), space(states[QuasistaticSolidThermoMechanicsStateAdvancer::TEMPERATURE]));
+  auto state_advancer = std::make_shared<QuasistaticSolidThermoMechanicsStateAdvancer>(
+      d_solid_nonlinear_solver, d_thermal_solver, vector_bcs, scalar_bcs, solid_mechanics_weak_form,
+      thermal_mechanics_weak_form, solid_time_rule, thermal_time_rule);
+  auto physics =
+      std::make_unique<DifferentiablePhysics>(mesh, graph, shape_disp, states, params, state_advancer, physics_name);
+
+  return std::make_tuple(std::move(physics), solid_mechanics_weak_form, thermal_mechanics_weak_form, vector_bcs, scalar_bcs);
+}
+
 };  // namespace custom_physics

@@ -110,12 +110,12 @@ int main(int argc, char* argv[])
   /// ================== Physics solver setup ==========================
   /// ==================================================================
 
-  SLIC_INFO_ROOT_FLUSH("Initializing ApplicationManager and DataStore");
-  /// -------------------------------------------------------------------
-
   smith::ApplicationManager applicationManager(argc, argv);
   axom::sidre::DataStore datastore;
   std::shared_ptr<smith::Mesh> mesh;
+
+  SLIC_INFO_ROOT_FLUSH("Initializing ApplicationManager and DataStore");
+  /// -------------------------------------------------------------------
 
   auto name = "does_not_matter_output";
   SLIC_INFO_ROOT_FLUSH("Initializing StateManager");
