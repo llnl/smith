@@ -86,7 +86,7 @@ Some helpful uberenv options include:
 
 The rest of Uberenv's command line options can be seen `here <https://uberenv.readthedocs.io/en/latest/#build-configuration>`_.
 
-Basic Spack variants:
+**Basic Spack variants:**
 
 +-------------+---------+---------------------------------------------------------------+
 | Variant     | Default | Description                                                   |
@@ -107,7 +107,7 @@ Basic Spack variants:
    devtool variant by adding ``~devtools`` to your Spack spec via the Spack or uberenv command line.
 
 
-TPL Spack variants:
+**TPL Spack variants:**
 
 +-------------+---------+---------------------------------------------------------------+
 | Variant     | Default | Description                                                   |
