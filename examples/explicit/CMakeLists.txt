@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if(SMITH_USE_DFEM)
+if(SMITH_USE_ENZYME)
     set(EXPLICIT_DYNAMICS_EXAMPLES_SOURCES
         dfem_gpu.cpp
         dfem_force_gpu.cpp

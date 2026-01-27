@@ -38,12 +38,11 @@ toss4_cray-llvm_amdgpu_6_4_2-src:
   variables:
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "60"
+    ALLOC_TIME: "75"
   extends: .src_build_on_toss4_cray
  
 toss4_cray-llvm_amdgpu_6_4_2-src-codevelop:
   variables:
-    # TODO: Add -DSMITH_USE_DFEM=ON when enzyme is enabled in toss4_cray host configs
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug -DSMITH_ENABLE_CODEVELOP=ON"
     EXTRA_BUILD_OPTIONS: "--skip-install"
     ALLOC_NODES: "1"
