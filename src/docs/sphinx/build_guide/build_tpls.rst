@@ -115,8 +115,8 @@ The rest of Uberenv's command line options can be seen `here <https://uberenv.re
 
 
 .. note::
-  Spack variants come in two flavors: True/False, which is indicated in the spec by ``+`` for
-  true and ``~`` for false. Multi-value variants must start with a space and require a value
+  Spack variants come in two flavors: Boolean, which is indicated in the spec by ``+`` for
+  true and ``~`` for false, and Multi-value variants, which must start with a space and require a value
   after the ``=`` sign (for example, ``+cuda cuda_arch=80``).
 
 
