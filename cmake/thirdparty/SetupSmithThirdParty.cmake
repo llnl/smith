@@ -606,7 +606,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(TRIBOL_ENABLE_TESTS OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_EXAMPLES OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_DOCS OFF CACHE BOOL "")
-        set(TRIBOL_ENABLE_PROFILING ${SMITH_ENABLE_PROFILING} CACHE BOOL "")
 
         if(EXISTS "${PROJECT_SOURCE_DIR}/smith/tribol")
             set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/smith/tribol")
@@ -614,8 +613,17 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/tribol")
         endif()
 
+        # User enabled tribol profiling, briefly restore CALIPER_DIR
+        if(TRIBOL_ENABLE_PROFILING)
+            set(CALIPER_DIR ${_caliper_dir} CACHE STRING "" FORCE)
+        endif()
+
         add_subdirectory(${tribol_repo_dir}  ${CMAKE_BINARY_DIR}/tribol)
         
+        if(TRIBOL_ENABLE_PROFILING)
+            unset(CALIPER_DIR CACHE)
+        endif()
+
         target_include_directories(redecomp PUBLIC
             $<BUILD_INTERFACE:${tribol_repo_dir}/src>
         )
