@@ -78,16 +78,61 @@ Run the command with the compiler that you want to develop with:
 
     scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=<path/to/spack.yaml> --spec="%clang_19"
 
-Some helpful uberenv options include :
+Some helpful uberenv options include:
 
-* ``--spec=" build_type=Debug"`` (build core TPLs, such as MFEM and Hypre, with debug symbols)
-* ``--spec=+profiling`` (build the Adiak and Caliper libraries)
-* ``--spec=+devtools`` (also build the devtools with one command)
-* ``--spec=%clang_19`` (build with a specific compiler as defined in the ``spack.yaml`` file)
+* ``--spec="+profiling build_type=Debug %clang_19"`` (Spack spec, ``smith@develop`` automatically prepended)
 * ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
 * ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Smith repository
 
-The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang_19'``.
+The rest of Uberenv's command line options can be seen `here <https://uberenv.readthedocs.io/en/latest/#build-configuration>`_.
+
+Basic Spack variants:
+
++-------------+---------+---------------------------------------------------------------+
+| Variant     | Default | Description                                                   |
++=============+=========+===============================================================+
+| shared      | False   | Enable build of shared libraries                              |
++-------------+---------+---------------------------------------------------------------+
+| asan        | False   | Enable Address Sanitizer flags                                |
++-------------+---------+---------------------------------------------------------------+
+| openmp      | True    | Enable OpenMP support                                         |
++-------------+---------+---------------------------------------------------------------+
+| devtools    | False   | Build development tools (such as Sphinx, CppCheck,            |
+|             |         | ClangFormat, etc...)                                          |
++-------------+---------+---------------------------------------------------------------+
+
+.. note::
+   If you are building on LC, using our provided Spack Environments, and do not have access to the ``smithdev`` linux group,
+   you cannot use our prebuilt Developer Tools referenced in the Spack Environment files. You will need to turn off the
+   devtool variant by adding ``~devtools`` to your Spack spec via the Spack or uberenv command line.
+
+
+TPL Spack variants:
+
++-------------+---------+---------------------------------------------------------------+
+| Variant     | Default | Description                                                   |
++=============+=========+===============================================================+
+| adiak       | False   | Build with adiak                                              |
++-------------+---------+---------------------------------------------------------------+
+| caliper     | False   | Build with caliper                                            |
++-------------+---------+---------------------------------------------------------------+
+| enzyme      | False   | Enable Enzyme Automatic Differentiation Framework             |
++-------------+---------+---------------------------------------------------------------+
+| petsc       | True    | Enable PETSc support                                          |
++-------------+---------+---------------------------------------------------------------+
+| raja        | True    | Build with portable kernel execution support                  |
++-------------+---------+---------------------------------------------------------------+
+| slepc       | True    | Enable SLEPc integration                                      |
++-------------+---------+---------------------------------------------------------------+
+| strumpack   | True    | Build MFEM TPL with Strumpack, a direct linear solver library |
++-------------+---------+---------------------------------------------------------------+
+| sundials    | True    | Build MFEM TPL with SUNDIALS nonlinear/ODE solver support     |
++-------------+---------+---------------------------------------------------------------+
+| tribol      | True    | Build Tribol, an interface physics library                    |
++-------------+---------+---------------------------------------------------------------+
+| umpire      | True    | Build with portable memory access support                     |
++-------------+---------+---------------------------------------------------------------+
+
 
 If successful, you will see two things. The first is what we call a host-config. It is all the CMake
 inputs you need to build Smith. This file will be a new CMake file in the current directory with your machine

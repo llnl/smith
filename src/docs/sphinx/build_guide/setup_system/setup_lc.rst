@@ -26,9 +26,9 @@ section by substituting the values in these two command line options: ``--spack-
   You should add the following to the start of your commands: ``salloc -ppdebug -N1 --exclusive python3 scripts/uberenv/uberenv.py``
 
 .. note::
-   If you do not have access to the ``smithdev`` linux group. You cannot currently use our prebuilt Dev Tools
-   referenced in the Spack Environment files listed above. You will be required to turn off the devtool variant
-   on your Spack spec by adding ``~devtools`` to your uberenv or Spack spec.
+   If you do not have access to the ``smithdev`` linux group, you cannot use our prebuilt Developer Tools
+   referenced in the Spack Environment files listed above. You will need to turn off the devtool variant
+   by adding ``~devtools`` to your Spack spec via the Spack or uberenv command line.
 
 -------------------------------
 Generate Spack Environment File
