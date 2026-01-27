@@ -495,7 +495,5 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
             "TRIBOL_ENABLE_TESTS", "tests"))
         options.append(self.define_from_variant(
             "TRIBOL_ENABLE_ASAN", "asan"))
-        options.append(self.define_from_variant(
-            "TRIBOL_ENABLE_PROFILING", "caliper"))
 
         return options
