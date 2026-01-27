@@ -47,37 +47,6 @@ Spack builds.
 
     ./scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --setup-and-env-only
 
-This command will create a Spack environment file, ``spack.yaml``, where you ran the above command.
-If you want to use Clang as your compiler, alter the following section in that file by changing
-``null`` in the ``f77`` and ``fc`` lines to ``/usr/bin/gfortran``:
-
-.. code-block:: yaml
-
-    - compiler:
-        spec: clang@=19.1.1
-        paths:
-            cc: /usr/bin/clang
-            cxx: /usr/bin/clang++
-            f77: null # Change null to /usr/bin/gfortran
-            fc: null # and this one too
-        flags: {}
-        operating_system: ubuntu24.04
-        target: x86_64
-        modules: []
-        environment: {}
-        extra_rpaths: []
-
-
-To speed up the build, you can add packages that exist on your system to the same Spack environment file. For example,
-we installed lua in the above ``apt`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
-
-.. code-block:: yaml
-
-    lua:
-      externals:
-      - spec: lua@5.2
-        prefix: /usr
-      buildable: false
 
 The above spack command will output a concretization that looks like the following:
 
@@ -120,18 +89,21 @@ The above spack command will output a concretization that looks like the followi
      -   xts3eqq          ^fmt@11.0.2 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~ipo+pic~shared build_system=cmake build_type=Release cxxstd=11 generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
 
 
-Lines starting with ``[e]`` are external packages that Spack recognizes are on the system and will not rebuild them.
-By adding Lua to the Spack environment file, Spack will no longer build Lua and any of its dependencies that are
-needed by anything else. In this case, ``lua``, ``readline``, and ``unzip`` will not be built. ``unzip`` may be needed
-by another package, so you can also add it with this yaml section:
+To speed up the build, you can add packages that exist on your system and were not detected by Spack to the same Spack environment file.
+For example, we installed lua in the above ``apt`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
 
 .. code-block:: yaml
 
-    unzip:
+    lua:
       externals:
-      - spec: unzip@6.0
+      - spec: lua@5.2
         prefix: /usr
       buildable: false
+
+
+Lines starting with ``[e]`` are external packages that Spack recognizes are on the system and will not rebuild them.
+By adding Lua to the Spack environment file, Spack will no longer build Lua and any of its dependencies that are
+needed by anything else. In this case, ``lua``, ``readline``, and ``unzip`` will not be built.
 
 .. important::
 
