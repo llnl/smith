@@ -88,18 +88,37 @@ The rest of Uberenv's command line options can be seen `here <https://uberenv.re
 
 **Basic Spack variants:**
 
-+-------------+---------+---------------------------------------------------------------+
-| Variant     | Default | Description                                                   |
-+=============+=========+===============================================================+
-| shared      | False   | Enable build of shared libraries                              |
-+-------------+---------+---------------------------------------------------------------+
-| asan        | False   | Enable Address Sanitizer flags                                |
-+-------------+---------+---------------------------------------------------------------+
-| openmp      | True    | Enable OpenMP support                                         |
-+-------------+---------+---------------------------------------------------------------+
-| devtools    | False   | Build development tools (such as Sphinx, CppCheck,            |
-|             |         | ClangFormat, etc...)                                          |
-+-------------+---------+---------------------------------------------------------------+
++-----------------+---------+---------------------------------------------------------------+
+| Variant         | Default | Description                                                   |
++=================+=========+===============================================================+
+| build_type      | Release | CMake build type (Debug, Release, RelWithDebInfo, MinSizeRel) |
++-----------------+---------+---------------------------------------------------------------+
+| shared          | False   | Enable build of shared libraries                              |
++-----------------+---------+---------------------------------------------------------------+
+| asan            | False   | Enable Address Sanitizer flags                                |
++-----------------+---------+---------------------------------------------------------------+
+| openmp          | True    | Enable OpenMP support                                         |
++-----------------+---------+---------------------------------------------------------------+
+| devtools        | False   | Build development tools (such as Sphinx, CppCheck,            |
+|                 |         | ClangFormat, etc...)                                          |
++-----------------+---------+---------------------------------------------------------------+
+| cuda            | False   | Enable CUDA support (requires ``cuda_arch=<number>``)         |
++-----------------+---------+---------------------------------------------------------------+
+| cuda_arch       | N/A     | Set CUDA architecture (for example, ``70``), can be single or |
+|                 |         | comma delimited                                               |
++-----------------+---------+---------------------------------------------------------------+
+| rocm            | False   | Enable ROCM support (requires ``amdgpu_target=<number>)``     |
++-----------------+---------+---------------------------------------------------------------+
+| amdgpu_target   | N/A     | Set ROCM target (for example, ``gfx942``), can be single or   |
+|                 |         | comma delimited                                               |
++-----------------+---------+---------------------------------------------------------------+
+
+
+.. note::
+  Spack variants come in two flavors: True/False, which is indicated in the spec by ``+`` for
+  true and ``~`` for false. Multi-value variants must start with a space and require a value
+  after the ``=`` sign (for example, ``+cuda cuda_arch=80``).
+
 
 .. note::
    If you are building on LC, using our provided Spack Environments, and do not have access to the ``smithdev`` linux group,
