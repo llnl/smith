@@ -35,7 +35,7 @@ namespace smith {
 template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
 auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
                          std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
-                         smith::SecondOrderTimeIntegrationRule time_rule, size_t num_checkpoints,
+                         smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, size_t num_checkpoints,
                          std::string physics_name, const std::vector<std::string>& param_names = {})
 {
   auto graph = std::make_shared<gretl::DataStore>(num_checkpoints);

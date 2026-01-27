@@ -23,6 +23,15 @@
 
 namespace smith {
 
+/**
+ * @brief Compute Green's strain from the displacement gradient
+ */
+template <typename T, int dim>
+auto greenStrain(const tensor<T, dim, dim>& grad_u)
+{
+  return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
+}
+
 /// @brief Green-Saint Venant isotropic thermoelastic model
 struct GreenSaintVenantThermoelasticMaterial {
   double density;    ///< density
@@ -259,7 +268,6 @@ struct FieldStore {
   std::map<std::string, size_t> to_unknown_index_;
   std::vector<std::shared_ptr<DirichletBoundaryConditions>> boundary_conditions_;
 
-  // MRT, do this for readability
   struct FieldLabel {
     std::string field_name;
     size_t field_index_in_residual;
@@ -320,17 +328,26 @@ std::vector<FieldState> solve(const std::vector<WeakForm*>& weak_forms, const Fi
                      field_store.getBoundaryConditionManagers());
 }
 
-TEST_F(SolidMechanicsMeshFixture, A)
+TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
 {
   SMITH_MARK_FUNCTION;
 
   FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-
   FieldType<H1<order, dim>> disp_type("displacement");
   FieldType<H1<order>> temperature_type("temperature");
 
   std::shared_ptr<DifferentiableBlockSolver> d_nonlinear_solver =
       buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+
+  double rho = 1.0;
+  double E = 100.0;
+  double nu = 0.25;
+  double c = 1.0;
+  double alpha = 1.0e-3;
+  double theta_ref = 0.0;
+  double k = 1.0;
+  GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
+
 
   FieldStore field_store(mesh_, 100);
 
@@ -345,8 +362,8 @@ TEST_F(SolidMechanicsMeshFixture, A)
   disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
 
   auto disp_old_type = field_store.addDerived(disp_type, "displacement_old");
-  auto velo_old_type = field_store.addDerived(disp_type, "velocity_old");
-  auto accel_old_type = field_store.addDerived(disp_type, "acceleration_old");
+  //auto velo_old_type = field_store.addDerived(disp_type, "velocity_old");
+  //auto accel_old_type = field_store.addDerived(disp_type, "acceleration_old");
 
   std::shared_ptr<DirichletBoundaryConditions>& temperature_bc = field_store.addUnknown(temperature_type);
   temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
@@ -354,30 +371,42 @@ TEST_F(SolidMechanicsMeshFixture, A)
 
   auto temperature_old_type = field_store.addDerived(temperature_type, "temperature_old");
 
-  auto disp_time_rule = SecondOrderTimeIntegrationRule(SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK);
+  auto disp_time_rule = QuasiStaticFirstOrderTimeIntegrationRule();
   auto temperature_time_rule = BackwardEulerFirstOrderTimeIntegrationRule();
 
   auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, field_store, disp_type, disp_old_type,
-                                             velo_old_type, accel_old_type, temperature_type, temperature_old_type);
+                                             temperature_type, temperature_old_type);
 
   solid_weak_form->addBodyIntegral(
-      mesh_->entireBodyName(), [=](auto time_info, auto /*X*/, auto disp, auto disp_old, auto velo_old, auto accel_old,
+      mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
                                    auto temperature, auto temperature_old) {
-        auto u = disp_time_rule.value(time_info, disp, disp_old, velo_old, accel_old);
-        auto a = disp_time_rule.ddot(time_info, disp, disp_old, velo_old, accel_old);
-        auto theta_dot = temperature_time_rule.dot(time_info, temperature, temperature_old);
-        return smith::tuple{2.0 * get<VALUE>(a), get<DERIVATIVE>(u) * get<VALUE>(theta_dot)};
+        auto u = disp_time_rule.value(t_info, disp, disp_old);
+        auto v = disp_time_rule.dot(t_info, disp, disp_old);
+        auto T = temperature_time_rule.value(t_info, temperature, temperature_old);
+        GreenSaintVenantThermoelasticMaterial::State state;
+        auto [pk, C_v, s0, q0] =
+            material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
+        return smith::tuple{smith::zero{}, pk};
       });
 
   auto thermal_weak_form = createWeakForm<dim>("thermal_flux", temperature_type, field_store, temperature_type,
-                                               temperature_old_type, disp_type);
+                                               temperature_old_type, disp_type, disp_old_type);
 
-  thermal_weak_form->addBodyIntegral(
-      mesh_->entireBodyName(), [=](auto time_info, auto /*X*/, auto temperature, auto temperature_old, auto) {
-        auto theta = temperature_time_rule.value(time_info, temperature, temperature_old);
-        auto theta_dot = temperature_time_rule.dot(time_info, temperature, temperature_old);
-        return smith::tuple{get<VALUE>(theta_dot), get<DERIVATIVE>(theta)};
-      });
+  thermal_weak_form->addBodyIntegral(mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto temperature,
+                                                                  auto temperature_old, auto disp, auto disp_old) {
+    GreenSaintVenantThermoelasticMaterial::State state;
+    auto u = disp_time_rule.value(t_info, disp, disp_old);
+    auto v = disp_time_rule.dot(t_info, disp, disp_old);
+    auto T = temperature_time_rule.value(t_info, temperature, temperature_old);
+    auto T_dot = temperature_time_rule.dot(t_info, temperature, temperature_old);
+    auto [pk, C_v, s0, q0] =
+        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
+    auto dT_dt = get<VALUE>(T_dot);
+    return smith::tuple{C_v * dT_dt - s0, -q0};
+  });
+
+  thermal_weak_form->addBodySource(smith::DependsOn<>(), mesh_->entireBodyName(),
+                                   [](auto /*t*/, auto /* x */) { return 100.0; });
 
   std::vector<WeakForm*> weak_forms{solid_weak_form.get(), thermal_weak_form.get()};
   std::vector<FieldState> disp_temp = solve(weak_forms, field_store, d_nonlinear_solver.get(), TimeInfo(0.0, 1.0));

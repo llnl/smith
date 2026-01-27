@@ -16,7 +16,7 @@ namespace smith {
 SolidMechanicsStateAdvancer::SolidMechanicsStateAdvancer(
     std::shared_ptr<smith::DifferentiableSolver> solver, std::shared_ptr<smith::DirichletBoundaryConditions> vector_bcs,
     std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_dynamic_weak_forms,
-    smith::SecondOrderTimeIntegrationRule time_rule)
+    smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule)
     : solver_(solver),
       vector_bcs_(vector_bcs),
       solid_dynamic_weak_forms_(solid_dynamic_weak_forms),

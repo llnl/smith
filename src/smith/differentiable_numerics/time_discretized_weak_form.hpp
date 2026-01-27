@@ -88,7 +88,7 @@ class SecondOrderTimeDiscretizedWeakForm;
 
 /// @brief Useful for time-discretized PDEs of second order (involves for first and second derivatives of time).  Users
 /// write q-functions in terns of u, u_dot, u_dot_dot, and the weak form is transformed by the
-/// SecondOrderTimeIntegrationRule so that is it globally a function of u, u_old, u_dot_old, u_dot_dot_old, with u as
+/// ImplicitNewmarkSecondOrderTimeIntegrationRule so that is it globally a function of u, u_old, u_dot_old, u_dot_dot_old, with u as
 /// the distinct unknown for the time discretized system.
 /// @tparam spatial_dim Spatial dimension, 2 or 3.
 /// @tparam OutputSpace The space corresponding to the output residual for the weak form (test-space).
@@ -108,7 +108,7 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
 
   /// @brief Constructor
   SecondOrderTimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
-                                     SecondOrderTimeIntegrationRule time_rule,
+                                     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule,
                                      const mfem::ParFiniteElementSpace& output_mfem_space,
                                      const typename TimeDiscretizedWeakFormT::SpacesT& input_mfem_spaces)
       : time_rule_(time_rule)
@@ -157,7 +157,7 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
       final_reaction_weak_form_;  ///< fully template underlying weak form (no time integration included, a function of
                                   ///< current u, v, and a)
 
-  SecondOrderTimeIntegrationRule time_rule_;  ///< encodes the time integration rule
+  ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule_;  ///< encodes the time integration rule
 };
 
 }  // namespace smith
