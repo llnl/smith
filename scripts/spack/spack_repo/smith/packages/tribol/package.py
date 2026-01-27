@@ -52,7 +52,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     # SMITH EDIT START
     # Note: We add a number to the end of the real version number to indicate that we have
     #  moved forward past the release. Increment the last number when updating the commit sha.
-    version("0.1.0.23", commit="04ab0220f54e074ecaf785ad2a607433993edb96", submodules=True, preferred=True)
+    version("0.1.0.24", commit="9f9d4d6fc8735106e9118992ed11a9188249962a", submodules=True, preferred=True)
 
     depends_on("c", type="build")
     depends_on("cxx", type="build")
@@ -273,7 +273,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
 
             hip_link_flags = ""
 
-            rocm_root = os.path.dirname(spec["llvm-amdgpu"].prefix)
+            rocm_root = spec["llvm-amdgpu"].prefix
             entries.append(cmake_cache_path("ROCM_ROOT_DIR", rocm_root))
 
             # Recommended MPI flags
