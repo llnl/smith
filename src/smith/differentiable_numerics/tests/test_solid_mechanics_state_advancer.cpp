@@ -90,7 +90,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
       buildDifferentiableNonlinearSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule(smith::SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK);
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule;
 
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
@@ -181,20 +181,15 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   EXPECT_NEAR(0.0, u_err, 1e-14);
 }
 
-TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
-{
-  SMITH_MARK_FUNCTION;
 
-  std::string physics_name = "solid";
-
+auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh) {
+  size_t num_checkpoints = 200;
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
       buildDifferentiableNonlinearSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule(smith::SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK);
-
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, time_rule, 200, physics_name, {"bulk", "shear"});
+          mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule(), num_checkpoints, physics_name, {"bulk", "shear"});
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
   bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
@@ -221,7 +216,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
 
   auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();
-  auto initial_states = physics->getInitialFieldStates();
+  auto states = physics->getInitialFieldStates();
 
   params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
     double scaling = 1.0;
@@ -234,6 +229,16 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   });
 
   physics->resetStates();
+
+  return std::make_tuple(physics, shape_disp, states, params);
+}
+
+
+TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
+{
+  SMITH_MARK_FUNCTION;
+  std::string physics_name = "solid";
+  auto [physics, shape_disp, initial_states, params] = createSolidMechanicsBasePhysics(physics_name, mesh);
 
   auto pv_writer = smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
@@ -311,56 +316,8 @@ void adjointBackward(std::shared_ptr<BasePhysics> physics, smith::FiniteElementD
 TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 {
   SMITH_MARK_FUNCTION;
-
   std::string physics_name = "solid";
-
-  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
-
-  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule(SecondOrderTimeIntegrationMethod::IMPLICIT_NEWMARK);
-
-  auto [physics, solid_weak_form, bcs] =
-      buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, time_rule, 200, physics_name, {"bulk", "shear"});
-
-  bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
-  bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
-    auto bc = 0.0 * X;
-    bc[0] = 0.01 * t;
-    bc[1] = -0.05 * t;
-    return bc;
-  });
-
-  double E = 100.0;
-  double nu = 0.25;
-  auto K = E / (3.0 * (1.0 - 2 * nu));
-  auto G = E / (2.0 * (1.0 + nu));
-  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
-  MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
-
-  solid_weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
-        MaterialType::State state;
-        auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
-        return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
-      });
-
-  auto shape_disp = physics->getShapeDispFieldState();
-  auto params = physics->getFieldParams();
-  auto states = physics->getInitialFieldStates();
-
-  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    double scaling = 1.0;
-    return scaling * material.K0;
-  });
-
-  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    double scaling = 1.0;
-    return scaling * material.G0;
-  });
-
-  physics->resetStates();
+  auto [physics, shape_disp, initial_states, params]  = createSolidMechanicsBasePhysics(physics_name, mesh);
 
   double qoi = integrateForward(physics, num_steps_, dt_);
   SLIC_INFO_ROOT(axom::fmt::format("{}", qoi));

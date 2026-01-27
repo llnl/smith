@@ -348,7 +348,6 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   double k = 1.0;
   GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
 
-
   FieldStore field_store(mesh_, 100);
 
   field_store.addShapeDisp(shape_disp_type);
@@ -362,8 +361,6 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
 
   auto disp_old_type = field_store.addDerived(disp_type, "displacement_old");
-  //auto velo_old_type = field_store.addDerived(disp_type, "velocity_old");
-  //auto accel_old_type = field_store.addDerived(disp_type, "acceleration_old");
 
   std::shared_ptr<DirichletBoundaryConditions>& temperature_bc = field_store.addUnknown(temperature_type);
   temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
@@ -371,8 +368,8 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
 
   auto temperature_old_type = field_store.addDerived(temperature_type, "temperature_old");
 
-  auto disp_time_rule = QuasiStaticFirstOrderTimeIntegrationRule();
-  auto temperature_time_rule = BackwardEulerFirstOrderTimeIntegrationRule();
+  QuasiStaticFirstOrderTimeIntegrationRule disp_time_rule;
+  BackwardEulerFirstOrderTimeIntegrationRule temperature_time_rule;
 
   auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, field_store, disp_type, disp_old_type,
                                              temperature_type, temperature_old_type);
@@ -411,14 +408,10 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   std::vector<WeakForm*> weak_forms{solid_weak_form.get(), thermal_weak_form.get()};
   std::vector<FieldState> disp_temp = solve(weak_forms, field_store, d_nonlinear_solver.get(), TimeInfo(0.0, 1.0));
 
+  
+
   EXPECT_EQ(0, 0);
 
-  // auto derived_types = createDerivedFieldTypes(ddot(disp_type), dot(temperature_type));
-  // FieldType<L2<0>> kappa_type;
-  // FieldType<L2<0>> mu_type;
-  // auto params =
-  // auto weak_form =
-  // createWeakForm("solid", smith::DependsOnFields(disp_type, dot(disp_type), ddot(disp_type), temperature_type));
 }
 
 }  // namespace smith

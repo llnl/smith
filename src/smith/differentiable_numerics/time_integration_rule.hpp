@@ -81,4 +81,41 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule {
   }
 };
 
+
+/// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
+/// When solving f(u, u_dot, u_dot_dot, t) = 0
+/// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of
+/// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
+struct QuasiStaticSecondOrderTimeIntegrationRule {
+  /// @brief Constructor
+  QuasiStaticSecondOrderTimeIntegrationRule() {}
+
+  /// @brief evaluate value of the ode state as used by the integration rule
+  template <typename T1, typename T2, typename T3, typename T4>
+  SMITH_HOST_DEVICE auto value([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
+                               [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                               [[maybe_unused]] const T4& accel_old) const
+  {
+    return field_new;
+  }
+
+  /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
+  template <typename T1, typename T2, typename T3, typename T4>
+  SMITH_HOST_DEVICE auto dot([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
+                             [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                             [[maybe_unused]] const T4& accel_old) const
+  {
+    return (1.0 / t.dt()) * (field_new - field_old);
+  }
+
+  /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
+  template <typename T1, typename T2, typename T3, typename T4>
+  SMITH_HOST_DEVICE auto ddot([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
+                              [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                              [[maybe_unused]] const T4& accel_old) const
+  {
+    return accel_old;
+  }
+};
+
 }  // namespace smith
