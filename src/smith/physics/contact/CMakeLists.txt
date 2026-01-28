@@ -16,10 +16,7 @@ set(contact_sources
     )
 
 set(contact_depends smith_infrastructure smith_state)
-blt_list_append(TO contact_depends ELEMENTS tribol IF TRIBOL_FOUND)
-if (TRIBOL_FOUND AND SMITH_ENABLE_MPI)
-    list(APPEND contact_depends redecomp)
-endif()
+blt_list_append(TO contact_depends ELEMENTS tribol redecomp IF TRIBOL_FOUND)
 
 smith_add_library(
     NAME        smith_contact

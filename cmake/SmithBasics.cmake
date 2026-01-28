@@ -27,7 +27,6 @@ if (NOT SMITH_BASICS_SETUP)
     cmake_dependent_option(SMITH_ENABLE_TESTS "Enables Smith Tests" ON "ENABLE_TESTS" OFF)
     cmake_dependent_option(SMITH_ENABLE_CUDA "Enables Smith with CUDA support" ON "ENABLE_CUDA" OFF)
     cmake_dependent_option(SMITH_ENABLE_HIP "Enables Smith with HIP support" ON "ENABLE_HIP" OFF)
-    cmake_dependent_option(SMITH_ENABLE_MPI "Enables Smith with MPI support" ON "ENABLE_MPI" OFF)
     cmake_dependent_option(SMITH_ENABLE_OPENMP "Enables Smith with OPENMP support" ON "ENABLE_OPENMP" OFF)
 
     # Options for builtin TPLs
