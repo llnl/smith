@@ -56,6 +56,7 @@ void ContactData::reset()
 
 void ContactData::update(int cycle, double time, double& dt)
 {
+  SMITH_MARK_FUNCTION;
   cycle_ = cycle;
   time_ = time;
   dt_ = dt;
@@ -70,6 +71,7 @@ void ContactData::update(int cycle, double time, double& dt)
 
 FiniteElementDual ContactData::forces() const
 {
+  SMITH_MARK_FUNCTION;
   FiniteElementDual f(*reference_nodes_->ParFESpace(), "contact force");
   for (const auto& interaction : interactions_) {
     f += interaction.forces();
@@ -79,6 +81,7 @@ FiniteElementDual ContactData::forces() const
 
 mfem::HypreParVector ContactData::mergedPressures() const
 {
+  SMITH_MARK_FUNCTION;
   updateDofOffsets();
   mfem::HypreParVector merged_p(mesh_.GetComm(), global_pressure_dof_offsets_[global_pressure_dof_offsets_.Size() - 1],
                                 global_pressure_dof_offsets_.GetData());
@@ -96,6 +99,7 @@ mfem::HypreParVector ContactData::mergedPressures() const
 
 mfem::HypreParVector ContactData::mergedGaps(bool zero_inactive) const
 {
+  SMITH_MARK_FUNCTION;
   updateDofOffsets();
   mfem::HypreParVector merged_g(mesh_.GetComm(), global_pressure_dof_offsets_[global_pressure_dof_offsets_.Size() - 1],
                                 global_pressure_dof_offsets_.GetData());
@@ -118,6 +122,7 @@ mfem::HypreParVector ContactData::mergedGaps(bool zero_inactive) const
 
 std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
 {
+  SMITH_MARK_FUNCTION;
   updateDofOffsets();
   // this is the BlockOperator we are returning with the following blocks:
   //  | df_(contact)/dx  df_(contact)/dp |
@@ -247,6 +252,7 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
 
 void ContactData::residualFunction(const mfem::Vector& u_shape, const mfem::Vector& u, mfem::Vector& r)
 {
+  SMITH_MARK_FUNCTION;
   const int disp_size = reference_nodes_->ParFESpace()->GetTrueVSize();
 
   // u_const should not change in this method; const cast is to create vector views which are copied to Tribol
@@ -281,6 +287,7 @@ void ContactData::residualFunction(const mfem::Vector& u_shape, const mfem::Vect
 
 std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(std::unique_ptr<mfem::HypreParMatrix> orig_J) const
 {
+  SMITH_MARK_FUNCTION;
   auto J_contact = mergedJacobian();
   if (J_contact->IsZeroBlock(0, 0)) {
     J_contact->SetBlock(0, 0, orig_J.release());
@@ -294,6 +301,7 @@ std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(std::unique_p
 
 void ContactData::setPressures(const mfem::Vector& merged_pressures) const
 {
+  SMITH_MARK_FUNCTION;
   updateDofOffsets();
   for (size_t i{0}; i < interactions_.size(); ++i) {
     FiniteElementState p_interaction(interactions_[i].pressureSpace());
@@ -317,6 +325,7 @@ void ContactData::setPressures(const mfem::Vector& merged_pressures) const
 
 void ContactData::setDisplacements(const mfem::Vector& shape_u, const mfem::Vector& u)
 {
+  SMITH_MARK_FUNCTION;
   mfem::ParGridFunction prolonged_shape_disp{current_coords_};
   reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(u, current_coords_);
   reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(shape_u, prolonged_shape_disp);

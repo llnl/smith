@@ -125,6 +125,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   std::unique_ptr<mfem_ext::StdFunctionOperator> buildQuasistaticOperator() override
   {
     auto residual_fn = [this](const mfem::Vector& u, mfem::Vector& r) {
+      SMITH_MARK_FUNCTION;
       const mfem::Vector u_blk(const_cast<mfem::Vector&>(u), 0, displacement_.Size());
       const mfem::Vector res = (*residual_)(time_, BasePhysics::shapeDisplacement(), u_blk, acceleration_,
                                             *parameters_[parameter_indices].state...);
@@ -148,6 +149,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
           displacement_.space().TrueVSize() + contact_.numPressureDofs(), residual_fn,
           // gradient of residual function
           [this](const mfem::Vector& u) -> mfem::Operator& {
+            SMITH_MARK_FUNCTION;
             const mfem::Vector u_blk(const_cast<mfem::Vector&>(u), 0, displacement_.Size());
             auto [r, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(u_blk),
                                           acceleration_, *parameters_[parameter_indices].state...);
@@ -184,6 +186,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       // mfem::HypreParMatrix
       return std::make_unique<mfem_ext::StdFunctionOperator>(
           displacement_.space().TrueVSize(), residual_fn, [this](const mfem::Vector& u) -> mfem::Operator& {
+            SMITH_MARK_FUNCTION;
             auto [r, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(u), acceleration_,
                                           *parameters_[parameter_indices].state...);
 
