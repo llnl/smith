@@ -65,12 +65,16 @@ TPLs installed.
    controls this with the ``--prefix`` command line argument which is required.
 
 
+.. _host_config-label:
+
 Host-configs
 ------------
 
 Our Spack package recipe generates a file we call a host-config (``<config_dependent_name>.cmake``)
-at the root of Smith repository. This host-config defines all the required information for building
-Smith including paths to compilers, TPLs, Developer Tools, and machine specific options.
+at the root of Smith repository. CMake refers to this file as an
+`initial cache <https://cmake.org/cmake/help/book/mastering-cmake/chapter/CMake%20Cache.html#cmake-cache>`_.
+This host-config defines all the required information for building Smith including paths to compilers,
+TPLs, Developer Tools, and machine specific options.
 
 
 Cloning Smith
