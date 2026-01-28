@@ -115,7 +115,7 @@ to CMake. Here are some examples on how to run ``config-build.py``:
      - Use the Ninja generator instead of Make to build the project.
 
 
-Option 1: Configuring the build with CMake
+Option 2: Configuring the build with CMake
 ------------------------------------------
 
 Another option is to use CMake directly, this can also be useful if you configure VSCode
