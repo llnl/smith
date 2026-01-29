@@ -51,6 +51,7 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
     mfem::Array<int> dof_markers(pressure_space.GetVSize());
     dof_markers = -1;
     mfem::Array<int> surf2_markers(pressure_space.GetMesh()->attributes.Max());
+    surf2_markers = 0;
     for (auto attr : bdry_attr_surf2) {
       surf2_markers[attr - 1] = 1;
     }

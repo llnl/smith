@@ -194,7 +194,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("adiak+mpi", when="+adiak")
 
-    with when("+caliper")
+    with when("+caliper"):
         depends_on("caliper+mpi~papi")
         depends_on("caliper+adiak", when="+adiak")
 
