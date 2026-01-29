@@ -121,6 +121,19 @@ Option 2: Configuring the build with CMake
 Another option is to use CMake directly, this can also be useful if you configure VSCode
 to build Smith.
 
+Here are some examples on how to run CMake:
+
+.. code-block:: bash
+
+   # Just a host-config with build and install directories
+   $ cmake -C /path/to/host-config.cmake -B build -DCMAKE_INSTALL_PREFIX=/path/to/install
+
+   # host-config + debug build
+   $ cmake -C /path/to/host-config.cmake -DCMAKE_BUILD_TYPE=Debug 
+
+   # host-config + CMake options
+   $ cmake -C /path/to/host-config.cmake -DENABLE_WARNINGS_AS_ERRORS=OFF
+
 
 .. list-table:: CMake configuration options
    :header-rows: 1
