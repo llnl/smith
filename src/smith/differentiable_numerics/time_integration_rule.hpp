@@ -41,7 +41,9 @@ struct BackwardEulerFirstOrderTimeIntegrationRule {
 };
 
 /// Altenative name for Backward Euler which makes sense when restricting what are typically second order odes,
-/// for example transient solid mechanics, to the quasi-static approximation.  It happens that the implementation is identical to backward-Euler applied to first order systems as we want to be able to capture current velocity dependencies.
+/// for example transient solid mechanics, to the quasi-static approximation.  It happens that the implementation is
+/// identical to backward-Euler applied to first order systems as we want to be able to capture current velocity
+/// dependencies.
 using QuasiStaticFirstOrderTimeIntegrationRule = BackwardEulerFirstOrderTimeIntegrationRule;
 
 /// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
@@ -80,7 +82,6 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule {
     return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
   }
 };
-
 
 /// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
 /// When solving f(u, u_dot, u_dot_dot, t) = 0

@@ -181,15 +181,16 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   EXPECT_NEAR(0.0, u_err, 1e-14);
 }
 
-
-auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh) {
+auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh)
+{
   size_t num_checkpoints = 200;
   std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
       buildDifferentiableNonlinearSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   auto [physics, solid_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule(), num_checkpoints, physics_name, {"bulk", "shear"});
+          mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule(), num_checkpoints,
+          physics_name, {"bulk", "shear"});
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
   bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
@@ -232,7 +233,6 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   return std::make_tuple(physics, shape_disp, states, params);
 }
-
 
 TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
 {
@@ -317,7 +317,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 {
   SMITH_MARK_FUNCTION;
   std::string physics_name = "solid";
-  auto [physics, shape_disp, initial_states, params]  = createSolidMechanicsBasePhysics(physics_name, mesh);
+  auto [physics, shape_disp, initial_states, params] = createSolidMechanicsBasePhysics(physics_name, mesh);
 
   double qoi = integrateForward(physics, num_steps_, dt_);
   SLIC_INFO_ROOT(axom::fmt::format("{}", qoi));

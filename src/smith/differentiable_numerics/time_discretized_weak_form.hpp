@@ -88,8 +88,8 @@ class SecondOrderTimeDiscretizedWeakForm;
 
 /// @brief Useful for time-discretized PDEs of second order (involves for first and second derivatives of time).  Users
 /// write q-functions in terns of u, u_dot, u_dot_dot, and the weak form is transformed by the
-/// ImplicitNewmarkSecondOrderTimeIntegrationRule so that is it globally a function of u, u_old, u_dot_old, u_dot_dot_old, with u as
-/// the distinct unknown for the time discretized system.
+/// ImplicitNewmarkSecondOrderTimeIntegrationRule so that is it globally a function of u, u_old, u_dot_old,
+/// u_dot_dot_old, with u as the distinct unknown for the time discretized system.
 /// @tparam spatial_dim Spatial dimension, 2 or 3.
 /// @tparam OutputSpace The space corresponding to the output residual for the weak form (test-space).
 /// @tparam TrialInputSpace The space corresponding to the predicted solution u, i.e., the trial solution, the unique

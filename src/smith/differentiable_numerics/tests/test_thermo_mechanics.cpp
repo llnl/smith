@@ -240,9 +240,21 @@ struct FieldStore {
 
   size_t getFieldIndex(const std::string& field_name) const { return to_fields_index_.at(field_name); }
 
-  const FieldState& getField(size_t field_index) const { return fields_[field_index]; }
+  const FieldState& getField(const std::string& field_name) const
+  {
+    size_t field_index = getFieldIndex(field_name);
+    return fields_[field_index];
+  }
+
+  void setField(const std::string& field_name, FieldState updated_field)
+  {
+    size_t field_index = getFieldIndex(field_name);
+    fields_[field_index] = updated_field;
+  }
 
   const FieldState& getShapeDisp() const { return shape_disp_[0]; }
+
+  const std::vector<FieldState>& getAllFields() const { return fields_; }
 
   std::vector<FieldState> getFields(const std::string& weak_form_name) const
   {
@@ -283,9 +295,8 @@ void createSpaces(const std::string& weak_form_name, FieldStore& field_store,
                   std::vector<const mfem::ParFiniteElementSpace*>& spaces, size_t arg_num, FirstType type,
                   Types... types)
 {
-  const size_t test_index = field_store.getFieldIndex(type.name);
   SLIC_ERROR_IF(spaces.size() != arg_num, "Error creating spaces recursively");
-  spaces.push_back(&field_store.getField(test_index).get()->space());
+  spaces.push_back(&field_store.getField(type.name).get()->space());
   field_store.addWeakFormArg(weak_form_name, type.name, arg_num);
   if (type.unknown_index >= 0) {
     field_store.addWeakFormUnknownArg(weak_form_name, type.name, arg_num);
@@ -299,8 +310,7 @@ template <int spatial_dim, typename TestSpaceType, typename... InputSpaceTypes>
 auto createWeakForm(std::string name, FieldType<TestSpaceType> test_type, FieldStore& field_store,
                     FieldType<InputSpaceTypes>... field_types)
 {
-  const size_t test_index = field_store.getFieldIndex(test_type.name);
-  const mfem::ParFiniteElementSpace& test_space = field_store.getField(test_index).get()->space();
+  const mfem::ParFiniteElementSpace& test_space = field_store.getField(test_type.name).get()->space();
   std::vector<const mfem::ParFiniteElementSpace*> input_spaces;
   createSpaces(name, field_store, input_spaces, 0, field_types...);
   return std::make_shared<TimeDiscretizedWeakForm<spatial_dim, TestSpaceType, Parameters<InputSpaceTypes...>>>(
@@ -374,17 +384,16 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, field_store, disp_type, disp_old_type,
                                              temperature_type, temperature_old_type);
 
-  solid_weak_form->addBodyIntegral(
-      mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
-                                   auto temperature, auto temperature_old) {
-        auto u = disp_time_rule.value(t_info, disp, disp_old);
-        auto v = disp_time_rule.dot(t_info, disp, disp_old);
-        auto T = temperature_time_rule.value(t_info, temperature, temperature_old);
-        GreenSaintVenantThermoelasticMaterial::State state;
-        auto [pk, C_v, s0, q0] =
-            material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-        return smith::tuple{smith::zero{}, pk};
-      });
+  solid_weak_form->addBodyIntegral(mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
+                                                                auto temperature, auto temperature_old) {
+    auto u = disp_time_rule.value(t_info, disp, disp_old);
+    auto v = disp_time_rule.dot(t_info, disp, disp_old);
+    auto T = temperature_time_rule.value(t_info, temperature, temperature_old);
+    GreenSaintVenantThermoelasticMaterial::State state;
+    auto [pk, C_v, s0, q0] =
+        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
+    return smith::tuple{smith::zero{}, pk};
+  });
 
   auto thermal_weak_form = createWeakForm<dim>("thermal_flux", temperature_type, field_store, temperature_type,
                                                temperature_old_type, disp_type, disp_old_type);
@@ -408,10 +417,9 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   std::vector<WeakForm*> weak_forms{solid_weak_form.get(), thermal_weak_form.get()};
   std::vector<FieldState> disp_temp = solve(weak_forms, field_store, d_nonlinear_solver.get(), TimeInfo(0.0, 1.0));
 
-  
+  // auto states = field_store.getFields();
 
   EXPECT_EQ(0, 0);
-
 }
 
 }  // namespace smith
