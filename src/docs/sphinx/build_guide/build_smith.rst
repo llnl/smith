@@ -9,7 +9,7 @@
 Building Smith with CMake
 =========================
 
-Smith uses a CMake build system as its build system. Due to our amount of
+Smith uses CMake as its build system. Due to our amount of
 Third-party Libraries (TPLs) and configuration options, we recommend
 utilizing a :ref:`host-config <host_config-label>` to encapsulate most
 of the build information necessary to build Smith. 
