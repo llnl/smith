@@ -66,7 +66,7 @@ your TPLs.
           prefix: /path/to/devtools_install/cppcheck-2.9
 
 
-1. Add a Spack upstream to the ``uberenv`` commands below with this command line option ``--upstream=../path/to/devtools_install``.
+2. Add a Spack upstream to the ``uberenv`` commands below with this command line option ``--upstream=../path/to/devtools_install``.
 
 
 Building TPLs
