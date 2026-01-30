@@ -237,10 +237,6 @@ Once the build has been configured, Smith can be built with one of the following
    $ cmake --build build -- -j16
 
 
-.. note::
-  On LC machines, it is good practice to do the build step in parallel on a compute node.
-  Here is an example command: ``srun -ppdebug -N1 --exclusive make -j16``
-
 We provide the following useful build targets that can be run from the build directory:
 
 * ``test``: Runs our unit tests

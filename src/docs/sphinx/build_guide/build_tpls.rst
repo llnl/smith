@@ -161,7 +161,6 @@ The second will be output from Spack that ends in this:
 .. code-block:: bash
 
     ==> smith: Executing phase: 'initconfig'
-    ==> Updating view at /my/prefix/spack_env/.spack-env/view
 
 --------------
 Building Smith

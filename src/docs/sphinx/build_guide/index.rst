@@ -16,6 +16,11 @@ how to build Smith from source. The process consists of the following high-level
 #. Build Third-party Libraries (TPLs) using Spack and Uberenv to provide a consistent dependency stack
 #. Build Smith itself using CMake once all dependencies are in place
 
+.. note::
+  On LC machines, it is good practice to run intensive build commands in parallel on a compute node.
+  Here is an example SLURM command, ``srun -ppdebug -N1 --exclusive make -j16`` and an example
+  Flux command, ``flux run -qpdebug -N1 --exclusive make -j16``.
+
 .. tip::
 
    If you are on a LC machine and are in the ``smithdev`` LC linux group, we have a variety of pre-installed
