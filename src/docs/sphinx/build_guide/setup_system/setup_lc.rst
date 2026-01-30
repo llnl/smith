@@ -103,7 +103,7 @@ For example, we installed lua in the above ``apt`` commands. To do so, add the f
 
 Lines starting with ``[e]`` are external packages that Spack recognizes are on the system and will not rebuild them.
 By adding Lua to the Spack environment file, Spack will no longer build Lua and any of its dependencies that are
-needed by anything else. In this case, ``lua``, ``readline``, and ``unzip`` will not be built.
+needed by anything else. In this example adding an external ``lua``, removes the need to build ``readline`` and ``unzip``.
 
 .. important::
 
