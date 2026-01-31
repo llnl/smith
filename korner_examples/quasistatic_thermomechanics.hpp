@@ -93,7 +93,7 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
 
     using ThermalWeakFormT =
         SecondOrderTimeDiscretizedWeakForm<spatial_dim, ScalarSpace,
-                                           Parameters<ScalarSpace, ScalarSpace, ScalarSpace, VectorSpace, VectorSpace,
+                                           Parameters<ScalarSpace, ScalarSpace, ScalarSpace, ScalarSpace, VectorSpace,
                                                       VectorSpace, VectorSpace, ParamSpaces...>>;
 
     auto thermal_input_spaces =
