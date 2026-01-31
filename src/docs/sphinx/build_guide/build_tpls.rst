@@ -18,7 +18,7 @@ Building Developer Tools
 
 .. note::
   This section can be skipped if you are not developing Smith and contributing back to our repository. It
-  can also be skipped if you are apart of the ``smithdev`` LC Linux group, as it will be automatically
+  can also be skipped if you are a part of the ``smithdev`` LC Linux group, as it will be automatically
   added by our Spack Environment.
 
 Smith developers utilize some industry standard development tools in their everyday work. These tools
