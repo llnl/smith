@@ -52,7 +52,7 @@ how to build Smith from source. The process consists of the following high-level
 Spack and Uberenv
 -----------------
 
-Smith uses `Spack <https://github.com/spack/spack>`_ to build it's TPLs.
+Smith uses `Spack <https://github.com/spack/spack>`_ to build its TPLs.
 This has been encapsulated using `Uberenv <https://github.com/LLNL/uberenv>`_.
 Uberenv helps by doing the following:
 
