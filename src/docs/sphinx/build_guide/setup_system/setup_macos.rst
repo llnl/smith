@@ -3,102 +3,16 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
-.. _tpl_builds-label:
+.. _setup_macos-label:
 
-===============================
-Third-party Library (TPL) Build
-===============================
-
------------------
-Spack and Uberenv
------------------
-
-Smith uses `Spack <https://github.com/spack/spack>`_ to build it's TPLs.
-This has been encapsulated using `Uberenv <https://github.com/LLNL/uberenv>`_.
-Uberenv helps by doing the following:
-
-* Pulls a blessed version of Spack locally
-* If you are on a known operating system (like TOSS4), we have defined Spack configuration files
-  to keep Spack from building the world
-* Installs our Spack packages into the local Spack Environment
-* Simplifies whole dependency build into one command
-
-Uberenv will create a directory containing a Spack instance with the required Smith
-TPLs installed.
-
-.. note::
-   This directory **must not** be within the Smith repo - the example below
-   controls this with the ``--prefix`` command line argument which is required.
-
-It also generates a host-config file (``<config_dependent_name>.cmake``)
-at the root of Smith repository. This host-config defines all the required information for building
-Smith.
-
-------------------
-Basic System Setup
-------------------
-
-We recommend installing some basic system-level development packages to minimize the
-amount of packages that Spack will build.
-
-The following page provides basic guidance on the following platforms:
-
- * Ubuntu 24 LTS
- * macOS
- * Livermore Computing (LC)
-
-.. note::
-
-   Smith uses the LLVM plugin `Enzyme <https://github.com/EnzymeAD/Enzyme>`_ to perform
-   automatic differentiation. Due to this you have to compile with an LLVM-based compiler.
-   We recommend ``clang``.
-
-Ubuntu 24 LTS
-^^^^^^^^^^^^^
-
-Install clang version 19 and make it the default compiler:
-
-.. code-block:: bash
-
-    sudo apt install -y --no-install-recommends clang-19 libclang-19-dev clang-format-19 llvm-19 llvm-19-dev libzstd-dev libomp-19-dev gfortran-13
-    # Set clang-19 as the default clang
-    sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-19 101 \
-    && sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 101 \
-    && sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-19 101
-
-Install required build packages to minimize what Spack will build:
-
-.. code-block:: bash
-
-    sudo apt install -y --no-install-recommends build-essential bzip2 cmake libopenblas-dev \
-    lua5.2 liblua5.2-dev openmpi-bin libopenmpi-dev unzip
-
-Optionally you can install packages to generate documentation:
-
-.. code-block:: bash
-
-    sudo apt install -y --no-install-recommends graphviz python3-sphinx texlive-full doxygen
-
-.. note::
-
-    The documentation packages require a lot of disk space.
-
-.. note::
-
-    We provide a basic Ubuntu 24 Spack environment file in ``scripts/spack/configs/linux_ubuntu_24`` that
-    may work for most people. If you want to try using that, skip to :ref:`building_tpls-label`
-    below and use this command line option instead ``--spack-env-file=scripts/spack/configs/linux_ubuntu_24/spack.yaml``
-
-macOS
-^^^^^
-
-.. warning::
-   These instructions are in development, but have been tested for M2 MacBooks.
+=====================
+Setup macOS TPL Build
+=====================
 
 .. note::
    View an example host-config for MacOS in ``host-configs/other/firion-macos_sonoma_aarch64-<compiler>.cmake``.
 
-Homebrew is recommended to install base dependencies due to it's stability. Relying on pure Spack historically leads to more failed builds.
+Homebrew is recommended to install base dependencies. Relying on pure Spack historically leads to more failed builds.
 
 To start, install the following packages using Homebrew.
 
@@ -130,16 +44,11 @@ This is also useful for a few additional packages:
 .. note::
 
     We provide a basic MacOS Spack environment file that
-    may work for most people. If you want to try using that, skip to :ref:`building_tpls-label`
+    may work for most people. If you want to try using that, skip to :ref:`build_tpls-label`
     below and use this command line option instead ``--spack-env-file=scripts/spack/configs/darwin/spack.yaml``. You will likely
     need to update the versions of packages to match the versions installed by Homebrew. The versions for all installed packages can be listed via
     the command ``brew list --versions``.
 
-.. note::
-    The invocation of ``uberenv.py`` is slightly modified from the standard instructions below
-    in order to force the use of the Homebrew-installed MPI and compilers. The spec command line option
-    should be ``--spec="^openmpi@5 %clang_19"`` and to build with devtools and profiling enabled,
-    change the spec to ``"+devtools+profiling ^openmpi@5 %clang_19"``
 
 Given that Homebrew can only install CMake version 4.0 and it breaks some TPL builds (e.g. metis), its recommended to install an older version of CMake
 manually. You can do this by downloading from `CMake's official archive <https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg>`_. After installing
@@ -192,30 +101,6 @@ Versions and prefixes may vary.
       - spec: py-sphinx@7.4.7
         prefix: /path/to/venv
 
-Livermore Computing (LC)
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-We provide Spack Environment files for each of LC's systems:
-
- * TOSS4: ``scripts/spack/configs/toss_4_x86_64_ib/spack.yaml``
- * BlueOS: ``scripts/spack/configs/blueos_3_ppc64le_p9/spack.yaml``
- * TOSS4 Cray: ``scripts/spack/configs/toss_4_x86_64_ib_cray/spack.yaml``
-
-Unless otherwise specified, Spack will default to a compiler.  This is generally not a good idea when
-developing large codes. To specify which compiler to use add the compiler specification to the ``--spec`` Uberenv
-command line option. We provide recommended Spack specs for LC in ``scripts/spack/specs.json``.
-
-You can use these directly in the ``uberenv.py`` command in the :ref:`building_tpls-label`
-section by substituting the values in these two command line options: ``--spack-env-file=ubuntu24.yaml --spec="%clang_19"``.
-
-.. note::
-  On LC machines, it is good practice to do the build step in parallel on a compute node.
-  You should add the following to the start of your commands: ``salloc -ppdebug -N1 --exclusive python3 scripts/uberenv/uberenv.py``
-
-.. note::
-   If you do not have access to the ``smithdev`` linux group. You cannot currently use our prebuilt Dev Tools
-   referenced in the Spack Environment files listed above. You will be required to turn off the devtool variant
-   on your Spack spec by adding ``~devtools`` to your uberenv or Spack spec.
 
 -------------------------------
 Generate Spack Environment File
@@ -256,14 +141,15 @@ If you want to use Clang as your compiler, alter the following section in that f
 
 
 To speed up the build, you can add packages that exist on your system to the same Spack environment file. For example,
-we installed lua in the above ``apt`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
+you can install lua via homebrew with this command, ``brew install lua``. Then you can add it as a Spack external
+in the ``packages:`` section of the Spack Environment yaml file:
 
 .. code-block:: yaml
 
     lua:
       externals:
       - spec: lua@5.2
-        prefix: /usr
+        prefix: /opt/homebrew
       buildable: false
 
 The above spack command will output a concretization that looks like the following:
@@ -325,57 +211,9 @@ by another package, so you can also add it with this yaml section:
     Uberenv will override existing ``spack.yaml`` files in the current working directory. Now that we have made modifications,
     you should rename/move the file so the changes are not lost and adjust the `uberenv.py` commands to reflect the new file name.
 
-
-.. _building_tpls-label:
-
 --------------------------------------
 Building Smith's Third-party Libraries
 --------------------------------------
 
-It is now time to build Smith's Third-party Libraries (TPLs). Run the command with the compiler
-that you want to develop with:
-
-.. code-block:: bash
-
-    scripts/uberenv/uberenv.py --prefix=<path/outside/repository> --spack-env-file=<path/to/spack.yaml> --spec="%clang_19"
-
-Some helpful uberenv options include :
-
-* ``--spec=" build_type=Debug"`` (build core TPLs, such as MFEM and Hypre, with debug symbols)
-* ``--spec=+profiling`` (build the Adiak and Caliper libraries)
-* ``--spec=+devtools`` (also build the devtools with one command)
-* ``--spec=%clang_19`` (build with a specific compiler as defined in the ``spack.yaml`` file)
-* ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
-* ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Smith repository
-
-The modifiers to the Spack specification ``spec`` can be chained together, e.g. ``--spec='+devtools build_type=Debug %clang_19'``.
-
-
-If successful, you will see two things. The first is what we call a host-config. It is all the CMake
-inputs you need to build Smith. This file will be a new CMake file in the current directory with your machine
-name, system type, and compiler, for example ``mycomputerlinux-ubuntu24.04-skylake-clang@19.1.1.cmake``.
-The second will be output from Spack that ends in this:
-
-.. code-block:: bash
-
-    ==> smith: Executing phase: 'initconfig'
-    ==> Updating view at /my/prefix/spack_env/.spack-env/view
-
---------------
-Building Smith
---------------
-
-Finally, with the TPL's built and the host-config file, you can build Smith with the following
-command:
-
-.. code-block:: bash
-
-    ./config-build.py -hc <host-config file>
-    cd <created build directory>
-    make -j
-    make -j8 test
-
-For more detail instructions on how to build Smith, see :ref:`build-label`.
-
-
+It is now time to build Smith's Third-party Libraries (TPLs). For detailed instructions see :ref:`build_tpls-label`.
 
