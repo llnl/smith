@@ -49,11 +49,6 @@ This is also useful for a few additional packages:
     need to update the versions of packages to match the versions installed by Homebrew. The versions for all installed packages can be listed via
     the command ``brew list --versions``.
 
-.. note::
-    The invocation of ``uberenv.py`` is slightly modified from the standard instructions below
-    in order to force the use of the Homebrew-installed MPI and compilers. The spec command line option
-    should be ``--spec="^openmpi@5 %clang_19"`` and to build with devtools and profiling enabled,
-    change the spec to ``"+devtools+profiling ^openmpi@5 %clang_19"``
 
 Given that Homebrew can only install CMake version 4.0 and it breaks some TPL builds (e.g. metis), its recommended to install an older version of CMake
 manually. You can do this by downloading from `CMake's official archive <https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg>`_. After installing
@@ -146,14 +141,15 @@ If you want to use Clang as your compiler, alter the following section in that f
 
 
 To speed up the build, you can add packages that exist on your system to the same Spack environment file. For example,
-we installed lua in the above ``apt`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
+you can install lua via homebrew with this command, ``brew install lua``. Then you can add it as a Spack external
+in the ``packages:`` section of the Spack Environment yaml file:
 
 .. code-block:: yaml
 
     lua:
       externals:
       - spec: lua@5.2
-        prefix: /usr
+        prefix: /opt/homebrew
       buildable: false
 
 The above spack command will output a concretization that looks like the following:

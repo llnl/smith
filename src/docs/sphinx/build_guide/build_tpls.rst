@@ -125,6 +125,12 @@ The rest of Uberenv's command line options can be seen `here <https://uberenv.re
    you cannot use our prebuilt Developer Tools referenced in the Spack Environment files. You will need to turn off the
    devtool variant by adding ``~devtools`` to your Spack spec via the Spack or uberenv command line.
 
+.. note::
+    If you are building on macOS, the invocation of ``uberenv.py`` may need to be slightly modified from the
+    standard instructions below in order to force the use of the Homebrew-installed MPI and compilers.
+    The spec command line option should be ``--spec="^openmpi@5 %clang_19"`` and to build with devtools and profiling enabled,
+    change the spec to ``"+devtools+profiling ^openmpi@5 %clang_19"``.
+
 
 **TPL Spack variants:**
 

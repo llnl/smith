@@ -89,8 +89,9 @@ The above spack command will output a concretization that looks like the followi
      -   xts3eqq          ^fmt@11.0.2 cflags=-fPIC cxxflags=-fPIC fflags=-fPIC ~ipo+pic~shared build_system=cmake build_type=Release cxxstd=11 generator=make arch=linux-ubuntu24.04-skylake %clang@19.1.1
 
 
-To speed up the build, you can add packages that exist on your system and were not detected by Spack to the same Spack environment file.
-For example, we installed lua in the above ``apt`` commands. To do so, add the following lines under the ``packages:`` section of the yaml:
+To speed up the build, you can add packages that exist on your system and were not detected by Spack to the same
+Spack environment file. For example, there is a lua installed in ``/usr/lib64`` but if it was not found by Spack,
+you could add the following lines under the ``packages:`` section of the yaml:
 
 .. code-block:: yaml
 
