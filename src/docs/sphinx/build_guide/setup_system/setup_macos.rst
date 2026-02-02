@@ -12,7 +12,7 @@ Setup macOS TPL Build
 .. note::
    View an example host-config for MacOS in ``host-configs/other/firion-macos_sonoma_aarch64-<compiler>.cmake``.
 
-Homebrew is recommended to install base dependencies due to it's stability. Relying on pure Spack historically leads to more failed builds.
+Homebrew is recommended to install base dependencies. Relying on pure Spack historically leads to more failed builds.
 
 To start, install the following packages using Homebrew.
 
