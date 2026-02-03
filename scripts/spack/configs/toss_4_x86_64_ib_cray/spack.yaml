@@ -12,6 +12,9 @@ spack:
   # Regular TPLs do not need views
   view: false
 
+  concretizer:
+    compiler_mixing: false
+
   include:
   - ../defaults.yaml
   - ../versions.yaml
