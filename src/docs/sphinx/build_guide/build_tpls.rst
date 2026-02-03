@@ -80,7 +80,7 @@ Run the command with the compiler that you want to develop with:
 
 Some helpful uberenv options include:
 
-* ``--spec="+profiling build_type=Debug %clang_19"`` (Spack spec, ``smith@develop`` automatically prepended)
+* ``--spec="+caliper+adiak build_type=Debug %clang_19"`` (Spack spec, ``smith@develop`` automatically prepended)
 * ``--spack-env-file=<Path to Spack environment file>`` (use specific Spack environment configuration file)
 * ``--prefix=<Path>`` (required, build and install the dependencies in a particular location) - this *must be outside* of your local Smith repository
 
@@ -129,7 +129,7 @@ The rest of Uberenv's command line options can be seen `here <https://uberenv.re
     If you are building on macOS, the invocation of ``uberenv.py`` may need to be slightly modified from the
     standard instructions below in order to force the use of the Homebrew-installed MPI and compilers.
     The spec command line option should be ``--spec="^openmpi@5 %clang_19"`` and to build with devtools and profiling enabled,
-    change the spec to ``"+devtools+profiling ^openmpi@5 %clang_19"``.
+    change the spec to ``"+devtools+caliper+adiak ^openmpi@5 %clang_19"``.
 
 
 **TPL Spack variants:**
