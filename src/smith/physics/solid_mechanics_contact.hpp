@@ -395,7 +395,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
     // By default, use a homogeneous essential boundary condition
     mfem::HypreParVector adjoint_essential(displacement_adjoint_load_);
-    adjoint_essential = 0.0;
+    adjoint_essential = SolidMechanicsBase::reactions_adjoint_bcs_;
 
     auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
                                   acceleration_, *parameters_[parameter_indices].state...);
