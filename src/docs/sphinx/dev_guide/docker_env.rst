@@ -34,7 +34,7 @@ If you haven't used Docker before, it is recommended that you check out the
    The ``-v`` option to ``docker run`` mounts a `Docker volume <https://docs.docker.com/storage/volumes/>`_ into the container.
    This means that part of your filesystem (in this case, your copy of the Smith repo) will be accessible from the container.
 
-6. Follow the build instructions detailed in the :ref:`quickstart guide <build-label>`, using the host-config in ``host-configs/docker`` that
+6. Follow the build instructions detailed in :ref:`build_smith-label`, using the host-config in ``host-configs/docker`` that
    corresponds to the compiler you've selected.  These commands should be run using the terminal you opened in the previous step. Due to issues
    with the docker bind-mount permissions, it is suggested that you set the build and install directories to be outside of the repository.
 

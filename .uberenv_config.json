@@ -4,7 +4,7 @@
 "package_final_phase" : "initconfig",
 "package_source_dir" : "../..",
 "spack_url": "https://github.com/spack/spack.git",
-"spack_commit": "0154734bd44cb9230fcadecf2e6567c9d22ce5ab",
+"spack_commit": "53aab9f6b32619964bb4c8f03793e5469492bcea",
 "spack_packages_url": "https://github.com/spack/spack-packages.git",
 "spack_packages_commit": "88ce9cc7d9f1cad16375ef90825cb1d3098eeb73",
 "spack_configs_path": "scripts/spack/configs",
