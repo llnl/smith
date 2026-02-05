@@ -75,10 +75,10 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
 /// systems of equations
 class SecondOrderTimeDiscretizedWeakForms {
  public:
-  std::shared_ptr<WeakForm> time_discretized_weak_form;  ///< this publicaly available abstract weak form is a
+  std::shared_ptr<WeakForm> time_discretized_weak_form;  ///< this publicly available abstract weak form is a
                                                          ///< functions of the current u, u_old, v_old, and a_old,
   std::shared_ptr<WeakForm>
-      final_reaction_weak_form;  ///< this publicaly available abstract weak form is structly a
+      final_reaction_weak_form;  ///< this publicly available abstract weak form is structly a
                                  ///< function of the current u, v, and a (no time discretization)
                                  ///< its main purpose is to compute reaction forces after the solve is completed
 };
