@@ -60,8 +60,7 @@ void computeStepAdjointLoad(const FiniteElementState& displacement, FiniteElemen
   d_qoi_d_displacement.Add(1.0, displacement);
 }
 
-FiniteElementState createReactionDirection(const BasePhysics& solid_solver, int direction,
-                                           std::shared_ptr<Mesh> mesh)
+FiniteElementState createReactionDirection(const BasePhysics& solid_solver, int direction, std::shared_ptr<Mesh> mesh)
 {
   const FiniteElementDual& reactions = solid_solver.dual("reactions");
 
@@ -82,7 +81,7 @@ double computeContactReactionQoi(BasePhysics& solid_solver, std::shared_ptr<Mesh
 {
   solid_solver.resetStates();
   solid_solver.advanceTimestep(1.0);
-  
+
   const FiniteElementDual& reactions = solid_solver.dual("reactions");
   auto reactionDirections = createReactionDirection(solid_solver, 1, mesh);
 
@@ -94,12 +93,12 @@ auto computeContactReactionQoiSensitivities(BasePhysics& solid_solver, std::shar
   EXPECT_EQ(0, solid_solver.cycle());
 
   double qoi = computeContactReactionQoi(solid_solver, mesh);
-  
+
   // Verify nonzero reaction forces
   EXPECT_NE(qoi, 0.0);
 
   FiniteElementDual shape_sensitivity(solid_solver.shapeDisplacement().space(), "shape sensitivity");
-  
+
   auto reaction_adjoint_load = createReactionDirection(solid_solver, 1, mesh);
 
   EXPECT_EQ(1, solid_solver.cycle());
@@ -112,7 +111,8 @@ auto computeContactReactionQoiSensitivities(BasePhysics& solid_solver, std::shar
 }
 
 double computeContactReactionQoiAdjustingShape(SolidMechanics<p, dim>& solid_solver,
-                                              const FiniteElementState& shape_derivative_direction, double pertubation, std::shared_ptr<Mesh> mesh)
+                                               const FiniteElementState& shape_derivative_direction, double pertubation,
+                                               std::shared_ptr<Mesh> mesh)
 {
   FiniteElementState shape_disp(shape_derivative_direction.space(), "input_shape_displacement");
 
