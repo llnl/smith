@@ -89,10 +89,12 @@ void BlockTriangularPreconditioner::LowerSweep(const mfem::Vector &in,
 
     // Subtract sum_{j < i} A_ij x_j
     for (int j = 0; j < i; j++)
-    {
+      {
+      if (block_jacobian_->IsZeroBlock(i, j))
+      {
+        continue; // no coupling
+      }
       const mfem::Operator &A_ij = block_jacobian_->GetBlock(i, j);
-
-      // Is there a way to detect if coupling is zero?
 
       mfem::Vector tmp(rhs_i.Size());
       const mfem::Vector &xj = x.GetBlock(j);
@@ -132,9 +134,12 @@ void BlockTriangularPreconditioner::UpperSweep(const mfem::Vector &in,
     // Subtract sum_{j > i} A_ij x_j
     for (int j = i + 1; j < nblocks_; j++)
     {
+      if (block_jacobian_->IsZeroBlock(i, j))
+      {
+        continue; // no coupling
+      }
       const mfem::Operator &A_ij = block_jacobian_->GetBlock(i, j);
 
-      // Is there a way to detect if coupling is zero?
       mfem::Vector tmp(rhs_i.Size());
       const mfem::Vector &xj = x.GetBlock(j);
 

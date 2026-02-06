@@ -10,6 +10,7 @@ set(numerics_serial_test_sources
     equationsolver.cpp
     operator.cpp
     odes.cpp
+    test_block_preconditioner.cpp
     )
 
 smith_add_tests( SOURCES       ${numerics_serial_test_sources}

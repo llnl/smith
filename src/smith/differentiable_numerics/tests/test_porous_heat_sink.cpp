@@ -40,8 +40,8 @@ struct MeshFixture : public testing::Test {
     smith::StateManager::initialize(datastore, "porous_heat");
 
     MPI_Barrier(MPI_COMM_WORLD);
-    int serial_refinement   = 6;
-    int parallel_refinement = 2;
+    int serial_refinement   = 0;
+    int parallel_refinement = 0;
 
     std::string filename = SMITH_REPO_DIR "/data/meshes/square_attribute.mesh";
 
@@ -132,10 +132,6 @@ TEST_F(MeshFixture,B)
       if (x[0] >= 4.0 / 16.0 && x[0] <= 7.0 / 16.0 && x[1] >= 5.0 / 16.0) return 1.0;
       else if (x[0] >= 14.0 / 16.0 && x[1] >= 5.0 / 16.0) return 1.0;
       else if (x[1] >= 13.0 / 16.0) return 1.0;
-
-      //else if (x[0] <= 2.0 / 16.0 && x[1] <= 11.0 / 16.0) return 1.0;
-      //else if (x[0] >= 9.0 / 16.0 && x[0] <= 12.0 / 16.0 && x[1] <= 11.0 / 16.0) return 1.0;
-      //else if (x[1] <= 3.0 / 16.0) return 1.0;
 
       return 1e-8;
     };
