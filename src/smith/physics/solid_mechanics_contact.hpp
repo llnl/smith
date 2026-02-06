@@ -393,10 +393,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     SLIC_ERROR_ROOT_IF(contact_.haveLagrangeMultipliers(),
                        "Lagrange multiplier contact does not currently support sensitivities/adjoints.");
 
-    // By default, use a homogeneous essential boundary condition
-    mfem::HypreParVector adjoint_essential(displacement_adjoint_load_);
-    adjoint_essential = SolidMechanicsBase::reactions_adjoint_bcs_;
-
     auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
                                   acceleration_, *parameters_[parameter_indices].state...);
 
@@ -406,7 +402,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     auto J_T = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
 
     for (const auto& bc : bcs_.essentials()) {
-      bc.apply(*J_T, displacement_adjoint_load_, adjoint_essential);
+      bc.apply(*J_T, displacement_adjoint_load_, reactions_adjoint_bcs_);
     }
 
     auto& lin_solver = nonlin_solver_->linearSolver();
@@ -450,6 +446,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   using SolidMechanicsBase::J_;
   using SolidMechanicsBase::J_e_;
   using SolidMechanicsBase::nonlin_solver_;
+  using SolidMechanicsBase::reactions_adjoint_bcs_;
   using SolidMechanicsBase::residual_;
   using SolidMechanicsBase::residual_with_bcs_;
   using SolidMechanicsBase::shape_displacement_dual_;
