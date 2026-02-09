@@ -13,6 +13,7 @@ set(differentiable_numerics_sources
     nonlinear_solve.cpp
     evaluate_objective.cpp
     dirichlet_boundary_conditions.cpp
+    multiphysics_time_integrator.cpp
     )
 
 set(differentiable_numerics_headers
@@ -34,6 +35,7 @@ set(differentiable_numerics_headers
     differentiable_solid_mechanics.hpp
     paraview_writer.hpp
     differentiable_test_utils.hpp
+    multiphysics_time_integrator.hpp
     )
 
 set(differentiable_numerics_depends
