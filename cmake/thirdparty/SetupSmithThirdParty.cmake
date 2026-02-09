@@ -613,8 +613,17 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/tribol")
         endif()
 
+        # User enabled tribol profiling, briefly restore CALIPER_DIR
+        if(TRIBOL_ENABLE_PROFILING)
+            set(CALIPER_DIR ${_caliper_dir} CACHE STRING "" FORCE)
+        endif()
+
         add_subdirectory(${tribol_repo_dir}  ${CMAKE_BINARY_DIR}/tribol)
         
+        if(TRIBOL_ENABLE_PROFILING)
+            unset(CALIPER_DIR CACHE)
+        endif()
+
         target_include_directories(redecomp PUBLIC
             $<BUILD_INTERFACE:${tribol_repo_dir}/src>
         )
@@ -709,7 +718,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     if(SMITH_ENABLE_PROFILING AND NOT ADIAK_DIR)
         message(FATAL_ERROR "SMITH_ENABLE_PROFILING cannot be ON without ADIAK_DIR defined. Either specify a host \
-                             config with ADIAK_DIR, or rebuild Smith TPLs with +profiling variant.")
+                             config with ADIAK_DIR, or rebuild Smith TPLs with +adiak variant.")
     endif()
 
     if(ADIAK_DIR AND SMITH_ENABLE_PROFILING)
@@ -731,7 +740,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     if(SMITH_ENABLE_PROFILING AND NOT CALIPER_DIR)
         message(FATAL_ERROR "SMITH_ENABLE_PROFILING cannot be ON without CALIPER_DIR defined. Either specify a host \
-                             config with CALIPER_DIR, or rebuild Smith TPLs with +profiling variant.")
+                             config with CALIPER_DIR, or rebuild Smith TPLs with +caliper variant.")
     endif()
 
     if(CALIPER_DIR AND SMITH_ENABLE_PROFILING)
