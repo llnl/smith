@@ -1653,10 +1653,10 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       // at time_ would give ~zero for unconstrained nodes.
       auto r = (*residual_)(time_ + dt, shapeDisplacement(), displacement_, acceleration_,
                             *parameters_[parameter_indices].state...);
-      // auto r_previous = (*residual_)(time_, shapeDisplacement(), displacement_, acceleration_,
-      //                                *parameters_[parameter_indices].state...);
+      auto r_previous = (*residual_)(time_, shapeDisplacement(), displacement_, acceleration_,
+                                     *parameters_[parameter_indices].state...);
 
-      // r -= r_previous;
+      r -= r_previous;
 
       // use the most recently evaluated Jacobian
       auto [_, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(displacement_), acceleration_,
