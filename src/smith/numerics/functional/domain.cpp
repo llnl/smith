@@ -731,24 +731,18 @@ static Domain domain_of_interior_boundary_elements(const mesh_t& mesh,
       case mfem::Geometry::SEGMENT:
         if (add) {
           output.addElement(edge_id, f, geom);
-          //output.edge_ids_.push_back(edge_id++);
-          //output.mfem_edge_ids_.push_back(f);
         }
         edge_id++;
         break;
       case mfem::Geometry::TRIANGLE:
         if (add) {
           output.addElement(tri_id, f, geom);
-          //output.edge_ids_.push_back(edge_id++);
-          //output.mfem_edge_ids_.push_back(f);
         }
         tri_id++;
         break;
       case mfem::Geometry::SQUARE:
         if (add) {
           output.addElement(quad_id, f, geom);
-          //output.edge_ids_.push_back(edge_id++);
-          //output.mfem_edge_ids_.push_back(f);
         }
         quad_id++;
         break;
