@@ -28,18 +28,18 @@ struct FieldStore {
   template <typename Space>
   void addShapeDisp(FieldType<Space> type)
   {
-    shape_disp_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, type.name, mesh_->tag()));
+    shape_disp_.push_back(smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag()));
   }
 
   std::shared_ptr<DirichletBoundaryConditions> addBoundaryConditions(FEFieldPtr field);
 
   template <typename Space>
-  std::shared_ptr<DirichletBoundaryConditions> addUnknown(FieldType<Space>& type)
+  std::shared_ptr<DirichletBoundaryConditions> addIndependent(FieldType<Space>& type)
   {
     type.unknown_index = static_cast<int>(num_unknowns_);
     to_fields_index_[type.name] = fields_.size();
     to_unknown_index_[type.name] = num_unknowns_;
-    FieldState new_field = smith::createFieldState<Space>(*data_store_, Space{}, type.name, mesh_->tag());
+    FieldState new_field = smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag());
     fields_.push_back(new_field);
     auto latest_bc = addBoundaryConditions(new_field.get());
       ++num_unknowns_;
@@ -49,10 +49,10 @@ struct FieldStore {
   }
 
   template <typename Space>
-  auto addDerived(FieldType<Space>, std::string name)
+  auto addDependent(FieldType<Space>, std::string name)
   {
     to_fields_index_[name] = fields_.size();
-    fields_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, name, mesh_->tag()));
+    fields_.push_back(smith::createFieldState<Space>(*graph_, Space{}, name, mesh_->tag()));
     return FieldType<Space>(name);
   }
 
@@ -82,7 +82,7 @@ struct FieldStore {
 
  private:
   std::shared_ptr<Mesh> mesh_;
-  std::shared_ptr<gretl::DataStore> data_store_;
+  std::shared_ptr<gretl::DataStore> graph_;
 
   std::vector<FieldState> shape_disp_;
   std::vector<FieldState> fields_;
@@ -129,7 +129,7 @@ auto createWeakForm(std::string name, FieldType<TestSpaceType> test_type, FieldS
       name, field_store.getMesh(), test_space, input_spaces);
 }
 
-std::vector<FieldState> solve(const std::vector<WeakForm*>& weak_forms, const FieldStore& field_store,
+std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
                               const DifferentiableBlockSolver* solver, const TimeInfo& time_info);
 
 
@@ -138,9 +138,30 @@ std::vector<FieldState> solve(const std::vector<WeakForm*>& weak_forms, const Fi
 // auto states = field_store.getFields();
 
 class MultiPhysicsTimeIntegrator : public StateAdvancer {
-  MultiPhysicsTimeIntegrator(std::shared_ptr<Mesh> mesh, std::vector<std::shared_ptr<WeakForm>> weak_forms, std::vector<>& time_integrators, 
-  )
-  // to do
+  public:
+  MultiPhysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store, const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const std::vector<std::shared_ptr<TimeIntegrationRule>>& time_integrators, std::shared_ptr<smith::DifferentiableBlockSolver> solver) :
+    field_store_(field_store), weak_forms_(weak_forms), time_integrators_(time_integrators), solver_(solver)
+  {
+
+  }
+
+   std::vector<FieldState> advanceState(const TimeInfo& time_info, const FieldState& shape_disp,
+                                               const std::vector<FieldState>& states,
+                                               const std::vector<FieldState>& params) const override {
+
+    
+    std::vector<FieldState> disp_temp = solve(weak_forms_, *field_store_, solver_.get(), time_info);
+    
+    
+    
+  }
+
+  private:
+  
+  std::shared_ptr<FieldStore> field_store_;
+  std::vector<std::shared_ptr<WeakForm>> weak_forms_;
+  std::vector<std::shared_ptr<TimeIntegrationRule>> time_integrators_;
+  std::shared_ptr<smith::DifferentiableBlockSolver> solver_;
 };
 
 }  // namespace smith

@@ -17,11 +17,31 @@
 
 namespace smith {
 
+
+class TimeIntegrationRule 
+{
+  virtual FieldState corrected_value(const TimeInfo& /*t*/, const std::vector<FieldState>& states) {
+    return states[0];
+  };
+
+virtual FieldState corrected_dot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) {
+    return states[0];
+  };
+
+  virtual FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) {
+    return states[0];
+  };
+
+};
+
+
 /// @brief encodes rules for time discretizing first order odes (involving first time derivatives).
 /// When solving f(u, u_dot, t) = 0
 /// this class provides the current discrete approximation for u and u_dot as a function of
 /// (u^{n+1}, u^n).
-struct BackwardEulerFirstOrderTimeIntegrationRule {
+class BackwardEulerFirstOrderTimeIntegrationRule : public TimeIntegrationRule 
+{
+  public:
   /// @brief Constructor
   BackwardEulerFirstOrderTimeIntegrationRule() {}
 
@@ -50,7 +70,9 @@ using QuasiStaticFirstOrderTimeIntegrationRule = BackwardEulerFirstOrderTimeInte
 /// When solving f(u, u_dot, u_dot_dot, t) = 0
 /// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
-struct ImplicitNewmarkSecondOrderTimeIntegrationRule {
+struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRule 
+{
+  public:
   /// @brief Constructor
   ImplicitNewmarkSecondOrderTimeIntegrationRule() {}
 
@@ -87,7 +109,9 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule {
 /// When solving f(u, u_dot, u_dot_dot, t) = 0
 /// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
-struct QuasiStaticSecondOrderTimeIntegrationRule {
+struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule 
+{
+  public:
   /// @brief Constructor
   QuasiStaticSecondOrderTimeIntegrationRule() {}
 

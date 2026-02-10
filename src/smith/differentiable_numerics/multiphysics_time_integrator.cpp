@@ -8,11 +8,12 @@
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
+#include "gretl/strumm_walther_checkpoint_strategy.hpp"
 
 namespace smith {
 
 FieldStore::FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size)
-    : mesh_(mesh), data_store_(std::make_shared<gretl::DataStore>(storage_size))
+    : mesh_(mesh), graph_(std::make_shared<gretl::DataStore>(std::make_unique<gretl::StrummWaltherCheckpointStrategy>(storage_size)))
 {
 }
 
@@ -115,7 +116,7 @@ std::vector<FieldState> FieldStore::getFields(const std::string& weak_form_name)
 
 const std::shared_ptr<smith::Mesh>& FieldStore::getMesh() const { return mesh_; }
 
-std::vector<FieldState> solve(const std::vector<WeakForm*>& weak_forms, const FieldStore& field_store,
+std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
                               const DifferentiableBlockSolver* solver, const TimeInfo& time_info)
 {
   std::vector<std::string> weak_form_names;
@@ -132,7 +133,11 @@ std::vector<FieldState> solve(const std::vector<WeakForm*>& weak_forms, const Fi
   }
   std::vector<std::vector<FieldState>> params(weak_forms.size());
 
-  return block_solve(weak_forms, index_map, field_store.getShapeDisp(), inputs, params, time_info, solver,
+  std::vector<WeakForm*> weak_form_ptrs;
+  for (auto& p : weak_forms) {
+    weak_form_ptrs.push_back(p.get());
+  }
+  return block_solve(weak_form_ptrs, index_map, field_store.getShapeDisp(), inputs, params, time_info, solver,
                      field_store.getBoundaryConditionManagers());
 }
 
