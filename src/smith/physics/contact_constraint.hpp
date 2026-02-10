@@ -206,6 +206,7 @@ class ContactConstraint : public Constraint {
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
    * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with fresh_evaluation if we re-evaluate or use previously cached
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
@@ -247,6 +248,7 @@ class ContactConstraint : public Constraint {
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
    * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with fresh_evaluation if we re-evaluate or use previously cached
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
