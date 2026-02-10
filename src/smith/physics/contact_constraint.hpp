@@ -93,7 +93,6 @@ class ContactConstraint : public Constraint {
     contact_opts_.enforcement = ContactEnforcement::LagrangeMultiplier;
     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts_);
     interaction_id_ = interaction_id;
-    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
   }
 
   /// @brief destructor
