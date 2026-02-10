@@ -216,4 +216,3 @@ Building Smith's Third-party Libraries
 --------------------------------------
 
 It is now time to build Smith's Third-party Libraries (TPLs). For detailed instructions see :ref:`build_tpls-label`.
-
