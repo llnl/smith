@@ -147,6 +147,9 @@ class ContactConstraint : public Constraint {
        and we do not need to recompute them.*/
     if (fresh_evaluation) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
+      for (auto& interaction : contact_.getContactInteractions()) {
+        interaction.evalJacobian(true);
+      }
       int cycle = 0;
       contact_.update(cycle, time, dt);
       J_contact_ = contact_.mergedJacobian();
