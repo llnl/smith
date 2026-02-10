@@ -20,6 +20,7 @@
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
+#include "gretl/strumm_walther_checkpoint_strategy.hpp"
 
 namespace smith {
 
@@ -141,7 +142,9 @@ struct FieldType {
 
 struct FieldStore {
   FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size = 50)
-      : mesh_(mesh), data_store_(std::make_shared<gretl::DataStore>(storage_size))
+      : mesh_(mesh),
+        data_store_(
+            std::make_shared<gretl::DataStore>(std::make_unique<gretl::StrummWaltherCheckpointStrategy>(storage_size)))
   {
   }
 
