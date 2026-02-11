@@ -176,6 +176,7 @@ struct Domain {
    */
   static Domain ofInteriorBoundaries(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func);
 
+  /// @overload
   static Domain ofInteriorBoundaries(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func);
 
   /// @brief get elements by geometry type
