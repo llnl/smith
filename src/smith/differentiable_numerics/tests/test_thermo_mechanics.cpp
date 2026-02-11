@@ -137,97 +137,35 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
 {
   SMITH_MARK_FUNCTION;
 
-  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-  FieldType<H1<order, dim>> disp_type("displacement");
-  FieldType<H1<order>> temperature_type("temperature");
+  GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 1.0e-3, 0.0, 1.0};
+  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, material, nonlinear_opts, linear_options);
 
-  std::shared_ptr<DifferentiableBlockSolver> d_nonlinear_solver =
-      buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
-
-  double rho = 1.0;
-  double E = 100.0;
-  double nu = 0.25;
-  double c = 1.0;
-  double alpha = 1.0e-3;
-  double theta_ref = 0.0;
-  double k = 1.0;
-  GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
-
-  auto field_store = std::make_shared<FieldStore>(mesh_, 100);
-  field_store->addShapeDisp(shape_disp_type);
-
-  // register states associated with the displacement
-
-  auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim> X) {
+  system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
     bc[0] = 0.01 * t;
     return bc;
   });
-  disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
-  
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE);
-  
-  auto temperature_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
+  system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
+  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
 
-  std::shared_ptr<DirichletBoundaryConditions> temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
-  temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
-  temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
+  system.thermal_weak_form->addBodySource(smith::DependsOn<>(), mesh_->entireBodyName(),
+                                          [](auto /*t*/, auto /* x */) { return 100.0; });
 
-  auto temperature_old_type = field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE);
-
-  auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, *field_store, disp_type, disp_old_type,
-                                             temperature_type, temperature_old_type);
-
-  solid_weak_form->addBodyIntegral(mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
-                                                                auto temperature, auto temperature_old) {
-    auto u = disp_time_rule->value(t_info, disp, disp_old);
-    auto v = disp_time_rule->dot(t_info, disp, disp_old);
-    auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
-    GreenSaintVenantThermoelasticMaterial::State state;
-    auto [pk, C_v, s0, q0] =
-        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-    return smith::tuple{smith::zero{}, pk};
-  });
-
-  auto thermal_weak_form = createWeakForm<dim>("thermal_flux", temperature_type, *field_store, temperature_type,
-                                               temperature_old_type, disp_type, disp_old_type);
-
-  // native unknowns...
-  thermal_weak_form->addBodyIntegral(mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto temperature,
-                                                                  auto temperature_old, auto disp, auto disp_old) {
-    GreenSaintVenantThermoelasticMaterial::State state;
-    auto u = disp_time_rule->value(t_info, disp, disp_old);
-    auto v = disp_time_rule->dot(t_info, disp, disp_old);
-    auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
-    auto T_dot = temperature_time_rule->dot(t_info, temperature, temperature_old);
-    auto [pk, C_v, s0, q0] =
-        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-    auto dT_dt = get<VALUE>(T_dot);
-    return smith::tuple{C_v * dT_dt - s0, -q0};
-  });
-
-  thermal_weak_form->addBodySource(smith::DependsOn<>(), mesh_->entireBodyName(),
-                                   [](auto /*t*/, auto /* x */) { return 100.0; });
-
-  std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form};
-  MultiPhysicsTimeIntegrator advancer(field_store, weak_forms, d_nonlinear_solver);
-  
   std::string pv_dir = "paraview_thermo_mechanics";
-  auto pv_writer = smith::createParaviewWriter(*mesh_, field_store->getAllFields(), pv_dir);
-  
+  auto pv_writer = smith::createParaviewWriter(*mesh_, system.field_store->getAllFields(), pv_dir);
+
   double dt = 0.001;
   double time = 0.0;
   int cycle = 0;
 
-  auto shape_disp = field_store->getShapeDisp();
-  auto states = field_store->getAllFields();
+  auto shape_disp = system.field_store->getShapeDisp();
+  auto states = system.field_store->getAllFields();
 
   pv_writer.write(cycle, time, states);
   for (size_t step = 0; step < 10; ++step) {
      TimeInfo t_info(time, dt, step);
-     auto states_and_reactions = advancer.advanceState(t_info, shape_disp, states, {});
+     auto states_and_reactions = system.advancer.advanceState(t_info, shape_disp, states, {});
      states = states_and_reactions.first;
      time += dt;
      cycle++;
@@ -241,100 +179,42 @@ TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
 {
   SMITH_MARK_FUNCTION;
 
-  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-  FieldType<H1<order, dim>> disp_type("displacement");
-  FieldType<H1<order>> temperature_type("temperature");
-
-  std::shared_ptr<DifferentiableBlockSolver> d_nonlinear_solver =
-      buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
-
   double rho = 1.0;
-  double E = 100.0;
-  double nu = 0.25;
   double specific_heat = 1.0;
-  double alpha = 0.0;  // Decoupled
-  double theta_ref = 0.0;
   double kappa = 0.1;
-  GreenSaintVenantThermoelasticMaterial material{rho, E, nu, specific_heat, alpha, theta_ref, kappa};
+  GreenSaintVenantThermoelasticMaterial material{rho, 100.0, 0.25, specific_heat, 0.0, 0.0, kappa};
+  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, material, nonlinear_opts, linear_options);
 
-  auto field_store = std::make_shared<FieldStore>(mesh_, 100);
-  field_store->addShapeDisp(shape_disp_type);
+  system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("left"));
+  system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
+  system.temperature_bc->setScalarBCs<dim>(mesh_->domain("left"), [](double, auto) { return 100.0; });
+  system.temperature_bc->setScalarBCs<dim>(mesh_->domain("right"), [](double, auto) { return 100.0; });
 
-  auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("left"));
-  disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
-
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE);
-
-  auto temperature_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
-  std::shared_ptr<DirichletBoundaryConditions> temperature_bc =
-      field_store->addIndependent(temperature_type, temperature_time_rule);
-  // BCs: T = 100 at x=0 (left) and x=1 (right). Assuming mesh length is 1.0.
-  temperature_bc->setScalarBCs<dim>(mesh_->domain("left"), [](double, auto) { return 100.0; });
-  temperature_bc->setScalarBCs<dim>(mesh_->domain("right"), [](double, auto) { return 100.0; });
-
-  auto temperature_old_type = field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE);
-
-  auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, *field_store, disp_type, disp_old_type,
-                                             temperature_type, temperature_old_type);
-
-  solid_weak_form->addBodyIntegral(mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
-                                                                auto temperature, auto temperature_old) {
-    auto u = disp_time_rule->value(t_info, disp, disp_old);
-    auto v = disp_time_rule->dot(t_info, disp, disp_old);
-    auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
-    GreenSaintVenantThermoelasticMaterial::State state;
-    auto [pk, C_v, s0, q0] =
-        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-    return smith::tuple{smith::zero{}, pk};
-  });
-
-  auto thermal_weak_form = createWeakForm<dim>("thermal_flux", temperature_type, *field_store, temperature_type,
-                                               temperature_old_type, disp_type, disp_old_type);
-
-  thermal_weak_form->addBodyIntegral(mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto temperature,
-                                                                  auto temperature_old, auto disp, auto disp_old) {
-    GreenSaintVenantThermoelasticMaterial::State state;
-    auto u = disp_time_rule->value(t_info, disp, disp_old);
-    auto v = disp_time_rule->dot(t_info, disp, disp_old);
-    auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
-    auto T_dot = temperature_time_rule->dot(t_info, temperature, temperature_old);
-    auto [pk, C_v, s0, q0] =
-        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-    auto dT_dt = get<VALUE>(T_dot);
-    return smith::tuple{C_v * dT_dt - s0, -q0};
-  });
-
-  std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form};
-  MultiPhysicsTimeIntegrator advancer(field_store, weak_forms, d_nonlinear_solver);
-
-  // Set Initial Condition
-  auto& temp_field = const_cast<FiniteElementState&>(*field_store->getField("temperature").get());
+  // Set Initial Condition: T(x,0) = 100 + sin(pi*x)
+  auto& temp_field = const_cast<FiniteElementState&>(*system.field_store->getField("temperature").get());
   temp_field.setFromFieldFunction([](tensor<double, dim> x) {
     using std::sin;
     return 100.0 + sin(M_PI * x[0]);
   });
-  // Also set old temperature to IC for consistency at t=0
-  const_cast<FiniteElementState&>(*field_store->getField("temperature_old").get()) = temp_field;
+  const_cast<FiniteElementState&>(*system.field_store->getField("temperature_old").get()) = temp_field;
 
   double dt = 0.01;
   double time = 0.0;
-  auto shape_disp = field_store->getShapeDisp();
-  auto states = field_store->getAllFields();
+  auto shape_disp = system.field_store->getShapeDisp();
+  auto states = system.field_store->getAllFields();
 
   double diffusivity = kappa / (rho * specific_heat);
 
   size_t num_steps = 10;
   for (size_t step = 0; step < num_steps; ++step) {
     TimeInfo t_info(time, dt, step);
-    auto states_and_reactions = advancer.advanceState(t_info, shape_disp, states, {});
+    auto states_and_reactions = system.advancer.advanceState(t_info, shape_disp, states, {});
     states = states_and_reactions.first;
     time += dt;
   }
 
   // Check nodal error against exact solution: T(x,t) = 100 + sin(pi*x) * exp(-diffusivity * pi^2 * t)
-  auto temp_idx = field_store->getFieldIndex("temperature");
+  auto temp_idx = system.field_store->getFieldIndex("temperature");
   FieldState final_temp = states[temp_idx];
 
   FiniteElementState exact_temp(final_temp.get()->space(), "exact_temp");
@@ -353,92 +233,35 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
 {
   SMITH_MARK_FUNCTION;
 
-  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-  FieldType<H1<order, dim>> disp_type("displacement");
-  FieldType<H1<order>> temperature_type("temperature");
+  GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0, 0.0, 0.1};
+  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, material, nonlinear_opts, linear_options);
 
-  std::shared_ptr<DifferentiableBlockSolver> d_nonlinear_solver =
-      buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+  // Arbitrary affine displacement: u(X) = G * X, where G is a constant displacement gradient
+  // Choose a small uniform deformation with both normal and shear components
+  tensor<double, dim, dim> G;
+  G[0][0] = 0.02; G[0][1] = 0.01; G[0][2] = 0.005;
+  G[1][0] = 0.01; G[1][1] = 0.03; G[1][2] = 0.002;
+  G[2][0] = 0.005; G[2][1] = 0.002; G[2][2] = 0.015;
 
-  double rho = 1.0;
-  double E = 100.0;
-  double nu = 0.25;
-  double specific_heat = 1.0;
-  double alpha = 0.0;  // Decoupled
-  double theta_ref = 0.0;
-  double kappa = 0.1;
-  GreenSaintVenantThermoelasticMaterial material{rho, E, nu, specific_heat, alpha, theta_ref, kappa};
+  auto u_exact_func = [G](auto X) { return dot(G, X); };
 
-  auto field_store = std::make_shared<FieldStore>(mesh_, 100);
-  field_store->addShapeDisp(shape_disp_type);
-
-  auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  
-  double lambda = 0.1;
-  auto u_exact_func = [=](auto X) {
-      return lambda * X;
-  };
-
-  // BCs: u = lambda * X on boundary
-  disp_bc->setVectorBCs<dim>(mesh_->entireBoundary(), [=](double, tensor<double, dim> X) {
+  system.disp_bc->setVectorBCs<dim>(mesh_->entireBoundary(), [=](double, tensor<double, dim> X) {
     return u_exact_func(X);
   });
-
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE);
-
-  auto temperature_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
-  std::shared_ptr<DirichletBoundaryConditions> temperature_bc =
-      field_store->addIndependent(temperature_type, temperature_time_rule);
-  temperature_bc->setFixedScalarBCs<dim>(mesh_->entireBoundary());
-
-  auto temperature_old_type = field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE);
-
-  auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, *field_store, disp_type, disp_old_type,
-                                             temperature_type, temperature_old_type);
-
-  solid_weak_form->addBodyIntegral(mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
-                                                                auto temperature, auto temperature_old) {
-    auto u = disp_time_rule->value(t_info, disp, disp_old);
-    auto v = disp_time_rule->dot(t_info, disp, disp_old);
-    auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
-    GreenSaintVenantThermoelasticMaterial::State state;
-    auto [pk, C_v, s0, q0] =
-        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-    return smith::tuple{smith::zero{}, pk};
-  });
-
-  // Thermal part needed for existence of T field, but won't affect solid due to alpha=0
-  auto thermal_weak_form = createWeakForm<dim>("thermal_flux", temperature_type, *field_store, temperature_type,
-                                               temperature_old_type, disp_type, disp_old_type);
-  thermal_weak_form->addBodyIntegral(mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto temperature,
-                                                                  auto temperature_old, auto disp, auto disp_old) {
-    GreenSaintVenantThermoelasticMaterial::State state;
-    auto u = disp_time_rule->value(t_info, disp, disp_old);
-    auto v = disp_time_rule->dot(t_info, disp, disp_old);
-    auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
-    auto T_dot = temperature_time_rule->dot(t_info, temperature, temperature_old);
-    auto [pk, C_v, s0, q0] =
-        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-    auto dT_dt = get<VALUE>(T_dot);
-    return smith::tuple{C_v * dT_dt - s0, -q0};
-  });
-
-  std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form};
-  MultiPhysicsTimeIntegrator advancer(field_store, weak_forms, d_nonlinear_solver);
+  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->entireBoundary());
 
   double dt = 1.0;
   double time = 0.0;
-  auto shape_disp = field_store->getShapeDisp();
-  auto states = field_store->getAllFields();
+  auto shape_disp = system.field_store->getShapeDisp();
+  auto states = system.field_store->getAllFields();
 
   // Run 1 step
   TimeInfo t_info(time, dt, 0);
-  auto states_and_reactions = advancer.advanceState(t_info, shape_disp, states, {});
+  auto states_and_reactions = system.advancer.advanceState(t_info, shape_disp, states, {});
   states = states_and_reactions.first;
 
-  // Check error
-  auto disp_idx = field_store->getFieldIndex("displacement");
+  // Check error - for affine displacement, FEM solution should be exact (up to machine precision)
+  auto disp_idx = system.field_store->getFieldIndex("displacement");
   FieldState final_disp = states[disp_idx];
 
   FunctionalObjective<dim, Parameters<H1<order, dim>>> error_obj("error", mesh_, spaces({final_disp}));
@@ -452,8 +275,8 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
   double l2_error_sq = error_obj.evaluate(TimeInfo(time+dt, dt, 0), shape_disp.get().get(), getConstFieldPointers({final_disp}));
   double l2_error = std::sqrt(l2_error_sq);
 
-  std::cout << "Static Elasticity L2 Error: " << l2_error << std::endl;
-  EXPECT_LT(l2_error, 1e-6);
+  std::cout << "Static Elasticity L2 Error (affine patch test): " << l2_error << std::endl;
+  EXPECT_LT(l2_error, 1e-10);  // Should be machine precision for affine displacement
 }
 
 }  // namespace smith
