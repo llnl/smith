@@ -8,6 +8,7 @@
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
+#include "smith/differentiable_numerics/reaction.hpp"
 #include "gretl/strumm_walther_checkpoint_strategy.hpp"
 
 namespace smith {
@@ -115,6 +116,101 @@ std::vector<FieldState> FieldStore::getFields(const std::string& weak_form_name)
 }
 
 const std::shared_ptr<smith::Mesh>& FieldStore::getMesh() const { return mesh_; }
+
+const std::vector<std::pair<std::shared_ptr<TimeIntegrationRule>, FieldStore::TimeIntegrationMapping>>& FieldStore::getTimeIntegrationRules() const {
+  return time_integration_rules_;
+}
+
+size_t FieldStore::getUnknownIndex(const std::string& field_name) const {
+  return to_unknown_index_.at(field_name);
+}
+
+void FieldStore::setField(size_t index, FieldState updated_field) {
+  fields_[index] = updated_field;
+}
+
+std::vector<FieldState> FieldStore::getFields(const std::string& weak_form_name, const std::vector<FieldState>& all_states) const {
+  auto unknown_field_indices = weak_form_name_to_field_indices_.at(weak_form_name);
+  std::vector<FieldState> fields_for_residual;
+  for (auto& i : unknown_field_indices) {
+    fields_for_residual.push_back(all_states[i]);
+  }
+  return fields_for_residual;
+}
+
+void FieldStore::addWeakFormTestField(std::string weak_form_name, std::string field_name) {
+  weak_form_to_test_field_[weak_form_name] = field_name;
+}
+
+std::string FieldStore::getWeakFormTestField(const std::string& weak_form_name) const {
+  return weak_form_to_test_field_.at(weak_form_name);
+}
+
+MultiPhysicsTimeIntegrator::MultiPhysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
+                                                       const std::vector<std::shared_ptr<WeakForm>>& weak_forms,
+                                                       std::shared_ptr<smith::DifferentiableBlockSolver> solver)
+    : field_store_(field_store), weak_forms_(weak_forms), solver_(solver)
+{
+}
+
+std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiPhysicsTimeIntegrator::advanceState(
+    const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states,
+    [[maybe_unused]] const std::vector<FieldState>& params) const
+{
+  // Sync FieldStore with input states
+  for (size_t i = 0; i < states.size(); ++i) {
+    field_store_->setField(i, states[i]);
+  }
+
+  std::vector<FieldState> primary_unknowns = solve(weak_forms_, *field_store_, solver_.get(), time_info);
+
+  std::vector<FieldState> new_states = states;
+
+  for (const auto& [rule, mapping] : field_store_->getTimeIntegrationRules()) {
+    size_t u_idx = field_store_->getFieldIndex(mapping.primary_name);
+    size_t unknown_idx = field_store_->getUnknownIndex(mapping.primary_name);
+    FieldState u_new = primary_unknowns[unknown_idx];
+    new_states[u_idx] = u_new;
+
+    std::vector<FieldState> rule_inputs;
+    rule_inputs.push_back(u_new);          // u_{n+1}
+    rule_inputs.push_back(states[u_idx]);  // u_n
+
+    if (!mapping.dot_name.empty()) {
+      size_t v_idx = field_store_->getFieldIndex(mapping.dot_name);
+      rule_inputs.push_back(states[v_idx]);
+    }
+
+    if (!mapping.ddot_name.empty()) {
+      size_t a_idx = field_store_->getFieldIndex(mapping.ddot_name);
+      rule_inputs.push_back(states[a_idx]);
+    }
+
+    if (!mapping.dot_name.empty()) {
+      size_t v_idx = field_store_->getFieldIndex(mapping.dot_name);
+      new_states[v_idx] = rule->corrected_dot(time_info, rule_inputs);
+    }
+
+    if (!mapping.ddot_name.empty()) {
+      size_t a_idx = field_store_->getFieldIndex(mapping.ddot_name);
+      new_states[a_idx] = rule->corrected_ddot(time_info, rule_inputs);
+    }
+
+    if (!mapping.history_name.empty()) {
+      size_t hist_idx = field_store_->getFieldIndex(mapping.history_name);
+      new_states[hist_idx] = u_new;
+    }
+  }
+
+  std::vector<ReactionState> reactions;
+  for (const auto& wf : weak_forms_) {
+    auto wf_fields = field_store_->getFields(wf->name(), new_states);
+    std::string test_field_name = field_store_->getWeakFormTestField(wf->name());
+    FieldState test_field = field_store_->getField(test_field_name);
+    reactions.push_back(smith::evaluateWeakForm(wf, time_info, shape_disp, wf_fields, test_field));
+  }
+  return {new_states, reactions};
+}
 
 std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
                               const DifferentiableBlockSolver* solver, const TimeInfo& time_info)

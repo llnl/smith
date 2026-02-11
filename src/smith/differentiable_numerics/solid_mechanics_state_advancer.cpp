@@ -24,10 +24,9 @@ SolidMechanicsStateAdvancer::SolidMechanicsStateAdvancer(
 {
 }
 
-std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const TimeInfo& time_info,
-                                                                  const FieldState& shape_disp,
-                                                                  const std::vector<FieldState>& states_old_,
-                                                                  const std::vector<FieldState>& params) const
+std::pair<std::vector<FieldState>, std::vector<ReactionState>> SolidMechanicsStateAdvancer::advanceState(
+    const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states_old_,
+    const std::vector<FieldState>& params) const
 {
   std::vector<FieldState> states_old = states_old_;
   if (time_info.cycle() == 0) {
@@ -49,18 +48,12 @@ std::vector<FieldState> SolidMechanicsStateAdvancer::advanceState(const TimeInfo
   states[ACCELERATION] = time_rule_.ddot(time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY],
                                          states_old[ACCELERATION]);
 
-  return states;
-}
-
-std::vector<ReactionState> SolidMechanicsStateAdvancer::computeReactions(const TimeInfo& time_info,
-                                                                         const FieldState& shape_disp,
-                                                                         const std::vector<FieldState>& states,
-                                                                         const std::vector<FieldState>& params) const
-{
-  std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]};
-  solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-  return {evaluateWeakForm(solid_dynamic_weak_forms_->final_reaction_weak_form, time_info, shape_disp, solid_inputs,
-                           states[DISPLACEMENT])};
+  std::vector<FieldState> solid_inputs_reaction{states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]};
+  solid_inputs_reaction.insert(solid_inputs_reaction.end(), params.begin(), params.end());
+  std::vector<ReactionState> reactions = {evaluateWeakForm(solid_dynamic_weak_forms_->final_reaction_weak_form,
+                                                           time_info, shape_disp, solid_inputs_reaction,
+                                                           states[DISPLACEMENT])};
+  return {states, reactions};
 }
 
 }  // namespace smith

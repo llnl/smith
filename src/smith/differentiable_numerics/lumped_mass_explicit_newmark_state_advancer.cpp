@@ -33,7 +33,7 @@ FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryCondit
   return s_bc.finalize();
 }
 
-std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
+std::pair<std::vector<FieldState>, std::vector<ReactionState>> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
     const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states_in,
     const std::vector<FieldState>& params) const
 {
@@ -110,7 +110,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
   }
 
   // place all solved updated states into the output
-  return states;
+  return {states, std::vector<ReactionState>{}};
 }
 
 }  // namespace smith

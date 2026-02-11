@@ -247,10 +247,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
     pv_writer.write(m + 1, physics->time(), physics->getFieldStatesAndParamStates());
   }
 
-  TimeInfo time_info(physics->time(), dt_);
-
-  auto state_advancer = physics->getStateAdvancer();
-  auto reactions = state_advancer->computeReactions(time_info, shape_disp, physics->getFieldStates(), params);
+  auto reactions = physics->getReactionStates();
 
   auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
 

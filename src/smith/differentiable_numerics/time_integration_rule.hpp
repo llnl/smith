@@ -14,23 +14,20 @@
 #pragma once
 
 #include "smith/physics/common.hpp"
+#include "smith/differentiable_numerics/field_state.hpp"
 
 namespace smith {
 
 
 class TimeIntegrationRule 
 {
-  virtual FieldState corrected_value(const TimeInfo& /*t*/, const std::vector<FieldState>& states) {
-    return states[0];
-  };
+ public:
+  virtual ~TimeIntegrationRule() {}
+  virtual FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const = 0;
 
-virtual FieldState corrected_dot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) {
-    return states[0];
-  };
+  virtual FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const = 0;
 
-  virtual FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) {
-    return states[0];
-  };
+  virtual FieldState corrected_ddot(const TimeInfo& t, const std::vector<FieldState>& states) const = 0;
 
 };
 
@@ -57,6 +54,19 @@ class BackwardEulerFirstOrderTimeIntegrationRule : public TimeIntegrationRule
   SMITH_HOST_DEVICE auto dot(const TimeInfo& t, const T1& field_new, const T2& field_old) const
   {
     return (1.0 / t.dt()) * (field_new - field_old);
+  }
+
+  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+    return value(t, states[0], states[1]);
+  }
+
+  FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+    return dot(t, states[0], states[1]);
+  }
+
+  FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override {
+     SLIC_ERROR("BackwardEulerFirstOrderTimeIntegrationRule does not support second derivatives.");
+     return states[0];
   }
 };
 
@@ -103,6 +113,18 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRul
     auto dt = t.dt();
     return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
   }
+
+  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+    return value(t, states[0], states[1], states[2], states[3]);
+  }
+
+  FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+    return dot(t, states[0], states[1], states[2], states[3]);
+  }
+
+  FieldState corrected_ddot(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+    return ddot(t, states[0], states[1], states[2], states[3]);
+  }
 };
 
 /// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
@@ -140,6 +162,18 @@ struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule
                               [[maybe_unused]] const T4& accel_old) const
   {
     return accel_old;
+  }
+
+  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+    return value(t, states[0], states[1], states[2], states[3]);
+  }
+
+  FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+    return dot(t, states[0], states[1], states[2], states[3]);
+  }
+
+  FieldState corrected_ddot(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+    return ddot(t, states[0], states[1], states[2], states[3]);
   }
 };
 

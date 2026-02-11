@@ -96,14 +96,10 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   }
 
   /// @overload
-  std::vector<FieldState> advanceState(const TimeInfo& time_info, const FieldState& shape_disp,
-                                       const std::vector<FieldState>& states_old,
-                                       const std::vector<FieldState>& params) const override;
-
-  /// @overload
-  std::vector<ReactionState> computeReactions(const TimeInfo& time_info, const FieldState& shape_disp,
-                                              const std::vector<FieldState>& states,
-                                              const std::vector<FieldState>& params) const override;
+  std::pair<std::vector<FieldState>, std::vector<ReactionState>> advanceState(const TimeInfo& time_info,
+                                                                             const FieldState& shape_disp,
+                                                                             const std::vector<FieldState>& states_old,
+                                                                             const std::vector<FieldState>& params) const override;
 
  private:
   std::shared_ptr<DifferentiableSolver> solver_;             ///< Differentiable solver
