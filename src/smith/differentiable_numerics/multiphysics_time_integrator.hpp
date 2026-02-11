@@ -34,13 +34,20 @@ struct FieldStore {
     shape_disp_.push_back(smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag()));
   }
 
+  template <typename Space>
+  void addParameter(FieldType<Space> type)
+  {
+    to_fields_index_[type.name] = fields_.size();
+    fields_.push_back(smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag()));
+  }
+
   std::shared_ptr<DirichletBoundaryConditions> addBoundaryConditions(FEFieldPtr field);
 
   enum class TimeDerivative { VALUE, DOT, DDOT, DDDOT };
 
   template <typename Space>
   std::shared_ptr<DirichletBoundaryConditions> addIndependent(FieldType<Space>& type,
-                                                              std::shared_ptr<TimeIntegrationRule> time_rule = nullptr)
+                                                              std::shared_ptr<TimeIntegrationRule> time_rule)
   {
     type.unknown_index = static_cast<int>(num_unknowns_);
     to_fields_index_[type.name] = fields_.size();
@@ -52,22 +59,14 @@ struct FieldStore {
     SLIC_ERROR_IF(num_unknowns_ != boundary_conditions_.size(),
                   "Inconcistency between num unknowns and boundary condition size");
 
-    if (time_rule) {
-      TimeIntegrationMapping mapping;
-      mapping.primary_name = type.name;
-      independent_name_to_rule_index_[type.name] = time_integration_rules_.size();
-      time_integration_rules_.push_back({time_rule, mapping});
-    }
+    SLIC_ERROR_IF(!time_rule, "Invalid time_rule");
 
-    return latest_bc;  // boundary_conditions_.back();
-  }
+    TimeIntegrationMapping mapping;
+    mapping.primary_name = type.name;
+    independent_name_to_rule_index_[type.name] = time_integration_rules_.size();
+    time_integration_rules_.push_back({time_rule, mapping});
 
-  template <typename Space>
-  auto addDependent(FieldType<Space>, std::string name)
-  {
-    to_fields_index_[name] = fields_.size();
-    fields_.push_back(smith::createFieldState<Space>(*graph_, Space{}, name, mesh_->tag()));
-    return FieldType<Space>(name);
+    return latest_bc;
   }
 
   template <typename Space>
@@ -101,7 +100,9 @@ struct FieldStore {
                    << independent_field.name << "' which has no registered TimeIntegrationRule.");
     }
 
-    return addDependent(independent_field, name);
+    to_fields_index_[name] = fields_.size();
+    fields_.push_back(smith::createFieldState<Space>(*graph_, Space{}, name, mesh_->tag()));
+    return FieldType<Space>(name);
   }
 
   void addWeakFormUnknownArg(std::string weak_form_name, std::string argument_name, size_t argument_index);
@@ -132,7 +133,7 @@ struct FieldStore {
 
   size_t getUnknownIndex(const std::string& field_name) const;
 
-  const FieldState& getField(const std::string& field_name) const;
+  FieldState getField(const std::string& field_name) const;
 
   void setField(const std::string& field_name, FieldState updated_field);
 
@@ -205,7 +206,8 @@ auto createWeakForm(std::string name, FieldType<TestSpaceType> test_type, FieldS
 }
 
 std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
-                              const DifferentiableBlockSolver* solver, const TimeInfo& time_info);
+                              const DifferentiableBlockSolver* solver, const TimeInfo& time_info,
+                              const std::vector<FieldState>& params = {});
 
 
 class MultiPhysicsTimeIntegrator : public StateAdvancer {
@@ -223,12 +225,12 @@ class MultiPhysicsTimeIntegrator : public StateAdvancer {
   std::shared_ptr<smith::DifferentiableBlockSolver> solver_;
 };
 
-template <int dim, int disp_order, int temp_order>
+template <int dim, int disp_order, int temp_order, typename... parameter_space>
 struct ThermoMechanicsSystem {
   using SolidWeakFormType = TimeDiscretizedWeakForm<dim, H1<disp_order, dim>,
-      Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<temp_order>, H1<temp_order>>>;
+      Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<temp_order>, H1<temp_order>, parameter_space...>>;
   using ThermalWeakFormType = TimeDiscretizedWeakForm<dim, H1<temp_order>,
-      Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>>>;
+      Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
 
   std::shared_ptr<FieldStore> field_store;
   std::shared_ptr<SolidWeakFormType> solid_weak_form;
@@ -236,14 +238,57 @@ struct ThermoMechanicsSystem {
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;
   std::shared_ptr<DirichletBoundaryConditions> temperature_bc;
   std::shared_ptr<DifferentiableBlockSolver> solver;
-  MultiPhysicsTimeIntegrator advancer;
+  std::shared_ptr<StateAdvancer> advancer;
+  std::shared_ptr<QuasiStaticFirstOrderTimeIntegrationRule> disp_time_rule;
+  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule> temperature_time_rule;
+  std::vector<FieldState> parameter_fields;
+
+  std::vector<FieldState> getStateFields() const
+  {
+    std::vector<FieldState> states;
+    states.push_back(field_store->getField("displacement"));
+    states.push_back(field_store->getField("displacement_old"));
+    states.push_back(field_store->getField("temperature"));
+    states.push_back(field_store->getField("temperature_old"));
+    return states;
+  }
+
+  const std::vector<FieldState>& getParameterFields() const { return parameter_fields; }
+
+  template <typename MaterialType>
+  void setMaterial(const MaterialType& material, const std::string& domain_name)
+  {
+    auto dtr = disp_time_rule;
+    auto ttr = temperature_time_rule;
+    solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
+                                                                  auto temperature, auto temperature_old, auto... params) {
+      auto u = dtr->value(t_info, disp, disp_old);
+      auto v = dtr->dot(t_info, disp, disp_old);
+      auto T = ttr->value(t_info, temperature, temperature_old);
+      typename MaterialType::State state;
+      auto [pk, C_v, s0, q0] =
+          material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T), params...);
+      return smith::tuple{smith::zero{}, pk};
+    });
+
+    thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto temperature,
+                                                                    auto temperature_old, auto disp, auto disp_old, auto... params) {
+      typename MaterialType::State state;
+      auto u = dtr->value(t_info, disp, disp_old);
+      auto v = dtr->dot(t_info, disp, disp_old);
+      auto T = ttr->value(t_info, temperature, temperature_old);
+      auto T_dot = ttr->dot(t_info, temperature, temperature_old);
+      auto [pk, C_v, s0, q0] =
+          material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T), params...);
+      auto dT_dt = get<VALUE>(T_dot);
+      return smith::tuple{C_v * dT_dt - s0, -q0};
+    });
+  }
 };
 
-template <int dim, int disp_order, int temp_order, typename MaterialType>
-ThermoMechanicsSystem<dim, disp_order, temp_order>
-buildThermoMechanicsStateAdvancer(std::shared_ptr<Mesh> mesh, const MaterialType& material,
-                                  const NonlinearSolverOptions& nonlinear_opts,
-                                  const LinearSolverOptions& linear_opts)
+template <int dim, int disp_order, int temp_order, typename... parameter_space>
+ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>
+buildThermoMechanicsStateAdvancer(std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver, FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
@@ -262,45 +307,24 @@ buildThermoMechanicsStateAdvancer(std::shared_ptr<Mesh> mesh, const MaterialType
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
   auto temperature_old_type = field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE);
 
+  std::vector<FieldState> parameter_fields;
+  (field_store->addParameter(parameter_types), ...);
+  (parameter_fields.push_back(field_store->getField(parameter_types.name)), ...);
+
   // Solid mechanics weak form
   auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, *field_store, disp_type, disp_old_type,
-                                             temperature_type, temperature_old_type);
-
-  solid_weak_form->addBodyIntegral(mesh->entireBodyName(), [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
-                                                                auto temperature, auto temperature_old) {
-    auto u = disp_time_rule->value(t_info, disp, disp_old);
-    auto v = disp_time_rule->dot(t_info, disp, disp_old);
-    auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
-    typename MaterialType::State state;
-    auto [pk, C_v, s0, q0] =
-        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-    return smith::tuple{smith::zero{}, pk};
-  });
+                                             temperature_type, temperature_old_type, parameter_types...);
 
   // Thermal weak form
   auto thermal_weak_form = createWeakForm<dim>("thermal_flux", temperature_type, *field_store, temperature_type,
-                                               temperature_old_type, disp_type, disp_old_type);
-
-  thermal_weak_form->addBodyIntegral(mesh->entireBodyName(), [=](auto t_info, auto /*X*/, auto temperature,
-                                                                  auto temperature_old, auto disp, auto disp_old) {
-    typename MaterialType::State state;
-    auto u = disp_time_rule->value(t_info, disp, disp_old);
-    auto v = disp_time_rule->dot(t_info, disp, disp_old);
-    auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
-    auto T_dot = temperature_time_rule->dot(t_info, temperature, temperature_old);
-    auto [pk, C_v, s0, q0] =
-        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-    auto dT_dt = get<VALUE>(T_dot);
-    return smith::tuple{C_v * dT_dt - s0, -q0};
-  });
+                                               temperature_old_type, disp_type, disp_old_type, parameter_types...);
 
   // Build solver and advancer
-  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_opts, *mesh);
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form};
-  MultiPhysicsTimeIntegrator advancer(field_store, weak_forms, solver);
+  auto advancer = std::make_shared<MultiPhysicsTimeIntegrator>(field_store, weak_forms, solver);
 
-  return ThermoMechanicsSystem<dim, disp_order, temp_order>{
-      field_store, solid_weak_form, thermal_weak_form, disp_bc, temperature_bc, solver, std::move(advancer)};
+  return ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>{
+      field_store, solid_weak_form, thermal_weak_form, disp_bc, temperature_bc, solver, advancer, disp_time_rule, temperature_time_rule, parameter_fields};
 }
 
 }  // namespace smith

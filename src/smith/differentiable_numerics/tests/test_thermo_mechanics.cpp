@@ -19,7 +19,7 @@
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/physics/functional_objective.hpp"
-#include "gretl/strumm_walther_checkpoint_strategy.hpp"
+#include "gretl/wang_checkpoint_strategy.hpp"
 
 namespace smith {
 
@@ -35,7 +35,7 @@ auto greenStrain(const tensor<T, dim, dim>& grad_u)
 /// @brief Green-Saint Venant isotropic thermoelastic model
 struct GreenSaintVenantThermoelasticMaterial {
   double density;    ///< density
-  double E;          ///< Young's modulus
+  double E0;         ///< base Young's modulus
   double nu;         ///< Poisson's ratio
   double C_v;        ///< volumetric heat capacity
   double alpha;      ///< thermal expansion coefficient
@@ -62,12 +62,13 @@ struct GreenSaintVenantThermoelasticMaterial {
    * step (units of energy), and the referential heat flux (units of
    * energy per unit time and per unit area).
    */
-  template <typename T1, typename T2, typename T3, typename T4, int dim>
+  template <typename T1, typename T2, typename T3, typename T4, typename T5, int dim>
   auto operator()(double, State&, const tensor<T1, dim, dim>& grad_u, const tensor<T2, dim, dim>& grad_v, T3 theta,
-                  const tensor<T4, dim>& grad_theta) const
+                  const tensor<T4, dim>& grad_theta, const T5& E_param) const
   {
-    const double K = E / (3.0 * (1.0 - 2.0 * nu));
-    const double G = 0.5 * E / (1.0 + nu);
+    auto E = E0 + get<0>(E_param);
+    const auto K = E / (3.0 * (1.0 - 2.0 * nu));
+    const auto G = 0.5 * E / (1.0 + nu);
     const auto Eg = greenStrain(grad_u);
     const auto trEg = tr(Eg);
 
@@ -87,6 +88,8 @@ struct GreenSaintVenantThermoelasticMaterial {
 
     return smith::tuple{Piola, C_v, s0, q0};
   }
+
+  static constexpr int numParameters() { return 1; }
 };
 
 smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::Strumpack,
@@ -134,7 +137,14 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   SMITH_MARK_FUNCTION;
 
   GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 1.0e-3, 0.0, 1.0};
-  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, material, nonlinear_opts, linear_options);
+  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
+  system.setMaterial(material, mesh_->entireBodyName());
+
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    return 0.0;
+  });
 
   system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
@@ -149,27 +159,37 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
                                           [](auto /*t*/, auto /* x */) { return 100.0; });
 
   std::string pv_dir = "paraview_thermo_mechanics";
-  auto pv_writer = smith::createParaviewWriter(*mesh_, system.field_store->getAllFields(), pv_dir);
+  auto pv_writer = smith::createParaviewWriter(*mesh_, system.getStateFields(), pv_dir);
 
   double dt = 0.001;
   double time = 0.0;
   int cycle = 0;
 
   auto shape_disp = system.field_store->getShapeDisp();
-  auto states = system.field_store->getAllFields();
+  auto states = system.getStateFields();
+  auto params = system.getParameterFields();
+  std::vector<ReactionState> reactions;
 
   pv_writer.write(cycle, time, states);
   for (size_t step = 0; step < 10; ++step) {
      TimeInfo t_info(time, dt, step);
-     auto states_and_reactions = system.advancer.advanceState(t_info, shape_disp, states, {});
+     auto states_and_reactions = system.advancer->advanceState(t_info, shape_disp, states, params);
      states = states_and_reactions.first;
+     reactions = states_and_reactions.second;
      time += dt;
      cycle++;
      pv_writer.write(cycle, time, states);
   }
 
-  
-  EXPECT_EQ(0, 0);
+  std::cout << "DEBUG: About to compute reaction_squared" << std::endl;
+  auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
+  std::cout << "DEBUG: reaction_squared computed, setting as objective" << std::endl;
+  gretl::set_as_objective(reaction_squared);
+  std::cout << "DEBUG: About to checkGradWrt for shape_disp" << std::endl;
+  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
+  std::cout << "DEBUG: About to checkGradWrt for params[0]" << std::endl;
+  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
+  std::cout << "DEBUG: Test complete" << std::endl;
 }
 
 TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
@@ -180,7 +200,14 @@ TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
   double specific_heat = 1.0;
   double kappa = 0.1;
   GreenSaintVenantThermoelasticMaterial material{rho, 100.0, 0.25, specific_heat, 0.0, 0.0, kappa};
-  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, material, nonlinear_opts, linear_options);
+  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
+  system.setMaterial(material, mesh_->entireBodyName());
+
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    return 0.0;
+  });
 
   system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("left"));
   system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
@@ -198,15 +225,18 @@ TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
   double dt = 0.01;
   double time = 0.0;
   auto shape_disp = system.field_store->getShapeDisp();
-  auto states = system.field_store->getAllFields();
+  auto states = system.getStateFields();
+  auto params = system.getParameterFields();
+  std::vector<ReactionState> reactions;
 
   double diffusivity = kappa / (rho * specific_heat);
 
   size_t num_steps = 10;
   for (size_t step = 0; step < num_steps; ++step) {
     TimeInfo t_info(time, dt, step);
-    auto states_and_reactions = system.advancer.advanceState(t_info, shape_disp, states, {});
+    auto states_and_reactions = system.advancer->advanceState(t_info, shape_disp, states, params);
     states = states_and_reactions.first;
+    reactions = states_and_reactions.second;
     time += dt;
   }
 
@@ -231,7 +261,14 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
   SMITH_MARK_FUNCTION;
 
   GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0, 0.0, 0.1};
-  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, material, nonlinear_opts, linear_options);
+  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
+  system.setMaterial(material, mesh_->entireBodyName());
+
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    return 0.0;
+  });
 
   // Arbitrary affine displacement: u(X) = G * X, where G is a constant displacement gradient
   // Choose a small uniform deformation with both normal and shear components
@@ -250,12 +287,15 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
   double dt = 1.0;
   double time = 0.0;
   auto shape_disp = system.field_store->getShapeDisp();
-  auto states = system.field_store->getAllFields();
+  auto states = system.getStateFields();
+  auto params = system.getParameterFields();
+  std::vector<ReactionState> reactions;
 
   // Run 1 step
   TimeInfo t_info(time, dt, 0);
-  auto states_and_reactions = system.advancer.advanceState(t_info, shape_disp, states, {});
+  auto states_and_reactions = system.advancer->advanceState(t_info, shape_disp, states, params);
   states = states_and_reactions.first;
+  reactions = states_and_reactions.second;
 
   // Check error - for affine displacement, FEM solution should be exact (up to machine precision)
   auto disp_idx = system.field_store->getFieldIndex("displacement");

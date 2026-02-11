@@ -9,12 +9,12 @@
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
-#include "gretl/strumm_walther_checkpoint_strategy.hpp"
+#include "gretl/wang_checkpoint_strategy.hpp"
 
 namespace smith {
 
 FieldStore::FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size)
-    : mesh_(mesh), graph_(std::make_shared<gretl::DataStore>(std::make_unique<gretl::StrummWaltherCheckpointStrategy>(storage_size)))
+    : mesh_(mesh), graph_(std::make_shared<gretl::DataStore>(std::make_unique<gretl::WangCheckpointStrategy>(storage_size)))
 {
 }
 
@@ -89,7 +89,7 @@ std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionMan
 
 size_t FieldStore::getFieldIndex(const std::string& field_name) const { return to_fields_index_.at(field_name); }
 
-const FieldState& FieldStore::getField(const std::string& field_name) const
+FieldState FieldStore::getField(const std::string& field_name) const
 {
   size_t field_index = getFieldIndex(field_name);
   return fields_[field_index];
@@ -155,16 +155,24 @@ MultiPhysicsTimeIntegrator::MultiPhysicsTimeIntegrator(std::shared_ptr<FieldStor
 
 std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiPhysicsTimeIntegrator::advanceState(
     const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states,
-    [[maybe_unused]] const std::vector<FieldState>& params) const
+    const std::vector<FieldState>& params) const
 {
   // Sync FieldStore with input states
   for (size_t i = 0; i < states.size(); ++i) {
     field_store_->setField(i, states[i]);
   }
 
-  std::vector<FieldState> primary_unknowns = solve(weak_forms_, *field_store_, solver_.get(), time_info);
+  // Parameters start after the regular state fields
+  size_t num_primary_fields = states.size();
+  for (size_t i = 0; i < params.size(); ++i) {
+    field_store_->setField(num_primary_fields + i, params[i]);
+  }
 
+  std::vector<FieldState> primary_unknowns = solve(weak_forms_, *field_store_, solver_.get(), time_info, params);
+
+  // Build new_states including params for use in getFields
   std::vector<FieldState> new_states = states;
+  new_states.insert(new_states.end(), params.begin(), params.end());
 
   for (const auto& [rule, mapping] : field_store_->getTimeIntegrationRules()) {
     size_t u_idx = field_store_->getFieldIndex(mapping.primary_name);
@@ -206,14 +214,25 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiPhysicsTimeI
   for (const auto& wf : weak_forms_) {
     auto wf_fields = field_store_->getFields(wf->name(), new_states);
     std::string test_field_name = field_store_->getWeakFormTestField(wf->name());
-    FieldState test_field = field_store_->getField(test_field_name);
+    size_t test_field_idx = field_store_->getFieldIndex(test_field_name);
+    FieldState test_field = new_states[test_field_idx];
     reactions.push_back(smith::evaluateWeakForm(wf, time_info, shape_disp, wf_fields, test_field));
   }
-  return {new_states, reactions};
+
+  // Extract only state fields (not params) for return
+  // Keep new_states intact since reactions reference it
+  std::vector<FieldState> return_states;
+  return_states.reserve(states.size());
+  for (size_t i = 0; i < states.size(); ++i) {
+    return_states.push_back(new_states[i]);
+  }
+
+  return {return_states, reactions};
 }
 
 std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
-                              const DifferentiableBlockSolver* solver, const TimeInfo& time_info)
+                              const DifferentiableBlockSolver* solver, const TimeInfo& time_info,
+                              const std::vector<FieldState>& params)
 {
   std::vector<std::string> weak_form_names;
   for (const auto& wf : weak_forms) {
@@ -227,13 +246,13 @@ std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak
     std::vector<FieldState> fields_for_wk = field_store.getFields(wf_name);
     inputs.push_back(fields_for_wk);
   }
-  std::vector<std::vector<FieldState>> params(weak_forms.size());
+  std::vector<std::vector<FieldState>> wk_params(weak_forms.size(), params);
 
   std::vector<WeakForm*> weak_form_ptrs;
   for (auto& p : weak_forms) {
     weak_form_ptrs.push_back(p.get());
   }
-  return block_solve(weak_form_ptrs, index_map, field_store.getShapeDisp(), inputs, params, time_info, solver,
+  return block_solve(weak_form_ptrs, index_map, field_store.getShapeDisp(), inputs, wk_params, time_info, solver,
                      field_store.getBoundaryConditionManagers());
 }
 
