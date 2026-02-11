@@ -338,9 +338,10 @@ static Domain domain_of_boundary_elems(const mesh_t& mesh,
           break;
         default:
           SLIC_ERROR("unsupported element type");
-        break;
+          break;
       }
-      continue;};
+      continue;
+    };
 
     mfem::Array<int> vertex_ids;
     mesh.GetFaceVertices(f, vertex_ids);
@@ -677,7 +678,7 @@ Domain InteriorFaces(const mesh_t& mesh)
 
 template <int d>
 static Domain domain_of_interior_boundary_elements(const mesh_t& mesh,
-                                       std::function<bool(std::vector<tensor<double, d>>, int)> predicate)
+                                                   std::function<bool(std::vector<tensor<double, d>>, int)> predicate)
 {
   assert(mesh.SpaceDimension() == d);
 
@@ -696,7 +697,6 @@ static Domain domain_of_interior_boundary_elements(const mesh_t& mesh,
 
   // faces that satisfy the predicate are added to the domain
   for (int f = 0; f < mesh.GetNumFaces(); f++) {
-
     auto geom = mesh.GetFaceGeometry(f);
 
     // discard faces with the wrong type (skip rest of loop if we are not interior)
@@ -713,9 +713,10 @@ static Domain domain_of_interior_boundary_elements(const mesh_t& mesh,
           break;
         default:
           SLIC_ERROR("unsupported element type");
-        break;
+          break;
       }
-      continue;};
+      continue;
+    };
 
     mfem::Array<int> vertex_ids;
     mesh.GetFaceVertices(f, vertex_ids);

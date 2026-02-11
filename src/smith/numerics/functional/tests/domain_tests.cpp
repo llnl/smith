@@ -508,34 +508,32 @@ TEST(domain, of3dBoundaryElementsFindsDofs)
 
 TEST(domain, ofInteriorBoundaryElements)
 {
+  using test_space = double;
+  using trial_space = H1<1>;
 
-    using test_space = double;
-    using trial_space = H1<1>;
- 
-    auto expectedArea = 1.0;
-    auto meshInput = buildMeshFromFile(SMITH_REPO_DIR "/data/meshes/SplitCubeTest.g");
-    auto mesh = smith::mesh::refineAndDistribute(std::move(meshInput), 0, 0);
+  auto expectedArea = 1.0;
+  auto meshInput = buildMeshFromFile(SMITH_REPO_DIR "/data/meshes/SplitCubeTest.g");
+  auto mesh = smith::mesh::refineAndDistribute(std::move(meshInput), 0, 0);
 
-    Domain d0 = Domain::ofInteriorBoundaries(*mesh, by_attr<3>(2)); 
+  Domain d0 = Domain::ofInteriorBoundaries(*mesh, by_attr<3>(2));
 
-    auto [trial_fespace, trial_fec] = smith::generateParFiniteElementSpace<trial_space>(mesh.get());
-    mfem::Vector U(trial_fespace->TrueVSize());
-    
-    // Calculate the area of the internal boundary region
-    Functional<test_space(trial_space)> totalArea({trial_fespace.get()});
+  auto [trial_fespace, trial_fec] = smith::generateParFiniteElementSpace<trial_space>(mesh.get());
+  mfem::Vector U(trial_fespace->TrueVSize());
 
-    totalArea.AddBoundaryIntegral(smith::Dimension<2>{}, smith::DependsOn<>{}, IdentityFunctor{}, d0);
-    double calculatedArea = totalArea(0.0, U);
+  // Calculate the area of the internal boundary region
+  Functional<test_space(trial_space)> totalArea({trial_fespace.get()});
 
-    EXPECT_NEAR(calculatedArea, expectedArea, 1e-6);
+  totalArea.AddBoundaryIntegral(smith::Dimension<2>{}, smith::DependsOn<>{}, IdentityFunctor{}, d0);
+  double calculatedArea = totalArea(0.0, U);
 
-    Domain d1 = Domain::ofBoundaryElements(*mesh,by_attr<3>(1));
+  EXPECT_NEAR(calculatedArea, expectedArea, 1e-6);
 
-    Domain d2 = d1|d0;
+  Domain d1 = Domain::ofBoundaryElements(*mesh, by_attr<3>(1));
 
-    EXPECT_EQ(d2.quad_ids_.size(), 28);
+  Domain d2 = d1 | d0;
+
+  EXPECT_EQ(d2.quad_ids_.size(), 28);
 }
-
 
 int main(int argc, char* argv[])
 {
