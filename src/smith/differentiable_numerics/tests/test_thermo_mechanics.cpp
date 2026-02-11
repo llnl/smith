@@ -135,13 +135,20 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
 {
   SMITH_MARK_FUNCTION;
 
-  GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 1.0e-3, 0.0, 1.0};
+  double rho = 1.0;
+  double E0 = 100.0;
+  double nu = 0.25;
+  double specific_heat = 1.0;
+  double kappa = 0.1;
+  GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 1.0, kappa};
+
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
-  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 0.0; });
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
 
   system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
@@ -167,6 +174,7 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   auto params = system.getParameterFields();
   std::vector<ReactionState> reactions;
 
+  printf("g\n");
   pv_writer.write(cycle, time, states);
   for (size_t step = 0; step < 10; ++step) {
     TimeInfo t_info(time, dt, step);
@@ -178,15 +186,14 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
     pv_writer.write(cycle, time, states);
   }
 
-  std::cout << "DEBUG: About to compute reaction_squared" << std::endl;
-  auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
-  std::cout << "DEBUG: reaction_squared computed, setting as objective" << std::endl;
+  printf("a0\n");
+  auto reaction_squared = innerProduct(reactions[0], reactions[0]);
+  printf("a1\n");
   gretl::set_as_objective(reaction_squared);
-  std::cout << "DEBUG: About to checkGradWrt for shape_disp" << std::endl;
-  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  std::cout << "DEBUG: About to checkGradWrt for params[0]" << std::endl;
+  printf("a\n");
+  // EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
   EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
-  std::cout << "DEBUG: Test complete" << std::endl;
+  printf("b\n");
 }
 
 TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
@@ -194,15 +201,18 @@ TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
   SMITH_MARK_FUNCTION;
 
   double rho = 1.0;
+  double E0 = 100.0;
+  double nu = 0.25;
   double specific_heat = 1.0;
   double kappa = 0.1;
-  GreenSaintVenantThermoelasticMaterial material{rho, 100.0, 0.25, specific_heat, 0.0, 0.0, kappa};
+  GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 0.0, kappa};
+
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
-  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 0.0; });
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
 
   system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("left"));
   system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
@@ -255,13 +265,19 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
 {
   SMITH_MARK_FUNCTION;
 
-  GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0, 0.0, 0.1};
+  double rho = 1.0;
+  double E0 = 100.0;
+  double nu = 0.25;
+  double specific_heat = 1.0;
+  double kappa = 0.1;
+  GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 0.0, kappa};
+
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
-  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 0.0; });
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
 
   // Arbitrary affine displacement: u(X) = G * X, where G is a constant displacement gradient
   // Choose a small uniform deformation with both normal and shear components

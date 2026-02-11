@@ -37,7 +37,7 @@ void FieldStore::addWeakFormUnknownArg(std::string weak_form_name, std::string a
 
 void FieldStore::addWeakFormArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
 {
-  size_t field_index = to_fields_index_.at(argument_name);
+  size_t field_index = to_states_index_.at(argument_name);
   if (weak_form_name_to_field_indices_.count(weak_form_name)) {
     weak_form_name_to_field_indices_.at(weak_form_name).push_back(field_index);
   } else {
@@ -88,30 +88,30 @@ std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionMan
   return bcs;
 }
 
-size_t FieldStore::getFieldIndex(const std::string& field_name) const { return to_fields_index_.at(field_name); }
+size_t FieldStore::getFieldIndex(const std::string& field_name) const { return to_states_index_.at(field_name); }
 
 FieldState FieldStore::getField(const std::string& field_name) const
 {
   size_t field_index = getFieldIndex(field_name);
-  return fields_[field_index];
+  return states_[field_index];
 }
 
 void FieldStore::setField(const std::string& field_name, FieldState updated_field)
 {
   size_t field_index = getFieldIndex(field_name);
-  fields_[field_index] = updated_field;
+  states_[field_index] = updated_field;
 }
 
-const FieldState& FieldStore::getShapeDisp() const { return shape_disp_[0]; }
+FieldState FieldStore::getShapeDisp() const { return shape_disp_[0]; }
 
-const std::vector<FieldState>& FieldStore::getAllFields() const { return fields_; }
+const std::vector<FieldState>& FieldStore::getAllFields() const { return states_; }
 
-std::vector<FieldState> FieldStore::getFields(const std::string& weak_form_name) const
+std::vector<FieldState> FieldStore::getStates(const std::string& weak_form_name) const
 {
   auto unknown_field_indices = weak_form_name_to_field_indices_.at(weak_form_name);
   std::vector<FieldState> fields_for_residual;
   for (auto& i : unknown_field_indices) {
-    fields_for_residual.push_back(fields_[i]);
+    fields_for_residual.push_back(states_[i]);
   }
   return fields_for_residual;
 }
@@ -126,18 +126,7 @@ FieldStore::getTimeIntegrationRules() const
 
 size_t FieldStore::getUnknownIndex(const std::string& field_name) const { return to_unknown_index_.at(field_name); }
 
-void FieldStore::setField(size_t index, FieldState updated_field) { fields_[index] = updated_field; }
-
-std::vector<FieldState> FieldStore::getFields(const std::string& weak_form_name,
-                                              const std::vector<FieldState>& all_states) const
-{
-  auto unknown_field_indices = weak_form_name_to_field_indices_.at(weak_form_name);
-  std::vector<FieldState> fields_for_residual;
-  for (auto& i : unknown_field_indices) {
-    fields_for_residual.push_back(all_states[i]);
-  }
-  return fields_for_residual;
-}
+void FieldStore::setField(size_t index, FieldState updated_field) { states_[index] = updated_field; }
 
 void FieldStore::addWeakFormTestField(std::string weak_form_name, std::string field_name)
 {
@@ -165,17 +154,25 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiPhysicsTimeI
     field_store_->setField(i, states[i]);
   }
 
-  // Parameters start after the regular state fields
-  size_t num_primary_fields = states.size();
-  for (size_t i = 0; i < params.size(); ++i) {
-    field_store_->setField(num_primary_fields + i, params[i]);
-  }
-
   std::vector<FieldState> primary_unknowns = solve(weak_forms_, *field_store_, solver_.get(), time_info, params);
 
-  // Build new_states including params for use in getFields
+  std::vector<ReactionState> reactions;
+  for (const auto& wf : weak_forms_) {
+    auto wf_fields = field_store_->getStates(wf->name());
+    std::string test_field_name = field_store_->getWeakFormTestField(wf->name());
+    size_t test_field_idx = field_store_->getFieldIndex(test_field_name);
+    std::cout << "test field id = " << test_field_idx << std::endl;
+    FieldState test_field = primary_unknowns[test_field_idx];
+    wf_fields.insert(wf_fields.end(), params.begin(), params.end());
+    std::cout << "res " << wf->name() << " " << test_field.get()->name() << " ";
+    for (auto& f : wf_fields) {
+      std::cout << f.get()->name() <<  " ";
+    }
+    std::cout << std::endl;
+    reactions.push_back(smith::evaluateWeakForm(wf, time_info, shape_disp, wf_fields, test_field));
+  }
+
   std::vector<FieldState> new_states = states;
-  new_states.insert(new_states.end(), params.begin(), params.end());
 
   for (const auto& [rule, mapping] : field_store_->getTimeIntegrationRules()) {
     size_t u_idx = field_store_->getFieldIndex(mapping.primary_name);
@@ -197,6 +194,8 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiPhysicsTimeI
       rule_inputs.push_back(states[a_idx]);
     }
 
+
+
     if (!mapping.dot_name.empty()) {
       size_t v_idx = field_store_->getFieldIndex(mapping.dot_name);
       new_states[v_idx] = rule->corrected_dot(time_info, rule_inputs);
@@ -213,24 +212,8 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiPhysicsTimeI
     }
   }
 
-  std::vector<ReactionState> reactions;
-  for (const auto& wf : weak_forms_) {
-    auto wf_fields = field_store_->getFields(wf->name(), new_states);
-    std::string test_field_name = field_store_->getWeakFormTestField(wf->name());
-    size_t test_field_idx = field_store_->getFieldIndex(test_field_name);
-    FieldState test_field = new_states[test_field_idx];
-    reactions.push_back(smith::evaluateWeakForm(wf, time_info, shape_disp, wf_fields, test_field));
-  }
 
-  // Extract only state fields (not params) for return
-  // Keep new_states intact since reactions reference it
-  std::vector<FieldState> return_states;
-  return_states.reserve(states.size());
-  for (size_t i = 0; i < states.size(); ++i) {
-    return_states.push_back(new_states[i]);
-  }
-
-  return {return_states, reactions};
+  return {new_states, reactions};
 }
 
 std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
@@ -246,7 +229,7 @@ std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak
   std::vector<std::vector<FieldState>> inputs;
   for (size_t i = 0; i < weak_forms.size(); ++i) {
     std::string wf_name = weak_forms[i]->name();
-    std::vector<FieldState> fields_for_wk = field_store.getFields(wf_name);
+    std::vector<FieldState> fields_for_wk = field_store.getStates(wf_name);
     inputs.push_back(fields_for_wk);
   }
   std::vector<std::vector<FieldState>> wk_params(weak_forms.size(), params);

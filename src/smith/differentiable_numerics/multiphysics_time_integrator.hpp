@@ -28,21 +28,6 @@ struct FieldType {
 struct FieldStore {
   FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size = 50);
 
-  template <typename Space>
-  void addShapeDisp(FieldType<Space> type)
-  {
-    shape_disp_.push_back(smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag()));
-  }
-
-  template <typename Space>
-  void addParameter(FieldType<Space> type)
-  {
-    to_fields_index_[type.name] = fields_.size();
-    fields_.push_back(smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag()));
-  }
-
-  std::shared_ptr<DirichletBoundaryConditions> addBoundaryConditions(FEFieldPtr field);
-
   enum class TimeDerivative
   {
     VALUE,
@@ -52,14 +37,27 @@ struct FieldStore {
   };
 
   template <typename Space>
+  void addShapeDisp(FieldType<Space> type)
+  {
+    shape_disp_.push_back(smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag()));
+  }
+
+  template <typename Space>
+  void addParameter(FieldType<Space> type)
+  {
+    to_params_index_[type.name] = params_.size();
+    params_.push_back(smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag()));
+  }
+
+  template <typename Space>
   std::shared_ptr<DirichletBoundaryConditions> addIndependent(FieldType<Space>& type,
                                                               std::shared_ptr<TimeIntegrationRule> time_rule)
   {
     type.unknown_index = static_cast<int>(num_unknowns_);
-    to_fields_index_[type.name] = fields_.size();
+    to_states_index_[type.name] = states_.size();
     to_unknown_index_[type.name] = num_unknowns_;
     FieldState new_field = smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag());
-    fields_.push_back(new_field);
+    states_.push_back(new_field);
     auto latest_bc = addBoundaryConditions(new_field.get());
     ++num_unknowns_;
     SLIC_ERROR_IF(num_unknowns_ != boundary_conditions_.size(),
@@ -106,8 +104,8 @@ struct FieldStore {
                    << independent_field.name << "' which has no registered TimeIntegrationRule.");
     }
 
-    to_fields_index_[name] = fields_.size();
-    fields_.push_back(smith::createFieldState<Space>(*graph_, Space{}, name, mesh_->tag()));
+    to_states_index_[name] = states_.size();
+    states_.push_back(smith::createFieldState<Space>(*graph_, Space{}, name, mesh_->tag()));
     return FieldType<Space>(name);
   }
 
@@ -145,13 +143,11 @@ struct FieldStore {
 
   void setField(size_t index, FieldState updated_field);
 
-  const FieldState& getShapeDisp() const;
+  FieldState getShapeDisp() const;
 
   const std::vector<FieldState>& getAllFields() const;
 
-  std::vector<FieldState> getFields(const std::string& weak_form_name) const;
-
-  std::vector<FieldState> getFields(const std::string& weak_form_name, const std::vector<FieldState>& all_states) const;
+  std::vector<FieldState> getStates(const std::string& weak_form_name) const;
 
   const std::shared_ptr<smith::Mesh>& getMesh() const;
 
@@ -160,8 +156,11 @@ struct FieldStore {
   std::shared_ptr<gretl::DataStore> graph_;
 
   std::vector<FieldState> shape_disp_;
-  std::vector<FieldState> fields_;
-  std::map<std::string, size_t> to_fields_index_;
+  std::vector<FieldState> params_;
+  std::vector<FieldState> states_;
+  
+  std::map<std::string, size_t> to_states_index_;
+  std::map<std::string, size_t> to_params_index_;
 
   size_t num_unknowns_ = 0;
   std::map<std::string, size_t> to_unknown_index_;
@@ -171,6 +170,8 @@ struct FieldStore {
     std::string field_name;
     size_t field_index_in_residual;
   };
+
+  std::shared_ptr<DirichletBoundaryConditions> addBoundaryConditions(FEFieldPtr field);
 
   std::map<std::string, std::vector<FieldLabel>> weak_form_name_to_unknown_name_index_;
 
@@ -318,6 +319,8 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   std::vector<FieldState> parameter_fields;
   (field_store->addParameter(parameter_types), ...);
   (parameter_fields.push_back(field_store->getField(parameter_types.name)), ...);
+
+  std::cout << "num params = " << parameter_fields.size() << std::endl;
 
   // Solid mechanics weak form
   auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, *field_store, disp_type, disp_old_type,
