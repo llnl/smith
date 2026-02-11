@@ -72,11 +72,11 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
                      std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<SolidWeakFormType> weak_form,
                      std::shared_ptr<smith::ContactConstraint> constraints, mfem::Array<int> fixed_tdof_list,
                      mfem::Array<int> disp_tdof_list, mfem::Vector uDC);
-  mfem::Vector residual(const mfem::Vector& u, bool fresh_evaluation) const;
-  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool fresh_evaluation, bool fresh_derivative);
-  mfem::Vector constraint(const mfem::Vector& u, bool fresh_evaluation) const;
-  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool fresh_evaluation, bool fresh_derivative);
-  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool fresh_evaluation,
+  mfem::Vector residual(const mfem::Vector& u, bool update_fields) const;
+  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool update_fields, bool fresh_derivative);
+  mfem::Vector constraint(const mfem::Vector& u, bool update_fields) const;
+  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool update_fields, bool fresh_derivative);
+  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool update_fields,
                                      bool fresh_derivative) const;
   void fullDisplacement(const mfem::Vector& x, mfem::Vector& u);
   virtual ~TiedContactProblem();
@@ -349,7 +349,7 @@ TiedContactProblem<SolidWeakFormType>::TiedContactProblem(std::vector<smith::Fin
 }
 
 template <typename SolidWeakFormType>
-mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector& u, bool /*fresh_evaluation*/) const
+mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector& u, bool /*update_fields*/) const
 {
   // TODO: cache this evaluation
   residual_states_[FIELD::DISP]->Set(1.0, u);
@@ -358,11 +358,10 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector&
 };
 
 template <typename SolidWeakFormType>
-mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(const mfem::Vector& u,
-                                                                              bool fresh_evaluation,
+mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(const mfem::Vector& u, bool update_fields,
                                                                               bool fresh_derivative)
 {
-  if (fresh_evaluation || fresh_derivative) {
+  if (update_fields || fresh_derivative) {
     residual_states_[FIELD::DISP]->Set(1.0, u);
     drdu_ = weak_form_->jacobian(time_info_, shape_disp_.get(), smith::getConstFieldPointers(residual_states_),
                                  jacobian_weights_);
@@ -373,40 +372,39 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(co
 }
 
 template <typename SolidWeakFormType>
-mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vector& u, bool fresh_evaluation) const
+mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vector& u, bool update_fields) const
 {
   // No caching necessary as that is already done in ContactConstraint::evaluate
   contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
   auto gap = constraints_->evaluate(time_info_.time(), time_info_.dt(), smith::getConstFieldPointers(contact_states_),
-                                    fresh_evaluation);
+                                    update_fields);
   return gap;
 }
 
 template <typename SolidWeakFormType>
 mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(const mfem::Vector& u,
-                                                                                bool fresh_evaluation,
+                                                                                bool update_fields,
                                                                                 bool fresh_derivative)
 {
-  if (fresh_evaluation || fresh_derivative) {
+  if (update_fields || fresh_derivative) {
     contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
     dcdu_ = constraints_->jacobian(time_info_.time(), time_info_.dt(), smith::getConstFieldPointers(contact_states_),
-                                   smith::ContactFields::DISP, fresh_evaluation, fresh_derivative);
-  } else {
-    SLIC_ERROR_ROOT_IF(!dcdu_, "must call evaluation method prior to using cached data");
+                                   smith::ContactFields::DISP, update_fields, fresh_derivative);
   }
+  SLIC_ERROR_ROOT_IF(!dcdu_, "must call evaluation method prior to using cached data");
   return dcdu_.get();
 }
 
 template <typename SolidWeakFormType>
 mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l,
-                                                                          bool fresh_evaluation,
+                                                                          bool update_fields,
                                                                           bool fresh_derivative) const
 {
   // internal caching done in ContactConstraint::residual_contribution
   contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
   auto res_contribution = constraints_->residual_contribution(
       time_info_.time(), time_info_.dt(), smith::getConstFieldPointers(contact_states_), l, smith::ContactFields::DISP,
-      fresh_evaluation, fresh_derivative);
+      update_fields, fresh_derivative);
   return res_contribution;
 }
 

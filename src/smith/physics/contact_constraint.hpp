@@ -104,13 +104,13 @@ class ContactConstraint : public Constraint {
    * @param time time
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
-   * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
    * @return mfem::Vector which is the constraint evaluation
    */
   mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                        bool fresh_evaluation = true) const override
+                        bool update_fields = true) const override
   {
-    if (fresh_evaluation) {
+    if (update_fields) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       // note: Tribol does not use cycle.
       int cycle = 0;
@@ -130,22 +130,24 @@ class ContactConstraint : public Constraint {
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
-   * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
-   * @param fresh_derivative boolean indicating with fresh_evaluation if we re-evaluate or use previously cached
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
    * evaluation
    * @return std::unique_ptr<mfem::HypreParMatrix> The true Jacobian
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                 int direction, bool fresh_evaluation = true,
+                                                 int direction, bool update_fields = true,
                                                  [[maybe_unused]] bool fresh_derivative = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
-    /* If this is not a new evaluation point e.g.,
-       if the constraint was evaluated at this point
-       then the derivatives have already been computed
-       and we do not need to recompute them.*/
-    if (fresh_evaluation) {
+    // if the fields are to be updated then we update the displacement field
+    if (update_fields) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
+    }
+    // if the field has been updated or we are requesting a fresh derivative
+    // then re-compute the gap Jacobian
+    // otherwise use previously cached Jacobian
+    if (update_fields || fresh_derivative) {
       for (auto& interaction : contact_.getContactInteractions()) {
         interaction.evalJacobian(true);
       }
@@ -166,18 +168,18 @@ class ContactConstraint : public Constraint {
    * @param fields vector of smith::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
-   * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
-   * @param fresh_derivative boolean indicating with fresh_evaluation if we re-evaluate or use previously cached
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
    * evaluation
    * @return std::Vector
    */
   mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                     const mfem::Vector& multipliers, int direction, bool fresh_evaluation = true,
+                                     const mfem::Vector& multipliers, int direction, bool update_fields = true,
                                      bool fresh_derivative = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     int cycle = 0;
-    if (fresh_evaluation) {
+    if (update_fields) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       // first update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
@@ -185,7 +187,7 @@ class ContactConstraint : public Constraint {
       }
       contact_.update(cycle, time, dt);
     }
-    if (fresh_evaluation || fresh_derivative) {
+    if (update_fields || fresh_derivative) {
       // with updated gaps, then update pressure for contact interactions with penalty enforcement
       contact_.setPressures(multipliers);
       // call update again with the right pressures
@@ -205,20 +207,20 @@ class ContactConstraint : public Constraint {
    * @param fields vector of smith::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
-   * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
-   * @param fresh_derivative boolean indicating with fresh_evaluation if we re-evaluate or use previously cached
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
                                                                        const std::vector<ConstFieldPtr>& fields,
                                                                        const mfem::Vector& multipliers, int direction,
-                                                                       bool fresh_evaluation = true,
+                                                                       bool update_fields = true,
                                                                        bool fresh_derivative = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
 
     int cycle = 0;
-    if (fresh_evaluation) {
+    if (update_fields) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       // first update gaps
       for (auto& interaction : contact_.getContactInteractions()) {
@@ -226,7 +228,7 @@ class ContactConstraint : public Constraint {
       }
       contact_.update(cycle, time, dt);
     }
-    if (fresh_evaluation || fresh_derivative) {
+    if (update_fields || fresh_derivative) {
       // with updated gaps, we can update pressure for contact interactions with penalty enforcement
       contact_.setPressures(multipliers);
       // call update again with the right pressures
@@ -247,19 +249,24 @@ class ContactConstraint : public Constraint {
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
-   * @param fresh_evaluation boolean indicating if we re-evaluate or use previously cached evaluation
-   * @param fresh_derivative boolean indicating with fresh_evaluation if we re-evaluate or use previously cached
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                                       int direction, bool fresh_evaluation = true,
+                                                       int direction, bool update_fields = true,
                                                        [[maybe_unused]] bool fresh_derivative = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
 
     int cycle = 0;
-    if (fresh_evaluation) {
+    if (update_fields) {
       contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
+    }
+    if (update_fields || fresh_derivative) {
+      for (auto& interaction : contact_.getContactInteractions()) {
+        interaction.evalJacobian(true);
+      }
       contact_.update(cycle, time, dt);
       J_contact_ = contact_.mergedJacobian();
     }
