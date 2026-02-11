@@ -72,13 +72,14 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
                      std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<SolidWeakFormType> weak_form,
                      std::shared_ptr<smith::ContactConstraint> constraints, mfem::Array<int> fixed_tdof_list,
                      mfem::Array<int> disp_tdof_list, mfem::Vector uDC);
-  mfem::Vector residual(const mfem::Vector& u, bool fresh_evaluation) const;
-  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool fresh_evaluation);
-  mfem::Vector constraint(const mfem::Vector& u, bool fresh_evaluation) const;
-  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool fresh_evaluation);
-  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool fresh_evaluation) const;
+  mfem::Vector residual(const mfem::Vector& u, bool fresh_evaluation) const override;
+  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool fresh_evaluation, bool new_deriv) override;
+  mfem::Vector constraint(const mfem::Vector& u, bool fresh_evaluation) const override;
+  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool fresh_evaluation, bool new_deriv) override;
+  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool fresh_evaluation,
+                                     bool new_deriv) const override;
   void fullDisplacement(const mfem::Vector& x, mfem::Vector& u);
-  virtual ~TiedContactProblem();
+  virtual ~TiedContactProblem() {}
 };
 
 class ParaviewWriter {
@@ -356,7 +357,8 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::residual(const mfem::Vector&
 
 template <typename SolidWeakFormType>
 mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::residualJacobian(const mfem::Vector& u,
-                                                                              bool /*fresh_evaluation*/)
+                                                                              bool /*fresh_evaluation*/,
+                                                                              bool /*new_deriv*/)
 {
   residual_states_[FIELD::DISP]->Set(1.0, u);
   drdu_ = weak_form_->jacobian(time_info_, shape_disp_.get(), smith::getConstFieldPointers(residual_states_),
@@ -376,7 +378,8 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraint(const mfem::Vecto
 
 template <typename SolidWeakFormType>
 mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(const mfem::Vector& u,
-                                                                                bool /*fresh_evaluation*/)
+                                                                                bool /*fresh_evaluation*/,
+                                                                                bool /*new_deriv*/)
 {
   bool fresh_evaluation = true;
   contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
@@ -387,7 +390,8 @@ mfem::HypreParMatrix* TiedContactProblem<SolidWeakFormType>::constraintJacobian(
 
 template <typename SolidWeakFormType>
 mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l,
-                                                                          bool /*fresh_evaluation*/) const
+                                                                          bool /*fresh_evaluation*/,
+                                                                          bool /*new_deriv*/) const
 {
   bool fresh_evaluation = true;
   contact_states_[smith::ContactFields::DISP]->Set(1.0, u);
@@ -395,9 +399,4 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
                                                               smith::getConstFieldPointers(contact_states_), l,
                                                               smith::ContactFields::DISP, fresh_evaluation);
   return res_contribution;
-}
-
-template <typename SolidWeakFormType>
-TiedContactProblem<SolidWeakFormType>::~TiedContactProblem()
-{
 }

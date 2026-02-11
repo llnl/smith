@@ -14,14 +14,15 @@
 namespace smith {
 
 FieldStore::FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size)
-    : mesh_(mesh), graph_(std::make_shared<gretl::DataStore>(std::make_unique<gretl::WangCheckpointStrategy>(storage_size)))
+    : mesh_(mesh),
+      graph_(std::make_shared<gretl::DataStore>(std::make_unique<gretl::WangCheckpointStrategy>(storage_size)))
 {
 }
 
-std::shared_ptr<DirichletBoundaryConditions> FieldStore::addBoundaryConditions(FEFieldPtr field) {
-  boundary_conditions_.push_back(
-      std::make_shared<DirichletBoundaryConditions>(mesh_->mfemParMesh(), field->space()));
-      return boundary_conditions_.back();
+std::shared_ptr<DirichletBoundaryConditions> FieldStore::addBoundaryConditions(FEFieldPtr field)
+{
+  boundary_conditions_.push_back(std::make_shared<DirichletBoundaryConditions>(mesh_->mfemParMesh(), field->space()));
+  return boundary_conditions_.back();
 }
 
 void FieldStore::addWeakFormUnknownArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
@@ -117,19 +118,19 @@ std::vector<FieldState> FieldStore::getFields(const std::string& weak_form_name)
 
 const std::shared_ptr<smith::Mesh>& FieldStore::getMesh() const { return mesh_; }
 
-const std::vector<std::pair<std::shared_ptr<TimeIntegrationRule>, FieldStore::TimeIntegrationMapping>>& FieldStore::getTimeIntegrationRules() const {
+const std::vector<std::pair<std::shared_ptr<TimeIntegrationRule>, FieldStore::TimeIntegrationMapping>>&
+FieldStore::getTimeIntegrationRules() const
+{
   return time_integration_rules_;
 }
 
-size_t FieldStore::getUnknownIndex(const std::string& field_name) const {
-  return to_unknown_index_.at(field_name);
-}
+size_t FieldStore::getUnknownIndex(const std::string& field_name) const { return to_unknown_index_.at(field_name); }
 
-void FieldStore::setField(size_t index, FieldState updated_field) {
-  fields_[index] = updated_field;
-}
+void FieldStore::setField(size_t index, FieldState updated_field) { fields_[index] = updated_field; }
 
-std::vector<FieldState> FieldStore::getFields(const std::string& weak_form_name, const std::vector<FieldState>& all_states) const {
+std::vector<FieldState> FieldStore::getFields(const std::string& weak_form_name,
+                                              const std::vector<FieldState>& all_states) const
+{
   auto unknown_field_indices = weak_form_name_to_field_indices_.at(weak_form_name);
   std::vector<FieldState> fields_for_residual;
   for (auto& i : unknown_field_indices) {
@@ -138,11 +139,13 @@ std::vector<FieldState> FieldStore::getFields(const std::string& weak_form_name,
   return fields_for_residual;
 }
 
-void FieldStore::addWeakFormTestField(std::string weak_form_name, std::string field_name) {
+void FieldStore::addWeakFormTestField(std::string weak_form_name, std::string field_name)
+{
   weak_form_to_test_field_[weak_form_name] = field_name;
 }
 
-std::string FieldStore::getWeakFormTestField(const std::string& weak_form_name) const {
+std::string FieldStore::getWeakFormTestField(const std::string& weak_form_name) const
+{
   return weak_form_to_test_field_.at(weak_form_name);
 }
 

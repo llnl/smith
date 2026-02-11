@@ -18,9 +18,7 @@
 
 namespace smith {
 
-
-class TimeIntegrationRule 
-{
+class TimeIntegrationRule {
  public:
   virtual ~TimeIntegrationRule() {}
   virtual FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const = 0;
@@ -28,17 +26,14 @@ class TimeIntegrationRule
   virtual FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const = 0;
 
   virtual FieldState corrected_ddot(const TimeInfo& t, const std::vector<FieldState>& states) const = 0;
-
 };
-
 
 /// @brief encodes rules for time discretizing first order odes (involving first time derivatives).
 /// When solving f(u, u_dot, t) = 0
 /// this class provides the current discrete approximation for u and u_dot as a function of
 /// (u^{n+1}, u^n).
-class BackwardEulerFirstOrderTimeIntegrationRule : public TimeIntegrationRule 
-{
-  public:
+class BackwardEulerFirstOrderTimeIntegrationRule : public TimeIntegrationRule {
+ public:
   /// @brief Constructor
   BackwardEulerFirstOrderTimeIntegrationRule() {}
 
@@ -56,17 +51,20 @@ class BackwardEulerFirstOrderTimeIntegrationRule : public TimeIntegrationRule
     return (1.0 / t.dt()) * (field_new - field_old);
   }
 
-  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
     return value(t, states[0], states[1]);
   }
 
-  FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+  FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
     return dot(t, states[0], states[1]);
   }
 
-  FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override {
-     SLIC_ERROR("BackwardEulerFirstOrderTimeIntegrationRule does not support second derivatives.");
-     return states[0];
+  FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
+  {
+    SLIC_ERROR("BackwardEulerFirstOrderTimeIntegrationRule does not support second derivatives.");
+    return states[0];
   }
 };
 
@@ -80,9 +78,8 @@ using QuasiStaticFirstOrderTimeIntegrationRule = BackwardEulerFirstOrderTimeInte
 /// When solving f(u, u_dot, u_dot_dot, t) = 0
 /// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
-struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRule 
-{
-  public:
+struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRule {
+ public:
   /// @brief Constructor
   ImplicitNewmarkSecondOrderTimeIntegrationRule() {}
 
@@ -114,15 +111,18 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRul
     return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
   }
 
-  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
     return value(t, states[0], states[1], states[2], states[3]);
   }
 
-  FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+  FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
     return dot(t, states[0], states[1], states[2], states[3]);
   }
 
-  FieldState corrected_ddot(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+  FieldState corrected_ddot(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
     return ddot(t, states[0], states[1], states[2], states[3]);
   }
 };
@@ -131,9 +131,8 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRul
 /// When solving f(u, u_dot, u_dot_dot, t) = 0
 /// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
-struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule 
-{
-  public:
+struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule {
+ public:
   /// @brief Constructor
   QuasiStaticSecondOrderTimeIntegrationRule() {}
 
@@ -164,15 +163,18 @@ struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule
     return accel_old;
   }
 
-  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
     return value(t, states[0], states[1], states[2], states[3]);
   }
 
-  FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+  FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
     return dot(t, states[0], states[1], states[2], states[3]);
   }
 
-  FieldState corrected_ddot(const TimeInfo& t, const std::vector<FieldState>& states) const override {
+  FieldState corrected_ddot(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
     return ddot(t, states[0], states[1], states[2], states[3]);
   }
 };

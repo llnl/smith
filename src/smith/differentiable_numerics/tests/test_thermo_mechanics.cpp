@@ -131,7 +131,6 @@ struct SolidMechanicsMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh_;
 };
 
-
 TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
 {
   SMITH_MARK_FUNCTION;
@@ -142,9 +141,7 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
-  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    return 0.0;
-  });
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 0.0; });
 
   system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
@@ -172,13 +169,13 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
 
   pv_writer.write(cycle, time, states);
   for (size_t step = 0; step < 10; ++step) {
-     TimeInfo t_info(time, dt, step);
-     auto states_and_reactions = system.advancer->advanceState(t_info, shape_disp, states, params);
-     states = states_and_reactions.first;
-     reactions = states_and_reactions.second;
-     time += dt;
-     cycle++;
-     pv_writer.write(cycle, time, states);
+    TimeInfo t_info(time, dt, step);
+    auto states_and_reactions = system.advancer->advanceState(t_info, shape_disp, states, params);
+    states = states_and_reactions.first;
+    reactions = states_and_reactions.second;
+    time += dt;
+    cycle++;
+    pv_writer.write(cycle, time, states);
   }
 
   std::cout << "DEBUG: About to compute reaction_squared" << std::endl;
@@ -205,9 +202,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
   auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
-  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    return 0.0;
-  });
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 0.0; });
 
   system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("left"));
   system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
@@ -266,22 +261,25 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
   auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
-  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    return 0.0;
-  });
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 0.0; });
 
   // Arbitrary affine displacement: u(X) = G * X, where G is a constant displacement gradient
   // Choose a small uniform deformation with both normal and shear components
   tensor<double, dim, dim> G;
-  G[0][0] = 0.02; G[0][1] = 0.01; G[0][2] = 0.005;
-  G[1][0] = 0.01; G[1][1] = 0.03; G[1][2] = 0.002;
-  G[2][0] = 0.005; G[2][1] = 0.002; G[2][2] = 0.015;
+  G[0][0] = 0.02;
+  G[0][1] = 0.01;
+  G[0][2] = 0.005;
+  G[1][0] = 0.01;
+  G[1][1] = 0.03;
+  G[1][2] = 0.002;
+  G[2][0] = 0.005;
+  G[2][1] = 0.002;
+  G[2][2] = 0.015;
 
   auto u_exact_func = [G](auto X) { return dot(G, X); };
 
-  system.disp_bc->setVectorBCs<dim>(mesh_->entireBoundary(), [=](double, tensor<double, dim> X) {
-    return u_exact_func(X);
-  });
+  system.disp_bc->setVectorBCs<dim>(mesh_->entireBoundary(),
+                                    [=](double, tensor<double, dim> X) { return u_exact_func(X); });
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->entireBoundary());
 
   double dt = 1.0;
@@ -309,7 +307,8 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
     return inner(u_val - exact, u_val - exact);
   });
 
-  double l2_error_sq = error_obj.evaluate(TimeInfo(time+dt, dt, 0), shape_disp.get().get(), getConstFieldPointers({final_disp}));
+  double l2_error_sq =
+      error_obj.evaluate(TimeInfo(time + dt, dt, 0), shape_disp.get().get(), getConstFieldPointers({final_disp}));
   double l2_error = std::sqrt(l2_error_sq);
 
   std::cout << "Static Elasticity L2 Error (affine patch test): " << l2_error << std::endl;
