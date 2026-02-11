@@ -124,10 +124,6 @@ struct SolidMechanicsMeshFixture : public testing::Test {
     mesh_->addDomainOfBoundaryElements("right", smith::by_attr<dim>(5));
   }
 
-  static constexpr double total_simulation_time_ = 1.1;
-  static constexpr size_t num_steps_ = 4;
-  static constexpr double dt_ = total_simulation_time_ / num_steps_;
-
   axom::sidre::DataStore datastore_;
   std::shared_ptr<smith::Mesh> mesh_;
 };
@@ -172,6 +168,7 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
      pv_writer.write(cycle, time, states);
   }
 
+  
   EXPECT_EQ(0, 0);
 }
 
