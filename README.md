@@ -1,4 +1,5 @@
 # <img src="/share/smith/logo/smith-logo-orange.png?raw=true" width="150" alt="Smith"/>
+[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/llnl/smith)
 
 [![Build Status](https://github.com/LLNL/smith/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/LLNL/smith/actions/workflows/unit-tests.yml)
 [![Documentation Status](https://readthedocs.org/projects/serac/badge/?version=latest)](https://llnlsmith.readthedocs.io/en/latest/?badge=latest)
