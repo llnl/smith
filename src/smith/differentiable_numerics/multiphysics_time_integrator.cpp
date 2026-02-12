@@ -88,7 +88,8 @@ std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionMan
   return bcs;
 }
 
-size_t FieldStore::getFieldIndex(const std::string& field_name) const {
+size_t FieldStore::getFieldIndex(const std::string& field_name) const
+{
   if (to_states_index_.count(field_name)) {
     return to_states_index_.at(field_name);
   }
@@ -96,7 +97,7 @@ size_t FieldStore::getFieldIndex(const std::string& field_name) const {
     return to_params_index_.at(field_name);
   }
   SLIC_ERROR("Field or parameter '" << field_name << "' not found in getFieldIndex");
-  return 0; // unreachable
+  return 0;  // unreachable
 }
 
 FieldState FieldStore::getField(const std::string& field_name) const
@@ -112,7 +113,7 @@ FieldState FieldStore::getField(const std::string& field_name) const
     return params_[param_index];
   }
   SLIC_ERROR("Field or parameter '" << field_name << "' not found");
-  return states_[0]; // unreachable, but needed for compilation
+  return states_[0];  // unreachable, but needed for compilation
 }
 
 FieldState FieldStore::getParameter(const std::string& param_name) const
@@ -146,8 +147,8 @@ std::vector<FieldState> FieldStore::getStates(const std::string& weak_form_name)
 }
 
 std::vector<FieldState> FieldStore::getStatesFromVectors(const std::string& weak_form_name,
-                                                          const std::vector<FieldState>& state_fields,
-                                                          const std::vector<FieldState>& param_fields) const
+                                                         const std::vector<FieldState>& state_fields,
+                                                         const std::vector<FieldState>& param_fields) const
 {
   auto field_names = weak_form_name_to_field_names_.at(weak_form_name);
   std::vector<FieldState> fields_for_residual;
@@ -161,8 +162,7 @@ std::vector<FieldState> FieldStore::getStatesFromVectors(const std::string& weak
     else if (to_params_index_.count(name)) {
       size_t idx = to_params_index_.at(name);
       fields_for_residual.push_back(param_fields[idx]);
-    }
-    else {
+    } else {
       SLIC_ERROR("Field or parameter '" << name << "' not found in getStatesFromVectors");
     }
   }

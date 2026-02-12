@@ -31,8 +31,8 @@ struct FieldType {
    * @param unknown_index_ Index of the unknown in the solver (default: -1).
    */
   FieldType(std::string n, int unknown_index_ = -1) : name(n), unknown_index(unknown_index_) {}
-  std::string name;        ///< Name of the field.
-  int unknown_index;       ///< Index of the unknown in the solver.
+  std::string name;   ///< Name of the field.
+  int unknown_index;  ///< Index of the unknown in the solver.
 };
 
 /**
@@ -197,7 +197,8 @@ struct FieldStore {
 
   /**
    * @brief Get all registered time integration rules and their mappings.
-   * @return const std::vector<std::pair<std::shared_ptr<TimeIntegrationRule>, TimeIntegrationMapping>>& List of rules and mappings.
+   * @return const std::vector<std::pair<std::shared_ptr<TimeIntegrationRule>, TimeIntegrationMapping>>& List of rules
+   * and mappings.
    */
   const std::vector<std::pair<std::shared_ptr<TimeIntegrationRule>, TimeIntegrationMapping>>& getTimeIntegrationRules()
       const;
@@ -289,8 +290,8 @@ struct FieldStore {
    * @return std::vector<FieldState> Subset of fields relevant to the weak form.
    */
   std::vector<FieldState> getStatesFromVectors(const std::string& weak_form_name,
-                                                const std::vector<FieldState>& state_fields,
-                                                const std::vector<FieldState>& param_fields) const;
+                                               const std::vector<FieldState>& state_fields,
+                                               const std::vector<FieldState>& param_fields) const;
 
   /**
    * @brief Get the associated mesh.
@@ -305,7 +306,7 @@ struct FieldStore {
   std::vector<FieldState> shape_disp_;
   std::vector<FieldState> params_;
   std::vector<FieldState> states_;
-  
+
   std::map<std::string, size_t> to_states_index_;
   std::map<std::string, size_t> to_params_index_;
 
@@ -427,16 +428,17 @@ struct ThermoMechanicsSystem {
       dim, H1<temp_order>,
       Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
 
-  std::shared_ptr<FieldStore> field_store;           ///< Field store managing the system's fields.
-  std::shared_ptr<SolidWeakFormType> solid_weak_form; ///< Solid mechanics weak form.
-  std::shared_ptr<ThermalWeakFormType> thermal_weak_form; ///< Thermal weak form.
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;   ///< Displacement boundary conditions.
-  std::shared_ptr<DirichletBoundaryConditions> temperature_bc; ///< Temperature boundary conditions.
-  std::shared_ptr<DifferentiableBlockSolver> solver;    ///< The solver for the coupled system.
-  std::shared_ptr<StateAdvancer> advancer;              ///< The multiphysics state advancer.
-  std::shared_ptr<QuasiStaticFirstOrderTimeIntegrationRule> disp_time_rule; ///< Time integration for displacement.
-  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule> temperature_time_rule; ///< Time integration for temperature.
-  std::vector<FieldState> parameter_fields;             ///< Optional parameter fields.
+  std::shared_ptr<FieldStore> field_store;                      ///< Field store managing the system's fields.
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;           ///< Solid mechanics weak form.
+  std::shared_ptr<ThermalWeakFormType> thermal_weak_form;       ///< Thermal weak form.
+  std::shared_ptr<DirichletBoundaryConditions> disp_bc;         ///< Displacement boundary conditions.
+  std::shared_ptr<DirichletBoundaryConditions> temperature_bc;  ///< Temperature boundary conditions.
+  std::shared_ptr<DifferentiableBlockSolver> solver;            ///< The solver for the coupled system.
+  std::shared_ptr<StateAdvancer> advancer;                      ///< The multiphysics state advancer.
+  std::shared_ptr<QuasiStaticFirstOrderTimeIntegrationRule> disp_time_rule;  ///< Time integration for displacement.
+  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule>
+      temperature_time_rule;                 ///< Time integration for temperature.
+  std::vector<FieldState> parameter_fields;  ///< Optional parameter fields.
 
   /**
    * @brief Get the list of all state fields (current and old).
@@ -472,29 +474,29 @@ struct ThermoMechanicsSystem {
 
     if constexpr (sizeof...(parameter_space) == 0) {
       // NO parameters - simpler version for testing
-      solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
-                                                        auto temperature, auto temperature_old) {
-        auto u = dtr->value(t_info, disp, disp_old);
-        auto v = dtr->dot(t_info, disp, disp_old);
-        auto T = ttr->value(t_info, temperature, temperature_old);
-        typename MaterialType::State state;
-        auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
-                                          get<DERIVATIVE>(T));
-        return smith::tuple{smith::zero{}, pk};
-      });
+      solid_weak_form->addBodyIntegral(
+          domain_name, [=](auto t_info, auto /*X*/, auto disp, auto disp_old, auto temperature, auto temperature_old) {
+            auto u = dtr->value(t_info, disp, disp_old);
+            auto v = dtr->dot(t_info, disp, disp_old);
+            auto T = ttr->value(t_info, temperature, temperature_old);
+            typename MaterialType::State state;
+            auto [pk, C_v, s0, q0] =
+                material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
+            return smith::tuple{smith::zero{}, pk};
+          });
 
-      thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old,
-                                                          auto disp, auto disp_old) {
-        typename MaterialType::State state;
-        auto u = dtr->value(t_info, disp, disp_old);
-        auto v = dtr->dot(t_info, disp, disp_old);
-        auto T = ttr->value(t_info, temperature, temperature_old);
-        auto T_dot = ttr->dot(t_info, temperature, temperature_old);
-        auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
-                                          get<DERIVATIVE>(T));
-        auto dT_dt = get<VALUE>(T_dot);
-        return smith::tuple{C_v * dT_dt - s0, -q0};
-      });
+      thermal_weak_form->addBodyIntegral(
+          domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old, auto disp, auto disp_old) {
+            typename MaterialType::State state;
+            auto u = dtr->value(t_info, disp, disp_old);
+            auto v = dtr->dot(t_info, disp, disp_old);
+            auto T = ttr->value(t_info, temperature, temperature_old);
+            auto T_dot = ttr->dot(t_info, temperature, temperature_old);
+            auto [pk, C_v, s0, q0] =
+                material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
+            auto dT_dt = get<VALUE>(T_dot);
+            return smith::tuple{C_v * dT_dt - s0, -q0};
+          });
     } else {
       // WITH parameters
       solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
@@ -508,18 +510,19 @@ struct ThermoMechanicsSystem {
         return smith::tuple{smith::zero{}, pk};
       });
 
-      thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old,
-                                                          auto disp, auto disp_old, auto... params) {
-        typename MaterialType::State state;
-        auto u = dtr->value(t_info, disp, disp_old);
-        auto v = dtr->dot(t_info, disp, disp_old);
-        auto T = ttr->value(t_info, temperature, temperature_old);
-        auto T_dot = ttr->dot(t_info, temperature, temperature_old);
-        auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
-                                          get<DERIVATIVE>(T), params...);
-        auto dT_dt = get<VALUE>(T_dot);
-        return smith::tuple{C_v * dT_dt - s0, -q0};
-      });
+      thermal_weak_form->addBodyIntegral(
+          domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old, auto disp, auto disp_old,
+                           auto... params) {
+            typename MaterialType::State state;
+            auto u = dtr->value(t_info, disp, disp_old);
+            auto v = dtr->dot(t_info, disp, disp_old);
+            auto T = ttr->value(t_info, temperature, temperature_old);
+            auto T_dot = ttr->dot(t_info, temperature, temperature_old);
+            auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
+                                              get<DERIVATIVE>(T), params...);
+            auto dT_dt = get<VALUE>(T_dot);
+            return smith::tuple{C_v * dT_dt - s0, -q0};
+          });
     }
   }
 };
