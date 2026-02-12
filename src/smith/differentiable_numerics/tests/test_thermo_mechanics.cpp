@@ -81,7 +81,7 @@ struct GreenSaintVenantThermoelasticMaterial {
     // internal heat power
     auto greenStrainRate =
         0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
-    const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate);
+    const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate) + 0.0 * E;
 
     // heat flux
     const auto q0 = -kappa * grad_theta;
@@ -186,14 +186,49 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
     pv_writer.write(cycle, time, states);
   }
 
-  printf("a0\n");
+  // Check that reactions are zero for unconstrained DOFs (should be within solver tolerance)
+  printf("Checking reaction forces on unconstrained DOFs\n");
+
+  // Check solid (displacement) reactions
+  {
+    auto& solid_reactions = *reactions[0].get();
+    auto& disp_bc_manager = system.disp_bc->getBoundaryConditionManager();
+
+    // Copy reactions to a FiniteElementState
+    FiniteElementState unconstrained_reactions(solid_reactions.space(), "unconstrained_solid_reactions");
+    unconstrained_reactions = solid_reactions;
+
+    // Zero out constrained DOFs
+    unconstrained_reactions.SetSubVector(disp_bc_manager.allEssentialTrueDofs(), 0.0);
+
+    // Check that remaining (unconstrained) values are ~0
+    double max_unconstrained = unconstrained_reactions.Normlinf();
+    printf("Solid: Max unconstrained reaction force: %e\n", max_unconstrained);
+    EXPECT_LT(max_unconstrained, 1e-6);  // Should be ~solver tolerance
+  }
+
+  // Check thermal (temperature) reactions
+  {
+    auto& thermal_reactions = *reactions[1].get();
+    auto& temp_bc_manager = system.temperature_bc->getBoundaryConditionManager();
+
+    // Copy reactions to a FiniteElementState
+    FiniteElementState unconstrained_reactions(thermal_reactions.space(), "unconstrained_thermal_reactions");
+    unconstrained_reactions = thermal_reactions;
+
+    // Zero out constrained DOFs
+    unconstrained_reactions.SetSubVector(temp_bc_manager.allEssentialTrueDofs(), 0.0);
+
+    // Check that remaining (unconstrained) values are ~0
+    double max_unconstrained = unconstrained_reactions.Normlinf();
+    printf("Thermal: Max unconstrained reaction force: %e\n", max_unconstrained);
+    EXPECT_LT(max_unconstrained, 1e-6);  // Should be ~solver tolerance
+  }
+
   auto reaction_squared = innerProduct(reactions[0], reactions[0]);
-  printf("a1\n");
   gretl::set_as_objective(reaction_squared);
-  printf("a\n");
-  // EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
-  printf("b\n");
+  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
+  //EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
 }
 
 TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)

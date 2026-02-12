@@ -139,6 +139,8 @@ struct FieldStore {
 
   FieldState getField(const std::string& field_name) const;
 
+  FieldState getParameter(const std::string& param_name) const;
+
   void setField(const std::string& field_name, FieldState updated_field);
 
   void setField(size_t index, FieldState updated_field);
@@ -148,6 +150,10 @@ struct FieldStore {
   const std::vector<FieldState>& getAllFields() const;
 
   std::vector<FieldState> getStates(const std::string& weak_form_name) const;
+
+  std::vector<FieldState> getStatesFromVectors(const std::string& weak_form_name,
+                                                const std::vector<FieldState>& state_fields,
+                                                const std::vector<FieldState>& param_fields) const;
 
   const std::shared_ptr<smith::Mesh>& getMesh() const;
 
@@ -176,6 +182,7 @@ struct FieldStore {
   std::map<std::string, std::vector<FieldLabel>> weak_form_name_to_unknown_name_index_;
 
   std::map<std::string, std::vector<size_t>> weak_form_name_to_field_indices_;
+  std::map<std::string, std::vector<std::string>> weak_form_name_to_field_names_;
 
   std::map<std::string, std::string> weak_form_to_test_field_;
 

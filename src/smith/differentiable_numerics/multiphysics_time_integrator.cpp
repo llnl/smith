@@ -37,13 +37,13 @@ void FieldStore::addWeakFormUnknownArg(std::string weak_form_name, std::string a
 
 void FieldStore::addWeakFormArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
 {
-  size_t field_index = to_states_index_.at(argument_name);
-  if (weak_form_name_to_field_indices_.count(weak_form_name)) {
-    weak_form_name_to_field_indices_.at(weak_form_name).push_back(field_index);
+  // Store the field name instead of index to avoid confusion between states_ and params_ indices
+  if (weak_form_name_to_field_names_.count(weak_form_name)) {
+    weak_form_name_to_field_names_.at(weak_form_name).push_back(argument_name);
   } else {
-    weak_form_name_to_field_indices_[weak_form_name] = std::vector<size_t>{field_index};
+    weak_form_name_to_field_names_[weak_form_name] = std::vector<std::string>{argument_name};
   }
-  SLIC_ERROR_IF(argument_index + 1 != weak_form_name_to_field_indices_.at(weak_form_name).size(),
+  SLIC_ERROR_IF(argument_index + 1 != weak_form_name_to_field_names_.at(weak_form_name).size(),
                 "Invalid order for adding weak form arguments.");
 }
 
@@ -88,12 +88,37 @@ std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionMan
   return bcs;
 }
 
-size_t FieldStore::getFieldIndex(const std::string& field_name) const { return to_states_index_.at(field_name); }
+size_t FieldStore::getFieldIndex(const std::string& field_name) const {
+  if (to_states_index_.count(field_name)) {
+    return to_states_index_.at(field_name);
+  }
+  if (to_params_index_.count(field_name)) {
+    return to_params_index_.at(field_name);
+  }
+  SLIC_ERROR("Field or parameter '" << field_name << "' not found in getFieldIndex");
+  return 0; // unreachable
+}
 
 FieldState FieldStore::getField(const std::string& field_name) const
 {
-  size_t field_index = getFieldIndex(field_name);
-  return states_[field_index];
+  // Check if it's a state field
+  if (to_states_index_.count(field_name)) {
+    size_t field_index = to_states_index_.at(field_name);
+    return states_[field_index];
+  }
+  // Otherwise check if it's a parameter
+  if (to_params_index_.count(field_name)) {
+    size_t param_index = to_params_index_.at(field_name);
+    return params_[param_index];
+  }
+  SLIC_ERROR("Field or parameter '" << field_name << "' not found");
+  return states_[0]; // unreachable, but needed for compilation
+}
+
+FieldState FieldStore::getParameter(const std::string& param_name) const
+{
+  size_t param_index = to_params_index_.at(param_name);
+  return params_[param_index];
 }
 
 void FieldStore::setField(const std::string& field_name, FieldState updated_field)
@@ -108,10 +133,34 @@ const std::vector<FieldState>& FieldStore::getAllFields() const { return states_
 
 std::vector<FieldState> FieldStore::getStates(const std::string& weak_form_name) const
 {
-  auto unknown_field_indices = weak_form_name_to_field_indices_.at(weak_form_name);
+  auto field_names = weak_form_name_to_field_names_.at(weak_form_name);
   std::vector<FieldState> fields_for_residual;
-  for (auto& i : unknown_field_indices) {
-    fields_for_residual.push_back(states_[i]);
+  for (auto& name : field_names) {
+    fields_for_residual.push_back(getField(name));
+  }
+  return fields_for_residual;
+}
+
+std::vector<FieldState> FieldStore::getStatesFromVectors(const std::string& weak_form_name,
+                                                          const std::vector<FieldState>& state_fields,
+                                                          const std::vector<FieldState>& param_fields) const
+{
+  auto field_names = weak_form_name_to_field_names_.at(weak_form_name);
+  std::vector<FieldState> fields_for_residual;
+  for (auto& name : field_names) {
+    // Check if it's a state field
+    if (to_states_index_.count(name)) {
+      size_t idx = to_states_index_.at(name);
+      fields_for_residual.push_back(state_fields[idx]);
+    }
+    // Otherwise check if it's a parameter
+    else if (to_params_index_.count(name)) {
+      size_t idx = to_params_index_.at(name);
+      fields_for_residual.push_back(param_fields[idx]);
+    }
+    else {
+      SLIC_ERROR("Field or parameter '" << name << "' not found in getStatesFromVectors");
+    }
   }
   return fields_for_residual;
 }
@@ -156,22 +205,27 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiPhysicsTimeI
 
   std::vector<FieldState> primary_unknowns = solve(weak_forms_, *field_store_, solver_.get(), time_info, params);
 
+  // Compute reactions BEFORE time integration updates, using newly solved primal unknowns and old states
+  // Build state vector with: new primary unknowns + old states from input
+  std::vector<FieldState> states_for_reactions = states;
+  for (const auto& [rule, mapping] : field_store_->getTimeIntegrationRules()) {
+    size_t u_idx = field_store_->getFieldIndex(mapping.primary_name);
+    size_t unknown_idx = field_store_->getUnknownIndex(mapping.primary_name);
+    FieldState u_new = primary_unknowns[unknown_idx];
+    states_for_reactions[u_idx] = u_new;  // Update primary unknown with newly solved value
+    // Keep old states (displacement_old, temperature_old) from input 'states'
+  }
+
   std::vector<ReactionState> reactions;
   for (const auto& wf : weak_forms_) {
-    auto wf_fields = field_store_->getStates(wf->name());
+    std::vector<FieldState> wf_fields = field_store_->getStatesFromVectors(wf->name(), states_for_reactions, params);
     std::string test_field_name = field_store_->getWeakFormTestField(wf->name());
     size_t test_field_idx = field_store_->getFieldIndex(test_field_name);
-    std::cout << "test field id = " << test_field_idx << std::endl;
-    FieldState test_field = primary_unknowns[test_field_idx];
-    wf_fields.insert(wf_fields.end(), params.begin(), params.end());
-    std::cout << "res " << wf->name() << " " << test_field.get()->name() << " ";
-    for (auto& f : wf_fields) {
-      std::cout << f.get()->name() <<  " ";
-    }
-    std::cout << std::endl;
+    FieldState test_field = states_for_reactions[test_field_idx];
     reactions.push_back(smith::evaluateWeakForm(wf, time_info, shape_disp, wf_fields, test_field));
   }
 
+  // Now do time integration to compute corrected velocities/accelerations and update all states
   std::vector<FieldState> new_states = states;
 
   for (const auto& [rule, mapping] : field_store_->getTimeIntegrationRules()) {
@@ -194,8 +248,6 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiPhysicsTimeI
       rule_inputs.push_back(states[a_idx]);
     }
 
-
-
     if (!mapping.dot_name.empty()) {
       size_t v_idx = field_store_->getFieldIndex(mapping.dot_name);
       new_states[v_idx] = rule->corrected_dot(time_info, rule_inputs);
@@ -211,7 +263,6 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiPhysicsTimeI
       new_states[hist_idx] = u_new;
     }
   }
-
 
   return {new_states, reactions};
 }
