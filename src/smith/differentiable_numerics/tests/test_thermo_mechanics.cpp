@@ -174,7 +174,6 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   auto params = system.getParameterFields();
   std::vector<ReactionState> reactions;
 
-  printf("g\n");
   pv_writer.write(cycle, time, states);
   for (size_t step = 0; step < 10; ++step) {
     TimeInfo t_info(time, dt, step);
@@ -187,48 +186,27 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   }
 
   // Check that reactions are zero for unconstrained DOFs (should be within solver tolerance)
-  printf("Checking reaction forces on unconstrained DOFs\n");
+  std::vector<std::pair<std::string, const BoundaryConditionManager*>> reaction_checks = {
+      {"Solid", &system.disp_bc->getBoundaryConditionManager()},
+      {"Thermal", &system.temperature_bc->getBoundaryConditionManager()}};
 
-  // Check solid (displacement) reactions
-  {
-    auto& solid_reactions = *reactions[0].get();
-    auto& disp_bc_manager = system.disp_bc->getBoundaryConditionManager();
+  for (size_t i = 0; i < reactions.size(); ++i) {
+    auto& reaction = *reactions[i].get();
+    auto& bc_manager = *reaction_checks[i].second;
 
-    // Copy reactions to a FiniteElementState
-    FiniteElementState unconstrained_reactions(solid_reactions.space(), "unconstrained_solid_reactions");
-    unconstrained_reactions = solid_reactions;
+    FiniteElementState unconstrained_reactions(reaction.space(), "unconstrained_reactions");
+    unconstrained_reactions = reaction;
+    unconstrained_reactions.SetSubVector(bc_manager.allEssentialTrueDofs(), 0.0);
 
-    // Zero out constrained DOFs
-    unconstrained_reactions.SetSubVector(disp_bc_manager.allEssentialTrueDofs(), 0.0);
-
-    // Check that remaining (unconstrained) values are ~0
     double max_unconstrained = unconstrained_reactions.Normlinf();
-    printf("Solid: Max unconstrained reaction force: %e\n", max_unconstrained);
-    EXPECT_LT(max_unconstrained, 1e-6);  // Should be ~solver tolerance
-  }
-
-  // Check thermal (temperature) reactions
-  {
-    auto& thermal_reactions = *reactions[1].get();
-    auto& temp_bc_manager = system.temperature_bc->getBoundaryConditionManager();
-
-    // Copy reactions to a FiniteElementState
-    FiniteElementState unconstrained_reactions(thermal_reactions.space(), "unconstrained_thermal_reactions");
-    unconstrained_reactions = thermal_reactions;
-
-    // Zero out constrained DOFs
-    unconstrained_reactions.SetSubVector(temp_bc_manager.allEssentialTrueDofs(), 0.0);
-
-    // Check that remaining (unconstrained) values are ~0
-    double max_unconstrained = unconstrained_reactions.Normlinf();
-    printf("Thermal: Max unconstrained reaction force: %e\n", max_unconstrained);
-    EXPECT_LT(max_unconstrained, 1e-6);  // Should be ~solver tolerance
+    EXPECT_LT(max_unconstrained, 1e-8);  // Should be ~solver tolerance
   }
 
   auto reaction_squared = innerProduct(reactions[0], reactions[0]);
   gretl::set_as_objective(reaction_squared);
+
   EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  //EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
 }
 
 TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
@@ -308,7 +286,7 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
   GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 0.0, kappa};
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
-  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  FieldType<H1<1>> youngs_modulus("youngs_modulus");
   auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 

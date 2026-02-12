@@ -136,7 +136,11 @@ std::vector<FieldState> FieldStore::getStates(const std::string& weak_form_name)
   auto field_names = weak_form_name_to_field_names_.at(weak_form_name);
   std::vector<FieldState> fields_for_residual;
   for (auto& name : field_names) {
-    fields_for_residual.push_back(getField(name));
+    // Only include state fields, not parameters
+    // Parameters are passed separately to avoid duplication in block_solve
+    if (to_states_index_.count(name)) {
+      fields_for_residual.push_back(getField(name));
+    }
   }
   return fields_for_residual;
 }

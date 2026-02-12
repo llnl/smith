@@ -368,6 +368,13 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
+
+    // fields.size() should always match the number of InputSpaces in the weak form template
+    SLIC_ERROR_IF(fields.size() != sizeof...(input_indices),
+                  "VJP fields size mismatch: fields.size()=" << fields.size()
+                  << " but weak form has " << sizeof...(input_indices) << " InputSpaces. "
+                  << "This likely means parameters are being duplicated in FieldStore::getStates()");
+
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{},
                                            time_info.time(), shape_disp, v_field, fields);
     {
