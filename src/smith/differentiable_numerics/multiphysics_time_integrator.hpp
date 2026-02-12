@@ -421,9 +421,12 @@ class MultiPhysicsTimeIntegrator : public StateAdvancer {
  */
 template <int dim, int disp_order, int temp_order, typename... parameter_space>
 struct ThermoMechanicsSystem {
+  /// @brief using for SolidWeakFormType
   using SolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<disp_order, dim>,
       Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<temp_order>, H1<temp_order>, parameter_space...>>;
+
+  /// @brief using for ThermalWeakFormType
   using ThermalWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<temp_order>,
       Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
