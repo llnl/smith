@@ -289,6 +289,26 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     SLIC_ERROR_IF(num_rows_ != block_indices[r].size(), "All block index rows must have the same number of columns");
   }
 
+  // Validate block_indices bounds against states sizes
+  for (size_t row = 0; row < num_rows_; ++row) {
+    for (size_t col = 0; col < num_rows_; ++col) {
+      size_t idx = block_indices[row][col];
+      if (idx != invalid_block_index) {
+        SLIC_ERROR_IF(
+            idx >= states[row].size(),
+            axom::fmt::format(
+                "block_indices[{}][{}] = {} is out of bounds (states[{}].size() = {})",
+                row, col, idx, row, states[row].size()));
+      }
+    }
+    // Validate that diagonal entry is not invalid
+    SLIC_ERROR_IF(
+        block_indices[row][row] == invalid_block_index,
+        axom::fmt::format(
+            "block_indices[{}][{}] (diagonal entry) must not be invalid_block_index",
+            row, row));
+  }
+
   std::vector<size_t> num_state_inputs;
   std::vector<gretl::StateBase> allFields;
   for (auto& ss : states) {
