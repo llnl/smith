@@ -463,3 +463,5 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
   }
   return dcdu_.get();
 }
+
+InertialReliefProblem::~InertialReliefProblem() {}

@@ -79,7 +79,7 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool update_fields,
                                      bool fresh_derivative) const;
   void fullDisplacement(const mfem::Vector& x, mfem::Vector& u);
-  virtual ~TiedContactProblem() {}
+  virtual ~TiedContactProblem();
 };
 
 class ParaviewWriter {
@@ -406,4 +406,9 @@ mfem::Vector TiedContactProblem<SolidWeakFormType>::constraintJacobianTvp(const 
       time_info_.time(), time_info_.dt(), smith::getConstFieldPointers(contact_states_), l, smith::ContactFields::DISP,
       update_fields, fresh_derivative);
   return res_contribution;
+}
+
+template <typename SolidWeakFormType>
+TiedContactProblem<SolidWeakFormType>::~TiedContactProblem()
+{
 }

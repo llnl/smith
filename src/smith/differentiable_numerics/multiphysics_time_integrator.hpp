@@ -486,19 +486,18 @@ struct ThermoMechanicsSystem {
       return smith::tuple{smith::zero{}, pk};
     });
 
-    thermal_weak_form->addBodyIntegral(
-        domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old, auto disp, auto disp_old,
-                          auto... params) {
-          typename MaterialType::State state;
-          auto u = dtr->value(t_info, disp, disp_old);
-          auto v = dtr->dot(t_info, disp, disp_old);
-          auto T = ttr->value(t_info, temperature, temperature_old);
-          auto T_dot = ttr->dot(t_info, temperature, temperature_old);
-          auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
-                                            get<DERIVATIVE>(T), params...);
-          auto dT_dt = get<VALUE>(T_dot);
-          return smith::tuple{C_v * dT_dt - s0, -q0};
-        });
+    thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old,
+                                                        auto disp, auto disp_old, auto... params) {
+      typename MaterialType::State state;
+      auto u = dtr->value(t_info, disp, disp_old);
+      auto v = dtr->dot(t_info, disp, disp_old);
+      auto T = ttr->value(t_info, temperature, temperature_old);
+      auto T_dot = ttr->dot(t_info, temperature, temperature_old);
+      auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
+                                        get<DERIVATIVE>(T), params...);
+      auto dT_dt = get<VALUE>(T_dot);
+      return smith::tuple{C_v * dT_dt - s0, -q0};
+    });
   }
 };
 
