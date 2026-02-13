@@ -15,7 +15,7 @@
 #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
-#include "gretl/strumm_walther_checkpoint_strategy.hpp"
+#include "gretl/wang_checkpoint_strategy.hpp"
 
 namespace smith {
 
@@ -40,7 +40,7 @@ auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
                          std::string physics_name, const std::vector<std::string>& param_names = {})
 {
   auto graph =
-      std::make_shared<gretl::DataStore>(std::make_unique<gretl::StrummWaltherCheckpointStrategy>(num_checkpoints));
+      std::make_shared<gretl::DataStore>(std::make_unique<gretl::WangCheckpointStrategy>(num_checkpoints));
   auto [shape_disp, states, params, time, solid_mechanics_weak_form] =
       SolidMechanicsStateAdvancer::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ParamSpaces...>(
           mesh, graph, time_rule, physics_name, param_names);

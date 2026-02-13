@@ -391,6 +391,92 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
   }
 }
 
+TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
+{
+  SMITH_MARK_FUNCTION;
+  std::string physics_name = "solid";
+
+  // 1. Calculate sensitivities using Gretl
+  auto [physicsGretl, shape_dispG, initial_statesG, paramsG, bcsG] = createSolidMechanicsBasePhysics(physics_name + "_gretl", mesh);
+
+  // Forward pass
+  for (size_t m = 0; m < num_steps_; ++m) {
+    physicsGretl->advanceTimestep(dt_);
+  }
+
+  auto reactionsG = physicsGretl->getReactionStates();
+  auto reaction_squaredG = 0.5 * innerProduct(reactionsG[0], reactionsG[0]);
+
+  // Backprop
+  gretl::set_as_objective(reaction_squaredG);
+  reaction_squaredG.data_store().back_prop();
+
+  // 2. Calculate sensitivities using BasePhysics manual adjoint
+  auto [physicsBase, shape_dispB, initial_statesB, paramsB, bcsB] = createSolidMechanicsBasePhysics(physics_name + "_base", mesh);
+
+  // Forward pass
+  double qoiB = integrateForward(physicsBase, num_steps_, dt_);
+
+  // Adjoint pass
+  size_t num_params = physicsBase->parameterNames().size();
+  smith::FiniteElementDual shape_sensitivityB(*shape_dispB.get_dual());
+  shape_sensitivityB = 0.0;
+  std::vector<smith::FiniteElementDual> parameter_sensitivitiesB;
+  for (size_t p = 0; p < num_params; ++p) {
+    parameter_sensitivitiesB.emplace_back(*paramsB[p].get_dual());
+    parameter_sensitivitiesB.back() = 0.0;
+  }
+
+  adjointBackward(physicsBase, shape_sensitivityB, parameter_sensitivitiesB);
+  auto initial_condition_sensitivitiesB = physicsBase->computeInitialConditionSensitivity();
+
+  // 3. Compare sensitivities
+  double tol = 1e-12;
+
+  // Compare objective values
+  EXPECT_NEAR(reaction_squaredG.get(), qoiB, tol);
+
+  auto diff_norm = [](const mfem::Vector& a, const mfem::Vector& b) {
+    mfem::Vector diff = a;
+    diff -= b;
+    return diff.Norml2();
+  };
+
+  // Compare shape sensitivities
+  double shape_diff = diff_norm(*shape_dispG.get_dual(), shape_sensitivityB);
+  SLIC_INFO_ROOT(axom::fmt::format("Shape sensitivity difference: {:.6e}", shape_diff));
+  EXPECT_LT(shape_diff, tol);
+
+  // Compare parameter sensitivities
+  for (size_t p = 0; p < num_params; ++p) {
+    double param_diff = diff_norm(*paramsG[p].get_dual(), parameter_sensitivitiesB[p]);
+    SLIC_INFO_ROOT(axom::fmt::format("Parameter {} sensitivity difference: {:.6e}", p, param_diff));
+    EXPECT_LT(param_diff, tol);
+  }
+
+  // Compare initial condition sensitivities
+  std::vector<std::string> state_suffixes = {"displacement", "velocity", "acceleration"};
+  for (const auto& suffix : state_suffixes) {
+    std::string nameG = physics_name + "_gretl_" + suffix;
+    std::string nameB = physics_name + "_base_" + suffix;
+    SLIC_INFO_ROOT(axom::fmt::format("Comparing sensitivity for {}: {} vs {}", suffix, nameG, nameB));
+    
+    // Find Gretl dual
+    const FiniteElementDual* dualG = nullptr;
+    for (auto const& s : initial_statesG) {
+      if (s.get()->name() == nameG) {
+        dualG = s.get_dual().get();
+        break;
+      }
+    }
+    ASSERT_NE(dualG, nullptr) << "Could not find Gretl dual for " << nameG;
+
+    double state_diff = diff_norm(*dualG, initial_condition_sensitivitiesB.at(nameB));
+    SLIC_INFO_ROOT(axom::fmt::format("Initial state {} sensitivity difference: {:.6e}", suffix, state_diff));
+    EXPECT_LT(state_diff, tol);
+  }
+}
+
 }  // namespace smith
 
 int main(int argc, char* argv[])
