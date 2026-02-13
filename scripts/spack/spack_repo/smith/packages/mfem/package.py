@@ -11,7 +11,7 @@ class Mfem(BuiltinMfem):
     # Note: Make sure this sha coincides with the git submodule
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
-    version("4.9.0.4", commit="8efb9483bc8353cfcda3cc2531427f048f606e01")
+    version("4.9.0.4", commit="1f5bc1c3d8c3c28e277bfe8f86b0279d982344f2")
 
     patch("fe_base_omp.patch", when="+openmp+threadsafe")
 
