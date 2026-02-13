@@ -90,9 +90,9 @@ stages:
     paths:
       - _smith_build_and_test_*/output.log*.txt
       - _smith_build_and_test_*/build-*/output.log*.txt
-      - _smith_build_and_test_*/build-*/asan.out.*.*
       - _smith_build_and_test_*/build-*/*.*.logs/*.log
       - _smith_build_and_test_*/build-*/*.*.logs/*.err
+      - asan_logs/
     reports:
       junit:
       - _smith_build_and_test_*/build-*/junit.xml
