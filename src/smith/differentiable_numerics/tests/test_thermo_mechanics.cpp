@@ -106,7 +106,9 @@ smith::NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::N
                                              .print_level = 2};
 
 static constexpr int dim = 3;
-static constexpr int order = 1;
+static constexpr int vdim = dim;
+static constexpr int displacement_order = 1;
+static constexpr int temperature_order = 1;
 
 struct SolidMechanicsMeshFixture : public testing::Test {
   double length = 1.0;
@@ -145,7 +147,7 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, order, order>(mesh_, solver, youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -155,7 +157,7 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
     bc[0] = 0.01 * t;
     return bc;
   });
-  system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
+  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh_->domain("right"));
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
 
@@ -222,7 +224,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, order, order>(mesh_, solver, youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -287,7 +289,7 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<H1<1>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, order, order>(mesh_, solver, youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -328,7 +330,7 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
   auto disp_idx = system.field_store->getFieldIndex("displacement");
   FieldState final_disp = states[disp_idx];
 
-  FunctionalObjective<dim, Parameters<H1<order, dim>>> error_obj("error", mesh_, spaces({final_disp}));
+  FunctionalObjective<dim, Parameters<H1<displacement_order, vdim>>> error_obj("error", mesh_, spaces({final_disp}));
   error_obj.addBodyIntegral(DependsOn<0>{}, mesh_->entireBodyName(), [=](auto /*t*/, auto X, auto U) {
     auto u_val = get<VALUE>(U);
     auto x_val = get<0>(X);
