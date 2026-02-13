@@ -51,10 +51,10 @@ struct FieldStore {
    */
   enum class TimeDerivative
   {
-    VALUE,  ///< The value of the field.
-    DOT,    ///< The first time derivative.
-    DDOT,   ///< The second time derivative.
-    DDDOT   ///< The third time derivative.
+    VAL,   ///< The value of the field.
+    DOT,   ///< The first time derivative.
+    DDOT,  ///< The second time derivative.
+    DDDOT  ///< The third time derivative.
   };
 
   /**
@@ -123,7 +123,7 @@ struct FieldStore {
   auto addDependent(FieldType<Space> independent_field, TimeDerivative derivative, std::string name_override = "")
   {
     std::string suffix;
-    if (derivative == TimeDerivative::VALUE) {
+    if (derivative == TimeDerivative::VAL) {
       suffix = "_old";
     } else if (derivative == TimeDerivative::DOT) {
       suffix = "_dot_old";
@@ -138,7 +138,7 @@ struct FieldStore {
     if (independent_name_to_rule_index_.count(independent_field.name)) {
       size_t rule_idx = independent_name_to_rule_index_.at(independent_field.name);
       auto& mapping = time_integration_rules_[rule_idx].second;
-      if (derivative == TimeDerivative::VALUE) {
+      if (derivative == TimeDerivative::VAL) {
         mapping.history_name = name;
       } else if (derivative == TimeDerivative::DOT) {
         mapping.dot_name = name;
@@ -518,13 +518,13 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
   FieldType<H1<disp_order, dim>> disp_type("displacement");
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE);
+  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL);
 
   // Temperature field with backward Euler time integration
   auto temperature_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
   FieldType<H1<temp_order>> temperature_type("temperature");
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
-  auto temperature_old_type = field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE);
+  auto temperature_old_type = field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL);
 
   std::vector<FieldState> parameter_fields;
   (field_store->addParameter(parameter_types), ...);
