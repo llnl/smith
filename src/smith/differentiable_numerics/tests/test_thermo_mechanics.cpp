@@ -179,9 +179,7 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   pv_writer.write(cycle, time, states);
   for (size_t step = 0; step < 10; ++step) {
     TimeInfo t_info(time, dt, step);
-    auto states_and_reactions = system.advancer->advanceState(t_info, shape_disp, states, params);
-    states = states_and_reactions.first;
-    reactions = states_and_reactions.second;
+    std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
     time += dt;
     cycle++;
     pv_writer.write(cycle, time, states);
@@ -254,9 +252,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
   size_t num_steps = 10;
   for (size_t step = 0; step < num_steps; ++step) {
     TimeInfo t_info(time, dt, step);
-    auto states_and_reactions = system.advancer->advanceState(t_info, shape_disp, states, params);
-    states = states_and_reactions.first;
-    reactions = states_and_reactions.second;
+    std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
     time += dt;
   }
 
