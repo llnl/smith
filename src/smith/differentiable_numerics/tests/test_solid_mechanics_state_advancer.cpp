@@ -34,8 +34,8 @@ namespace smith {
  * @param bc Boundary conditions to identify Dirichlet DOFs.
  * @param tolerance Absolute tolerance for zero check.
  */
-void checkUnconstrainedReactionForces(const FiniteElementDual& reaction_field,
-                                       const DirichletBoundaryConditions& bc, double tolerance = 1e-10)
+void checkUnconstrainedReactionForces(const FiniteElementDual& reaction_field, const DirichletBoundaryConditions& bc,
+                                      double tolerance = 1e-10)
 {
   const auto& true_dofs = bc.getBoundaryConditionManager().allEssentialTrueDofs();
   const mfem::Array<int>& ess_tdof_list = true_dofs;
@@ -397,7 +397,8 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
   std::string physics_name = "solid";
 
   // 1. Calculate sensitivities using Gretl
-  auto [physicsGretl, shape_dispG, initial_statesG, paramsG, bcsG] = createSolidMechanicsBasePhysics(physics_name + "_gretl", mesh);
+  auto [physicsGretl, shape_dispG, initial_statesG, paramsG, bcsG] =
+      createSolidMechanicsBasePhysics(physics_name + "_gretl", mesh);
 
   // Forward pass
   for (size_t m = 0; m < num_steps_; ++m) {
@@ -412,7 +413,8 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
   reaction_squaredG.data_store().back_prop();
 
   // 2. Calculate sensitivities using BasePhysics manual adjoint
-  auto [physicsBase, shape_dispB, initial_statesB, paramsB, bcsB] = createSolidMechanicsBasePhysics(physics_name + "_base", mesh);
+  auto [physicsBase, shape_dispB, initial_statesB, paramsB, bcsB] =
+      createSolidMechanicsBasePhysics(physics_name + "_base", mesh);
 
   // Forward pass
   double qoiB = integrateForward(physicsBase, num_steps_, dt_);
@@ -460,7 +462,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
     std::string nameG = physics_name + "_gretl_" + suffix;
     std::string nameB = physics_name + "_base_" + suffix;
     SLIC_INFO_ROOT(axom::fmt::format("Comparing sensitivity for {}: {} vs {}", suffix, nameG, nameB));
-    
+
     // Find Gretl dual
     const FiniteElementDual* dualG = nullptr;
     for (auto const& s : initial_statesG) {

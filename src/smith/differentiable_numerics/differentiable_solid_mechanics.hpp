@@ -39,8 +39,7 @@ auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
                          smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, size_t num_checkpoints,
                          std::string physics_name, const std::vector<std::string>& param_names = {})
 {
-  auto graph =
-      std::make_shared<gretl::DataStore>(std::make_unique<gretl::WangCheckpointStrategy>(num_checkpoints));
+  auto graph = std::make_shared<gretl::DataStore>(std::make_unique<gretl::WangCheckpointStrategy>(num_checkpoints));
   auto [shape_disp, states, params, time, solid_mechanics_weak_form] =
       SolidMechanicsStateAdvancer::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ParamSpaces...>(
           mesh, graph, time_rule, physics_name, param_names);
