@@ -13,7 +13,7 @@
 #include "smith/physics/mesh.hpp"
 
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
-#include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
+#include "smith/differentiable_numerics/thermo_mechanics_system.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
@@ -145,7 +145,7 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, order, order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -222,7 +222,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, order, order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -287,7 +287,7 @@ TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<H1<1>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsStateAdvancer<dim, order, order>(mesh_, solver, youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, order, order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });

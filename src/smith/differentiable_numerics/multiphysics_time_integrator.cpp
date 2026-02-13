@@ -135,10 +135,9 @@ const std::vector<FieldState>& FieldStore::getAllFields() const { return states_
 std::vector<FieldState> FieldStore::getStates(const std::string& weak_form_name) const
 {
   // Validate that weak form is registered
-  SLIC_ERROR_ROOT_IF(
-      weak_form_name_to_field_names_.count(weak_form_name) == 0,
-      axom::fmt::format("Weak form '{}' not found in FieldStore. Did you forget to call addResidual()?",
-                        weak_form_name));
+  SLIC_ERROR_ROOT_IF(weak_form_name_to_field_names_.count(weak_form_name) == 0,
+                     axom::fmt::format("Weak form '{}' not found in FieldStore. Did you forget to call addResidual()?",
+                                       weak_form_name));
 
   auto field_names = weak_form_name_to_field_names_.at(weak_form_name);
   std::vector<FieldState> fields_for_residual;
@@ -146,8 +145,7 @@ std::vector<FieldState> FieldStore::getStates(const std::string& weak_form_name)
     // Validate that field exists
     SLIC_ERROR_ROOT_IF(
         to_states_index_.count(name) == 0 && to_params_index_.count(name) == 0,
-        axom::fmt::format("Field '{}' (required by weak form '{}') not found in FieldStore",
-                          name, weak_form_name));
+        axom::fmt::format("Field '{}' (required by weak form '{}') not found in FieldStore", name, weak_form_name));
 
     // Only include state fields, not parameters
     // Parameters are passed separately to avoid duplication in block_solve
@@ -163,10 +161,9 @@ std::vector<FieldState> FieldStore::getStatesFromVectors(const std::string& weak
                                                          const std::vector<FieldState>& param_fields) const
 {
   // Validate that weak form is registered
-  SLIC_ERROR_ROOT_IF(
-      weak_form_name_to_field_names_.count(weak_form_name) == 0,
-      axom::fmt::format("Weak form '{}' not found in FieldStore. Did you forget to call addResidual()?",
-                        weak_form_name));
+  SLIC_ERROR_ROOT_IF(weak_form_name_to_field_names_.count(weak_form_name) == 0,
+                     axom::fmt::format("Weak form '{}' not found in FieldStore. Did you forget to call addResidual()?",
+                                       weak_form_name));
 
   auto field_names = weak_form_name_to_field_names_.at(weak_form_name);
   std::vector<FieldState> fields_for_residual;
@@ -174,24 +171,21 @@ std::vector<FieldState> FieldStore::getStatesFromVectors(const std::string& weak
     // Check if it's a state field
     if (to_states_index_.count(name)) {
       size_t idx = to_states_index_.at(name);
-      SLIC_ERROR_ROOT_IF(
-          idx >= state_fields.size(),
-          axom::fmt::format("State field index {} out of bounds (size={}) for field '{}'",
-                            idx, state_fields.size(), name));
+      SLIC_ERROR_ROOT_IF(idx >= state_fields.size(),
+                         axom::fmt::format("State field index {} out of bounds (size={}) for field '{}'", idx,
+                                           state_fields.size(), name));
       fields_for_residual.push_back(state_fields[idx]);
     }
     // Otherwise check if it's a parameter
     else if (to_params_index_.count(name)) {
       size_t idx = to_params_index_.at(name);
-      SLIC_ERROR_ROOT_IF(
-          idx >= param_fields.size(),
-          axom::fmt::format("Parameter field index {} out of bounds (size={}) for field '{}'",
-                            idx, param_fields.size(), name));
+      SLIC_ERROR_ROOT_IF(idx >= param_fields.size(),
+                         axom::fmt::format("Parameter field index {} out of bounds (size={}) for field '{}'", idx,
+                                           param_fields.size(), name));
       fields_for_residual.push_back(param_fields[idx]);
     } else {
-      SLIC_ERROR_ROOT(axom::fmt::format(
-          "Field or parameter '{}' (required by weak form '{}') not found in FieldStore",
-          name, weak_form_name));
+      SLIC_ERROR_ROOT(axom::fmt::format("Field or parameter '{}' (required by weak form '{}') not found in FieldStore",
+                                        name, weak_form_name));
     }
   }
   return fields_for_residual;

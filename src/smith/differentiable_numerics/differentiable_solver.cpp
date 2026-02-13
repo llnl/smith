@@ -303,9 +303,13 @@ std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSol
 
   auto residual_op_ = std::make_unique<mfem_ext::StdFunctionOperator>(
       block_u->Size(),
-      [&residual_funcs, num_rows, &u_guesses, &block_r](const mfem::Vector& u_, mfem::Vector& r_) {
+      [&residual_funcs, num_rows, &u_guesses, &block_r, &block_offsets](const mfem::Vector& u_, mfem::Vector& r_) {
         const mfem::BlockVector* u = dynamic_cast<const mfem::BlockVector*>(&u_);
-        SLIC_ERROR_IF(!u, "Invalid u cast in block differentiable solver to a blocl vector");
+        mfem::BlockVector u_block_wrapper;
+        if (!u) {
+          u_block_wrapper.Update(const_cast<double*>(u_.GetData()), block_offsets);
+          u = &u_block_wrapper;
+        }
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
         }
@@ -319,7 +323,11 @@ std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSol
       },
       [this, &block_offsets, &u_guesses, jacobian_funcs, num_rows](const mfem::Vector& u_) -> mfem::Operator& {
         const mfem::BlockVector* u = dynamic_cast<const mfem::BlockVector*>(&u_);
-        SLIC_ERROR_IF(!u, "Invalid u cast in block differentiable solver to a block vector");
+        mfem::BlockVector u_block_wrapper;
+        if (!u) {
+          u_block_wrapper.Update(const_cast<double*>(u_.GetData()), block_offsets);
+          u = &u_block_wrapper;
+        }
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
         }

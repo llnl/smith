@@ -429,7 +429,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     if constexpr (I < sizeof...(InputSpaces)) {
       using Space = typename std::tuple_element<I, std::tuple<InputSpaces...>>::type;
       validateSpace<Space>(fields[I]->space(),
-                          axom::fmt::format("{}(): field[{}] ('{}')", method_name, I, fields[I]->name()));
+                           axom::fmt::format("{}(): field[{}] ('{}')", method_name, I, fields[I]->name()));
       validateFieldsRecursive<I + 1>(fields, method_name);
     }
   }
@@ -437,10 +437,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   /// @brief Validate that fields vector matches the templated input spaces
   void validateFields(const std::vector<ConstFieldPtr>& fields, const std::string& method_name) const
   {
-    SLIC_ERROR_ROOT_IF(
-        fields.size() != sizeof...(InputSpaces),
-        axom::fmt::format("{}(): fields.size()={} but weak form expects {} InputSpaces",
-                          method_name, fields.size(), sizeof...(InputSpaces)));
+    SLIC_ERROR_ROOT_IF(fields.size() != sizeof...(InputSpaces),
+                       axom::fmt::format("{}(): fields.size()={} but weak form expects {} InputSpaces", method_name,
+                                         fields.size(), sizeof...(InputSpaces)));
 
     if constexpr (sizeof...(InputSpaces) > 0) {
       validateFieldsRecursive<0>(fields, method_name);
@@ -457,29 +456,24 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     // has multiple FECollection types that represent H1 and L2 spaces
     if constexpr (Space::family == Family::H1) {
       std::string fec_name = fec->Name();
-      bool is_h1 = (fec_name.find("H1") != std::string::npos ||
-                    fec_name.find("ND_") != std::string::npos ||  // Nedelec elements
-                    fec_name.find("Linear") != std::string::npos);
-      SLIC_ERROR_ROOT_IF(
-          !is_h1,
-          axom::fmt::format("Space '{}': Template specifies H1 family but mfem space uses '{}'",
-                            space_name, fec_name));
+      bool is_h1 =
+          (fec_name.find("H1") != std::string::npos || fec_name.find("ND_") != std::string::npos ||  // Nedelec elements
+           fec_name.find("Linear") != std::string::npos);
+      SLIC_ERROR_ROOT_IF(!is_h1, axom::fmt::format("Space '{}': Template specifies H1 family but mfem space uses '{}'",
+                                                   space_name, fec_name));
     } else if constexpr (Space::family == Family::L2) {
       std::string fec_name = fec->Name();
-      bool is_l2 = (fec_name.find("L2") != std::string::npos ||
-                    fec_name.find("DG") != std::string::npos ||
+      bool is_l2 = (fec_name.find("L2") != std::string::npos || fec_name.find("DG") != std::string::npos ||
                     fec_name.find("Const") != std::string::npos);
       SLIC_ERROR_ROOT_IF(
-          !is_l2,
-          axom::fmt::format("Space '{}': Template specifies L2/DG family but mfem space uses '{}'",
-                            space_name, fec_name));
+          !is_l2, axom::fmt::format("Space '{}': Template specifies L2/DG family but mfem space uses '{}'", space_name,
+                                    fec_name));
     }
 
     // Validate order
-    SLIC_ERROR_ROOT_IF(
-        fec->GetOrder() != Space::order,
-        axom::fmt::format("Space '{}': Template specifies order {} but mfem space has order {}",
-                          space_name, Space::order, fec->GetOrder()));
+    SLIC_ERROR_ROOT_IF(fec->GetOrder() != Space::order,
+                       axom::fmt::format("Space '{}': Template specifies order {} but mfem space has order {}",
+                                         space_name, Space::order, fec->GetOrder()));
 
     // Validate vector dimension
     SLIC_ERROR_ROOT_IF(

@@ -24,21 +24,69 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
+#include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 
 namespace smith {
+
+/**
+ * @brief Verify that reaction forces are zero at non-Dirichlet DOFs.
+ * @param reaction_field The reaction field to check.
+ * @param bc Boundary conditions to identify Dirichlet DOFs.
+ * @param tolerance Absolute tolerance for zero check.
+ */
+void checkUnconstrainedReactionForces(const FiniteElementDual& reaction_field,
+                                       const DirichletBoundaryConditions& bc, double tolerance = 1e-10)
+{
+  const auto& true_dofs = bc.getBoundaryConditionManager().allEssentialTrueDofs();
+  const mfem::Array<int>& ess_tdof_list = true_dofs;
+
+  // Get reaction data
+  const mfem::Vector& reaction_data = reaction_field;
+
+  // Create a set of essential DOFs for fast lookup
+  std::set<int> ess_dof_set(ess_tdof_list.begin(), ess_tdof_list.end());
+
+  // Check all DOFs
+  double max_non_bc_reaction = 0.0;
+  int num_non_bc_violations = 0;
+
+  for (int i = 0; i < reaction_data.Size(); ++i) {
+    if (ess_dof_set.find(i) == ess_dof_set.end()) {
+      // This is NOT a Dirichlet DOF, reaction should be zero
+      double reaction_value = std::abs(reaction_data[i]);
+      if (reaction_value > tolerance) {
+        max_non_bc_reaction = std::max(max_non_bc_reaction, reaction_value);
+        ++num_non_bc_violations;
+      }
+    }
+  }
+
+  if (num_non_bc_violations > 0) {
+    SLIC_WARNING_ROOT(axom::fmt::format("Found {} non-Dirichlet DOFs with non-zero reactions (max: {:.6e})",
+                                        num_non_bc_violations, max_non_bc_reaction));
+  }
+
+  // Expect all non-Dirichlet DOFs to have zero reactions
+  EXPECT_EQ(num_non_bc_violations, 0) << "Reaction forces should be zero at non-Dirichlet DOFs. Max violation: "
+                                      << max_non_bc_reaction;
+
+  SLIC_INFO_ROOT(axom::fmt::format("Reaction force check passed. {} Dirichlet DOFs, {} free DOFs", ess_dof_set.size(),
+                                   static_cast<size_t>(reaction_data.Size()) - ess_dof_set.size()));
+}
 
 smith::LinearSolverOptions solid_linear_options{.linear_solver = smith::LinearSolver::CG,
                                                 .preconditioner = smith::Preconditioner::HypreJacobi,
                                                 .relative_tol = 1e-11,
                                                 .absolute_tol = 1e-11,
                                                 .max_iterations = 10000,
-                                                .print_level = 0};
+                                                .print_level = 1};
 
 smith::NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
                                                    .relative_tol = 1.0e-10,
                                                    .absolute_tol = 1.0e-10,
                                                    .max_iterations = 500,
-                                                   .print_level = 0};
+                                                   .print_level = 1,
+                                                   .force_monolithic = true};
 
 static constexpr int dim = 3;
 static constexpr int order = 1;
@@ -58,7 +106,7 @@ struct SolidMechanicsMeshFixture : public testing::Test {
   void SetUp()
   {
     smith::StateManager::initialize(datastore, "solid");
-    auto mfem_shape = mfem::Element::QUADRILATERAL;
+    auto mfem_shape = mfem::Element::HEXAHEDRON;
     mesh = std::make_shared<smith::Mesh>(
         mfem::Mesh::MakeCartesian3D(num_elements_x, num_elements_y, num_elements_z, mfem_shape, length, width, width),
         "mesh", 0, 0);
@@ -78,23 +126,12 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;
 
-  enum STATE
-  {
-    DISP,
-    VELO,
-    ACCEL
-  };
+  auto d_solid_nonlinear_solver =
+      buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  std::string physics_name = "solid";
-
-  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
-
-  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule;
-
-  auto [physics, solid_weak_form, bcs] =
-      buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, time_rule, 100, physics_name, {"bulk", "shear"});
+  auto system = buildSolidMechanicsSystem<dim, order>(
+      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{},
+      FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
 
   static constexpr double gravity = -9.0;
 
@@ -105,79 +142,84 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
   MaterialType material{.density = 1.0, .K0 = K, .G0 = G};
 
-  solid_weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
-        MaterialType::State state;
-        auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
+  // Set parameters
+  auto params = system.getParameterFields();
+  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return material.K0; });
+  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return material.G0; });
+
+  // Set material
+  system.setMaterial(material, mesh->entireBodyName());
+
+  // Add gravity body force
+  system.solid_weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
+      [](auto /*t_info*/, auto /*X*/, auto /*disp*/, auto /*disp_old*/, auto /*velo_old*/, auto accel_old) {
         smith::tensor<double, dim> b{};
         b[1] = gravity;
-        return smith::tuple{get<VALUE>(a) * material.density - b, pk_stress};
+        auto zero_grad = 0.0 * get<DERIVATIVE>(accel_old);
+        return smith::tuple{-b, zero_grad};
       });
 
-  auto shape_disp = physics->getShapeDispFieldState();
-  auto params = physics->getFieldParams();
-  auto states = physics->getInitialFieldStates();
+  auto shape_disp = system.field_store->getShapeDisp();
+  auto states = system.getStateFields();
 
-  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    double scaling = 1.0;
-    return scaling * material.K0;
+  // Set initial acceleration to gravity
+  states[3].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    smith::tensor<double, dim> a{};
+    a[1] = gravity;
+    return a;
   });
 
-  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    double scaling = 1.0;
-    return scaling * material.G0;
-  });
+  std::string pv_dir = "paraview_solid";
+  auto pv_writer = createParaviewWriter(*mesh, {states[0], params[0], params[1]}, pv_dir);
+  pv_writer.write(0, 0.0, {states[0], params[0], params[1]});
 
-  physics->resetStates();
-  auto all_fields = physics->getFieldStatesAndParamStates();
-
-  std::string pv_dir = std::string("paraview_") + physics->name();
-  auto pv_writer = createParaviewWriter(*mesh, all_fields, pv_dir);
-  pv_writer.write(physics->cycle(), physics->time(), all_fields);
-
+  double time = 0.0;
   for (size_t m = 0; m < num_steps_; ++m) {
-    physics->advanceTimestep(dt_);
-    all_fields = physics->getFieldStatesAndParamStates();
-    pv_writer.write(physics->cycle(), physics->time(), all_fields);
+    TimeInfo t_info(time, dt_, m);
+    auto [new_states, reactions] = system.advancer->advanceState(t_info, shape_disp, states, params);
+    states = new_states;
+    time += dt_;
+    pv_writer.write(m + 1, time, {states[0], params[0], params[1]});
   }
 
   double a_exact = gravity;
   double v_exact = gravity * total_simulation_time_;
   double u_exact = 0.5 * gravity * total_simulation_time_ * total_simulation_time_;
 
-  TimeInfo endTimeInfo(physics->time(), dt_, static_cast<size_t>(physics->cycle()));
+  TimeInfo endTimeInfo(time, dt_, num_steps_);
 
-  FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({all_fields[ACCEL]}));
+  // Test acceleration (states[3] is acceleration_old)
+  FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({states[3]}));
   accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
     auto a = get<VALUE>(A);
     auto da0 = a[0];
     auto da1 = a[1] - a_exact;
     return da0 * da0 + da1 * da1;
   });
-  double a_err = accel_error.evaluate(endTimeInfo, shape_disp.get().get(), getConstFieldPointers({all_fields[ACCEL]}));
+  double a_err = accel_error.evaluate(endTimeInfo, shape_disp.get().get(), getConstFieldPointers({states[3]}));
   EXPECT_NEAR(0.0, a_err, 1e-14);
 
-  FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh, spaces({all_fields[VELO]}));
+  // Test velocity (states[2] is velocity_old)
+  FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh, spaces({states[2]}));
   velo_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
     auto v = get<VALUE>(V);
     auto dv0 = v[0];
     auto dv1 = v[1] - v_exact;
     return dv0 * dv0 + dv1 * dv1;
   });
-  double v_err =
-      velo_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(), getConstFieldPointers({all_fields[VELO]}));
+  double v_err = velo_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(), getConstFieldPointers({states[2]}));
   EXPECT_NEAR(0.0, v_err, 1e-14);
 
-  FunctionalObjective<dim, Parameters<VectorSpace>> disp_error("disp_error", mesh, spaces({all_fields[DISP]}));
+  // Test displacement (states[0] is current displacement)
+  FunctionalObjective<dim, Parameters<VectorSpace>> disp_error("disp_error", mesh, spaces({states[0]}));
   disp_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
     auto u = get<VALUE>(U);
     auto du0 = u[0];
     auto du1 = u[1] - u_exact;
     return du0 * du0 + du1 * du1;
   });
-  double u_err =
-      disp_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(), getConstFieldPointers({all_fields[DISP]}));
+  double u_err = disp_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(), getConstFieldPointers({states[0]}));
   EXPECT_NEAR(0.0, u_err, 1e-14);
 }
 
@@ -231,14 +273,14 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   physics->resetStates();
 
-  return std::make_tuple(physics, shape_disp, states, params);
+  return std::make_tuple(physics, shape_disp, states, params, bcs);
 }
 
 TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
 {
   SMITH_MARK_FUNCTION;
   std::string physics_name = "solid";
-  auto [physics, shape_disp, initial_states, params] = createSolidMechanicsBasePhysics(physics_name, mesh);
+  auto [physics, shape_disp, initial_states, params, bcs] = createSolidMechanicsBasePhysics(physics_name, mesh);
 
   auto pv_writer = smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
@@ -248,6 +290,9 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   }
 
   auto reactions = physics->getReactionStates();
+
+  // Check that reaction forces are zero away from Dirichlet DOFs
+  checkUnconstrainedReactionForces(*reactions[0].get(), *bcs);
 
   auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
 
@@ -314,10 +359,14 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 {
   SMITH_MARK_FUNCTION;
   std::string physics_name = "solid";
-  auto [physics, shape_disp, initial_states, params] = createSolidMechanicsBasePhysics(physics_name, mesh);
+  auto [physics, shape_disp, initial_states, params, bcs] = createSolidMechanicsBasePhysics(physics_name, mesh);
 
   double qoi = integrateForward(physics, num_steps_, dt_);
   SLIC_INFO_ROOT(axom::fmt::format("{}", qoi));
+
+  // Check that reaction forces are zero away from Dirichlet DOFs
+  auto reactions = physics->getReactionStates();
+  checkUnconstrainedReactionForces(*reactions[0].get(), *bcs);
 
   size_t num_params = physics->parameterNames().size();
 

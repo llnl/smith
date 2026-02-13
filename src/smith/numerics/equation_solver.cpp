@@ -35,6 +35,9 @@ class NewtonSolver : public mfem::NewtonSolver {
   /// reconstructed smith print level
   mutable size_t print_level = 0;
 
+  /// Tracks if grad was monolithicized and needs deletion
+  mutable bool grad_monolithic = false;
+
  public:
   /// constructor
   NewtonSolver(const NonlinearSolverOptions& nonlinear_opts) : nonlinear_options(nonlinear_opts) {}
@@ -46,6 +49,12 @@ class NewtonSolver : public mfem::NewtonSolver {
   {
   }
 #endif
+
+  /// destructor
+  virtual ~NewtonSolver()
+  {
+    if (grad_monolithic) delete grad;
+  }
 
   /// Evaluate the residual, put in rOut and return its norm.
   double evaluateNorm(const mfem::Vector& x, mfem::Vector& rOut) const
@@ -65,10 +74,18 @@ class NewtonSolver : public mfem::NewtonSolver {
   void assembleJacobian(const mfem::Vector& x) const
   {
     SMITH_MARK_FUNCTION;
+    if (grad_monolithic) {
+      delete grad;
+      grad = nullptr;
+      grad_monolithic = false;
+    }
     grad = &oper->GetGradient(x);
     if (nonlinear_options.force_monolithic) {
       auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
-      if (grad_blocked) grad = buildMonolithicMatrix(*grad_blocked).release();
+      if (grad_blocked) {
+        grad = buildMonolithicMatrix(*grad_blocked).release();
+        grad_monolithic = true;
+      }
     }
   }
 
@@ -337,6 +354,9 @@ class TrustRegion : public mfem::NewtonSolver {
   /// reconstructed smith print level
   mutable size_t print_level = 0;
 
+  /// Tracks if grad was monolithicized and needs deletion
+  mutable bool grad_monolithic = false;
+
  public:
   /// internal counter for hess-vecs
   mutable size_t num_hess_vecs = 0;
@@ -357,6 +377,12 @@ class TrustRegion : public mfem::NewtonSolver {
   {
   }
 #endif
+
+  /// destructor
+  virtual ~TrustRegion()
+  {
+    if (grad_monolithic) delete grad;
+  }
 
   /// finds tau s.t. (z + tau*d)^2 = trSize^2
   void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
@@ -597,10 +623,18 @@ class TrustRegion : public mfem::NewtonSolver {
   {
     SMITH_MARK_FUNCTION;
     ++num_jacobian_assembles;
+    if (grad_monolithic) {
+      delete grad;
+      grad = nullptr;
+      grad_monolithic = false;
+    }
     grad = &oper->GetGradient(x);
     if (nonlinear_options.force_monolithic) {
       auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
-      if (grad_blocked) grad = buildMonolithicMatrix(*grad_blocked).release();
+      if (grad_blocked) {
+        grad = buildMonolithicMatrix(*grad_blocked).release();
+        grad_monolithic = true;
+      }
     }
   }
 
@@ -935,6 +969,21 @@ void SuperLUSolver::Mult(const mfem::Vector& input, mfem::Vector& output) const
   superlu_solver_.Mult(input, output);
 }
 
+/**
+ * @brief Build a monolithic HypreParMatrix from a BlockOperator.
+ *
+ * PERFORMANCE NOTE: This function creates a NEW monolithic matrix by copying data from
+ * the block structure. This incurs a performance overhead:
+ * - Memory: Allocates new matrix storage
+ * - Time: Copies all block data into monolithic format
+ *
+ * This is necessary when using direct solvers (SuperLU, Strumpack) that require
+ * monolithic matrices. For iterative solvers, the BlockOperator can be used directly
+ * without this copy overhead.
+ *
+ * @param block_operator The block operator to convert.
+ * @return Unique pointer to the new monolithic HypreParMatrix.
+ */
 std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOperator& block_operator)
 {
   int row_blocks = block_operator.NumRowBlocks();
@@ -959,7 +1008,8 @@ std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOpe
     }
   }
 
-  // Note that MFEM passes ownership of this matrix to the caller
+  // Note that MFEM passes ownership of this matrix to the caller.
+  // MFEM creates a new monolithic matrix (not a view), so this is a COPY operation.
   return std::unique_ptr<mfem::HypreParMatrix>(mfem::HypreParMatrixFromBlocks(hypre_blocks));
 }
 
