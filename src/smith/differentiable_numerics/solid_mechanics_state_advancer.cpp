@@ -78,20 +78,7 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> SolidMechanicsSta
   }
 
   // Now perform the regular time step
-  auto [new_states, reactions_from_integrator] = integrator_->advanceState(time_info, shape_disp, current_states, params);
-
-  // Compute reactions using the cycle_zero_weak_form (which uses corrected acceleration)
-  // This gives us the correct reaction forces
-  std::vector<ReactionState> reactions;
-  if (cycle_zero_weak_form_) {
-    std::vector<FieldState> wf_fields = field_store_->getStatesFromVectors(cycle_zero_weak_form_->name(), new_states, params);
-    std::string test_field_name = field_store_->getWeakFormTestField(cycle_zero_weak_form_->name());
-    size_t test_field_idx = field_store_->getFieldIndex(test_field_name);
-    FieldState test_field = new_states[test_field_idx];
-    reactions.push_back(smith::evaluateWeakForm(cycle_zero_weak_form_, time_info, shape_disp, wf_fields, test_field));
-  } else {
-    reactions = reactions_from_integrator;
-  }
+  auto [new_states, reactions] = integrator_->advanceState(time_info, shape_disp, current_states, params);
 
   return {new_states, reactions};
 }

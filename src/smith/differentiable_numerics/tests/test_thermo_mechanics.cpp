@@ -161,8 +161,10 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
 
-  system.thermal_weak_form->addBodySource(smith::DependsOn<>(), mesh_->entireBodyName(),
-                                          [](auto /*t*/, auto /* x */) { return 100.0; });
+  system.addThermalBodySource(mesh_->entireBodyName(),
+                              [](auto /*t*/, auto /*x*/, auto /*T*/, auto /*T_dot*/, auto /*u*/, auto /*E_param*/) {
+                                return 100.0;
+                              });
 
   std::string pv_dir = "paraview_thermo_mechanics";
   auto pv_writer = smith::createParaviewWriter(*mesh_, system.getStateFields(), pv_dir);

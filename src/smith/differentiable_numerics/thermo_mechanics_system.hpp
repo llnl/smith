@@ -16,6 +16,7 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
+#include "smith/differentiable_numerics/time_integrated_weak_form.hpp"
 #include "smith/physics/weak_form.hpp"
 
 namespace smith {
@@ -30,13 +31,13 @@ namespace smith {
 template <int dim, int disp_order, int temp_order, typename... parameter_space>
 struct ThermoMechanicsSystem {
   /// @brief using for SolidWeakFormType
-  using SolidWeakFormType = TimeDiscretizedWeakForm<
-      dim, H1<disp_order, dim>,
+  using SolidWeakFormType = TimeIntegratedWeakForm<
+      dim, H1<disp_order, dim>, QuasiStaticFirstOrderTimeIntegrationRule,
       Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<temp_order>, H1<temp_order>, parameter_space...>>;
 
   /// @brief using for ThermalWeakFormType
-  using ThermalWeakFormType = TimeDiscretizedWeakForm<
-      dim, H1<temp_order>,
+  using ThermalWeakFormType = TimeIntegratedWeakForm<
+      dim, H1<temp_order>, BackwardEulerFirstOrderTimeIntegrationRule,
       Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
 
   std::shared_ptr<FieldStore> field_store;                      ///< Field store managing the system's fields.
@@ -80,43 +81,94 @@ struct ThermoMechanicsSystem {
   template <typename MaterialType>
   void setMaterial(const MaterialType& material, const std::string& domain_name)
   {
-    auto dtr = disp_time_rule;
-    auto ttr = temperature_time_rule;
-
-    solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
+    solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto u, auto v, 
                                                       auto temperature, auto temperature_old, auto... params) {
-      auto u = dtr->value(t_info, disp, disp_old);
-      auto v = dtr->dot(t_info, disp, disp_old);
-      auto T = ttr->value(t_info, temperature, temperature_old);
+      auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
       typename MaterialType::State state;
       auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
                                         get<DERIVATIVE>(T), params...);
-      return smith::tuple{smith::zero{}, pk};
+      return smith::tuple{zero{}, pk};
     });
 
-    thermal_weak_form->addBodyIntegral(
-
-        domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old, auto disp, auto disp_old,
-
-                         auto... params) {
+    // Thermal weak form expects (t_info, X, T, T_dot, u, u_old, params...)
+    thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_dot, 
+                                                        auto disp, auto disp_old, auto... params) {
           typename MaterialType::State state;
-
-          auto u = dtr->value(t_info, disp, disp_old);
-
-          auto v = dtr->dot(t_info, disp, disp_old);
-
-          auto T = ttr->value(t_info, temperature, temperature_old);
-
-          auto T_dot = ttr->dot(t_info, temperature, temperature_old);
-
+          auto u = disp_time_rule->value(t_info, disp, disp_old);
+          auto v = disp_time_rule->dot(t_info, disp, disp_old);
           auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
-
                                             get<DERIVATIVE>(T), params...);
-
           auto dT_dt = get<VALUE>(T_dot);
-
           return smith::tuple{C_v * dT_dt - s0, -q0};
         });
+  }
+
+  /**
+   * @brief Add a body force to the solid mechanics part of the system.
+   * @tparam BodyForceType The body force function type.
+   * @param domain_name The name of the domain to apply the force to.
+   * @param force_function The force function (t, X, u, v, T, params...).
+   */
+  template <typename BodyForceType>
+  void addSolidBodyForce(const std::string& domain_name, BodyForceType force_function)
+  {
+      solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto X, auto u, auto v, 
+                                                        auto temperature, auto temperature_old, auto... params) {
+          auto current_T = temperature_time_rule->value(t_info, temperature, temperature_old);
+          return smith::tuple{-force_function(t_info.time(), get<VALUE>(X), get<VALUE>(u), get<VALUE>(v), 
+                                              get<VALUE>(current_T), get<VALUE>(params)...), zero{}};
+      });
+  }
+
+  /**
+   * @brief Add a surface flux (traction) to the solid mechanics part of the system.
+   * @tparam SurfaceFluxType The surface flux function type.
+   * @param domain_name The name of the boundary domain to apply the flux to.
+   * @param flux_function The flux function (t, X, n, u, v, T, params...).
+   */
+  template <typename SurfaceFluxType>
+  void addSolidSurfaceFlux(const std::string& domain_name, SurfaceFluxType flux_function)
+  {
+      solid_weak_form->addSurfaceFlux(domain_name, [=](auto t_info, auto X, auto n, auto u, auto v, 
+                                                        auto temperature, auto temperature_old, auto... params) {
+          auto current_T = temperature_time_rule->value(t_info, temperature, temperature_old);
+          return -flux_function(t_info.time(), get<VALUE>(X), n, get<VALUE>(u), get<VALUE>(v), 
+                                get<VALUE>(current_T), get<VALUE>(params)...);
+      });
+  }
+
+  /**
+   * @brief Add a body source (heat source) to the thermal part of the system.
+   * @tparam BodySourceType The body source function type.
+   * @param domain_name The name of the domain to apply the source to.
+   * @param source_function The source function (t, X, T, T_dot, u, params...).
+   */
+  template <typename BodySourceType>
+  void addThermalBodySource(const std::string& domain_name, BodySourceType source_function)
+  {
+      thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto X, auto T, auto T_dot, 
+                                                          auto disp, auto disp_old, auto... params) {
+          auto current_u = disp_time_rule->value(t_info, disp, disp_old);
+          return smith::tuple{-source_function(t_info.time(), get<VALUE>(X), get<VALUE>(T), get<VALUE>(T_dot), 
+                                               get<VALUE>(current_u), get<VALUE>(params)...), zero{}};
+      });
+  }
+
+  /**
+   * @brief Add a surface flux (heat flux) to the thermal part of the system.
+   * @tparam SurfaceFluxType The surface flux function type.
+   * @param domain_name The name of the boundary domain to apply the flux to.
+   * @param flux_function The flux function (t, X, n, T, T_dot, u, params...).
+   */
+  template <typename SurfaceFluxType>
+  void addThermalSurfaceFlux(const std::string& domain_name, SurfaceFluxType flux_function)
+  {
+      thermal_weak_form->addSurfaceFlux(domain_name, [=](auto t_info, auto X, auto n, auto T, auto T_dot, 
+                                                          auto disp, auto disp_old, auto... params) {
+          auto current_u = disp_time_rule->value(t_info, disp, disp_old);
+          return -flux_function(t_info.time(), get<VALUE>(X), n, get<VALUE>(T), get<VALUE>(T_dot), 
+                                get<VALUE>(current_u), get<VALUE>(params)...);
+      });
   }
 };
 
@@ -158,12 +210,24 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   (parameter_fields.push_back(field_store->getField(parameter_types.name)), ...);
 
   // Solid mechanics weak form
-  auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, *field_store, disp_type, disp_old_type,
-                                             temperature_type, temperature_old_type, parameter_types...);
+  field_store->addWeakFormTestField("solid_force", disp_type.name);
+  const mfem::ParFiniteElementSpace& disp_test_space = field_store->getField(disp_type.name).get()->space();
+  std::vector<const mfem::ParFiniteElementSpace*> disp_input_spaces;
+  createSpaces("solid_force", *field_store, disp_input_spaces, 0, disp_type, disp_old_type,
+               temperature_type, temperature_old_type, parameter_types...);
+
+  auto solid_weak_form = std::make_shared<typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::SolidWeakFormType>(
+      "solid_force", field_store->getMesh(), disp_test_space, disp_input_spaces, disp_time_rule);
 
   // Thermal weak form
-  auto thermal_weak_form = createWeakForm<dim>("thermal_flux", temperature_type, *field_store, temperature_type,
-                                               temperature_old_type, disp_type, disp_old_type, parameter_types...);
+  field_store->addWeakFormTestField("thermal_flux", temperature_type.name);
+  const mfem::ParFiniteElementSpace& temp_test_space = field_store->getField(temperature_type.name).get()->space();
+  std::vector<const mfem::ParFiniteElementSpace*> temp_input_spaces;
+  createSpaces("thermal_flux", *field_store, temp_input_spaces, 0, temperature_type, 
+               temperature_old_type, disp_type, disp_old_type, parameter_types...);
+
+  auto thermal_weak_form = std::make_shared<typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::ThermalWeakFormType>(
+      "thermal_flux", field_store->getMesh(), temp_test_space, temp_input_spaces, temperature_time_rule);
 
   // Build solver and advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form};

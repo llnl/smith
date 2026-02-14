@@ -40,9 +40,6 @@ void checkUnconstrainedReactionForces(const FiniteElementDual& reaction_field, c
   const auto& true_dofs = bc.getBoundaryConditionManager().allEssentialTrueDofs();
   const mfem::Array<int>& ess_tdof_list = true_dofs;
 
-  // Get reaction data
-  const mfem::Vector& reaction_data = reaction_field;
-
   // Create a set of essential DOFs for fast lookup
   std::set<int> ess_dof_set(ess_tdof_list.begin(), ess_tdof_list.end());
 
@@ -50,10 +47,10 @@ void checkUnconstrainedReactionForces(const FiniteElementDual& reaction_field, c
   double max_non_bc_reaction = 0.0;
   int num_non_bc_violations = 0;
 
-  for (int i = 0; i < reaction_data.Size(); ++i) {
+  for (int i = 0; i < reaction_field.Size(); ++i) {
     if (ess_dof_set.find(i) == ess_dof_set.end()) {
       // This is NOT a Dirichlet DOF, reaction should be zero
-      double reaction_value = std::abs(reaction_data[i]);
+      double reaction_value = std::abs(reaction_field[i]);
       if (reaction_value > tolerance) {
         max_non_bc_reaction = std::max(max_non_bc_reaction, reaction_value);
         ++num_non_bc_violations;
@@ -71,17 +68,17 @@ void checkUnconstrainedReactionForces(const FiniteElementDual& reaction_field, c
                                       << max_non_bc_reaction;
 
   SLIC_INFO_ROOT(axom::fmt::format("Reaction force check passed. {} Dirichlet DOFs, {} free DOFs", ess_dof_set.size(),
-                                   static_cast<size_t>(reaction_data.Size()) - ess_dof_set.size()));
+                                   static_cast<size_t>(reaction_field.Size()) - ess_dof_set.size()));
 }
 
-smith::LinearSolverOptions solid_linear_options{.linear_solver = smith::LinearSolver::CG,
-                                                .preconditioner = smith::Preconditioner::HypreJacobi,
+LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::CG,
+                                                .preconditioner = Preconditioner::HypreJacobi,
                                                 .relative_tol = 1e-11,
                                                 .absolute_tol = 1e-11,
                                                 .max_iterations = 10000,
-                                                .print_level = 1};
+                                                .print_level = 0};
 
-smith::NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
+NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
                                                    .relative_tol = 1.0e-10,
                                                    .absolute_tol = 1.0e-10,
                                                    .max_iterations = 500,
@@ -105,13 +102,13 @@ struct SolidMechanicsMeshFixture : public testing::Test {
 
   void SetUp()
   {
-    smith::StateManager::initialize(datastore, "solid");
+    StateManager::initialize(datastore, "solid");
     auto mfem_shape = mfem::Element::HEXAHEDRON;
     mesh = std::make_shared<smith::Mesh>(
         mfem::Mesh::MakeCartesian3D(num_elements_x, num_elements_y, num_elements_z, mfem_shape, length, width, width),
         "mesh", 0, 0);
-    mesh->addDomainOfBoundaryElements("left", smith::by_attr<dim>(3));
-    mesh->addDomainOfBoundaryElements("right", smith::by_attr<dim>(5));
+    mesh->addDomainOfBoundaryElements("left", by_attr<dim>(3));
+    mesh->addDomainOfBoundaryElements("right", by_attr<dim>(5));
   }
 
   static constexpr double total_simulation_time_ = 1.1;
@@ -144,26 +141,25 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   // Set parameters
   auto params = system.getParameterFields();
-  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return material.K0; });
-  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return material.G0; });
+  params[0].get()->setFromFieldFunction([=](tensor<double, dim>) { return material.K0; });
+  params[1].get()->setFromFieldFunction([=](tensor<double, dim>) { return material.G0; });
 
   // Set material
   system.setMaterial(material, mesh->entireBodyName());
 
   // Add gravity body force to BOTH weak forms
   system.solid_weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-      [](auto /*t_info*/, auto /*X*/, auto /*disp*/, auto /*disp_old*/, auto /*velo_old*/, auto accel_old) {
-        smith::tensor<double, dim> b{};
+      DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
+      [](auto /*t_info*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*a*/) {
+        tensor<double, dim> b{};
         b[1] = gravity;
-        auto zero_grad = 0.0 * get<DERIVATIVE>(accel_old);
-        return smith::tuple{-b, zero_grad};
+        return smith::tuple{-b, smith::zero{}};
       });
 
   system.cycle_zero_weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
+      DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
       [](auto /*t_info*/, auto /*X*/, auto /*disp*/, auto /*velo*/, auto accel) {
-        smith::tensor<double, dim> b{};
+        tensor<double, dim> b{};
         b[1] = gravity;
         auto zero_grad = 0.0 * get<DERIVATIVE>(accel);
         return smith::tuple{-b, zero_grad};
@@ -173,8 +169,8 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto states = system.getStateFields();
 
   // Set initial acceleration to gravity
-  states[3].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
-    smith::tensor<double, dim> a{};
+  states[3].get()->setFromFieldFunction([=](tensor<double, dim>) {
+    tensor<double, dim> a{};
     a[1] = gravity;
     return a;
   });
@@ -248,7 +244,7 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
           mesh, d_solid_nonlinear_solver, time_rule, num_checkpoints, physics_name, {"bulk", "shear"});
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
-  bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
+  bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, tensor<double, dim> X) {
     auto bc = 0.0 * X;
     bc[0] = 0.01 * t;
     bc[1] = -0.05 * t;
@@ -263,18 +259,16 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
 
   solid_weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1, 2, 3, 4, 5>{}, mesh->entireBodyName(),
-      [material, time_rule](const auto& time_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto bulk,
+      DependsOn<0, 1, 2, 3, 4, 5>{}, mesh->entireBodyName(),
+      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk,
                             auto shear) {
-        auto u_curr = time_rule.value(time_info, u, u_old, v_old, a_old);
-        auto a_curr = time_rule.ddot(time_info, u, u_old, v_old, a_old);
         MaterialType::State state;
-        auto pk_stress = material(state, get<DERIVATIVE>(u_curr), bulk, shear);
-        return smith::tuple{get<VALUE>(a_curr) * material.density, pk_stress};
+        auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
+        return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
       });
 
   cycle_zero_weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1, 2, 3, 4>{}, mesh->entireBodyName(),
+      DependsOn<0, 1, 2, 3, 4>{}, mesh->entireBodyName(),
       [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
         MaterialType::State state;
         auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
@@ -285,12 +279,12 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   auto params = physics->getFieldParams();
   auto states = physics->getInitialFieldStates();
 
-  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+  params[0].get()->setFromFieldFunction([=](tensor<double, dim>) {
     double scaling = 1.0;
     return scaling * material.K0;
   });
 
-  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+  params[1].get()->setFromFieldFunction([=](tensor<double, dim>) {
     double scaling = 1.0;
     return scaling * material.G0;
   });

@@ -17,6 +17,7 @@
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
+#include "smith/differentiable_numerics/time_integrated_weak_form.hpp"
 #include "smith/physics/weak_form.hpp"
 
 namespace smith {
@@ -29,8 +30,8 @@ namespace smith {
  */
 template <int dim, int order, typename... parameter_space>
 struct SolidMechanicsSystem {
-  using SolidWeakFormType = TimeDiscretizedWeakForm<
-      dim, H1<order, dim>,
+  using SolidWeakFormType = TimeIntegratedWeakForm<
+      dim, H1<order, dim>, ImplicitNewmarkSecondOrderTimeIntegrationRule,
       Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
   using CycleZeroWeakFormType = TimeDiscretizedWeakForm<
@@ -70,25 +71,18 @@ struct SolidMechanicsSystem {
   template <typename MaterialType>
   void setMaterial(const MaterialType& material, const std::string& domain_name)
   {
-    auto tr = time_rule;
-    const int num_params = sizeof...(parameter_space);
-
-    // Add to solid weak form (u, u_old, v_old, a_old)
-    auto depends_on = std::make_integer_sequence<int, 4 + num_params>{};
-    solid_weak_form->addBodyIntegralImpl(
+    // Add to solid weak form (u, v, a, params...)
+    solid_weak_form->addBodyIntegral(
         domain_name,
-        [=](auto t_info, auto /*X*/, auto disp, auto disp_old, auto velo_old, auto accel_old, auto... params) {
-          auto u = tr->value(t_info, disp, disp_old, velo_old, accel_old);
-          auto a = tr->ddot(t_info, disp, disp_old, velo_old, accel_old);
-
+        [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto... params) {
           typename MaterialType::State state;
           auto pk_stress = material(state, get<DERIVATIVE>(u), params...);
 
           return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
-        },
-        depends_on);
+        });
 
     // Add to cycle-zero weak form (u, v, a) for initial acceleration solve
+    const int num_params = sizeof...(parameter_space);
     auto depends_on_cycle_zero = std::make_integer_sequence<int, 3 + num_params>{};
     cycle_zero_weak_form->addBodyIntegralImpl(
         domain_name,
@@ -99,6 +93,38 @@ struct SolidMechanicsSystem {
           return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
         },
         depends_on_cycle_zero);
+  }
+
+  /**
+   * @brief Add a body force to the system.
+   * @tparam BodyForceType The body force function type.
+   * @param domain_name The name of the domain to apply the force to.
+   * @param force_function The force function (t, X, u, v, a, params...).
+   */
+  template <typename BodyForceType>
+  void addBodyForce(const std::string& domain_name, BodyForceType force_function)
+  {
+      solid_weak_form->addBodyIntegral(domain_name, [force_function](auto t_info, auto X, auto u, auto v, 
+                                                                     auto a, auto... params) {
+          return smith::tuple{-force_function(t_info.time(), get<VALUE>(X), get<VALUE>(u), get<VALUE>(v), 
+                                              get<VALUE>(a), get<VALUE>(params)...), smith::zero{}};
+      });
+  }
+
+  /**
+   * @brief Add a surface flux (traction) to the system.
+   * @tparam SurfaceFluxType The surface flux function type.
+   * @param domain_name The name of the boundary domain to apply the flux to.
+   * @param flux_function The flux function (t, X, n, u, v, a, params...).
+   */
+  template <typename SurfaceFluxType>
+  void addSurfaceFlux(const std::string& domain_name, SurfaceFluxType flux_function)
+  {
+      solid_weak_form->addSurfaceFlux(domain_name, [flux_function](auto t_info, auto X, auto n, auto u, auto v, 
+                                                                    auto a, auto... params) {
+          return -flux_function(t_info.time(), get<VALUE>(X), n, get<VALUE>(u), get<VALUE>(v), 
+                                get<VALUE>(a), get<VALUE>(params)...);
+      });
   }
 };
 
@@ -140,8 +166,14 @@ SolidMechanicsSystem<dim, order, parameter_space...> buildSolidMechanicsSystem(
   (parameter_fields.push_back(field_store->getField(parameter_types.name)), ...);
 
   // Create solid mechanics weak form (u, u_old, v_old, a_old)
-  auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, *field_store, disp_type, disp_old_type,
-                                             velo_old_type, accel_old_type, parameter_types...);
+  field_store->addWeakFormTestField("solid_force", disp_type.name);
+  const mfem::ParFiniteElementSpace& test_space = field_store->getField(disp_type.name).get()->space();
+  std::vector<const mfem::ParFiniteElementSpace*> input_spaces;
+  createSpaces("solid_force", *field_store, input_spaces, 0, disp_type, disp_old_type, velo_old_type, accel_old_type,
+               parameter_types...);
+
+  auto solid_weak_form = std::make_shared<typename SolidMechanicsSystem<dim, order, parameter_space...>::SolidWeakFormType>(
+      "solid_force", field_store->getMesh(), test_space, input_spaces, time_rule_ptr);
 
   // Create cycle-zero weak form (u, v, a) for initial acceleration solve
   // The test field is acceleration, which is what we solve for at cycle=0

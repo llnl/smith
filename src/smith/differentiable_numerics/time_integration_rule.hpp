@@ -43,6 +43,9 @@ class TimeIntegrationRule {
 /// (u^{n+1}, u^n).
 class BackwardEulerFirstOrderTimeIntegrationRule : public TimeIntegrationRule {
  public:
+  /// @brief Number of state arguments (field_new, field_old)
+  static constexpr int num_args = 2;
+
   /// @brief Constructor
   BackwardEulerFirstOrderTimeIntegrationRule() {}
 
@@ -92,6 +95,9 @@ using QuasiStaticFirstOrderTimeIntegrationRule = BackwardEulerFirstOrderTimeInte
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
 struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRule {
  public:
+  /// @brief Number of state arguments (field_new, field_old, velo_old, accel_old)
+  static constexpr int num_args = 4;
+
   /// @brief Constructor
   ImplicitNewmarkSecondOrderTimeIntegrationRule() {}
 
@@ -148,6 +154,9 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRul
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
 struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule {
  public:
+  /// @brief Number of state arguments (field_new, field_old, velo_old, accel_old)
+  static constexpr int num_args = 4;
+
   /// @brief Constructor
   QuasiStaticSecondOrderTimeIntegrationRule() {}
 
