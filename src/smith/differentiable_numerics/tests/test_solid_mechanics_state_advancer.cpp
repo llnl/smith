@@ -150,13 +150,22 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   // Set material
   system.setMaterial(material, mesh->entireBodyName());
 
-  // Add gravity body force
+  // Add gravity body force to BOTH weak forms
   system.solid_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
       [](auto /*t_info*/, auto /*X*/, auto /*disp*/, auto /*disp_old*/, auto /*velo_old*/, auto accel_old) {
         smith::tensor<double, dim> b{};
         b[1] = gravity;
         auto zero_grad = 0.0 * get<DERIVATIVE>(accel_old);
+        return smith::tuple{-b, zero_grad};
+      });
+
+  system.cycle_zero_weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
+      [](auto /*t_info*/, auto /*X*/, auto /*disp*/, auto /*velo*/, auto accel) {
+        smith::tensor<double, dim> b{};
+        b[1] = gravity;
+        auto zero_grad = 0.0 * get<DERIVATIVE>(accel);
         return smith::tuple{-b, zero_grad};
       });
 
@@ -175,11 +184,14 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   pv_writer.write(0, 0.0, {states[0], params[0], params[1]});
 
   double time = 0.0;
+  size_t cycle = 0;
+  std::vector<ReactionState> reactions;
+
   for (size_t m = 0; m < num_steps_; ++m) {
-    TimeInfo t_info(time, dt_, m);
-    auto [new_states, reactions] = system.advancer->advanceState(t_info, shape_disp, states, params);
-    states = new_states;
+    TimeInfo t_info(time, dt_, cycle);
+    std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
     time += dt_;
+    cycle++;
     pv_writer.write(m + 1, time, {states[0], params[0], params[1]});
   }
 
@@ -187,7 +199,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   double v_exact = gravity * total_simulation_time_;
   double u_exact = 0.5 * gravity * total_simulation_time_ * total_simulation_time_;
 
-  TimeInfo endTimeInfo(time, dt_, num_steps_);
+  TimeInfo endTimeInfo(time, dt_, cycle);
 
   // Test acceleration (states[3] is acceleration_old)
   FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({states[3]}));
@@ -226,13 +238,14 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh)
 {
   size_t num_checkpoints = 200;
-  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  std::shared_ptr<DifferentiableBlockSolver> d_solid_nonlinear_solver =
+      buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  auto [physics, solid_weak_form, bcs] =
+  auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
+
+  auto [physics, solid_weak_form, cycle_zero_weak_form, bcs] =
       buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule(), num_checkpoints,
-          physics_name, {"bulk", "shear"});
+          mesh, d_solid_nonlinear_solver, time_rule, num_checkpoints, physics_name, {"bulk", "shear"});
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
   bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
@@ -250,7 +263,18 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
 
   solid_weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
+      smith::DependsOn<0, 1, 2, 3, 4, 5>{}, mesh->entireBodyName(),
+      [material, time_rule](const auto& time_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto bulk,
+                            auto shear) {
+        auto u_curr = time_rule.value(time_info, u, u_old, v_old, a_old);
+        auto a_curr = time_rule.ddot(time_info, u, u_old, v_old, a_old);
+        MaterialType::State state;
+        auto pk_stress = material(state, get<DERIVATIVE>(u_curr), bulk, shear);
+        return smith::tuple{get<VALUE>(a_curr) * material.density, pk_stress};
+      });
+
+  cycle_zero_weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1, 2, 3, 4>{}, mesh->entireBodyName(),
       [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
         MaterialType::State state;
         auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
@@ -318,6 +342,65 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
     SLIC_INFO_ROOT(axom::fmt::format("{} {} {}", params[p].get()->name(), params[p].get()->Norml2(),
                                      params[p].get_dual()->Norml2()));
   }
+}
+
+TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretlNew)
+{
+  SMITH_MARK_FUNCTION;
+  auto d_solid_nonlinear_solver =
+      buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+
+  auto system = buildSolidMechanicsSystem<dim, order>(
+      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{},
+      FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
+
+  system.disp_bc->setFixedVectorBCs<dim>(mesh->domain("right"));
+  system.disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
+    auto bc = 0.0 * X;
+    bc[0] = 0.01 * t;
+    bc[1] = -0.05 * t;
+    return bc;
+  });
+
+  double E = 100.0;
+  double nu = 0.25;
+  auto K = E / (3.0 * (1.0 - 2.0 * nu));
+  auto G = E / (2.0 * (1.0 + nu));
+  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
+  MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
+
+  // Set parameters
+  auto params = system.getParameterFields();
+  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return material.K0; });
+  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return material.G0; });
+
+  // Set material
+  system.setMaterial(material, mesh->entireBodyName());
+
+  auto shape_disp = system.field_store->getShapeDisp();
+  auto states = system.getStateFields();
+
+  double time = 0.0;
+  size_t cycle = 0;
+  std::vector<ReactionState> reactions;
+
+  for (size_t m = 0; m < num_steps_; ++m) {
+    TimeInfo t_info(time, dt_, cycle);
+    std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
+    time += dt_;
+    cycle++;
+  }
+
+  // Check that reaction forces are zero away from Dirichlet DOFs
+  checkUnconstrainedReactionForces(*reactions[0].get(), *system.disp_bc);
+
+  auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
+
+  gretl::set_as_objective(reaction_squared);
+
+  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
+  EXPECT_GT(checkGradWrt(reaction_squared, params[1], 6.2e-1, 4, true), 0.7);
 }
 
 // these functions mimic the BasePhysics style of running smith
@@ -457,7 +540,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
   }
 
   // Compare initial condition sensitivities
-  std::vector<std::string> state_suffixes = {"displacement", "velocity", "acceleration"};
+  std::vector<std::string> state_suffixes = {"displacement", "displacement_old", "velocity_old", "acceleration_old"};
   for (const auto& suffix : state_suffixes) {
     std::string nameG = physics_name + "_gretl_" + suffix;
     std::string nameB = physics_name + "_base_" + suffix;

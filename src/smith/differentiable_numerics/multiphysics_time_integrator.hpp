@@ -37,15 +37,15 @@ std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak
 /**
  * @brief Time integrator for multiphysics problems, coordinating multiple weak forms.
  */
-class MultiPhysicsTimeIntegrator : public StateAdvancer {
+class MultiphysicsTimeIntegrator : public StateAdvancer {
  public:
   /**
-   * @brief Construct a new MultiPhysicsTimeIntegrator object.
+   * @brief Construct a new MultiphysicsTimeIntegrator object.
    * @param field_store Field store containing the fields.
    * @param weak_forms List of weak forms to coordinate.
    * @param solver The block solver to use.
    */
-  MultiPhysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
+  MultiphysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
                              const std::vector<std::shared_ptr<WeakForm>>& weak_forms,
                              std::shared_ptr<smith::DifferentiableBlockSolver> solver);
 

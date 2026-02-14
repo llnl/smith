@@ -110,7 +110,7 @@ static constexpr int vdim = dim;
 static constexpr int displacement_order = 1;
 static constexpr int temperature_order = 1;
 
-struct SolidMechanicsMeshFixture : public testing::Test {
+struct ThermoMechanicsMeshFixture : public testing::Test {
   double length = 1.0;
   double width = 0.04;
   int num_elements_x = 12;
@@ -133,7 +133,7 @@ struct SolidMechanicsMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh_;
 };
 
-TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
+TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
 {
   SMITH_MARK_FUNCTION;
 
@@ -209,7 +209,7 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
   EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
 }
 
-TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
+TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
 {
   SMITH_MARK_FUNCTION;
 
@@ -272,7 +272,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientHeatEquationAnalytic)
   EXPECT_LT(max_nodal_error, 1e-3);
 }
 
-TEST_F(SolidMechanicsMeshFixture, StaticElasticityAnalytic)
+TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
 {
   SMITH_MARK_FUNCTION;
 

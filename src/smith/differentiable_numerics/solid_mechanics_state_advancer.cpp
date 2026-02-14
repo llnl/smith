@@ -10,50 +10,90 @@
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
+#include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
 namespace smith {
 
-SolidMechanicsStateAdvancer::SolidMechanicsStateAdvancer(
-    std::shared_ptr<smith::DifferentiableSolver> solver, std::shared_ptr<smith::DirichletBoundaryConditions> vector_bcs,
-    std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_dynamic_weak_forms,
-    smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule)
-    : solver_(solver),
-      vector_bcs_(vector_bcs),
-      solid_dynamic_weak_forms_(solid_dynamic_weak_forms),
-      time_rule_(time_rule)
+SolidMechanicsStateAdvancer::SolidMechanicsStateAdvancer(std::shared_ptr<FieldStore> field_store,
+                                                         std::shared_ptr<WeakForm> solid_weak_form,
+                                                         std::shared_ptr<WeakForm> cycle_zero_weak_form,
+                                                         std::shared_ptr<smith::DifferentiableBlockSolver> solver)
+    : field_store_(field_store), cycle_zero_weak_form_(cycle_zero_weak_form), solver_(solver)
 {
+  std::vector<std::shared_ptr<WeakForm>> weak_forms = {solid_weak_form};
+  integrator_ = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
 }
 
 std::pair<std::vector<FieldState>, std::vector<ReactionState>> SolidMechanicsStateAdvancer::advanceState(
-    const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states_old_,
+    const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states,
     const std::vector<FieldState>& params) const
 {
-  std::vector<FieldState> states_old = states_old_;
-  if (time_info.cycle() == 0) {
-    states_old[ACCELERATION] = solve(*solid_dynamic_weak_forms_->final_reaction_weak_form, shape_disp, states_old_,
-                                     params, time_info, *solver_, *vector_bcs_, ACCELERATION);
+  // Handle initial acceleration solve at cycle 0
+  std::vector<FieldState> current_states = states;
+  if (time_info.cycle() == 0 && cycle_zero_weak_form_) {
+    // Sync FieldStore with input states
+    for (size_t i = 0; i < states.size(); ++i) {
+      field_store_->setField(i, states[i]);
+    }
+
+    // The test field of cycle_zero_weak_form is the field we need to solve for (acceleration)
+    std::string test_field_name = field_store_->getWeakFormTestField(cycle_zero_weak_form_->name());
+
+    // Get the weak form's state fields
+    std::vector<FieldState> wf_fields = field_store_->getStates(cycle_zero_weak_form_->name());
+
+    // Find which argument index corresponds to the test field (the unknown we're solving for)
+    FieldState test_field = field_store_->getField(test_field_name);
+    size_t test_field_idx_in_wf = invalid_block_index;
+    for (size_t j = 0; j < wf_fields.size(); ++j) {
+      if (wf_fields[j].get() == test_field.get()) {
+        test_field_idx_in_wf = j;
+        break;
+      }
+    }
+    SLIC_ERROR_IF(test_field_idx_in_wf == invalid_block_index,
+                  "Test field '" << test_field_name << "' not found in weak form '" << cycle_zero_weak_form_->name()
+                                 << "'");
+
+    // Set up block solve for this single unknown
+    std::vector<WeakForm*> wf_ptrs = {cycle_zero_weak_form_.get()};
+    std::vector<std::vector<size_t>> block_indices = {{test_field_idx_in_wf}};
+
+    // Get boundary conditions (assume first BC manager for now)
+    std::vector<const BoundaryConditionManager*> bcs;
+    auto all_bcs = field_store_->getBoundaryConditionManagers();
+    if (!all_bcs.empty()) {
+      bcs.push_back(all_bcs[0]);
+    }
+
+    std::vector<std::vector<FieldState>> states_vec = {wf_fields};
+    std::vector<std::vector<FieldState>> params_vec = {params};
+
+    auto result =
+        block_solve(wf_ptrs, block_indices, shape_disp, states_vec, params_vec, time_info, solver_.get(), bcs);
+
+    // Update the acceleration field in our current states
+    size_t test_field_state_idx = field_store_->getFieldIndex(test_field_name);
+    current_states[test_field_state_idx] = result[0];
   }
 
-  std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
-                                       states_old[ACCELERATION]};
+  // Now perform the regular time step
+  auto [new_states, reactions_from_integrator] = integrator_->advanceState(time_info, shape_disp, current_states, params);
 
-  auto displacement = solve(*solid_dynamic_weak_forms_->time_discretized_weak_form, shape_disp, solid_inputs, params,
-                            time_info, *solver_, *vector_bcs_);
+  // Compute reactions using the cycle_zero_weak_form (which uses corrected acceleration)
+  // This gives us the correct reaction forces
+  std::vector<ReactionState> reactions;
+  if (cycle_zero_weak_form_) {
+    std::vector<FieldState> wf_fields = field_store_->getStatesFromVectors(cycle_zero_weak_form_->name(), new_states, params);
+    std::string test_field_name = field_store_->getWeakFormTestField(cycle_zero_weak_form_->name());
+    size_t test_field_idx = field_store_->getFieldIndex(test_field_name);
+    FieldState test_field = new_states[test_field_idx];
+    reactions.push_back(smith::evaluateWeakForm(cycle_zero_weak_form_, time_info, shape_disp, wf_fields, test_field));
+  } else {
+    reactions = reactions_from_integrator;
+  }
 
-  std::vector<FieldState> states = states_old;
-
-  states[DISPLACEMENT] = displacement;
-  states[VELOCITY] =
-      time_rule_.dot(time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY], states_old[ACCELERATION]);
-  states[ACCELERATION] = time_rule_.ddot(time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY],
-                                         states_old[ACCELERATION]);
-
-  std::vector<FieldState> solid_inputs_reaction{states[DISPLACEMENT], states[VELOCITY], states[ACCELERATION]};
-  solid_inputs_reaction.insert(solid_inputs_reaction.end(), params.begin(), params.end());
-  std::vector<ReactionState> reactions = {evaluateWeakForm(solid_dynamic_weak_forms_->final_reaction_weak_form,
-                                                           time_info, shape_disp, solid_inputs_reaction,
-                                                           states[DISPLACEMENT])};
-  return {states, reactions};
+  return {new_states, reactions};
 }
 
 }  // namespace smith

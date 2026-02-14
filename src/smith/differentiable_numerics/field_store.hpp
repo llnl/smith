@@ -225,6 +225,13 @@ struct FieldStore {
   std::vector<const BoundaryConditionManager*> getBoundaryConditionManagers() const;
 
   /**
+   * @brief Get the Dirichlet boundary conditions for an independent field by its unknown index.
+   * @param unknown_index The unknown index of the independent field.
+   * @return std::shared_ptr<DirichletBoundaryConditions> The boundary conditions.
+   */
+  std::shared_ptr<DirichletBoundaryConditions> getBoundaryConditions(size_t unknown_index) const;
+
+  /**
    * @brief Get the internal index of a field by name.
    * @param field_name Name of the field.
    * @return size_t Index of the field.
@@ -301,6 +308,12 @@ struct FieldStore {
    * @return const std::shared_ptr<smith::Mesh>& The mesh.
    */
   const std::shared_ptr<smith::Mesh>& getMesh() const;
+
+  /**
+   * @brief Get the associated data store graph.
+   * @return const std::shared_ptr<gretl::DataStore>& The graph.
+   */
+  const std::shared_ptr<gretl::DataStore>& graph() const;
 
  private:
   std::shared_ptr<Mesh> mesh_;

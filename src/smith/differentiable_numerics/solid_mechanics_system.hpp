@@ -14,7 +14,8 @@
 #include "smith/differentiable_numerics/field_store.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
+#include "smith/differentiable_numerics/state_advancer.hpp"
+#include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
 #include "smith/physics/weak_form.hpp"
 
@@ -32,11 +33,15 @@ struct SolidMechanicsSystem {
       dim, H1<order, dim>,
       Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
-  std::shared_ptr<FieldStore> field_store;               ///< Field store managing the system's fields.
-  std::shared_ptr<SolidWeakFormType> solid_weak_form;    ///< Solid mechanics weak form.
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
-  std::shared_ptr<DifferentiableBlockSolver> solver;     ///< The solver for the system.
-  std::shared_ptr<MultiPhysicsTimeIntegrator> advancer;  ///< The multiphysics state advancer.
+  using CycleZeroWeakFormType = TimeDiscretizedWeakForm<
+      dim, H1<order, dim>, Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
+
+  std::shared_ptr<FieldStore> field_store;                 ///< Field store managing the system's fields.
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;      ///< Solid mechanics weak form.
+  std::shared_ptr<CycleZeroWeakFormType> cycle_zero_weak_form;  ///< Cycle-zero weak form for initial acceleration solve.
+  std::shared_ptr<DirichletBoundaryConditions> disp_bc;    ///< Displacement boundary conditions.
+  std::shared_ptr<DifferentiableBlockSolver> solver;       ///< The solver for the system.
+  std::shared_ptr<StateAdvancer> advancer;                 ///< The state advancer.
   std::shared_ptr<ImplicitNewmarkSecondOrderTimeIntegrationRule> time_rule;  ///< Time integration rule.
   std::vector<FieldState> parameter_fields;                                  ///< Optional parameter fields.
 
@@ -67,6 +72,8 @@ struct SolidMechanicsSystem {
   {
     auto tr = time_rule;
     const int num_params = sizeof...(parameter_space);
+
+    // Add to solid weak form (u, u_old, v_old, a_old)
     auto depends_on = std::make_integer_sequence<int, 4 + num_params>{};
     solid_weak_form->addBodyIntegralImpl(
         domain_name,
@@ -80,6 +87,18 @@ struct SolidMechanicsSystem {
           return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
         },
         depends_on);
+
+    // Add to cycle-zero weak form (u, v, a) for initial acceleration solve
+    auto depends_on_cycle_zero = std::make_integer_sequence<int, 3 + num_params>{};
+    cycle_zero_weak_form->addBodyIntegralImpl(
+        domain_name,
+        [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto... params) {
+          typename MaterialType::State state;
+          auto pk_stress = material(state, get<DERIVATIVE>(u), params...);
+
+          return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
+        },
+        depends_on_cycle_zero);
   }
 };
 
@@ -120,16 +139,28 @@ SolidMechanicsSystem<dim, order, parameter_space...> buildSolidMechanicsSystem(
   (field_store->addParameter(parameter_types), ...);
   (parameter_fields.push_back(field_store->getField(parameter_types.name)), ...);
 
-  // Create solid mechanics weak form
+  // Create solid mechanics weak form (u, u_old, v_old, a_old)
   auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, *field_store, disp_type, disp_old_type,
                                              velo_old_type, accel_old_type, parameter_types...);
 
-  // Build advancer
-  std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form};
-  auto advancer = std::make_shared<MultiPhysicsTimeIntegrator>(field_store, weak_forms, solver);
+  // Create cycle-zero weak form (u, v, a) for initial acceleration solve
+  // The test field is acceleration, which is what we solve for at cycle=0
+  auto cycle_zero_weak_form = createWeakForm<dim>("solid_reaction", accel_old_type, *field_store, disp_type,
+                                                  velo_old_type, accel_old_type, parameter_types...);
 
-  return SolidMechanicsSystem<dim, order, parameter_space...>{field_store, solid_weak_form, disp_bc,         solver,
-                                                              advancer,    time_rule_ptr,   parameter_fields};
+  // Build advancer using SolidMechanicsStateAdvancer which wraps MultiphysicsTimeIntegrator
+  // and handles the initial acceleration solve at cycle=0
+  auto advancer = std::make_shared<SolidMechanicsStateAdvancer>(field_store, solid_weak_form, cycle_zero_weak_form,
+                                                                 solver);
+
+  return SolidMechanicsSystem<dim, order, parameter_space...>{field_store,
+                                                               solid_weak_form,
+                                                               cycle_zero_weak_form,
+                                                               disp_bc,
+                                                               solver,
+                                                               advancer,
+                                                               time_rule_ptr,
+                                                               parameter_fields};
 }
 
 }  // namespace smith

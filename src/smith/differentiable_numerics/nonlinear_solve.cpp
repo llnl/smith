@@ -536,7 +536,11 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     std::vector<std::vector<std::unique_ptr<mfem::HypreParMatrix>>> jacobians_T(num_rows);
     for (size_t col_j = 0; col_j < num_rows; ++col_j) {
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-        jacobians_T[col_j].emplace_back(std::unique_ptr<mfem::HypreParMatrix>(jacobians[row_i][col_j]->Transpose()));
+        if (jacobians[row_i][col_j]) {
+          jacobians_T[col_j].emplace_back(std::unique_ptr<mfem::HypreParMatrix>(jacobians[row_i][col_j]->Transpose()));
+        } else {
+          jacobians_T[col_j].emplace_back(nullptr);
+        }
       }
     }
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {

@@ -167,7 +167,7 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
 
   // Build solver and advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form};
-  auto advancer = std::make_shared<MultiPhysicsTimeIntegrator>(field_store, weak_forms, solver);
+  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
 
   return ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>{
       field_store, solid_weak_form, thermal_weak_form,     disp_bc,         temperature_bc, solver,
