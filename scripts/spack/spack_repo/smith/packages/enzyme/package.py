@@ -15,7 +15,7 @@ class Enzyme(BuiltinEnzyme):
     def llvm_prefix(self):
         spec = self.spec
         if spec.satisfies("%libllvm=llvm"):
-            return os.path.join(spec["llvm"].prefix, "llvm")
+            return os.path.join(spec["llvm"].prefix)
         if spec.satisfies("%libllvm=llvm-amdgpu"):
             return os.path.join(spec["llvm-amdgpu"].prefix, "llvm")
         raise InstallError("Unknown 'libllvm' provider!")

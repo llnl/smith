@@ -21,7 +21,7 @@ packages:
     - spec: "@2.33.0"
   mfem:
     require:
-    - spec: "@4.9.0.4"
+    - spec: "@4.9.1.1"
   petsc:
     require:
     - spec: "@3.21.6"
