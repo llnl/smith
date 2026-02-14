@@ -148,9 +148,10 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   system.setMaterial(material, mesh->entireBodyName());
 
   // Add gravity body force to BOTH weak forms
+  // Now with TimeDiscretizedWeakForm, inputs are (u, u_old, v_old, a_old)
   system.solid_weak_form->addBodyIntegral(
       DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-      [](auto /*t_info*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*a*/) {
+      [](auto /*t_info*/, auto /*X*/, auto /*u*/, auto /*u_old*/, auto /*v_old*/, auto /*a_old*/) {
         tensor<double, dim> b{};
         b[1] = gravity;
         return smith::tuple{-b, smith::zero{}};
@@ -258,13 +259,19 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
   MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
 
+  // Note: With TimeDiscretizedWeakForm, inputs are now (u, u_old, v_old, a_old, bulk, shear)
+  // Need to apply time integration rule to get current state
   solid_weak_form->addBodyIntegral(
       DependsOn<0, 1, 2, 3, 4, 5>{}, mesh->entireBodyName(),
-      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk,
+      [material, time_rule](const auto& t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto bulk,
                             auto shear) {
+        // Apply time integration to get current state
+        auto u_current = time_rule.value(t_info, u, u_old, v_old, a_old);
+        auto a_current = time_rule.ddot(t_info, u, u_old, v_old, a_old);
+
         MaterialType::State state;
-        auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
-        return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
+        auto pk_stress = material(state, get<DERIVATIVE>(u_current), bulk, shear);
+        return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
       });
 
   cycle_zero_weak_form->addBodyIntegral(

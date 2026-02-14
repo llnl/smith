@@ -20,7 +20,7 @@
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
-#include "smith/differentiable_numerics/time_integrated_weak_form.hpp"
+#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 
 namespace smith {
 
@@ -85,12 +85,12 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
     createSpaces(physics_name, *field_store, input_spaces, 0, disp_type, disp_old_type, velo_old_type, accel_old_type,
                  parameter_types...);
 
-    using SolidWeakFormType = TimeIntegratedWeakForm<
-        spatial_dim, VectorSpace, ImplicitNewmarkSecondOrderTimeIntegrationRule,
+    using SolidWeakFormType = TimeDiscretizedWeakForm<
+        spatial_dim, VectorSpace,
         Parameters<VectorSpace, VectorSpace, VectorSpace, VectorSpace, ParamSpaces...>>;
 
     auto solid_weak_form = std::make_shared<SolidWeakFormType>(
-        physics_name, field_store->getMesh(), test_space, input_spaces, time_rule_ptr);
+        physics_name, field_store->getMesh(), test_space, input_spaces);
 
     // Create cycle-zero weak form (u, v, a) for initial acceleration solve at cycle=0
     auto cycle_zero_weak_form = createWeakForm<spatial_dim>(physics_name + "_reaction", accel_old_type, *field_store,

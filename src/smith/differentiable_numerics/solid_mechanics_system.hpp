@@ -17,7 +17,7 @@
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/time_integrated_weak_form.hpp"
+#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/physics/weak_form.hpp"
 
 namespace smith {
@@ -30,9 +30,8 @@ namespace smith {
  */
 template <int dim, int order, typename... parameter_space>
 struct SolidMechanicsSystem {
-  using SolidWeakFormType = TimeIntegratedWeakForm<
-      dim, H1<order, dim>, ImplicitNewmarkSecondOrderTimeIntegrationRule,
-      Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
+  using SolidWeakFormType = TimeDiscretizedWeakForm<
+      dim, H1<order, dim>, Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
   using CycleZeroWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<order, dim>, Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
@@ -71,8 +70,25 @@ struct SolidMechanicsSystem {
   template <typename MaterialType>
   void setMaterial(const MaterialType& material, const std::string& domain_name)
   {
-    // Add to solid weak form (u, v, a, params...)
+    // Add to solid weak form (inputs: u, u_old, v_old, a_old, params...)
+    // Manually apply time integration rule to compute current state
+    auto captured_rule = time_rule;
     solid_weak_form->addBodyIntegral(
+        domain_name,
+        [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+          // Apply time integration rule to compute current state from history
+          auto u_current = captured_rule->value(t_info, u, u_old, v_old, a_old);
+          auto a_current = captured_rule->ddot(t_info, u, u_old, v_old, a_old);
+
+          typename MaterialType::State state;
+          auto pk_stress = material(state, get<DERIVATIVE>(u_current), params...);
+
+          return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
+        });
+
+    // Add to cycle-zero weak form (inputs: u, v, a, params...)
+    // At cycle 0, we directly use u, v, a (no time integration needed)
+    cycle_zero_weak_form->addBodyIntegral(
         domain_name,
         [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto... params) {
           typename MaterialType::State state;
@@ -80,19 +96,6 @@ struct SolidMechanicsSystem {
 
           return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
         });
-
-    // Add to cycle-zero weak form (u, v, a) for initial acceleration solve
-    const int num_params = sizeof...(parameter_space);
-    auto depends_on_cycle_zero = std::make_integer_sequence<int, 3 + num_params>{};
-    cycle_zero_weak_form->addBodyIntegralImpl(
-        domain_name,
-        [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto... params) {
-          typename MaterialType::State state;
-          auto pk_stress = material(state, get<DERIVATIVE>(u), params...);
-
-          return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
-        },
-        depends_on_cycle_zero);
   }
 
   /**
@@ -104,10 +107,17 @@ struct SolidMechanicsSystem {
   template <typename BodyForceType>
   void addBodyForce(const std::string& domain_name, BodyForceType force_function)
   {
-      solid_weak_form->addBodyIntegral(domain_name, [force_function](auto t_info, auto X, auto u, auto v, 
-                                                                     auto a, auto... params) {
-          return smith::tuple{-force_function(t_info.time(), get<VALUE>(X), get<VALUE>(u), get<VALUE>(v), 
-                                              get<VALUE>(a), get<VALUE>(params)...), smith::zero{}};
+      auto captured_rule = time_rule;
+      solid_weak_form->addBodyIntegral(domain_name,
+          [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+          // Apply time integration rule to get current state
+          auto u_current = captured_rule->value(t_info, u, u_old, v_old, a_old);
+          auto v_current = captured_rule->dot(t_info, u, u_old, v_old, a_old);
+          auto a_current = captured_rule->ddot(t_info, u, u_old, v_old, a_old);
+
+          return smith::tuple{-force_function(t_info.time(), get<VALUE>(X), get<VALUE>(u_current),
+                                              get<VALUE>(v_current), get<VALUE>(a_current),
+                                              get<VALUE>(params)...), smith::zero{}};
       });
   }
 
@@ -120,10 +130,16 @@ struct SolidMechanicsSystem {
   template <typename SurfaceFluxType>
   void addSurfaceFlux(const std::string& domain_name, SurfaceFluxType flux_function)
   {
-      solid_weak_form->addSurfaceFlux(domain_name, [flux_function](auto t_info, auto X, auto n, auto u, auto v, 
-                                                                    auto a, auto... params) {
-          return -flux_function(t_info.time(), get<VALUE>(X), n, get<VALUE>(u), get<VALUE>(v), 
-                                get<VALUE>(a), get<VALUE>(params)...);
+      auto captured_rule = time_rule;
+      solid_weak_form->addSurfaceFlux(domain_name,
+          [=](auto t_info, auto X, auto n, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+          // Apply time integration rule to get current state
+          auto u_current = captured_rule->value(t_info, u, u_old, v_old, a_old);
+          auto v_current = captured_rule->dot(t_info, u, u_old, v_old, a_old);
+          auto a_current = captured_rule->ddot(t_info, u, u_old, v_old, a_old);
+
+          return -flux_function(t_info.time(), get<VALUE>(X), n, get<VALUE>(u_current), get<VALUE>(v_current),
+                                get<VALUE>(a_current), get<VALUE>(params)...);
       });
   }
 };
@@ -173,7 +189,7 @@ SolidMechanicsSystem<dim, order, parameter_space...> buildSolidMechanicsSystem(
                parameter_types...);
 
   auto solid_weak_form = std::make_shared<typename SolidMechanicsSystem<dim, order, parameter_space...>::SolidWeakFormType>(
-      "solid_force", field_store->getMesh(), test_space, input_spaces, time_rule_ptr);
+      "solid_force", field_store->getMesh(), test_space, input_spaces);
 
   // Create cycle-zero weak form (u, v, a) for initial acceleration solve
   // The test field is acceleration, which is what we solve for at cycle=0

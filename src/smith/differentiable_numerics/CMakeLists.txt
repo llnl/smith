@@ -38,7 +38,6 @@ set(differentiable_numerics_headers
     paraview_writer.hpp
     differentiable_test_utils.hpp
     multiphysics_time_integrator.hpp
-    time_integrated_weak_form.hpp
     solid_mechanics_system.hpp
     thermo_mechanics_system.hpp
     )

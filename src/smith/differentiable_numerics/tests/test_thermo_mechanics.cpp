@@ -229,8 +229,8 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
 
-  system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("left"));
-  system.disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
+  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh_->domain("left"));
+  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh_->domain("right"));
   system.temperature_bc->setScalarBCs<dim>(mesh_->domain("left"), [](double, auto) { return 100.0; });
   system.temperature_bc->setScalarBCs<dim>(mesh_->domain("right"), [](double, auto) { return 100.0; });
 
