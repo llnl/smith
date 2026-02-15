@@ -64,16 +64,16 @@ class SolidMechanicsTimeIntegrator : public StateAdvancer {
 
     // Add displacement as independent (unknown) with time integration rule
     auto time_rule_ptr = std::make_shared<ImplicitNewmarkSecondOrderTimeIntegrationRule>(time_rule);
-    FieldType<VectorSpace> disp_type(physics_name + "_displacement");
+    FieldType<VectorSpace> disp_type(physics_name + "_displacement_predicted");
     field_store->addIndependent(disp_type, time_rule_ptr);
 
     // Add dependent fields for time integration history
     auto disp_old_type =
-        field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, physics_name + "_displacement_old");
+        field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, physics_name + "_displacement");
     auto velo_old_type =
-        field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, physics_name + "_velocity_old");
+        field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, physics_name + "_velocity");
     auto accel_old_type =
-        field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, physics_name + "_acceleration_old");
+        field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, physics_name + "_acceleration");
 
     // Add parameters
     (field_store->addParameter(parameter_types), ...);

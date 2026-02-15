@@ -19,6 +19,7 @@
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
+#include "smith/differentiable_numerics/system_base.hpp"
 
 namespace smith {
 
@@ -30,7 +31,7 @@ namespace smith {
  * @tparam parameter_space Finite element spaces for optional parameters.
  */
 template <int dim, int disp_order, int temp_order, typename... parameter_space>
-struct ThermoMechanicsSystem {
+struct ThermoMechanicsSystem : public SystemBase {
   /// @brief using for SolidWeakFormType
   using SolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<disp_order, dim>,
@@ -41,18 +42,13 @@ struct ThermoMechanicsSystem {
       dim, H1<temp_order>,
       Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
 
-  std::shared_ptr<FieldStore> field_store;                      ///< Field store managing the system's fields.
   std::shared_ptr<SolidWeakFormType> solid_weak_form;           ///< Solid mechanics weak form.
   std::shared_ptr<ThermalWeakFormType> thermal_weak_form;       ///< Thermal weak form.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;         ///< Displacement boundary conditions.
   std::shared_ptr<DirichletBoundaryConditions> temperature_bc;  ///< Temperature boundary conditions.
-  std::shared_ptr<DifferentiableBlockSolver> solver;            ///< The solver for the coupled system.
-  std::shared_ptr<StateAdvancer> advancer;                      ///< The multiphysics state advancer.
   std::shared_ptr<QuasiStaticFirstOrderTimeIntegrationRule> disp_time_rule;  ///< Time integration for displacement.
   std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule>
       temperature_time_rule;                 ///< Time integration for temperature.
-  std::vector<FieldState> parameter_fields;  ///< Optional parameter fields.
-  std::string physics_name_;
 
   /**
    * @brief Get the list of all state fields (current and old).
@@ -61,18 +57,12 @@ struct ThermoMechanicsSystem {
   std::vector<FieldState> getStateFields() const
   {
     std::vector<FieldState> states;
-    states.push_back(field_store->getField(physics_name_ + "_displacement"));
-    states.push_back(field_store->getField(physics_name_ + "_displacement_old"));
-    states.push_back(field_store->getField(physics_name_ + "_temperature"));
-    states.push_back(field_store->getField(physics_name_ + "_temperature_old"));
+    states.push_back(field_store->getField(prefix("displacement_predicted")));
+    states.push_back(field_store->getField(prefix("displacement")));
+    states.push_back(field_store->getField(prefix("temperature_predicted")));
+    states.push_back(field_store->getField(prefix("temperature")));
     return states;
   }
-
-  /**
-   * @brief Get the list of all parameter fields.
-   * @return const std::vector<FieldState>& List of parameter fields.
-   */
-  const std::vector<FieldState>& getParameterFields() const { return parameter_fields; }
 
   /**
    * @brief Create a DifferentiablePhysics object for this system.
@@ -84,7 +74,7 @@ struct ThermoMechanicsSystem {
     return std::make_shared<DifferentiablePhysics>(
         field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
         getParameterFields(), advancer, physics_name,
-        std::vector<std::string>{physics_name_ + "_solid_force", physics_name_ + "_thermal_flux"});
+        std::vector<std::string>{prefix("solid_force"), prefix("thermal_flux")});
   }
 
   /**
@@ -233,57 +223,64 @@ struct ThermoMechanicsSystem {
  * @tparam parameter_space Finite element spaces for optional parameters.
  * @param mesh The mesh.
  * @param solver The differentiable block solver.
- * @param physics_name The name of the physics (used as field prefix).
+ * @param prepend_name The name of the physics (used as field prefix).
  * @param parameter_types Parameter field types.
  * @return ThermoMechanicsSystem with all components initialized.
  */
 template <int dim, int disp_order, int temp_order, typename... parameter_space>
 ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver, std::string physics_name,
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
-  FieldType<H1<1, dim>> shape_disp_type(physics_name + "_shape_displacement");
+  auto prefix = [&](const std::string& name) {
+    if (prepend_name.empty()) {
+      return name;
+    }
+    return prepend_name + "_" + name;
+  };
+
+  FieldType<H1<1, dim>> shape_disp_type(prefix("shape_displacement"));
   field_store->addShapeDisp(shape_disp_type);
 
   // Displacement field with quasi-static time integration
   auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
-  FieldType<H1<disp_order, dim>> disp_type(physics_name + "_displacement");
+  FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
   auto disp_old_type =
-      field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, physics_name + "_displacement_old");
+      field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, prefix("displacement"));
 
   // Temperature field with backward Euler time integration
   auto temperature_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
-  FieldType<H1<temp_order>> temperature_type(physics_name + "_temperature");
+  FieldType<H1<temp_order>> temperature_type(prefix("temperature_predicted"));
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
   auto temperature_old_type =
-      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE, physics_name + "_temperature_old");
+      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE, prefix("temperature"));
 
   std::vector<FieldState> parameter_fields;
-  (field_store->addParameter(FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)), ...);
-  (parameter_fields.push_back(field_store->getField(physics_name + "_param_" + parameter_types.name)), ...);
+  (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
+  (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
 
   // Solid mechanics weak form
-  std::string solid_force_name = physics_name + "_solid_force";
+  std::string solid_force_name = prefix("solid_force");
   field_store->addWeakFormTestField(solid_force_name, disp_type.name);
   const mfem::ParFiniteElementSpace& disp_test_space = field_store->getField(disp_type.name).get()->space();
   std::vector<const mfem::ParFiniteElementSpace*> disp_input_spaces;
   createSpaces(solid_force_name, *field_store, disp_input_spaces, 0, disp_type, disp_old_type, temperature_type,
-               temperature_old_type, FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)...);
+               temperature_old_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
 
   auto solid_weak_form = std::make_shared<
       typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::SolidWeakFormType>(
       solid_force_name, field_store->getMesh(), disp_test_space, disp_input_spaces);
 
   // Thermal weak form
-  std::string thermal_flux_name = physics_name + "_thermal_flux";
+  std::string thermal_flux_name = prefix("thermal_flux");
   field_store->addWeakFormTestField(thermal_flux_name, temperature_type.name);
   const mfem::ParFiniteElementSpace& temp_test_space = field_store->getField(temperature_type.name).get()->space();
   std::vector<const mfem::ParFiniteElementSpace*> temp_input_spaces;
   createSpaces(thermal_flux_name, *field_store, temp_input_spaces, 0, temperature_type, temperature_old_type, disp_type,
-               disp_old_type, FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)...);
+               disp_old_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
 
   auto thermal_weak_form = std::make_shared<
       typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::ThermalWeakFormType>(
@@ -294,8 +291,13 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
 
   return ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>{
-      field_store, solid_weak_form, thermal_weak_form,     disp_bc,          temperature_bc, solver,
-      advancer,    disp_time_rule,  temperature_time_rule, parameter_fields, physics_name};
+      {field_store, solver, advancer, parameter_fields, prepend_name},
+      solid_weak_form,
+      thermal_weak_form,
+      disp_bc,
+      temperature_bc,
+      disp_time_rule,
+      temperature_time_rule};
 }
 
 }  // namespace smith

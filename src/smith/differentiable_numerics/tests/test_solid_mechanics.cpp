@@ -82,9 +82,8 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto d_solid_nonlinear_solver =
       buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  std::string physics_name = "gravity";
   auto system = buildSolidMechanicsSystem<dim, order>(
-      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, physics_name,
+      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, "",
       FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
 
   static constexpr double gravity = -9.0;
@@ -101,10 +100,9 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   params[0].get()->setFromFieldFunction([=](tensor<double, dim>) { return material.K0; });
   params[1].get()->setFromFieldFunction([=](tensor<double, dim>) { return material.G0; });
 
-  // Set material
   system.setMaterial(material, mesh->entireBodyName());
 
-  // Add gravity body force to BOTH weak forms
+  // Add gravity body force
   system.addBodyForce(mesh->entireBodyName(),
                       [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*a*/, auto... /*params*/) {
                         tensor<double, dim> b{};
@@ -118,13 +116,6 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   auto shape_disp = system.field_store->getShapeDisp();
   auto states = system.getStateFields();
-
-  // Set initial acceleration to gravity
-  states[3].get()->setFromFieldFunction([=](tensor<double, dim>) {
-    tensor<double, dim> a{};
-    a[1] = gravity;
-    return a;
-  });
 
   std::string pv_dir = "paraview_solid";
   auto pv_writer = createParaviewWriter(*mesh, {states[0], params[0], params[1]}, pv_dir);
@@ -148,7 +139,6 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   TimeInfo endTimeInfo(time, dt_, cycle);
 
-  // Test acceleration (states[3] is acceleration_old)
   FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({states[3]}));
   accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
     auto a = get<VALUE>(A);
@@ -159,7 +149,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   double a_err = accel_error.evaluate(endTimeInfo, shape_disp.get().get(), getConstFieldPointers({states[3]}));
   EXPECT_NEAR(0.0, a_err, 1e-14);
 
-  // Test velocity (states[2] is velocity_old)
+  // Test velocity (states[2] is velocity)
   FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh, spaces({states[2]}));
   velo_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
     auto v = get<VALUE>(V);
@@ -170,8 +160,8 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   double v_err = velo_error.evaluate(TimeInfo(0.0, 1.0, 0), shape_disp.get().get(), getConstFieldPointers({states[2]}));
   EXPECT_NEAR(0.0, v_err, 1e-14);
 
-  // Test displacement (states[0] is current displacement)
-  FunctionalObjective<dim, Parameters<VectorSpace>> disp_error("disp_error", mesh, spaces({states[0]}));
+  // Test displacement (states[1] is displacement)
+  FunctionalObjective<dim, Parameters<VectorSpace>> disp_error("disp_error", mesh, spaces({states[1]}));
   disp_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
     auto u = get<VALUE>(U);
     auto du0 = u[0];
@@ -195,8 +185,6 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   auto physics = system.createDifferentiablePhysics(physics_name);
   auto bcs = system.disp_bc;
-  auto solid_weak_form = system.solid_weak_form;
-  auto cycle_zero_weak_form = system.cycle_zero_weak_form;
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
   bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, tensor<double, dim> X) {
@@ -213,27 +201,7 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
   MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
 
-  // Note: With TimeDiscretizedWeakForm, inputs are now (u, u_old, v_old, a_old, bulk, shear)
-  // Need to apply time integration rule to get current state
-  solid_weak_form->addBodyIntegral(DependsOn<0, 1, 2, 3, 4, 5>{}, mesh->entireBodyName(),
-                                   [material, time_rule](const auto& t_info, auto /*X*/, auto u, auto u_old, auto v_old,
-                                                         auto a_old, auto bulk, auto shear) {
-                                     // Apply time integration to get current state
-                                     auto u_current = time_rule.value(t_info, u, u_old, v_old, a_old);
-                                     auto a_current = time_rule.ddot(t_info, u, u_old, v_old, a_old);
-
-                                     MaterialType::State state;
-                                     auto pk_stress = material(state, get<DERIVATIVE>(u_current), bulk, shear);
-                                     return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
-                                   });
-
-  cycle_zero_weak_form->addBodyIntegral(
-      DependsOn<0, 1, 2, 3, 4>{}, mesh->entireBodyName(),
-      [material](const auto& /*time_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto bulk, auto shear) {
-        MaterialType::State state;
-        auto pk_stress = material(state, get<DERIVATIVE>(u), bulk, shear);
-        return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
-      });
+  system.setMaterial(material, mesh->entireBodyName());
 
   auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();
@@ -298,91 +266,31 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   }
 }
 
-TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretlNew)
-{
-  SMITH_MARK_FUNCTION;
-  auto d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
-
-  std::string physics_name = "new";
-  auto system = buildSolidMechanicsSystem<dim, order>(
-      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, physics_name,
-      FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
-
-  system.disp_bc->setFixedVectorBCs<dim>(mesh->domain("right"));
-  system.disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
-    auto bc = 0.0 * X;
-    bc[0] = 0.01 * t;
-    bc[1] = -0.05 * t;
-    return bc;
-  });
-
-  double E = 100.0;
-  double nu = 0.25;
-  auto K = E / (3.0 * (1.0 - 2.0 * nu));
-  auto G = E / (2.0 * (1.0 + nu));
-  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
-  MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
-
-  // Set parameters
-  auto params = system.getParameterFields();
-  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return material.K0; });
-  params[1].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return material.G0; });
-
-  // Set material
-  system.setMaterial(material, mesh->entireBodyName());
-
-  auto shape_disp = system.field_store->getShapeDisp();
-  auto states = system.getStateFields();
-
-  double time = 0.0;
-  size_t cycle = 0;
-  std::vector<ReactionState> reactions;
-
-  for (size_t m = 0; m < num_steps_; ++m) {
-    TimeInfo t_info(time, dt_, cycle);
-    std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
-    time += dt_;
-    cycle++;
-  }
-
-  // Check that reaction forces are zero away from Dirichlet DOFs
-  checkUnconstrainedReactions(*reactions[0].get(), system.disp_bc->getBoundaryConditionManager());
-
-  auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
-
-  gretl::set_as_objective(reaction_squared);
-
-  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, params[1], 6.2e-1, 4, true), 0.7);
-}
-
 // these functions mimic the BasePhysics style of running smith
 
 void resetAndApplyInitialConditions(std::shared_ptr<BasePhysics> physics) { physics->resetStates(); }
 
-double integrateForward(std::shared_ptr<BasePhysics> physics, size_t num_steps, double dt)
+double integrateForward(std::shared_ptr<BasePhysics> physics, size_t num_steps, double dt, std::string reaction_name)
 {
   resetAndApplyInitialConditions(physics);
   for (size_t m = 0; m < num_steps; ++m) {
     physics->advanceTimestep(dt);
   }
-  FiniteElementDual reaction = physics->dual("reactions");
+  FiniteElementDual reaction = physics->dual(reaction_name);
 
   return 0.5 * innerProduct(reaction, reaction);
 }
 
 void adjointBackward(std::shared_ptr<BasePhysics> physics, smith::FiniteElementDual& shape_sensitivity,
-                     std::vector<smith::FiniteElementDual>& parameter_sensitivities)
+                     std::vector<smith::FiniteElementDual>& parameter_sensitivities, std::string reaction_name)
 {
-  smith::FiniteElementDual reaction = physics->dual("reactions");
-  smith::FiniteElementState reaction_dual(reaction.space(), "reactions_dual");
+  smith::FiniteElementDual reaction = physics->dual(reaction_name);
+  smith::FiniteElementState reaction_dual(reaction.space(), reaction_name + "_dual");
   reaction_dual = reaction;
 
   physics->resetAdjointStates();
 
-  physics->setDualAdjointBcs({{"reactions", reaction_dual}});
+  physics->setDualAdjointBcs({{reaction_name, reaction_dual}});
 
   while (physics->cycle() > 0) {
     physics->reverseAdjointTimestep();
@@ -399,7 +307,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
   std::string physics_name = "solid";
   auto [physics, shape_disp, initial_states, params, bcs] = createSolidMechanicsBasePhysics(physics_name, mesh);
 
-  double qoi = integrateForward(physics, num_steps_, dt_);
+  double qoi = integrateForward(physics, num_steps_, dt_, physics_name + "_reactions");
   SLIC_INFO_ROOT(axom::fmt::format("{}", qoi));
 
   // Check that reaction forces are zero away from Dirichlet DOFs
@@ -414,7 +322,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
     parameter_sensitivities.emplace_back(*params[p].get_dual());
   }
 
-  adjointBackward(physics, shape_sensitivity, parameter_sensitivities);
+  adjointBackward(physics, shape_sensitivity, parameter_sensitivities, physics_name + "_reactions");
 
   auto state_sensitivities = physics->computeInitialConditionSensitivity();
   for (auto name_and_state_sensitivity : state_sensitivities) {
@@ -455,7 +363,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
       createSolidMechanicsBasePhysics(physics_name + "_base", mesh);
 
   // Forward pass
-  double qoiB = integrateForward(physicsBase, num_steps_, dt_);
+  double qoiB = integrateForward(physicsBase, num_steps_, dt_, physics_name + "_base_reactions");
 
   // Adjoint pass
   size_t num_params = physicsBase->parameterNames().size();
@@ -467,7 +375,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
     parameter_sensitivitiesB.back() = 0.0;
   }
 
-  adjointBackward(physicsBase, shape_sensitivityB, parameter_sensitivitiesB);
+  adjointBackward(physicsBase, shape_sensitivityB, parameter_sensitivitiesB, physics_name + "_base_reactions");
   auto initial_condition_sensitivitiesB = physicsBase->computeInitialConditionSensitivity();
 
   // 3. Compare sensitivities
@@ -495,7 +403,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
   }
 
   // Compare initial condition sensitivities
-  std::vector<std::string> state_suffixes = {"displacement", "displacement_old", "velocity_old", "acceleration_old"};
+  std::vector<std::string> state_suffixes = {"displacement_predicted", "displacement", "velocity", "acceleration"};
   for (const auto& suffix : state_suffixes) {
     std::string nameG = physics_name + "_gretl_" + suffix;
     std::string nameB = physics_name + "_base_" + suffix;

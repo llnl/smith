@@ -20,6 +20,7 @@
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
+#include "smith/differentiable_numerics/system_base.hpp"
 
 namespace smith {
 
@@ -30,7 +31,7 @@ namespace smith {
  * @tparam parameter_space Parameter spaces for material properties.
  */
 template <int dim, int order, typename... parameter_space>
-struct SolidMechanicsSystem {
+struct SolidMechanicsSystem : public SystemBase {
   using SolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<order, dim>,
       Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
@@ -39,16 +40,11 @@ struct SolidMechanicsSystem {
       TimeDiscretizedWeakForm<dim, H1<order, dim>,
                               Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
-  std::shared_ptr<FieldStore> field_store;             ///< Field store managing the system's fields.
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
   std::shared_ptr<CycleZeroWeakFormType>
       cycle_zero_weak_form;                              ///< Cycle-zero weak form for initial acceleration solve.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
-  std::shared_ptr<DifferentiableBlockSolver> solver;     ///< The solver for the system.
-  std::shared_ptr<StateAdvancer> advancer;               ///< The state advancer.
   std::shared_ptr<ImplicitNewmarkSecondOrderTimeIntegrationRule> time_rule;  ///< Time integration rule.
-  std::vector<FieldState> parameter_fields;                                  ///< Optional parameter fields.
-  std::string physics_name_;
 
   /**
    * @brief Get the list of all state fields (displacement, displacement_old, velocity_old, acceleration_old).
@@ -56,17 +52,9 @@ struct SolidMechanicsSystem {
    */
   std::vector<FieldState> getStateFields() const
   {
-    return {field_store->getField(physics_name_ + "_displacement"),
-            field_store->getField(physics_name_ + "_displacement_old"),
-            field_store->getField(physics_name_ + "_velocity_old"),
-            field_store->getField(physics_name_ + "_acceleration_old")};
+    return {field_store->getField(prefix("displacement_predicted")), field_store->getField(prefix("displacement")),
+            field_store->getField(prefix("velocity")), field_store->getField(prefix("acceleration"))};
   }
-
-  /**
-   * @brief Get the list of all parameter fields.
-   * @return const std::vector<FieldState>& List of parameter fields.
-   */
-  const std::vector<FieldState>& getParameterFields() const { return parameter_fields; }
 
   /**
    * @brief Create a DifferentiablePhysics object for this system.
@@ -75,9 +63,9 @@ struct SolidMechanicsSystem {
    */
   std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
-                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-                                                   advancer, physics_name, std::vector<std::string>{"reactions"});
+    return std::make_shared<DifferentiablePhysics>(
+        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
+        getParameterFields(), advancer, physics_name, std::vector<std::string>{prefix("reactions")});
   }
 
   /**
@@ -213,47 +201,52 @@ struct SolidMechanicsSystem {
  * @param mesh The mesh.
  * @param solver The differentiable block solver.
  * @param time_rule The time integration rule.
- * @param physics_name The name of the physics (used as field prefix).
+ * @param prepend_name The name of the physics (used as field prefix).
  * @param parameter_types Parameter field types.
  * @return SolidMechanicsSystem with all components initialized.
  */
 template <int dim, int order, typename... parameter_space>
 SolidMechanicsSystem<dim, order, parameter_space...> buildSolidMechanicsSystem(
     std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver,
-    ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+    ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
+  auto prefix = [&](const std::string& name) {
+    if (prepend_name.empty()) {
+      return name;
+    }
+    return prepend_name + "_" + name;
+  };
+
   // Add shape displacement
-  FieldType<H1<1, dim>> shape_disp_type(physics_name + "_shape_displacement");
+  FieldType<H1<1, dim>> shape_disp_type(prefix("shape_displacement"));
   field_store->addShapeDisp(shape_disp_type);
 
   // Add displacement as independent (unknown) with time integration rule
   auto time_rule_ptr = std::make_shared<ImplicitNewmarkSecondOrderTimeIntegrationRule>(time_rule);
-  FieldType<H1<order, dim>> disp_type(physics_name + "_displacement");
+  FieldType<H1<order, dim>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, time_rule_ptr);
 
   // Add dependent fields for time integration history
-  auto disp_old_type =
-      field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, physics_name + "_displacement_old");
-  auto velo_old_type =
-      field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, physics_name + "_velocity_old");
+  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, prefix("displacement"));
+  auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, prefix("velocity"));
   auto accel_old_type =
-      field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, physics_name + "_acceleration_old");
+      field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, prefix("acceleration"));
 
   // Add parameters
   std::vector<FieldState> parameter_fields;
-  (field_store->addParameter(FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)), ...);
-  (parameter_fields.push_back(field_store->getField(physics_name + "_param_" + parameter_types.name)), ...);
+  (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
+  (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
 
   // Create solid mechanics weak form (u, u_old, v_old, a_old)
-  std::string force_name = physics_name + "_solid_force";
+  std::string force_name = prefix("solid_force");
   field_store->addWeakFormTestField(force_name, disp_type.name);
   const mfem::ParFiniteElementSpace& test_space = field_store->getField(disp_type.name).get()->space();
   std::vector<const mfem::ParFiniteElementSpace*> input_spaces;
   createSpaces(force_name, *field_store, input_spaces, 0, disp_type, disp_old_type, velo_old_type, accel_old_type,
-               FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)...);
+               FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
 
   auto solid_weak_form =
       std::make_shared<typename SolidMechanicsSystem<dim, order, parameter_space...>::SolidWeakFormType>(
@@ -264,17 +257,20 @@ SolidMechanicsSystem<dim, order, parameter_space...> buildSolidMechanicsSystem(
   // Note: We solve R(u_0, v_0, a_0) = 0 for a_0.
   // The inputs are just the states themselves, not history.
   auto cycle_zero_weak_form = createWeakForm<dim>(
-      physics_name + "_solid_reaction", accel_old_type, *field_store, disp_type, velo_old_type, accel_old_type,
-      FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)...);
+      prefix("solid_reaction"), accel_old_type, *field_store, disp_type, velo_old_type, accel_old_type,
+      FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
 
   // Build advancer using SolidMechanicsTimeIntegrator which wraps MultiphysicsTimeIntegrator
   // and handles the initial acceleration solve at cycle=0
   auto advancer =
       std::make_shared<SolidMechanicsTimeIntegrator>(field_store, solid_weak_form, cycle_zero_weak_form, solver);
 
-  return SolidMechanicsSystem<dim, order, parameter_space...>{field_store,   solid_weak_form,  cycle_zero_weak_form,
-                                                              disp_bc,       solver,           advancer,
-                                                              time_rule_ptr, parameter_fields, physics_name};
+  return SolidMechanicsSystem<dim, order, parameter_space...>{
+      {field_store, solver, advancer, parameter_fields, prepend_name},
+      solid_weak_form,
+      cycle_zero_weak_form,
+      disp_bc,
+      time_rule_ptr};
 }
 
 }  // namespace smith

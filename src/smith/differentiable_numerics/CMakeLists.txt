@@ -38,6 +38,7 @@ set(differentiable_numerics_headers
     multiphysics_time_integrator.hpp
     solid_mechanics_system.hpp
     thermo_mechanics_system.hpp
+    system_base.hpp
     )
 
 set(differentiable_numerics_depends
