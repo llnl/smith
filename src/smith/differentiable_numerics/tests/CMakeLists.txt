@@ -10,6 +10,7 @@ set(differentiable_numerics_test_source
     test_field_state.cpp
     test_solid_dynamics.cpp
     test_thermo_mechanics.cpp
+    test_thermal_static.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}

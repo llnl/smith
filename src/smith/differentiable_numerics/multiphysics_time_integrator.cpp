@@ -64,14 +64,16 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
 
     std::vector<FieldState> rule_inputs;
     rule_inputs.push_back(u_new);          // u_{n+1}
-    rule_inputs.push_back(states[u_idx]);  // u_n
+    if (rule->num_args() >= 2) {
+      rule_inputs.push_back(states[u_idx]);  // u_n
+    }
 
-    if (!mapping.dot_name.empty()) {
+    if (rule->num_args() >= 3 && !mapping.dot_name.empty()) {
       size_t v_idx = field_store_->getFieldIndex(mapping.dot_name);
       rule_inputs.push_back(states[v_idx]);
     }
 
-    if (!mapping.ddot_name.empty()) {
+    if (rule->num_args() >= 4 && !mapping.ddot_name.empty()) {
       size_t a_idx = field_store_->getFieldIndex(mapping.ddot_name);
       rule_inputs.push_back(states[a_idx]);
     }

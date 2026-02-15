@@ -28,6 +28,9 @@ class TimeIntegrationRule {
   /// variable, followed by
   virtual FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const = 0;
 
+  /// @brief get the number of states required by the rule
+  virtual int num_args() const = 0;
+
   /// @brief update the current value of the independent variable's first time derivative, given the predicted value of
   /// the current independent variable, followed by
   virtual FieldState corrected_dot(const TimeInfo& t, const std::vector<FieldState>& states) const = 0;
@@ -43,11 +46,11 @@ class TimeIntegrationRule {
 /// (u^{n+1}, u^n).
 class BackwardEulerFirstOrderTimeIntegrationRule : public TimeIntegrationRule {
  public:
-  /// @brief Number of state arguments (field_new, field_old)
-  static constexpr int num_args = 2;
-
   /// @brief Constructor
   BackwardEulerFirstOrderTimeIntegrationRule() {}
+
+  /// @brief get the number of states required by the rule
+  int num_args() const override { return 2; }
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2>
@@ -83,6 +86,51 @@ class BackwardEulerFirstOrderTimeIntegrationRule : public TimeIntegrationRule {
   }
 };
 
+/// @brief encodes rules for time discretizing first order odes where time derivatives are zero.
+/// When solving f(u, t) = 0
+/// this class provides the current discrete approximation for u as a function of u^{n+1}.
+class QuasiStaticRule : public TimeIntegrationRule {
+ public:
+  /// @brief Constructor
+  QuasiStaticRule() {}
+
+  /// @brief get the number of states required by the rule
+  int num_args() const override { return 1; }
+
+  /// @brief evaluate value of the ode state as used by the integration rule
+  template <typename T1>
+  SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new) const
+  {
+    return field_new;
+  }
+
+  /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
+  template <typename T1>
+  SMITH_HOST_DEVICE auto dot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
+  {
+    return zero{};
+  }
+
+  /// @overload
+  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
+    return value(t, states[0]);
+  }
+
+  /// @overload
+  FieldState corrected_dot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
+  {
+    return zeroCopy(states[0]);
+  }
+
+  /// @overload
+  FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
+  {
+    SLIC_ERROR("QuasiStaticRule does not support second derivatives.");
+    return states[0];
+  }
+};
+
 /// Altenative name for Backward Euler which makes sense when restricting what are typically second order odes,
 /// for example transient solid mechanics, to the quasi-static approximation.  It happens that the implementation is
 /// identical to backward-Euler applied to first order systems as we want to be able to capture current velocity
@@ -95,11 +143,11 @@ using QuasiStaticFirstOrderTimeIntegrationRule = BackwardEulerFirstOrderTimeInte
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
 struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRule {
  public:
-  /// @brief Number of state arguments (field_new, field_old, velo_old, accel_old)
-  static constexpr int num_args = 4;
-
   /// @brief Constructor
   ImplicitNewmarkSecondOrderTimeIntegrationRule() {}
+
+  /// @brief get the number of states required by the rule
+  int num_args() const override { return 4; }
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
@@ -154,11 +202,11 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRul
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
 struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule {
  public:
-  /// @brief Number of state arguments (field_new, field_old, velo_old, accel_old)
-  static constexpr int num_args = 4;
-
   /// @brief Constructor
   QuasiStaticSecondOrderTimeIntegrationRule() {}
+
+  /// @brief get the number of states required by the rule
+  int num_args() const override { return 4; }
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
