@@ -37,8 +37,8 @@ class SolidMechanicsTimeIntegrator : public StateAdvancer {
    * @param solver The block solver to use.
    */
   SolidMechanicsTimeIntegrator(std::shared_ptr<FieldStore> field_store, std::shared_ptr<WeakForm> solid_weak_form,
-                              std::shared_ptr<WeakForm> cycle_zero_weak_form,
-                              std::shared_ptr<smith::DifferentiableBlockSolver> solver);
+                               std::shared_ptr<WeakForm> cycle_zero_weak_form,
+                               std::shared_ptr<smith::DifferentiableBlockSolver> solver);
 
   /// State enum for indexing convenience (deprecated, use FieldType instead)
   enum STATE
@@ -53,7 +53,8 @@ class SolidMechanicsTimeIntegrator : public StateAdvancer {
    * application.
    */
   template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
-  static auto buildWeakFormAndStates([[maybe_unused]] std::shared_ptr<Mesh> mesh, std::shared_ptr<FieldStore> field_store,
+  static auto buildWeakFormAndStates([[maybe_unused]] std::shared_ptr<Mesh> mesh,
+                                     std::shared_ptr<FieldStore> field_store,
                                      ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string physics_name,
                                      FieldType<ParamSpaces>... parameter_types)
   {
@@ -84,16 +85,17 @@ class SolidMechanicsTimeIntegrator : public StateAdvancer {
     createSpaces(physics_name, *field_store, input_spaces, 0, disp_type, disp_old_type, velo_old_type, accel_old_type,
                  parameter_types...);
 
-    using SolidWeakFormType = TimeDiscretizedWeakForm<
-        spatial_dim, VectorSpace,
-        Parameters<VectorSpace, VectorSpace, VectorSpace, VectorSpace, ParamSpaces...>>;
+    using SolidWeakFormType =
+        TimeDiscretizedWeakForm<spatial_dim, VectorSpace,
+                                Parameters<VectorSpace, VectorSpace, VectorSpace, VectorSpace, ParamSpaces...>>;
 
-    auto solid_weak_form = std::make_shared<SolidWeakFormType>(
-        physics_name, field_store->getMesh(), test_space, input_spaces);
+    auto solid_weak_form =
+        std::make_shared<SolidWeakFormType>(physics_name, field_store->getMesh(), test_space, input_spaces);
 
     // Create cycle-zero weak form (u, v, a) for initial acceleration solve at cycle=0
-    auto cycle_zero_weak_form = createWeakForm<spatial_dim>(physics_name + "_reaction", accel_old_type, *field_store,
-                                                            disp_type, velo_old_type, accel_old_type, parameter_types...);
+    auto cycle_zero_weak_form =
+        createWeakForm<spatial_dim>(physics_name + "_reaction", accel_old_type, *field_store, disp_type, velo_old_type,
+                                    accel_old_type, parameter_types...);
 
     return std::make_tuple(solid_weak_form, cycle_zero_weak_form);
   }

@@ -15,9 +15,9 @@
 namespace smith {
 
 SolidMechanicsTimeIntegrator::SolidMechanicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
-                                                         std::shared_ptr<WeakForm> solid_weak_form,
-                                                         std::shared_ptr<WeakForm> cycle_zero_weak_form,
-                                                         std::shared_ptr<smith::DifferentiableBlockSolver> solver)
+                                                           std::shared_ptr<WeakForm> solid_weak_form,
+                                                           std::shared_ptr<WeakForm> cycle_zero_weak_form,
+                                                           std::shared_ptr<smith::DifferentiableBlockSolver> solver)
     : field_store_(field_store), cycle_zero_weak_form_(cycle_zero_weak_form), solver_(solver)
 {
   std::vector<std::shared_ptr<WeakForm>> weak_forms = {solid_weak_form};
@@ -51,9 +51,9 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> SolidMechanicsTim
         break;
       }
     }
-    SLIC_ERROR_IF(test_field_idx_in_wf == invalid_block_index,
-                  "Test field '" << test_field_name << "' not found in weak form '" << cycle_zero_weak_form_->name()
-                                 << "'");
+    SLIC_ERROR_IF(test_field_idx_in_wf == invalid_block_index, "Test field '" << test_field_name
+                                                                              << "' not found in weak form '"
+                                                                              << cycle_zero_weak_form_->name() << "'");
 
     // Set up block solve for this single unknown
     std::vector<WeakForm*> wf_ptrs = {cycle_zero_weak_form_.get()};

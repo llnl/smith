@@ -81,11 +81,10 @@ struct ThermoMechanicsSystem {
    */
   std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
-                                                    field_store->getShapeDisp(), getStateFields(),
-                                                    getParameterFields(), advancer, physics_name,
-                                                    std::vector<std::string>{physics_name_ + "_solid_force",
-                                                                             physics_name_ + "_thermal_flux"});
+    return std::make_shared<DifferentiablePhysics>(
+        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
+        getParameterFields(), advancer, physics_name,
+        std::vector<std::string>{physics_name_ + "_solid_force", physics_name_ + "_thermal_flux"});
   }
 
   /**
@@ -102,8 +101,8 @@ struct ThermoMechanicsSystem {
     auto captured_disp_rule = disp_time_rule;
     auto captured_temp_rule = temperature_time_rule;
 
-    solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old,
-                                                      auto temperature, auto temperature_old, auto... params) {
+    solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto temperature,
+                                                      auto temperature_old, auto... params) {
       // Apply time integration to get current state
       auto u_current = captured_disp_rule->value(t_info, u, u_old);
       auto v_current = captured_disp_rule->dot(t_info, u, u_old);
@@ -117,20 +116,20 @@ struct ThermoMechanicsSystem {
 
     // Thermal weak form: inputs are (T, T_old, u, u_old, params...)
     // Manually apply time integration rules to get current state
-    thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_old,
-                                                        auto disp, auto disp_old, auto... params) {
-      // Apply time integration to get current state
-      auto T_current = captured_temp_rule->value(t_info, T, T_old);
-      auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-      auto u = captured_disp_rule->value(t_info, disp, disp_old);
-      auto v = captured_disp_rule->dot(t_info, disp, disp_old);
+    thermal_weak_form->addBodyIntegral(
+        domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
+          // Apply time integration to get current state
+          auto T_current = captured_temp_rule->value(t_info, T, T_old);
+          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
+          auto u = captured_disp_rule->value(t_info, disp, disp_old);
+          auto v = captured_disp_rule->dot(t_info, disp, disp_old);
 
-      typename MaterialType::State state;
-      auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
-                                        get<VALUE>(T_current), get<DERIVATIVE>(T_current), params...);
-      auto dT_dt = get<VALUE>(T_dot);
-      return smith::tuple{C_v * dT_dt - s0, -q0};
-    });
+          typename MaterialType::State state;
+          auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
+                                            get<VALUE>(T_current), get<DERIVATIVE>(T_current), params...);
+          auto dT_dt = get<VALUE>(T_dot);
+          return smith::tuple{C_v * dT_dt - s0, -q0};
+        });
   }
 
   /**
@@ -142,20 +141,18 @@ struct ThermoMechanicsSystem {
   template <typename BodyForceType>
   void addSolidBodyForce(const std::string& domain_name, BodyForceType force_function)
   {
-      auto captured_disp_rule = disp_time_rule;
-      auto captured_temp_rule = temperature_time_rule;
+    auto captured_disp_rule = disp_time_rule;
+    auto captured_temp_rule = temperature_time_rule;
 
-      solid_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto u, auto u_old,
-                                                        auto temperature, auto temperature_old, auto... params) {
-          // Apply time integration to get current state
-          auto u_current = captured_disp_rule->value(t_info, u, u_old);
-          auto v_current = captured_disp_rule->dot(t_info, u, u_old);
-          auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
+    solid_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto u, auto u_old, auto temperature,
+                                                    auto temperature_old, auto... params) {
+      // Apply time integration to get current state
+      auto u_current = captured_disp_rule->value(t_info, u, u_old);
+      auto v_current = captured_disp_rule->dot(t_info, u, u_old);
+      auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
 
-          return force_function(t_info.time(), X, u_current,
-                                             v_current, current_T,
-                                             params...);
-      });
+      return force_function(t_info.time(), X, u_current, v_current, current_T, params...);
+    });
   }
 
   /**
@@ -167,19 +164,18 @@ struct ThermoMechanicsSystem {
   template <typename SurfaceFluxType>
   void addSolidTraction(const std::string& domain_name, SurfaceFluxType flux_function)
   {
-      auto captured_disp_rule = disp_time_rule;
-      auto captured_temp_rule = temperature_time_rule;
+    auto captured_disp_rule = disp_time_rule;
+    auto captured_temp_rule = temperature_time_rule;
 
-      solid_weak_form->addBoundaryFlux(domain_name, [=](auto t_info, auto X, auto n, auto u, auto u_old,
-                                                        auto temperature, auto temperature_old, auto... params) {
-          // Apply time integration to get current state
-          auto u_current = captured_disp_rule->value(t_info, u, u_old);
-          auto v_current = captured_disp_rule->dot(t_info, u, u_old);
-          auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
+    solid_weak_form->addBoundaryFlux(domain_name, [=](auto t_info, auto X, auto n, auto u, auto u_old, auto temperature,
+                                                      auto temperature_old, auto... params) {
+      // Apply time integration to get current state
+      auto u_current = captured_disp_rule->value(t_info, u, u_old);
+      auto v_current = captured_disp_rule->dot(t_info, u, u_old);
+      auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
 
-          return flux_function(t_info.time(), X, n, u_current, v_current,
-                                current_T, params...);
-      });
+      return flux_function(t_info.time(), X, n, u_current, v_current, current_T, params...);
+    });
   }
 
   /**
@@ -191,20 +187,18 @@ struct ThermoMechanicsSystem {
   template <typename BodySourceType>
   void addThermalHeatSource(const std::string& domain_name, BodySourceType source_function)
   {
-      auto captured_disp_rule = disp_time_rule;
-      auto captured_temp_rule = temperature_time_rule;
+    auto captured_disp_rule = disp_time_rule;
+    auto captured_temp_rule = temperature_time_rule;
 
-      thermal_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto T, auto T_old,
-                                                          auto disp, auto disp_old, auto... params) {
+    thermal_weak_form->addBodySource(
+        domain_name, [=](auto t_info, auto X, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
           // Apply time integration to get current state
           auto T_current = captured_temp_rule->value(t_info, T, T_old);
           auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
           auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
 
-          return source_function(t_info.time(), X, T_current,
-                                               T_dot, current_u,
-                                               params...);
-      });
+          return source_function(t_info.time(), X, T_current, T_dot, current_u, params...);
+        });
   }
 
   /**
@@ -216,19 +210,18 @@ struct ThermoMechanicsSystem {
   template <typename SurfaceFluxType>
   void addThermalHeatFlux(const std::string& domain_name, SurfaceFluxType flux_function)
   {
-      auto captured_disp_rule = disp_time_rule;
-      auto captured_temp_rule = temperature_time_rule;
+    auto captured_disp_rule = disp_time_rule;
+    auto captured_temp_rule = temperature_time_rule;
 
-      thermal_weak_form->addBoundaryFlux(domain_name, [=](auto t_info, auto X, auto n, auto T, auto T_old,
-                                                          auto disp, auto disp_old, auto... params) {
+    thermal_weak_form->addBoundaryFlux(
+        domain_name, [=](auto t_info, auto X, auto n, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
           // Apply time integration to get current state
           auto T_current = captured_temp_rule->value(t_info, T, T_old);
           auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
           auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
 
-          return -flux_function(t_info.time(), X, n, T_current, T_dot,
-                                current_u, params...);
-      });
+          return -flux_function(t_info.time(), X, n, T_current, T_dot, current_u, params...);
+        });
   }
 };
 
@@ -258,13 +251,15 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
   FieldType<H1<disp_order, dim>> disp_type(physics_name + "_displacement");
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, physics_name + "_displacement_old");
+  auto disp_old_type =
+      field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, physics_name + "_displacement_old");
 
   // Temperature field with backward Euler time integration
   auto temperature_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
   FieldType<H1<temp_order>> temperature_type(physics_name + "_temperature");
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
-  auto temperature_old_type = field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE, physics_name + "_temperature_old");
+  auto temperature_old_type =
+      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE, physics_name + "_temperature_old");
 
   std::vector<FieldState> parameter_fields;
   (field_store->addParameter(FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)), ...);
@@ -275,10 +270,11 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   field_store->addWeakFormTestField(solid_force_name, disp_type.name);
   const mfem::ParFiniteElementSpace& disp_test_space = field_store->getField(disp_type.name).get()->space();
   std::vector<const mfem::ParFiniteElementSpace*> disp_input_spaces;
-  createSpaces(solid_force_name, *field_store, disp_input_spaces, 0, disp_type, disp_old_type,
-               temperature_type, temperature_old_type, FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)...);
+  createSpaces(solid_force_name, *field_store, disp_input_spaces, 0, disp_type, disp_old_type, temperature_type,
+               temperature_old_type, FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)...);
 
-  auto solid_weak_form = std::make_shared<typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::SolidWeakFormType>(
+  auto solid_weak_form = std::make_shared<
+      typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::SolidWeakFormType>(
       solid_force_name, field_store->getMesh(), disp_test_space, disp_input_spaces);
 
   // Thermal weak form
@@ -286,10 +282,11 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   field_store->addWeakFormTestField(thermal_flux_name, temperature_type.name);
   const mfem::ParFiniteElementSpace& temp_test_space = field_store->getField(temperature_type.name).get()->space();
   std::vector<const mfem::ParFiniteElementSpace*> temp_input_spaces;
-  createSpaces(thermal_flux_name, *field_store, temp_input_spaces, 0, temperature_type,
-               temperature_old_type, disp_type, disp_old_type, FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)...);
+  createSpaces(thermal_flux_name, *field_store, temp_input_spaces, 0, temperature_type, temperature_old_type, disp_type,
+               disp_old_type, FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)...);
 
-  auto thermal_weak_form = std::make_shared<typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::ThermalWeakFormType>(
+  auto thermal_weak_form = std::make_shared<
+      typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::ThermalWeakFormType>(
       thermal_flux_name, field_store->getMesh(), temp_test_space, temp_input_spaces);
 
   // Build solver and advancer
@@ -297,7 +294,7 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
 
   return ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>{
-      field_store, solid_weak_form, thermal_weak_form,     disp_bc,         temperature_bc, solver,
+      field_store, solid_weak_form, thermal_weak_form,     disp_bc,          temperature_bc, solver,
       advancer,    disp_time_rule,  temperature_time_rule, parameter_fields, physics_name};
 }
 

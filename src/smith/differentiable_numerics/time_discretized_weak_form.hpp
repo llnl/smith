@@ -168,9 +168,9 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
     const size_t* cycle = &this->cycle_;
     Base::addBoundaryFlux(depends_on, boundary_name,
                           [dt, cycle, flux_function](double t, auto X, auto n, auto... inputs) {
-      TimeInfo time_info(t, *dt, *cycle);
-      return flux_function(time_info, X, n, inputs...);
-    });
+                            TimeInfo time_info(t, *dt, *cycle);
+                            return flux_function(time_info, X, n, inputs...);
+                          });
   }
 
   /// @overload - defaults to all parameters
@@ -197,9 +197,9 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
     const size_t* cycle = &this->cycle_;
     Base::addInteriorBoundaryIntegral(depends_on, interior_name,
                                       [dt, cycle, integrand](double t, auto X, auto... inputs) {
-      TimeInfo time_info(t, *dt, *cycle);
-      return integrand(time_info, X, inputs...);
-    });
+                                        TimeInfo time_info(t, *dt, *cycle);
+                                        return integrand(time_info, X, inputs...);
+                                      });
   }
 
   /// @overload - defaults to all parameters
@@ -210,8 +210,7 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
     addInteriorBoundaryIntegralWithAllParams(interior_name, integrand, std::make_integer_sequence<int, num_inputs>{});
   }
 
-private:
-
+ private:
   template <typename BodyIntegralType, int... all_params>
   void addBodyIntegralWithAllParams(std::string body_name, BodyIntegralType integrand,
                                     std::integer_sequence<int, all_params...>)

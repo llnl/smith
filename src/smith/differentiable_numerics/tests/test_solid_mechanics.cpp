@@ -28,18 +28,18 @@
 namespace smith {
 
 LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::CG,
-                                                .preconditioner = Preconditioner::HypreJacobi,
-                                                .relative_tol = 1e-11,
-                                                .absolute_tol = 1e-11,
-                                                .max_iterations = 10000,
-                                                .print_level = 0};
+                                         .preconditioner = Preconditioner::HypreJacobi,
+                                         .relative_tol = 1e-11,
+                                         .absolute_tol = 1e-11,
+                                         .max_iterations = 10000,
+                                         .print_level = 0};
 
 NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
-                                                   .relative_tol = 1.0e-10,
-                                                   .absolute_tol = 1.0e-10,
-                                                   .max_iterations = 500,
-                                                   .print_level = 1,
-                                                   .force_monolithic = true};
+                                            .relative_tol = 1.0e-10,
+                                            .absolute_tol = 1.0e-10,
+                                            .max_iterations = 500,
+                                            .print_level = 1,
+                                            .force_monolithic = true};
 
 static constexpr int dim = 3;
 static constexpr int order = 1;
@@ -113,10 +113,8 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
                       });
 
   // Add dummy traction to test compilation
-  system.addTraction("right",
-                     [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/, auto... /*params*/) {
-                       return tensor<double, dim>{};
-                     });
+  system.addTraction("right", [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/,
+                                 auto... /*params*/) { return tensor<double, dim>{}; });
 
   auto shape_disp = system.field_store->getShapeDisp();
   auto states = system.getStateFields();
@@ -191,9 +189,9 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 
-  auto system = buildSolidMechanicsSystem<dim, order>(
-      mesh, d_solid_nonlinear_solver, time_rule, physics_name,
-      FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
+  auto system = buildSolidMechanicsSystem<dim, order>(mesh, d_solid_nonlinear_solver, time_rule, physics_name,
+                                                      FieldType<ScalarParameterSpace>("bulk"),
+                                                      FieldType<ScalarParameterSpace>("shear"));
 
   auto physics = system.createDifferentiablePhysics(physics_name);
   auto bcs = system.disp_bc;
@@ -217,18 +215,17 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   // Note: With TimeDiscretizedWeakForm, inputs are now (u, u_old, v_old, a_old, bulk, shear)
   // Need to apply time integration rule to get current state
-  solid_weak_form->addBodyIntegral(
-      DependsOn<0, 1, 2, 3, 4, 5>{}, mesh->entireBodyName(),
-      [material, time_rule](const auto& t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto bulk,
-                            auto shear) {
-        // Apply time integration to get current state
-        auto u_current = time_rule.value(t_info, u, u_old, v_old, a_old);
-        auto a_current = time_rule.ddot(t_info, u, u_old, v_old, a_old);
+  solid_weak_form->addBodyIntegral(DependsOn<0, 1, 2, 3, 4, 5>{}, mesh->entireBodyName(),
+                                   [material, time_rule](const auto& t_info, auto /*X*/, auto u, auto u_old, auto v_old,
+                                                         auto a_old, auto bulk, auto shear) {
+                                     // Apply time integration to get current state
+                                     auto u_current = time_rule.value(t_info, u, u_old, v_old, a_old);
+                                     auto a_current = time_rule.ddot(t_info, u, u_old, v_old, a_old);
 
-        MaterialType::State state;
-        auto pk_stress = material(state, get<DERIVATIVE>(u_current), bulk, shear);
-        return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
-      });
+                                     MaterialType::State state;
+                                     auto pk_stress = material(state, get<DERIVATIVE>(u_current), bulk, shear);
+                                     return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
+                                   });
 
   cycle_zero_weak_form->addBodyIntegral(
       DependsOn<0, 1, 2, 3, 4>{}, mesh->entireBodyName(),

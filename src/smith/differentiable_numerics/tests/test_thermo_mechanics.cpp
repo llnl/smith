@@ -148,7 +148,8 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   std::string physics_name = "thermo_mech";
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name, youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name,
+                                                                                       youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -162,10 +163,8 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
 
-  system.addThermalHeatSource(mesh_->entireBodyName(),
-                              [](auto /*t*/, auto /*x*/, auto /*T*/, auto /*T_dot*/, auto /*u*/, auto /*E_param*/) {
-                                return 100.0;
-                              });
+  system.addThermalHeatSource(mesh_->entireBodyName(), [](auto /*t*/, auto /*x*/, auto /*T*/, auto /*T_dot*/,
+                                                          auto /*u*/, auto /*E_param*/) { return 100.0; });
 
   std::string pv_dir = "paraview_thermo_mechanics";
   auto pv_writer = smith::createParaviewWriter(*mesh_, system.getStateFields(), pv_dir);
@@ -213,7 +212,8 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   std::string physics_name = "thermal";
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name, youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name,
+                                                                                       youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -224,7 +224,8 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
   system.temperature_bc->setScalarBCs<dim>(mesh_->domain("right"), [](double, auto) { return 100.0; });
 
   // Set Initial Condition: T(x,0) = 100 + sin(pi*x)
-  auto& temp_field = const_cast<FiniteElementState&>(*system.field_store->getField(physics_name + "_temperature").get());
+  auto& temp_field =
+      const_cast<FiniteElementState&>(*system.field_store->getField(physics_name + "_temperature").get());
   temp_field.setFromFieldFunction([](tensor<double, dim> x) {
     using std::sin;
     return 100.0 + sin(M_PI * x[0]);
@@ -281,7 +282,8 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<H1<1>> youngs_modulus("youngs_modulus");
   std::string physics_name = "elasticity";
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name, youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name,
+                                                                                       youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -357,42 +359,40 @@ TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   std::string physics_name = "thermo_mech_compilation";
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name, youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name,
+                                                                                       youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
 
   // Add Solid Body Force (Gravity)
   system.addSolidBodyForce(mesh_->entireBodyName(),
-    [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*T*/, auto... /*params*/) {
-      tensor<double, dim> f{};
-      f[1] = -9.81;
-      return f;
-    });
+                           [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*T*/, auto... /*params*/) {
+                             tensor<double, dim> f{};
+                             f[1] = -9.81;
+                             return f;
+                           });
 
   // Add Solid Traction
-  system.addSolidTraction("right",
-    [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*T*/, auto... /*params*/) {
-      tensor<double, dim> t{};
-      t[0] = 1.0;
-      return t;
-    });
-  
+  system.addSolidTraction(
+      "right", [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*T*/, auto... /*params*/) {
+        tensor<double, dim> t{};
+        t[0] = 1.0;
+        return t;
+      });
+
   // Add Thermal Heat Source
-  system.addThermalHeatSource(mesh_->entireBodyName(),
-    [](double /*time*/, auto /*X*/, auto /*T*/, auto /*T_dot*/, auto /*u*/, auto... /*params*/) {
-      return 10.0;
-    });
+  system.addThermalHeatSource(mesh_->entireBodyName(), [](double /*time*/, auto /*X*/, auto /*T*/, auto /*T_dot*/,
+                                                          auto /*u*/, auto... /*params*/) { return 10.0; });
 
   // Add Thermal Heat Flux
-  system.addThermalHeatFlux("left",
-    [](double /*time*/, auto /*X*/, auto /*n*/, auto /*T*/, auto /*T_dot*/, auto /*u*/, auto... /*params*/) {
-      return 5.0; // Flux into domain (if negative sign in implementation handles it)
-    });
+  system.addThermalHeatFlux(
+      "left", [](double /*time*/, auto /*X*/, auto /*n*/, auto /*T*/, auto /*T_dot*/, auto /*u*/, auto... /*params*/) {
+        return 5.0;  // Flux into domain (if negative sign in implementation handles it)
+      });
 
-  system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double /*t*/, smith::tensor<double, dim> X) {
-    return 0.0 * X;
-  });
+  system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"),
+                                    [](double /*t*/, smith::tensor<double, dim> X) { return 0.0 * X; });
   // system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right")); // Let right be flux boundary
 
   double dt = 0.001;

@@ -33,8 +33,8 @@ inline void checkUnconstrainedReactions(const FiniteElementDual& reaction, const
   unconstrained_reactions.SetSubVector(bc_manager.allEssentialTrueDofs(), 0.0);
 
   double max_unconstrained = unconstrained_reactions.Normlinf();
-  EXPECT_LT(max_unconstrained, tolerance) << "Reaction forces should be zero at non-Dirichlet DOFs. Max violation: "
-                                          << max_unconstrained;
+  EXPECT_LT(max_unconstrained, tolerance)
+      << "Reaction forces should be zero at non-Dirichlet DOFs. Max violation: " << max_unconstrained;
 }
 
 /// @brief Utility function to construct a smith::functional which evaluates the total kinetic energy
