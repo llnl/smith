@@ -145,16 +145,16 @@ struct ThermoMechanicsSystem {
       auto captured_disp_rule = disp_time_rule;
       auto captured_temp_rule = temperature_time_rule;
 
-      solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto X, auto u, auto u_old,
+      solid_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto u, auto u_old,
                                                         auto temperature, auto temperature_old, auto... params) {
           // Apply time integration to get current state
           auto u_current = captured_disp_rule->value(t_info, u, u_old);
           auto v_current = captured_disp_rule->dot(t_info, u, u_old);
           auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
 
-          return smith::tuple{-force_function(t_info.time(), get<VALUE>(X), get<VALUE>(u_current),
-                                              get<VALUE>(v_current), get<VALUE>(current_T),
-                                              get<VALUE>(params)...), zero{}};
+          return smith::tuple{force_function(t_info.time(), get<VALUE>(X), get<VALUE>(u_current),
+                                             get<VALUE>(v_current), get<VALUE>(current_T),
+                                             get<VALUE>(params)...), zero{}};
       });
   }
 
@@ -165,19 +165,19 @@ struct ThermoMechanicsSystem {
    * @param flux_function The flux function (t, X, n, u, v, T, params...).
    */
   template <typename SurfaceFluxType>
-  void addSolidSurfaceFlux(const std::string& domain_name, SurfaceFluxType flux_function)
+  void addSolidTraction(const std::string& domain_name, SurfaceFluxType flux_function)
   {
       auto captured_disp_rule = disp_time_rule;
       auto captured_temp_rule = temperature_time_rule;
 
-      solid_weak_form->addSurfaceFlux(domain_name, [=](auto t_info, auto X, auto n, auto u, auto u_old,
+      solid_weak_form->addBoundaryFlux(domain_name, [=](auto t_info, auto X, auto n, auto u, auto u_old,
                                                         auto temperature, auto temperature_old, auto... params) {
           // Apply time integration to get current state
           auto u_current = captured_disp_rule->value(t_info, u, u_old);
           auto v_current = captured_disp_rule->dot(t_info, u, u_old);
           auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
 
-          return -flux_function(t_info.time(), get<VALUE>(X), n, get<VALUE>(u_current), get<VALUE>(v_current),
+          return flux_function(t_info.time(), get<VALUE>(X), n, get<VALUE>(u_current), get<VALUE>(v_current),
                                 get<VALUE>(current_T), get<VALUE>(params)...);
       });
   }
@@ -189,7 +189,7 @@ struct ThermoMechanicsSystem {
    * @param source_function The source function (t, X, T, T_dot, u, params...).
    */
   template <typename BodySourceType>
-  void addThermalBodySource(const std::string& domain_name, BodySourceType source_function)
+  void addThermalHeatSource(const std::string& domain_name, BodySourceType source_function)
   {
       auto captured_disp_rule = disp_time_rule;
       auto captured_temp_rule = temperature_time_rule;

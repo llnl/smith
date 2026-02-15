@@ -105,23 +105,18 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   system.setMaterial(material, mesh->entireBodyName());
 
   // Add gravity body force to BOTH weak forms
-  // Now with TimeDiscretizedWeakForm, inputs are (u, u_old, v_old, a_old)
-  system.solid_weak_form->addBodyIntegral(
-      DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-      [](auto /*t_info*/, auto /*X*/, auto /*u*/, auto /*u_old*/, auto /*v_old*/, auto /*a_old*/) {
-        tensor<double, dim> b{};
-        b[1] = gravity;
-        return smith::tuple{-b, smith::zero{}};
-      });
+  system.addBodyForce(mesh->entireBodyName(),
+                      [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*a*/, auto... /*params*/) {
+                        tensor<double, dim> b{};
+                        b[1] = gravity;
+                        return b;
+                      });
 
-  system.cycle_zero_weak_form->addBodyIntegral(
-      DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
-      [](auto /*t_info*/, auto /*X*/, auto /*disp*/, auto /*velo*/, auto accel) {
-        tensor<double, dim> b{};
-        b[1] = gravity;
-        auto zero_grad = 0.0 * get<DERIVATIVE>(accel);
-        return smith::tuple{-b, zero_grad};
-      });
+  // Add dummy traction to test compilation
+  system.addTraction("right",
+                     [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/, auto... /*params*/) {
+                       return tensor<double, dim>{};
+                     });
 
   auto shape_disp = system.field_store->getShapeDisp();
   auto states = system.getStateFields();
