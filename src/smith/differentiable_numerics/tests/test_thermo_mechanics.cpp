@@ -162,7 +162,7 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
 
-  system.addThermalBodySource(mesh_->entireBodyName(),
+  system.addThermalHeatSource(mesh_->entireBodyName(),
                               [](auto /*t*/, auto /*x*/, auto /*T*/, auto /*T_dot*/, auto /*u*/, auto /*E_param*/) {
                                 return 100.0;
                               });
@@ -340,6 +340,73 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
 
   std::cout << "Static Elasticity L2 Error (affine patch test): " << l2_error << std::endl;
   EXPECT_LT(l2_error, 1e-10);  // Should be machine precision for affine displacement
+}
+
+TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
+{
+  SMITH_MARK_FUNCTION;
+
+  double rho = 1.0;
+  double E0 = 100.0;
+  double nu = 0.25;
+  double specific_heat = 1.0;
+  double kappa = 0.1;
+  GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 1.0, kappa};
+
+  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+
+  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  std::string physics_name = "thermo_mech_compilation";
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name, youngs_modulus);
+  system.setMaterial(material, mesh_->entireBodyName());
+
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
+
+  // Add Solid Body Force (Gravity)
+  system.addSolidBodyForce(mesh_->entireBodyName(),
+    [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*T*/, auto... /*params*/) {
+      tensor<double, dim> f{};
+      f[1] = -9.81;
+      return f;
+    });
+
+  // Add Solid Traction
+  system.addSolidTraction("right",
+    [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*T*/, auto... /*params*/) {
+      tensor<double, dim> t{};
+      t[0] = 1.0;
+      return t;
+    });
+  
+  // Add Thermal Heat Source
+  system.addThermalHeatSource(mesh_->entireBodyName(),
+    [](double /*time*/, auto /*X*/, auto /*T*/, auto /*T_dot*/, auto /*u*/, auto... /*params*/) {
+      return 10.0;
+    });
+
+  // Add Thermal Heat Flux
+  system.addThermalHeatFlux("left",
+    [](double /*time*/, auto /*X*/, auto /*n*/, auto /*T*/, auto /*T_dot*/, auto /*u*/, auto... /*params*/) {
+      return 5.0; // Flux into domain (if negative sign in implementation handles it)
+    });
+
+  system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double /*t*/, smith::tensor<double, dim> X) {
+    return 0.0 * X;
+  });
+  // system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right")); // Let right be flux boundary
+
+  double dt = 0.001;
+  double time = 0.0;
+  auto shape_disp = system.field_store->getShapeDisp();
+  auto states = system.getStateFields();
+  auto params = system.getParameterFields();
+  std::vector<ReactionState> reactions;
+
+  for (size_t step = 0; step < 2; ++step) {
+    TimeInfo t_info(time, dt, step);
+    std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
+    time += dt;
+  }
 }
 
 }  // namespace smith
