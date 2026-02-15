@@ -20,56 +20,12 @@
 #include "smith/physics/materials/parameterized_solid_material.hpp"
 
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
-#include "smith/differentiable_numerics/differentiable_solid_mechanics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 
 namespace smith {
-
-/**
- * @brief Verify that reaction forces are zero at non-Dirichlet DOFs.
- * @param reaction_field The reaction field to check.
- * @param bc Boundary conditions to identify Dirichlet DOFs.
- * @param tolerance Absolute tolerance for zero check.
- */
-void checkUnconstrainedReactionForces(const FiniteElementDual& reaction_field, const DirichletBoundaryConditions& bc,
-                                      double tolerance = 1e-10)
-{
-  const auto& true_dofs = bc.getBoundaryConditionManager().allEssentialTrueDofs();
-  const mfem::Array<int>& ess_tdof_list = true_dofs;
-
-  // Create a set of essential DOFs for fast lookup
-  std::set<int> ess_dof_set(ess_tdof_list.begin(), ess_tdof_list.end());
-
-  // Check all DOFs
-  double max_non_bc_reaction = 0.0;
-  int num_non_bc_violations = 0;
-
-  for (int i = 0; i < reaction_field.Size(); ++i) {
-    if (ess_dof_set.find(i) == ess_dof_set.end()) {
-      // This is NOT a Dirichlet DOF, reaction should be zero
-      double reaction_value = std::abs(reaction_field[i]);
-      if (reaction_value > tolerance) {
-        max_non_bc_reaction = std::max(max_non_bc_reaction, reaction_value);
-        ++num_non_bc_violations;
-      }
-    }
-  }
-
-  if (num_non_bc_violations > 0) {
-    SLIC_WARNING_ROOT(axom::fmt::format("Found {} non-Dirichlet DOFs with non-zero reactions (max: {:.6e})",
-                                        num_non_bc_violations, max_non_bc_reaction));
-  }
-
-  // Expect all non-Dirichlet DOFs to have zero reactions
-  EXPECT_EQ(num_non_bc_violations, 0) << "Reaction forces should be zero at non-Dirichlet DOFs. Max violation: "
-                                      << max_non_bc_reaction;
-
-  SLIC_INFO_ROOT(axom::fmt::format("Reaction force check passed. {} Dirichlet DOFs, {} free DOFs", ess_dof_set.size(),
-                                   static_cast<size_t>(reaction_field.Size()) - ess_dof_set.size()));
-}
 
 LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::CG,
                                                 .preconditioner = Preconditioner::HypreJacobi,
@@ -126,8 +82,9 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto d_solid_nonlinear_solver =
       buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
+  std::string physics_name = "gravity";
   auto system = buildSolidMechanicsSystem<dim, order>(
-      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{},
+      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, physics_name,
       FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
 
   static constexpr double gravity = -9.0;
@@ -234,15 +191,19 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
 auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh)
 {
-  size_t num_checkpoints = 200;
   std::shared_ptr<DifferentiableBlockSolver> d_solid_nonlinear_solver =
       buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 
-  auto [physics, solid_weak_form, cycle_zero_weak_form, bcs] =
-      buildSolidMechanics<dim, ShapeDispSpace, VectorSpace, ScalarParameterSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, time_rule, num_checkpoints, physics_name, {"bulk", "shear"});
+  auto system = buildSolidMechanicsSystem<dim, order>(
+      mesh, d_solid_nonlinear_solver, time_rule, physics_name,
+      FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
+
+  auto physics = system.createDifferentiablePhysics(physics_name);
+  auto bcs = system.disp_bc;
+  auto solid_weak_form = system.solid_weak_form;
+  auto cycle_zero_weak_form = system.cycle_zero_weak_form;
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
   bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, tensor<double, dim> X) {
@@ -317,7 +278,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   auto reactions = physics->getReactionStates();
 
   // Check that reaction forces are zero away from Dirichlet DOFs
-  checkUnconstrainedReactionForces(*reactions[0].get(), *bcs);
+  checkUnconstrainedReactions(*reactions[0].get(), bcs->getBoundaryConditionManager());
 
   auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
 
@@ -351,8 +312,9 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretlNew)
   auto d_solid_nonlinear_solver =
       buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
+  std::string physics_name = "new";
   auto system = buildSolidMechanicsSystem<dim, order>(
-      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{},
+      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, physics_name,
       FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
 
   system.disp_bc->setFixedVectorBCs<dim>(mesh->domain("right"));
@@ -393,7 +355,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretlNew)
   }
 
   // Check that reaction forces are zero away from Dirichlet DOFs
-  checkUnconstrainedReactionForces(*reactions[0].get(), *system.disp_bc);
+  checkUnconstrainedReactions(*reactions[0].get(), system.disp_bc->getBoundaryConditionManager());
 
   auto reaction_squared = 0.5 * innerProduct(reactions[0], reactions[0]);
 
@@ -450,7 +412,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 
   // Check that reaction forces are zero away from Dirichlet DOFs
   auto reactions = physics->getReactionStates();
-  checkUnconstrainedReactionForces(*reactions[0].get(), *bcs);
+  checkUnconstrainedReactions(*reactions[0].get(), bcs->getBoundaryConditionManager());
 
   size_t num_params = physics->parameterNames().size();
 

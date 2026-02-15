@@ -15,8 +15,27 @@
 #include "gretl/double_state.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/physics/scalar_objective.hpp"
+#include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 
 namespace smith {
+
+/**
+ * @brief Verify that reaction forces are zero at non-Dirichlet DOFs.
+ * @param reaction The reaction field to check.
+ * @param bc_manager Boundary condition manager to identify Dirichlet DOFs.
+ * @param tolerance Absolute tolerance for zero check.
+ */
+inline void checkUnconstrainedReactions(const FiniteElementDual& reaction, const BoundaryConditionManager& bc_manager,
+                                        double tolerance = 1e-8)
+{
+  FiniteElementState unconstrained_reactions(reaction.space(), "unconstrained_reactions");
+  unconstrained_reactions = reaction;
+  unconstrained_reactions.SetSubVector(bc_manager.allEssentialTrueDofs(), 0.0);
+
+  double max_unconstrained = unconstrained_reactions.Normlinf();
+  EXPECT_LT(max_unconstrained, tolerance) << "Reaction forces should be zero at non-Dirichlet DOFs. Max violation: "
+                                          << max_unconstrained;
+}
 
 /// @brief Utility function to construct a smith::functional which evaluates the total kinetic energy
 template <typename DispSpace, typename DensitySpace>

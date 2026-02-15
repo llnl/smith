@@ -28,16 +28,16 @@ class DifferentiableBlockSolver;
 class DirichletBoundaryConditions;
 
 /// @brief Implementation of the StateAdvancer interface for advancing the solution of solid mechanics problems
-class SolidMechanicsStateAdvancer : public StateAdvancer {
+class SolidMechanicsTimeIntegrator : public StateAdvancer {
  public:
   /**
-   * @brief Construct a new SolidMechanicsStateAdvancer object.
+   * @brief Construct a new SolidMechanicsTimeIntegrator object.
    * @param field_store Field store containing the fields.
    * @param solid_weak_form Primary solid mechanics weak form.
    * @param cycle_zero_weak_form Weak form for initial acceleration solve at cycle=0.
    * @param solver The block solver to use.
    */
-  SolidMechanicsStateAdvancer(std::shared_ptr<FieldStore> field_store, std::shared_ptr<WeakForm> solid_weak_form,
+  SolidMechanicsTimeIntegrator(std::shared_ptr<FieldStore> field_store, std::shared_ptr<WeakForm> solid_weak_form,
                               std::shared_ptr<WeakForm> cycle_zero_weak_form,
                               std::shared_ptr<smith::DifferentiableBlockSolver> solver);
 

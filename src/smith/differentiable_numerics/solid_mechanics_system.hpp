@@ -18,6 +18,7 @@
 #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
 
 namespace smith {
@@ -44,6 +45,7 @@ struct SolidMechanicsSystem {
   std::shared_ptr<StateAdvancer> advancer;                 ///< The state advancer.
   std::shared_ptr<ImplicitNewmarkSecondOrderTimeIntegrationRule> time_rule;  ///< Time integration rule.
   std::vector<FieldState> parameter_fields;                                  ///< Optional parameter fields.
+  std::string physics_name_;
 
   /**
    * @brief Get the list of all state fields (displacement, displacement_old, velocity_old, acceleration_old).
@@ -51,8 +53,10 @@ struct SolidMechanicsSystem {
    */
   std::vector<FieldState> getStateFields() const
   {
-    return {field_store->getField("displacement"), field_store->getField("displacement_old"),
-            field_store->getField("velocity_old"), field_store->getField("acceleration_old")};
+    return {field_store->getField(physics_name_ + "_displacement"),
+            field_store->getField(physics_name_ + "_displacement_old"),
+            field_store->getField(physics_name_ + "_velocity_old"),
+            field_store->getField(physics_name_ + "_acceleration_old")};
   }
 
   /**
@@ -60,6 +64,19 @@ struct SolidMechanicsSystem {
    * @return const std::vector<FieldState>& List of parameter fields.
    */
   const std::vector<FieldState>& getParameterFields() const { return parameter_fields; }
+
+  /**
+   * @brief Create a DifferentiablePhysics object for this system.
+   * @param physics_name The name of the physics.
+   * @return std::shared_ptr<DifferentiablePhysics> The differentiable physics object.
+   */
+  std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
+  {
+    return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
+                                                    field_store->getShapeDisp(), getStateFields(),
+                                                    getParameterFields(), advancer, physics_name,
+                                                    std::vector<std::string>{"reactions"});
+  }
 
   /**
    * @brief Set the material model for a domain, defining integrals for the solid weak form.
@@ -152,53 +169,61 @@ struct SolidMechanicsSystem {
  * @param mesh The mesh.
  * @param solver The differentiable block solver.
  * @param time_rule The time integration rule.
+ * @param physics_name The name of the physics (used as field prefix).
  * @param parameter_types Parameter field types.
  * @return SolidMechanicsSystem with all components initialized.
  */
 template <int dim, int order, typename... parameter_space>
 SolidMechanicsSystem<dim, order, parameter_space...> buildSolidMechanicsSystem(
     std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver,
-    ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, FieldType<parameter_space>... parameter_types)
+    ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+    FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
   // Add shape displacement
-  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
+  FieldType<H1<1, dim>> shape_disp_type(physics_name + "_shape_displacement");
   field_store->addShapeDisp(shape_disp_type);
 
   // Add displacement as independent (unknown) with time integration rule
   auto time_rule_ptr = std::make_shared<ImplicitNewmarkSecondOrderTimeIntegrationRule>(time_rule);
-  FieldType<H1<order, dim>> disp_type("displacement");
+  FieldType<H1<order, dim>> disp_type(physics_name + "_displacement");
   auto disp_bc = field_store->addIndependent(disp_type, time_rule_ptr);
 
   // Add dependent fields for time integration history
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, "displacement_old");
-  auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, "velocity_old");
-  auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, "acceleration_old");
+  auto disp_old_type =
+      field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, physics_name + "_displacement_old");
+  auto velo_old_type =
+      field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, physics_name + "_velocity_old");
+  auto accel_old_type =
+      field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, physics_name + "_acceleration_old");
 
   // Add parameters
   std::vector<FieldState> parameter_fields;
-  (field_store->addParameter(parameter_types), ...);
-  (parameter_fields.push_back(field_store->getField(parameter_types.name)), ...);
+  (field_store->addParameter(FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)), ...);
+  (parameter_fields.push_back(field_store->getField(physics_name + "_param_" + parameter_types.name)), ...);
 
   // Create solid mechanics weak form (u, u_old, v_old, a_old)
-  field_store->addWeakFormTestField("solid_force", disp_type.name);
+  std::string force_name = physics_name + "_solid_force";
+  field_store->addWeakFormTestField(force_name, disp_type.name);
   const mfem::ParFiniteElementSpace& test_space = field_store->getField(disp_type.name).get()->space();
   std::vector<const mfem::ParFiniteElementSpace*> input_spaces;
-  createSpaces("solid_force", *field_store, input_spaces, 0, disp_type, disp_old_type, velo_old_type, accel_old_type,
-               parameter_types...);
+  createSpaces(force_name, *field_store, input_spaces, 0, disp_type, disp_old_type, velo_old_type, accel_old_type,
+               FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)...);
 
-  auto solid_weak_form = std::make_shared<typename SolidMechanicsSystem<dim, order, parameter_space...>::SolidWeakFormType>(
-      "solid_force", field_store->getMesh(), test_space, input_spaces);
+  auto solid_weak_form =
+      std::make_shared<typename SolidMechanicsSystem<dim, order, parameter_space...>::SolidWeakFormType>(
+          force_name, field_store->getMesh(), test_space, input_spaces);
 
   // Create cycle-zero weak form (u, v, a) for initial acceleration solve
   // The test field is acceleration, which is what we solve for at cycle=0
-  auto cycle_zero_weak_form = createWeakForm<dim>("solid_reaction", accel_old_type, *field_store, disp_type,
-                                                  velo_old_type, accel_old_type, parameter_types...);
+  auto cycle_zero_weak_form =
+      createWeakForm<dim>(physics_name + "_solid_reaction", accel_old_type, *field_store, disp_type, velo_old_type,
+                          accel_old_type, FieldType<parameter_space>(physics_name + "_param_" + parameter_types.name)...);
 
-  // Build advancer using SolidMechanicsStateAdvancer which wraps MultiphysicsTimeIntegrator
+  // Build advancer using SolidMechanicsTimeIntegrator which wraps MultiphysicsTimeIntegrator
   // and handles the initial acceleration solve at cycle=0
-  auto advancer = std::make_shared<SolidMechanicsStateAdvancer>(field_store, solid_weak_form, cycle_zero_weak_form,
+  auto advancer = std::make_shared<SolidMechanicsTimeIntegrator>(field_store, solid_weak_form, cycle_zero_weak_form,
                                                                  solver);
 
   return SolidMechanicsSystem<dim, order, parameter_space...>{field_store,
@@ -208,7 +233,8 @@ SolidMechanicsSystem<dim, order, parameter_space...> buildSolidMechanicsSystem(
                                                                solver,
                                                                advancer,
                                                                time_rule_ptr,
-                                                               parameter_fields};
+                                                               parameter_fields,
+                                                               physics_name};
 }
 
 }  // namespace smith

@@ -14,7 +14,7 @@
 
 namespace smith {
 
-SolidMechanicsStateAdvancer::SolidMechanicsStateAdvancer(std::shared_ptr<FieldStore> field_store,
+SolidMechanicsTimeIntegrator::SolidMechanicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
                                                          std::shared_ptr<WeakForm> solid_weak_form,
                                                          std::shared_ptr<WeakForm> cycle_zero_weak_form,
                                                          std::shared_ptr<smith::DifferentiableBlockSolver> solver)
@@ -24,7 +24,7 @@ SolidMechanicsStateAdvancer::SolidMechanicsStateAdvancer(std::shared_ptr<FieldSt
   integrator_ = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
 }
 
-std::pair<std::vector<FieldState>, std::vector<ReactionState>> SolidMechanicsStateAdvancer::advanceState(
+std::pair<std::vector<FieldState>, std::vector<ReactionState>> SolidMechanicsTimeIntegrator::advanceState(
     const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states,
     const std::vector<FieldState>& params) const
 {

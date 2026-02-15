@@ -8,7 +8,7 @@ set(differentiable_numerics_test_depends smith_physics smith_differentiable_nume
 
 set(differentiable_numerics_test_source
     test_field_state.cpp
-    test_solid_mechanics_state_advancer.cpp
+    test_solid_mechanics.cpp
     test_thermo_mechanics.cpp
     )
 

@@ -99,7 +99,7 @@ smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::
                                           .print_level = 0};
 
 smith::NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
-                                             .relative_tol = 1.9e-6,
+                                             .relative_tol = 1.0e-10,
                                              .absolute_tol = 1.0e-10,
                                              .max_iterations = 500,
                                              .max_line_search_iterations = 50,
@@ -147,7 +147,8 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
+  std::string physics_name = "thermo_mech";
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -188,21 +189,8 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
   }
 
   // Check that reactions are zero for unconstrained DOFs (should be within solver tolerance)
-  std::vector<std::pair<std::string, const BoundaryConditionManager*>> reaction_checks = {
-      {"Solid", &system.disp_bc->getBoundaryConditionManager()},
-      {"Thermal", &system.temperature_bc->getBoundaryConditionManager()}};
-
-  for (size_t i = 0; i < reactions.size(); ++i) {
-    auto& reaction = *reactions[i].get();
-    auto& bc_manager = *reaction_checks[i].second;
-
-    FiniteElementState unconstrained_reactions(reaction.space(), "unconstrained_reactions");
-    unconstrained_reactions = reaction;
-    unconstrained_reactions.SetSubVector(bc_manager.allEssentialTrueDofs(), 0.0);
-
-    double max_unconstrained = unconstrained_reactions.Normlinf();
-    EXPECT_LT(max_unconstrained, 1e-8);  // Should be ~solver tolerance
-  }
+  checkUnconstrainedReactions(*reactions[0].get(), system.disp_bc->getBoundaryConditionManager());
+  checkUnconstrainedReactions(*reactions[1].get(), system.temperature_bc->getBoundaryConditionManager());
 
   auto reaction_squared = innerProduct(reactions[0], reactions[0]);
   gretl::set_as_objective(reaction_squared);
@@ -224,7 +212,8 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
+  std::string physics_name = "thermal";
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -235,12 +224,12 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
   system.temperature_bc->setScalarBCs<dim>(mesh_->domain("right"), [](double, auto) { return 100.0; });
 
   // Set Initial Condition: T(x,0) = 100 + sin(pi*x)
-  auto& temp_field = const_cast<FiniteElementState&>(*system.field_store->getField("temperature").get());
+  auto& temp_field = const_cast<FiniteElementState&>(*system.field_store->getField(physics_name + "_temperature").get());
   temp_field.setFromFieldFunction([](tensor<double, dim> x) {
     using std::sin;
     return 100.0 + sin(M_PI * x[0]);
   });
-  const_cast<FiniteElementState&>(*system.field_store->getField("temperature_old").get()) = temp_field;
+  const_cast<FiniteElementState&>(*system.field_store->getField(physics_name + "_temperature_old").get()) = temp_field;
 
   double dt = 0.01;
   double time = 0.0;
@@ -258,8 +247,12 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
     time += dt;
   }
 
+  // Check that reactions are zero for unconstrained DOFs
+  checkUnconstrainedReactions(*reactions[0].get(), system.disp_bc->getBoundaryConditionManager());
+  checkUnconstrainedReactions(*reactions[1].get(), system.temperature_bc->getBoundaryConditionManager());
+
   // Check nodal error against exact solution: T(x,t) = 100 + sin(pi*x) * exp(-diffusivity * pi^2 * t)
-  auto temp_idx = system.field_store->getFieldIndex("temperature");
+  auto temp_idx = system.field_store->getFieldIndex(physics_name + "_temperature");
   FieldState final_temp = states[temp_idx];
 
   FiniteElementState exact_temp(final_temp.get()->space(), "exact_temp");
@@ -287,7 +280,8 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<H1<1>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
+  std::string physics_name = "elasticity";
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, physics_name, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -324,8 +318,12 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
   states = states_and_reactions.first;
   reactions = states_and_reactions.second;
 
+  // Check that reactions are zero for unconstrained DOFs
+  checkUnconstrainedReactions(*reactions[0].get(), system.disp_bc->getBoundaryConditionManager());
+  checkUnconstrainedReactions(*reactions[1].get(), system.temperature_bc->getBoundaryConditionManager());
+
   // Check error - for affine displacement, FEM solution should be exact (up to machine precision)
-  auto disp_idx = system.field_store->getFieldIndex("displacement");
+  auto disp_idx = system.field_store->getFieldIndex(physics_name + "_displacement");
   FieldState final_disp = states[disp_idx];
 
   FunctionalObjective<dim, Parameters<H1<displacement_order, vdim>>> error_obj("error", mesh_, spaces({final_disp}));
