@@ -9,7 +9,7 @@ set(differentiable_numerics_sources
     field_store.cpp
     differentiable_physics.cpp
     lumped_mass_explicit_newmark_state_advancer.cpp
-    solid_mechanics_state_advancer.cpp
+    solid_mechanics_time_integrator.cpp
     differentiable_solver.cpp
     nonlinear_solve.cpp
     evaluate_objective.cpp
@@ -28,7 +28,7 @@ set(differentiable_numerics_headers
     explicit_dynamic_solve.hpp
     lumped_mass_weak_form.hpp
     lumped_mass_explicit_newmark_state_advancer.hpp
-    solid_mechanics_state_advancer.hpp
+    solid_mechanics_time_integrator.hpp
     nonlinear_solve.hpp
     evaluate_objective.hpp
     dirichlet_boundary_conditions.hpp

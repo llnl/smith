@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file solid_mechanics_state_advancer.hpp
- * .hpp
+ * @file solid_mechanics_time_integrator.hpp
  *
  * @brief Specifies parameterized residuals and various linearized evaluations for arbitrary nonlinear systems of
  * equations

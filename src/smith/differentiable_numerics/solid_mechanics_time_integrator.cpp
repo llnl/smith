@@ -8,7 +8,7 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
-#include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
+#include "smith/differentiable_numerics/solid_mechanics_time_integrator.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
