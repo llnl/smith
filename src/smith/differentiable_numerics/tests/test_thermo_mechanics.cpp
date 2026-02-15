@@ -147,8 +147,7 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, "",
-                                                                                       youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -210,8 +209,7 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, "",
-                                                                                       youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -278,8 +276,7 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<H1<1>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, "",
-                                                                                       youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -337,7 +334,7 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
   double l2_error = std::sqrt(l2_error_sq);
 
   std::cout << "Static Elasticity L2 Error (affine patch test): " << l2_error << std::endl;
-  EXPECT_LT(l2_error, 1e-10);  // Should be machine precision for affine displacement
+  EXPECT_LT(l2_error, 1e-11);  // Should be machine precision for affine displacement
 }
 
 TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
@@ -356,8 +353,7 @@ TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
   auto solver = buildDifferentiableNonlinearBlockSolver(fast_nonlinear_opts, linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, "",
-                                                                                       youngs_modulus);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -385,12 +381,60 @@ TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
   // Add Thermal Heat Flux
   system.addThermalHeatFlux(
       "left", [](double /*time*/, auto /*X*/, auto /*n*/, auto /*T*/, auto /*T_dot*/, auto /*u*/, auto... /*params*/) {
-        return 5.0;  // Flux into domain (if negative sign in implementation handles it)
+        return 5.0;  // Flux into domain
       });
 
   system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"),
                                     [](double /*t*/, smith::tensor<double, dim> X) { return 0.0 * X; });
   // Don't run anything, just make sure the templates build as expected.
+}
+
+TEST_F(ThermoMechanicsMeshFixture, PressureBC)
+{
+  SMITH_MARK_FUNCTION;
+
+  double rho = 1.0;
+  double E0 = 100.0;
+  double nu = 0.25;
+  double specific_heat = 1.0;
+  double kappa = 0.1;
+  GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 1.0, kappa};
+
+  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
+  system.setMaterial(material, mesh_->entireBodyName());
+
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
+
+  // Fixed left side
+  system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
+  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
+
+  // Apply pressure on right side
+  double pressure_mag = 0.1;
+  system.addPressure("right", [pressure_mag](double, auto, auto...) { return pressure_mag; });
+
+  auto shape_disp = system.field_store->getShapeDisp();
+  auto states = system.getStateFields();
+  auto params = system.getParameterFields();
+
+  double dt = 0.001;
+  double time = 0.0;
+  size_t cycle = 0;
+  // Advance one step
+  TimeInfo t_info(time, dt, cycle);
+  auto result = system.advancer->advanceState(t_info, shape_disp, states, params);
+  states = result.first;
+
+  // Check that we have some displacement
+  auto disp_idx = system.field_store->getFieldIndex("displacement_predicted");
+  FieldState final_disp = states[disp_idx];
+
+  // We expect non-zero displacement
+  double disp_norm = final_disp.get()->Norml2();
+  EXPECT_GT(disp_norm, 1e-6);
 }
 
 }  // namespace smith

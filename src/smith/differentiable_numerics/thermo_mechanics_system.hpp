@@ -123,6 +123,34 @@ struct ThermoMechanicsSystem : public SystemBase {
   }
 
   /**
+   * @brief Add a body force to the solid mechanics part of the system (with DependsOn).
+   * @tparam active_parameters Indices of fields this force depends on.
+   * @tparam BodyForceType The body force function type.
+   * @param depends_on Dependency specification for which input fields to pass.
+   * @param domain_name The name of the domain to apply the force to.
+   * @param force_function The force function (t, X, selected time-integrated inputs...).
+   * @note Time integration is applied to the state fields before calling the user function.
+   */
+  template <int... active_parameters, typename BodyForceType>
+  void addSolidBodyForce(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
+                         BodyForceType force_function)
+  {
+    auto captured_disp_rule = disp_time_rule;
+    auto captured_temp_rule = temperature_time_rule;
+
+    solid_weak_form->addBodySource(depends_on, domain_name,
+                                    [=](auto t_info, auto X, auto u, auto u_old, auto temperature,
+                                        auto temperature_old, auto... params) {
+                                      // Apply time integration to get current state
+                                      auto u_current = captured_disp_rule->value(t_info, u, u_old);
+                                      auto v_current = captured_disp_rule->dot(t_info, u, u_old);
+                                      auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
+
+                                      return force_function(t_info.time(), X, u_current, v_current, current_T, params...);
+                                    });
+  }
+
+  /**
    * @brief Add a body force to the solid mechanics part of the system.
    * @tparam BodyForceType The body force function type.
    * @param domain_name The name of the domain to apply the force to.
@@ -131,18 +159,37 @@ struct ThermoMechanicsSystem : public SystemBase {
   template <typename BodyForceType>
   void addSolidBodyForce(const std::string& domain_name, BodyForceType force_function)
   {
+    addSolidBodyForceAllParams(domain_name, force_function,
+                                std::make_index_sequence<4 + sizeof...(parameter_space)>{});
+  }
+
+  /**
+   * @brief Add a surface flux (traction) to the solid mechanics part of the system (with DependsOn).
+   * @tparam active_parameters Indices of fields this flux depends on.
+   * @tparam SurfaceFluxType The surface flux function type.
+   * @param depends_on Dependency specification for which input fields to pass.
+   * @param domain_name The name of the boundary domain to apply the flux to.
+   * @param flux_function The flux function (t, X, n, selected time-integrated inputs...).
+   * @note Time integration is applied to the state fields before calling the user function.
+   */
+  template <int... active_parameters, typename SurfaceFluxType>
+  void addSolidTraction(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
+                        SurfaceFluxType flux_function)
+  {
     auto captured_disp_rule = disp_time_rule;
     auto captured_temp_rule = temperature_time_rule;
 
-    solid_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto u, auto u_old, auto temperature,
-                                                    auto temperature_old, auto... params) {
-      // Apply time integration to get current state
-      auto u_current = captured_disp_rule->value(t_info, u, u_old);
-      auto v_current = captured_disp_rule->dot(t_info, u, u_old);
-      auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
+    solid_weak_form->addBoundaryFlux(depends_on, domain_name,
+                                      [=](auto t_info, auto X, auto n, auto u, auto u_old, auto temperature,
+                                          auto temperature_old, auto... params) {
+                                        // Apply time integration to get current state
+                                        auto u_current = captured_disp_rule->value(t_info, u, u_old);
+                                        auto v_current = captured_disp_rule->dot(t_info, u, u_old);
+                                        auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
 
-      return force_function(t_info.time(), X, u_current, v_current, current_T, params...);
-    });
+                                        return flux_function(t_info.time(), X, n, u_current, v_current, current_T,
+                                                             params...);
+                                      });
   }
 
   /**
@@ -154,18 +201,35 @@ struct ThermoMechanicsSystem : public SystemBase {
   template <typename SurfaceFluxType>
   void addSolidTraction(const std::string& domain_name, SurfaceFluxType flux_function)
   {
+    addSolidTractionAllParams(domain_name, flux_function,
+                               std::make_index_sequence<4 + sizeof...(parameter_space)>{});
+  }
+
+  /**
+   * @brief Add a body source (heat source) to the thermal part of the system (with DependsOn).
+   * @tparam active_parameters Indices of fields this source depends on.
+   * @tparam BodySourceType The body source function type.
+   * @param depends_on Dependency specification for which input fields to pass.
+   * @param domain_name The name of the domain to apply the source to.
+   * @param source_function The source function (t, X, selected time-integrated inputs...).
+   * @note Time integration is applied to the state fields before calling the user function.
+   */
+  template <int... active_parameters, typename BodySourceType>
+  void addThermalHeatSource(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
+                            BodySourceType source_function)
+  {
     auto captured_disp_rule = disp_time_rule;
     auto captured_temp_rule = temperature_time_rule;
 
-    solid_weak_form->addBoundaryFlux(domain_name, [=](auto t_info, auto X, auto n, auto u, auto u_old, auto temperature,
-                                                      auto temperature_old, auto... params) {
-      // Apply time integration to get current state
-      auto u_current = captured_disp_rule->value(t_info, u, u_old);
-      auto v_current = captured_disp_rule->dot(t_info, u, u_old);
-      auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
+    thermal_weak_form->addBodySource(
+        depends_on, domain_name, [=](auto t_info, auto X, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
+          // Apply time integration to get current state
+          auto T_current = captured_temp_rule->value(t_info, T, T_old);
+          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
+          auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
 
-      return flux_function(t_info.time(), X, n, u_current, v_current, current_T, params...);
-    });
+          return source_function(t_info.time(), X, T_current, T_dot, current_u, params...);
+        });
   }
 
   /**
@@ -177,18 +241,37 @@ struct ThermoMechanicsSystem : public SystemBase {
   template <typename BodySourceType>
   void addThermalHeatSource(const std::string& domain_name, BodySourceType source_function)
   {
+    addThermalHeatSourceAllParams(domain_name, source_function,
+                                   std::make_index_sequence<4 + sizeof...(parameter_space)>{});
+  }
+
+  /**
+   * @brief Add a surface flux (heat flux) to the thermal part of the system (with DependsOn).
+   * @tparam active_parameters Indices of fields this flux depends on.
+   * @tparam SurfaceFluxType The surface flux function type.
+   * @param depends_on Dependency specification for which input fields to pass.
+   * @param domain_name The name of the boundary domain to apply the flux to.
+   * @param flux_function The flux function (t, X, n, selected time-integrated inputs...).
+   * @note Time integration is applied to the state fields before calling the user function.
+   */
+  template <int... active_parameters, typename SurfaceFluxType>
+  void addThermalHeatFlux(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
+                          SurfaceFluxType flux_function)
+  {
     auto captured_disp_rule = disp_time_rule;
     auto captured_temp_rule = temperature_time_rule;
 
-    thermal_weak_form->addBodySource(
-        domain_name, [=](auto t_info, auto X, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
-          // Apply time integration to get current state
-          auto T_current = captured_temp_rule->value(t_info, T, T_old);
-          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-          auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
+    thermal_weak_form->addBoundaryFlux(depends_on, domain_name,
+                                        [=](auto t_info, auto X, auto n, auto T, auto T_old, auto disp, auto disp_old,
+                                            auto... params) {
+                                          // Apply time integration to get current state
+                                          auto T_current = captured_temp_rule->value(t_info, T, T_old);
+                                          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
+                                          auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
 
-          return source_function(t_info.time(), X, T_current, T_dot, current_u, params...);
-        });
+                                          return -flux_function(t_info.time(), X, n, T_current, T_dot, current_u,
+                                                                params...);
+                                        });
   }
 
   /**
@@ -200,18 +283,91 @@ struct ThermoMechanicsSystem : public SystemBase {
   template <typename SurfaceFluxType>
   void addThermalHeatFlux(const std::string& domain_name, SurfaceFluxType flux_function)
   {
+    addThermalHeatFluxAllParams(domain_name, flux_function,
+                                 std::make_index_sequence<4 + sizeof...(parameter_space)>{});
+  }
+
+  /**
+   * @brief Add a pressure boundary condition (follower force) to the solid mechanics part of the system (with DependsOn).
+   * @tparam active_parameters Indices of fields this pressure depends on.
+   * @tparam PressureType The pressure function type.
+   * @param depends_on Dependency specification for which input fields to pass.
+   * @param domain_name The name of the boundary domain.
+   * @param pressure_function The pressure function (t, X, selected time-integrated inputs...).
+   * @note Pressure is applied in the current configuration: P * n_deformed.
+   * @note Time integration is applied to the state fields before calling the user function.
+   */
+  template <int... active_parameters, typename PressureType>
+  void addPressure(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
+                   PressureType pressure_function)
+  {
     auto captured_disp_rule = disp_time_rule;
-    auto captured_temp_rule = temperature_time_rule;
 
-    thermal_weak_form->addBoundaryFlux(
-        domain_name, [=](auto t_info, auto X, auto n, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
+    solid_weak_form->addBoundaryIntegral(
+        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto u_old, auto /*temperature*/, auto /*temperature_old*/, auto... params) {
           // Apply time integration to get current state
-          auto T_current = captured_temp_rule->value(t_info, T, T_old);
-          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-          auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
+          auto u_current = captured_disp_rule->value(t_info, u, u_old);
 
-          return -flux_function(t_info.time(), X, n, T_current, T_dot, current_u, params...);
+          // Compute deformed normal and apply correction for reference configuration integration
+          auto x_current = X + u_current;
+          auto n_deformed = cross(get<DERIVATIVE>(x_current));
+          auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
+
+          auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(params)...);
+
+          // Return traction vector (force)
+          return pressure * n_deformed * (1.0 / n_shape_norm);
         });
+  }
+
+  /**
+   * @brief Add a pressure boundary condition (follower force) to the solid mechanics part of the system.
+   * @tparam PressureType The pressure function type.
+   * @param domain_name The name of the boundary domain.
+   * @param pressure_function The pressure function (t, X, params...).
+   * @note Pressure is applied in the current configuration: P * n_deformed.
+   */
+  template <typename PressureType>
+  void addPressure(const std::string& domain_name, PressureType pressure_function)
+  {
+    addPressureAllParams(domain_name, pressure_function, std::make_index_sequence<4 + sizeof...(parameter_space)>{});
+  }
+
+ private:
+  // Helper functions to forward non-DependsOn calls to DependsOn versions with all parameters
+  template <typename BodyForceType, std::size_t... Is>
+  void addSolidBodyForceAllParams(const std::string& domain_name, BodyForceType force_function,
+                                   std::index_sequence<Is...>)
+  {
+    addSolidBodyForce(DependsOn<static_cast<int>(Is)...>{}, domain_name, force_function);
+  }
+
+  template <typename SurfaceFluxType, std::size_t... Is>
+  void addSolidTractionAllParams(const std::string& domain_name, SurfaceFluxType flux_function,
+                                  std::index_sequence<Is...>)
+  {
+    addSolidTraction(DependsOn<static_cast<int>(Is)...>{}, domain_name, flux_function);
+  }
+
+  template <typename PressureType, std::size_t... Is>
+  void addPressureAllParams(const std::string& domain_name, PressureType pressure_function,
+                             std::index_sequence<Is...>)
+  {
+    addPressure(DependsOn<static_cast<int>(Is)...>{}, domain_name, pressure_function);
+  }
+
+  template <typename BodySourceType, std::size_t... Is>
+  void addThermalHeatSourceAllParams(const std::string& domain_name, BodySourceType source_function,
+                                      std::index_sequence<Is...>)
+  {
+    addThermalHeatSource(DependsOn<static_cast<int>(Is)...>{}, domain_name, source_function);
+  }
+
+  template <typename SurfaceFluxType, std::size_t... Is>
+  void addThermalHeatFluxAllParams(const std::string& domain_name, SurfaceFluxType flux_function,
+                                    std::index_sequence<Is...>)
+  {
+    addThermalHeatFlux(DependsOn<static_cast<int>(Is)...>{}, domain_name, flux_function);
   }
 };
 
@@ -298,6 +454,26 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
       temperature_bc,
       disp_time_rule,
       temperature_time_rule};
+}
+
+/**
+ * @brief Factory function to build a thermo-mechanical system (without physics name).
+ * @tparam dim Spatial dimension.
+ * @tparam disp_order Order of the displacement basis.
+ * @tparam temp_order Order of the temperature basis.
+ * @tparam parameter_space Finite element spaces for optional parameters.
+ * @param mesh The mesh.
+ * @param solver The differentiable block solver.
+ * @param parameter_types Parameter field types.
+ * @return ThermoMechanicsSystem with all components initialized.
+ */
+template <int dim, int disp_order, int temp_order, typename... parameter_space>
+ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildThermoMechanicsSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver,
+    FieldType<parameter_space>... parameter_types)
+{
+  return buildThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>(mesh, solver, "",
+                                                                                      parameter_types...);
 }
 
 }  // namespace smith

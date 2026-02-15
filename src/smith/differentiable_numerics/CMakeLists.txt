@@ -36,7 +36,7 @@ set(differentiable_numerics_headers
     time_discretized_weak_form.hpp
     paraview_writer.hpp
     multiphysics_time_integrator.hpp
-    solid_mechanics_system.hpp
+    solid_dynamics_system.hpp
     thermo_mechanics_system.hpp
     system_base.hpp
     )

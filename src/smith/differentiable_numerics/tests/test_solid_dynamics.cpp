@@ -23,7 +23,7 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
-#include "smith/differentiable_numerics/solid_mechanics_system.hpp"
+#include "smith/differentiable_numerics/solid_dynamics_system.hpp"
 
 namespace smith {
 
@@ -82,8 +82,8 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto d_solid_nonlinear_solver =
       buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  auto system = buildSolidMechanicsSystem<dim, order>(
-      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, "",
+  auto system = buildSolidDynamicsSystem<dim, order>(
+      mesh, d_solid_nonlinear_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{},
       FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
 
   static constexpr double gravity = -9.0;
@@ -139,6 +139,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   TimeInfo endTimeInfo(time, dt_, cycle);
 
+  // Test acceleration (states[3] is acceleration)
   FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({states[3]}));
   accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
     auto a = get<VALUE>(A);
@@ -179,7 +180,7 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 
-  auto system = buildSolidMechanicsSystem<dim, order>(mesh, d_solid_nonlinear_solver, time_rule, physics_name,
+  auto system = buildSolidDynamicsSystem<dim, order>(mesh, d_solid_nonlinear_solver, time_rule, physics_name,
                                                       FieldType<ScalarParameterSpace>("bulk"),
                                                       FieldType<ScalarParameterSpace>("shear"));
 
