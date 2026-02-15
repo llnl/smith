@@ -36,9 +36,9 @@ struct SolidDynamicsSystem : public SystemBase {
       dim, H1<order, dim>,
       Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
-  using CycleZeroWeakFormType =
-      TimeDiscretizedWeakForm<dim, H1<order, dim>,
-                              Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
+  using CycleZeroWeakFormType = TimeDiscretizedWeakForm<
+      dim, H1<order, dim>,
+      Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
   std::shared_ptr<CycleZeroWeakFormType>
@@ -94,13 +94,13 @@ struct SolidDynamicsSystem : public SystemBase {
 
     // Add to cycle-zero weak form (inputs: u, u_old, v_old, a, params...)
     // At cycle 0, we directly use u, v, a (no time integration needed)
-    cycle_zero_weak_form->addBodyIntegral(domain_name,
-                                          [=](auto /*t_info*/, auto /*X*/, auto u, auto /*u_old*/, auto /*v_old*/, auto a, auto... params) {
-                                            typename MaterialType::State state;
-                                            auto pk_stress = material(state, get<DERIVATIVE>(u), params...);
+    cycle_zero_weak_form->addBodyIntegral(
+        domain_name, [=](auto /*t_info*/, auto /*X*/, auto u, auto /*u_old*/, auto /*v_old*/, auto a, auto... params) {
+          typename MaterialType::State state;
+          auto pk_stress = material(state, get<DERIVATIVE>(u), params...);
 
-                                            return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
-                                          });
+          return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
+        });
   }
 
   /**
@@ -127,10 +127,10 @@ struct SolidDynamicsSystem : public SystemBase {
           return force_function(t_info.time(), X, u_current, v_current, a_current, params...);
         });
 
-    cycle_zero_weak_form->addBodySource(depends_on, domain_name,
-                                        [=](auto t_info, auto X, auto u, auto /*u_old*/, auto v_old, auto a, auto... params) {
-                                          return force_function(t_info.time(), X, u, v_old, a, params...);
-                                        });
+    cycle_zero_weak_form->addBodySource(
+        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto /*u_old*/, auto v_old, auto a, auto... params) {
+          return force_function(t_info.time(), X, u, v_old, a, params...);
+        });
   }
 
   /**
@@ -170,10 +170,11 @@ struct SolidDynamicsSystem : public SystemBase {
           return traction_function(t_info.time(), X, n, u_current, v_current, a_current, params...);
         });
 
-    cycle_zero_weak_form->addBoundaryFlux(depends_on, domain_name,
-                                          [=](auto t_info, auto X, auto n, auto u, auto /*u_old*/, auto v_old, auto a, auto... params) {
-                                            return traction_function(t_info.time(), X, n, u, v_old, a, params...);
-                                          });
+    cycle_zero_weak_form->addBoundaryFlux(
+        depends_on, domain_name,
+        [=](auto t_info, auto X, auto n, auto u, auto /*u_old*/, auto v_old, auto a, auto... params) {
+          return traction_function(t_info.time(), X, n, u, v_old, a, params...);
+        });
   }
 
   /**
@@ -251,22 +252,19 @@ struct SolidDynamicsSystem : public SystemBase {
  private:
   // Helper functions to forward non-DependsOn calls to DependsOn versions with all parameters
   template <typename BodyForceType, std::size_t... Is>
-  void addBodyForceAllParams(const std::string& domain_name, BodyForceType force_function,
-                              std::index_sequence<Is...>)
+  void addBodyForceAllParams(const std::string& domain_name, BodyForceType force_function, std::index_sequence<Is...>)
   {
     addBodyForce(DependsOn<static_cast<int>(Is)...>{}, domain_name, force_function);
   }
 
   template <typename TractionType, std::size_t... Is>
-  void addTractionAllParams(const std::string& domain_name, TractionType traction_function,
-                             std::index_sequence<Is...>)
+  void addTractionAllParams(const std::string& domain_name, TractionType traction_function, std::index_sequence<Is...>)
   {
     addTraction(DependsOn<static_cast<int>(Is)...>{}, domain_name, traction_function);
   }
 
   template <typename PressureType, std::size_t... Is>
-  void addPressureAllParams(const std::string& domain_name, PressureType pressure_function,
-                             std::index_sequence<Is...>)
+  void addPressureAllParams(const std::string& domain_name, PressureType pressure_function, std::index_sequence<Is...>)
   {
     addPressure(DependsOn<static_cast<int>(Is)...>{}, domain_name, pressure_function);
   }
@@ -311,8 +309,7 @@ SolidDynamicsSystem<dim, order, parameter_space...> buildSolidDynamicsSystem(
   // Add dependent fields for time integration history
   auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, prefix("displacement"));
   auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, prefix("velocity"));
-  auto accel_old_type =
-      field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, prefix("acceleration"));
+  auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, prefix("acceleration"));
 
   // Add parameters
   std::vector<FieldState> parameter_fields;
@@ -338,8 +335,8 @@ SolidDynamicsSystem<dim, order, parameter_space...> buildSolidDynamicsSystem(
   field_store->addWeakFormTestField(cycle_zero_name, accel_old_type.name);
   const mfem::ParFiniteElementSpace& cycle_zero_test_space = field_store->getField(accel_old_type.name).get()->space();
   std::vector<const mfem::ParFiniteElementSpace*> cycle_zero_input_spaces;
-  createSpaces(cycle_zero_name, *field_store, cycle_zero_input_spaces, 0, disp_type, disp_old_type, velo_old_type, accel_old_type,
-               FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
+  createSpaces(cycle_zero_name, *field_store, cycle_zero_input_spaces, 0, disp_type, disp_old_type, velo_old_type,
+               accel_old_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
 
   auto cycle_zero_weak_form =
       std::make_shared<typename SolidDynamicsSystem<dim, order, parameter_space...>::CycleZeroWeakFormType>(

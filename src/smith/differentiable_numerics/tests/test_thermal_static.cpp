@@ -39,10 +39,7 @@ struct ThermalStaticFixture : public testing::Test {
     setupMesh(32, "default");
   }
 
-  void TearDown() override
-  {
-    StateManager::reset();
-  }
+  void TearDown() override { StateManager::reset(); }
 
   template <int temp_order>
   double run_thermal_solve()
@@ -68,21 +65,20 @@ struct ThermalStaticFixture : public testing::Test {
       return 2.0 * k * pi * pi * sin(pi * x) * sin(pi * y);
     });
 
-    thermal_system.temperature_bc->template setScalarBCs<2>(mesh->entireBoundary(), [](double /*t*/, tensor<double, 2> /*X*/) {
-      return 0.0;
-    });
+    thermal_system.temperature_bc->template setScalarBCs<2>(mesh->entireBoundary(),
+                                                            [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
     TimeInfo t_info(0.0, 1.0);
-    auto [new_states, reactions] = thermal_system.advancer->advanceState(t_info, thermal_system.field_store->getShapeDisp(),
-                                                                       thermal_system.field_store->getAllFields(),
-                                                                       thermal_system.getParameterFields());
+    auto [new_states, reactions] = thermal_system.advancer->advanceState(
+        t_info, thermal_system.field_store->getShapeDisp(), thermal_system.field_store->getAllFields(),
+        thermal_system.getParameterFields());
 
     for (size_t i = 0; i < new_states.size(); ++i) {
       thermal_system.field_store->setField(i, new_states[i]);
     }
 
     auto temperature = thermal_system.field_store->getField(thermal_system.prefix("temperature"));
-    
+
     auto exact_sol_func = [](const mfem::Vector& X, mfem::Vector& T) {
       double x = X(0);
       double y = X(1);
@@ -90,7 +86,7 @@ struct ThermalStaticFixture : public testing::Test {
       T(0) = std::sin(pi * x) * std::sin(pi * y);
     };
     mfem::VectorFunctionCoefficient exact_sol_coeff(1, exact_sol_func);
-    
+
     return computeL2Error(*temperature.get(), exact_sol_coeff);
   }
 };
@@ -115,7 +111,7 @@ TEST_F(ThermalStaticFixture, ConvergenceOrder1)
   double e1 = run_thermal_solve<1>();
   setupMesh(32, "conv1_h32");
   double e2 = run_thermal_solve<1>();
-  
+
   double rate = std::log2(e1 / e2);
   SLIC_INFO("Convergence Rate (Order 1): " << rate);
   EXPECT_NEAR(rate, 2.0, 0.1);
@@ -127,7 +123,7 @@ TEST_F(ThermalStaticFixture, ConvergenceOrder2)
   double e1 = run_thermal_solve<2>();
   setupMesh(16, "conv2_h16");
   double e2 = run_thermal_solve<2>();
-  
+
   double rate = std::log2(e1 / e2);
   SLIC_INFO("Convergence Rate (Order 2): " << rate);
   EXPECT_NEAR(rate, 3.0, 0.1);

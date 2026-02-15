@@ -181,8 +181,8 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 
   auto system = buildSolidDynamicsSystem<dim, order>(mesh, d_solid_nonlinear_solver, time_rule, physics_name,
-                                                      FieldType<ScalarParameterSpace>("bulk"),
-                                                      FieldType<ScalarParameterSpace>("shear"));
+                                                     FieldType<ScalarParameterSpace>("bulk"),
+                                                     FieldType<ScalarParameterSpace>("shear"));
 
   auto physics = system.createDifferentiablePhysics(physics_name);
   auto bcs = system.disp_bc;

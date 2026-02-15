@@ -219,8 +219,7 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
   system.temperature_bc->setScalarBCs<dim>(mesh_->domain("left"), [](double, auto) { return 100.0; });
   system.temperature_bc->setScalarBCs<dim>(mesh_->domain("right"), [](double, auto) { return 100.0; });
 
-  auto& temp_field =
-      const_cast<FiniteElementState&>(*system.field_store->getField("temperature_predicted").get());
+  auto& temp_field = const_cast<FiniteElementState&>(*system.field_store->getField("temperature_predicted").get());
   temp_field.setFromFieldFunction([](tensor<double, dim> x) {
     using std::sin;
     return 100.0 + sin(M_PI * x[0]);

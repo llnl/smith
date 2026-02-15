@@ -63,7 +63,7 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
     new_states[u_idx] = u_new;
 
     std::vector<FieldState> rule_inputs;
-    rule_inputs.push_back(u_new);          // u_{n+1}
+    rule_inputs.push_back(u_new);  // u_{n+1}
     if (rule->num_args() >= 2) {
       rule_inputs.push_back(states[u_idx]);  // u_n
     }

@@ -32,13 +32,12 @@ namespace smith {
 template <int dim, int temp_order, typename... parameter_space>
 struct ThermalSystem : public SystemBase {
   /// @brief using for ThermalWeakFormType
-  using ThermalWeakFormType = TimeDiscretizedWeakForm<
-      dim, H1<temp_order>,
-      Parameters<H1<temp_order>, parameter_space...>>;
+  using ThermalWeakFormType =
+      TimeDiscretizedWeakForm<dim, H1<temp_order>, Parameters<H1<temp_order>, parameter_space...>>;
 
   std::shared_ptr<ThermalWeakFormType> thermal_weak_form;       ///< Thermal weak form.
   std::shared_ptr<DirichletBoundaryConditions> temperature_bc;  ///< Temperature boundary conditions.
-  std::shared_ptr<QuasiStaticRule> temperature_time_rule;  ///< Time integration for temperature.
+  std::shared_ptr<QuasiStaticRule> temperature_time_rule;       ///< Time integration for temperature.
 
   /**
    * @brief Get the list of all state fields.
@@ -60,8 +59,7 @@ struct ThermalSystem : public SystemBase {
   {
     return std::make_shared<DifferentiablePhysics>(
         field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
-        getParameterFields(), advancer, physics_name,
-        std::vector<std::string>{prefix("thermal_flux")});
+        getParameterFields(), advancer, physics_name, std::vector<std::string>{prefix("thermal_flux")});
   }
 
   /**
@@ -75,12 +73,11 @@ struct ThermalSystem : public SystemBase {
   {
     auto captured_temp_rule = temperature_time_rule;
 
-    thermal_weak_form->addBodyIntegral(
-        domain_name, [=](auto t_info, auto X, auto temperature, auto... params) {
-          // Apply time integration to get current state
-          auto T = captured_temp_rule->value(t_info, temperature);
-          return integrand(t_info, X, T, params...);
-        });
+    thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto X, auto temperature, auto... params) {
+      // Apply time integration to get current state
+      auto T = captured_temp_rule->value(t_info, temperature);
+      return integrand(t_info, X, T, params...);
+    });
   }
 
   /**
@@ -94,11 +91,10 @@ struct ThermalSystem : public SystemBase {
   {
     auto captured_temp_rule = temperature_time_rule;
 
-    thermal_weak_form->addBodySource(
-        domain_name, [=](auto t_info, auto X, auto temperature, auto... params) {
-          auto T = captured_temp_rule->value(t_info, temperature);
-          return source_function(t_info.time(), X, T, params...);
-        });
+    thermal_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto temperature, auto... params) {
+      auto T = captured_temp_rule->value(t_info, temperature);
+      return source_function(t_info.time(), X, T, params...);
+    });
   }
 
   /**
@@ -112,11 +108,11 @@ struct ThermalSystem : public SystemBase {
   {
     auto captured_temp_rule = temperature_time_rule;
 
-    thermal_weak_form->addBoundaryFlux(
-        boundary_name, [=](auto t_info, auto X, auto n, auto temperature, auto... params) {
-          auto T = captured_temp_rule->value(t_info, temperature);
-          return -flux_function(t_info.time(), X, n, T, params...);
-        });
+    thermal_weak_form->addBoundaryFlux(boundary_name,
+                                       [=](auto t_info, auto X, auto n, auto temperature, auto... params) {
+                                         auto T = captured_temp_rule->value(t_info, temperature);
+                                         return -flux_function(t_info.time(), X, n, T, params...);
+                                       });
   }
 };
 
@@ -124,9 +120,10 @@ struct ThermalSystem : public SystemBase {
  * @brief Factory function to build a thermal system.
  */
 template <int dim, int temp_order, typename... parameter_space>
-ThermalSystem<dim, temp_order, parameter_space...> buildThermalSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver, std::string prepend_name = "",
-    FieldType<parameter_space>... parameter_types)
+ThermalSystem<dim, temp_order, parameter_space...> buildThermalSystem(std::shared_ptr<Mesh> mesh,
+                                                                      std::shared_ptr<DifferentiableBlockSolver> solver,
+                                                                      std::string prepend_name = "",
+                                                                      FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
@@ -157,9 +154,9 @@ ThermalSystem<dim, temp_order, parameter_space...> buildThermalSystem(
   createSpaces(thermal_flux_name, *field_store, temp_input_spaces, 0, temperature_type,
                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
 
-  auto thermal_weak_form = std::make_shared<
-      typename ThermalSystem<dim, temp_order, parameter_space...>::ThermalWeakFormType>(
-      thermal_flux_name, field_store->getMesh(), temp_test_space, temp_input_spaces);
+  auto thermal_weak_form =
+      std::make_shared<typename ThermalSystem<dim, temp_order, parameter_space...>::ThermalWeakFormType>(
+          thermal_flux_name, field_store->getMesh(), temp_test_space, temp_input_spaces);
 
   // Build solver and advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{thermal_weak_form};
@@ -172,4 +169,4 @@ ThermalSystem<dim, temp_order, parameter_space...> buildThermalSystem(
       temperature_time_rule};
 }
 
-} // namespace smith
+}  // namespace smith

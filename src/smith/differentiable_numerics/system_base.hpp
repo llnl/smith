@@ -25,10 +25,10 @@ namespace smith {
  * @brief Base struct for physics systems containing common members and helper functions.
  */
 struct SystemBase {
-  std::shared_ptr<FieldStore> field_store;             ///< Field store managing the system's fields.
-  std::shared_ptr<DifferentiableBlockSolver> solver;     ///< The solver for the system.
-  std::shared_ptr<StateAdvancer> advancer;               ///< The state advancer.
-  std::vector<FieldState> parameter_fields;                                  ///< Optional parameter fields.
+  std::shared_ptr<FieldStore> field_store;            ///< Field store managing the system's fields.
+  std::shared_ptr<DifferentiableBlockSolver> solver;  ///< The solver for the system.
+  std::shared_ptr<StateAdvancer> advancer;            ///< The state advancer.
+  std::vector<FieldState> parameter_fields;           ///< Optional parameter fields.
   std::string prepend_name_;
 
   /**
@@ -42,7 +42,8 @@ struct SystemBase {
    * @param name The name to prepend to.
    * @return std::string The prepended name.
    */
-  std::string prefix(const std::string& name) const {
+  std::string prefix(const std::string& name) const
+  {
     if (prepend_name_.empty()) {
       return name;
     }
