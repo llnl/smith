@@ -327,7 +327,8 @@ enum class Preconditioner
   HypreILU,         /**< Hypre's Incomplete LU */
   AMGX,             /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
   Petsc,            /**< PETSc preconditioner,  */
-  None              /**< No preconditioner used */
+  None,             /**< No preconditioner used */
+  AMGF              /**< MFEM-based AMG with filtering (AMGF) */
 };
 // _preconditioners_end
 
@@ -351,6 +352,8 @@ inline std::string preconditionerName(Preconditioner p)
       return "Petsc";
     case Preconditioner::None:
       return "None";
+    case Preconditioner::AMGF:
+      return "AMGF";
   }
   // This cannot happen, but GCC doesn't know that
   return "UNKNOWN";
@@ -369,6 +372,7 @@ inline std::map<std::string, Preconditioner> preconditionerMap = {
     {"AMGX", Preconditioner::AMGX},
     {"Petsc", Preconditioner::Petsc},
     {"None", Preconditioner::None},
+    {"AMGF", Preconditioner::AMGF},
 };
 
 // _linear_options_start
