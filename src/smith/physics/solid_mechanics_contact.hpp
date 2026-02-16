@@ -180,14 +180,14 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
             return *J_constraint_;
           });
     } else {
-      // If all of the contact interactions are penalty, then there will be no blocks.  Jacobian operator is a single
+      // If all of the contact interactions are penalty, then there will be no blocks. Jacobian operator is a single
       // mfem::HypreParMatrix
       return std::make_unique<mfem_ext::StdFunctionOperator>(
           displacement_.space().TrueVSize(), residual_fn, [this](const mfem::Vector& u) -> mfem::Operator& {
             auto [r, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(u), acceleration_,
                                           *parameters_[parameter_indices].state...);
 
-            // get 11-block holding jacobian contributions
+            // get 11-block holding Jacobian contributions
             auto block_J = contact_.jacobianFunction(assemble(drdu));
             block_J->owns_blocks = false;
             J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
