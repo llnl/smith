@@ -43,6 +43,24 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
     num_pressure_dofs_ += interactions_.back().numPressureDofs();
     offsets_up_to_date_ = false;
   }
+  // specify all contact boundaries
+  mfem::Array<int> ess_bdry;
+  ess_bdry.SetSize(mesh_.bdr_attributes.Max());
+  ess_bdry = 0;
+  for (const auto& bdry_attr : bdry_attr_surf1) {
+    ess_bdry[bdry_attr] = 1;
+  }
+  for (const auto& bdry_attr : bdry_attr_surf2) {
+    ess_bdry[bdry_attr] = 1;
+  }
+  // dofs for the current contact interaction
+  mfem::Array<int> contact_interaction_dofs_;
+  reference_nodes_->ParFESpace()->GetEssentialTrueDofs(ess_bdry, contact_interaction_dofs_);
+  // add dofs for current contact interaction call to all contact_dofs_
+  contact_dofs_.Append(contact_interaction_dofs_.GetData(), contact_interaction_dofs_.Size());
+  // sort and delete duplicates
+  contact_dofs_.Sort();
+  contact_dofs_.Unique();
 }
 
 void ContactData::reset()

@@ -296,6 +296,11 @@ class ContactData {
    */
   mutable mfem::Array<HYPRE_BigInt> global_pressure_dof_offsets_;
 
+  /**
+   * @brief Array of dofs associated to contact
+   */
+  mfem::Array<int> contact_dofs_;
+
   int cycle_{0};
   double time_{0.0};
   double dt_{1.0};
