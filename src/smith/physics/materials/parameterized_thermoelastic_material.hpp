@@ -211,6 +211,7 @@ struct ParameterizedThermalStiffeningMaterial {
 
     // C_v is double (as in the nonlinear model)
     return smith::tuple{Piola, C_v, s0, q0};
+  }
 
 #else
 // Original nonlinear model
@@ -313,8 +314,8 @@ struct ParameterizedThermalStiffeningMaterial {
     const auto s0 = tr(dot(theta * dSedT, greenStrainRate));
 
     return smith::tuple{Piola, C_v, s0, q0};
-#endif
   }
+#endif
 };
 
 /**
