@@ -381,6 +381,47 @@ void ContactData::updateDofOffsets() const
   offsets_up_to_date_ = true;
 }
 
+
+std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperator()
+{
+   // contact_dofs_
+   const MPI_Comm comm = reference_nodes_->ParFESpace()->GetComm();
+   HYPRE_BigInt * col_offsets = reference_nodes_->ParFESpace()->GetTrueDofOffsets();
+   HYPRE_BigInt ncols_glb = reference_nodes_->ParFESpace()->GlobalTrueVSize();
+   // TODO: are there places where int should be replaced with HYPRE_BigInt?
+   // determine number of rows per process based contact_dofs_
+   // as we ultimately restrict from all dofs to those dofs specified
+   // in the contact_dofs Array
+   int nrows_loc = contact_dofs_.Size();
+   int nrows_glb = 0;
+   MPI_Allreduce(&nrows_loc, &nrows_glb, 1, MPI_INT, MPI_SUM, comm);
+   int row_offset = 0;
+   MPI_Scan(&nrows_loc, &row_offset, 1, MPI_INT, MPI_SUM, comm);
+   row_offset -= nrows_loc;
+   HYPRE_BigInt row_offsets[2];
+   row_offsets[0] = row_offset;
+   row_offsets[1] = row_offset + nrows_loc;
+   mfem::SparseMatrix Psparse(nrows_loc, ncols_glb);
+
+   mfem::Array<int> col;
+   mfem::Vector entry;
+   col.SetSize(1);
+   entry.SetSize(1);
+   entry(0) = 1.0;
+   for (int k = 0; k < nrows_loc; k++)
+   {
+      col[0] = contact_dofs_[k];
+      Psparse.SetRow(k, col, entry);
+   }
+   Psparse.Finalize();
+
+   int * I = Psparse.GetI();
+   HYPRE_BigInt * J = Psparse.GetJ();
+   double * data = Psparse.GetData();
+   std::unique_ptr<mfem::HypreParMatrix> transfer_operator = std::make_unique<mfem::HypreParMatrix>(comm, nrows_loc, nrows_glb, ncols_glb, I, J, data, row_offsets, col_offsets);
+   return transfer_operator;
+}
+
 #else
 
 ContactData::ContactData([[maybe_unused]] const mfem::ParMesh& mesh)
@@ -444,6 +485,13 @@ void ContactData::setPressures([[maybe_unused]] const mfem::Vector& true_pressur
 void ContactData::setDisplacements([[maybe_unused]] const mfem::Vector& u_shape,
                                    [[maybe_unused]] const mfem::Vector& true_displacement)
 {
+}
+
+std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperator()
+{
+   // TODO: if there is no tribol contact what should be done here?
+   std::unique_ptr<mfem::HypreParMatrix> transfer_operator = nullptr;
+   return transfer_operator;
 }
 
 #endif
