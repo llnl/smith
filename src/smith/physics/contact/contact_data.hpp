@@ -155,9 +155,9 @@ class ContactData {
    * @pre update() must be called with the current configuration so the Jacobian contributions are up-to-date
    */
   std::unique_ptr<mfem::BlockOperator> jacobianFunction(std::unique_ptr<mfem::HypreParMatrix> orig_J) const;
-  
+
   /**
-   * @brief Computes the subspace transfer operator 
+   * @brief Computes the subspace transfer operator
    *
    * @return Contact subspace transfer operator
    */

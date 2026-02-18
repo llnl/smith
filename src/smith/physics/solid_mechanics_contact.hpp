@@ -219,10 +219,10 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   /**
    * @brief create a contactSubspaceTransferOperator for AMGF
    */
-  std::unique_ptr<mfem::HypreParMatrix> contactSubspaceTransferOperator() 
+  std::unique_ptr<mfem::HypreParMatrix> contactSubspaceTransferOperator()
   {
     return contact_.contactSubspaceTransferOperator();
-  } 
+  }
 
   /**
    * @brief Complete the initialization and allocation of the data structures.
