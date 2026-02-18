@@ -254,17 +254,13 @@ class StrumpackSolver : public mfem::Solver {
 
 /**
  * @brief Function for building a monolithic parallel Hypre matrix from a block system of smaller Hypre matrices
- *
- * @param block_operator The block system of HypreParMatrices
+ * @param block_operator The block system of HypreParMatrices, must have assembled HypreParMatrices for its sub-blocks
  * @return The assembled monolithic HypreParMatrix
- *
- * @pre @a block_operator must have assembled HypreParMatrices for its sub-blocks
  */
 std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOperator& block_operator);
 
 /**
  * @brief Build a nonlinear solver using the nonlinear option struct
- *
  * @param nonlinear_opts The options to configure the nonlinear solution scheme
  * @param linear_opts The options to configure the linear solution scheme
  * @param preconditioner A preconditioner to help with either linear or nonlinear solves

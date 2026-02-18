@@ -32,10 +32,12 @@ namespace smith {
  */
 template <int dim, int order, typename... parameter_space>
 struct SolidDynamicsSystem : public SystemBase {
+  /// @brief using
   using SolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<order, dim>,
       Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
+  /// @brief using
   using CycleZeroWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<order, dim>,
       Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;

@@ -42,14 +42,6 @@ struct ThermoMechanicsSystem : public SystemBase {
       dim, H1<temp_order>,
       Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
 
-  std::shared_ptr<SolidWeakFormType> solid_weak_form;                        ///< Solid mechanics weak form.
-  std::shared_ptr<ThermalWeakFormType> thermal_weak_form;                    ///< Thermal weak form.
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;                      ///< Displacement boundary conditions.
-  std::shared_ptr<DirichletBoundaryConditions> temperature_bc;               ///< Temperature boundary conditions.
-  std::shared_ptr<QuasiStaticFirstOrderTimeIntegrationRule> disp_time_rule;  ///< Time integration for displacement.
-  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule>
-      temperature_time_rule;  ///< Time integration for temperature.
-
   /**
    * @brief Get the list of all state fields (current and old).
    * @return std::vector<FieldState> List of state fields.
@@ -366,6 +358,14 @@ struct ThermoMechanicsSystem : public SystemBase {
   {
     addThermalHeatFlux(DependsOn<static_cast<int>(Is)...>{}, domain_name, flux_function);
   }
+
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;                        ///< Solid mechanics weak form.
+  std::shared_ptr<ThermalWeakFormType> thermal_weak_form;                    ///< Thermal weak form.
+  std::shared_ptr<DirichletBoundaryConditions> disp_bc;                      ///< Displacement boundary conditions.
+  std::shared_ptr<DirichletBoundaryConditions> temperature_bc;               ///< Temperature boundary conditions.
+  std::shared_ptr<QuasiStaticFirstOrderTimeIntegrationRule> disp_time_rule;  ///< Time integration for displacement.
+  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule>
+      temperature_time_rule;  ///< Time integration for temperature.
 };
 
 /**
@@ -401,6 +401,7 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
   FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
+  /// MRT, does this need to be returned?
   auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, prefix("displacement"));
 
   // Temperature field with backward Euler time integration
@@ -415,10 +416,12 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
 
   // Solid mechanics weak form
-  std::string solid_force_name = prefix("solid_force");
-  field_store->addWeakFormTestField(solid_force_name, disp_type.name);
+  std::string solid_force_name = prefix("solid_residual");
+  field_store->addWeakFormTestField(solid_force_name, disp_type.name); ///< MRT rename to reaction?
   const mfem::ParFiniteElementSpace& disp_test_space = field_store->getField(disp_type.name).get()->space();
   std::vector<const mfem::ParFiniteElementSpace*> disp_input_spaces;
+
+  /// MRT:  have this return the vector of spaces? Simplify
   createSpaces(solid_force_name, *field_store, disp_input_spaces, 0, disp_type, disp_old_type, temperature_type,
                temperature_old_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
 

@@ -35,24 +35,24 @@ namespace smith {
  */
 template <int dim, int disp_order, typename StateSpace, typename... parameter_space>
 struct SolidStaticsWithL2StateSystem : public SystemBase {
-  // Primary weak form: residual for displacement (u).
-  // Inputs: u, u_old, alpha, alpha_old, params...
+  /// Primary weak form: residual for displacement (u).
+  /// Inputs: u, u_old, alpha, alpha_old, params...
   using SolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<disp_order, dim>,
       Parameters<H1<disp_order, dim>, H1<disp_order, dim>, StateSpace, StateSpace, parameter_space...>>;
 
-  // State weak form: residual for state variable (alpha).
-  // Inputs: alpha, alpha_old, u, u_old, params...
+  /// State weak form: residual for state variable (alpha).
+  /// Inputs: alpha, alpha_old, u, u_old, params...
   using StateWeakFormType = TimeDiscretizedWeakForm<
       dim, StateSpace,
       Parameters<StateSpace, StateSpace, H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
 
-  std::shared_ptr<SolidWeakFormType> solid_weak_form;            ///< Solid mechanics weak form.
-  std::shared_ptr<StateWeakFormType> state_weak_form;            ///< State variable weak form.
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;          ///< Displacement boundary conditions.
-  std::shared_ptr<DirichletBoundaryConditions> state_bc;         ///< State variable boundary conditions.
-  std::shared_ptr<QuasiStaticFirstOrderTimeIntegrationRule> disp_time_rule;  ///< Time integration for displacement.
-  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule> state_time_rule; ///< Time integration for state.
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;                           ///< Solid mechanics weak form.
+  std::shared_ptr<StateWeakFormType> state_weak_form;                           ///< State variable weak form.
+  std::shared_ptr<DirichletBoundaryConditions> disp_bc;                         ///< Displacement boundary conditions.
+  std::shared_ptr<DirichletBoundaryConditions> state_bc;                        ///< State variable boundary conditions.
+  std::shared_ptr<QuasiStaticFirstOrderTimeIntegrationRule> disp_time_rule;     ///< Time integration for displacement.
+  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule> state_time_rule;  ///< Time integration for state.
 
   /**
    * @brief Get the list of all state fields.
@@ -60,10 +60,8 @@ struct SolidStaticsWithL2StateSystem : public SystemBase {
    */
   std::vector<FieldState> getStateFields() const
   {
-    return {field_store->getField(prefix("displacement_predicted")),
-            field_store->getField(prefix("displacement")),
-            field_store->getField(prefix("state_predicted")),
-            field_store->getField(prefix("state"))};
+    return {field_store->getField(prefix("displacement_predicted")), field_store->getField(prefix("displacement")),
+            field_store->getField(prefix("state_predicted")), field_store->getField(prefix("state"))};
   }
 
   /**
@@ -131,13 +129,14 @@ struct SolidStaticsWithL2StateSystem : public SystemBase {
 
           // The residual for the state variable:
           // R = alpha_current - evolution_function(...)
-          
-          auto residual_val = evolution_law(t_info, get<VALUE>(alpha_current), get<VALUE>(alpha_old), get<DERIVATIVE>(u_current), params...);
-          
+
+          auto residual_val = evolution_law(t_info, get<VALUE>(alpha_current), get<VALUE>(alpha_old),
+                                            get<DERIVATIVE>(u_current), params...);
+
           // Return {residual, flux}
           // Flux is zero for local evolution
           tensor<double, dim> flux{};
-          return smith::tuple{residual_val, flux}; 
+          return smith::tuple{residual_val, flux};
         });
   }
 
@@ -148,11 +147,8 @@ struct SolidStaticsWithL2StateSystem : public SystemBase {
  * @brief Factory function to build a solid statics system with L2 state variable.
  */
 template <int dim, int disp_order, typename StateSpace, typename... parameter_space>
-SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...> 
-buildSolidStaticsWithL2StateSystem(
-    std::shared_ptr<Mesh> mesh,
-    std::shared_ptr<DifferentiableBlockSolver> solver,
-    std::string prepend_name = "",
+SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...> buildSolidStaticsWithL2StateSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
@@ -190,13 +186,13 @@ buildSolidStaticsWithL2StateSystem(
   std::string solid_res_name = prefix("solid_residual");
   field_store->addWeakFormTestField(solid_res_name, disp_type.name);
   const mfem::ParFiniteElementSpace& solid_test_space = field_store->getField(disp_type.name).get()->space();
-  
-  std::vector<const mfem::ParFiniteElementSpace*> solid_input_spaces;
-  createSpaces(solid_res_name, *field_store, solid_input_spaces, 0, 
-               disp_type, disp_old_type, state_type, state_old_type,
-               FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
 
-  auto solid_weak_form = std::make_shared<typename SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...>::SolidWeakFormType>(
+  std::vector<const mfem::ParFiniteElementSpace*> solid_input_spaces;
+  createSpaces(solid_res_name, *field_store, solid_input_spaces, 0, disp_type, disp_old_type, state_type,
+               state_old_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
+
+  auto solid_weak_form = std::make_shared<
+      typename SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...>::SolidWeakFormType>(
       solid_res_name, field_store->getMesh(), solid_test_space, solid_input_spaces);
 
   // 5. State Weak Form (Residual for alpha)
@@ -206,11 +202,11 @@ buildSolidStaticsWithL2StateSystem(
   const mfem::ParFiniteElementSpace& state_test_space = field_store->getField(state_type.name).get()->space();
 
   std::vector<const mfem::ParFiniteElementSpace*> state_input_spaces;
-  createSpaces(state_res_name, *field_store, state_input_spaces, 0,
-               state_type, state_old_type, disp_type, disp_old_type,
-               FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
+  createSpaces(state_res_name, *field_store, state_input_spaces, 0, state_type, state_old_type, disp_type,
+               disp_old_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
 
-  auto state_weak_form = std::make_shared<typename SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...>::StateWeakFormType>(
+  auto state_weak_form = std::make_shared<
+      typename SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...>::StateWeakFormType>(
       state_res_name, field_store->getMesh(), state_test_space, state_input_spaces);
 
   // 6. Solver and Advancer
@@ -227,4 +223,4 @@ buildSolidStaticsWithL2StateSystem(
       state_time_rule};
 }
 
-} // namespace smith
+}  // namespace smith
