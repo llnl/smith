@@ -8,10 +8,9 @@
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/numerics/solver_config.hpp"
-#include "smith/differentiable_numerics/solid_statics_with_L2_state_system.hpp"
+#include "smith/differentiable_numerics/solid_statics_with_internal_vars_system.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
-// #include "smith/physics/functional_objective.hpp"  // Temporarily commented to isolate build issue
 
 namespace smith {
 
@@ -34,14 +33,12 @@ static constexpr int dim = 3;
 static constexpr int disp_order = 1;
 static constexpr int state_order = 0;
 
-// Temporarily use H1 to test if the issue is specific to L2 elements
-using StateSpace = L2<state_order>;  // L2<state_order>;
+using StateSpace = L2<state_order>;
 
-struct SolidStaticWithStateFixture : public testing::Test {
+struct SolidStaticWithInternalVarsFixture : public testing::Test {
   void SetUp() override
   {
-    StateManager::initialize(datastore, "solid_state");
-    // Create a single element cube
+    StateManager::initialize(datastore, "solid_static_with_internal_vars");
     mesh = std::make_shared<smith::Mesh>(mfem::Mesh::MakeCartesian3D(4, 4, 4, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0),
                                          "mesh", 0, 0);
     mesh->addDomainOfBoundaryElements("bottom", by_attr<dim>(1));  // z=0
@@ -52,15 +49,15 @@ struct SolidStaticWithStateFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh;
 };
 
-// Simple damage-like material: stiffness decreases with state variable alpha
+// Simple damage-like material: stiffness decreases with internal state variable (isv)
 struct DamageMaterial {
   using State = smith::QOI;
 
   double E = 100.0;
   double nu = 0.3;
 
-  template <typename StateType, typename DerivType, typename AlphaType, typename... Params>
-  SMITH_HOST_DEVICE auto operator()(StateType /*state*/, DerivType deriv_u, AlphaType alpha, Params... /*params*/) const
+  template <typename StateType, typename DerivType, typename ISVType, typename... Params>
+  SMITH_HOST_DEVICE auto operator()(StateType /*state*/, DerivType deriv_u, ISVType isv, Params... /*params*/) const
   {
     auto epsilon = sym(deriv_u);
     auto tr_eps = tr(epsilon);
@@ -69,9 +66,8 @@ struct DamageMaterial {
     double lambda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));
     double mu = E / (2.0 * (1.0 + nu));
 
-    // Stiffness degradation: (1 - alpha) * Stress_elastic
-    // Ensure alpha doesn't exceed 0.99 for stability
-    auto damage = alpha;
+    // Stiffness degradation: (1 - isv) * Stress_elastic
+    auto damage = isv;
     if (damage > 1.0) damage = 1.0;
     if (damage < 0.0) damage = 0.0;
 
@@ -82,32 +78,33 @@ struct DamageMaterial {
   }
 };
 
-// Evolution law: alpha_dot = (1 - alpha) * eps_norm
+// Evolution law: isv_dot = (1 - isv) * eps_norm
 //
-// This ODE drives alpha toward 1 as eps_norm increases.
-// For constant eps_norm, the solution is: alpha(t) = 1 - (1 - alpha_0) * exp(-eps_norm * t)
+// This ODE drives isv toward 1 as eps_norm increases.
+// For constant eps_norm, the solution is: isv(t) = 1 - (1 - isv_0) * exp(-eps_norm * t)
 // which asymptotes to 1 as eps_norm -> infinity (fast convergence) or t -> infinity.
 //
-// Residual form returned: alpha_dot - (1 - alpha) * eps_norm = 0
+// Residual form returned: isv_dot - (1 - isv) * eps_norm = 0
 struct StrainNormEvolution {
-  template <typename TimeInfo, typename AlphaType, typename AlphaDotType, typename DerivType, typename... Params>
-  SMITH_HOST_DEVICE auto operator()(TimeInfo /*t_info*/, AlphaType alpha, AlphaDotType alpha_dot, DerivType deriv_u,
+  template <typename TimeInfo, typename ISVType, typename ISVDotType, typename DerivType, typename... Params>
+  SMITH_HOST_DEVICE auto operator()(TimeInfo /*t_info*/, ISVType isv, ISVDotType isv_dot, DerivType deriv_u,
                                     Params... /*params*/) const
   {
     using std::sqrt;
     auto epsilon = sym(deriv_u);
     auto eps_norm = sqrt(inner(epsilon, epsilon));
 
-    // ODE: alpha_dot = (1 - alpha) * eps_norm
-    return alpha_dot - (1.0 - alpha) * eps_norm;
+    // ODE: isv_dot = (1 - isv) * eps_norm
+    return isv_dot - (1.0 - isv) * eps_norm;
   }
 };
 
-TEST_F(SolidStaticWithStateFixture, CoupledSolve)
+TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
 {
   auto solver = buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  auto system = buildSolidStaticsWithL2StateSystem<dim, disp_order, StateSpace>(mesh, solver, "coupled_system");
+  auto system =
+      buildSolidStaticsWithL2StateSystem<dim, disp_order, StateSpace>(mesh, solver, "solid_static_with_internal_vars");
 
   // Material and Evolution
   system.setMaterial(DamageMaterial{}, mesh->entireBodyName());
