@@ -116,15 +116,6 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   InertialReliefProblem(std::vector<smith::FieldPtr> obj_states, std::vector<smith::FieldPtr> all_states,
                         std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<SolidWeakFormT> weak_form,
                         std::vector<std::shared_ptr<smith::ScalarObjective>> constraints);
-<<<<<<< HEAD
-  mfem::Vector residual(const mfem::Vector& u, bool fresh_evaluation) const;
-  mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool fresh_evaluation,
-                                     bool new_deriv) const;
-  mfem::Vector constraint(const mfem::Vector& u, bool fresh_evaluation) const;
-  mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool fresh_evaluation, bool new_deriv);
-  mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool fresh_evaluation, bool new_deriv);
-  virtual ~InertialReliefProblem() {}
-=======
   mfem::Vector residual(const mfem::Vector& u, bool update_fields) const;
   mfem::Vector constraintJacobianTvp(const mfem::Vector& u, const mfem::Vector& l, bool update_fields,
                                      bool fresh_derivative) const;
@@ -132,7 +123,6 @@ class InertialReliefProblem : public EqualityConstrainedHomotopyProblem {
   mfem::HypreParMatrix* constraintJacobian(const mfem::Vector& u, bool update_fields, bool fresh_derivative);
   mfem::HypreParMatrix* residualJacobian(const mfem::Vector& u, bool update_fields, bool fresh_derivative);
   virtual ~InertialReliefProblem();
->>>>>>> develop
 };
 
 int main(int argc, char* argv[])
@@ -473,3 +463,5 @@ mfem::HypreParMatrix* InertialReliefProblem::constraintJacobian(const mfem::Vect
   }
   return dcdu_.get();
 }
+
+InertialReliefProblem::~InertialReliefProblem() {}
