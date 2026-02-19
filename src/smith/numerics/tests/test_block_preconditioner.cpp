@@ -3,6 +3,7 @@
 
 #include "mfem.hpp"
 #include "smith/numerics/block_preconditioner.hpp"
+#include "smith/infrastructure/application_manager.hpp"
 
 using namespace mfem;
 
@@ -450,9 +451,7 @@ TEST(BlockTriangular, WorksForSingleBlockAllTypes)
 
 int main(int argc, char *argv[])
 {
-  MPI_Init(&argc, &argv);
   ::testing::InitGoogleTest(&argc, argv);
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-  return result;
+  smith::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }

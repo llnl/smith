@@ -8,7 +8,6 @@
 
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
-#include "smith/physics/materials/thermal_material.hpp"
 #include "smith/physics/functional_weak_form.hpp"
 
 #include "smith/differentiable_numerics/field_state.hpp"
@@ -31,8 +30,8 @@ using GammaSpace = L2<1>;
 struct MeshFixture : public testing::Test {
   double length = 1.0;
   double width = 1.0;
-  int num_elements_x = 64;
-  int num_elements_y = 64;
+  int num_elements_x = 32;
+  int num_elements_y = 32;
   double elem_size = length / num_elements_x;
  
   void SetUp()
@@ -194,26 +193,42 @@ TEST_F(MeshFixture,B)
     block_offsets_[2] = T2.get()->space().TrueVSize();
     block_offsets_.PartialSum();
     std::vector<std::unique_ptr<mfem::Solver>> solvers;
-    // BoomerAMG solvers for the blocks as before
+    // Case 1: BoomerAMG solvers for the blocks
     // solvers.push_back(std::make_unique<mfem::HypreBoomerAMG>());
     // solvers.push_back(std::make_unique<mfem::HypreBoomerAMG>());
-    // LU direct solvers
-    // smith::LinearSolverOptions direct_solver_options{.linear_solver = smith::LinearSolver::Strumpack};
-    // auto[solver1, precond1] = smith::buildLinearSolverAndPreconditioner(direct_solver_options, mesh->getComm());
-    // auto[solver2, precond2] = smith::buildLinearSolverAndPreconditioner(direct_solver_options, mesh->getComm());
-    // Iterative solver for blocks
-    smith::LinearSolverOptions iter_solver_options = {.linear_solver = smith::LinearSolver::GMRES,
-                                                      .preconditioner = smith::Preconditioner::HypreJacobi,
-                                                      .relative_tol = 1.0e-3,
-                                                      .absolute_tol = 1.0e-6,
-                                                      .max_iterations = 100,
-                                                      .print_level = 1};
-    auto[solver1, precond1] = smith::buildLinearSolverAndPreconditioner(iter_solver_options, mesh->getComm());
-    auto[solver2, precond2] = smith::buildLinearSolverAndPreconditioner(iter_solver_options, mesh->getComm());
+    // Case 2: LU direct solvers
+    smith::LinearSolverOptions direct_solver_options{.linear_solver = smith::LinearSolver::Strumpack};
+    auto[solver1, precond1] = smith::buildLinearSolverAndPreconditioner(direct_solver_options, mesh->getComm());
+    auto[solver2, precond2] = smith::buildLinearSolverAndPreconditioner(direct_solver_options, mesh->getComm());
     solvers.push_back(std::move(solver1));
     solvers.push_back(std::move(solver2));
+    // Case 3: Iterative solver for blocks
+    // smith::LinearSolverOptions iter_solver_options = {.linear_solver = smith::LinearSolver::GMRES,
+    //                                                   .preconditioner = smith::Preconditioner:HypreAMG,
+    //                                                   .relative_tol = 1.0e-3,
+    //                                                   .absolute_tol = 1.0e-6,
+    //                                                   .max_iterations = 100,
+    //                                                   .print_level = 1};
+    // auto[solver1, precond1] = smith::buildLinearSolverAndPreconditioner(iter_solver_options, mesh->getComm());
+    // auto[solver2, precond2] = smith::buildLinearSolverAndPreconditioner(iter_solver_options, mesh->getComm());
+    // solvers.push_back(std::move(solver1));
+    // solvers.push_back(std::move(solver2));
+    // Case A: Block Diagonal preconditioner
     // std::unique_ptr<mfem::Solver> diff_precond = std::make_unique<smith::BlockDiagonalPreconditioner>(block_offsets_, std::move(solvers));
-    std::unique_ptr<mfem::Solver> diff_precond = std::make_unique<smith::BlockTriangularPreconditioner>(block_offsets_, std::move(solvers), smith::BlockTriangularType::Symmetric);
+    // Case B: Block Triangular preconditioner (lower)
+    // std::unique_ptr<mfem::Solver> diff_precond = std::make_unique<smith::BlockTriangularPreconditioner>(block_offsets_, std::move(solvers), smith::BlockTriangularType::Lower);
+    // Case C: Block Triangular preconditioner (upper)
+    // std::unique_ptr<mfem::Solver> diff_precond = std::make_unique<smith::BlockTriangularPreconditioner>(block_offsets_, std::move(solvers), smith::BlockTriangularType::Lower);
+    // Case D: Block Triangular preconditioner (symmetric)
+    // std::unique_ptr<mfem::Solver> diff_precond = std::make_unique<smith::BlockTriangularPreconditioner>(block_offsets_, std::move(solvers), smith::BlockTriangularType::Lower);
+    // Case E: Block Schur complement factorization  (Lower)
+    // std::unique_ptr<mfem::Solver> diff_precond = std::make_unique<smith::BlockSchurPreconditioner>(block_offsets_, std::move(solvers), smith::BlockSchurType::Lower);
+    // Case F: Block Schur complement factorization  (Lower)
+    // std::unique_ptr<mfem::Solver> diff_precond = std::make_unique<smith::BlockSchurPreconditioner>(block_offsets_, std::move(solvers), smith::BlockSchurType::Upper);
+    // Case G: Block Schur complement factorization  (Lower)
+    // std::unique_ptr<mfem::Solver> diff_precond = std::make_unique<smith::BlockSchurPreconditioner>(block_offsets_, std::move(solvers), smith::BlockSchurType::Diagonal);
+    // Case H: Block Schur complement factorization  (Lower)
+    std::unique_ptr<mfem::Solver> diff_precond = std::make_unique<smith::BlockSchurPreconditioner>(block_offsets_, std::move(solvers), smith::BlockSchurType::Full);
     std::unique_ptr<mfem::Solver> linear_solver = std::make_unique<mfem::GMRESSolver>(mesh->getComm());
     mfem::GMRESSolver* iter_lin_solver = dynamic_cast<mfem::GMRESSolver*>(linear_solver.get());
 
@@ -248,12 +263,6 @@ TEST_F(MeshFixture,B)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  MPI_Init(&argc, &argv);
-
-  axom::slic::SimpleLogger logger;
-
-  int result = RUN_ALL_TESTS();
-  MPI_Finalize();
-
-  return result;
+  smith::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
 }
