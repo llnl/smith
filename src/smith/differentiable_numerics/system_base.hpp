@@ -29,7 +29,7 @@ struct SystemBase {
   std::shared_ptr<DifferentiableBlockSolver> solver;  ///< The solver for the system.
   std::shared_ptr<StateAdvancer> advancer;            ///< The state advancer.
   std::vector<FieldState> parameter_fields;           ///< Optional parameter fields.
-  std::string prepend_name_;
+  std::string prepend_name_;                          ///< Optional prepended name for all fields.
 
   /**
    * @brief Get the list of all parameter fields.

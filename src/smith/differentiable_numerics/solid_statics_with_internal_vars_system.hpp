@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file solid_statics_with_L2_state_system.hpp
- * @brief Defines the SolidStaticsWithL2StateSystem struct and its factory function
+ * @file solid_statics_with_internal_vars_system.hpp
+ * @brief Defines the SolidStaticsWithInternalVarsSystem struct and its factory function
  */
 
 #pragma once
@@ -34,15 +34,17 @@ namespace smith {
  * @tparam parameter_space Parameter spaces for material properties.
  */
 template <int dim, int disp_order, typename StateSpace, typename... parameter_space>
-struct SolidStaticsWithL2StateSystem : public SystemBase {
+struct SolidStaticsWithInternalVarsSystem : public SystemBase {
   // Primary weak form: residual for displacement (u).
   // Inputs: u, u_old, alpha, alpha_old, params...
+  /// using
   using SolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<disp_order, dim>,
       Parameters<H1<disp_order, dim>, H1<disp_order, dim>, StateSpace, StateSpace, parameter_space...>>;
 
   // State weak form: residual for state variable (alpha).
   // Inputs: alpha, alpha_old, u, u_old, params...
+  /// using
   using StateWeakFormType = TimeDiscretizedWeakForm<
       dim, StateSpace,
       Parameters<StateSpace, StateSpace, H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
@@ -149,7 +151,7 @@ struct SolidStaticsWithL2StateSystem : public SystemBase {
  * @brief Factory function to build a solid statics system with L2 state variable.
  */
 template <int dim, int disp_order, typename StateSpace, typename... parameter_space>
-SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...> buildSolidStaticsWithL2StateSystem(
+SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space...> buildSolidStaticsWithL2StateSystem(
     std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
@@ -187,7 +189,7 @@ SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...> b
   // Inputs: u, u_old, alpha, alpha_old, params...
   std::string solid_res_name = prefix("solid_residual");
   auto solid_weak_form = std::make_shared<
-      typename SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...>::SolidWeakFormType>(
+      typename SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space...>::SolidWeakFormType>(
       solid_res_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
       field_store->createSpaces(solid_res_name, disp_type.name, disp_type, disp_old_type, state_type, state_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
@@ -196,7 +198,7 @@ SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...> b
   // Inputs: alpha, alpha_old, u, u_old, params...
   std::string state_res_name = prefix("state_residual");
   auto state_weak_form = std::make_shared<
-      typename SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...>::StateWeakFormType>(
+      typename SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space...>::StateWeakFormType>(
       state_res_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
       field_store->createSpaces(state_res_name, state_type.name, state_type, state_old_type, disp_type, disp_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
@@ -205,7 +207,7 @@ SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...> b
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, state_weak_form};
   auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
 
-  return SolidStaticsWithL2StateSystem<dim, disp_order, StateSpace, parameter_space...>{
+  return SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space...>{
       {field_store, solver, advancer, parameter_fields, prepend_name},
       solid_weak_form,
       state_weak_form,

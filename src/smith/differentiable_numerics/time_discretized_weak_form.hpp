@@ -116,7 +116,8 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
     });
   }
 
-  /// @overload - defaults to all parameters
+  /// defaults to use all parameters
+  /// @overload
   template <typename BodyLoadType>
   void addBodySource(std::string body_name, BodyLoadType load_function)
   {
@@ -144,7 +145,8 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
     });
   }
 
-  /// @overload - defaults to all parameters
+  /// defaults to use all parameters
+  /// @overload
   template <typename BoundaryIntegralType>
   void addBoundaryIntegral(std::string boundary_name, BoundaryIntegralType integrand)
   {
@@ -173,7 +175,8 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
                           });
   }
 
-  /// @overload - defaults to all parameters
+  /// defaults to use all parameters
+  /// @overload
   template <typename BoundaryFluxType>
   void addBoundaryFlux(std::string boundary_name, BoundaryFluxType flux_function)
   {
@@ -202,7 +205,8 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
                                       });
   }
 
-  /// @overload - defaults to all parameters
+  /// defaults to use all parameters
+  /// @overload
   template <typename InteriorIntegralType>
   void addInteriorBoundaryIntegral(std::string interior_name, InteriorIntegralType integrand)
   {
