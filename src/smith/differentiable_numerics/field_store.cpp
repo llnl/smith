@@ -209,12 +209,12 @@ size_t FieldStore::getUnknownIndex(const std::string& field_name) const { return
 
 void FieldStore::setField(size_t index, FieldState updated_field) { states_[index] = updated_field; }
 
-void FieldStore::addWeakFormTestField(std::string weak_form_name, std::string field_name)
+void FieldStore::addWeakFormReaction(std::string weak_form_name, std::string field_name)
 {
   weak_form_to_test_field_[weak_form_name] = field_name;
 }
 
-std::string FieldStore::getWeakFormTestField(const std::string& weak_form_name) const
+std::string FieldStore::getWeakFormReaction(const std::string& weak_form_name) const
 {
   return weak_form_to_test_field_.at(weak_form_name);
 }

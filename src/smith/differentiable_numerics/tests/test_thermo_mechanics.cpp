@@ -161,8 +161,8 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
   system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
 
-  system.addThermalHeatSource(mesh_->entireBodyName(), [](auto /*t*/, auto /*x*/, auto /*T*/, auto /*T_dot*/,
-                                                          auto /*u*/, auto /*E_param*/) { return 100.0; });
+  system.addThermalHeatSource(mesh_->entireBodyName(), [](auto /*t*/, auto /*x*/, auto /*u*/, auto /*v*/, auto /*T*/,
+                                                          auto /*T_dot*/, auto /*E_param*/) { return 100.0; });
 
   std::string pv_dir = "paraview_thermo_mechanics";
   auto pv_writer = smith::createParaviewWriter(*mesh_, system.getStateFields(), pv_dir);
@@ -358,30 +358,31 @@ TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
 
   // Add Solid Body Force (Gravity)
-  system.addSolidBodyForce(mesh_->entireBodyName(),
-                           [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*T*/, auto... /*params*/) {
-                             tensor<double, dim> f{};
-                             f[1] = -9.81;
-                             return f;
-                           });
+  system.addSolidBodyForce(mesh_->entireBodyName(), [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*T*/,
+                                                       auto /*T_dot*/, auto... /*params*/) {
+    tensor<double, dim> f{};
+    f[1] = -9.81;
+    return f;
+  });
 
   // Add Solid Traction
-  system.addSolidTraction(
-      "right", [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*T*/, auto... /*params*/) {
-        tensor<double, dim> t{};
-        t[0] = 1.0;
-        return t;
-      });
+  system.addSolidTraction("right", [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*T*/,
+                                      auto /*T_dot*/, auto... /*params*/) {
+    tensor<double, dim> t{};
+    t[0] = 1.0;
+    return t;
+  });
 
   // Add Thermal Heat Source
-  system.addThermalHeatSource(mesh_->entireBodyName(), [](double /*time*/, auto /*X*/, auto /*T*/, auto /*T_dot*/,
-                                                          auto /*u*/, auto... /*params*/) { return 10.0; });
+  system.addThermalHeatSource(mesh_->entireBodyName(),
+                              [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*T*/, auto /*T_dot*/,
+                                 auto... /*params*/) { return 10.0; });
 
   // Add Thermal Heat Flux
-  system.addThermalHeatFlux(
-      "left", [](double /*time*/, auto /*X*/, auto /*n*/, auto /*T*/, auto /*T_dot*/, auto /*u*/, auto... /*params*/) {
-        return 5.0;  // Flux into domain
-      });
+  system.addThermalHeatFlux("left", [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*T*/,
+                                       auto /*T_dot*/, auto... /*params*/) {
+    return 5.0;  // Flux into domain
+  });
 
   system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"),
                                     [](double /*t*/, smith::tensor<double, dim> X) { return 0.0 * X; });
@@ -413,7 +414,7 @@ TEST_F(ThermoMechanicsMeshFixture, PressureBC)
 
   // Apply pressure on right side
   double pressure_mag = 0.1;
-  system.addPressure("right", [pressure_mag](double, auto, auto...) { return pressure_mag; });
+  system.addPressure("right", [pressure_mag](double, auto, auto, auto, auto, auto, auto...) { return pressure_mag; });
 
   auto shape_disp = system.field_store->getShapeDisp();
   auto states = system.getStateFields();

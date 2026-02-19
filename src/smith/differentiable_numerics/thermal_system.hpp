@@ -148,15 +148,11 @@ ThermalSystem<dim, temp_order, parameter_space...> buildThermalSystem(std::share
 
   // Thermal weak form
   std::string thermal_flux_name = prefix("thermal_flux");
-  field_store->addWeakFormTestField(thermal_flux_name, temperature_type.name);
-  const mfem::ParFiniteElementSpace& temp_test_space = field_store->getField(temperature_type.name).get()->space();
-  std::vector<const mfem::ParFiniteElementSpace*> temp_input_spaces;
-  createSpaces(thermal_flux_name, *field_store, temp_input_spaces, 0, temperature_type,
-               FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
-
   auto thermal_weak_form =
       std::make_shared<typename ThermalSystem<dim, temp_order, parameter_space...>::ThermalWeakFormType>(
-          thermal_flux_name, field_store->getMesh(), temp_test_space, temp_input_spaces);
+          thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
+          field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type,
+                                    FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   // Build solver and advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{thermal_weak_form};

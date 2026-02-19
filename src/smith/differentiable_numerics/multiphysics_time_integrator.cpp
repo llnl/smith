@@ -43,7 +43,7 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
   std::vector<ReactionState> reactions;
   for (const auto& wf : weak_forms_) {
     std::vector<FieldState> wf_fields = field_store_->getStatesFromVectors(wf->name(), states_for_reactions, params);
-    std::string test_field_name = field_store_->getWeakFormTestField(wf->name());
+    std::string test_field_name = field_store_->getWeakFormReaction(wf->name());
     size_t test_field_idx = field_store_->getFieldIndex(test_field_name);
     FieldState test_field = states_for_reactions[test_field_idx];
     reactions.push_back(smith::evaluateWeakForm(wf, time_info, shape_disp, wf_fields, test_field));

@@ -79,18 +79,14 @@ class SolidMechanicsTimeIntegrator : public StateAdvancer {
     (field_store->addParameter(parameter_types), ...);
 
     // Create solid mechanics weak form (u, u_old, v_old, a_old)
-    field_store->addWeakFormTestField(physics_name, disp_type.name);
-    const mfem::ParFiniteElementSpace& test_space = field_store->getField(disp_type.name).get()->space();
-    std::vector<const mfem::ParFiniteElementSpace*> input_spaces;
-    createSpaces(physics_name, *field_store, input_spaces, 0, disp_type, disp_old_type, velo_old_type, accel_old_type,
-                 parameter_types...);
-
     using SolidWeakFormType =
         TimeDiscretizedWeakForm<spatial_dim, VectorSpace,
                                 Parameters<VectorSpace, VectorSpace, VectorSpace, VectorSpace, ParamSpaces...>>;
 
-    auto solid_weak_form =
-        std::make_shared<SolidWeakFormType>(physics_name, field_store->getMesh(), test_space, input_spaces);
+    auto solid_weak_form = std::make_shared<SolidWeakFormType>(
+        physics_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
+        field_store->createSpaces(physics_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
+                                  parameter_types...));
 
     // Create cycle-zero weak form (u, v, a) for initial acceleration solve at cycle=0
     auto cycle_zero_weak_form =

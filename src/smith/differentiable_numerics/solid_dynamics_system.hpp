@@ -318,29 +318,22 @@ SolidDynamicsSystem<dim, order, parameter_space...> buildSolidDynamicsSystem(
 
   // Create solid mechanics weak form (u, u_old, v_old, a_old)
   std::string force_name = prefix("solid_force");
-  field_store->addWeakFormTestField(force_name, disp_type.name);
-  const mfem::ParFiniteElementSpace& test_space = field_store->getField(disp_type.name).get()->space();
-  std::vector<const mfem::ParFiniteElementSpace*> input_spaces;
-  createSpaces(force_name, *field_store, input_spaces, 0, disp_type, disp_old_type, velo_old_type, accel_old_type,
-               FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
-
   auto solid_weak_form =
       std::make_shared<typename SolidDynamicsSystem<dim, order, parameter_space...>::SolidWeakFormType>(
-          force_name, field_store->getMesh(), test_space, input_spaces);
+          force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
+          field_store->createSpaces(force_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
+                                    FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   // Create cycle-zero weak form (u, u_old, v_old, a) for initial acceleration solve
   // Note: We solve R(u_0, v_0, a_0) = 0 for a_0.
   // We include history terms to keep trial space indices consistent with solid_weak_form.
   std::string cycle_zero_name = prefix("solid_reaction");
-  field_store->addWeakFormTestField(cycle_zero_name, accel_old_type.name);
-  const mfem::ParFiniteElementSpace& cycle_zero_test_space = field_store->getField(accel_old_type.name).get()->space();
-  std::vector<const mfem::ParFiniteElementSpace*> cycle_zero_input_spaces;
-  createSpaces(cycle_zero_name, *field_store, cycle_zero_input_spaces, 0, disp_type, disp_old_type, velo_old_type,
-               accel_old_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
-
   auto cycle_zero_weak_form =
       std::make_shared<typename SolidDynamicsSystem<dim, order, parameter_space...>::CycleZeroWeakFormType>(
-          cycle_zero_name, field_store->getMesh(), cycle_zero_test_space, cycle_zero_input_spaces);
+          cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
+          field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, disp_old_type, velo_old_type,
+                                    accel_old_type,
+                                    FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   // Build advancer using SolidMechanicsTimeIntegrator which wraps MultiphysicsTimeIntegrator
   // and handles the initial acceleration solve at cycle=0

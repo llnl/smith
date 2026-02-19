@@ -37,7 +37,7 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> SolidMechanicsTim
     }
 
     // The test field of cycle_zero_weak_form is the field we need to solve for (acceleration)
-    std::string test_field_name = field_store_->getWeakFormTestField(cycle_zero_weak_form_->name());
+    std::string test_field_name = field_store_->getWeakFormReaction(cycle_zero_weak_form_->name());
 
     // Get the weak form's state fields
     std::vector<FieldState> wf_fields = field_store_->getStates(cycle_zero_weak_form_->name());

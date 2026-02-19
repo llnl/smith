@@ -84,10 +84,18 @@ struct FieldStore {
   }
 
   /**
-   * @brief Add an independent field (an unknown) to the store.
+   * @brief Add an independent field (a solver unknown) to the store.
+   *
+   * Registers the field as an unknown and assigns it an index in the solver's block structure.
+   * The @p type argument is mutated in-place: its @c unknown_index is set to the assigned index,
+   * so the same @c FieldType<Space> object can later be passed to @c createSpaces to tell the
+   * weak form that this argument is an active unknown (i.e. the Jacobian should be computed
+   * with respect to it).
+   *
    * @tparam Space The finite element space type.
-   * @param type The field type specification.
-   * @param time_rule The time integration rule for this field.
+   * @param type The field type specification; @c type.unknown_index is set on return.
+   * @param time_rule The time integration rule governing how this unknown and its dependents
+   *        are related across time steps.
    * @return std::shared_ptr<DirichletBoundaryConditions> The boundary conditions for this field.
    */
   template <typename Space>
@@ -115,12 +123,32 @@ struct FieldStore {
   }
 
   /**
-   * @brief Add a dependent field (e.g., history, velocity, acceleration) to the store.
-   * @tparam Space The finite element space type.
-   * @param independent_field The independent field this field depends on.
-   * @param derivative The type of time derivative this field represents.
-   * @param name_override Optional name override for the dependent field.
-   * @return FieldType<Space> The added dependent field's type specification.
+   * @brief Add a dependent field (history value, velocity, or acceleration) to the store.
+   *
+   * Creates and registers a new field that carries the previous time-step value of a particular
+   * time derivative of an independent field.  The relationship is recorded in the
+   * @c TimeIntegrationMapping for the parent independent field so that, at evaluation time, the
+   * time integration rule can reconstruct the current rate from the pair
+   * (predicted_value, stored_old_value).
+   *
+   * **Return value:** a @c FieldType<Space> whose @c name is the name of the newly registered
+   * field.  This object is intentionally returned (rather than discarded) so that callers can
+   * pass it directly to @c createSpaces when assembling the weak-form argument list.  The
+   * position at which a @c FieldType appears in that argument list determines which slot of the
+   * lambda the field occupies at quadrature-point evaluation time, which is how the time
+   * integration rules reconstruct quantities such as
+   * @f$ \dot{\alpha} = (\alpha_\text{predicted} - \alpha_\text{old}) / \Delta t @f$.
+   *
+   * The field name is derived automatically from the independent field's name plus a suffix that
+   * reflects the derivative level (@c _old for VALUE, @c _dot_old for DOT,
+   * @c _ddot_old for DDOT), unless @p name_override is supplied.
+   *
+   * @tparam Space The finite element space type (must match the independent field).
+   * @param independent_field The @c FieldType of the independent (predicted) field.
+   * @param derivative Which time-derivative level this history field stores.
+   * @param name_override If non-empty, use this as the field name instead of the auto-generated one.
+   * @return FieldType<Space> Type descriptor for the newly created dependent field; pass this to
+   *         @c createSpaces to register it as a weak-form argument.
    */
   template <typename Space>
   auto addDependent(FieldType<Space> independent_field, TimeDerivative derivative, std::string name_override = "")
@@ -175,18 +203,58 @@ struct FieldStore {
   void addWeakFormArg(std::string weak_form_name, std::string argument_name, size_t argument_index);
 
   /**
-   * @brief Register the test field for a weak form.
+   * @brief Register the reaction (test) field for a weak form.
+   *
+   * The reaction field is the field whose test function space the weak form integrates against.
+   * It determines which field's degrees of freedom the assembled residual is "returned to"
+   * (i.e. the field whose force/flux vector is populated).
+   *
    * @param weak_form_name Name of the weak form.
-   * @param field_name Name of the test field.
+   * @param field_name Name of the reaction field.
    */
-  void addWeakFormTestField(std::string weak_form_name, std::string field_name);
+  void addWeakFormReaction(std::string weak_form_name, std::string field_name);
 
   /**
-   * @brief Get the name of the test field for a weak form.
+   * @brief Get the name of the reaction (test) field for a weak form.
    * @param weak_form_name Name of the weak form.
-   * @return std::string Name of the test field.
+   * @return std::string Name of the reaction field.
    */
-  std::string getWeakFormTestField(const std::string& weak_form_name) const;
+  std::string getWeakFormReaction(const std::string& weak_form_name) const;
+
+  /**
+   * @brief Register all input fields for a weak form and return their FE spaces.
+   *
+   * This is the primary setup method for constructing a weak form.  It:
+   *   1. Registers @p reaction_field_name as the reaction/test field via @c addWeakFormReaction.
+   *   2. Iterates over every @c FieldType in @p types (in order), registering each as an input
+   *      argument to the weak form and recording whether it is an active unknown.
+   *   3. Returns the ordered vector of finite element spaces, which can be passed directly to
+   *      the @c TimeDiscretizedWeakForm constructor without creating a named temporary.
+   *
+   * @param weak_form_name  Name of the weak form being constructed.
+   * @param reaction_field_name  Name of the test/reaction field (may differ from the first input).
+   * @param types  Ordered list of @c FieldType descriptors for every input argument.
+   * @return std::vector<const mfem::ParFiniteElementSpace*> Ordered input FE spaces.
+   */
+  template <typename... FieldTypes>
+  std::vector<const mfem::ParFiniteElementSpace*> createSpaces(const std::string& weak_form_name,
+                                                               const std::string& reaction_field_name,
+                                                               FieldTypes... types)
+  {
+    addWeakFormReaction(weak_form_name, reaction_field_name);
+    std::vector<const mfem::ParFiniteElementSpace*> spaces;
+    size_t arg_num = 0;
+    auto register_field = [&](auto type) {
+      spaces.push_back(&getField(type.name).get()->space());
+      addWeakFormArg(weak_form_name, type.name, arg_num);
+      if (type.unknown_index >= 0) {
+        addWeakFormUnknownArg(weak_form_name, type.name, arg_num);
+      }
+      ++arg_num;
+    };
+    (register_field(types), ...);
+    return spaces;
+  }
 
   /**
    * @brief Mapping between primary and history/derivative fields for time integration.
@@ -349,37 +417,18 @@ struct FieldStore {
 };
 
 /**
- * @brief Helper function to recursively register finite element spaces for a weak form.
- */
-template <typename FirstType, typename... Types>
-void createSpaces(const std::string& weak_form_name, FieldStore& field_store,
-                  std::vector<const mfem::ParFiniteElementSpace*>& spaces, size_t arg_num, FirstType type,
-                  Types... types)
-{
-  SLIC_ERROR_IF(spaces.size() != arg_num, "Error creating spaces recursively");
-  spaces.push_back(&field_store.getField(type.name).get()->space());
-  field_store.addWeakFormArg(weak_form_name, type.name, arg_num);
-  if (type.unknown_index >= 0) {
-    field_store.addWeakFormUnknownArg(weak_form_name, type.name, arg_num);
-  }
-  if constexpr (sizeof...(types) > 0) {
-    createSpaces(weak_form_name, field_store, spaces, arg_num + 1, types...);
-  }
-}
-
-/**
  * @brief Create a TimeDiscretizedWeakForm and register its fields in the FieldStore.
+ *
+ * Thin convenience wrapper: registers @p test_type as the reaction field, registers all
+ * @p field_types as input arguments, and constructs the weak form in one call.
  */
 template <int spatial_dim, typename TestSpaceType, typename... InputSpaceTypes>
 auto createWeakForm(std::string name, FieldType<TestSpaceType> test_type, FieldStore& field_store,
                     FieldType<InputSpaceTypes>... field_types)
 {
-  field_store.addWeakFormTestField(name, test_type.name);
-  const mfem::ParFiniteElementSpace& test_space = field_store.getField(test_type.name).get()->space();
-  std::vector<const mfem::ParFiniteElementSpace*> input_spaces;
-  createSpaces(name, field_store, input_spaces, 0, field_types...);
   return std::make_shared<TimeDiscretizedWeakForm<spatial_dim, TestSpaceType, Parameters<InputSpaceTypes...>>>(
-      name, field_store.getMesh(), test_space, input_spaces);
+      name, field_store.getMesh(), field_store.getField(test_type.name).get()->space(),
+      field_store.createSpaces(name, test_type.name, field_types...));
 }
 
 }  // namespace smith

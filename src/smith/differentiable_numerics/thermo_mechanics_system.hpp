@@ -128,7 +128,7 @@ struct ThermoMechanicsSystem : public SystemBase {
    * @tparam BodyForceType The body force function type.
    * @param depends_on Dependency specification for which input fields to pass.
    * @param domain_name The name of the domain to apply the force to.
-   * @param force_function The force function (t, X, selected time-integrated inputs...).
+   * @param force_function The force function (t, X, u, v, T, T_dot, selected params...).
    * @note Time integration is applied to the state fields before calling the user function.
    */
   template <int... active_parameters, typename BodyForceType>
@@ -145,8 +145,9 @@ struct ThermoMechanicsSystem : public SystemBase {
           auto u_current = captured_disp_rule->value(t_info, u, u_old);
           auto v_current = captured_disp_rule->dot(t_info, u, u_old);
           auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
+          auto T_dot = captured_temp_rule->dot(t_info, temperature, temperature_old);
 
-          return force_function(t_info.time(), X, u_current, v_current, current_T, params...);
+          return force_function(t_info.time(), X, u_current, v_current, current_T, T_dot, params...);
         });
   }
 
@@ -154,7 +155,7 @@ struct ThermoMechanicsSystem : public SystemBase {
    * @brief Add a body force to the solid mechanics part of the system.
    * @tparam BodyForceType The body force function type.
    * @param domain_name The name of the domain to apply the force to.
-   * @param force_function The force function (t, X, u, v, T, params...).
+   * @param force_function The force function (t, X, u, v, T, T_dot, params...).
    */
   template <typename BodyForceType>
   void addSolidBodyForce(const std::string& domain_name, BodyForceType force_function)
@@ -168,7 +169,7 @@ struct ThermoMechanicsSystem : public SystemBase {
    * @tparam SurfaceFluxType The surface flux function type.
    * @param depends_on Dependency specification for which input fields to pass.
    * @param domain_name The name of the boundary domain to apply the flux to.
-   * @param flux_function The flux function (t, X, n, selected time-integrated inputs...).
+   * @param flux_function The flux function (t, X, n, u, v, T, T_dot, selected params...).
    * @note Time integration is applied to the state fields before calling the user function.
    */
   template <int... active_parameters, typename SurfaceFluxType>
@@ -185,8 +186,9 @@ struct ThermoMechanicsSystem : public SystemBase {
           auto u_current = captured_disp_rule->value(t_info, u, u_old);
           auto v_current = captured_disp_rule->dot(t_info, u, u_old);
           auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
+          auto T_dot = captured_temp_rule->dot(t_info, temperature, temperature_old);
 
-          return flux_function(t_info.time(), X, n, u_current, v_current, current_T, params...);
+          return flux_function(t_info.time(), X, n, u_current, v_current, current_T, T_dot, params...);
         });
   }
 
@@ -194,7 +196,7 @@ struct ThermoMechanicsSystem : public SystemBase {
    * @brief Add a surface flux (traction) to the solid mechanics part of the system.
    * @tparam SurfaceFluxType The surface flux function type.
    * @param domain_name The name of the boundary domain to apply the flux to.
-   * @param flux_function The flux function (t, X, n, u, v, T, params...).
+   * @param flux_function The flux function (t, X, n, u, v, T, T_dot, params...).
    */
   template <typename SurfaceFluxType>
   void addSolidTraction(const std::string& domain_name, SurfaceFluxType flux_function)
@@ -208,7 +210,7 @@ struct ThermoMechanicsSystem : public SystemBase {
    * @tparam BodySourceType The body source function type.
    * @param depends_on Dependency specification for which input fields to pass.
    * @param domain_name The name of the domain to apply the source to.
-   * @param source_function The source function (t, X, selected time-integrated inputs...).
+   * @param source_function The source function (t, X, u, v, T, T_dot, selected params...).
    * @note Time integration is applied to the state fields before calling the user function.
    */
   template <int... active_parameters, typename BodySourceType>
@@ -222,11 +224,12 @@ struct ThermoMechanicsSystem : public SystemBase {
         depends_on, domain_name,
         [=](auto t_info, auto X, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
           // Apply time integration to get current state
+          auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
+          auto v_current = captured_disp_rule->dot(t_info, disp, disp_old);
           auto T_current = captured_temp_rule->value(t_info, T, T_old);
           auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-          auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
 
-          return source_function(t_info.time(), X, T_current, T_dot, current_u, params...);
+          return source_function(t_info.time(), X, current_u, v_current, T_current, T_dot, params...);
         });
   }
 
@@ -234,7 +237,7 @@ struct ThermoMechanicsSystem : public SystemBase {
    * @brief Add a body source (heat source) to the thermal part of the system.
    * @tparam BodySourceType The body source function type.
    * @param domain_name The name of the domain to apply the source to.
-   * @param source_function The source function (t, X, T, T_dot, u, params...).
+   * @param source_function The source function (t, X, u, v, T, T_dot, params...).
    */
   template <typename BodySourceType>
   void addThermalHeatSource(const std::string& domain_name, BodySourceType source_function)
@@ -249,7 +252,7 @@ struct ThermoMechanicsSystem : public SystemBase {
    * @tparam SurfaceFluxType The surface flux function type.
    * @param depends_on Dependency specification for which input fields to pass.
    * @param domain_name The name of the boundary domain to apply the flux to.
-   * @param flux_function The flux function (t, X, n, selected time-integrated inputs...).
+   * @param flux_function The flux function (t, X, n, u, v, T, T_dot, selected params...).
    * @note Time integration is applied to the state fields before calling the user function.
    */
   template <int... active_parameters, typename SurfaceFluxType>
@@ -263,11 +266,12 @@ struct ThermoMechanicsSystem : public SystemBase {
         depends_on, domain_name,
         [=](auto t_info, auto X, auto n, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
           // Apply time integration to get current state
+          auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
+          auto v_current = captured_disp_rule->dot(t_info, disp, disp_old);
           auto T_current = captured_temp_rule->value(t_info, T, T_old);
           auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-          auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
 
-          return -flux_function(t_info.time(), X, n, T_current, T_dot, current_u, params...);
+          return -flux_function(t_info.time(), X, n, current_u, v_current, T_current, T_dot, params...);
         });
   }
 
@@ -275,7 +279,7 @@ struct ThermoMechanicsSystem : public SystemBase {
    * @brief Add a surface flux (heat flux) to the thermal part of the system.
    * @tparam SurfaceFluxType The surface flux function type.
    * @param domain_name The name of the boundary domain to apply the flux to.
-   * @param flux_function The flux function (t, X, n, T, T_dot, u, params...).
+   * @param flux_function The flux function (t, X, n, u, v, T, T_dot, params...).
    */
   template <typename SurfaceFluxType>
   void addThermalHeatFlux(const std::string& domain_name, SurfaceFluxType flux_function)
@@ -290,7 +294,7 @@ struct ThermoMechanicsSystem : public SystemBase {
    * @tparam PressureType The pressure function type.
    * @param depends_on Dependency specification for which input fields to pass.
    * @param domain_name The name of the boundary domain.
-   * @param pressure_function The pressure function (t, X, selected time-integrated inputs...).
+   * @param pressure_function The pressure function (t, X, u, v, T, T_dot, selected params...).
    * @note Pressure is applied in the current configuration: P * n_deformed.
    * @note Time integration is applied to the state fields before calling the user function.
    */
@@ -299,19 +303,24 @@ struct ThermoMechanicsSystem : public SystemBase {
                    PressureType pressure_function)
   {
     auto captured_disp_rule = disp_time_rule;
+    auto captured_temp_rule = temperature_time_rule;
 
     solid_weak_form->addBoundaryIntegral(
         depends_on, domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto /*temperature*/, auto /*temperature_old*/, auto... params) {
+        [=](auto t_info, auto X, auto u, auto u_old, auto temperature, auto temperature_old, auto... params) {
           // Apply time integration to get current state
           auto u_current = captured_disp_rule->value(t_info, u, u_old);
+          auto v_current = captured_disp_rule->dot(t_info, u, u_old);
+          auto T_current = captured_temp_rule->value(t_info, temperature, temperature_old);
+          auto T_dot = captured_temp_rule->dot(t_info, temperature, temperature_old);
 
           // Compute deformed normal and apply correction for reference configuration integration
           auto x_current = X + u_current;
           auto n_deformed = cross(get<DERIVATIVE>(x_current));
           auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
 
-          auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(params)...);
+          auto pressure = pressure_function(t_info.time(), get<VALUE>(X), u_current, v_current, T_current, T_dot,
+                                            get<VALUE>(params)...);
 
           // Return traction vector (force)
           return pressure * n_deformed * (1.0 / n_shape_norm);
@@ -322,7 +331,7 @@ struct ThermoMechanicsSystem : public SystemBase {
    * @brief Add a pressure boundary condition (follower force) to the solid mechanics part of the system.
    * @tparam PressureType The pressure function type.
    * @param domain_name The name of the boundary domain.
-   * @param pressure_function The pressure function (t, X, params...).
+   * @param pressure_function The pressure function (t, X, u, v, T, T_dot, params...).
    * @note Pressure is applied in the current configuration: P * n_deformed.
    */
   template <typename PressureType>
@@ -416,27 +425,21 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
 
   // Solid mechanics weak form
   std::string solid_force_name = prefix("solid_force");
-  field_store->addWeakFormTestField(solid_force_name, disp_type.name);
-  const mfem::ParFiniteElementSpace& disp_test_space = field_store->getField(disp_type.name).get()->space();
-  std::vector<const mfem::ParFiniteElementSpace*> disp_input_spaces;
-  createSpaces(solid_force_name, *field_store, disp_input_spaces, 0, disp_type, disp_old_type, temperature_type,
-               temperature_old_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
-
   auto solid_weak_form = std::make_shared<
       typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::SolidWeakFormType>(
-      solid_force_name, field_store->getMesh(), disp_test_space, disp_input_spaces);
+      solid_force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
+      field_store->createSpaces(solid_force_name, disp_type.name, disp_type, disp_old_type, temperature_type,
+                                temperature_old_type,
+                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   // Thermal weak form
   std::string thermal_flux_name = prefix("thermal_flux");
-  field_store->addWeakFormTestField(thermal_flux_name, temperature_type.name);
-  const mfem::ParFiniteElementSpace& temp_test_space = field_store->getField(temperature_type.name).get()->space();
-  std::vector<const mfem::ParFiniteElementSpace*> temp_input_spaces;
-  createSpaces(thermal_flux_name, *field_store, temp_input_spaces, 0, temperature_type, temperature_old_type, disp_type,
-               disp_old_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...);
-
   auto thermal_weak_form = std::make_shared<
       typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::ThermalWeakFormType>(
-      thermal_flux_name, field_store->getMesh(), temp_test_space, temp_input_spaces);
+      thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
+      field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
+                                disp_type, disp_old_type,
+                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   // Build solver and advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form};
