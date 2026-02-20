@@ -9,14 +9,15 @@
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "mfem.hpp"
 
 #include <axom/slic.hpp>
 #include <axom/fmt.hpp>
 
 namespace smith {
 
-SystemSolver::SystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
-    : max_staggered_iterations_(max_staggered_iterations), exact_staggered_steps_(exact_staggered_steps)
+SystemSolver::SystemSolver(MPI_Comm comm, int max_staggered_iterations, bool exact_staggered_steps)
+    : comm_(comm), max_staggered_iterations_(max_staggered_iterations), exact_staggered_steps_(exact_staggered_steps)
 {
 }
 
@@ -94,10 +95,13 @@ std::vector<FieldState> SystemSolver::solve(
       }
     }
 
-    // --- Convergence check (skipped in exact-steps mode or if only one iteration) ---
-    if (!exact_staggered_steps_ && max_staggered_iterations_ > 1) {
+    // --- Convergence check (skipped in exact-steps mode, single-iteration mode,
+    //     or on the last iteration where a break has no effect) ---
+    if (!exact_staggered_steps_ && max_staggered_iterations_ > 1 &&
+        iter < max_staggered_iterations_ - 1) {
       bool all_converged = true;
-      for (const auto& stage : stages_) {
+      for (size_t s = 0; s < stages_.size(); ++s) {
+        const auto& stage = stages_[s];
         size_t num_stage_blocks = stage.block_indices.size();
         std::vector<mfem::Vector> stage_residuals;
         for (size_t i = 0; i < num_stage_blocks; ++i) {
@@ -112,12 +116,27 @@ std::vector<FieldState> SystemSolver::solve(
           }
           stage_residuals.push_back(std::move(res));
         }
-        if (!stage.solver->checkConvergence(1.0, stage_residuals)) {
+        bool stage_converged = stage.solver->checkConvergence(1.0, stage_residuals);
+
+        // Compute per-stage residual norm for diagnostics (parallel-correct)
+        double stage_norm_sq = 0.0;
+        for (const auto& r : stage_residuals) {
+          double n = mfem::ParNormlp(r, 2.0, comm_);
+          stage_norm_sq += n * n;
+        }
+        SLIC_INFO_ROOT(axom::fmt::format(
+            "Staggered iter {}/{}: stage {} residual norm = {:.6e}, converged = {}",
+            iter + 1, max_staggered_iterations_, s, std::sqrt(stage_norm_sq),
+            stage_converged ? "true" : "false"));
+
+        if (!stage_converged) {
           all_converged = false;
           break;
         }
       }
       if (all_converged) {
+        SLIC_INFO_ROOT(axom::fmt::format(
+            "Staggered iteration converged after {} iteration(s)", iter + 1));
         break;
       }
     }

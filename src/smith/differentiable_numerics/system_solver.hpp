@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <memory>
+#include <mpi.h>
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/physics/common.hpp"
 
@@ -25,13 +26,14 @@ public:
   };
 
   /// @brief Construct a SystemSolver for staggered iteration.
+  /// @param comm MPI communicator for parallel norm computation and diagnostic output.
   /// @param max_staggered_iterations Maximum number of staggered sweeps across all stages.  When
   ///        @p exact_staggered_steps is false, the solver may exit early once all stage solvers
   ///        report convergence.
   /// @param exact_staggered_steps If true, always perform exactly @p max_staggered_iterations
   ///        sweeps with no early-exit convergence check.  Useful when a fixed number of
   ///        partitioned-stagger steps is required regardless of residual level.
-  SystemSolver(int max_staggered_iterations, bool exact_staggered_steps = false);
+  SystemSolver(MPI_Comm comm, int max_staggered_iterations, bool exact_staggered_steps = false);
 
   void addStage(const Stage& stage);
   void addStage(const std::vector<size_t>& block_indices, std::shared_ptr<DifferentiableBlockSolver> solver);
@@ -46,6 +48,7 @@ public:
       const std::vector<const BoundaryConditionManager*>& bc_managers) const;
 
 private:
+  MPI_Comm comm_;
   int max_staggered_iterations_;
   bool exact_staggered_steps_;
   std::vector<Stage> stages_;

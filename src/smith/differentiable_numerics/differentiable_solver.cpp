@@ -160,8 +160,8 @@ void NonlinearDifferentiableSolver::clearMemory() const { J_.reset(); }
 
 LinearDifferentiableBlockSolver::LinearDifferentiableBlockSolver(std::unique_ptr<mfem::Solver> s,
                                                                  std::unique_ptr<mfem::Solver> p,
-                                                                 double abs_tol, double rel_tol)
-    : mfem_solver(std::move(s)), mfem_preconditioner(std::move(p)), abs_tol_(abs_tol), rel_tol_(rel_tol)
+                                                                 MPI_Comm comm, double abs_tol, double rel_tol)
+    : mfem_solver(std::move(s)), mfem_preconditioner(std::move(p)), comm_(comm), abs_tol_(abs_tol), rel_tol_(rel_tol)
 {
 }
 
@@ -176,7 +176,7 @@ bool LinearDifferentiableBlockSolver::checkConvergence(double tolerance_multipli
 {
   double r_norm_sq = 0.0;
   for (const auto& r : residuals) {
-    double n = r.Norml2();
+    double n = mfem::ParNormlp(r, 2.0, comm_);
     r_norm_sq += n * n;
   }
   double r_norm = std::sqrt(r_norm_sq);
@@ -294,8 +294,8 @@ std::vector<DifferentiableBlockSolver::FieldPtr> LinearDifferentiableBlockSolver
 }
 
 NonlinearDifferentiableBlockSolver::NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s,
-                                                                       double abs_tol, double rel_tol)
-    : nonlinear_solver_(std::move(s)), abs_tol_(abs_tol), rel_tol_(rel_tol)
+                                                                       MPI_Comm comm, double abs_tol, double rel_tol)
+    : nonlinear_solver_(std::move(s)), comm_(comm), abs_tol_(abs_tol), rel_tol_(rel_tol)
 {
 }
 
@@ -310,7 +310,7 @@ bool NonlinearDifferentiableBlockSolver::checkConvergence(double tolerance_multi
 {
   double r_norm_sq = 0.0;
   for (const auto& r : residuals) {
-    double n = r.Norml2();
+    double n = mfem::ParNormlp(r, 2.0, comm_);
     r_norm_sq += n * n;
   }
   double r_norm = std::sqrt(r_norm_sq);
@@ -479,7 +479,7 @@ std::shared_ptr<NonlinearDifferentiableBlockSolver> buildDifferentiableNonlinear
   inner_opts.absolute_tol = inner_tol_factor * outer_abs_tol;
   inner_opts.relative_tol = inner_tol_factor * outer_rel_tol;
   auto solid_solver = std::make_unique<EquationSolver>(inner_opts, linear_opts, mesh.getComm());
-  return std::make_shared<NonlinearDifferentiableBlockSolver>(std::move(solid_solver), outer_abs_tol, outer_rel_tol);
+  return std::make_shared<NonlinearDifferentiableBlockSolver>(std::move(solid_solver), mesh.getComm(), outer_abs_tol, outer_rel_tol);
 }
 
 }  // namespace smith

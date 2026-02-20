@@ -16,6 +16,7 @@
 #include <functional>
 #include <optional>
 #include <vector>
+#include <mpi.h>
 
 namespace mfem {
 class Solver;
@@ -171,7 +172,7 @@ class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
  public:
   /// @brief Construct from a linear solver and linear block precondition which may be used by the linear solver
   LinearDifferentiableBlockSolver(std::unique_ptr<mfem::Solver> s, std::unique_ptr<mfem::Solver> p,
-                                  double abs_tol = 1e-12, double rel_tol = 1e-8);
+                                  MPI_Comm comm, double abs_tol = 1e-12, double rel_tol = 1e-8);
 
   /// @overload
   void completeSetup(const std::vector<FieldT>& us) override;
@@ -195,6 +196,7 @@ class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
 
   mutable std::unique_ptr<mfem::Solver> mfem_solver;          ///< stored mfem block solver
   mutable std::unique_ptr<mfem::Solver> mfem_preconditioner;  ///< stored mfem block preconditioner
+  MPI_Comm comm_;
   double abs_tol_;
   double rel_tol_;
   mutable std::optional<double> initial_residual_norm_;
@@ -204,8 +206,11 @@ class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
 /// linear adjoint solves
 class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
  public:
-  /// @brief Construct from a linear solver and linear block precondition which may be used by the linear solver
-  NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s,
+  /// @brief Construct from a nonlinear equation solver.
+  /// @note The caller is responsible for choosing inner vs outer tolerance when using this
+  /// constructor directly.  The builder function buildDifferentiableNonlinearBlockSolver
+  /// applies a 0.6x inner-tolerance factor automatically.
+  NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm,
                                      double abs_tol = 1e-12, double rel_tol = 1e-8);
 
   /// @overload
@@ -237,6 +242,7 @@ class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
   mutable std::unique_ptr<EquationSolver>
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 
+  MPI_Comm comm_;                                ///< MPI communicator for parallel norm computation
   double abs_tol_;                               ///< absolute residual tolerance for convergence check
   double rel_tol_;                               ///< relative residual tolerance for convergence check
   mutable std::optional<double> initial_residual_norm_;  ///< residual norm at first convergence check (for rel tol)
