@@ -96,7 +96,6 @@ std::vector<FieldState> SystemSolver::solve(
       for (size_t i = 0; i < num_stage_blocks; ++i) {
         size_t global_row = stage.block_indices[i];
         size_t global_col = global_row; // The solution corresponds to the diagonal block
-        size_t s_idx = block_indices[global_row][global_col]; // the index of the unknown in the states array
 
         // We must update the state globally
         // Wait, current_states[some_row] might also contain this field as an input.
@@ -112,15 +111,11 @@ std::vector<FieldState> SystemSolver::solve(
         
         // Let's just update it:
         FieldState new_state = stage_solutions[i];
-        FieldState old_state = current_states[global_row][s_idx]; // The one we just solved for
         
         for (size_t r = 0; r < num_residuals; ++r) {
-          for (size_t c = 0; c < current_states[r].size(); ++c) {
-            // Check identity (e.g. name or pointer). Name is unique enough for states.
-            // For now, let's just compare the `get<FEFieldPtr>()` pointers or names.
-            if (current_states[r][c].get()->name() == old_state.get()->name()) {
-              current_states[r][c] = new_state;
-            }
+          size_t c = block_indices[r][global_col];
+          if (c != invalid_block_index) {
+            current_states[r][c] = new_state;
           }
         }
       }
