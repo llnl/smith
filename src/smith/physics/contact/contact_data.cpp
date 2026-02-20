@@ -381,7 +381,7 @@ void ContactData::updateDofOffsets() const
   offsets_up_to_date_ = true;
 }
 
-std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperator()
+std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubSpaceTransferOperator()
 {
   // contact_dofs_
   const MPI_Comm comm = reference_nodes_->ParFESpace()->GetComm();
@@ -416,8 +416,11 @@ std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperat
   int* I = Psparse.GetI();
   HYPRE_BigInt* J = Psparse.GetJ();
   double* data = Psparse.GetData();
-  std::unique_ptr<mfem::HypreParMatrix> transfer_operator = std::make_unique<mfem::HypreParMatrix>(
+
+  std::unique_ptr<mfem::HypreParMatrix> restriction_operator = std::make_unique<mfem::HypreParMatrix>(
       comm, nrows_loc, nrows_glb, ncols_glb, I, J, data, row_offsets, col_offsets);
+  std::unique_ptr<mfem::HypreParMatrix> transfer_operator;
+  transfer_operator.reset(restriction_operator->Transpose());
   return transfer_operator;
 }
 

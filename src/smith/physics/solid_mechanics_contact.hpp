@@ -219,10 +219,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   /**
    * @brief create a contactSubspaceTransferOperator for AMGF
    */
-  std::unique_ptr<mfem::HypreParMatrix> contactSubspaceTransferOperator()
-  {
-    return contact_.contactSubspaceTransferOperator();
-  }
+  void contactSubSpaceTransferOperator() { contact_dof_restriction_ = contact_.contactSubSpaceTransferOperator(); }
 
   /**
    * @brief Complete the initialization and allocation of the data structures.
@@ -233,6 +230,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     double dt = 0.0;
     contact_.update(cycle_, time_, dt);
+    auto amgf_prec = dynamic_cast<mfem::AMGFSolver*>(&nonlin_solver_->preconditioner());
+    if (amgf_prec) {
+      contact_dof_restriction_ = contactSubspaceTransferOperator();
+      amgf_prec->SetFilteredSubspaceTransferOperator(*(contact_dof_restriction_.get()));
+    }
 
     SolidMechanicsBase::completeSetup();
   }
@@ -385,8 +387,28 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
       auto& lin_solver = nonlin_solver_->linearSolver();
 
+      auto amgf_prec = dynamic_cast<mfem::AMGFSolver*>(&nonlin_solver_->preconditioner());
+      if (amgf_prec) {
+        // set options for AMG component of AMGF
+        amgf_prec->GetAMG().SetSystemsOptions(3);
+        amgf_prec->GetAMG().SetPrintLevel(0);
+        amgf_prec->GetAMG().SetRelaxType(88);
+        // compute contact_dof_restriction
+        computeSubSpaceTransferOperator();
+        // contact_dof_restriction_ = contactSubspaceTransferOperator();
+        //  set AMGFs subspace transfer operator
+        amgf_prec->SetFilteredSubspaceTransferOperator(*(contact_dof_restriction_.get()));
+        // set the filteredsubspace solver component of AMGF
+        auto iterative_solver = dynamic_cast<mfem::IterativeSolver*>(&lin_solver);
+        SLIC_ERROR_ROOT_IF(!iterative_solver, "AMGF should only be used as a preconditioner for an iterative solver");
+#ifdef SMITH_USE_MPI
+        filter_solver_ = std::make_unique<StrumpackSolver>(0, iterative_solver->GetComm());
+        amgf_prec->SetFilteredSubspaceSolver(*filter_solver_.get());
+#else
+        SLIC_ERROR_ROOT("AMGF can only be used with MPI builds");
+#endif
+      }
       lin_solver.SetOperator(*J_operator_);
-
       lin_solver.Mult(augmented_residual, augmented_solution);
 
       du_ = du;
@@ -492,6 +514,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
   /// forces for output
   FiniteElementDual forces_;
+
+  /// contactDOFRestrictionOperator
+  std::unique_ptr<mfem::HypreParMatrix> contact_dof_restriction_;
+
+  /// filter solver (for use with AMGF preconditioner)
+  std::unique_ptr<mfem::Solver> filter_solver_;
 };
 
 }  // namespace smith
