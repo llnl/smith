@@ -121,12 +121,32 @@ std::vector<FieldState> SystemSolver::solve(
       }
     }
 
-    // TODO: Evaluate global residual to break early if max_iterations > 1
-    // if (global_max_iterations_ > 1 && evaluateGlobalResidual(...) < global_rel_tol_) break;
-    // For now, we just rely on max_iters
+    if (global_max_iterations_ > 1) {
+      double global_residual_norm_sq = 0.0;
+      for (size_t r = 0; r < num_residuals; ++r) {
+        std::vector<const FiniteElementState*> input_ptrs;
+        for (const auto& field_state : current_states[r]) {
+          input_ptrs.push_back(field_state.get().get());
+        }
+        
+        mfem::Vector res = residual_evals[r]->residual(time_info, shape_disp.get().get(), input_ptrs);
+        if (bc_managers[r]) {
+          res.SetSubVector(bc_managers[r]->allEssentialTrueDofs(), 0.0);
+        }
+        double r_norm = res.Norml2();
+        global_residual_norm_sq += r_norm * r_norm;
+      }
+      
+      double global_residual_norm = std::sqrt(global_residual_norm_sq);
+      
+      // We don't have a reliable initial residual norm for a relative tolerance check here
+      // Typically, staggered solvers compare against an initial un-staggered residual,
+      // or use an absolute tolerance. We'll use the provided tolerance.
+      if (global_residual_norm < global_rel_tol_) {
+        break;
+      }
+    }
   }
-
-  (void)global_rel_tol_; // unused for now, will be used when evaluating global residual
 
   // At the end, return the DIAGONAL states as the final solution
   std::vector<FieldState> final_solutions;
