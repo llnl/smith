@@ -1210,12 +1210,12 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
 {
   std::unique_ptr<mfem::Solver> preconditioner_solver;
   auto preconditioner = linear_opts.preconditioner;
-  auto print_level = linear_opts.print_level;
+  auto preconditioner_print_level = linear_opts.preconditioner_print_level;
 
   // Handle the preconditioner - currently just BoomerAMG and HypreSmoother are supported
   if (preconditioner == Preconditioner::HypreAMG) {
     auto amg_preconditioner = std::make_unique<mfem::HypreBoomerAMG>();
-    amg_preconditioner->SetPrintLevel(print_level);
+    amg_preconditioner->SetPrintLevel(preconditioner_print_level);
     preconditioner_solver = std::move(amg_preconditioner);
   } else if (preconditioner == Preconditioner::HypreJacobi) {
     auto jac_preconditioner = std::make_unique<mfem::HypreSmoother>();
@@ -1232,7 +1232,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
   } else if (preconditioner == Preconditioner::HypreILU) {
     auto ilu_preconditioner = std::make_unique<mfem::HypreILU>();
     ilu_preconditioner->SetLevelOfFill(1);
-    ilu_preconditioner->SetPrintLevel(print_level);
+    ilu_preconditioner->SetPrintLevel(preconditioner_print_level);
     preconditioner_solver = std::move(ilu_preconditioner);
   } else if (preconditioner == Preconditioner::AMGX) {
 #ifdef MFEM_USE_AMGX
@@ -1248,6 +1248,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
 #endif
   } else if (preconditioner == Preconditioner::AMGF) {
     auto amgf_preconditioner = std::make_unique<mfem::AMGFSolver>();
+    amgf_preconditioner->GetAMG().SetPrintLevel(preconditioner_print_level);
     preconditioner_solver = std::move(amgf_preconditioner);
   } else {
     SLIC_ERROR_ROOT_IF(preconditioner != Preconditioner::None, "Unknown preconditioner type requested");

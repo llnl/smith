@@ -381,7 +381,7 @@ void ContactData::updateDofOffsets() const
   offsets_up_to_date_ = true;
 }
 
-std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubSpaceTransferOperator()
+std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperator()
 {
   // contact_dofs_
   const MPI_Comm comm = reference_nodes_->ParFESpace()->GetComm();

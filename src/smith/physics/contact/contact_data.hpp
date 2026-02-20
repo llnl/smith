@@ -161,7 +161,7 @@ class ContactData {
    *
    * @return Contact subspace transfer operator (mapping from contact_dofs to all displacement dofs)
    */
-  std::unique_ptr<mfem::HypreParMatrix> contactSubSpaceTransferOperator();
+  std::unique_ptr<mfem::HypreParMatrix> contactSubspaceTransferOperator();
 
   /**
    * @brief Set the pressure field
