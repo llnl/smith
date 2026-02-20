@@ -57,6 +57,11 @@ def parse_args():
                       dest="verbose",
                       default=False,
                       help="Output logs to screen as well as to files")
+    parser.add_argument("--clean-up-build",
+                      action="store_true",
+                      dest="clean_up_build",
+                      default=True,
+                      help="Choose whether to clean the build directory after tests have run successfully.")
     parser.add_argument("-j", "--jobs",
                       dest="jobs",
                       default="",
@@ -140,7 +145,8 @@ def main():
             test_root = get_build_and_test_root(repo_dir, timestamp)
             os.mkdir(test_root)
             res = build_and_test_host_config(test_root, hostconfig_path, args["verbose"], args["extra_cmake_options"],
-                                             args["skip_install"], args["skip_tests"], args["jobs"])
+                                             args["skip_install"], args["skip_tests"], args["jobs"],
+                                             args["clean_up_build"])
 
     finally:
         os.chdir(original_wd)

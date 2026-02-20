@@ -254,7 +254,7 @@ def test_examples(host_config, build_dir, install_dir, report_to_stdout = False,
 
     return 0
 
-def build_and_test_host_config(test_root, host_config, report_to_stdout=False, extra_cmake_options="", skip_install=False, skip_tests=False, job_count=""):
+def build_and_test_host_config(test_root, host_config, report_to_stdout=False, extra_cmake_options="", skip_install=False, skip_tests=False, job_count="", clean_up_build=False):
     host_config_root = get_host_config_root(host_config)
     # setup build and install dirs
     build_dir   = pjoin(test_root,"build-%s"   % host_config_root)
@@ -372,6 +372,12 @@ def build_and_test_host_config(test_root, host_config, report_to_stdout=False, e
 
     set_group_and_perms(build_dir)
     set_group_and_perms(install_dir)
+
+    if clean_up_build:
+        print("[running `make clean`]")
+        res = shell_exec(f"cd {build_dir} && make clean",
+                        print_output=report_to_stdout,
+                        echo=True)
 
     return 0
 
