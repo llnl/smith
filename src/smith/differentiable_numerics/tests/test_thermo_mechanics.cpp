@@ -13,6 +13,7 @@
 #include "smith/physics/mesh.hpp"
 
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/thermo_mechanics_system.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
@@ -149,7 +150,9 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
+  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  sys_solver->addStage({0, 1}, solver);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -211,7 +214,9 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
+  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  sys_solver->addStage({0, 1}, solver);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -277,7 +282,9 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<H1<1>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
+  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  sys_solver->addStage({0, 1}, solver);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -354,7 +361,9 @@ TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
   auto solver = buildDifferentiableNonlinearBlockSolver(fast_nonlinear_opts, linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
+  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  sys_solver->addStage({0, 1}, solver);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -404,7 +413,9 @@ TEST_F(ThermoMechanicsMeshFixture, PressureBC)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, solver, youngs_modulus);
+  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  sys_solver->addStage({0, 1}, solver);
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });

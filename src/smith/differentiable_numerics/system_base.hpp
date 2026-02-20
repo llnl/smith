@@ -16,7 +16,7 @@
 #include <memory>
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 
 namespace smith {
@@ -26,7 +26,7 @@ namespace smith {
  */
 struct SystemBase {
   std::shared_ptr<FieldStore> field_store;            ///< Field store managing the system's fields.
-  std::shared_ptr<DifferentiableBlockSolver> solver;  ///< The solver for the system.
+  std::shared_ptr<SystemSolver> solver;               ///< The solver for the system.
   std::shared_ptr<StateAdvancer> advancer;            ///< The state advancer.
   std::vector<FieldState> parameter_fields;           ///< Optional parameter fields.
   std::string prepend_name_;                          ///< Optional prepended name for all fields.

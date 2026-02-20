@@ -1,0 +1,65 @@
+<VTKFile type="UnstructuredGrid" compressor="vtkZLibDataCompressor" version="2.2" byte_order="LittleEndian">
+<UnstructuredGrid>
+<Piece NumberOfPoints="384" NumberOfCells="48">
+<Points>
+<DataArray type="Float64" NumberOfComponents="3" format="binary">
+AQAAAAAkAAAAAAAA3AIAAA==eJy9ljGO2zAQRXmI3GfLPUEuk1wjR2C1AdLlCO7duNlKEbCAYcCAjhAkggr++W9HsimxM3f88D45HG8pfn39v36/wJ/L9y+/Xv98+/Gi9bpP31O+fm/5rPW6/6jPvF+hvkL9Vp8K9RX9j+FX4Ffga31Nz6n3/aqX56t/npc85/0T7EfPpZ5yeX/lZ57Kp/rcx/fPCfYf9dH+UX70b9/jCfbjO1W+r9/vfLRP9X7JZ23effszes7rjLn8+zxjLvVUfuapfKpf6+Pn1znpq60+OofPSV8dxa/A53fq+TTH+t9vy6nA57lEeT/3vGAu73nBXN5T+dm9KJ/qcx/fJ5ew/5yP9onyo/9yHsovzaJ3egn7R51PkaX3Sz5r87Z90q8/yfPn27/1jrnUc6mnXOqp/MxT+VS/1kf7pK2nvtrqU6Ge+uoofgU+v1PPpznW/35bTgU+zyXKS57zpwFz+bkxYC719Hz29Hyqz338HBvC/nM+OueVH/1Ls4awT+9U+b5+v/Mpdg1h/9G8bZ/068/PPUfM5T1HzOU9R8zl72VMc6318X0yJn211Uf7ZEz66ih+BX72TpVPc6z//bacCvxsLsW85Dn/jnxgLv879YG51NPz2dPzqT730T5p66mvtvro/wnKj/7LeSg/e6fK9/X7nU+RpfdLPmvz7tWf5DmvK+byc/WKudRT+Zmn8ql+rY+f89ekr7b66By+Jn11FL8Cn9+p59Mc63+/LacCn+cS5SXP+R3dMJefGzfMpZ6ez56eT/W5j59jt7D/nI/OeeVH/+U8lF+aFd+p8n39fudTZOn9ks/avG2f9OtP8pzf0R1z+bl6x1zqqfzMU/lUv9bHz/l70ldbfXQO35O+Oopfgc/v1PNpjvW/35ZTgc9zifKS5/xpwlx+bkyYSz09nz09n+pzHz/HprD/nI/OeeVH/9KsKezTO1W+r9/vfIpdU9h/NG/bJ/368y9dTrBF
+</DataArray>
+</Points>
+<Cells>
+<DataArray type="Int32" Name="connectivity" format="binary">
+AQAAAAAGAAAAAAAARgIAAA==eJwV02ODEAYAANDLtm3r0l24bNu2L9u1Zdu2scUtbplbbotbtmsLrw/vJ7yAgICAMIQjLOGJQCQiEpkoRCMq0YlBLGISmzjEIy7xSUAiEpKYJCQjKclJQSpSkpo0pCMt6clAJjKSmSxkIyvZyUEuchJIbvKSh3zkJ5ggClCQwhQihCIUoyjFKUEpSlKaMpSjLOWpQCUqUpkqVKMq1alBLWpSmzrUoy71aUAjGtKYJjSjKc1pQSta0po2tKMt7elAJzrSmS50JZRudKcnPehFb/rSh370ZyADGMRghjKEYQxnJCP4gR8ZzSjGMJbxjGMCE5nMJKYwlelMYwYzmc0s5jCX+cxjAQtZzCKWsJTlLGMFK1nNKtawlvWsYwMb2cwmtrCV7WzjJ35mJzvYxW72sodf+JX97OMABznMIX7jd45yhGMc5yQnOMVpznKGc5znT/7gAhe5zCWucJXrXOMv/uYmN7jFbe5yh3/4l/vc4wEPecwjnvCU5zzjBS95zSve8Jb3vOMDH/mPT/zPZ77yhe/5wxCOsIQnApGISGSiEI2oRCcGsYhJbOIQj7jEJwGJSEhikpCMpCQnBalISWrSkI60pCcDmchIZrKQjaxkJwe5yEkguclLHvKRn2CCKEBBClOIEIpQjKIUpwSlKElpylCOspSnApWoSGWqUI2qVKcGtahJbepQj7rUpwGNaEhjmtCMpjSnBa1oSWva0I62tKcDnehIZ7rQlVC60Z2e9KAXvelLH/rRn4EMYBCDGcoQvgGhMZ/B
+</DataArray>
+<DataArray type="Int32" Name="offsets" format="binary">
+AQAAAMAAAAAAAAAAYQAAAA==eJwNwxEUgwAUAMA/C8MwDMMwDMMwDMMwDMMwDIfD4XA4HA6HYXfvXRIRqZm5haWVtY2tnb2Do5Ozi6ubu4d3Hz59+fbj159/T+MWkZiamVtYWlnb2NrZOzg6OXsBMXwT0g==
+</DataArray>
+<DataArray type="UInt8" Name="types" format="binary">
+AQAAADAAAAAAAAAADAAAAA==eJzz8CANAABK/w2B
+</DataArray>
+</Cells>
+<CellData Scalars="attribute">
+<DataArray type="Int32" Name="attribute" format="binary">
+AQAAAMAAAAAAAAAADwAAAA==eJxjZGBgYBzCGAATIAAx
+</DataArray>
+</CellData>
+<PointData >
+<DataArray type="Float64" Name="solid_acceleration" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="solid_acceleration_dual" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="solid_displacement" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="solid_displacement_dual" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="solid_displacement_predicted" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="solid_displacement_predicted_dual" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="solid_param_bulk" NumberOfComponents="1"  format="binary" >
+AQAAAAAMAAAAAAAAIgAAAA==eJztxUENAAAIBKBqRjCnV9JZw8GHzOmKbdu27fcvX+LT2w==
+</DataArray>
+<DataArray type="Float64" Name="solid_param_bulk_dual" NumberOfComponents="1"  format="binary" >
+AQAAAAAMAAAAAAAAGQAAAA==eJztwQEBAAAAgiD/r25IQAEAAC8GDAAAAQ==
+</DataArray>
+<DataArray type="Float64" Name="solid_param_shear" NumberOfComponents="1"  format="binary" >
+AQAAAAAMAAAAAAAAIgAAAA==eJztxTENAAAIA7BJ48C/pgUbpH2anJ3Ytm3bfn8BZX7GAQ==
+</DataArray>
+<DataArray type="Float64" Name="solid_param_shear_dual" NumberOfComponents="1"  format="binary" >
+AQAAAAAMAAAAAAAAGQAAAA==eJztwQEBAAAAgiD/r25IQAEAAC8GDAAAAQ==
+</DataArray>
+<DataArray type="Float64" Name="solid_velocity" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="solid_velocity_dual" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+</PointData>
+</Piece>
+</UnstructuredGrid>
+</VTKFile>

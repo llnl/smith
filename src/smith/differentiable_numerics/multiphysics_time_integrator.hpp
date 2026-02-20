@@ -17,7 +17,7 @@
 
 namespace smith {
 
-class DifferentiableBlockSolver;
+class SystemSolver;
 class DirichletBoundaryConditions;
 class BoundaryConditionManager;
 
@@ -31,7 +31,7 @@ class BoundaryConditionManager;
  * @return std::vector<FieldState> The updated state fields.
  */
 std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
-                              const DifferentiableBlockSolver* solver, const TimeInfo& time_info,
+                              const SystemSolver* solver, const TimeInfo& time_info,
                               const std::vector<FieldState>& params = {});
 
 /**
@@ -47,7 +47,7 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
    */
   MultiphysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
                              const std::vector<std::shared_ptr<WeakForm>>& weak_forms,
-                             std::shared_ptr<smith::DifferentiableBlockSolver> solver);
+                             std::shared_ptr<smith::SystemSolver> solver);
 
   /**
    * @brief Advance the multiphysics state by one time step.
@@ -64,7 +64,7 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
  private:
   std::shared_ptr<FieldStore> field_store_;
   std::vector<std::shared_ptr<WeakForm>> weak_forms_;
-  std::shared_ptr<smith::DifferentiableBlockSolver> solver_;
+  std::shared_ptr<smith::SystemSolver> solver_;
 };
 
 }  // namespace smith

@@ -152,7 +152,7 @@ struct SolidStaticsWithInternalVarsSystem : public SystemBase {
  */
 template <int dim, int disp_order, typename StateSpace, typename... parameter_space>
 SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space...> buildSolidStaticsWithL2StateSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver, std::string prepend_name = "",
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);

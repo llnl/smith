@@ -391,7 +391,7 @@ struct ThermoMechanicsSystem : public SystemBase {
  */
 template <int dim, int disp_order, int temp_order, typename... parameter_space>
 ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver, std::string prepend_name = "",
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
@@ -468,7 +468,7 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
  */
 template <int dim, int disp_order, int temp_order, typename... parameter_space>
 ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver,
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
     FieldType<parameter_space>... parameter_types)
 {
   return buildThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>(mesh, solver, "",

@@ -11,6 +11,7 @@ set(differentiable_numerics_sources
     lumped_mass_explicit_newmark_state_advancer.cpp
     solid_mechanics_time_integrator.cpp
     differentiable_solver.cpp
+    system_solver.cpp
     nonlinear_solve.cpp
     evaluate_objective.cpp
     dirichlet_boundary_conditions.cpp
@@ -23,6 +24,7 @@ set(differentiable_numerics_headers
     state_advancer.hpp
     reaction.hpp
     differentiable_solver.hpp
+    system_solver.hpp
     differentiable_physics.hpp
     timestep_estimator.hpp
     explicit_dynamic_solve.hpp

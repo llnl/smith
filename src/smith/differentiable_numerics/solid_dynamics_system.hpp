@@ -286,7 +286,7 @@ struct SolidDynamicsSystem : public SystemBase {
  */
 template <int dim, int order, typename... parameter_space>
 SolidDynamicsSystem<dim, order, parameter_space...> buildSolidDynamicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver,
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
@@ -363,7 +363,7 @@ SolidDynamicsSystem<dim, order, parameter_space...> buildSolidDynamicsSystem(
  */
 template <int dim, int order, typename... parameter_space>
 SolidDynamicsSystem<dim, order, parameter_space...> buildSolidDynamicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver,
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, FieldType<parameter_space>... parameter_types)
 {
   return buildSolidDynamicsSystem<dim, order, parameter_space...>(mesh, solver, time_rule, "", parameter_types...);

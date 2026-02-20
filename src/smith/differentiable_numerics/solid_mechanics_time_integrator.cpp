@@ -12,12 +12,14 @@
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
+#include "smith/differentiable_numerics/system_solver.hpp"
+
 namespace smith {
 
 SolidMechanicsTimeIntegrator::SolidMechanicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
                                                            std::shared_ptr<WeakForm> solid_weak_form,
                                                            std::shared_ptr<WeakForm> cycle_zero_weak_form,
-                                                           std::shared_ptr<smith::DifferentiableBlockSolver> solver)
+                                                           std::shared_ptr<smith::SystemSolver> solver)
     : field_store_(field_store), cycle_zero_weak_form_(cycle_zero_weak_form), solver_(solver)
 {
   std::vector<std::shared_ptr<WeakForm>> weak_forms = {solid_weak_form};
@@ -70,7 +72,7 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> SolidMechanicsTim
     std::vector<std::vector<FieldState>> params_vec = {params};
 
     auto result =
-        block_solve(wf_ptrs, block_indices, shape_disp, states_vec, params_vec, time_info, solver_.get(), bcs);
+        solver_->solve(wf_ptrs, block_indices, shape_disp, states_vec, params_vec, time_info, bcs);
 
     // Update the acceleration field in our current states
     size_t test_field_state_idx = field_store_->getFieldIndex(test_field_name);

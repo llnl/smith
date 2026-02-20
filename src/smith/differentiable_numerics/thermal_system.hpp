@@ -121,7 +121,7 @@ struct ThermalSystem : public SystemBase {
  */
 template <int dim, int temp_order, typename... parameter_space>
 ThermalSystem<dim, temp_order, parameter_space...> buildThermalSystem(std::shared_ptr<Mesh> mesh,
-                                                                      std::shared_ptr<DifferentiableBlockSolver> solver,
+                                                                      std::shared_ptr<SystemSolver> solver,
                                                                       std::string prepend_name = "",
                                                                       FieldType<parameter_space>... parameter_types)
 {

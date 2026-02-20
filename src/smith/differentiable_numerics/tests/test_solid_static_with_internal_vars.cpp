@@ -103,8 +103,9 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
 {
   auto solver = buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  auto system =
-      buildSolidStaticsWithL2StateSystem<dim, disp_order, StateSpace>(mesh, solver, "solid_static_with_internal_vars");
+  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  sys_solver->addStage({0, 1}, solver);
+  auto system = buildSolidStaticsWithL2StateSystem<dim, disp_order, StateSpace>(mesh, sys_solver, "solid_static_with_internal_vars");
 
   // Material and Evolution
   system.setMaterial(DamageMaterial{}, mesh->entireBodyName());

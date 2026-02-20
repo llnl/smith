@@ -7,6 +7,7 @@
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 
@@ -14,7 +15,7 @@ namespace smith {
 
 MultiphysicsTimeIntegrator::MultiphysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
                                                        const std::vector<std::shared_ptr<WeakForm>>& weak_forms,
-                                                       std::shared_ptr<smith::DifferentiableBlockSolver> solver)
+                                                       std::shared_ptr<smith::SystemSolver> solver)
     : field_store_(field_store), weak_forms_(weak_forms), solver_(solver)
 {
 }
@@ -98,7 +99,7 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
 }
 
 std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
-                              const DifferentiableBlockSolver* solver, const TimeInfo& time_info,
+                              const SystemSolver* solver, const TimeInfo& time_info,
                               const std::vector<FieldState>& params)
 {
   std::vector<std::string> weak_form_names;
@@ -119,8 +120,8 @@ std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak
   for (auto& p : weak_forms) {
     weak_form_ptrs.push_back(p.get());
   }
-  return block_solve(weak_form_ptrs, index_map, field_store.getShapeDisp(), inputs, wk_params, time_info, solver,
-                     field_store.getBoundaryConditionManagers());
+  return solver->solve(weak_form_ptrs, index_map, field_store.getShapeDisp(), inputs, wk_params, time_info,
+                       field_store.getBoundaryConditionManagers());
 }
 
 }  // namespace smith

@@ -15,6 +15,7 @@
 
 #include <vector>
 #include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/physics/common.hpp"
 
 namespace smith {
 

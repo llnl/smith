@@ -1,0 +1,53 @@
+<VTKFile type="UnstructuredGrid" compressor="vtkZLibDataCompressor" version="2.2" byte_order="LittleEndian">
+<UnstructuredGrid>
+<Piece NumberOfPoints="384" NumberOfCells="48">
+<Points>
+<DataArray type="Float64" NumberOfComponents="3" format="binary">
+AQAAAAAkAAAAAAAA1AIAAA==eJy1mLGN21AQBVWE+1HoCtyM3YZLYGQDzlyCciVMHNECBBACBLAEwz4o+E8z2iOwZnb/vkbzVgwe9nDg59O/5+dR/n348uHHx9+fvx7zfp7b55Kfn3v8nfftnP1Pcv7s+bhvudj/JOfmedJzntZZc/Gcz5qL53zWXOmZfOOM3ztrLvacNRd7zpqL5zzreRp+//b3+aW50vNx33KlZ/Irz+QbZ3wWzcVzXjQXz3nRXPyeLHrOnhfNxZ4XzcWeF83Fc77oeRq+/Y5XzcXvyVVzpWfyK8/kG2d8Vs3Fc141F8951Vz8nqx6znO+aS6e801zpWfyK8/kG2ec211z8ZzvmovnfNdc/J7c9ZznvGkunvOmuXjOm+bi92ST8/195u18kvuT3K/7TPL5vp2/v8+w/0nO9/YZ8zwV5+/vMzznc5Gr7jPmmXzjjN/rfYY95yJX3WfMM/nGeXxj1WfSc7xvueo+Y57JN844N+8zPOelyFX3GfNMvnHG7/U+w56XIlfdZ8wz+cYZf3fvM/yeXItcdZ8xz+QbZ5yb9xme81rkqvuMeSbfOOPcvM/wnG9FrrrPmGfyjTPOzfsMz/le5Kr7jHkm3zjj3LzP8Jy3IlfdZ8wz+ezbv59h/iT8SfiT8I3TvZ959mR+5Zl84/TtZ8yT+e7JfOP07WdeeybfPZlvnL79jHky3z2Zb5y+/Yx5Mt89mW+cvv3Ma8/kuyfzjdO3nzFP5rsn843Tt58xT+a7J/ON07efMU/muyfzjdO3nzFP5rsn843Tt58xT+a7J/Otb/TtZ5jvPYH5ed/O/9d+Zm+fMc/kG6dvP2OezHdP5hunbz/z2vO5J5gn843Tt58xT+sJ5sl84/TtZ/b2GfNkvnH69jOvPZ97gnky3zh9+5m9fcY8mW+cvv2MeTLfPZlvnL79jHlaTzBP5hunbz+zt8+YJ/ON07efMU/muyfzp+MfcjSwRQ==
+</DataArray>
+</Points>
+<Cells>
+<DataArray type="Int32" Name="connectivity" format="binary">
+AQAAAAAGAAAAAAAARgIAAA==eJwV02ODEAYAANDLtm3r0l24bNu2L9u1Zdu2scUtbplbbotbtmsLrw/vJ7yAgICAMIQjLOGJQCQiEpkoRCMq0YlBLGISmzjEIy7xSUAiEpKYJCQjKclJQSpSkpo0pCMt6clAJjKSmSxkIyvZyUEuchJIbvKSh3zkJ5ggClCQwhQihCIUoyjFKUEpSlKaMpSjLOWpQCUqUpkqVKMq1alBLWpSmzrUoy71aUAjGtKYJjSjKc1pQSta0po2tKMt7elAJzrSmS50JZRudKcnPehFb/rSh370ZyADGMRghjKEYQxnJCP4gR8ZzSjGMJbxjGMCE5nMJKYwlelMYwYzmc0s5jCX+cxjAQtZzCKWsJTlLGMFK1nNKtawlvWsYwMb2cwmtrCV7WzjJ35mJzvYxW72sodf+JX97OMABznMIX7jd45yhGMc5yQnOMVpznKGc5znT/7gAhe5zCWucJXrXOMv/uYmN7jFbe5yh3/4l/vc4wEPecwjnvCU5zzjBS95zSve8Jb3vOMDH/mPT/zPZ77yhe/5wxCOsIQnApGISGSiEI2oRCcGsYhJbOIQj7jEJwGJSEhikpCMpCQnBalISWrSkI60pCcDmchIZrKQjaxkJwe5yEkguclLHvKRn2CCKEBBClOIEIpQjKIUpwSlKElpylCOspSnApWoSGWqUI2qVKcGtahJbepQj7rUpwGNaEhjmtCMpjSnBa1oSWva0I62tKcDnehIZ7rQlVC60Z2e9KAXvelLH/rRn4EMYBCDGcoQvgGhMZ/B
+</DataArray>
+<DataArray type="Int32" Name="offsets" format="binary">
+AQAAAMAAAAAAAAAAYQAAAA==eJwNwxEUgwAUAMA/C8MwDMMwDMMwDMMwDMMwDIfD4XA4HA6HYXfvXRIRqZm5haWVtY2tnb2Do5Ozi6ubu4d3Hz59+fbj159/T+MWkZiamVtYWlnb2NrZOzg6OXsBMXwT0g==
+</DataArray>
+<DataArray type="UInt8" Name="types" format="binary">
+AQAAADAAAAAAAAAADAAAAA==eJzz8CANAABK/w2B
+</DataArray>
+</Cells>
+<CellData Scalars="attribute">
+<DataArray type="Int32" Name="attribute" format="binary">
+AQAAAMAAAAAAAAAADwAAAA==eJxjZGBgYBzCGAATIAAx
+</DataArray>
+</CellData>
+<PointData >
+<DataArray type="Float64" Name="thermo_mech_displacement" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="thermo_mech_displacement_dual" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="thermo_mech_displacement_predicted" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="thermo_mech_displacement_predicted_dual" NumberOfComponents="3" ComponentName0="0" ComponentName1="1" ComponentName2="2" format="binary" >
+AQAAAAAkAAAAAAAAIAAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAIBXAyQAAAE=
+</DataArray>
+<DataArray type="Float64" Name="thermo_mech_temperature" NumberOfComponents="1"  format="binary" >
+AQAAAAAMAAAAAAAAGQAAAA==eJztwQEBAAAAgiD/r25IQAEAAC8GDAAAAQ==
+</DataArray>
+<DataArray type="Float64" Name="thermo_mech_temperature_dual" NumberOfComponents="1"  format="binary" >
+AQAAAAAMAAAAAAAAGQAAAA==eJztwQEBAAAAgiD/r25IQAEAAC8GDAAAAQ==
+</DataArray>
+<DataArray type="Float64" Name="thermo_mech_temperature_predicted" NumberOfComponents="1"  format="binary" >
+AQAAAAAMAAAAAAAAGQAAAA==eJztwQEBAAAAgiD/r25IQAEAAC8GDAAAAQ==
+</DataArray>
+<DataArray type="Float64" Name="thermo_mech_temperature_predicted_dual" NumberOfComponents="1"  format="binary" >
+AQAAAAAMAAAAAAAAGQAAAA==eJztwQEBAAAAgiD/r25IQAEAAC8GDAAAAQ==
+</DataArray>
+</PointData>
+</Piece>
+</UnstructuredGrid>
+</VTKFile>

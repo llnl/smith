@@ -507,11 +507,15 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       std::vector<double> tangent_weights(row_field_inputs.size(), 0.0);
       for (size_t col_j = 0; col_j < num_rows; ++col_j) {
         size_t field_index_to_diff = block_indices[row_i][col_j];
-        tangent_weights[field_index_to_diff] = 1.0;
-        auto jac_ij = residual_evals[row_i]->jacobian(time_info, shape_disp_ptr.get(),
-                                                      getConstFieldPointers(row_field_inputs), tangent_weights);
-        jacobians[row_i].emplace_back(std::move(jac_ij));
-        tangent_weights[field_index_to_diff] = 0.0;
+        if (field_index_to_diff != invalid_block_index) {
+          tangent_weights[field_index_to_diff] = 1.0;
+          auto jac_ij = residual_evals[row_i]->jacobian(time_info, shape_disp_ptr.get(),
+                                                        getConstFieldPointers(row_field_inputs), tangent_weights);
+          jacobians[row_i].emplace_back(std::move(jac_ij));
+          tangent_weights[field_index_to_diff] = 0.0;
+        } else {
+          jacobians[row_i].emplace_back(nullptr);
+        }
       }
     }
 

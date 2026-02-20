@@ -9,6 +9,7 @@
 #include "smith/differentiable_numerics/thermal_system.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/common.hpp"
 #include "smith/physics/state/state_manager.hpp"
@@ -50,7 +51,9 @@ struct ThermalStaticFixture : public testing::Test {
     auto linear_options = LinearSolverOptions();
     auto block_solver = buildDifferentiableNonlinearBlockSolver(solver_options, linear_options, *mesh);
 
-    auto thermal_system = buildThermalSystem<2, temp_order>(mesh, block_solver);
+    auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+    sys_solver->addStage({0}, block_solver);
+    auto thermal_system = buildThermalSystem<2, temp_order>(mesh, sys_solver);
 
     double k = 1.0;
     thermal_system.setThermalIntegrand("entire_body", [=](auto /*t_info*/, auto /*X*/, auto T) {
