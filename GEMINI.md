@@ -4,7 +4,7 @@
 - The main build directory is `build`.
 - Run tests quickly using `cd build && ctest -j 8`. To run a specific test, use `ctest -R "[testname]"` (e.g., `ctest -R "test_thermo_mechanics"`).
 - Always compile the project using `make -j 8 -C build` before running tests.
-- Maintain existing codebase conventions when writing tests (e.g. `SMITH_MARK_FUNCTION`).
+- Maintain existing codebase conventions when writing tests (e.g. `SMITH_MARK_FUNCTION`,`SLIC_ERROR_IF`, etc).
 
 ## C++ Style Conventions
 

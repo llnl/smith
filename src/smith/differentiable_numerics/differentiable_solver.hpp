@@ -14,6 +14,8 @@
 
 #include <memory>
 #include <functional>
+#include <optional>
+#include <vector>
 
 namespace mfem {
 class Solver;
@@ -148,6 +150,17 @@ class DifferentiableBlockSolver {
   virtual std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
                                              std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const = 0;
 
+  /// @brief Check whether the stage residuals satisfy convergence for this solver's configured tolerance.
+  /// @param tolerance_multiplier Multiplier applied to the configured tolerance (e.g. 1.0 for the final check,
+  ///        or a smaller value for a stricter intermediate check)
+  /// @param residuals The current residual vectors for each block in this solver
+  /// @return true if all residuals satisfy the convergence criterion
+  virtual bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals) const = 0;
+
+  /// @brief Reset internal convergence tracking state (e.g. the stored initial residual norm used for relative
+  /// tolerance). Call this at the start of each new solve sequence.
+  virtual void resetConvergenceState() const {}
+
   /// @brief Interface option to clear memory between solves to avoid high-water mark memory usage.
   virtual void clearMemory() const {}
 };
@@ -157,10 +170,18 @@ class DifferentiableBlockSolver {
 class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
  public:
   /// @brief Construct from a linear solver and linear block precondition which may be used by the linear solver
-  LinearDifferentiableBlockSolver(std::unique_ptr<mfem::Solver> s, std::unique_ptr<mfem::Solver> p);
+  LinearDifferentiableBlockSolver(std::unique_ptr<mfem::Solver> s, std::unique_ptr<mfem::Solver> p,
+                                  double abs_tol = 1e-12, double rel_tol = 1e-8);
 
   /// @overload
   void completeSetup(const std::vector<FieldT>& us) override;
+
+  /// @overload
+  bool checkConvergence(double tolerance_multiplier,
+                        const std::vector<mfem::Vector>& residuals) const override;
+
+  /// @overload
+  void resetConvergenceState() const override;
 
   /// @overload
   std::vector<FieldPtr> solve(
@@ -174,6 +195,9 @@ class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
 
   mutable std::unique_ptr<mfem::Solver> mfem_solver;          ///< stored mfem block solver
   mutable std::unique_ptr<mfem::Solver> mfem_preconditioner;  ///< stored mfem block preconditioner
+  double abs_tol_;
+  double rel_tol_;
+  mutable std::optional<double> initial_residual_norm_;
 };
 
 /// @brief Implementation of the DifferentiableBlockSolver interface for the special case of nonlinear solves with
@@ -181,10 +205,18 @@ class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
 class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
  public:
   /// @brief Construct from a linear solver and linear block precondition which may be used by the linear solver
-  NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s);
+  NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s,
+                                     double abs_tol = 1e-12, double rel_tol = 1e-8);
 
   /// @overload
   void completeSetup(const std::vector<FieldT>& us) override;
+
+  /// @overload
+  bool checkConvergence(double tolerance_multiplier,
+                        const std::vector<mfem::Vector>& residuals) const override;
+
+  /// @overload
+  void resetConvergenceState() const override;
 
   /// @overload
   std::vector<FieldPtr> solve(
@@ -204,6 +236,10 @@ class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
 
   mutable std::unique_ptr<EquationSolver>
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
+
+  double abs_tol_;                               ///< absolute residual tolerance for convergence check
+  double rel_tol_;                               ///< relative residual tolerance for convergence check
+  mutable std::optional<double> initial_residual_norm_;  ///< residual norm at first convergence check (for rel tol)
 };
 
 /// @brief Create a differentiable linear solver

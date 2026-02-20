@@ -150,7 +150,7 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  auto sys_solver = std::make_shared<SystemSolver>(1);
   sys_solver->addStage({0, 1}, solver);
   auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
@@ -214,7 +214,7 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  auto sys_solver = std::make_shared<SystemSolver>(1);
   sys_solver->addStage({0, 1}, solver);
   auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
@@ -282,7 +282,7 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<H1<1>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  auto sys_solver = std::make_shared<SystemSolver>(1);
   sys_solver->addStage({0, 1}, solver);
   auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
@@ -361,7 +361,7 @@ TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
   auto solver = buildDifferentiableNonlinearBlockSolver(fast_nonlinear_opts, linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  auto sys_solver = std::make_shared<SystemSolver>(1);
   sys_solver->addStage({0, 1}, solver);
   auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
@@ -413,7 +413,7 @@ TEST_F(ThermoMechanicsMeshFixture, PressureBC)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(1e-8, 1);
+  auto sys_solver = std::make_shared<SystemSolver>(1);
   sys_solver->addStage({0, 1}, solver);
   auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());

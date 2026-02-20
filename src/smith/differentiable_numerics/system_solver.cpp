@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
+// other smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -10,14 +10,13 @@
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 
-#include <iostream>
 #include <axom/slic.hpp>
 #include <axom/fmt.hpp>
 
 namespace smith {
 
-SystemSolver::SystemSolver(double global_rel_tol, int global_max_iterations)
-    : global_rel_tol_(global_rel_tol), global_max_iterations_(global_max_iterations)
+SystemSolver::SystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
+    : max_staggered_iterations_(max_staggered_iterations), exact_staggered_steps_(exact_staggered_steps)
 {
 }
 
@@ -33,85 +32,59 @@ void SystemSolver::addStage(const std::vector<size_t>& block_indices, std::share
 
 std::vector<FieldState> SystemSolver::solve(
     const std::vector<WeakForm*>& residual_evals,
-    const std::vector<std::vector<size_t>>& block_indices, 
+    const std::vector<std::vector<size_t>>& block_indices,
     const FieldState& shape_disp,
     const std::vector<std::vector<FieldState>>& states,
-    const std::vector<std::vector<FieldState>>& params, 
+    const std::vector<std::vector<FieldState>>& params,
     const TimeInfo& time_info,
     const std::vector<const BoundaryConditionManager*>& bc_managers) const
 {
-  // Check if there are no stages. If not, maybe create a monolithic stage?
-  // Let's enforce that stages_ is not empty.
   SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
 
-  // Make a working copy of the states that we will update iteratively
+  // Reset each stage solver's convergence tracking (e.g. initial residual norm for rel-tol)
+  for (const auto& stage : stages_) {
+    stage.solver->resetConvergenceState();
+  }
+
+  // Working copy of states, updated in-place as stages solve
   std::vector<std::vector<FieldState>> current_states = states;
-
   size_t num_residuals = residual_evals.size();
-  
-  // Create a loop over global max iterations
-  for (int iter = 0; iter < global_max_iterations_; ++iter) {
-    // bool all_stages_converged = true; // In a real implementation we would check the global residual here
 
-    // Instead of checking global residual right now, let's just do a single loop if global_max_iterations_ == 1
-    // or we can just rely on the sub-solvers for now.
-    
-    // For each stage in the staggered solve
+  for (int iter = 0; iter < max_staggered_iterations_; ++iter) {
+    // --- Run each stage ---
     for (size_t stage_idx = 0; stage_idx < stages_.size(); ++stage_idx) {
       const auto& stage = stages_[stage_idx];
-      
-      // Extract the subset of equations and variables for this stage
+      size_t num_stage_blocks = stage.block_indices.size();
+
       std::vector<WeakForm*> stage_residuals;
       std::vector<std::vector<size_t>> stage_block_indices;
       std::vector<std::vector<FieldState>> stage_states;
       std::vector<std::vector<FieldState>> stage_params;
       std::vector<const BoundaryConditionManager*> stage_bc_managers;
 
-      size_t num_stage_blocks = stage.block_indices.size();
-
       for (size_t i = 0; i < num_stage_blocks; ++i) {
         size_t global_row = stage.block_indices[i];
         stage_residuals.push_back(residual_evals[global_row]);
         stage_bc_managers.push_back(bc_managers[global_row]);
-
         stage_states.push_back(current_states[global_row]);
         stage_params.push_back(params[global_row]);
 
         std::vector<size_t> row_indices(num_stage_blocks, invalid_block_index);
-
         for (size_t col_idx = 0; col_idx < num_stage_blocks; ++col_idx) {
           size_t global_col = stage.block_indices[col_idx];
           row_indices[col_idx] = block_indices[global_row][global_col];
         }
-
         stage_block_indices.push_back(row_indices);
       }
 
-      // Solve this stage!
       std::vector<FieldState> stage_solutions = block_solve(
-          stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info, stage.solver.get(), stage_bc_managers);
+          stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info,
+          stage.solver.get(), stage_bc_managers);
 
-      // Now, update the current_states with the solutions from this stage
-      // stage_solutions contains the updated fields for the diagonal blocks of this stage
+      // Propagate updated fields to all residuals that reference them
       for (size_t i = 0; i < num_stage_blocks; ++i) {
-        size_t global_row = stage.block_indices[i];
-        size_t global_col = global_row; // The solution corresponds to the diagonal block
-
-        // We must update the state globally
-        // Wait, current_states[some_row] might also contain this field as an input.
-        // We should just update ALL references to this state across current_states.
-        // The easiest way is to match by field name or identity. Since we cloned it, 
-        // we can just replace it everywhere it appears.
-        
-        // Actually, in `SystemSolver`, it's much simpler if the physics system (e.g., MultiphysicsTimeIntegrator)
-        // just extracts the diagonal fields.
-        // Let's replace the occurrences of the field in `current_states` with `stage_solutions[i]`.
-        // To do this, we know that original `states[r][s_idx]` was the unknown.
-        // We can just find all occurrences of the OLD state in `current_states` and replace with `stage_solutions[i]`.
-        
-        // Let's just update it:
+        size_t global_col = stage.block_indices[i];
         FieldState new_state = stage_solutions[i];
-        
         for (size_t r = 0; r < num_residuals; ++r) {
           size_t c = block_indices[r][global_col];
           if (c != invalid_block_index) {
@@ -121,34 +94,36 @@ std::vector<FieldState> SystemSolver::solve(
       }
     }
 
-    if (global_max_iterations_ > 1) {
-      double global_residual_norm_sq = 0.0;
-      for (size_t r = 0; r < num_residuals; ++r) {
-        std::vector<const FiniteElementState*> input_ptrs;
-        for (const auto& field_state : current_states[r]) {
-          input_ptrs.push_back(field_state.get().get());
+    // --- Convergence check (skipped in exact-steps mode or if only one iteration) ---
+    if (!exact_staggered_steps_ && max_staggered_iterations_ > 1) {
+      bool all_converged = true;
+      for (const auto& stage : stages_) {
+        size_t num_stage_blocks = stage.block_indices.size();
+        std::vector<mfem::Vector> stage_residuals;
+        for (size_t i = 0; i < num_stage_blocks; ++i) {
+          size_t global_row = stage.block_indices[i];
+          std::vector<const FiniteElementState*> input_ptrs;
+          for (const auto& field_state : current_states[global_row]) {
+            input_ptrs.push_back(field_state.get().get());
+          }
+          mfem::Vector res = residual_evals[global_row]->residual(time_info, shape_disp.get().get(), input_ptrs);
+          if (bc_managers[global_row]) {
+            res.SetSubVector(bc_managers[global_row]->allEssentialTrueDofs(), 0.0);
+          }
+          stage_residuals.push_back(std::move(res));
         }
-        
-        mfem::Vector res = residual_evals[r]->residual(time_info, shape_disp.get().get(), input_ptrs);
-        if (bc_managers[r]) {
-          res.SetSubVector(bc_managers[r]->allEssentialTrueDofs(), 0.0);
+        if (!stage.solver->checkConvergence(1.0, stage_residuals)) {
+          all_converged = false;
+          break;
         }
-        double r_norm = res.Norml2();
-        global_residual_norm_sq += r_norm * r_norm;
       }
-      
-      double global_residual_norm = std::sqrt(global_residual_norm_sq);
-      
-      // We don't have a reliable initial residual norm for a relative tolerance check here
-      // Typically, staggered solvers compare against an initial un-staggered residual,
-      // or use an absolute tolerance. We'll use the provided tolerance.
-      if (global_residual_norm < global_rel_tol_) {
+      if (all_converged) {
         break;
       }
     }
   }
 
-  // At the end, return the DIAGONAL states as the final solution
+  // Return the diagonal (unknown) states as the final solution
   std::vector<FieldState> final_solutions;
   final_solutions.reserve(num_residuals);
   for (size_t r = 0; r < num_residuals; ++r) {
