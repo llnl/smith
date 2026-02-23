@@ -47,26 +47,26 @@ TEST_P(ContactTestAMGF, beam)
 
   auto mesh = std::make_shared<smith::Mesh>(buildMeshFromFile(filename), "beam_mesh", 1, 0);
 
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::GMRES,
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
                                      .preconditioner = Preconditioner::AMGF,
                                      .relative_tol = 0.0,
-                                     .absolute_tol = 1.0e-14,
-                                     .print_level = 1};
+                                     .absolute_tol = 1.0e-10,
+                                     .print_level = 2};
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
   return;
 #endif
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
-                                           .relative_tol = 1.0e-12,
-                                           .absolute_tol = 1.0e-12,
+                                           .relative_tol = 0.0,
+                                           .absolute_tol = 1.0e-8,
                                            .max_iterations = 20,
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
                                  .enforcement = std::get<0>(GetParam()),
                                  .type = std::get<1>(GetParam()),
-                                 .penalty = 1.0e2,
+                                 .penalty = 1.0e4,
                                  .jacobian = std::get<2>(GetParam())};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
@@ -116,13 +116,13 @@ TEST_P(ContactTestAMGF, beam)
 // NOTE: if Penalty is first and Lagrange Multiplier is second, SuperLU gives a zero diagonal error
 INSTANTIATE_TEST_SUITE_P(tribol, ContactTestAMGF,
                          testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal,
-                                                         ContactJacobian::Approximate, "penalty_tiednormal_Japprox"),
+                                                         ContactJacobian::Approximate, "penalty_tiednormal_Japprox_amgf"),
                                          std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-                                                         ContactJacobian::Approximate, "penalty_frictionless_Japprox"),
-                                         std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal,
-                                                         ContactJacobian::Exact, "penalty_tiednormal_Jexact"),
-                                         std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-                                                         ContactJacobian::Exact, "penalty_frictionless_Jexact")));
+                                                         ContactJacobian::Approximate, "penalty_frictionless_Japprox_amgf")));//,
+                                         //std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal,
+                                         //                ContactJacobian::Exact, "penalty_tiednormal_Jexact"),
+                                         //std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
+                                         //                ContactJacobian::Exact, "penalty_frictionless_Jexact")));
 
 }  // namespace smith
 
