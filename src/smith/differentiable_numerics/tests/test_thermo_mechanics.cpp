@@ -35,7 +35,8 @@ auto greenStrain(const tensor<T, dim, dim>& grad_u)
 
 /// @brief Green-Saint Venant isotropic thermoelastic model
 /// This an unparametrized version of the model in green_saint_venant_thermoelastic.hpp
-/// Another difference is that this implementation does not use 'State' as state is not supported in smith for autodifferentiation
+/// Another difference is that this implementation does not use 'State' as state is not supported in smith for
+/// autodifferentiation
 struct GreenSaintVenantThermoelasticMaterial {
   double density;    ///< density
   double E;          ///< Young's modulus
