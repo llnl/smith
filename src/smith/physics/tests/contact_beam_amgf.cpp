@@ -114,15 +114,16 @@ TEST_P(ContactTestAMGF, beam)
 }
 
 // NOTE: if Penalty is first and Lagrange Multiplier is second, SuperLU gives a zero diagonal error
-INSTANTIATE_TEST_SUITE_P(tribol, ContactTestAMGF,
-                         testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal,
-                                                         ContactJacobian::Approximate, "penalty_tiednormal_Japprox_amgf"),
-                                         std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-                                                         ContactJacobian::Approximate, "penalty_frictionless_Japprox_amgf")));//,
-                                         //std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal,
-                                         //                ContactJacobian::Exact, "penalty_tiednormal_Jexact"),
-                                         //std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-                                         //                ContactJacobian::Exact, "penalty_frictionless_Jexact")));
+INSTANTIATE_TEST_SUITE_P(
+    tribol, ContactTestAMGF,
+    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Approximate,
+                                    "penalty_tiednormal_Japprox_amgf"),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
+                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox_amgf")));  //,
+// std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal,
+//                 ContactJacobian::Exact, "penalty_tiednormal_Jexact"),
+// std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
+//                 ContactJacobian::Exact, "penalty_frictionless_Jexact")));
 
 }  // namespace smith
 
