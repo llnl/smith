@@ -4,13 +4,13 @@
 # CMake executable path: /usr/tce/packages/cmake/cmake-3.29.2/bin/cmake
 #------------------------------------------------------------------------------
 
-set(CMAKE_PREFIX_PATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/caliper-2.12.1-x2ce7umcpli5fqgdandkgczlf5myipoy;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/tribol-0.1.0.24-dt7szr32wsbu24yb4kvxvocngdxc5dln;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/adiak-0.4.1-62gxccbhdmltjnoie7qfyshfjysalr2g;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/libunwind-1.8.3-cxgef2qr2nlygjpigoowaglp43k4aykv;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/axom-0.12.0.1-2icyrg6hylzrq3ihkecbdtex5okphlea;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/conduit-0.9.5-mivnw6vbanunz42cz7vpwytjnvydxn5p;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/mfem-4.9.0.3-ilqq6fncrqigws3n2n2pgmbfdld3eelq;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/netcdf-c-4.7.4-d4rvpsusha3on2pe75yvfh6sstiqnyw3;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/raja-2025.09.0-32s2rallmn4osasi2gf4hj637avz62gz;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/strumpack-8.0.0-4nzp2kzyiew7lxzc6ccmijqsfstuzxet;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/sundials-7.5.0-be43ky6inobvtsbls5yk334r2kr4fqyn;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/superlu-dist-8.1.2-6ignctzsgrpxvw5t4cm4qcvgwoxcyldc;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/umpire-2025.09.0-66ssnc5izfnzourvg7oiq6jcgaxz3mzw;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/hdf5-1.8.23-nmu2vrokct4k4banmaeyuchrnptg5mqx;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/netlib-scalapack-2.2.2-vs53gyf6e56ekpdyi2alonlonz243yt7;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/hypre-2.33.0-liw3q7m6gy3rpo3k3xoojvvtkyz22rjj;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/parmetis-4.0.3-srcq3e64ymyvck256mucgmku2zraqcsb;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/camp-2025.09.2-kubgohptqlzut47jgppfg4qftipbmg5v;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/fmt-12.1.0-vwydbr72m2meunrzcqptplqmaswxclas;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/metis-5.1.0-v6xgdvelc46f7zu3dch37kpkp4iob2jw;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/none-none/compiler-wrapper-1.0-gsjte4xjarvat5o7b7sdeufsa3qr7mjh;/usr/tce/packages/cmake/cmake-3.29.2;/usr/tce/packages/cray-mpich-tce/cray-mpich-8.1.29-rocmcc-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/usr/tce/packages/cmake/cmake-3.29.2" CACHE STRING "")
+set(CMAKE_PREFIX_PATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/caliper-2.12.1-am6ehnzp2m2z5f6ekxcuwrf2ugzhewqi;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/tribol-0.1.0.25-4qe4774jgrpvrujzrp2heunrvws5blfk;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/adiak-0.4.1-3bix57nuclcu255t4zcoq2nrgmz3oq4p;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/libunwind-1.8.3-ippgykoga74yoixwyiqks7gi6quw36v4;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/axom-0.12.0.1-oedeczoaqi3govmvr3qd4w3ir7jxobim;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/conduit-0.9.5-4mxhzotmrngjgoky4t7qaofhmwcsqgl7;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/mfem-4.9.1.1-qga6acnz7ejqrjnjn4i2qsixu3yuycd3;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/enzyme-0.0.249-zpsgmqbv7vldpmzugxl7vx3n5b7qapkk;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/hipcub-6.4.2-iyptmtnfqwsxxgzz7wpcrgji5fghdny5;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/netcdf-c-4.7.4-3lm3jpmxvii4gxo5kewxb5irp5gzkvwl;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/raja-2025.09.0-mzlz7wn7f22fn7bc6ut24hxspzfdb3eq;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/strumpack-8.0.0-ur6dhl7lobsui32gugmf32cu7svqlpbv;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/sundials-7.5.0-kwvi2s6vdzp4tdwxkptonhkvguusnjgl;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/superlu-dist-8.1.2-dv6ym6skcymnvwacj6dcsbys4lu7eerm;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/umpire-2025.09.0-ifzxz2gfr6lwe2noancq2srjpbwxvhot;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/hdf5-1.8.23-mjfldfpg6d5kc7xwrq3ljhtwf6sxmdof;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/netlib-scalapack-2.2.2-jpzeuqcaz3kstu46wgkkt4bgqzmrddmf;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/hypre-2.33.0-3n4xgmdm7rr6rnri7zzri2fybswhf226;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/parmetis-4.0.3-c26o6zlfv2ewwt6evbirykb3v3mgafmt;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/camp-2025.09.2-23tfauqt22avy44pxakde27unhmsdfek;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/fmt-11.0.2-effkn2xr7yuztkobdvimtqsm34rm7qzz;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/metis-5.1.0-gxshuj2wfwht6dllp7lv75smkfj55myo;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/none-none/compiler-wrapper-1.0-pypgv2tridcfdliq3cjhfecu23umxcjd;/usr/tce/packages/cmake/cmake-3.29.2;/usr/tce/packages/cray-mpich-tce/cray-mpich-8.1.29-rocmcc-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/opt/rocm-6.4.2;/usr/tce/packages/cmake/cmake-3.29.2" CACHE STRING "")
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH "ON" CACHE STRING "")
 
-set(CMAKE_BUILD_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/smith-develop-xe53if7u3fm42c7yygdbgqslqxw2burl/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/smith-develop-xe53if7u3fm42c7yygdbgqslqxw2burl/lib64;;/opt/rh/gcc-toolset-13/root/usr/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
+set(CMAKE_BUILD_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/smith-develop-3zk7wg4bocznhln4gprlqyvyie3dexom/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/smith-develop-3zk7wg4bocznhln4gprlqyvyie3dexom/lib64;;/opt/rh/gcc-toolset-13/root/usr/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
 
-set(CMAKE_INSTALL_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/smith-develop-xe53if7u3fm42c7yygdbgqslqxw2burl/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2/smith-develop-xe53if7u3fm42c7yygdbgqslqxw2burl/lib64;;/opt/rh/gcc-toolset-13/root/usr/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
+set(CMAKE_INSTALL_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/smith-develop-3zk7wg4bocznhln4gprlqyvyie3dexom/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2/smith-develop-3zk7wg4bocznhln4gprlqyvyie3dexom/lib64;;/opt/rh/gcc-toolset-13/root/usr/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
 
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 
@@ -21,11 +21,11 @@ set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 #------------------------------------------------------------------------------
 if(DEFINED ENV{SPACK_CC})
 
-  set(CMAKE_C_COMPILER "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/none-none/compiler-wrapper-1.0-gsjte4xjarvat5o7b7sdeufsa3qr7mjh/libexec/spack/rocmcc/amdclang" CACHE PATH "")
+  set(CMAKE_C_COMPILER "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/none-none/compiler-wrapper-1.0-pypgv2tridcfdliq3cjhfecu23umxcjd/libexec/spack/rocmcc/amdclang" CACHE PATH "")
 
-  set(CMAKE_CXX_COMPILER "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/none-none/compiler-wrapper-1.0-gsjte4xjarvat5o7b7sdeufsa3qr7mjh/libexec/spack/rocmcc/amdclang++" CACHE PATH "")
+  set(CMAKE_CXX_COMPILER "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/none-none/compiler-wrapper-1.0-pypgv2tridcfdliq3cjhfecu23umxcjd/libexec/spack/rocmcc/amdclang++" CACHE PATH "")
 
-  set(CMAKE_Fortran_COMPILER "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/none-none/compiler-wrapper-1.0-gsjte4xjarvat5o7b7sdeufsa3qr7mjh/libexec/spack/rocmcc/amdflang" CACHE PATH "")
+  set(CMAKE_Fortran_COMPILER "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/none-none/compiler-wrapper-1.0-pypgv2tridcfdliq3cjhfecu23umxcjd/libexec/spack/rocmcc/amdflang" CACHE PATH "")
 
 else()
 
@@ -85,51 +85,51 @@ set(CMAKE_EXE_LINKER_FLAGS "-lxpmem -L/opt/cray/pe/mpich/8.1.29/gtl/lib -Wl,-rpa
 # TPLs
 #------------------------------------------------------------------------------
 
-set(TPL_ROOT "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_01_12_12_30_49/llvm-amdgpu-6.4.2" CACHE PATH "")
+set(TPL_ROOT "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib_cray/2026_02_19_11_29_48/llvm-amdgpu-6.4.2" CACHE PATH "")
 
-set(AXOM_DIR "${TPL_ROOT}/axom-0.12.0.1-2icyrg6hylzrq3ihkecbdtex5okphlea" CACHE PATH "")
+set(AXOM_DIR "${TPL_ROOT}/axom-0.12.0.1-oedeczoaqi3govmvr3qd4w3ir7jxobim" CACHE PATH "")
 
-set(CAMP_DIR "${TPL_ROOT}/camp-2025.09.2-kubgohptqlzut47jgppfg4qftipbmg5v" CACHE PATH "")
+set(CAMP_DIR "${TPL_ROOT}/camp-2025.09.2-23tfauqt22avy44pxakde27unhmsdfek" CACHE PATH "")
 
-set(CONDUIT_DIR "${TPL_ROOT}/conduit-0.9.5-mivnw6vbanunz42cz7vpwytjnvydxn5p" CACHE PATH "")
+set(CONDUIT_DIR "${TPL_ROOT}/conduit-0.9.5-4mxhzotmrngjgoky4t7qaofhmwcsqgl7" CACHE PATH "")
 
 set(LUA_DIR "/usr" CACHE PATH "")
 
-set(MFEM_DIR "${TPL_ROOT}/mfem-4.9.0.3-ilqq6fncrqigws3n2n2pgmbfdld3eelq" CACHE PATH "")
+set(MFEM_DIR "${TPL_ROOT}/mfem-4.9.1.1-qga6acnz7ejqrjnjn4i2qsixu3yuycd3" CACHE PATH "")
 
-set(HDF5_DIR "${TPL_ROOT}/hdf5-1.8.23-nmu2vrokct4k4banmaeyuchrnptg5mqx" CACHE PATH "")
+set(HDF5_DIR "${TPL_ROOT}/hdf5-1.8.23-mjfldfpg6d5kc7xwrq3ljhtwf6sxmdof" CACHE PATH "")
 
-set(HYPRE_DIR "${TPL_ROOT}/hypre-2.33.0-liw3q7m6gy3rpo3k3xoojvvtkyz22rjj" CACHE PATH "")
+set(HYPRE_DIR "${TPL_ROOT}/hypre-2.33.0-3n4xgmdm7rr6rnri7zzri2fybswhf226" CACHE PATH "")
 
-set(METIS_DIR "${TPL_ROOT}/metis-5.1.0-v6xgdvelc46f7zu3dch37kpkp4iob2jw" CACHE PATH "")
+set(METIS_DIR "${TPL_ROOT}/metis-5.1.0-gxshuj2wfwht6dllp7lv75smkfj55myo" CACHE PATH "")
 
-set(PARMETIS_DIR "${TPL_ROOT}/parmetis-4.0.3-srcq3e64ymyvck256mucgmku2zraqcsb" CACHE PATH "")
+set(PARMETIS_DIR "${TPL_ROOT}/parmetis-4.0.3-c26o6zlfv2ewwt6evbirykb3v3mgafmt" CACHE PATH "")
 
-set(NETCDF_DIR "${TPL_ROOT}/netcdf-c-4.7.4-d4rvpsusha3on2pe75yvfh6sstiqnyw3" CACHE PATH "")
+set(NETCDF_DIR "${TPL_ROOT}/netcdf-c-4.7.4-3lm3jpmxvii4gxo5kewxb5irp5gzkvwl" CACHE PATH "")
 
-set(SUPERLUDIST_DIR "${TPL_ROOT}/superlu-dist-8.1.2-6ignctzsgrpxvw5t4cm4qcvgwoxcyldc" CACHE PATH "")
+set(SUPERLUDIST_DIR "${TPL_ROOT}/superlu-dist-8.1.2-dv6ym6skcymnvwacj6dcsbys4lu7eerm" CACHE PATH "")
 
-set(ADIAK_DIR "${TPL_ROOT}/adiak-0.4.1-62gxccbhdmltjnoie7qfyshfjysalr2g" CACHE PATH "")
+set(ADIAK_DIR "${TPL_ROOT}/adiak-0.4.1-3bix57nuclcu255t4zcoq2nrgmz3oq4p" CACHE PATH "")
 
 # AMGX not built
 
-set(CALIPER_DIR "${TPL_ROOT}/caliper-2.12.1-x2ce7umcpli5fqgdandkgczlf5myipoy" CACHE PATH "")
+set(CALIPER_DIR "${TPL_ROOT}/caliper-2.12.1-am6ehnzp2m2z5f6ekxcuwrf2ugzhewqi" CACHE PATH "")
 
-# ENZYME not built
+set(ENZYME_DIR "${TPL_ROOT}/enzyme-0.0.249-zpsgmqbv7vldpmzugxl7vx3n5b7qapkk" CACHE PATH "")
 
 # PETSC not built
 
-set(RAJA_DIR "${TPL_ROOT}/raja-2025.09.0-32s2rallmn4osasi2gf4hj637avz62gz" CACHE PATH "")
+set(RAJA_DIR "${TPL_ROOT}/raja-2025.09.0-mzlz7wn7f22fn7bc6ut24hxspzfdb3eq" CACHE PATH "")
 
 # SLEPC not built
 
-set(STRUMPACK_DIR "${TPL_ROOT}/strumpack-8.0.0-4nzp2kzyiew7lxzc6ccmijqsfstuzxet" CACHE PATH "")
+set(STRUMPACK_DIR "${TPL_ROOT}/strumpack-8.0.0-ur6dhl7lobsui32gugmf32cu7svqlpbv" CACHE PATH "")
 
-set(SUNDIALS_DIR "${TPL_ROOT}/sundials-7.5.0-be43ky6inobvtsbls5yk334r2kr4fqyn" CACHE PATH "")
+set(SUNDIALS_DIR "${TPL_ROOT}/sundials-7.5.0-kwvi2s6vdzp4tdwxkptonhkvguusnjgl" CACHE PATH "")
 
-set(UMPIRE_DIR "${TPL_ROOT}/umpire-2025.09.0-66ssnc5izfnzourvg7oiq6jcgaxz3mzw" CACHE PATH "")
+set(UMPIRE_DIR "${TPL_ROOT}/umpire-2025.09.0-ifzxz2gfr6lwe2noancq2srjpbwxvhot" CACHE PATH "")
 
-set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.24-dt7szr32wsbu24yb4kvxvocngdxc5dln" CACHE PATH "")
+set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.25-4qe4774jgrpvrujzrp2heunrvws5blfk" CACHE PATH "")
 
 #------------------------------------------------------------------------------
 # Devtools
