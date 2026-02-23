@@ -166,7 +166,7 @@ struct FieldStore {
     boundary_conditions_.push_back(
         std::make_shared<DirichletBoundaryConditions>(mesh_->mfemParMesh(), new_field.get()->space()));
     SLIC_ERROR_IF(num_unknowns_ != boundary_conditions_.size(),
-                  "Inconcistency between num unknowns and boundary condition size");
+                  "Inconsistency between num unknowns and boundary condition size");
     return boundary_conditions_.back();
   }
 
