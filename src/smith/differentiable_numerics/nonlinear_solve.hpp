@@ -24,7 +24,7 @@ class DifferentiableBlockSolver;
 class BoundaryConditionManager;
 class DirichletBoundaryConditions;
 
-/// @brief magic number for represending a field which is not an argument of the weak form.
+/// @brief magic number for representing a field which is not an argument of the weak form.
 static constexpr size_t invalid_block_index = std::numeric_limits<size_t>::max() - 1;
 
 /// @brief Solve a nonlinear system of equations as defined by the weak form, assuming that the field indexed by
