@@ -123,10 +123,9 @@ TEST(BlockDiagonal, ThrowsOnWrongNumberOfSolvers)
   std::vector<std::unique_ptr<Solver>> solvers;
   solvers.push_back(std::make_unique<IdentitySolver>());
 
-  EXPECT_DEATH(
-    { smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers)); },
-    "Number of solvers must match number of blocks"
-  );
+  EXPECT_THROW(
+      smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers)),
+      std::invalid_argument);
 }
 
 // If the solver for each block is identity, the block solver is identity

@@ -12,8 +12,10 @@ namespace smith {
 BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers)
   : block_offsets_(offsets), nblocks_(offsets.Size() - 1), block_jacobian_(nullptr), solver_diag_(block_offsets_), mfem_solvers(std::move(solvers))
 {
-  MFEM_VERIFY(mfem_solvers.size() == static_cast<size_t>(nblocks_),
-              "Number of solvers must match number of blocks");
+  if (mfem_solvers.size() != static_cast<size_t>(nblocks_))
+  {
+    throw std::invalid_argument("Number of solvers must match number of blocks");
+  }
 }
 
 /**
@@ -61,8 +63,10 @@ BlockDiagonalPreconditioner::~BlockDiagonalPreconditioner() {}
 BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockTriangularType type)
   : block_offsets_(offsets), nblocks_(offsets.Size() - 1), block_jacobian_(nullptr), mfem_solvers(std::move(solvers)), type_(type)
 {
-  MFEM_VERIFY(mfem_solvers.size() == static_cast<size_t>(nblocks_),
-            "Number of solvers must match number of blocks");
+  if (mfem_solvers.size() != static_cast<size_t>(nblocks_))
+  {
+    throw std::invalid_argument("Number of solvers must match number of blocks");
+  }
 }
 
 /**
