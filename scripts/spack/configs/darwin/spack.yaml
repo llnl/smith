@@ -1,19 +1,8 @@
 spack:
-  config:
-    install_tree:
-      root: $spack/..
-      projections:
-        all: '{compiler.name}-{compiler.version}/{name}-{version}-{hash}'
-    misc_cache: $spack/../misc_cache
-    test_stage: $spack/../test_stage
-    build_stage::
-    - $spack/../build_stage
-
-  view: false
-
   include:
     - ../defaults.yaml
     - ../versions.yaml
+
 
   toolchains:
     clang_19:
@@ -25,6 +14,7 @@ spack:
       when: '%fortran'
     - spec: '%openmpi@5.0.8.clang_19'
       when: '%mpi'
+
 
   packages:
     all:
@@ -220,5 +210,5 @@ spack:
     py-sphinx:
       buildable: false
       externals:
-      - spec: py-sphinx@7.4.7
+      - spec: py-sphinx@7.4.7 ^python
         prefix: /Users/chapman39/dev/smith/venv

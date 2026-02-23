@@ -14,7 +14,7 @@
 
 #include "smith/smith_config.hpp"
 
-#ifdef SMITH_USE_DFEM
+#ifdef SMITH_USE_ENZYME
 
 #include "smith/physics/dfem_weak_form.hpp"
 
@@ -38,7 +38,7 @@ struct StressDivQFunction {
       const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dv_dxi,
       const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>&,
       const mfem::future::tensor<mfem::real_t, Material::dim, Material::dim>& dX_dxi, mfem::real_t weight,
-      Parameters::QFunctionInput... params) const
+      typename Parameters::QFunctionInput... params) const
   {
     auto dxi_dX = mfem::future::inv(dX_dxi);
     auto du_dX = mfem::future::dot(du_dxi, dxi_dX);

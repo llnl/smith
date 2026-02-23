@@ -55,9 +55,6 @@ smith_add_library(
     DEPENDS_ON  ${infrastructure_depends}
     )
 
-# Set file back to C++ due to nvcc compiler error
-set_source_files_properties(input.cpp PROPERTIES LANGUAGE CXX)
-
 smith_write_unified_header(
     NAME    infrastructure
     HEADERS ${infrastructure_headers}

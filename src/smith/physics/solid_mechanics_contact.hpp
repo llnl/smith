@@ -151,10 +151,9 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
             const mfem::Vector u_blk(const_cast<mfem::Vector&>(u), 0, displacement_.Size());
             auto [r, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(u_blk),
                                           acceleration_, *parameters_[parameter_indices].state...);
-            J_ = assemble(drdu);
 
             // create block operator holding jacobian contributions
-            J_constraint_ = contact_.jacobianFunction(J_.release());
+            J_constraint_ = contact_.jacobianFunction(assemble(drdu));
 
             // take ownership of blocks
             J_constraint_->owns_blocks = false;
@@ -187,10 +186,9 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
           displacement_.space().TrueVSize(), residual_fn, [this](const mfem::Vector& u) -> mfem::Operator& {
             auto [r, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(u), acceleration_,
                                           *parameters_[parameter_indices].state...);
-            J_ = assemble(drdu);
 
             // get 11-block holding jacobian contributions
-            auto block_J = contact_.jacobianFunction(J_.release());
+            auto block_J = contact_.jacobianFunction(assemble(drdu));
             block_J->owns_blocks = false;
             J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 
@@ -336,13 +334,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       // use the most recently evaluated Jacobian
       auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
                                     acceleration_, *parameters_[parameter_indices].previous_state...);
-      J_.reset();
-      J_ = assemble(drdu);
 
       contact_.update(cycle_, time_, dt);
       if (contact_.haveLagrangeMultipliers()) {
         J_offsets_ = mfem::Array<int>({0, displacement_.Size(), displacement_.Size() + contact_.numPressureDofs()});
-        J_constraint_ = contact_.jacobianFunction(J_.release());
+        J_constraint_ = contact_.jacobianFunction(assemble(drdu));
 
         // take ownership of blocks
         J_constraint_->owns_blocks = false;
@@ -354,7 +350,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
         J_22_ =
             std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&J_constraint_->GetBlock(1, 1)));
 
-        J_e_.reset();
         J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
         J_e_21_ = std::unique_ptr<mfem::HypreParMatrix>(J_21_->EliminateCols(bcs_.allEssentialTrueDofs()));
         J_12_->EliminateRows(bcs_.allEssentialTrueDofs());
@@ -362,7 +357,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
         J_operator_ = J_constraint_.get();
       } else {
         // get 11-block holding jacobian contributions
-        auto block_J = contact_.jacobianFunction(J_.release());
+        auto block_J = contact_.jacobianFunction(assemble(drdu));
         block_J->owns_blocks = false;
         J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 
@@ -398,21 +393,16 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     SLIC_ERROR_ROOT_IF(contact_.haveLagrangeMultipliers(),
                        "Lagrange multiplier contact does not currently support sensitivities/adjoints.");
 
-    // By default, use a homogeneous essential boundary condition
-    mfem::HypreParVector adjoint_essential(displacement_adjoint_load_);
-    adjoint_essential = 0.0;
-
     auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
                                   acceleration_, *parameters_[parameter_indices].state...);
-    auto jacobian = assemble(drdu);
 
-    auto block_J = contact_.jacobianFunction(jacobian.release());
+    auto block_J = contact_.jacobianFunction(assemble(drdu));
     block_J->owns_blocks = false;
-    jacobian = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
+    auto jacobian = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
     auto J_T = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
 
     for (const auto& bc : bcs_.essentials()) {
-      bc.apply(*J_T, displacement_adjoint_load_, adjoint_essential);
+      bc.apply(*J_T, displacement_adjoint_load_, reactions_adjoint_bcs_);
     }
 
     auto& lin_solver = nonlin_solver_->linearSolver();
@@ -427,11 +417,10 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
         smith::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(BasePhysics::shapeDisplacement()),
                                             displacement_, acceleration_, *parameters_[parameter_indices].state...));
 
-    auto drdshape_mat = assemble(drdshape);
-
-    auto block_J = contact_.jacobianFunction(drdshape_mat.release());
+    auto block_J = contact_.jacobianFunction(assemble(drdshape));
     block_J->owns_blocks = false;
-    drdshape_mat = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
+    auto drdshape_mat =
+        std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
 
     drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_dual_);
 
@@ -457,6 +446,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   using SolidMechanicsBase::J_;
   using SolidMechanicsBase::J_e_;
   using SolidMechanicsBase::nonlin_solver_;
+  using SolidMechanicsBase::reactions_adjoint_bcs_;
   using SolidMechanicsBase::residual_;
   using SolidMechanicsBase::residual_with_bcs_;
   using SolidMechanicsBase::shape_displacement_dual_;

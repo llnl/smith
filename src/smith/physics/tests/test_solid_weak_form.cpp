@@ -30,7 +30,6 @@
 #include "smith/physics/state/finite_element_state.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
-
 namespace smith {
 
 struct NeoHookeanWithFieldWithRateForTesting {
