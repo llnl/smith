@@ -50,7 +50,7 @@ TEST_P(ContactTestAMGF, beam)
   LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
                                      .preconditioner = Preconditioner::AMGF,
                                      .relative_tol = 0.0,
-                                     .absolute_tol = 1.0e-10,
+                                     .absolute_tol = 1.0e-13,
                                      .print_level = 2};
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -119,11 +119,7 @@ INSTANTIATE_TEST_SUITE_P(
     testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Approximate,
                                     "penalty_tiednormal_Japprox_amgf"),
                     std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox_amgf")));  //,
-// std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal,
-//                 ContactJacobian::Exact, "penalty_tiednormal_Jexact"),
-// std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-//                 ContactJacobian::Exact, "penalty_frictionless_Jexact")));
+                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox_amgf")));
 
 }  // namespace smith
 
