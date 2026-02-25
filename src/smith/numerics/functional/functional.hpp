@@ -239,6 +239,27 @@ class Functional;
 /// @endcond
 
 /**
+ * @brief Holds per-element stiffness matrices and the associated global DOF indices
+ *
+ * Returned by @p assemble_element_matrices(Gradient&). The data is keyed by
+ * mfem::Geometry::Type (e.g. mfem::Geometry::CUBE for hexahedra).
+ *
+ * Storage conventions (flat, row-major in the "inner" indices):
+ *  - K[geom]         : [n_elems * cols_per_elem * rows_per_elem]
+ *                       K[e * C*R + i * R + j] = K_e(e, trial_col_i, test_row_j)
+ *  - test_dofs[geom] : [n_elems * rows_per_elem]   (global row DOF indices, 0-based)
+ *  - trial_dofs[geom]: [n_elems * cols_per_elem]   (global col DOF indices, 0-based)
+ */
+struct ElementMatrices {
+  std::map<mfem::Geometry::Type, std::vector<double>> K;            ///< element stiffness data
+  std::map<mfem::Geometry::Type, std::vector<int>>    test_dofs;    ///< row (test) global DOF indices
+  std::map<mfem::Geometry::Type, std::vector<int>>    trial_dofs;   ///< col (trial) global DOF indices
+  std::map<mfem::Geometry::Type, int>                 rows_per_elem; ///< test DOFs per element
+  std::map<mfem::Geometry::Type, int>                 cols_per_elem; ///< trial DOFs per element
+  std::map<mfem::Geometry::Type, int>                 num_elements;  ///< element count per geometry
+};
+
+/**
  * @brief Intended to be like @p std::function for finite element kernels
  *
  * That is: you tell it the inputs (trial spaces) for a kernel, and the outputs (test space) like @p std::function.
@@ -977,6 +998,89 @@ class Functional<test(trials...), exec> {
     };
 
     friend auto assemble(Gradient& g) { return g.assemble(); }
+
+    /**
+     * @brief Extract per-element stiffness matrices and their global DOF mappings
+     *
+     * This method mirrors the inner loop of @p assemble() but instead of scattering into
+     * a sparse matrix it returns the dense element stiffness matrices together with the
+     * test (row) and trial (column) global DOF index arrays for every element.
+     *
+     * The caller must have evaluated the parent @p Functional with @p differentiate_wrt
+     * at least once before calling this method, because the element gradient kernels
+     * read from quadrature-point derivative buffers populated during that evaluation.
+     *
+     * @return An @p ElementMatrices struct containing K, test_dofs and trial_dofs keyed
+     *         by mfem::Geometry::Type.
+     */
+    ElementMatrices assemble_element_matrices()
+    {
+      ElementMatrices result;
+
+      std::vector<double> K_buffer(max_buffer_size());
+
+      for (auto& integral : form_.integrals_) {
+        if (integral.functional_to_integral_index_.count(which_argument) > 0) {
+          Domain& dom = integral.domain_;
+
+          uint32_t id = integral.functional_to_integral_index_.at(which_argument);
+          const auto& G_test  = dom.get_restriction(form_.test_function_space_);
+          const auto& G_trial = dom.get_restriction(form_.trial_function_spaces_[which_argument]);
+
+          for (const auto& [geom, calculate_element_matrices_func] : integral.element_gradient_[id]) {
+            const auto& test_restriction  = G_test.restrictions.at(geom);
+            const auto& trial_restriction = G_trial.restrictions.at(geom);
+
+            uint32_t rows   = test_restriction.nodes_per_elem  * test_restriction.components;
+            uint32_t cols   = trial_restriction.nodes_per_elem * trial_restriction.components;
+            uint32_t n_elem = test_restriction.num_elements;
+
+            result.rows_per_elem[geom] = int(rows);
+            result.cols_per_elem[geom] = int(cols);
+            result.num_elements[geom]  = int(n_elem);
+
+            // Initialise K accumulator and DOF maps on first encounter with this geometry
+            if (result.K.find(geom) == result.K.end()) {
+              result.K[geom].assign(n_elem * cols * rows, 0.0);
+
+              result.test_dofs[geom].resize(n_elem * rows);
+              result.trial_dofs[geom].resize(n_elem * cols);
+
+              std::vector<DoF> test_vdofs(rows);
+              std::vector<DoF> trial_vdofs(cols);
+              for (uint32_t e = 0; e < n_elem; e++) {
+                test_restriction.GetElementVDofs(int(e), test_vdofs);
+                trial_restriction.GetElementVDofs(int(e), trial_vdofs);
+                for (uint32_t j = 0; j < rows; j++) {
+                  result.test_dofs[geom][e * rows + j] = int(test_vdofs[j].index());
+                }
+                for (uint32_t i = 0; i < cols; i++) {
+                  result.trial_dofs[geom][e * cols + i] = int(trial_vdofs[i].index());
+                }
+              }
+            }
+
+            // Compute element matrices from the stored AD derivatives
+            CPUArrayView<double, 3> K_e(K_buffer.data(), n_elem, cols, rows);
+            detail::zero_out(K_e);
+            calculate_element_matrices_func(K_e);
+
+            // Accumulate: result.K[geom][e][col][row] += K_e(e, col, row)
+            for (uint32_t e = 0; e < n_elem; e++) {
+              for (uint32_t i = 0; i < cols; i++) {
+                for (uint32_t j = 0; j < rows; j++) {
+                  result.K[geom][e * cols * rows + i * rows + j] += K_e(e, i, j);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return result;
+    }
+
+    friend auto assemble_element_matrices(Gradient& g) { return g.assemble_element_matrices(); }
 
    private:
     /// @brief The "parent" @p Functional to calculate gradients with

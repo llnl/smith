@@ -33,10 +33,10 @@ set(functional_headers
     typedefs.hpp
     )
 
-set(functional_sources 
-    domain.cpp 
-    element_restriction.cpp 
-    geometric_factors.cpp 
+set(functional_sources
+    domain.cpp
+    element_restriction.cpp
+    geometric_factors.cpp
     quadrature_data.cpp)
 
 set(functional_detail_headers
