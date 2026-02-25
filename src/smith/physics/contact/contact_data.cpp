@@ -47,7 +47,7 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
   mfem::Array<int> ess_bdry;
   ess_bdry.SetSize(mesh_.bdr_attributes.Max());
   ess_bdry = 0;
-  // attributes start at 1, 
+  // attributes start at 1,
   // shift by -1 to account for zero-based array indexing
   for (const auto& bdry_attr : bdry_attr_surf1) {
     ess_bdry[bdry_attr - 1] = 1;
