@@ -72,8 +72,11 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
     auto temperature_rate_rate =
         create_field_state(*graph, ScalarSpace{}, physics_name + "_temperature_rate_rate", mesh->tag());
     auto time = graph->create_state<double, double>(initial_time);
-    std::vector<FieldState> params =
-        createParams<ParamSpaces...>(*graph, physics_name + "_param", param_names, mesh->tag());
+    std::vector<FieldState> params;
+    if constexpr (sizeof...(ParamSpaces) > 0)
+    {
+        params = createParams<ParamSpaces...>(*graph, physics_name + "_param", param_names, mesh->tag());
+    }
     std::vector<FieldState> states{disp, velo, acceleration, temperature, temperature_rate, temperature_rate_rate};
 
     using SolidWeakFormT =
