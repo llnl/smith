@@ -21,7 +21,7 @@ packages:
     - spec: "@2.33.0"
   mfem:
     require:
-    - spec: "@4.9.0.3"
+    - spec: "@4.9.1.1"
   petsc:
     require:
     - spec: "@3.21.6"
@@ -33,7 +33,7 @@ packages:
     - spec: "@7.5.0"
   tribol:
     require:
-    - spec: "@0.1.0.24"
+    - spec: "@0.1.0.25"
   umpire:
     require:
     - spec: "@2025.09.0"

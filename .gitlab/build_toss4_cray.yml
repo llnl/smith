@@ -12,7 +12,7 @@
     - if: '$CI_COMMIT_BRANCH =~ /_qnone/ || $ON_TOSS4_CRAY == "OFF"' #run except if ...
       when: never
   before_script:
-    - module load cmake/3.23.1
+    - module load cmake/3.29.2
 
 ####
 # Templates

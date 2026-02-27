@@ -151,6 +151,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on("petsc+openmp", when="+openmp")
         depends_on("petsc~openmp", when="~openmp")
         depends_on("slepc+arpack", when="+slepc")
+        depends_on("arpack-ng", when="+slepc")
 
     with when("+tribol"):
         depends_on("tribol")
