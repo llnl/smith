@@ -8,21 +8,6 @@
 - `tests/`: external test-data submodule (not compiled; used by CI/integration).
 - `cmake/` + `host-configs/`: BLT-based CMake build system and machine configs.
 
-## Build, Test, and Development Commands
-1) Initialize dependencies (submodules):
-`git submodule update --init --recursive`
-
-2) Configure a build (wrapper around CMake + host-config cache):
-`./config-build.py -bp build -ip install -hc host-configs/<file>.cmake -bt Debug --exportcompilercommands`
-
-3) Build:
-`cmake --build build -j`
-
-4) Run tests:
-- All: `ctest --test-dir build`
-- One suite: `ctest --test-dir build -R <regex>`
-- Examples (labeled): `ctest --test-dir build -L Example` (often MPI-enabled)
-
 ## Coding Style & Naming Conventions
 - C++ formatting is enforced via `.clang-format`; prefer running `cmake --build build --target style` before pushing.
 - Use existing naming patterns: `PascalCase` types, `camelCase` methods, `snake_case_` members, `SCREAMING_SNAKE_CASE` constants.
