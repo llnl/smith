@@ -1246,10 +1246,10 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
 #else
     SLIC_ERROR_ROOT("PETSc preconditioner requested in non-PETSc build");
 #endif
-  } else if (preconditioner == Preconditioner::AMGF) {
-    auto amgf_preconditioner = std::make_unique<mfem::AMGFSolver>();
-    amgf_preconditioner->GetAMG().SetPrintLevel(preconditioner_print_level);
-    preconditioner_solver = std::move(amgf_preconditioner);
+  } else if (preconditioner == Preconditioner::AMGFContact) {
+    auto amgfcontact_preconditioner = std::make_unique<mfem::AMGFSolver>();
+    amgfcontact_preconditioner->GetAMG().SetPrintLevel(preconditioner_print_level);
+    preconditioner_solver = std::move(amgfcontact_preconditioner);
   } else {
     SLIC_ERROR_ROOT_IF(preconditioner != Preconditioner::None, "Unknown preconditioner type requested");
   }
@@ -1348,8 +1348,8 @@ smith::LinearSolverOptions FromInlet<smith::LinearSolverOptions>::operator()(con
     options.preconditioner = smith::Preconditioner::Petsc;
     options.petsc_preconditioner = smith::mfem_ext::stringToPetscPCType(petsc_prec);
 #endif
-  } else if (prec_type == "AMGF") {
-    options.preconditioner = smith::Preconditioner::AMGF;
+  } else if (prec_type == "AMGFContact") {
+    options.preconditioner = smith::Preconditioner::AMGFContact;
   } else {
     std::string msg = axom::fmt::format("Unknown preconditioner type given: '{0}'", prec_type);
     SLIC_ERROR_ROOT(msg);

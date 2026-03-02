@@ -48,7 +48,7 @@ TEST_P(ContactTestAMGF, beam)
   auto mesh = std::make_shared<smith::Mesh>(buildMeshFromFile(filename), "beam_mesh", 1, 0);
 
   LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
-                                     .preconditioner = Preconditioner::AMGF,
+                                     .preconditioner = Preconditioner::AMGFContact,
                                      .relative_tol = 0.0,
                                      .absolute_tol = 1.0e-13,
                                      .print_level = 2};

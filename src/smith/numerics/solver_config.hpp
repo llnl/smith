@@ -328,7 +328,7 @@ enum class Preconditioner
   AMGX,             /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
   Petsc,            /**< PETSc preconditioner,  */
   None,             /**< No preconditioner used */
-  AMGF              /**< MFEM-based AMG with filtering (AMGF) */
+  AMGFContact       /**< MFEM-based AMG with filtering (AMGF), contact problems only */
 };
 // _preconditioners_end
 
@@ -352,8 +352,8 @@ inline std::string preconditionerName(Preconditioner p)
       return "Petsc";
     case Preconditioner::None:
       return "None";
-    case Preconditioner::AMGF:
-      return "AMGF";
+    case Preconditioner::AMGFContact:
+      return "AMGFContact";
   }
   // This cannot happen, but GCC doesn't know that
   return "UNKNOWN";
@@ -372,7 +372,7 @@ inline std::map<std::string, Preconditioner> preconditionerMap = {
     {"AMGX", Preconditioner::AMGX},
     {"Petsc", Preconditioner::Petsc},
     {"None", Preconditioner::None},
-    {"AMGF", Preconditioner::AMGF},
+    {"AMGFContact", Preconditioner::AMGFContact},
 };
 
 // _linear_options_start
