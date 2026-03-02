@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# This script is used to determine whether you are on
+# an LC login node and therefore should not build
+
+# If not on LC, just say compute so we allow building
+if [[ -z "${SYS_TYPE:-}" ]]; then
+  echo "compute"
+  exit 0
+fi
+
+# On LC, do not allow building on login node
+if [[ "$SYS_TYPE" == "toss_4_x86_64_ib_cray" ]] && [[ -n "$FLUX_URI" ]]; then
+  echo "compute"
+elif [[ "$SYS_TYPE" == "toss_4_x86_64_ib" ]] && [[ -n "$SLURMD_NODENAME" ]]; then
+  echo "compute"
+else
+  echo "login"
+fi
