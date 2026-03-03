@@ -59,12 +59,10 @@ smith_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 1)
 
-if(SMITH_ENABLE_HIP AND TRIBOL_FOUND)
-    foreach(filename ${physics_serial_tribol_test_sources})
-        get_filename_component(test_name ${filename} NAME_WE)
-        blt_add_target_compile_flags(TO ${test_name} FLAGS "-fgpu-rdc")
-        blt_add_target_link_flags(TO ${test_name} FLAGS "-fgpu-rdc")
-    endforeach()
+if (SMITH_USE_ENZYME)
+    # error: failed to meet occupancy target given by 'amdgpu-waves-per-eu' in ...
+    # desired occupancy was 4, final occupancy is 3 [-Werror,-Wpass-failed]
+    target_compile_options(test_dfem_explicit_dynamics PRIVATE -Wno-pass-failed)
 endif()
 
 set(physics_parallel_test_sources
@@ -96,11 +94,3 @@ blt_list_append(TO       physics_parallel_test_sources
 smith_add_tests(SOURCES       ${physics_parallel_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 2)
-
-if(SMITH_ENABLE_HIP AND TRIBOL_FOUND)
-    foreach(filename ${physics_parallel_tribol_test_sources})
-        get_filename_component(test_name ${filename} NAME_WE)
-        blt_add_target_compile_flags(TO ${test_name} FLAGS "-fgpu-rdc")
-        blt_add_target_link_flags(TO ${test_name} FLAGS "-fgpu-rdc")
-    endforeach()
-endif()
