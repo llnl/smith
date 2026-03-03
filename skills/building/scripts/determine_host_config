@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+##############################################################################
+# Copyright (c) Lawrence Livermore National Security, LLC and
+# other Smith Project Developers. See the top-level LICENSE file for
+# details.
+#
+# SPDX-License-Identifier: (BSD-3-Clause)
+##############################################################################
 
 set -euo pipefail
 
@@ -22,7 +29,7 @@ Notes:
   - Machine equivalences:
       rzwhippet <-> rzgenie
       rzadams   <-> rzvernal
-      tuolumne  <-> tioga  (also accepts 'tuolomne')
+      tuolumne  <-> tioga  (also accepts 'tuo')
 EOF
 }
 
@@ -103,9 +110,9 @@ case "$machine" in
     [[ "$machine" != "rzadams" ]] && machine_candidates+=("rzadams")
     [[ "$machine" != "rzvernal" ]] && machine_candidates+=("rzvernal")
     ;;
-  tioga|tuolumne|tuolomne)
+  tioga|tuolumne|tuo)
     machine_candidates=("$machine")
-    [[ "$machine" != "tuolumne" ]] && machine_candidates+=("tuolumne")
+    [[ "$machine" != "tuo" ]] && machine_candidates+=("tuo")
     [[ "$machine" != "tuolomne" ]] && machine_candidates+=("tuolomne")
     [[ "$machine" != "tioga" ]] && machine_candidates+=("tioga")
     ;;

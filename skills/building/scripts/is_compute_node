@@ -1,4 +1,11 @@
 #!/bin/bash
+##############################################################################
+# Copyright (c) Lawrence Livermore National Security, LLC and
+# other Smith Project Developers. See the top-level LICENSE file for
+# details.
+#
+# SPDX-License-Identifier: (BSD-3-Clause)
+##############################################################################
 
 # This script is used to determine whether you are on
 # an LC login node and therefore should not build
