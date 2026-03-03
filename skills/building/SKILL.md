@@ -1,5 +1,15 @@
 # Building Smith
 
+## Compute-node requirement (Codex)
+
+Only run compilation and test commands on a compute node. Determine this by running:
+
+```bash
+./skills/building/scripts/is_compute_node
+```
+
+If it prints `login`, do **not** run `./config-build.py`, `cmake --build ...`, or `ctest ...`. Stop and ask the user to switch to/allocate a compute node, then continue once `is_compute_node` prints `compute`.
+
 This repository supports two build workflows:
 
 - **Smith-only (default):** builds Smith against externally provided TPLs (e.g., via Spack/uberenv + a host-config).
