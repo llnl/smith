@@ -8,11 +8,6 @@
 - `tests/`: external test-data submodule (not compiled; used by CI/integration).
 - `cmake/` + `host-configs/`: BLT-based CMake build system and machine configs.
 
-## Coding Style & Naming Conventions
-- C++ formatting is enforced via `.clang-format`; prefer running `cmake --build build --target style` before pushing.
-- Use existing naming patterns: `PascalCase` types, `camelCase` methods, `snake_case_` members, `SCREAMING_SNAKE_CASE` constants.
-- Keep changes minimal and localized; avoid drive-by refactors.
-
 ## Testing Guidelines
 - Tests use GoogleTest (`TEST(...)`) and are registered via CMake/BLT.
 - Add or update tests near the code they cover (e.g., `src/smith/physics/state/tests/`).
