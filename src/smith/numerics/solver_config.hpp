@@ -251,6 +251,20 @@ struct AMGXOptions {
 };
 
 /**
+ * @brief Stores the configuration information for an AMGFContact preconditioner
+ */
+struct AMGFContactOptions {
+  /**
+   * @brief The amg relaxation type
+   */
+  int relax_type = 88;
+  /**
+   * @brief amg SystemsOptions
+   */
+  int systems_options = 3;
+};
+
+/**
  * @brief Preconditioner types supported by PETSc
  */
 enum class PetscPCType
@@ -386,6 +400,9 @@ struct LinearSolverOptions {
 
   /// AMGX Options, used for Preconditioner::AMGX
   AMGXOptions amgx_options = AMGXOptions{};
+
+  /// AMGFContact Options, used for Preconditioner::AMGFContact
+  AMGFContactOptions amgfcontact_options = AMGFContactOptions{};
 
   /// PETSc preconditioner type
   PetscPCType petsc_preconditioner = PetscPCType::JACOBI;

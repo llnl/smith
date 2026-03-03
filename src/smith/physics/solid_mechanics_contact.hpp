@@ -387,9 +387,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
       auto amgf_prec = dynamic_cast<mfem::AMGFSolver*>(&nonlin_solver_->preconditioner());
       if (amgf_prec) {
-        // set options for AMG component of AMGF
-        amgf_prec->GetAMG().SetSystemsOptions(3);
-        amgf_prec->GetAMG().SetRelaxType(88);
         // compute contact_dof_restriction
         computeContactSubspaceTransferOperator();
         // set AMGF subspace transfer operator
