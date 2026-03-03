@@ -19,7 +19,8 @@ namespace smith {
  */
 enum class ContactMethod
 {
-  SingleMortar /**< Puso and Laursen 2004 */
+  SingleMortar, /**< Puso and Laursen 2004 */
+  SmoothMortar  /**< Variationally consistent 2D mortar with smoothing */
 };
 
 /**
