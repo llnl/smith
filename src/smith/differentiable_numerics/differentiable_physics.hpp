@@ -23,7 +23,6 @@ namespace smith {
 
 class Mesh;
 class WeakForm;
-class DifferentiableSolver;
 class StateAdvancer;
 class TimestepEstimator;
 class Reaction;

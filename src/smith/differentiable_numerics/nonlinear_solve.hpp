@@ -20,29 +20,12 @@
 namespace smith {
 
 class WeakForm;
-class DifferentiableSolver;
 class DifferentiableBlockSolver;
 class BoundaryConditionManager;
 class DirichletBoundaryConditions;
 
 /// @brief magic number for representing a field which is not an argument of the weak form.
 static constexpr size_t invalid_block_index = std::numeric_limits<size_t>::max() - 1;
-
-/// @brief Solve a nonlinear system of equations as defined by the weak form, assuming that the field indexed by
-/// unknown_index is the unknown field
-/// @param residual_eval The weak form which defines the equations to be solved
-/// @param shape_disp The mesh-morphed shape displacement
-/// @param states The time varying states as inputs to the weak form
-/// @param params All fixed fields pass to the weak form
-/// @param time_info Timestep information (time, dt, cycle)
-/// @param solver The differentiable, potentially nonlinear, equation solver used to solve the system of equations
-/// @param bcs Holds information about which degrees of freedom (DOFS), and has the information about the time and space
-/// varying values for the boundary conditions
-/// @param unknown_state_index
-/// @return The field solution to the weak form
-FieldState solve(const WeakForm& residual_eval, const FieldState& shape_disp, const std::vector<FieldState>& states,
-                 const std::vector<FieldState>& params, const TimeInfo& time_info, const DifferentiableSolver& solver,
-                 const DirichletBoundaryConditions& bcs, size_t unknown_state_index = 0);
 
 /// @brief Solve a block nonlinear system of equations as defined by the vector of weak form
 /// @param residual_evals Vector of weak forms which define the equations to be solved
