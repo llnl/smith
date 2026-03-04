@@ -266,6 +266,28 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   const FiniteElementDual& computeTimestepContactShapeSensitivity(int interaction_id)
   {
 #ifdef SMITH_USE_TRIBOL
+    // For penalty contact, the Tribol Jacobian depends on the penalty pressures which themselves depend on the
+    // gaps. Ensure the gaps/pressures/Jacobian are consistent with the current configuration by mirroring the update
+    // sequence in ContactData::residualFunction(): update gaps -> set penalty pressures -> update.
+    if (contact_.haveContactInteractions()) {
+      contact_.setDisplacements(BasePhysics::shapeDisplacement(), displacement_);
+
+      for (const auto& interaction : contact_.getContactInteractions()) {
+        interaction.evalJacobian(false);
+      }
+      double dt = this->getCheckpointedTimestep(cycle_);
+      contact_.update(cycle_, time_end_step_, dt);
+
+      mfem::Vector merged_pressures(contact_.numPressureDofs());
+      merged_pressures = 0.0;
+      contact_.setPressures(merged_pressures);
+
+      for (const auto& interaction : contact_.getContactInteractions()) {
+        interaction.evalJacobian(true);
+      }
+      contact_.update(cycle_, time_end_step_, dt);
+    }
+
     const ContactInteraction* interaction_ptr = nullptr;
     for (const auto& interaction : contact_.getContactInteractions()) {
       if (interaction.getInteractionId() == interaction_id) {
@@ -337,11 +359,76 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     }
 
     auto& contact_shape_sensitivity = *it->second;
+    contact_shape_sensitivity = 0.0;
     dfdx->MultTranspose(adjoint_displacement_, contact_shape_sensitivity);
     return contact_shape_sensitivity;
 #else
     SLIC_ERROR_ROOT("Smith built without Tribol support. Cannot compute contact shape sensitivities.");
     return BasePhysics::shapeDisplacementSensitivity();
+#endif
+  }
+
+  /**
+   * @brief Evaluates the scalar quantity \f$\lambda^T f_{\mathrm{contact},i}\f$ for a single contact interaction
+   *
+   * This is primarily useful for finite-difference checks of
+   * computeTimestepContactShapeSensitivity(interaction_id).
+   *
+   * @param interaction_id The unique identifier for the contact interaction
+   * @param shape_u Shape displacement true DOF vector
+   * @param u Displacement true DOF vector
+   * @param adjoint_u Displacement adjoint true DOF vector
+   * @param dt Timestep size to pass to Tribol update
+   * @return The scalar \f$\lambda^T f_{\mathrm{contact},i}\f$
+   *
+   * @pre The contact interaction must be penalty-enforced.
+   */
+  double evalContactInteractionForceAdjointProduct(int interaction_id, const mfem::Vector& shape_u,
+                                                   const mfem::Vector& u, const mfem::Vector& adjoint_u,
+                                                   double dt = 1.0)
+  {
+#ifdef SMITH_USE_TRIBOL
+    const ContactInteraction* interaction_ptr = nullptr;
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      if (interaction.getInteractionId() == interaction_id) {
+        interaction_ptr = &interaction;
+        break;
+      }
+    }
+    SLIC_ERROR_ROOT_IF(!interaction_ptr,
+                       axom::fmt::format("No contact interaction found with interaction_id={}", interaction_id));
+    SLIC_ERROR_ROOT_IF(
+        interaction_ptr->getContactOptions().enforcement != ContactEnforcement::Penalty,
+        "evalContactInteractionForceAdjointProduct currently only supports penalty-enforced contact interactions.");
+
+    // Mirror the update sequence in ContactData::residualFunction() for penalty enforcement.
+    contact_.setDisplacements(shape_u, u);
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      interaction.evalJacobian(false);
+    }
+    contact_.update(cycle_, time_end_step_, dt);
+
+    mfem::Vector merged_pressures(contact_.numPressureDofs());
+    merged_pressures = 0.0;
+    contact_.setPressures(merged_pressures);
+
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      interaction.evalJacobian(true);
+    }
+    contact_.update(cycle_, time_end_step_, dt);
+
+    const FiniteElementDual f = interaction_ptr->forces();
+    FiniteElementState adjoint_state(displacement_.space(), "adjoint_tmp");
+    adjoint_state = adjoint_u;
+    return innerProduct(f, adjoint_state);
+#else
+    (void)interaction_id;
+    (void)shape_u;
+    (void)u;
+    (void)adjoint_u;
+    (void)dt;
+    SLIC_ERROR_ROOT("Smith built without Tribol support. Cannot evaluate contact interaction forces.");
+    return 0.0;
 #endif
   }
 
