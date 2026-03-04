@@ -398,7 +398,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 #ifdef SMITH_USE_MPI
         // better solution: retrieve print level from .preconditioner_print_level from linear_solver_options
         int filter_solver_print_level = 0;
-        filter_solver_ = std::make_unique<StrumpackSolver>(filter_solver_print_level, iterative_solver->GetComm());
+        filter_solver_ =
+            std::make_unique<StrumpackSolver>(filter_solver_print_level, contact_dof_restriction_->GetComm());
         amgf_prec->SetFilteredSubspaceSolver(*filter_solver_.get());
 #else
         SLIC_ERROR_ROOT("AMGFContact can only be used with MPI builds");
