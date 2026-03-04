@@ -8,7 +8,11 @@ namespace smith {
 
 class BlockDiagonalPreconditioner : public mfem::Solver {
  public:
-  BlockDiagonalPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers);
+  using BlockOverride = std::pair<int, std::shared_ptr<const mfem::Operator>>;
+
+  BlockDiagonalPreconditioner(mfem::Array<int>& offsets,
+                              std::vector<std::unique_ptr<mfem::Solver>> solvers,
+                              std::vector<BlockOverride> overrides = {});
 
   virtual void Mult(const mfem::Vector& in, mfem::Vector& out) const;
 
@@ -31,6 +35,9 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
 
   // mfem solvers for each block
   mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers;
+
+  // size nblocks_, nullptr means "use Jacobian diagonal block"
+  std::vector<std::shared_ptr<const mfem::Operator>> block_op_overrides_;
 };
 
 enum class BlockTriangularType {

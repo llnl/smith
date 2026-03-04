@@ -9,12 +9,32 @@ namespace smith {
  * @param offsets The array of offsets describing a block vector of (b_1, ..., b_n)
  */
 
-BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers)
-  : block_offsets_(offsets), nblocks_(offsets.Size() - 1), block_jacobian_(nullptr), solver_diag_(block_offsets_), mfem_solvers(std::move(solvers))
+BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offsets,
+   std::vector<std::unique_ptr<mfem::Solver>> solvers, std::vector<BlockOverride> overrides)
+  : block_offsets_(offsets), nblocks_(offsets.Size() - 1), block_jacobian_(nullptr),
+    solver_diag_(block_offsets_), mfem_solvers(std::move(solvers)), block_op_overrides_(static_cast<size_t>(nblocks_), nullptr)
 {
   if (mfem_solvers.size() != static_cast<size_t>(nblocks_))
   {
     throw std::invalid_argument("Number of solvers must match number of blocks");
+  }
+
+  // Apply overrides if any
+  for (auto& ov : overrides) {
+    const int i = ov.first;
+    auto& op = ov.second;
+
+    if (i < 0 || i >= nblocks_) {
+      throw std::out_of_range("Override block index out of range");
+    }
+    if (!op) {
+      throw std::invalid_argument("Override operator must be non-null");
+    }
+    if (block_op_overrides_[static_cast<size_t>(i)]) {
+      throw std::invalid_argument("Duplicate override for same block index");
+    }
+
+    block_op_overrides_[static_cast<size_t>(i)] = std::move(op);
   }
 }
 
@@ -42,10 +62,16 @@ void BlockDiagonalPreconditioner::SetOperator(const mfem::Operator& jacobian)
   // For each diagonal block A_ii, configure the corresponding solver
   for (int i = 0; i < nblocks_; i++)
   {
-    const mfem::Operator &A_ii = block_jacobian_->GetBlock(i, i);
-
     // Attach operator to solver
-    mfem_solvers[i]->SetOperator(A_ii);
+    const mfem::Operator* op = nullptr;
+
+    if (block_op_overrides_[i]) {
+      op = block_op_overrides_[i].get();      // use override
+    } else {
+      op = &block_jacobian_->GetBlock(i, i);  // use Jacobian diagonal block
+    }
+
+    mfem_solvers[i]->SetOperator(*op);
 
     // Place the solver into the diagonal block of solver_diag_
     solver_diag_.SetBlock(i, i, mfem_solvers[i].get());
