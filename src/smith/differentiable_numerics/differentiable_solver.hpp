@@ -93,15 +93,14 @@ class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
   /// @note The caller is responsible for choosing inner vs outer tolerance when using this
   /// constructor directly.  The builder function buildDifferentiableNonlinearBlockSolver
   /// applies a 0.6x inner-tolerance factor automatically.
-  NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm,
-                                     double abs_tol = 1e-12, double rel_tol = 1e-8);
+  NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol = 1e-12,
+                                     double rel_tol = 1e-8);
 
   /// @overload
   void completeSetup(const std::vector<FieldT>& us) override;
 
   /// @overload
-  bool checkConvergence(double tolerance_multiplier,
-                        const std::vector<mfem::Vector>& residuals) const override;
+  bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals) const override;
 
   /// @overload
   void resetConvergenceState() const override;
@@ -125,9 +124,9 @@ class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
   mutable std::unique_ptr<EquationSolver>
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 
-  MPI_Comm comm_;                                ///< MPI communicator for parallel norm computation
-  double abs_tol_;                               ///< absolute residual tolerance for convergence check
-  double rel_tol_;                               ///< relative residual tolerance for convergence check
+  MPI_Comm comm_;                                        ///< MPI communicator for parallel norm computation
+  double abs_tol_;                                       ///< absolute residual tolerance for convergence check
+  double rel_tol_;                                       ///< relative residual tolerance for convergence check
   mutable std::optional<double> initial_residual_norm_;  ///< residual norm at first convergence check (for rel tol)
 };
 

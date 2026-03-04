@@ -71,8 +71,7 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> SolidMechanicsTim
     std::vector<std::vector<FieldState>> states_vec = {wf_fields};
     std::vector<std::vector<FieldState>> params_vec = {params};
 
-    auto result =
-        solver_->solve(wf_ptrs, block_indices, shape_disp, states_vec, params_vec, time_info, bcs);
+    auto result = solver_->solve(wf_ptrs, block_indices, shape_disp, states_vec, params_vec, time_info, bcs);
 
     // Update the acceleration field in our current states
     size_t test_field_state_idx = field_store_->getFieldIndex(test_field_name);

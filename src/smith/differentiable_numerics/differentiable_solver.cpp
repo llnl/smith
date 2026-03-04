@@ -63,8 +63,8 @@ void initializeSolver(mfem::Solver* mfem_solver, const smith::FiniteElementState
 #endif
 }
 
-NonlinearDifferentiableBlockSolver::NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s,
-                                                                       MPI_Comm comm, double abs_tol, double rel_tol)
+NonlinearDifferentiableBlockSolver::NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm,
+                                                                       double abs_tol, double rel_tol)
     : nonlinear_solver_(std::move(s)), comm_(comm), abs_tol_(abs_tol), rel_tol_(rel_tol)
 {
 }
@@ -76,7 +76,8 @@ void NonlinearDifferentiableBlockSolver::completeSetup(const std::vector<FieldT>
 
 void NonlinearDifferentiableBlockSolver::resetConvergenceState() const { initial_residual_norm_.reset(); }
 
-bool NonlinearDifferentiableBlockSolver::checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals) const
+bool NonlinearDifferentiableBlockSolver::checkConvergence(double tolerance_multiplier,
+                                                          const std::vector<mfem::Vector>& residuals) const
 {
   double r_norm_sq = 0.0;
   for (const auto& r : residuals) {
@@ -234,7 +235,8 @@ std::shared_ptr<NonlinearDifferentiableBlockSolver> buildDifferentiableNonlinear
   inner_opts.absolute_tol = inner_tol_factor * outer_abs_tol;
   inner_opts.relative_tol = inner_tol_factor * outer_rel_tol;
   auto solid_solver = std::make_unique<EquationSolver>(inner_opts, linear_opts, mesh.getComm());
-  return std::make_shared<NonlinearDifferentiableBlockSolver>(std::move(solid_solver), mesh.getComm(), outer_abs_tol, outer_rel_tol);
+  return std::make_shared<NonlinearDifferentiableBlockSolver>(std::move(solid_solver), mesh.getComm(), outer_abs_tol,
+                                                              outer_rel_tol);
 }
 
 }  // namespace smith

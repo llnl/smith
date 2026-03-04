@@ -86,8 +86,8 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto system_solver = std::make_shared<SystemSolver>(mesh->getComm(), 1);
   system_solver->addStage({0}, d_solid_nonlinear_solver);
   auto system = buildSolidDynamicsSystem<dim, order>(
-      mesh, system_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{},
-      FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
+      mesh, system_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, FieldType<ScalarParameterSpace>("bulk"),
+      FieldType<ScalarParameterSpace>("shear"));
 
   static constexpr double gravity = -9.0;
 

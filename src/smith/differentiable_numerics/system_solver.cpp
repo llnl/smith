@@ -21,24 +21,20 @@ SystemSolver::SystemSolver(MPI_Comm comm, int max_staggered_iterations, bool exa
 {
 }
 
-void SystemSolver::addStage(const Stage& stage)
-{
-  stages_.push_back(stage);
-}
+void SystemSolver::addStage(const Stage& stage) { stages_.push_back(stage); }
 
 void SystemSolver::addStage(const std::vector<size_t>& block_indices, std::shared_ptr<DifferentiableBlockSolver> solver)
 {
   stages_.push_back({block_indices, std::move(solver)});
 }
 
-std::vector<FieldState> SystemSolver::solve(
-    const std::vector<WeakForm*>& residual_evals,
-    const std::vector<std::vector<size_t>>& block_indices,
-    const FieldState& shape_disp,
-    const std::vector<std::vector<FieldState>>& states,
-    const std::vector<std::vector<FieldState>>& params,
-    const TimeInfo& time_info,
-    const std::vector<const BoundaryConditionManager*>& bc_managers) const
+std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residual_evals,
+                                            const std::vector<std::vector<size_t>>& block_indices,
+                                            const FieldState& shape_disp,
+                                            const std::vector<std::vector<FieldState>>& states,
+                                            const std::vector<std::vector<FieldState>>& params,
+                                            const TimeInfo& time_info,
+                                            const std::vector<const BoundaryConditionManager*>& bc_managers) const
 {
   SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
 
@@ -78,9 +74,9 @@ std::vector<FieldState> SystemSolver::solve(
         stage_block_indices.push_back(row_indices);
       }
 
-      std::vector<FieldState> stage_solutions = block_solve(
-          stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info,
-          stage.solver.get(), stage_bc_managers);
+      std::vector<FieldState> stage_solutions =
+          block_solve(stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info,
+                      stage.solver.get(), stage_bc_managers);
 
       // Propagate updated fields to all residuals that reference them
       for (size_t i = 0; i < num_stage_blocks; ++i) {
@@ -97,8 +93,7 @@ std::vector<FieldState> SystemSolver::solve(
 
     // --- Convergence check (skipped in exact-steps mode, single-iteration mode,
     //     or on the last iteration where a break has no effect) ---
-    if (!exact_staggered_steps_ && max_staggered_iterations_ > 1 &&
-        iter < max_staggered_iterations_ - 1) {
+    if (!exact_staggered_steps_ && max_staggered_iterations_ > 1 && iter < max_staggered_iterations_ - 1) {
       bool all_converged = true;
       for (size_t s = 0; s < stages_.size(); ++s) {
         const auto& stage = stages_[s];
@@ -124,10 +119,9 @@ std::vector<FieldState> SystemSolver::solve(
           double n = mfem::ParNormlp(r, 2.0, comm_);
           stage_norm_sq += n * n;
         }
-        SLIC_INFO_ROOT(axom::fmt::format(
-            "Staggered iter {}/{}: stage {} residual norm = {:.6e}, converged = {}",
-            iter + 1, max_staggered_iterations_, s, std::sqrt(stage_norm_sq),
-            stage_converged ? "true" : "false"));
+        SLIC_INFO_ROOT(axom::fmt::format("Staggered iter {}/{}: stage {} residual norm = {:.6e}, converged = {}",
+                                         iter + 1, max_staggered_iterations_, s, std::sqrt(stage_norm_sq),
+                                         stage_converged ? "true" : "false"));
 
         if (!stage_converged) {
           all_converged = false;
@@ -135,8 +129,7 @@ std::vector<FieldState> SystemSolver::solve(
         }
       }
       if (all_converged) {
-        SLIC_INFO_ROOT(axom::fmt::format(
-            "Staggered iteration converged after {} iteration(s)", iter + 1));
+        SLIC_INFO_ROOT(axom::fmt::format("Staggered iteration converged after {} iteration(s)", iter + 1));
         break;
       }
     }
@@ -153,4 +146,4 @@ std::vector<FieldState> SystemSolver::solve(
   return final_solutions;
 }
 
-} // namespace smith
+}  // namespace smith

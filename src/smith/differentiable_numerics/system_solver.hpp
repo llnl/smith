@@ -19,7 +19,7 @@ class DifferentiableBlockSolver;
 class BoundaryConditionManager;
 
 class SystemSolver {
-public:
+ public:
   struct Stage {
     std::vector<size_t> block_indices;  // which blocks (residuals) to solve in this stage
     std::shared_ptr<DifferentiableBlockSolver> solver;
@@ -38,20 +38,17 @@ public:
   void addStage(const Stage& stage);
   void addStage(const std::vector<size_t>& block_indices, std::shared_ptr<DifferentiableBlockSolver> solver);
 
-  std::vector<FieldState> solve(
-      const std::vector<WeakForm*>& residual_evals,
-      const std::vector<std::vector<size_t>>& block_indices,
-      const FieldState& shape_disp,
-      const std::vector<std::vector<FieldState>>& states,
-      const std::vector<std::vector<FieldState>>& params,
-      const TimeInfo& time_info,
-      const std::vector<const BoundaryConditionManager*>& bc_managers) const;
+  std::vector<FieldState> solve(const std::vector<WeakForm*>& residual_evals,
+                                const std::vector<std::vector<size_t>>& block_indices, const FieldState& shape_disp,
+                                const std::vector<std::vector<FieldState>>& states,
+                                const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
+                                const std::vector<const BoundaryConditionManager*>& bc_managers) const;
 
-private:
+ private:
   MPI_Comm comm_;
   int max_staggered_iterations_;
   bool exact_staggered_steps_;
   std::vector<Stage> stages_;
 };
 
-} // namespace smith
+}  // namespace smith

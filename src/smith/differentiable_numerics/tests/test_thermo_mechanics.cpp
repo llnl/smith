@@ -152,7 +152,8 @@ TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto sys_solver = std::make_shared<SystemSolver>(mesh_->getComm(), 1);
   sys_solver->addStage({0, 1}, solver);
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
+  auto system =
+      buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -216,7 +217,8 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto sys_solver = std::make_shared<SystemSolver>(mesh_->getComm(), 1);
   sys_solver->addStage({0, 1}, solver);
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
+  auto system =
+      buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -284,7 +286,8 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
   FieldType<H1<1>> youngs_modulus("youngs_modulus");
   auto sys_solver = std::make_shared<SystemSolver>(mesh_->getComm(), 1);
   sys_solver->addStage({0, 1}, solver);
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
+  auto system =
+      buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -363,7 +366,8 @@ TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto sys_solver = std::make_shared<SystemSolver>(mesh_->getComm(), 1);
   sys_solver->addStage({0, 1}, solver);
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
+  auto system =
+      buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -415,7 +419,8 @@ TEST_F(ThermoMechanicsMeshFixture, PressureBC)
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto sys_solver = std::make_shared<SystemSolver>(mesh_->getComm(), 1);
   sys_solver->addStage({0, 1}, solver);
-  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
+  auto system =
+      buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
