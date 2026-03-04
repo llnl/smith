@@ -272,7 +272,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
                                     const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const DifferentiableBlockSolver* solver,
-                                    const std::vector<const BoundaryConditionManager*> bc_managers)
+                                    const std::vector<const BoundaryConditionManager*>& bc_managers)
 {
   SMITH_MARK_FUNCTION;
   size_t num_rows_ = residual_evals.size();
@@ -287,6 +287,22 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
   for (size_t r = 0; r < num_rows_; ++r) {
     SLIC_ERROR_IF(num_rows_ != block_indices[r].size(), "All block index rows must have the same number of columns");
+  }
+
+  // Validate block_indices bounds against states sizes
+  for (size_t row = 0; row < num_rows_; ++row) {
+    for (size_t col = 0; col < num_rows_; ++col) {
+      size_t idx = block_indices[row][col];
+      if (idx != invalid_block_index) {
+        SLIC_ERROR_IF(idx >= states[row].size(),
+                      axom::fmt::format("block_indices[{}][{}] = {} is out of bounds (states[{}].size() = {})", row,
+                                        col, idx, row, states[row].size()));
+      }
+    }
+    // Validate that diagonal entry is not invalid
+    SLIC_ERROR_IF(
+        block_indices[row][row] == invalid_block_index,
+        axom::fmt::format("block_indices[{}][{}] (diagonal entry) must not be invalid_block_index", row, row));
   }
 
   std::vector<size_t> num_state_inputs;
@@ -520,7 +536,11 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     std::vector<std::vector<std::unique_ptr<mfem::HypreParMatrix>>> jacobians_T(num_rows);
     for (size_t col_j = 0; col_j < num_rows; ++col_j) {
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-        jacobians_T[col_j].emplace_back(std::unique_ptr<mfem::HypreParMatrix>(jacobians[row_i][col_j]->Transpose()));
+        if (jacobians[row_i][col_j]) {
+          jacobians_T[col_j].emplace_back(std::unique_ptr<mfem::HypreParMatrix>(jacobians[row_i][col_j]->Transpose()));
+        } else {
+          jacobians_T[col_j].emplace_back(nullptr);
+        }
       }
     }
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {

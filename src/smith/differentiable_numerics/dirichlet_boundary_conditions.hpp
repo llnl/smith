@@ -94,35 +94,34 @@ class DirichletBoundaryConditions {
   template <int spatial_dim>
   void setFixedScalarBCs(const Domain& domain)
   {
-    setVectorBCs<spatial_dim>(domain, [](auto, auto) { return 0.0; });
-  }
-
-  /// @brief Constrain the dofs of a scalar field over a domain
-  template <int spatial_dim>
-  void setFixedVectorBCs(const Domain& domain, int component)
-  {
-    setScalarBCs<spatial_dim>(domain, component, [](auto, auto) { return 0.0; });
+    setScalarBCs<spatial_dim>(domain, [](auto, auto) { return 0.0; });
   }
 
   /// @brief Constrain the vector dofs over a domain corresponding to a subset of the vector components
-  template <int spatial_dim>
+  template <int spatial_dim, int field_dim>
   void setFixedVectorBCs(const Domain& domain, std::vector<int> components)
   {
-    setVectorBCs<spatial_dim>(domain, components, [](auto, auto) { return smith::tensor<double, spatial_dim>{}; });
+    setVectorBCs<spatial_dim>(domain, components, [](auto, auto) { return smith::tensor<double, field_dim>{}; });
+  }
+
+  /// @brief Constrain the dofs of a scalar field over a domain
+  template <int spatial_dim, int field_dim>
+  void setFixedVectorBCs(const Domain& domain, int component)
+  {
+    std::vector<int> components{component};
+    setVectorBCs<spatial_dim, field_dim>(domain, components);
   }
 
   /// @brief Constrain all the vector dofs over a domain
-  template <int spatial_dim>
+  template <int spatial_dim, int field_dim = spatial_dim>
   void setFixedVectorBCs(const Domain& domain)
   {
-    const int field_dim = space_.GetVDim();
-    SLIC_ERROR_IF(field_dim != spatial_dim,
-                  "Vector boundary conditions current only work if they match the spatial dimension");
+    SLIC_ERROR_IF(field_dim != space_.GetVDim(), "Vector boundary condition field_dim does not match the fields vdim");
     std::vector<int> components(static_cast<size_t>(field_dim));
     for (int component = 0; component < field_dim; ++component) {
       components[static_cast<size_t>(component)] = component;
     }
-    setFixedVectorBCs<spatial_dim>(domain, components);
+    setFixedVectorBCs<spatial_dim, field_dim>(domain, components);
   }
 
   /// @brief Return the smith BoundaryConditionManager

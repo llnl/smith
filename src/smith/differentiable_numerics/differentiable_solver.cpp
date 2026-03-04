@@ -232,6 +232,13 @@ std::vector<DifferentiableBlockSolver::FieldPtr> LinearDifferentiableBlockSolver
         u_bars[static_cast<size_t>(row_i)]->space(), "u_dual_" + std::to_string(row_i));
   }
 
+  // If it's a 1x1 system, pass the operator directly to avoid potential BlockOperator issues with smoothers
+  if (num_rows == 1) {
+    mfem_solver->SetOperator(*jacobian_transposed[0][0]);
+    mfem_solver->Mult(*u_bars[0], *u_duals[0]);
+    return u_duals;
+  }
+
   mfem::Array<int> block_offsets;
   block_offsets.SetSize(num_rows + 1);
   block_offsets[0] = 0;
@@ -273,7 +280,7 @@ NonlinearDifferentiableBlockSolver::NonlinearDifferentiableBlockSolver(std::uniq
 
 void NonlinearDifferentiableBlockSolver::completeSetup(const std::vector<FieldT>&)
 {
-  // initializeSolver(&nonlinear_solver_->preconditioner(), u);
+  // eventually may need something like: initializeSolver(&nonlinear_solver_->preconditioner(), u);
 }
 
 std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSolver::solve(
@@ -303,15 +310,17 @@ std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSol
 
   auto residual_op_ = std::make_unique<mfem_ext::StdFunctionOperator>(
       block_u->Size(),
-      [&residual_funcs, num_rows, &u_guesses, &block_r](const mfem::Vector& u_, mfem::Vector& r_) {
+      [&residual_funcs, num_rows, &u_guesses, &block_r, &block_offsets](const mfem::Vector& u_, mfem::Vector& r_) {
         const mfem::BlockVector* u = dynamic_cast<const mfem::BlockVector*>(&u_);
-        SLIC_ERROR_IF(!u, "Invalid u cast in block differentiable solver to a blocl vector");
+        mfem::BlockVector u_block_wrapper;
+        if (!u) {
+          u_block_wrapper.Update(const_cast<double*>(u_.GetData()), block_offsets);
+          u = &u_block_wrapper;
+        }
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
         }
         auto residuals = residual_funcs(u_guesses);
-        // auto block_r = std::make_unique<mfem::BlockVector>(block_offsets);
-        // auto block_r = dynamic_cast<mfem::BlockVector*>(&r_);
         SLIC_ERROR_IF(!block_r, "Invalid r cast in block differentiable solver to a block vector");
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           auto r = residuals[static_cast<size_t>(row_i)];
@@ -321,7 +330,11 @@ std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSol
       },
       [this, &block_offsets, &u_guesses, jacobian_funcs, num_rows](const mfem::Vector& u_) -> mfem::Operator& {
         const mfem::BlockVector* u = dynamic_cast<const mfem::BlockVector*>(&u_);
-        SLIC_ERROR_IF(!u, "Invalid u cast in block differentiable solver to a block vector");
+        mfem::BlockVector u_block_wrapper;
+        if (!u) {
+          u_block_wrapper.Update(const_cast<double*>(u_.GetData()), block_offsets);
+          u = &u_block_wrapper;
+        }
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
         }
@@ -361,6 +374,15 @@ std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSol
         u_bars[static_cast<size_t>(row_i)]->space(), "u_dual_" + std::to_string(row_i));
   }
 
+  auto& linear_solver = nonlinear_solver_->linearSolver();
+
+  // If it's a 1x1 system, pass the operator directly to avoid potential BlockOperator issues with smoothers
+  if (num_rows == 1) {
+    linear_solver.SetOperator(*jacobian_transposed[0][0]);
+    linear_solver.Mult(*u_bars[0], *u_duals[0]);
+    return u_duals;
+  }
+
   mfem::Array<int> block_offsets;
   block_offsets.SetSize(num_rows + 1);
   block_offsets[0] = 0;
@@ -384,7 +406,6 @@ std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSol
     }
   }
 
-  auto& linear_solver = nonlinear_solver_->linearSolver();
   linear_solver.SetOperator(*block_jac);
   linear_solver.Mult(*block_r, *block_ds);
 
