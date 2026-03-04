@@ -27,6 +27,7 @@
 #include "smith/physics/solid_mechanics.hpp"
 #include "smith/physics/state/finite_element_dual.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
+#include "smith/physics/contact/contact_data.hpp"
 
 namespace smith {
 
@@ -108,6 +109,56 @@ auto computeContactReactionQoiSensitivities(BasePhysics& solid_solver, std::shar
   EXPECT_EQ(0, solid_solver.cycle());
 
   return std::make_tuple(qoi, shape_sensitivity);
+}
+
+double computeSingleInteractionContactReactionTerm(const mfem::ParMesh& mfem_mesh, const mfem::Vector& shape_u,
+                                                   const mfem::Vector& displacement,
+                                                   const FiniteElementState& adjoint_displacement, int interaction_id,
+                                                   const std::set<int>& bdry_attr_surf1,
+                                                   const std::set<int>& bdry_attr_surf2,
+                                                   const ContactOptions& contact_options)
+{
+#ifdef SMITH_USE_TRIBOL
+  ContactData contact_data(mfem_mesh);
+  contact_data.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_options);
+
+  contact_data.setDisplacements(shape_u, displacement);
+
+  // Mirror ContactData::residualFunction() update sequence for penalty enforcement: update gaps -> set pressures ->
+  // update
+  for (const auto& interaction : contact_data.getContactInteractions()) {
+    interaction.evalJacobian(false);
+  }
+  double dt = 1.0;
+  contact_data.update(0, 0.0, dt);
+
+  mfem::Vector merged_pressures(contact_data.numPressureDofs());
+  merged_pressures = 0.0;
+  contact_data.setPressures(merged_pressures);
+
+  for (const auto& interaction : contact_data.getContactInteractions()) {
+    interaction.evalJacobian(true);
+  }
+  contact_data.update(0, 0.0, dt);
+
+  const auto& interactions = contact_data.getContactInteractions();
+  SLIC_ERROR_ROOT_IF(interactions.size() != 1,
+                     axom::fmt::format("Expected exactly one contact interaction, but got {}", interactions.size()));
+
+  const FiniteElementDual contact_forces = interactions[0].forces();
+  return innerProduct(contact_forces, adjoint_displacement);
+#else
+  (void)mfem_mesh;
+  (void)shape_u;
+  (void)displacement;
+  (void)adjoint_displacement;
+  (void)interaction_id;
+  (void)bdry_attr_surf1;
+  (void)bdry_attr_surf2;
+  (void)contact_options;
+  SLIC_ERROR_ROOT("Smith built without Tribol support. Cannot compute contact interaction forces.");
+  return 0.0;
+#endif
 }
 
 double computeContactReactionQoiAdjustingShape(SolidMechanics<p, dim>& solid_solver,
@@ -295,6 +346,61 @@ TEST_F(ContactSensitivityFixture, ReactionShapeSensitivities)
 
   double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
   double directional_deriv_fd = (qoi_plus - qoi_base) / eps;
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, eps);
+}
+
+TEST_F(ContactSensitivityFixture, SingleContactInteractionReactionTermShapeSensitivities)
+{
+#ifndef SMITH_USE_TRIBOL
+  GTEST_SKIP() << "Test requires Tribol support.";
+#endif
+
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  // Forward solve and adjoint solve for reaction QoI to get adjoint displacement (lambda)
+  computeContactReactionQoi(*solid_solver, mesh);
+  auto reaction_adjoint_load = createReactionDirection(*solid_solver, 1, mesh);
+  solid_solver->setDualAdjointBcs({{"reactions", reaction_adjoint_load}});
+  solid_solver->reverseAdjointTimestep();
+
+  // Compute the contact-interaction-only shape sensitivity term: lambda^T dR_contact/dshape
+  constexpr int contact_interaction_id = 0;
+  const FiniteElementDual contact_shape_sensitivity =
+      solid_solver->computeTimestepContactShapeSensitivity(contact_interaction_id);
+
+  FiniteElementState derivative_direction(contact_shape_sensitivity.space(), "derivative_direction");
+  fillDirection(*solid_solver, derivative_direction);
+
+  // Base and perturbed evaluations of the contact reaction term with fixed u and lambda
+  const auto& u = solid_solver->state("displacement");
+  const auto& shape_u = solid_solver->shapeDisplacement();
+  const auto& lambda = solid_solver->adjoint("displacement");
+
+  double element_length = 1.0;
+  double penalty = 105.1 * mat.K / element_length;
+  smith::ContactOptions contact_options{.method = smith::ContactMethod::SingleMortar,
+                                        .enforcement = smith::ContactEnforcement::Penalty,
+                                        .type = smith::ContactType::TiedNormal,
+                                        .penalty = penalty,
+                                        .jacobian = smith::ContactJacobian::Exact};
+
+  const std::set<int> bdry_attr_surf1 = {3};
+  const std::set<int> bdry_attr_surf2 = {5};
+
+  const double term_base =
+      computeSingleInteractionContactReactionTerm(mesh->mfemParMesh(), shape_u, u, lambda, contact_interaction_id,
+                                                  bdry_attr_surf1, bdry_attr_surf2, contact_options);
+
+  FiniteElementState perturbed_shape_u(shape_u);
+  perturbed_shape_u.Add(eps, derivative_direction);
+
+  const double term_plus = computeSingleInteractionContactReactionTerm(mesh->mfemParMesh(), perturbed_shape_u, u,
+                                                                       lambda, contact_interaction_id, bdry_attr_surf1,
+                                                                       bdry_attr_surf2, contact_options);
+
+  const double directional_deriv = innerProduct(derivative_direction, contact_shape_sensitivity);
+  const double directional_deriv_fd = (term_plus - term_base) / eps;
+
   EXPECT_NEAR(directional_deriv, directional_deriv_fd, eps);
 }
 

@@ -12,6 +12,9 @@
 
 #pragma once
 
+#include <memory>
+#include <unordered_map>
+
 #include "smith/physics/solid_mechanics.hpp"
 #include "smith/physics/contact/contact_data.hpp"
 
@@ -213,6 +216,20 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     SLIC_ERROR_ROOT_IF(!is_quasistatic_, "Contact can only be applied to quasistatic problems.");
     SLIC_ERROR_ROOT_IF(order > 1, "Contact can only be applied to linear (order = 1) meshes.");
+
+    const auto interaction_force_name = detail::addPrefix(name_, axom::fmt::format("contact_force_{}", interaction_id));
+    SLIC_ERROR_ROOT_IF(StateManager::hasDual(interaction_force_name),
+                       axom::fmt::format("StateManager already contains a dual named '{}'", interaction_force_name));
+    SLIC_ERROR_ROOT_IF(
+        contact_interaction_forces_.find(interaction_id) != contact_interaction_forces_.end(),
+        axom::fmt::format("Contact interaction force dual already registered for interaction_id={}", interaction_id));
+
+    auto interaction_force_dual =
+        std::make_unique<FiniteElementDual>(StateManager::newDual(displacement_.space(), interaction_force_name));
+    *interaction_force_dual = 0.0;
+    duals_.push_back(interaction_force_dual.get());
+    contact_interaction_forces_.emplace(interaction_id, std::move(interaction_force_dual));
+
     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts);
   }
 
@@ -235,6 +252,98 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
    * @return The merged contact pressures
    */
   mfem::HypreParVector pressure() const { return contact_.mergedPressures(); }
+
+  /**
+   * @brief Computes the shape sensitivity of the residual contribution from a single contact interaction
+   *
+   * @param interaction_id The unique identifier for the contact interaction
+   * @return Contact-only shape sensitivity (as a dual on the shape displacement space)
+   *
+   * @pre The contact interaction must be penalty-enforced.
+   * @pre ContactData::update() must have been called with the current configuration so Tribol Jacobian contributions
+   * are up-to-date.
+   */
+  const FiniteElementDual& computeTimestepContactShapeSensitivity(int interaction_id)
+  {
+#ifdef SMITH_USE_TRIBOL
+    const ContactInteraction* interaction_ptr = nullptr;
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      if (interaction.getInteractionId() == interaction_id) {
+        interaction_ptr = &interaction;
+        break;
+      }
+    }
+    SLIC_ERROR_ROOT_IF(!interaction_ptr,
+                       axom::fmt::format("No contact interaction found with interaction_id={}", interaction_id));
+
+    const auto& interaction = *interaction_ptr;
+    SLIC_ERROR_ROOT_IF(
+        interaction.getContactOptions().enforcement != ContactEnforcement::Penalty,
+        "computeTimestepContactShapeSensitivity currently only supports penalty-enforced contact interactions.");
+
+    auto interaction_J = interaction.jacobian();
+    interaction_J->owns_blocks = false;  // this method manages ownership of blocks
+
+    std::unique_ptr<mfem::HypreParMatrix> dfdx;
+    if (!interaction_J->IsZeroBlock(0, 0)) {
+      auto* block_0_0 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
+      SLIC_ERROR_ROOT_IF(!block_0_0, "Only HypreParMatrix constraint matrix blocks are currently supported.");
+      dfdx.reset(block_0_0);
+    }
+
+    // For penalty contact, Tribol returns dg/dx (1,0) and df/dp (0,1). Smith builds df/dx += penalty * (df/dp)^T dg/dx
+    // (see ContactData::mergedJacobian()).
+    if (!interaction_J->IsZeroBlock(1, 0) && !interaction_J->IsZeroBlock(0, 1)) {
+      auto* dgdu = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(1, 0));
+      auto* dfdp = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 1));
+      SLIC_ERROR_ROOT_IF(!dgdu, "Only HypreParMatrix constraint matrix blocks are currently supported.");
+      SLIC_ERROR_ROOT_IF(!dfdp, "Only HypreParMatrix constraint matrix blocks are currently supported.");
+
+      // zero out rows and cols not in the active set
+      auto inactive_dofs = interaction.inactiveDofs();
+      dgdu->EliminateRows(inactive_dofs);
+      auto dfdp_elim = std::unique_ptr<mfem::HypreParMatrix>(dfdp->EliminateCols(inactive_dofs));
+
+      std::unique_ptr<mfem::HypreParMatrix> BTB(mfem::ParMult(dfdp, dgdu, true));
+
+      delete &interaction_J->GetBlock(1, 0);
+      delete &interaction_J->GetBlock(0, 1);
+
+      if (!dfdx) {
+        mfem::Vector penalty(displacement_.space().TrueVSize());
+        penalty = interaction.getContactOptions().penalty;
+        BTB->ScaleRows(penalty);
+        dfdx = std::move(BTB);
+      } else {
+        dfdx.reset(mfem::Add(1.0, *dfdx, interaction.getContactOptions().penalty, *BTB));
+      }
+    }
+
+    if (!interaction_J->IsZeroBlock(1, 1)) {
+      // Smith tracks its own active set, so discard the Tribol inactive dof block
+      delete &interaction_J->GetBlock(1, 1);
+    }
+
+    SLIC_ERROR_ROOT_IF(!dfdx,
+                       axom::fmt::format("Contact interaction {} produced a zero df/dx contribution.", interaction_id));
+
+    auto it = contact_interaction_shape_sensitivities_.find(interaction_id);
+    if (it == contact_interaction_shape_sensitivities_.end()) {
+      const auto sens_name =
+          detail::addPrefix(name_, axom::fmt::format("contact_shape_sensitivity_{}", interaction_id));
+      auto sens = std::make_unique<FiniteElementDual>(BasePhysics::shapeDisplacementSensitivity().space(), sens_name);
+      *sens = 0.0;
+      it = contact_interaction_shape_sensitivities_.emplace(interaction_id, std::move(sens)).first;
+    }
+
+    auto& contact_shape_sensitivity = *it->second;
+    dfdx->MultTranspose(adjoint_displacement_, contact_shape_sensitivity);
+    return contact_shape_sensitivity;
+#else
+    SLIC_ERROR_ROOT("Smith built without Tribol support. Cannot compute contact shape sensitivities.");
+    return BasePhysics::shapeDisplacementSensitivity();
+#endif
+  }
 
  protected:
   /// @brief Solve the Quasi-static Newton system
@@ -260,6 +369,15 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     contact_.setPressures(mfem::Vector(augmented_solution, displacement_.Size(), contact_.numPressureDofs()));
     contact_.update(cycle_, time_, dt);
     forces_.SetVector(contact_.forces(), 0);
+
+#ifdef SMITH_USE_TRIBOL
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      auto it = contact_interaction_forces_.find(interaction.getInteractionId());
+      if (it != contact_interaction_forces_.end()) {
+        it->second->SetVector(interaction.forces(), 0);
+      }
+    }
+#endif
   }
 
   /**
@@ -484,6 +602,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
   /// forces for output
   FiniteElementDual forces_;
+
+  /// per-interaction contact forces for output
+  std::unordered_map<int, std::unique_ptr<FiniteElementDual>> contact_interaction_forces_;
+
+  /// contact-only shape sensitivities (not stored in StateManager)
+  std::unordered_map<int, std::unique_ptr<FiniteElementDual>> contact_interaction_shape_sensitivities_;
 };
 
 }  // namespace smith
