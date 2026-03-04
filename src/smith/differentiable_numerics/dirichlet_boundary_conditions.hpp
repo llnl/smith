@@ -128,8 +128,6 @@ class DirichletBoundaryConditions {
   /// @brief Return the smith BoundaryConditionManager
   const smith::BoundaryConditionManager& getBoundaryConditionManager() const { return bcs_; }
 
-  const mfem::ParFiniteElementSpace& getSpace() const { return space_; }
-
  private:
   smith::BoundaryConditionManager bcs_;  ///< boundary condition manager that does the heavy lifting
   mfem::ParFiniteElementSpace& space_;   ///< save the space for the field which will be constrained

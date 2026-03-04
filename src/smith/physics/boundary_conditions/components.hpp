@@ -31,49 +31,8 @@ class Components {
   /// @brief Constructor
   Components(Component i) : flags_{size_t(i)} {};
 
-  /// Number of possible components.
-  static constexpr size_t size() { return 3; }
-
   /// @brief Indexing operator to check if a component is flagged
   bool operator[](size_t i) const { return flags_[i]; };
-
-  /// Iterator support: iterate over active component indices
-  class iterator {
-  public:
-    iterator(const Components* comps, size_t idx)
-      : comps_(comps), idx_(idx)
-    {
-      advance_to_valid();
-    }
-
-    size_t operator*() const { return idx_; }
-
-    iterator& operator++()
-    {
-      ++idx_;
-      advance_to_valid();
-      return *this;
-    }
-
-    bool operator!=(const iterator& other) const
-    {
-      return idx_ != other.idx_;
-    }
-
-  private:
-    void advance_to_valid()
-    {
-      while (idx_ < Components::size() && !(*comps_)[idx_]) {
-        ++idx_;
-      }
-    }
-
-    const Components* comps_;
-    size_t idx_;
-  };
-
-  iterator begin() const { return iterator(this, 0); }
-  iterator end()   const { return iterator(this, size()); }
 
   /// See docstring on function declaration
   friend Components operator+(Component i, Component j);
