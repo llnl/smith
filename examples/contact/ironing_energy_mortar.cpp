@@ -85,11 +85,10 @@ int main(int argc, char* argv[])
                                                         .max_iterations = 500,
                                                         .print_level = 1};
 
-        serac::ContactOptions contact_options{.method = serac::ContactMethod::SmoothMortar,
+        serac::ContactOptions contact_options{.method = serac::ContactMethod::EnergyMortar,
                                               .enforcement = serac::ContactEnforcement::Penalty,
                                               .type = serac::ContactType::Frictionless,
-                                              .penalty = 10000,
-                                              .penalty2 = 0, 
+                                              .penalty = 10000, 
                                               .jacobian = serac::ContactJacobian::Exact};
 
         serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(

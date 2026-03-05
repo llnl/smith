@@ -20,7 +20,8 @@ namespace serac {
 enum class ContactMethod
 {
   SingleMortar, /**< Puso and Laursen 2004 */
-  SmoothMortar  /**< Pointwise gap enforced smoothed contact method */
+  SmoothMortar, /**< Pointwise gap enforced smoothed contact method */
+  EnergyMortar
 };
 
 

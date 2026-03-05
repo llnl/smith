@@ -12,6 +12,7 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
         twist.cpp
         ironing_2D.cpp
         twisted_ironing_2D.cpp
+        ironing_energy_mortar.cpp
     )
 
     foreach(filename ${CONTACT_EXAMPLES_SOURCES})
