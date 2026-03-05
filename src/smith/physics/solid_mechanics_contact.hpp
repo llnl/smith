@@ -260,34 +260,13 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
    * @return Contact-only shape sensitivity (as a dual on the shape displacement space)
    *
    * @pre The contact interaction must be penalty-enforced.
-   * @pre ContactData::update() must have been called with the current configuration so Tribol Jacobian contributions
-   * are up-to-date.
+   * @pre ContactData/Tribol must have been updated for the current configuration so the interaction Jacobian is
+   * up-to-date. For penalty enforcement this implies the same two-stage update sequence used by
+   * ContactData::residualFunction() (update gaps -> set penalty pressures -> update).
    */
   const FiniteElementDual& computeTimestepContactShapeSensitivity(int interaction_id)
   {
 #ifdef SMITH_USE_TRIBOL
-    // For penalty contact, the Tribol Jacobian depends on the penalty pressures which themselves depend on the
-    // gaps. Ensure the gaps/pressures/Jacobian are consistent with the current configuration by mirroring the update
-    // sequence in ContactData::residualFunction(): update gaps -> set penalty pressures -> update.
-    if (contact_.haveContactInteractions()) {
-      contact_.setDisplacements(BasePhysics::shapeDisplacement(), displacement_);
-
-      for (const auto& interaction : contact_.getContactInteractions()) {
-        interaction.evalJacobian(false);
-      }
-      double dt = this->getCheckpointedTimestep(cycle_);
-      contact_.update(cycle_, time_end_step_, dt);
-
-      mfem::Vector merged_pressures(contact_.numPressureDofs());
-      merged_pressures = 0.0;
-      contact_.setPressures(merged_pressures);
-
-      for (const auto& interaction : contact_.getContactInteractions()) {
-        interaction.evalJacobian(true);
-      }
-      contact_.update(cycle_, time_end_step_, dt);
-    }
-
     const ContactInteraction* interaction_ptr = nullptr;
     for (const auto& interaction : contact_.getContactInteractions()) {
       if (interaction.getInteractionId() == interaction_id) {

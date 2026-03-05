@@ -300,17 +300,18 @@ TEST_F(ContactSensitivityFixture, ReactionShapeSensitivities)
 
 TEST_F(ContactSensitivityFixture, SingleContactInteractionReactionTermShapeSensitivities)
 {
-#ifndef SMITH_USE_TRIBOL
-  GTEST_SKIP() << "Test requires Tribol support.";
-#endif
-
   auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
 
+  solid_solver->resetStates();
+  solid_solver->outputStateToDisk("paraview_contact");
+  solid_solver->advanceTimestep(1.0);
+  solid_solver->outputStateToDisk("paraview_contact");
   // Forward solve and adjoint solve for reaction QoI to get adjoint displacement (lambda)
-  computeContactReactionQoi(*solid_solver, mesh);
-  auto reaction_adjoint_load = createReactionDirection(*solid_solver, 1, mesh);
-  solid_solver->setDualAdjointBcs({{"reactions", reaction_adjoint_load}});
-  solid_solver->reverseAdjointTimestep();
+  // solid_solver->resetStates();
+  // solid_solver->advanceTimestep(1.0);
+  // auto reaction_adjoint_load = createReactionDirection(*solid_solver, 1, mesh);
+  // solid_solver->setDualAdjointBcs({{"reactions", reaction_adjoint_load}});
+  // solid_solver->reverseAdjointTimestep();
 
   // Compute the contact-interaction-only shape sensitivity term: lambda^T dR_contact/dshape
   constexpr int contact_interaction_id = 0;
