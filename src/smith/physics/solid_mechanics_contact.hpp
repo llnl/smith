@@ -282,7 +282,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
         interaction.getContactOptions().enforcement != ContactEnforcement::Penalty,
         "computeTimestepContactShapeSensitivity currently only supports penalty-enforced contact interactions.");
 
-    auto interaction_J = interaction.jacobian();
+    auto interaction_J = interaction.jacobianContribution();
     interaction_J->owns_blocks = false;  // this method manages ownership of blocks
 
     std::unique_ptr<mfem::HypreParMatrix> dfdx;
@@ -290,39 +290,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       auto* block_0_0 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
       SLIC_ERROR_ROOT_IF(!block_0_0, "Only HypreParMatrix constraint matrix blocks are currently supported.");
       dfdx.reset(block_0_0);
-    }
-
-    // For penalty contact, Tribol returns dg/dx (1,0) and df/dp (0,1). Smith builds df/dx += penalty * (df/dp)^T dg/dx
-    // (see ContactData::mergedJacobian()).
-    if (!interaction_J->IsZeroBlock(1, 0) && !interaction_J->IsZeroBlock(0, 1)) {
-      auto* dgdu = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(1, 0));
-      auto* dfdp = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 1));
-      SLIC_ERROR_ROOT_IF(!dgdu, "Only HypreParMatrix constraint matrix blocks are currently supported.");
-      SLIC_ERROR_ROOT_IF(!dfdp, "Only HypreParMatrix constraint matrix blocks are currently supported.");
-
-      // zero out rows and cols not in the active set
-      auto inactive_dofs = interaction.inactiveDofs();
-      dgdu->EliminateRows(inactive_dofs);
-      auto dfdp_elim = std::unique_ptr<mfem::HypreParMatrix>(dfdp->EliminateCols(inactive_dofs));
-
-      std::unique_ptr<mfem::HypreParMatrix> BTB(mfem::ParMult(dfdp, dgdu, true));
-
-      delete &interaction_J->GetBlock(1, 0);
-      delete &interaction_J->GetBlock(0, 1);
-
-      if (!dfdx) {
-        mfem::Vector penalty(displacement_.space().TrueVSize());
-        penalty = interaction.getContactOptions().penalty;
-        BTB->ScaleRows(penalty);
-        dfdx = std::move(BTB);
-      } else {
-        dfdx.reset(mfem::Add(1.0, *dfdx, interaction.getContactOptions().penalty, *BTB));
-      }
-    }
-
-    if (!interaction_J->IsZeroBlock(1, 1)) {
-      // Smith tracks its own active set, so discard the Tribol inactive dof block
-      delete &interaction_J->GetBlock(1, 1);
     }
 
     SLIC_ERROR_ROOT_IF(!dfdx,
