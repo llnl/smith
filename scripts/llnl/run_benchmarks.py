@@ -2,7 +2,7 @@
 "exec" "python3" "-u" "-B" "$0" "$@"
 
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for details.
+# other Smith Project Developers. See the top-level LICENSE file for details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
@@ -57,8 +57,12 @@ def parse_args():
 
 
 def main():
-    # Args
     args = parse_args()
+
+    if not ensure_on_lc_and_group_permissions():
+        return 1
+
+    # Args
     cmake_options = args["extra_cmake_options"] + " -DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Release"
     host_config = args["host_config"]
     spot_dir = os.path.abspath(args["spot_dir"])
@@ -72,7 +76,7 @@ def main():
     benchmarks_output_file = os.path.join(test_root, "output.log.%s.benchmarks.txt" % host_config_root)
     build_dir = os.path.join(test_root, "build-%s" % host_config_root)
 
-    # Build Serac
+    # Build Smith
     os.chdir(repo_dir)
     os.makedirs(test_root, exist_ok=True)
     build_and_test_host_config(test_root=test_root, host_config=host_config_path,

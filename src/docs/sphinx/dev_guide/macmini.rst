@@ -1,22 +1,22 @@
 .. ## Copyright (c) Lawrence Livermore National Security, LLC and
-.. ## other Serac Project Developers. See the top-level COPYRIGHT file for details.
+.. ## other Smith Project Developers. See the top-level COPYRIGHT file for details.
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
 .. _macmini-label:
 
 ==============
-Serac Mac Mini
+Smith Mac Mini
 ==============
 
 ------------------------------------------
-Adding an Additional User to Serac MacMini
+Adding an Additional User to Smith MacMini
 ------------------------------------------
 
-This page assumes you are a Serac developer who requires access to the team's shared MacMini. This machine
-tests Serac Mac builds on a regular basis via cron. If you have any questions, reach out to either
+This page assumes you are a Smith developer who requires access to the team's shared MacMini. This machine
+tests Smith Mac builds on a regular basis via cron. If you have any questions, reach out to either
 `Brandon Talamini <talamini1@llnl.gov>`_, `Alex Chapman <chapman39@llnl.gov>`_, or LivIT. The following
-are steps to guide you to gaining access on the machine to the point you're able to build Serac.
+are steps to guide you to gaining access on the machine to the point you're able to build Smith.
 
 1. **Add User**
 
@@ -39,27 +39,26 @@ is for your MyPass (assuming it's plugged into to the machine) and the other is 
 
 5. **Download and setup Homebrew**
 
-Visit `Homebrew's website <https://brew.sh/>`_ to install and setup Homebrew. This is required to install some of Serac's third-party libraries
+Visit `Homebrew's website <https://brew.sh/>`_ to install and setup Homebrew. This is required to install some of Smith's third-party libraries
 (TPLs).
 
 6. **Add New SSH Key to GitHub**
 
-Next step setting up a new SSH Key to your GitHub account so that you're able to clone the Serac repo. In case you do not know
+Next step setting up a new SSH Key to your GitHub account so that you're able to clone the Smith repo. In case you do not know
 how to do this, instructions can be found on
 `GitHub's website <https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account>`_.
 
-7. **Install Serac**
+7. **Install Smith**
 
-You're now able to clone Serac and get started with the installation process. Further instructions for doing so are currently on 
-the `quickstart page <https://serac.readthedocs.io/en/latest/sphinx/quickstart.html#quickstart-label>`_ of the Serac documentation.
+You're now able to clone Smith and get started with the installation process. For further instructions see :ref:`build_smith-label`.
 
 ----------------
 Cron Job Example
 ----------------
 
-The following is an example of a cron job that could be used to test a Mac build, assuming TPLs have been built for Serac. Run
+The following is an example of a cron job that could be used to test a Mac build, assuming TPLs have been built for Smith. Run
 ``crontab -e`` to edit the cron file.
 
 .. code-block:: bash
 
-    0 7 * * 4 /Users/chapman39/dev/serac/ci/repo/scripts/shared-macmini/build-and-test.sh
+    0 7 * * 4 /Users/chapman39/dev/smith/ci/repo/scripts/shared-macmini/build-and-test.sh

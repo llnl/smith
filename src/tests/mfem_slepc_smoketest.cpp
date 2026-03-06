@@ -1,9 +1,9 @@
-// SERAC_EDIT_START
+// SMITH_EDIT_START
 // Source: https://github.com/mfem/mfem/blob/38c9bc75b524df6f05f9307c3ff11859a5141e0d/examples/petsc/ex11p.cpp
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
 // clang-format off
-// SERAC_EDIT_END
+// SMITH_EDIT_END
 //                       MFEM Example 11 - Parallel Version
 //                              PETSc Modification
 //
@@ -38,12 +38,11 @@
 #include <fstream>
 #include <iostream>
 
-// SERAC_EDIT_START
+// SMITH_EDIT_START
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "serac/infrastructure/application_manager.hpp"
-#include "serac/serac_config.hpp"
-#include <gtest/gtest.h>
-// SERAC_EDIT_END
+#include "smith/smith_config.hpp"
+#include "gtest/gtest.h"
+// SMITH_EDIT_END
 
 #ifndef MFEM_USE_SLEPC
 #error This examples requires that MFEM is build with MFEM_USE_SLEPC=YES
@@ -52,13 +51,13 @@
 using namespace std;
 using namespace mfem;
 
-// SERAC_EDIT_START
+// SMITH_EDIT_START
 //int main(int argc, char *argv[])
 int ex11_main(int argc, char *argv[])
 {
    // 1. Initialize MPI and HYPRE.
    //Mpi::Init(argc, argv);
-// SERAC_EDIT_END
+// SMITH_EDIT_END
    int num_procs = Mpi::WorldSize();
    int myid = Mpi::WorldRank();
    Hypre::Init();
@@ -456,23 +455,23 @@ int ex11_main(int argc, char *argv[])
    return 0;
 }
 
-// SERAC_EDIT_START
+// SMITH_EDIT_START
 // clang-format on
 
 TEST(MfemSlepcSmoketest, MfemPetscEx11)
 {
   ::testing::internal::CaptureStdout();
-#ifdef SERAC_USE_CUDA
-  const char* fake_argv[] = {"ex11",       "-m",          SERAC_REPO_DIR "/mfem/data/star.mesh",
-                             "--useslepc", "--slepcopts", SERAC_REPO_DIR "/src/tests/rc_mfem_slepc_smoketest_gpu",
+#ifdef SMITH_USE_CUDA
+  const char* fake_argv[] = {"ex11",       "-m",          SMITH_REPO_DIR "/mfem/data/star.mesh",
+                             "--useslepc", "--slepcopts", SMITH_REPO_DIR "/src/tests/rc_mfem_slepc_smoketest_gpu",
                              "--device",   "cuda",        "--no-visualization"};
 #else
   const char* fake_argv[] = {"ex11",
                              "-m",
-                             SERAC_REPO_DIR "/mfem/data/star.mesh",
+                             SMITH_REPO_DIR "/mfem/data/star.mesh",
                              "--useslepc",
                              "--slepcopts",
-                             SERAC_REPO_DIR "/src/tests/rc_mfem_slepc_smoketest",
+                             SMITH_REPO_DIR "/src/tests/rc_mfem_slepc_smoketest",
                              "--no-visualization"};
 #endif
   int fake_argc = sizeof(fake_argv) / sizeof(fake_argv[0]);
@@ -489,8 +488,8 @@ TEST(MfemSlepcSmoketest, MfemPetscEx11)
 
 int main(int argc, char* argv[])
 {
-  // NOTE: This test does not use Serac's ApplicationManager, because
-  // it does not use Serac!
+  // NOTE: This test does not use Smith's ApplicationManager, because
+  // it does not use Smith!
   int result = 0;
 
   ::testing::InitGoogleTest(&argc, argv);
@@ -507,4 +506,4 @@ int main(int argc, char* argv[])
 }
 
 #pragma GCC diagnostic pop
-// SERAC_EDIT_END
+// SMITH_EDIT_END

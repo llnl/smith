@@ -1,5 +1,5 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
@@ -11,25 +11,29 @@
  * the C++ API to configure the simulation
  */
 
-// _serac_include_header_start
-#include "serac/serac.hpp"
-// _serac_include_header_end
+#include <memory>
+#include <set>
+#include <string>
+
+// _smith_include_header_start
+#include "smith/smith.hpp"
+// _smith_include_header_end
 
 // _main_init_start
 int main(int argc, char* argv[])
 {
   // Initialize and automatically finalize MPI and other libraries
-  serac::ApplicationManager applicationManager(argc, argv);
+  smith::ApplicationManager applicationManager(argc, argv);
   // _main_init_end
 
   // _statemanager_start
   axom::sidre::DataStore datastore;
-  serac::StateManager::initialize(datastore, "without_input_file_example");
+  smith::StateManager::initialize(datastore, "without_input_file_example");
   // _statemanager_end
 
   // _create_mesh_start
   std::string mesh_tag{"mesh"};
-  auto mesh = std::make_shared<serac::Mesh>(serac::buildRectangleMesh(10, 10), mesh_tag);
+  auto mesh = std::make_shared<smith::Mesh>(smith::buildRectangleMesh(10, 10), mesh_tag);
   // _create_mesh_end
 
   // _create_module_start
@@ -37,14 +41,14 @@ int main(int argc, char* argv[])
   constexpr int order = 1;
   constexpr int dim = 2;
 
-  serac::HeatTransfer<order, dim> heat_transfer(serac::heat_transfer::default_nonlinear_options,
-                                                serac::heat_transfer::default_linear_options,
-                                                serac::heat_transfer::default_static_options, "thermal_solver", mesh);
+  smith::HeatTransfer<order, dim> heat_transfer(smith::heat_transfer::default_nonlinear_options,
+                                                smith::heat_transfer::default_linear_options,
+                                                smith::heat_transfer::default_static_options, "thermal_solver", mesh);
   // _create_module_end
 
   // _conductivity_start
   constexpr double kappa = 0.5;
-  serac::heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, kappa);
+  smith::heat_transfer::LinearIsotropicConductor mat(1.0, 1.0, kappa);
 
   heat_transfer.setMaterial(mat, mesh->entireBody());
   // _conductivity_end

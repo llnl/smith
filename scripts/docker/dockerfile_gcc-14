@@ -1,0 +1,18 @@
+FROM ghcr.io/llnl/radiuss:gcc-14-ubuntu-24.04
+LABEL maintainer="chapman39@llnl.gov"
+ARG branch=develop
+ENV spec="~devtools~enzyme %gcc_14"
+
+SHELL ["/bin/bash", "-c"]
+RUN sudo apt-get update -y
+RUN sudo apt-get install gettext gfortran-$(gcc -dumpversion) libopenblas-dev \
+                         lsb-release lua5.2 lua5.2-dev ssh -fy
+
+RUN sudo useradd -m -s /bin/bash -G sudo smith
+WORKDIR "/home/smith"
+USER smith
+
+RUN git clone --recursive --branch $branch --single-branch --depth 1 https://github.com/LLNL/smith.git smith_repo
+
+WORKDIR "/home/smith/smith_repo"
+RUN ./scripts/docker/setup-smith.sh

@@ -3,14 +3,16 @@
 .on_toss4_cray:
   variables:
     SCHEDULER_PARAMETERS: "--queue pci --exclusive --time-limit=${ALLOC_TIME}m --nodes=${ALLOC_NODES}"
+    COMPILER: "llvm-amdgpu@6.4.2"
+    HOST_CONFIG: "tuolumne-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
   tags:
     - batch
-    - tioga
+    - tuolumne
   rules:
     - if: '$CI_COMMIT_BRANCH =~ /_qnone/ || $ON_TOSS4_CRAY == "OFF"' #run except if ...
       when: never
   before_script:
-    - module load cmake/3.23.1
+    - module load cmake/3.29.2
 
 ####
 # Templates
@@ -32,46 +34,38 @@
 ####
 # Build jobs
 
-toss4_cray-rocmcc_6_2_1-src:
- variables:
-   COMPILER: "rocmcc@6.2.1"
-   HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
-   EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON"
-   ALLOC_NODES: "1"
-   ALLOC_TIME: "30"
- extends: .src_build_on_toss4_cray
+toss4_cray-llvm_amdgpu_6_4_2-src:
+  variables:
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "75"
+  extends: .src_build_on_toss4_cray
  
-toss4_cray-rocmcc_6_2_1-src-codevelop:
- variables:
-   COMPILER: "rocmcc@6.2.1"
-   HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
-   EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DSERAC_ENABLE_CODEVELOP=ON"
-   EXTRA_BUILD_OPTIONS: "--skip-install"
-   ALLOC_NODES: "1"
-   ALLOC_TIME: "30"
- extends: .src_build_on_toss4_cray
+toss4_cray-llvm_amdgpu_6_4_2-src-codevelop:
+  variables:
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug -DSMITH_ENABLE_CODEVELOP=ON"
+    EXTRA_BUILD_OPTIONS: "--skip-install"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "75"
+  extends: .src_build_on_toss4_cray
 
 # NOTE: SPEC should matches specs.json, but devtools and profiling variants removed
-toss4_cray-rocmcc_6_2_1-tpl:
+toss4_cray-llvm_amdgpu_6_4_2-tpl:
   variables:
-    COMPILER: "rocmcc@6.2.1"
-    SPEC: "--spec %${COMPILER}~openmp+rocm~petsc amdgpu_target=gfx90a ^hip@6.2.1 ^rocprim@6.2.1 ^hsa-rocr-dev@6.2.1 ^llvm-amdgpu@6.2.1 ^hdf5 cflags=-Wno-int-conversion"
+    SPEC: "--spec %~devtools~profiling~openmp+rocm~petsc~slepc~enzyme~sundials amdgpu_target=gfx942,gfx90a %${COMPILER}"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "70"
+    ALLOC_TIME: "90"
   extends: .tpl_build_on_toss4_cray
 
-toss4_cray-rocmcc_6_2_1-examples:
+toss4_cray-llvm_amdgpu_6_4_2-examples:
   variables:
-    COMPILER: "rocmcc@6.2.1"
-    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
+    EXTRA_CMAKE_OPTIONS: "-DCMAKE_BUILD_TYPE=Debug"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "30"
+    ALLOC_TIME: "90"
   extends: .examples_build_on_toss4_cray
 
-toss4_cray-rocmcc_6_2_1-benchmarks:
+toss4_cray-llvm_amdgpu_6_4_2-benchmarks:
   variables:
-    COMPILER: "rocmcc@6.2.1"
-    HOST_CONFIG: "tioga-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
     ALLOC_NODES: "1"
     ALLOC_TIME: "120"
   extends: .benchmarks_build_on_toss4_cray

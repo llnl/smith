@@ -1,5 +1,5 @@
 # Copyright (c) Lawrence Livermore National Security, LLC and
-# other Serac Project Developers. See the top-level LICENSE file for
+# other Smith Project Developers. See the top-level LICENSE file for
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause) 
@@ -15,43 +15,54 @@ set(language_tests
 set(language_depends
     gtest
     mfem
-    blt::mpi
-    ${serac_device_depends})
+    blt::mpi)
 
-blt_list_append(TO language_depends ELEMENTS blt::openmp IF SERAC_ENABLE_OPENMP)
+blt_list_append(TO language_depends ELEMENTS blt::openmp IF SMITH_ENABLE_OPENMP)
 
-serac_add_tests( SOURCES    ${language_tests}
+smith_add_tests( SOURCES    ${language_tests}
                  DEPENDS_ON ${language_depends})
 
-if(SERAC_ENABLE_CUDA)
-    blt_add_library( NAME       cuda_smoketest_kernel
-                     SOURCES    cuda_smoketest_kernel.cpp
-                     DEPENDS_ON ${serac_device_depends})
+#
+# Enzyme test
+#
 
-    serac_add_tests( SOURCES    cuda_smoketest.cpp
+if(ENZYME_FOUND)
+    smith_add_tests( SOURCES    enzyme_smoketest.cpp
+                     DEPENDS_ON ClangEnzymeFlags gtest)
+endif()
+
+#
+# GPU tests
+#
+
+if(SMITH_ENABLE_CUDA)
+    smith_add_library( NAME       cuda_smoketest_kernel
+                       SOURCES    cuda_smoketest_kernel.cpp)
+
+    smith_add_tests( SOURCES    cuda_smoketest.cpp
                      DEPENDS_ON cuda_smoketest_kernel gtest)
 endif()
 
-if(SERAC_ENABLE_HIP)
-    serac_add_tests( SOURCES    hip_smoketest.cpp
-                     DEPENDS_ON ${serac_device_depends} gtest)
+if(SMITH_ENABLE_HIP)
+    smith_add_tests( SOURCES    hip_smoketest.cpp
+                     DEPENDS_ON gtest)
 endif()
 
 #
 # TPL regression and smoke tests
 #
 
-serac_add_tests( SOURCES       axom_smoketest.cpp
+smith_add_tests( SOURCES       axom_smoketest.cpp
                  DEPENDS_ON    axom::inlet)
 
 if(PETSC_FOUND)
-    serac_add_tests(SOURCES       mfem_petsc_smoketest.cpp
-                    DEPENDS_ON    gtest serac_infrastructure
+    smith_add_tests(SOURCES       mfem_petsc_smoketest.cpp
+                    DEPENDS_ON    gtest smith_infrastructure
                     NUM_MPI_TASKS 4)
 
     if(SLEPC_FOUND)
-        serac_add_tests(SOURCES       mfem_slepc_smoketest.cpp
-                        DEPENDS_ON    gtest serac_infrastructure
+        smith_add_tests(SOURCES       mfem_slepc_smoketest.cpp
+                        DEPENDS_ON    gtest smith_infrastructure
                         NUM_MPI_TASKS 4)
     endif()
 endif()
