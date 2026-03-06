@@ -253,6 +253,25 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
    */
   mfem::HypreParVector pressure() const { return contact_.mergedPressures(); }
 
+#ifdef SMITH_USE_TRIBOL
+  /**
+   * @brief Get a contact interaction by its interaction id
+   *
+   * @param interaction_id The unique identifier for the contact interaction
+   * @return Reference to the requested contact interaction
+   */
+  const ContactInteraction& contactInteraction(int interaction_id) const
+  {
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      if (interaction.getInteractionId() == interaction_id) {
+        return interaction;
+      }
+    }
+    SLIC_ERROR_ROOT(axom::fmt::format("No contact interaction found with interaction_id={}", interaction_id));
+    return contact_.getContactInteractions().front();
+  }
+#endif
+
   /**
    * @brief Computes the shape sensitivity of the residual contribution from a single contact interaction
    *

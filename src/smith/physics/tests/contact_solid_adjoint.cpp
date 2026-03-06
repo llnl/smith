@@ -303,86 +303,24 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionReactionTermShapeSensi
   // For this test, define a QoI that penalizes the (single-interaction) contact force magnitude:
   //   J = 0.5 * <f_contact,i, f_contact,i>
   // and verify the adjoint-based directional derivative matches a finite-difference check.
-  class TestSolidMechanicsContact : public SolidMechT {
-   public:
-    using SolidMechT::SolidMechT;
-
-    FiniteElementDual contactInteractionForces(int interaction_id) const
-    {
-      for (const auto& interaction : contact_.getContactInteractions()) {
-        if (interaction.getInteractionId() == interaction_id) {
-          return interaction.forces();
-        }
-      }
-      SLIC_ERROR_ROOT(axom::fmt::format("No contact interaction found with interaction_id={}", interaction_id));
-      return contact_.forces();
-    }
-
-    std::unique_ptr<mfem::HypreParMatrix> contactInteractionJacobian00(int interaction_id) const
-    {
-      for (const auto& interaction : contact_.getContactInteractions()) {
-        if (interaction.getInteractionId() == interaction_id) {
-          auto J = interaction.jacobianContribution();
-          // Steal ownership of the (0,0) block for use in the test.
-          J->owns_blocks = false;
-          auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&J->GetBlock(0, 0));
-          SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
-          return std::unique_ptr<mfem::HypreParMatrix>(J00);
-        }
-      }
-      SLIC_ERROR_ROOT(axom::fmt::format("No contact interaction found with interaction_id={}", interaction_id));
-      return nullptr;
-    }
-  };
-
-  auto create_force_qoi_solver = [&]() -> std::unique_ptr<TestSolidMechanicsContact> {
-    static int iter = 0;
-    auto solid = std::make_unique<TestSolidMechanicsContact>(nonlinear_opts, solid_mechanics::direct_linear_options,
-                                                             dyn_opts, physics_prefix + std::to_string(iter++), mesh,
-                                                             std::vector<std::string>{}, 0, 0.0, false, true);
-
-    solid->setMaterial(mat, mesh->entireBody());
-    solid->setFixedBCs(mesh->domain("two"));
-    solid->setDisplacementBCs(
-        [](tensor<double, dim> x, double) {
-          auto r = 0.0 * x;
-          r[1] -= 0.1;
-          return r;
-        },
-        mesh->domain("four"), Component::ALL);
-
-    auto contact_type = smith::ContactEnforcement::Penalty;
-    double element_length = 1.0;
-    double penalty = 105.1 * mat.K / element_length;
-
-    smith::ContactOptions contact_options{.method = smith::ContactMethod::SingleMortar,
-                                          .enforcement = contact_type,
-                                          .type = smith::ContactType::TiedNormal,
-                                          .penalty = penalty,
-                                          .jacobian = smith::ContactJacobian::Exact};
-    constexpr int contact_interaction_id = 0;
-    solid->addContactInteraction(contact_interaction_id, {3}, {5}, contact_options);
-
-    solid->completeSetup();
-    return solid;
-  };
-
   constexpr int contact_interaction_id = 0;
 
-  auto solid_solver = create_force_qoi_solver();
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
 
-  auto compute_contact_force_qoi = [&](TestSolidMechanicsContact& solver) -> double {
+  auto compute_contact_force_qoi = [&](SolidMechT& solver) -> double {
     solver.resetStates();
     solver.advanceTimestep(1.0);
-    const auto f = solver.contactInteractionForces(contact_interaction_id);
+    const auto f = solver.contactInteraction(contact_interaction_id).forces();
     return 0.5 * innerProduct(f, f);
   };
 
   compute_contact_force_qoi(*solid_solver);
 
   // Compute adjoint/shape sensitivity for this QoI.
-  const auto f_base = solid_solver->contactInteractionForces(contact_interaction_id);
-  auto J00 = solid_solver->contactInteractionJacobian00(contact_interaction_id);
+  const auto f_base = solid_solver->contactInteraction(contact_interaction_id).forces();
+  const auto interaction_jacobian = solid_solver->contactInteraction(contact_interaction_id).jacobianContribution();
+  auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
+  SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
 
   FiniteElementDual displacement_adjoint_load(solid_solver->state("displacement").space(),
                                               "contact_force_qoi_adjoint_load");
@@ -412,7 +350,7 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionReactionTermShapeSensi
   const double eps_contact = 1.0e-3;
 #endif
 
-  auto compute_qoi_adjusting_shape = [&](TestSolidMechanicsContact& solver, double scale) -> double {
+  auto compute_qoi_adjusting_shape = [&](SolidMechT& solver, double scale) -> double {
     FiniteElementState shape_disp(solver.shapeDisplacement().space(), "input_shape_displacement");
     shape_disp = 0.0;
     shape_disp.Add(scale, derivative_direction);
