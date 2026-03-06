@@ -65,11 +65,11 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
     mfem::FiniteElementSpace::MarkerToList(tdof_markers, inactive_tdofs_);
   }
 
-  if(getContactOptions().method == ContactMethod::SmoothMortar) 
+  if(getContactOptions().method == ContactMethod::EnergyMortar) 
   {
     contact_opts_.enforcement = ContactEnforcement::NotRequired;
     tribol::setMfemKinematicConstantPenalty(interaction_id, contact_opts_.penalty, contact_opts_.penalty2);
-    contact_opts_.type = ContactType::TiedNormal;
+    // contact_opts_.type = ContactType::TiedNormal;
   }
 
   // set up Tribol to compute exact Jacobian if requested
@@ -82,26 +82,43 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
 FiniteElementDual ContactInteraction::forces() const
 {
   FiniteElementDual f(*current_coords_.ParFESpace());
-  auto& f_loc = f.linearForm();
-  tribol::getMfemResponse(getInteractionId(), f_loc);
-  f.setFromLinearForm(f_loc);
+  if ( getContactOptions().method == ContactMethod::EnergyMortar ) {
+    f = tribol::getMfemTDofForce(getInteractionId());
+  }
+  else{
+    auto& f_loc = f.linearForm();
+    tribol::getMfemResponse(getInteractionId(), f_loc);
+    f.setFromLinearForm(f_loc);
+  }
   return f;
 }
 
 FiniteElementState ContactInteraction::pressure() const
 {
-  auto& p_tribol = tribol::getMfemPressure(getInteractionId());
-  FiniteElementState p(*p_tribol.ParFESpace());
-  p.setFromGridFunction(p_tribol);
+  
+  FiniteElementState p(pressureSpace());
+  if( getContactOptions().method == ContactMethod::EnergyMortar ) {
+    
+    p = tribol::getMfemTDofPressure(getInteractionId());
+  }
+  else{
+    auto& p_tribol = tribol::getMfemPressure(getInteractionId());
+    p.setFromGridFunction(p_tribol);
+  }
   return p;
 }
 
 FiniteElementDual ContactInteraction::gaps() const
 {
   FiniteElementDual g(pressureSpace());
-  auto& g_loc = g.linearForm();
-  tribol::getMfemGap(getInteractionId(), g_loc);
-  g.setFromLinearForm(g_loc);
+  if ( getContactOptions().method == ContactMethod::EnergyMortar ) {
+    g = tribol::getMfemTDofGap(getInteractionId());
+  }
+  else {
+    auto& g_loc = g.linearForm();
+    tribol::getMfemGap(getInteractionId(), g_loc);
+    g.setFromLinearForm(g_loc);
+  }
   return g;
 }
 
@@ -124,7 +141,12 @@ mfem::ParFiniteElementSpace& ContactInteraction::pressureSpace() const
 
 void ContactInteraction::setPressure(const FiniteElementState& pressure) const
 {
-  tribol::getMfemPressure(getInteractionId()) = pressure.gridFunction();
+  if ( getContactOptions().method == ContactMethod::EnergyMortar ) {
+    tribol::getMfemTDofPressure(getInteractionId()) = pressure;
+  }
+  else{
+    tribol::getMfemPressure(getInteractionId()) = pressure.gridFunction();
+  }
 }
 
 const mfem::Array<int>& ContactInteraction::inactiveDofs() const { return inactiveDofs(pressure()); }
@@ -164,8 +186,8 @@ tribol::ContactMethod ContactInteraction::getMethod() const
   switch (contact_opts_.method) {
     case ContactMethod::SingleMortar:
       return tribol::SINGLE_MORTAR;
-    case ContactMethod::SmoothMortar:
-      return tribol::SMOOTH_MORTAR;
+    case ContactMethod::EnergyMortar:
+      return tribol::ENERGY_MORTAR;
     default:
       SLIC_ERROR_ROOT("Unsupported contact method.");
       // return something so we don't get an error

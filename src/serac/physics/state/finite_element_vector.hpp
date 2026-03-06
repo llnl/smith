@@ -56,6 +56,7 @@ class FiniteElementVector : public mfem::HypreParVector {
    */
   FiniteElementVector(const mfem::ParFiniteElementSpace& space, const std::string& name = "");
 
+
   /**
    * @brief Construct a new Finite Element Vector object given a templated function space
    *
