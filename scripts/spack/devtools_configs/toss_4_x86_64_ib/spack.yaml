@@ -32,7 +32,6 @@ spack:
       # This defaults us to machine specific flags of ivybridge which allows
       # us to run on broadwell as well
       target: [ivybridge]
-      compiler: [gcc]
       providers:
         blas: [openblas]
         lapack: [netlib-lapack]
