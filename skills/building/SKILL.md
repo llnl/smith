@@ -26,7 +26,7 @@ git submodule update --init --recursive
 2) Configure (recommended wrapper around CMake):
 
 ```bash
-./config-build.py -bp build -ip install -hc host-configs/<file>.cmake -bt Debug --exportcompilercommands
+./config-build.py -bp build -ip install -hc host-configs/<file>.cmake -bt RelWithDebInfo --exportcompilercommands
 ```
 
 3) Build and test:
@@ -49,7 +49,7 @@ git submodule update --init --recursive
 2) Configure with co-develop enabled:
 
 ```bash
-./config-build.py -bp build-codevelop -ip install-codevelop -hc host-configs/<file>.cmake -bt Debug -DSMITH_ENABLE_CODEVELOP=ON --exportcompilercommands
+./config-build.py -bp build-codevelop -ip install-codevelop -hc host-configs/<file>.cmake -bt RelWithDebInfo -DSMITH_ENABLE_CODEVELOP=ON --exportcompilercommands
 ```
 
 3) Build and test:
@@ -65,6 +65,14 @@ Common CMake options (and their defaults) live in `cmake/SmithBasics.cmake`. Pas
 
 ```bash
 ./config-build.py -hc host-configs/<file>.cmake -DENABLE_ASAN=ON
+```
+
+### Debug builds (when requested)
+
+When a user explicitly asks for a debug build, use `-bt Debug` in the configure step:
+
+```bash
+./config-build.py -bp build -ip install -hc host-configs/<file>.cmake -bt Debug --exportcompilercommands
 ```
 
 ### AddressSanitizer (`ENABLE_ASAN`)
