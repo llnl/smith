@@ -12,9 +12,9 @@
 
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/smith_config.hpp"
-#include "problems/Problems.hpp"
-#include "solvers/Solvers.hpp"
-#include "utilities.hpp"
+#include "continuationsolvers/problems/Problems.hpp"
+#include "continuationsolvers/solvers/Solvers.hpp"
+#include "continuationsolvers/utilities.hpp"
 
 using namespace smith;
 
