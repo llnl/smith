@@ -3,12 +3,6 @@
 
 namespace smith {
 
-/**
- * @brief Construct a new nxn block diagonal preconditioner
- *
- * @param offsets The array of offsets describing a block vector of (b_1, ..., b_n)
- */
-
 BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offsets,
                                                          std::vector<std::unique_ptr<mfem::Solver>> solvers)
     : block_offsets_(offsets),
@@ -22,19 +16,8 @@ BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offse
   }
 }
 
-/**
- * @brief The action of the precondition on the block vector (b_1, ..., b_n)
- *
- * @param in The block input vector (b_1, ..., b_n)
- * @param out The block output vector P^-1(b_1, ..., b_n)
- */
 void BlockDiagonalPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) const { solver_diag_.Mult(in, out); }
 
-/**
- * @brief Set the preconditioner to use the supplied linearized block Jacobian
- *
- * @param jacobian The supplied linearized Jacobian. Note that it is always a block operator
- */
 void BlockDiagonalPreconditioner::SetOperator(const mfem::Operator& jacobian)
 {
   // Cast the supplied jacobian to a block operator object
@@ -54,12 +37,6 @@ void BlockDiagonalPreconditioner::SetOperator(const mfem::Operator& jacobian)
 
 BlockDiagonalPreconditioner::~BlockDiagonalPreconditioner() {}
 
-/**
- * @brief Construct a new nxn block triangular preconditioner
- *
- * @param offsets The array of offsets describing a block vector of (b_1, ..., b_n)
- */
-
 BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& offsets,
                                                              std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                                              BlockTriangularType type)
@@ -74,12 +51,6 @@ BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& o
   }
 }
 
-/**
- * @brief The action of the lower sweep on the block vector (b_1, ..., b_n)
- *
- * @param in The block input vector (b_1, ..., b_n)
- * @param out The block output vector P_lower^-1(b_1, ..., b_n)
- */
 void BlockTriangularPreconditioner::LowerSweep(const mfem::Vector& in, mfem::Vector& out) const
 {
   mfem::BlockVector b(const_cast<mfem::Vector&>(in), block_offsets_);
@@ -113,12 +84,6 @@ void BlockTriangularPreconditioner::LowerSweep(const mfem::Vector& in, mfem::Vec
   }
 }
 
-/**
- * @brief The action of the upper sweep on the block vector (b_1, ..., b_n)
- *
- * @param in The block input vector (b_1, ..., b_n)
- * @param out The block output vector P_upper^-1(b_1, ..., b_n)
- */
 void BlockTriangularPreconditioner::UpperSweep(const mfem::Vector& in, mfem::Vector& out) const
 {
   mfem::BlockVector b(const_cast<mfem::Vector&>(in), block_offsets_);
@@ -152,12 +117,6 @@ void BlockTriangularPreconditioner::UpperSweep(const mfem::Vector& in, mfem::Vec
   }
 }
 
-/**
- * @brief The action of the precondition on the block vector (b_1, ..., b_n)
- *
- * @param in The block input vector (b_1, ..., b_n)
- * @param out The block output vector P^-1(b_1, ..., b_n)
- */
 void BlockTriangularPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) const
 {
   switch (type_) {
@@ -199,11 +158,6 @@ void BlockTriangularPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& o
   }
 }
 
-/**
- * @brief Set the preconditioner to use the supplied linearized block Jacobian
- *
- * @param jacobian The supplied linearized Jacobian. Note that it is always a block operator
- */
 void BlockTriangularPreconditioner::SetOperator(const mfem::Operator& jacobian)
 {
   // Cast the supplied jacobian to a block operator object
@@ -218,11 +172,6 @@ void BlockTriangularPreconditioner::SetOperator(const mfem::Operator& jacobian)
 
 BlockTriangularPreconditioner::~BlockTriangularPreconditioner() {}
 
-/**
- * @brief Construct a new 2x2 block Schur complement factorization preconditioner
- *
- * @param offsets The array of offsets describing a block vector of (b_1, ..., b_n)
- */
 BlockSchurPreconditioner::BlockSchurPreconditioner(mfem::Array<int>& offsets,
                                                    std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                                    BlockSchurType type)
@@ -234,12 +183,6 @@ BlockSchurPreconditioner::BlockSchurPreconditioner(mfem::Array<int>& offsets,
 {
 }
 
-/**
- * @brief The action of the lower sweep on the block vector (b_1, b_2)
- *
- * @param in The block input vector (b_1, b_2)
- * @param out The block output vector [I, 0; -A21 A11^-1, I] (b_1, b_2)
- */
 void BlockSchurPreconditioner::LowerBlock(const mfem::Vector& in, mfem::Vector& out) const
 {
   // Interpret in, out as block vectors: in = [b1; b2], out = [x1; x2]
@@ -256,19 +199,13 @@ void BlockSchurPreconditioner::LowerBlock(const mfem::Vector& in, mfem::Vector& 
 
   // 2) Build x2 = b2 - A21 x1
   A_21_->Mult(x1, x2);  // x2 = A21 x1
-  x2.Neg();            // x2 = -A21 x1
-  x2 += b2;            // x2 = b2 - A21 x1
+  x2.Neg();             // x2 = -A21 x1
+  x2 += b2;             // x2 = b2 - A21 x1
 
   // 3) Reassign x1.
   x1 = b1;
 }
 
-/**
- * @brief The action of the upper block on the block vector (b_1, b_2)
- *
- * @param in The block input vector (b_1, b_2)
- * @param out The block output vector [I - A11^-1 A12; 0, I](b_1, b_2)
- */
 void BlockSchurPreconditioner::UpperBlock(const mfem::Vector& in, mfem::Vector& out) const
 {
   // Interpret in, out as block vectors: in = [b1; b2], out = [x1; x2]
@@ -294,12 +231,7 @@ void BlockSchurPreconditioner::UpperBlock(const mfem::Vector& in, mfem::Vector& 
   // 4) Assign x2
   x2 = b2;
 }
-/**
- * @brief The action of the precondition on the block vector (b_1, b_2)
- *
- * @param in The block input vector (b_1, b_2)
- * @param out The block output vector P^-1(b_1, b_2)
- */
+
 void BlockSchurPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) const
 {
   switch (type_) {
@@ -337,13 +269,6 @@ void BlockSchurPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) c
   }
 }
 
-/**
- * @brief Set the preconditioner to use the supplied linearized block Jacobian.
- *
- * The Schur complement approximation is given by S_approx = A22 - A21 * diag(A11)^{-1} * A12
- *
- * @param jacobian The supplied linearized Jacobian. Note that it is always a block operator
- */
 void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
 {
   block_jacobian_ = dynamic_cast<const mfem::BlockOperator*>(&jacobian);
