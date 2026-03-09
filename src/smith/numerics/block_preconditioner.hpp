@@ -30,18 +30,20 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
   mfem::BlockOperator solver_diag_;
 
   // mfem solvers for each block
-  mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers;
+  mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 };
 
-enum class BlockTriangularType {
-    Lower,
-    Upper,
-    Symmetric
+enum class BlockTriangularType
+{
+  Lower,
+  Upper,
+  Symmetric
 };
 
 class BlockTriangularPreconditioner : public mfem::Solver {
  public:
-  BlockTriangularPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockTriangularType type = BlockTriangularType::Lower);
+  BlockTriangularPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
+                                BlockTriangularType type = BlockTriangularType::Lower);
 
   virtual void Mult(const mfem::Vector& in, mfem::Vector& out) const;
 
@@ -52,7 +54,7 @@ class BlockTriangularPreconditioner : public mfem::Solver {
  private:
   // Offsets for extracting block vector segments
   mfem::Array<int>& block_offsets_;
-  
+
   // Number of blocks
   const int nblocks_;
 
@@ -60,7 +62,7 @@ class BlockTriangularPreconditioner : public mfem::Solver {
   const mfem::BlockOperator* block_jacobian_;
 
   // mfem solvers for each block
-  mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers;
+  mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 
   // Block Triangular type
   BlockTriangularType type_;
@@ -70,16 +72,18 @@ class BlockTriangularPreconditioner : public mfem::Solver {
   void UpperSweep(const mfem::Vector& in, mfem::Vector& out) const;
 };
 
-enum class BlockSchurType {
-    Diagonal,
-    Lower,
-    Upper,
-    Full
+enum class BlockSchurType
+{
+  Diagonal,
+  Lower,
+  Upper,
+  Full
 };
 
 class BlockSchurPreconditioner : public mfem::Solver {
  public:
-  BlockSchurPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockSchurType type=BlockSchurType::Diagonal);
+  BlockSchurPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
+                           BlockSchurType type = BlockSchurType::Diagonal);
 
   virtual void Mult(const mfem::Vector& in, mfem::Vector& out) const;
 
@@ -98,12 +102,12 @@ class BlockSchurPreconditioner : public mfem::Solver {
   mfem::BlockOperator solver_diag_;
 
   // mfem solvers for each block
-  mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers;
+  mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 
   // Views of the linearized Jacobian blocks
-  const mfem::Operator *A_11, *A_22, *A_12, *A_21;
+  const mfem::Operator *A_12_, *A_21_;
 
-  mutable mfem::HypreParMatrix *S_approx;
+  mutable mfem::HypreParMatrix* S_approx_;
 
   BlockSchurType type_;
 

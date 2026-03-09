@@ -1014,7 +1014,7 @@ void StrumpackSolver::SetOperator(const mfem::Operator& op)
     strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*matrix);
   }
   height = op.Height();
-  width  = op.Width();
+  width = op.Width();
   strumpack_solver_.SetOperator(*strumpack_mat_);
 }
 
