@@ -12,13 +12,14 @@ using namespace smith;
 
 struct BlockPrecTestParams
 {
-    enum class BlockPattern { Diagonal2x2, Lower2x2 };
-    enum class PrecKind { Diagonal, Triangular };
+    enum class BlockPattern { Diagonal2x2, Lower2x2, Full2x2 };
+    enum class PrecKind { Diagonal, Triangular, Schur };
     enum class SolverBackend { HypreBoomerAMG, Strumpack };
 
     BlockPattern  pattern;
     PrecKind      prec_kind;
     smith::BlockTriangularType tri_type; // Only for triangular
+    smith::BlockSchurType schur_type; // Only for Schur
     std::string   name;
     double        rel_tol;
     SolverBackend backend;
@@ -92,6 +93,17 @@ TEST_P(BlockPreconditionerParamTest, SolvesBlockSystemApproximately)
         C = c.ParallelAssemble();
         J.SetBlock(1, 0, C);
     }
+    if (params.pattern == BlockPrecTestParams::BlockPattern::Full2x2)
+    {
+        // Build mass matrix for off-diagonals
+        ParBilinearForm c(&fes);
+        c.AddDomainIntegrator(new MassIntegrator(one));
+        c.Assemble();
+        c.Finalize();
+        C = c.ParallelAssemble();
+        J.SetBlock(1, 0, C);
+        J.SetBlock(0, 1, C);
+    }
 
     // Build solver array
     std::vector<std::unique_ptr<Solver>> block_solvers;
@@ -120,9 +132,14 @@ TEST_P(BlockPreconditionerParamTest, SolvesBlockSystemApproximately)
     {
         P = std::make_unique<smith::BlockDiagonalPreconditioner>(block_offsets, std::move(block_solvers));
     }
-    else
+    else if (params.prec_kind == BlockPrecTestParams::PrecKind::Triangular)
     {
         P = std::make_unique<smith::BlockTriangularPreconditioner>(block_offsets, std::move(block_solvers), params.tri_type);
+    }
+    else
+    {
+        P = std::make_unique<smith::BlockSchurPreconditioner>(block_offsets, std::move(block_solvers), params.schur_type, smith::SchurApproxType::A22Only);
+        //P = std::make_unique<smith::BlockSchurPreconditioner>(block_offsets, std::move(block_solvers), params.schur_type);
     }
     P->SetOperator(J);
 
@@ -155,6 +172,7 @@ INSTANTIATE_TEST_SUITE_P(
             BlockPrecTestParams::BlockPattern::Diagonal2x2,
             BlockPrecTestParams::PrecKind::Diagonal,
             smith::BlockTriangularType::Lower, // unused for diagonal
+            smith::BlockSchurType::Full,
             "Diag_HypreBoomerAMG",
             1e-1,
             BlockPrecTestParams::SolverBackend::HypreBoomerAMG
@@ -164,7 +182,18 @@ INSTANTIATE_TEST_SUITE_P(
             BlockPrecTestParams::BlockPattern::Lower2x2,
             BlockPrecTestParams::PrecKind::Triangular,
             smith::BlockTriangularType::Lower,
+            smith::BlockSchurType::Full,
             "TriLower_HypreBoomerAMG",
+            1e-1,
+            BlockPrecTestParams::SolverBackend::HypreBoomerAMG
+        },
+        // BlockSchurPreconditioner + HypreBoomerAMG on [A C; C A]
+        BlockPrecTestParams{
+            BlockPrecTestParams::BlockPattern::Full2x2,
+            BlockPrecTestParams::PrecKind::Schur,
+            smith::BlockTriangularType::Lower,
+            smith::BlockSchurType::Full,
+            "SchurFull_HypreBoomerAMG",
             1e-1,
             BlockPrecTestParams::SolverBackend::HypreBoomerAMG
         }
@@ -175,6 +204,7 @@ INSTANTIATE_TEST_SUITE_P(
             BlockPrecTestParams::BlockPattern::Diagonal2x2,
             BlockPrecTestParams::PrecKind::Diagonal,
             smith::BlockTriangularType::Lower,
+            smith::BlockSchurType::Full,
             "Diag_Strumpack",
             1e-10,
             BlockPrecTestParams::SolverBackend::Strumpack
@@ -184,8 +214,39 @@ INSTANTIATE_TEST_SUITE_P(
             BlockPrecTestParams::BlockPattern::Lower2x2,
             BlockPrecTestParams::PrecKind::Triangular,
             smith::BlockTriangularType::Lower,
+            smith::BlockSchurType::Full,
             "TriLower_Strumpack",
             1e-10,
+            BlockPrecTestParams::SolverBackend::Strumpack
+        },
+        // BlockSchurPreconditioner + Strumpack on [A C; C A]
+        BlockPrecTestParams{
+            BlockPrecTestParams::BlockPattern::Full2x2,
+            BlockPrecTestParams::PrecKind::Schur,
+            smith::BlockTriangularType::Lower,
+            smith::BlockSchurType::Full,
+            "SchurFull_Strumpack",
+            1e-1,
+            BlockPrecTestParams::SolverBackend::Strumpack
+        },
+        // BlockSchurPreconditioner + Strumpack on [A C; C A]
+        BlockPrecTestParams{
+            BlockPrecTestParams::BlockPattern::Full2x2,
+            BlockPrecTestParams::PrecKind::Schur,
+            smith::BlockTriangularType::Lower,
+            smith::BlockSchurType::Diagonal,
+            "SchurDiagonal_Strumpack",
+            0.5,
+            BlockPrecTestParams::SolverBackend::Strumpack
+        },
+        // BlockDiagonalPreconditioner + Strumpack on [A C; C A]
+        BlockPrecTestParams{
+            BlockPrecTestParams::BlockPattern::Full2x2,
+            BlockPrecTestParams::PrecKind::Diagonal,
+            smith::BlockTriangularType::Lower,
+            smith::BlockSchurType::Full,
+            "DiagFull_Strumpack",
+            0.5,
             BlockPrecTestParams::SolverBackend::Strumpack
         }
 #endif

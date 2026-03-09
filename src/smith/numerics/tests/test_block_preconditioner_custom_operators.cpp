@@ -157,6 +157,44 @@ TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity)
   EXPECT_NEAR(diff.Norml2(), 0.0, 1e-14);
 }
 
+
+// If the solver for second block is identity, the block solver is identity
+TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity2)
+{
+  Array<int> offsets({0, 2, 5});
+
+  auto A11 = makeScaledIdentity(2, 1.0);
+  auto A22 = makeScaledIdentity(3, 2.0);
+
+  BlockOperator A(offsets);
+  A.SetBlock(0,0, A11.get());
+  A.SetBlock(1,1, A22.get());
+
+  std::vector<std::unique_ptr<Solver>> solvers;
+  solvers.push_back(std::make_unique<ExactDiagonalSolver>());
+  solvers.push_back(std::make_unique<ExactDiagonalSolver>());
+
+  // Define custom operators to be used in the preconditioner
+  auto M2u = makeScaledIdentity(3, 1.0);
+
+  std::shared_ptr<const mfem::Operator> M2(std::move(M2u));
+
+  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers),
+                                            { {1, M2} });
+
+  P.SetOperator(A);
+
+  Vector x(5), y(5);
+  x.Randomize();
+
+  P.Mult(x, y);
+
+  mfem::Vector diff(x);
+  diff -= y;
+
+  EXPECT_NEAR(diff.Norml2(), 0.0, 1e-14);
+}
+
 /* ============================================================
    main
    ============================================================ */

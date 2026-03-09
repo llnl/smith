@@ -443,6 +443,37 @@ TEST(BlockTriangular, WorksForSingleBlockAllTypes)
         EXPECT_NEAR(r.Norml2(), 0.0, 1e-12);
     }
 }
+// Schur tests
+// If the solver for each block is identity, the block solver is identity
+TEST(BlockSchur, IdentityActsAsIdentity)
+{
+  Array<int> offsets({0, 2, 5});
+
+  auto A11 = makeScaledIdentity(2, 1.0);
+  auto A22 = makeScaledIdentity(3, 1.0);
+
+  BlockOperator A(offsets);
+  A.SetBlock(0,0, A11.get());
+  A.SetBlock(1,1, A22.get());
+
+  std::vector<std::unique_ptr<Solver>> solvers;
+  solvers.push_back(std::make_unique<IdentitySolver>());
+  solvers.push_back(std::make_unique<IdentitySolver>());
+
+  smith::BlockSchurPreconditioner P(offsets, std::move(solvers),
+                                  smith::BlockSchurType::Full);
+  P.SetOperator(A);
+
+  Vector x(5), y(5);
+  x.Randomize();
+
+  P.Mult(x, y);
+
+  mfem::Vector diff(x);
+  diff -= y;
+
+  EXPECT_NEAR(diff.Norml2(), 0.0, 1e-14);
+}
 
 /* ============================================================
    main

@@ -6,9 +6,10 @@
 
 namespace smith {
 
+using BlockOverride = std::pair<int, std::shared_ptr<const mfem::Operator>>;
+
 class BlockDiagonalPreconditioner : public mfem::Solver {
  public:
-  using BlockOverride = std::pair<int, std::shared_ptr<const mfem::Operator>>;
 
   BlockDiagonalPreconditioner(mfem::Array<int>& offsets,
                               std::vector<std::unique_ptr<mfem::Solver>> solvers,
@@ -48,7 +49,10 @@ enum class BlockTriangularType {
 
 class BlockTriangularPreconditioner : public mfem::Solver {
  public:
-  BlockTriangularPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockTriangularType type = BlockTriangularType::Lower);
+  BlockTriangularPreconditioner(mfem::Array<int>& offsets,
+                              std::vector<std::unique_ptr<mfem::Solver>> solvers, 
+                              BlockTriangularType type = BlockTriangularType::Lower,
+                              std::vector<BlockOverride> overrides = {});
 
   virtual void Mult(const mfem::Vector& in, mfem::Vector& out) const;
 
@@ -75,6 +79,9 @@ class BlockTriangularPreconditioner : public mfem::Solver {
   // Lower and Upper sweeps to be used in Mult
   void LowerSweep(const mfem::Vector& in, mfem::Vector& out) const;
   void UpperSweep(const mfem::Vector& in, mfem::Vector& out) const;
+
+  // size nblocks_, nullptr means "use Jacobian diagonal block"
+  std::vector<std::shared_ptr<const mfem::Operator>> block_op_overrides_;
 };
 
 enum class BlockSchurType {
@@ -84,9 +91,19 @@ enum class BlockSchurType {
     Full
 };
 
+enum class SchurApproxType {
+    DiagInv,
+    A22Only,
+    Custom,
+};
+
 class BlockSchurPreconditioner : public mfem::Solver {
  public:
-  BlockSchurPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockSchurType type=BlockSchurType::Diagonal);
+  BlockSchurPreconditioner(mfem::Array<int>& offsets,
+                           std::vector<std::unique_ptr<mfem::Solver>> solvers,
+                           BlockSchurType type=BlockSchurType::Diagonal,
+                           SchurApproxType approxType=SchurApproxType::DiagInv,
+                           std::vector<BlockOverride> overrides = {});
 
   virtual void Mult(const mfem::Vector& in, mfem::Vector& out) const;
 
@@ -110,12 +127,23 @@ class BlockSchurPreconditioner : public mfem::Solver {
   // Views of the linearized Jacobian blocks
   const mfem::Operator *A_11, *A_22, *A_12, *A_21;
 
-  mutable mfem::HypreParMatrix *S_approx;
+  const mfem::Operator *S_approx;
 
   BlockSchurType type_;
+
+  SchurApproxType approxType_;
 
   // Lower and Upper blocks to be used in Mult
   void LowerBlock(const mfem::Vector& in, mfem::Vector& out) const;
   void UpperBlock(const mfem::Vector& in, mfem::Vector& out) const;
+
+  // size nblocks_, nullptr means "use Jacobian diagonal block"
+  std::vector<std::shared_ptr<const mfem::Operator>> block_op_overrides_;
+
+  mfem::HypreParMatrix* BuildSchurDiagApprox_(const mfem::HypreParMatrix& A11,
+                                         const mfem::HypreParMatrix& A12,
+                                         const mfem::HypreParMatrix& A21,
+                                         const mfem::HypreParMatrix& A22) const;
+
 };
 }  // namespace smith

@@ -12,7 +12,8 @@ namespace smith {
 BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offsets,
    std::vector<std::unique_ptr<mfem::Solver>> solvers, std::vector<BlockOverride> overrides)
   : block_offsets_(offsets), nblocks_(offsets.Size() - 1), block_jacobian_(nullptr),
-    solver_diag_(block_offsets_), mfem_solvers(std::move(solvers)), block_op_overrides_(static_cast<size_t>(nblocks_), nullptr)
+    solver_diag_(block_offsets_), mfem_solvers(std::move(solvers)),
+    block_op_overrides_(static_cast<size_t>(nblocks_), nullptr)
 {
   if (mfem_solvers.size() != static_cast<size_t>(nblocks_))
   {
@@ -86,12 +87,31 @@ BlockDiagonalPreconditioner::~BlockDiagonalPreconditioner() {}
  * @param offsets The array of offsets describing a block vector of (b_1, ..., b_n)
  */
 
-BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockTriangularType type)
-  : block_offsets_(offsets), nblocks_(offsets.Size() - 1), block_jacobian_(nullptr), mfem_solvers(std::move(solvers)), type_(type)
+BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& offsets,
+   std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockTriangularType type, std::vector<BlockOverride> overrides)
+  : block_offsets_(offsets), nblocks_(offsets.Size() - 1), block_jacobian_(nullptr),
+   mfem_solvers(std::move(solvers)), type_(type), block_op_overrides_(static_cast<size_t>(nblocks_), nullptr)
 {
   if (mfem_solvers.size() != static_cast<size_t>(nblocks_))
   {
     throw std::invalid_argument("Number of solvers must match number of blocks");
+  }
+  // Apply overrides if any
+  for (auto& ov : overrides) {
+    const int i = ov.first;
+    auto& op = ov.second;
+
+    if (i < 0 || i >= nblocks_) {
+      throw std::out_of_range("Override block index out of range");
+    }
+    if (!op) {
+      throw std::invalid_argument("Override operator must be non-null");
+    }
+    if (block_op_overrides_[static_cast<size_t>(i)]) {
+      throw std::invalid_argument("Duplicate override for same block index");
+    }
+
+    block_op_overrides_[static_cast<size_t>(i)] = std::move(op);
   }
 }
 
@@ -243,8 +263,16 @@ void BlockTriangularPreconditioner::SetOperator(const mfem::Operator& jacobian)
   // Configure all diagonal solves
   for (int i = 0; i < nblocks_; i++)
   {
-    const mfem::Operator &A_ii = block_jacobian_->GetBlock(i, i);
-    mfem_solvers[i]->SetOperator(A_ii);
+    // Attach operator to solver
+    const mfem::Operator* op = nullptr;
+
+    if (block_op_overrides_[i]) {
+      op = block_op_overrides_[i].get();      // use override
+    } else {
+      op = &block_jacobian_->GetBlock(i, i);  // use Jacobian diagonal block
+    }
+
+    mfem_solvers[i]->SetOperator(*op);
   }
 }
 
@@ -255,9 +283,30 @@ BlockTriangularPreconditioner::~BlockTriangularPreconditioner() {}
    *
    * @param offsets The array of offsets describing a block vector of (b_1, ..., b_n)
    */
-BlockSchurPreconditioner::BlockSchurPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockSchurType type)
-  : block_offsets_(offsets), block_jacobian_(nullptr), solver_diag_(block_offsets_), mfem_solvers(std::move(solvers)), type_(type)
+BlockSchurPreconditioner::BlockSchurPreconditioner(mfem::Array<int>& offsets,
+   std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockSchurType type,
+   SchurApproxType approxType, std::vector<BlockOverride> overrides)
+  : block_offsets_(offsets), block_jacobian_(nullptr), solver_diag_(block_offsets_),
+  mfem_solvers(std::move(solvers)), type_(type), 
+  approxType_(approxType), block_op_overrides_(static_cast<size_t>(2), nullptr)
 {
+    // Apply overrides if any
+  for (auto& ov : overrides) {
+    const int i = ov.first;
+    auto& op = ov.second;
+
+    if (i < 0 || i >= 2) {
+      throw std::out_of_range("Override block index out of range");
+    }
+    if (!op) {
+      throw std::invalid_argument("Override operator must be non-null");
+    }
+    if (block_op_overrides_[static_cast<size_t>(i)]) {
+      throw std::invalid_argument("Duplicate override for same block index");
+    }
+
+    block_op_overrides_[static_cast<size_t>(i)] = std::move(op);
+  }
 }
 
 /**
@@ -365,6 +414,51 @@ void BlockSchurPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) c
 }
 
 /**
+* @brief Build an assembled approximation to the Schur complement.
+*
+* The Schur complement approximation is given by
+* S_approx = A22 - A21 * diag(A11)^{-1} * A12,
+*
+* @param A11 The (0,0) block of the Jacobian. Only its diagonal is used.
+* @param A12 The (0,1) block of the Jacobian.
+* @param A21 The (1,0) block of the Jacobian.
+* @param A22 The (1,1) block of the Jacobian.
+*
+* @return Newly allocated assembled matrix representing S_approx.
+*/
+mfem::HypreParMatrix*
+BlockSchurPreconditioner::BuildSchurDiagApprox_(const mfem::HypreParMatrix& A11,
+                                            const mfem::HypreParMatrix& A12,
+                                            const mfem::HypreParMatrix& A21,
+                                            const mfem::HypreParMatrix& A22) const
+{
+    // Extract diagonal of A11
+    auto* Md = new mfem::HypreParVector(MPI_COMM_WORLD,
+                                        A11.GetGlobalNumRows(),
+                                        A11.GetRowStarts());
+    A11.GetDiag(*Md);
+
+    // Scale rows of A12 by diag(A11)^{-1}
+    auto* A12_scaled = new mfem::HypreParMatrix(A12);
+    A12_scaled->InvScaleRows(*Md);
+
+    delete Md;
+    Md = nullptr;
+
+    // Compute A21 * (diag(A11)^{-1} * A12)
+    mfem::HypreParMatrix* A21DinvA12 = mfem::ParMult(&A21, A12_scaled);
+    delete A12_scaled;
+    A12_scaled = nullptr;
+
+    // S_approx = A22 - A21 * diag(A11)^{-1} * A12
+    mfem::HypreParMatrix* S = mfem::Add(1.0, A22, -1.0, *A21DinvA12);
+    delete A21DinvA12;
+    A21DinvA12 = nullptr;
+
+    return S; // caller owns
+}
+
+/**
 * @brief Set the preconditioner to use the supplied linearized block Jacobian.
 *
 * The Schur complement approximation is given by S_approx = A22 - A21 * diag(A11)^{-1} * A12
@@ -391,25 +485,23 @@ void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
       A_12 = A12;
     }
     // Diagonal preconditioner for block (0,0)
-    mfem_solvers[0]->SetOperator(*A11);
+    const mfem::Operator* op = nullptr;
+    if (block_op_overrides_[0]) {
+      op = block_op_overrides_[0].get();      // use override
+    } else {
+      op = A11;  // use Jacobian diagonal block
+    }
+    mfem_solvers[0]->SetOperator(*op);
 
-    // Extract the diagonal of A11 (no inversion!)
-    mfem::HypreParVector *Md = new mfem::HypreParVector(MPI_COMM_WORLD,
-        A11->GetGlobalNumRows(), A11->GetRowStarts());
-    A11->GetDiag(*Md);
 
-    // Scale ROWS of A12 by Md^{-1}
-    mfem::HypreParMatrix *A12_scaled = new mfem::HypreParMatrix(*A12);
-    A12_scaled->InvScaleRows(*Md);
-    delete Md;
-
-    // Now compute A21 * (diag(A11)^{-1} * A12)
-    mfem::HypreParMatrix *A21DinvA12 = mfem::ParMult(A21, A12_scaled);
-    delete A12_scaled;
-
-    // S_approx = A22 - A21 * diag(A11)^{-1} * A12
-    S_approx = mfem::Add(1.0, *A22, -1.0, *A21DinvA12);
-    delete A21DinvA12;
+    // Build Schur complement approximation
+    if (approxType_ == SchurApproxType::DiagInv) {
+      S_approx = BuildSchurDiagApprox_(*A11, *A12, *A21, *A22);
+    } else if (approxType_ == SchurApproxType::A22Only) {
+      S_approx = new mfem::HypreParMatrix(*A22);
+    } else if (block_op_overrides_[1]) {
+      S_approx = block_op_overrides_[1].get();      // use override
+    }
 
     // Set the Schur complement preconditioner for block (1,1)
     mfem_solvers[1]->SetOperator(*S_approx);
