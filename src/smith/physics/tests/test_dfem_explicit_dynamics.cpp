@@ -272,6 +272,6 @@ TEST_F(ExplicitDynamicsFixture, RunDfemExplicitDynamicsSim)
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
-  smith::ApplicationManager applicationManager(argc, argv, MPI_COMM_WORLD, true, smith::ExecutionSpace::GPU);
+  smith::ApplicationManager applicationManager(argc, argv, MPI_COMM_WORLD, true, smith::ExecutionSpace::CPU);
   return RUN_ALL_TESTS();
 }
