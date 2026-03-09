@@ -218,11 +218,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     SLIC_ERROR_ROOT_IF(order > 1, "Contact can only be applied to linear (order = 1) meshes.");
 
     const auto interaction_force_name = detail::addPrefix(name_, axom::fmt::format("contact_force_{}", interaction_id));
-    SLIC_ERROR_ROOT_IF(StateManager::hasDual(interaction_force_name),
-                       axom::fmt::format("StateManager already contains a dual named '{}'", interaction_force_name));
-    SLIC_ERROR_ROOT_IF(
-        contact_interaction_forces_.find(interaction_id) != contact_interaction_forces_.end(),
-        axom::fmt::format("Contact interaction force dual already registered for interaction_id={}", interaction_id));
 
     auto interaction_force_dual =
         std::make_unique<FiniteElementDual>(StateManager::newDual(displacement_.space(), interaction_force_name));
@@ -232,6 +227,57 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts);
   }
+
+  /**
+   * @brief Get the contact force dual for a specific contact interaction
+   *
+   * @param interaction_id The unique identifier for the contact interaction
+   * @return Reference to the stored force dual (same FE space as displacement)
+   */
+  FiniteElementDual& contactInteractionForceDual(int interaction_id)
+  {
+    auto it = contact_interaction_forces_.find(interaction_id);
+    SLIC_ERROR_ROOT_IF(it == contact_interaction_forces_.end(),
+                       axom::fmt::format("No contact force dual registered for interaction_id={}", interaction_id));
+    return *it->second;
+  }
+
+  /// @overload
+  const FiniteElementDual& contactInteractionForceDual(int interaction_id) const
+  {
+    auto it = contact_interaction_forces_.find(interaction_id);
+    SLIC_ERROR_ROOT_IF(it == contact_interaction_forces_.end(),
+                       axom::fmt::format("No contact force dual registered for interaction_id={}", interaction_id));
+    return *it->second;
+  }
+
+#ifdef SMITH_USE_TRIBOL
+  /**
+   * @brief Evaluate contact forces for a single interaction at a provided shape displacement
+   *
+   * This method holds the current displacement state fixed and evaluates Tribol contact at the provided shape
+   * displacement (i.e. perturbed geometry), returning the nodal contact forces for the specified interaction.
+   *
+   * @param interaction_id The unique identifier for the contact interaction
+   * @param shape_disp Shape displacement (true DOFs) used to perturb the geometry
+   * @return Nodal contact forces for the requested interaction
+   *
+   * @note This method updates internal Tribol/contact state to be consistent with @p shape_disp.
+   */
+  FiniteElementDual evalContactInteractionForcesAtShape(int interaction_id, const FiniteElementState& shape_disp)
+  {
+    mfem::Vector u_aug(displacement_.Size() + contact_.numPressureDofs());
+    u_aug.SetVector(displacement_, 0);
+    if (contact_.numPressureDofs() > 0) {
+      u_aug.SetVector(contact_.mergedPressures(), displacement_.Size());
+    }
+
+    mfem::Vector r(u_aug.Size());
+    r = 0.0;
+    contact_.residualFunction(shape_disp, u_aug, r);
+    return contactInteraction(interaction_id).forces();
+  }
+#endif
 
   /**
    * @brief Complete the initialization and allocation of the data structures.

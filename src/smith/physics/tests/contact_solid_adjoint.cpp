@@ -298,7 +298,7 @@ TEST_F(ContactSensitivityFixture, ReactionShapeSensitivities)
   EXPECT_NEAR(directional_deriv, directional_deriv_fd, eps);
 }
 
-TEST_F(ContactSensitivityFixture, SingleContactInteractionReactionTermShapeSensitivities)
+TEST_F(ContactSensitivityFixture, SingleContactInteractionForceMagnitudeQoiShapeSensitivities)
 {
   // For this test, define a QoI that penalizes the (single-interaction) contact force magnitude:
   //   J = 0.5 * <f_contact,i, f_contact,i>
@@ -310,14 +310,14 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionReactionTermShapeSensi
   auto compute_contact_force_qoi = [&](SolidMechT& solver) -> double {
     solver.resetStates();
     solver.advanceTimestep(1.0);
-    const auto f = solver.contactInteraction(contact_interaction_id).forces();
+    const auto f = solver.contactInteractionForceDual(contact_interaction_id);
     return 0.5 * innerProduct(f, f);
   };
 
-  compute_contact_force_qoi(*solid_solver);
+  const double qoi_base = compute_contact_force_qoi(*solid_solver);
 
   // Compute adjoint/shape sensitivity for this QoI.
-  const auto f_base = solid_solver->contactInteraction(contact_interaction_id).forces();
+  const auto f_base = solid_solver->contactInteractionForceDual(contact_interaction_id);
   const auto interaction_jacobian = solid_solver->contactInteraction(contact_interaction_id).jacobianContribution();
   auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
   SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
@@ -327,6 +327,8 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionReactionTermShapeSensi
   displacement_adjoint_load = 0.0;
   J00->MultTranspose(f_base, displacement_adjoint_load);
 
+  // Our shape sensitivity has an explicit term (dJ/d(shape) with u=const) which is only dependent on the contact
+  // interaction force ( = f_contact,i^T * d(f_contact,i)/d(shape) )
   FiniteElementDual explicit_shape_term(solid_solver->shapeDisplacement().space(), "contact_force_qoi_explicit_shape");
   explicit_shape_term = 0.0;
   J00->MultTranspose(f_base, explicit_shape_term);
@@ -344,12 +346,6 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionReactionTermShapeSensi
   FiniteElementState derivative_direction(total_shape_sensitivity.space(), "derivative_direction");
   fillDirection(*solid_solver, derivative_direction);
 
-#ifdef SMITH_USE_ENZYME
-  const double eps_contact = eps;
-#else
-  const double eps_contact = 1.0e-3;
-#endif
-
   auto compute_qoi_adjusting_shape = [&](SolidMechT& solver, double scale) -> double {
     FiniteElementState shape_disp(solver.shapeDisplacement().space(), "input_shape_displacement");
     shape_disp = 0.0;
@@ -358,13 +354,65 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionReactionTermShapeSensi
     return compute_contact_force_qoi(solver);
   };
 
-  const double qoi_plus = compute_qoi_adjusting_shape(*solid_solver, eps_contact);
-  const double qoi_minus = compute_qoi_adjusting_shape(*solid_solver, -eps_contact);
+  const double qoi_plus = compute_qoi_adjusting_shape(*solid_solver, eps);
 
   const double directional_deriv = innerProduct(derivative_direction, total_shape_sensitivity);
-  const double directional_deriv_fd = (qoi_plus - qoi_minus) / (2.0 * eps_contact);
+  const double directional_deriv_fd = (qoi_plus - qoi_base) / eps;
 
-  EXPECT_NEAR(directional_deriv, directional_deriv_fd, eps_contact);
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, 10.0 * eps);
+}
+
+TEST_F(ContactSensitivityFixture, SingleContactInteractionResidualShapeSensitivityDirectionalDerivative)
+{
+  // This test directly exercises SolidMechanicsContact::computeTimestepContactShapeSensitivity(interaction_id) by
+  // verifying its directional derivative against a finite-difference check of the scalar functional:
+  //   G(S) = <lambda, f_contact,i(u, S)>
+  // holding the displacement u fixed and perturbing only the shape displacement S.
+  //
+  // Here, lambda is the displacement adjoint obtained from a simple displacement QoI.
+  constexpr int contact_interaction_id = 0;
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  // Forward solve once to establish equilibrium at the end of the step.
+  solid_solver->resetStates();
+  solid_solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solid_solver->cycle());
+
+  // Solve a displacement adjoint for a simple displacement QoI.
+  FiniteElementDual adjoint_load(solid_solver->state("displacement").space(), "adjoint_displacement_load");
+  auto displacement_end = solid_solver->loadCheckpointedState("displacement", solid_solver->cycle());
+  computeStepAdjointLoad(displacement_end, adjoint_load);
+  solid_solver->setAdjointLoad({{"displacement", adjoint_load}});
+  solid_solver->reverseAdjointTimestep();
+
+  // Ensure the contact Jacobian/forces correspond to the current configuration before taking derivatives.
+  FiniteElementState base_shape_disp(solid_solver->shapeDisplacement().space(), "base_shape_displacement");
+  base_shape_disp = solid_solver->shapeDisplacement();
+  (void)solid_solver->evalContactInteractionForcesAtShape(contact_interaction_id, base_shape_disp);
+
+  const auto& contact_shape_sens = solid_solver->computeTimestepContactShapeSensitivity(contact_interaction_id);
+  const auto& lambda = solid_solver->adjoint("displacement");
+
+  FiniteElementState derivative_direction(contact_shape_sens.space(), "derivative_direction");
+  fillDirection(*solid_solver, derivative_direction);
+
+  const double eps_contact = 1.0e-3;
+
+  auto compute_linear_form_at_shape = [&](double scale) -> double {
+    FiniteElementState shape_disp(base_shape_disp.space(), "shape_displacement");
+    shape_disp = base_shape_disp;
+    shape_disp.Add(scale, derivative_direction);
+    const auto f = solid_solver->evalContactInteractionForcesAtShape(contact_interaction_id, shape_disp);
+    return innerProduct(f, lambda);
+  };
+
+  const double g_plus = compute_linear_form_at_shape(eps_contact);
+  const double g_minus = compute_linear_form_at_shape(-eps_contact);
+
+  const double directional_deriv = innerProduct(derivative_direction, contact_shape_sens);
+  const double directional_deriv_fd = (g_plus - g_minus) / (2.0 * eps_contact);
+
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, 10.0 * eps_contact);
 }
 
 }  // namespace smith
