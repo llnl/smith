@@ -271,7 +271,7 @@ std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOpe
  * @param comm The MPI communicator for the supplied nonlinear operators and HypreParVectors
  * @return The constructed nonlinear solver
  */
-std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(const NonlinearSolverOptions& nonlinear_opts,
+std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions nonlinear_opts,
                                                          const LinearSolverOptions& linear_opts,
                                                          mfem::Solver& preconditioner, MPI_Comm comm = MPI_COMM_WORLD);
 
