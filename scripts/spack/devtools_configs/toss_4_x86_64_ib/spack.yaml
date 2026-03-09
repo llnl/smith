@@ -73,9 +73,8 @@ spack:
     mvapich2:
       buildable: false
       externals:
-      - spec: mvapich2@2.3.7.gcc_13~alloca~cuda~debug~hwloc_graphics~hwlocv2+regcache+wrapperrpath build_system=autotools ch3_rank_bits=32 fabrics=mrail file_systems=auto process_managers=slurm threads=multiple
-        prefix: /usr/tce/packages/mvapich2/mvapich2-2.3.7-gcc-13.3.1
-
+      - spec: mvapich2@2.3.7.gcc_13
+        prefix: /usr/tce/packages/mvapich2/mvapich2-2.3.7-gcc-13.3.1-magic
     netlib-lapack:
       buildable: false
       externals:
@@ -109,11 +108,10 @@ spack:
       - spec: bzip2@1.0.6
         prefix: /usr
     cmake:
-      version: [3.23.1]
       buildable: false
       externals:
-      - spec: cmake@3.23.1
-        prefix: /usr/tce
+      - spec: cmake@3.26.5
+        prefix: /usr
     curl:
       buildable: false
       externals:
@@ -158,6 +156,11 @@ spack:
       buildable: false
       externals:
       - spec: ghostscript@9.27
+        prefix: /usr
+    gmake:
+      buildable: false
+      externals:
+      - spec: gmake@4.2.1
         prefix: /usr
     graphviz:
       buildable: false
