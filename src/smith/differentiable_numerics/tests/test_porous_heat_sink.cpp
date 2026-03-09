@@ -16,6 +16,7 @@
 #include "smith/numerics/block_preconditioner.hpp"
 
 #include "gretl/data_store.hpp"
+#include "gretl/wang_checkpoint_strategy.hpp"
 
 using namespace smith;
 
@@ -131,7 +132,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   const auto& test_params = GetParam();
 
   std::string physics_name = "heatsink";
-  auto graph = std::make_shared<gretl::DataStore>(100);
+  auto graph = std::make_shared<gretl::DataStore>(std::make_unique<gretl::WangCheckpointStrategy>(100));
   auto shape_disp = createFieldState(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
   auto T1 = createFieldState(*graph, Space{}, physics_name + "_T1", mesh->tag());
   auto T2 = createFieldState(*graph, Space{}, physics_name + "_T2", mesh->tag());
