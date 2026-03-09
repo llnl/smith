@@ -224,9 +224,14 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   void completeSetup() override
   {
     double dt = 0.0;
+    std::cout << "Line 227" << std::endl;
     contact_.update(cycle_, time_, dt);
 
+    std::cout << "Line 230" << std::endl;
+
     SolidMechanicsBase::completeSetup();
+
+    std::cout << "Line 234" << std::endl;
   }
 
   /**

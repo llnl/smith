@@ -1,10 +1,10 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "serac/physics/solid_mechanics_contact.hpp"
+#include "smith/physics/solid_mechanics_contact.hpp"
 
 #include <fem/datacollection.hpp>
 #include <functional>
@@ -15,7 +15,7 @@
 #include <mfem/fem/pgridfunc.hpp>
 #include <mfem/linalg/hypre.hpp>
 #include <set>
-#include <src/serac/physics/contact/contact_config.hpp>
+#include <src/smith/physics/contact/contact_config.hpp>
 #include <string>
 #include "axom/slic/core/SimpleLogger.hpp"
 #include <gtest/gtest.h>
@@ -23,13 +23,13 @@
 #include "mfem.hpp"
 
 #include "shared/mesh/MeshBuilder.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/physics/boundary_conditions/components.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/mesh.hpp"
-#include "serac/physics/materials/solid_material.hpp"
-#include "serac/serac_config.hpp"
-#include "serac/infrastructure/application_manager.hpp"
+#include "smith/mesh_utils/mesh_utils.hpp"
+#include "smith/physics/boundary_conditions/components.hpp"
+#include "smith/physics/state/state_manager.hpp"
+#include "smith/physics/mesh.hpp"
+#include "smith/physics/materials/solid_material.hpp"
+#include "smith/smith_config.hpp"
+#include "smith/infrastructure/application_manager.hpp"
 #include <fenv.h>
 
 
@@ -40,7 +40,7 @@
   
 // }
 
-namespace serac {
+namespace smith {
 
 class ContactTest : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactJacobian, std::string>> {};
 
@@ -59,7 +59,7 @@ TEST_P(ContactTest, patch)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
+  auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
     shared::MeshBuilder::SquareMesh(50,50 ).translate({0.0,  1.0}).bdrAttribInfo()
     .updateBdrAttrib(4, 7).updateBdrAttrib(3, 9).updateBdrAttrib(1, 6),
     shared::MeshBuilder::SquareMesh(50, 50).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
@@ -72,12 +72,12 @@ TEST_P(ContactTest, patch)
   
   
 
-  mesh->addDomainOfBoundaryElements("x0_faces", serac::by_attr<dim>(7));
-  mesh->addDomainOfBoundaryElements("y0_faces", serac::by_attr<dim>(8));
-  mesh->addDomainOfBoundaryElements("Ymax_face", serac::by_attr<dim>(9));
+  mesh->addDomainOfBoundaryElements("x0_faces", smith::by_attr<dim>(7));
+  mesh->addDomainOfBoundaryElements("y0_faces", smith::by_attr<dim>(8));
+  mesh->addDomainOfBoundaryElements("Ymax_face", smith::by_attr<dim>(9));
 
   // TODO: investigate performance with Petsc
-  // #ifdef SERAC_USE_PETSC
+  // #ifdef smith_USE_PETSC
   //   LinearSolverOptions linear_options{
   //       .linear_solver = LinearSolver::PetscGMRES,
   //       .preconditioner = Preconditioner::Petsc,
@@ -101,12 +101,12 @@ TEST_P(ContactTest, patch)
                                            .max_line_search_iterations = 12,
                                            .print_level = 1};
 
-  ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
-                                 .enforcement =serac::ContactEnforcement::Penalty,
+  ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
+                                 .enforcement =smith::ContactEnforcement::Penalty,
                                  .type = ContactType::Frictionless,
                                  .penalty = 10000,
                                  .penalty2 = 0,
-                                 .jacobian = serac::ContactJacobian::Exact};
+                                 .jacobian = smith::ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, mesh);
@@ -219,7 +219,7 @@ INSTANTIATE_TEST_SUITE_P(
                     std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_approxJ")));
                     // std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")));
 
-}  // namespace serac
+}  // namespace smith
 
 int main(int argc, char* argv[])
 {
@@ -227,6 +227,6 @@ int main(int argc, char* argv[])
 
   // enable_fpe();
   testing::InitGoogleTest(&argc, argv);
-  serac::ApplicationManager applicationManager(argc, argv);
+  smith::ApplicationManager applicationManager(argc, argv);
   return RUN_ALL_TESTS();
 }

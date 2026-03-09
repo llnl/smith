@@ -1,27 +1,28 @@
 // Copyright (c) Lawrence Livermore National Security, LLC and
-// other Serac Project Developers. See the top-level LICENSE file for
+// other smith Project Developers. See the top-level LICENSE file for
 // details.
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <set>
+#include <src/smith/physics/contact/contact_config.hpp>
 #include <string>
 
 #include "axom/slic.hpp"
 
 #include "mfem.hpp"
 
-#include "serac/numerics/solver_config.hpp"
-#include "serac/physics/contact/contact_config.hpp"
-#include "serac/physics/materials/parameterized_solid_material.hpp"
-#include "serac/physics/solid_mechanics.hpp"
-#include "serac/physics/solid_mechanics_contact.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/serac.hpp"
+#include "smith/numerics/solver_config.hpp"
+#include "smith/physics/contact/contact_config.hpp"
+#include "smith/physics/materials/parameterized_solid_material.hpp"
+#include "smith/physics/solid_mechanics.hpp"
+#include "smith/physics/solid_mechanics_contact.hpp"
+#include "smith/physics/state/state_manager.hpp"
+#include "smith/smith.hpp"
 #include <cmath>
 
-#include "serac/physics/contact/contact_config.hpp"
-#include "serac/physics/solid_mechanics_contact.hpp"
+#include "smith/physics/contact/contact_config.hpp"
+#include "smith/physics/solid_mechanics_contact.hpp"
 
 #include <cfenv>
 #include <fem/datacollection.hpp>
@@ -33,13 +34,13 @@
 #include "mfem.hpp"
 
 #include "shared/mesh/MeshBuilder.hpp"
-#include "serac/mesh_utils/mesh_utils.hpp"
-#include "serac/physics/boundary_conditions/components.hpp"
-#include "serac/physics/state/state_manager.hpp"
-#include "serac/physics/mesh.hpp"
-#include "serac/physics/materials/solid_material.hpp"
-#include "serac/serac_config.hpp"
-#include "serac/infrastructure/application_manager.hpp"
+#include "smith/mesh_utils/mesh_utils.hpp"
+#include "smith/physics/boundary_conditions/components.hpp"
+#include "smith/physics/state/state_manager.hpp"
+#include "smith/physics/mesh.hpp"
+#include "smith/physics/materials/solid_material.hpp"
+#include "smith/smith_config.hpp"
+#include "smith/infrastructure/application_manager.hpp"
 #include <fenv.h>
 
 
@@ -48,7 +49,7 @@ int main(int argc, char* argv[])
  {
 
     //Initialize and automatically finalize MPI and other libraries
-    serac::ApplicationManager applicationManager(argc, argv);
+    smith::ApplicationManager applicationManager(argc, argv);
 
     // NOTE: p must be equal to 1 to work with Tribol's mortar method   
     constexpr int p = 1;
@@ -59,14 +60,14 @@ int main(int argc, char* argv[])
     //Create DataStore
     std::string name = "twisted_contact_ironing_2D_example";
     axom::sidre::DataStore datastore; 
-    serac::StateManager::initialize(datastore, name + "_data");
+    smith::StateManager::initialize(datastore, name + "_data");
 
 
-    auto mesh = std::make_shared<serac::Mesh>(shared::MeshBuilder::Unify({
+    auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
         shared::MeshBuilder::SquareMesh(32,32).updateBdrAttrib(1, 6).updateBdrAttrib(3, 9).scale({1.0, 0.5}),
         shared::MeshBuilder::SquareMesh(8, 8).scale({0.25, 0.25}).translate({0.0, 0.5}).updateBdrAttrib(3, 5).updateBdrAttrib(1, 8).updateBdrAttrib(2, 8).updateBdrAttrib(4, 8).updateAttrib(1, 2)}), "ironing_2D_mesh", 0, 0);
 
-        serac::LinearSolverOptions linear_options{.linear_solver = serac::LinearSolver::Strumpack, .print_level=0};
+        smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::Strumpack, .print_level=0};
 
         mfem::VisItDataCollection visit_dc("contact_ironing_twist_vist", &mesh->mfemParMesh());
 
@@ -78,49 +79,49 @@ int main(int argc, char* argv[])
             return 1;
         #endif
 
-        serac::NonlinearSolverOptions nonlinear_options{.nonlin_solver = serac::NonlinearSolver::TrustRegion,
+        smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
                                                         .relative_tol = 1.0e-8,
                                                         .absolute_tol = 1.0e-10,
                                                         .max_iterations = 50,
                                                         .print_level = 1};
         
-        serac::ContactOptions contact_options{.method = serac::ContactMethod::SmoothMortar,
-                                              .enforcement = serac::ContactEnforcement::Penalty,
+        smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
+                                              .enforcement = smith::ContactEnforcement::Penalty,
                                               .penalty = 4000,
                                               .penalty2 = 0,
-                                              .jacobian = serac::ContactJacobian::Exact};
+                                              .jacobian = smith::ContactJacobian::Exact};
         
-        serac::SolidMechanicsContact<p, dim, serac::Parameters<serac::L2<0>, serac::L2<0>>> solid_solver(
-            nonlinear_options, linear_options, serac::solid_mechanics::default_quasistatic_options, name, mesh, {"bulk_mod", "shear_mod"});
+        smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
+            nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh, {"bulk_mod", "shear_mod"});
 
         
-        serac::FiniteElementState K_field(serac::StateManager::newState(serac::L2<0>{}, "bulk_mod", mesh->tag()));
+        smith::FiniteElementState K_field(smith::StateManager::newState(smith::L2<0>{}, "bulk_mod", mesh->tag()));
 
         mfem::Vector K_values({10.0, 100.0});
         mfem::PWConstCoefficient K_coeff(K_values);
         K_field.project(K_coeff);
         solid_solver.setParameter(0, K_field);
 
-        serac::FiniteElementState G_field(serac::StateManager::newState(serac::L2<0>{}, "shear_mod", mesh->tag()));
+        smith::FiniteElementState G_field(smith::StateManager::newState(smith::L2<0>{}, "shear_mod", mesh->tag()));
 
         mfem::Vector G_values({0.25, 2.5});
         mfem::PWConstCoefficient G_coeff(G_values);
         G_field.project(G_coeff);
         solid_solver.setParameter(1, G_field);
 
-        serac::solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-        solid_solver.setMaterial(serac::DependsOn<0, 1>{}, mat, mesh->entireBody());
+        smith::solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
+        solid_solver.setMaterial(smith::DependsOn<0, 1>{}, mat, mesh->entireBody());
 
         //Pass the BC information to the solver object
-        mesh->addDomainOfBoundaryElements("bottom_of_subtrate", serac::by_attr<dim>(6));
+        mesh->addDomainOfBoundaryElements("bottom_of_subtrate", smith::by_attr<dim>(6));
         solid_solver.setFixedBCs((mesh->domain("bottom_of_subtrate")));
 
-        mesh->addDomainOfBoundaryElements("top of indenter", serac::by_attr<dim>(5));
-        const serac::tensor<double, dim> r0{{0.125, 0.625}};
-        auto applied_displacement = [r0](serac::tensor<double, dim> x, double t) {
+        mesh->addDomainOfBoundaryElements("top of indenter", smith::by_attr<dim>(5));
+        const smith::tensor<double, dim> r0{{0.125, 0.625}};
+        auto applied_displacement = [r0](smith::tensor<double, dim> x, double t) {
             constexpr double init_steps = 10.0;
             constexpr double theta_max   = 80.0 * M_PI / 180.0; 
-            serac::tensor<double, dim> u{};
+            smith::tensor<double, dim> u{};
             if (t <= init_steps + 1.0e-12) {
                 u[1] = -t * 0.05 / init_steps;
             }
@@ -131,8 +132,8 @@ int main(int argc, char* argv[])
                 double sin_theta = std::sin(theta);
 
                 //Rotate about r0
-                serac::tensor<double, dim> y {{x[0] - r0[0], x[1] - r0[1]}};
-                serac::tensor<double, dim> y_rot {{cos_theta*y[0] - sin_theta*y[1], sin_theta*y[0] + cos_theta*y[1]}};
+                smith::tensor<double, dim> y {{x[0] - r0[0], x[1] - r0[1]}};
+                smith::tensor<double, dim> y_rot {{cos_theta*y[0] - sin_theta*y[1], sin_theta*y[0] + cos_theta*y[1]}};
 
                 u[0] = (y_rot[0] - y[0]) + 0.01 * (t - init_steps);
                 u[1] = (y_rot[1] - y[1]) - 0.05;  

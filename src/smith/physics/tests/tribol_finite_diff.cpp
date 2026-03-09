@@ -64,7 +64,7 @@ TEST_P(TribolFiniteDiff, patch)
   }), "patch_mesh", 0, 0);
   // clang-format on
 
-  ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
+  ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
                                  .enforcement = GetParam().first,
                                  .type = ContactType::Frictionless,
                                  .penalty = 0.1,

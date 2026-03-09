@@ -50,7 +50,7 @@ TEST_P(ContactFiniteDiff, patch)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  double shift = 0.0;
+  // double shift = 0.0;
   // clang-format off
   auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
     shared::MeshBuilder::CubeMesh(1, 1, 1),
@@ -86,7 +86,7 @@ TEST_P(ContactFiniteDiff, patch)
                                            .max_iterations = 1,
                                            .print_level = 1};
 
-  ContactOptions contact_options{.method = ContactMethod::SmoothMortar,
+  ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
                                  .enforcement = GetParam().first,
                                  .type = ContactType::Frictionless,
                                  .penalty = 0.1,
