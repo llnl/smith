@@ -6,7 +6,7 @@
 from spack_repo.builtin.build_systems.bundle import BundlePackage
 from spack.package import *
 
-class SmithDevtools(BundlePackage):
+class Smithdevtools(BundlePackage):
     """This is a set of tools necessary for the developers of Smith"""
 
     version('fakeversion')
