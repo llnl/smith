@@ -141,8 +141,8 @@ TEST_P(BlockPreconditionerParamTest, SolvesBlockSystemApproximately)
   P->Mult(b, x);
   J.Mult(x, r);
   r -= b;
-  double err = r.Norml2();
-  double rel_err = err / b.Norml2();
+  double resid_err = r.Norml2();
+  double rel_err = resid_err / b.Norml2();
 
   if (rank_ == 0) {
     std::cout << "Test " << params.name << ", rel_err = " << rel_err << std::endl;
@@ -164,9 +164,13 @@ INSTANTIATE_TEST_SUITE_P(
         // BlockTriangularPreconditioner + HypreBoomerAMG on [A 0; C A]
         BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Lower2x2, BlockPrecTestParams::PrecKind::Triangular,
                             smith::BlockTriangularType::Lower, "TriLower_HypreBoomerAMG", 1e-1,
-                            BlockPrecTestParams::SolverBackend::HypreBoomerAMG}
+                            BlockPrecTestParams::SolverBackend::HypreBoomerAMG}),
+    [](const ::testing::TestParamInfo<BlockPrecTestParams>& param_info) { return param_info.param.name; });
+
 #ifdef MFEM_USE_STRUMPACK
-        ,
+INSTANTIATE_TEST_SUITE_P(
+    BlockPreconditionerStrumpackTests, BlockPreconditionerParamTest,
+    ::testing::Values(
         // BlockDiagonalPreconditioner + Strumpack on [A 0; 0 A]
         BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Diagonal2x2, BlockPrecTestParams::PrecKind::Diagonal,
                             smith::BlockTriangularType::Lower, "Diag_Strumpack", 1e-10,
@@ -174,11 +178,9 @@ INSTANTIATE_TEST_SUITE_P(
         // BlockTriangularPreconditioner + Strumpack on [A 0; C A]
         BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Lower2x2, BlockPrecTestParams::PrecKind::Triangular,
                             smith::BlockTriangularType::Lower, "TriLower_Strumpack", 1e-10,
-                            BlockPrecTestParams::SolverBackend::Strumpack}
-#endif
-        ),
+                            BlockPrecTestParams::SolverBackend::Strumpack}),
     [](const ::testing::TestParamInfo<BlockPrecTestParams>& param_info) { return param_info.param.name; });
-
+#endif
 // ----------- Google Test Main ------------
 
 int main(int argc, char** argv)
