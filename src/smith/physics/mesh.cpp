@@ -24,7 +24,6 @@ Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_s
 {
   auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel, comm);
   mfem_mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
-  errorIfRankHasNoElements();
   createDomains();
 }
 
@@ -33,7 +32,6 @@ Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int
 {
   auto meshtmp = smith::mesh::refineAndDistribute(std::move(mesh), refine_serial, refine_parallel, comm);
   mfem_mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
-  errorIfRankHasNoElements();
   createDomains();
 }
 
@@ -43,13 +41,7 @@ Mesh::Mesh(mfem::ParMesh&& mesh, const std::string& meshtag) : mesh_tag_(meshtag
   meshtmp->EnsureNodes();
   meshtmp->ExchangeFaceNbrData();
   mfem_mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
-  errorIfRankHasNoElements();
   createDomains();
-}
-
-void Mesh::errorIfRankHasNoElements() const
-{
-  SLIC_ERROR_IF(mfem_mesh_->GetNE() == 0, "After refining and distributing mesh, local size of mesh is 0");
 }
 
 MPI_Comm Mesh::getComm() const { return mfem_mesh_->GetComm(); }
