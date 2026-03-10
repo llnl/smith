@@ -8,4 +8,4 @@ from spack_repo.builtin.packages.fmt.package import Fmt as BuiltinFmt
 
 class Fmt(BuiltinFmt):
   # Fix NVCC error
-  patch("system_error_cuda.patch", when="@12.1.0:")
+  patch("system_error_cuda.patch", when="@12.1.0: ^cuda")
