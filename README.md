@@ -1,7 +1,7 @@
 # <img src="/share/smith/logo/smith-logo-orange.png?raw=true" width="150" alt="Smith"/>
 
 [![Build Status](https://github.com/LLNL/smith/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/LLNL/smith/actions/workflows/unit-tests.yml)
-[![Documentation Status](https://readthedocs.org/projects/serac/badge/?version=latest)](https://serac.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/serac/badge/?version=latest)](https://llnlsmith.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/LLNL/serac/branch/develop/graph/badge.svg?token=DO4KFMPNM0)](https://codecov.io/gh/LLNL/serac)
 [![License](https://img.shields.io/badge/license-BSD%203--Clause-blue.svg)](./LICENSE)
 
@@ -15,9 +15,9 @@ It also heavily leverages the [MFEM finite element library](https://mfem.org/).
 Documentation
 ------
 
-Build, run, and design documentation can be found at [readthedocs](https://serac.readthedocs.io).
+Build, run, and design documentation can be found at [readthedocs](https://llnlsmith.readthedocs.io).
 
-Source documentation can be found [here](https://serac.readthedocs.io/en/latest/doxygen/html/index.html).
+Source documentation can be found [here](https://llnlsmith.readthedocs.io/en/latest/doxygen/html/index.html).
 
 Contributions
 -------------
@@ -68,6 +68,10 @@ PackageLicenseDeclared: BSD-3-Clause
 
 PackageName: BLT  
 PackageHomePage: https://github.com/LLNL/blt  
+PackageLicenseDeclared: BSD-3-Clause  
+
+PackageName: ContinuationSolvers  
+PackageHomePage: https://github.com/LLNL/ContinuationSolvers  
 PackageLicenseDeclared: BSD-3-Clause  
 
 PackageName: MFEM  

@@ -109,6 +109,9 @@ def main():
     # setup
     args = parse_args()
 
+    if not ensure_on_lc_and_group_permissions():
+        return 1
+
     # args
     current_cali_dir = os.path.abspath(args["current_cali_dir"])
     baseline_cali_dir = os.path.abspath(args["baseline_cali_dir"])

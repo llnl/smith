@@ -65,6 +65,10 @@ void finalizer()
 #endif
 #endif
 
+#ifdef SMITH_USE_SUNDIALS
+  mfem::Sundials::Finalize();
+#endif
+
   profiling::finalize();
 
   int mpi_initialized = 0;
@@ -78,7 +82,9 @@ void finalizer()
   accelerator::terminateDevice();
 }
 
-ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bool doesPrintRunInfo) : comm_(comm)
+ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bool doesPrintRunInfo,
+                                       ExecutionSpace exec_space)
+    : comm_(comm)
 {
   // Initialize MPI
   if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
@@ -120,7 +126,7 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bo
 #endif
 
   // Initialize GPU (no-op if not enabled/available)
-  accelerator::initializeDevice();
+  accelerator::initializeDevice(exec_space);
 
   // Register signal handlers
   std::signal(SIGABRT, signalHandler);

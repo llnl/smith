@@ -161,7 +161,7 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
       // zero out rows and cols not in the active set
       auto inactive_dofs = interactions_[i].inactiveDofs();
       dgdu->EliminateRows(inactive_dofs);
-      dfdp->EliminateCols(inactive_dofs);
+      auto dfdp_elim = std::unique_ptr<mfem::HypreParMatrix>(dfdp->EliminateCols(inactive_dofs));
       if (interactions_[i].getContactOptions().enforcement == ContactEnforcement::Penalty) {
         // compute contribution to df_(contact)/dx (the 0, 0 block) for penalty
         std::unique_ptr<mfem::HypreParMatrix> BTB(mfem::ParMult(dfdp, dgdu, true));
@@ -279,11 +279,11 @@ void ContactData::residualFunction(const mfem::Vector& u_shape, const mfem::Vect
   g_blk.Set(1.0, mergedGaps(true));
 }
 
-std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(mfem::HypreParMatrix* orig_J) const
+std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(std::unique_ptr<mfem::HypreParMatrix> orig_J) const
 {
   auto J_contact = mergedJacobian();
   if (J_contact->IsZeroBlock(0, 0)) {
-    J_contact->SetBlock(0, 0, orig_J);
+    J_contact->SetBlock(0, 0, orig_J.release());
   } else {
     J_contact->SetBlock(0, 0,
                         mfem::Add(1.0, *orig_J, 1.0, static_cast<mfem::HypreParMatrix&>(J_contact->GetBlock(0, 0))));
@@ -408,11 +408,11 @@ void ContactData::residualFunction([[maybe_unused]] const mfem::Vector& u_shape,
 {
 }
 
-std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(mfem::HypreParMatrix* orig_J) const
+std::unique_ptr<mfem::BlockOperator> ContactData::jacobianFunction(std::unique_ptr<mfem::HypreParMatrix> orig_J) const
 {
   auto J_contact = mergedJacobian();
   if (J_contact->IsZeroBlock(0, 0)) {
-    J_contact->SetBlock(0, 0, orig_J);
+    J_contact->SetBlock(0, 0, orig_J.release());
   } else {
     J_contact->SetBlock(0, 0,
                         mfem::Add(1.0, *orig_J, 1.0, static_cast<mfem::HypreParMatrix&>(J_contact->GetBlock(0, 0))));

@@ -956,7 +956,7 @@ SMITH_HOST_DEVICE constexpr auto dot(const tensor<S, m, n, p, q>& A, const tenso
 
 /// compute the cross product of the columns of A: A(:,1) x A(:,2)
 template <typename T>
-auto cross(const tensor<T, 3, 2>& A)
+SMITH_HOST_DEVICE auto cross(const tensor<T, 3, 2>& A)
 {
   return tensor<T, 3>{A(1, 0) * A(2, 1) - A(2, 0) * A(1, 1), A(2, 0) * A(0, 1) - A(0, 0) * A(2, 1),
                       A(0, 0) * A(1, 1) - A(1, 0) * A(0, 1)};
@@ -964,21 +964,21 @@ auto cross(const tensor<T, 3, 2>& A)
 
 /// return the in-plane components of the cross product of {v[0], v[1], 0} x {0, 0, 1}
 template <typename T>
-auto cross(const tensor<T, 2, 1>& v)
+SMITH_HOST_DEVICE auto cross(const tensor<T, 2, 1>& v)
 {
   return tensor<T, 2>{v(1, 0), -v(0, 0)};
 }
 
 /// return the in-plane components of the cross product of {v[0], v[1], 0} x {0, 0, 1}
 template <typename T>
-auto cross(const tensor<T, 2>& v)
+SMITH_HOST_DEVICE auto cross(const tensor<T, 2>& v)
 {
   return tensor<T, 2>{v[1], -v[0]};
 }
 
 /// compute the (right handed) cross product of two 3-vectors
 template <typename S, typename T>
-auto cross(const tensor<S, 3>& u, const tensor<T, 3>& v)
+SMITH_HOST_DEVICE auto cross(const tensor<S, 3>& u, const tensor<T, 3>& v)
 {
   return tensor<decltype(S{} * T{}), 3>{u(1) * v(2) - u(2) * v(1), u(2) * v(0) - u(0) * v(2),
                                         u(0) * v(1) - u(1) * v(0)};
@@ -1335,7 +1335,7 @@ SMITH_HOST_DEVICE constexpr auto detApIm1(const tensor<T, 3, 3>& A)
 
   // clang-format off
   // equivalent to tr(A) + I2(A) + det(A)
-  return A(0, 0) + A(1, 1) + A(2, 2) 
+  return A(0, 0) + A(1, 1) + A(2, 2)
        - A(0, 1) * A(1, 0) * (1 + A(2, 2))
        + A(0, 0) * A(1, 1) * (1 + A(2, 2))
        - A(0, 2) * A(2, 0) * (1 + A(1, 1))
@@ -2086,7 +2086,7 @@ inline mat < 2, 2 > look_at(const vec < 2 > & direction) {
 
 inline mat < 3, 3 > R3_basis(const vec3 & n) {
   float sign = (n[2] >= 0.0f) ? 1.0f : -1.0f;
-  float a = -1.0f / (sign + n[2]); 
+  float a = -1.0f / (sign + n[2]);
   float b = n[0] * n[1] * a;
 
   return mat < 3, 3 >{

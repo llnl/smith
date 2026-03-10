@@ -1,3 +1,21 @@
+# Set directory structures in places we can find easily
+config:
+  install_tree:
+    root: $spack/..
+    projections:
+      all: '{compiler.name}-{compiler.version}/{name}-{version}-{hash}'
+  misc_cache: $spack/../misc_cache
+  test_stage: $spack/../test_stage
+  build_stage::
+  - $spack/../build_stage
+
+# Regular TPLs do not need views
+view: false
+
+# Do not allow Spack to flip compiler families
+concretizer:
+  compiler_mixing: false
+
 # Globally lock variants of third party libraries
 packages:
   caliper:
@@ -8,7 +26,10 @@ packages:
     - spec: "~shared~test~examples~utilities"
   hdf5:
     require:
-    - spec: ~shared~mpi
+    - spec: "~shared~mpi"
+  mfem:
+    require:
+    - spec: "cxxstd=17"
   raja:
     require:
     - spec: "~shared~examples~exercises"

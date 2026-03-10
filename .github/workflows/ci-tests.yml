@@ -12,9 +12,9 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/develop' }}
 
 env:
-  CLANG_DOCKER_IMAGE: seracllnl/tpls:clang-19_10-09-25_23h-54m
-  CUDA_DOCKER_IMAGE: seracllnl/tpls:cuda-12_04-16-25_20h-55m
-  GCC_DOCKER_IMAGE: seracllnl/tpls:gcc-14_10-09-25_23h-54m
+  CLANG_DOCKER_IMAGE: seracllnl/tpls:clang-19_02-24-26_02h-31m
+  CUDA_DOCKER_IMAGE: seracllnl/tpls:cuda-12_01-09-26_02h-37m
+  GCC_DOCKER_IMAGE: seracllnl/tpls:gcc-14_02-24-26_02h-17m
 
 jobs:
   # Hacky solution to reference env variables outside of `run` steps https://stackoverflow.com/a/74217028
@@ -40,10 +40,10 @@ jobs:
           host_config: llvm@19.1.1.cmake
           compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
           cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF"
-        # TODO re-add cuda testing
+        # # Not enough disk space to run CUDA container
         # https://github.com/LLNL/smith/issues/1479
-        # - job_name: gcc@12.3.0, shared, cuda, no tests/install/warnings as errors
-        #   host_config: gcc@12.3.0_cuda.cmake
+        # - job_name: gcc@13.3.0, shared, cuda, no tests/install/warnings as errors
+        #   host_config: gcc@13.3.0_cuda.cmake
         #   compiler_image: ${{ needs.set_image_vars.outputs.cuda_docker_image }}
         #   cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF -DENABLE_WARNINGS_AS_ERRORS=OFF"
         #   build_src_opts: "--skip-install --skip-tests"
@@ -63,13 +63,13 @@ jobs:
     container:
       image: ${{ matrix.config.compiler_image }}
       volumes:
-      - /home/serac/serac
-      # Required - default is set to user "serac"
+      - /home/smith/smith
+      # Required - default is set to user "smith"
       options: --user root
     steps:
       - name: Checkout Smith
         uses: actions/checkout@v4
-        with: 
+        with:
           submodules: recursive
       - name: Print Matrix Variables
         run: |
@@ -106,8 +106,8 @@ jobs:
     container:
       image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
       volumes:
-      - /home/serac/serac
-      # Required - default is set to user "serac"
+      - /home/smith/smith
+      # Required - default is set to user "smith"
       options: --user root
       env:
         CHECK_TYPE: ${{ matrix.check_type }}

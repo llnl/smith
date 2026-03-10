@@ -4,28 +4,28 @@
 # CMake executable path: /usr/local/bin/cmake
 #------------------------------------------------------------------------------
 
-set(CMAKE_PREFIX_PATH "/home/serac/serac_tpls/gcc-14.2.0/tribol-0.1.0.22-wazfmdbkalzczo7r5y2utwnimbwjkhnx;/home/serac/serac_tpls/gcc-14.2.0/axom-0.11.0.1-qs45ql23enjk5icq6yasgpjict4ovgge;/home/serac/serac_tpls/gcc-14.2.0/conduit-0.9.2-a2ql5k5t2bdur2yxekjzgznggvvrxtyn;/home/serac/serac_tpls/gcc-14.2.0/mfem-4.9.0.1-sgfrwx6qadkzigkocbwxfi2rxd4bdg5c;/home/serac/serac_tpls/gcc-14.2.0/raja-2024.07.0-hbxa5g4eqneaq3e2pnyaouk2mnrk47zc;/home/serac/serac_tpls/gcc-14.2.0/umpire-2024.07.0-yvluhnikhhswrlvuhfwbgcbur55jtxlu;/home/serac/serac_tpls/gcc-14.2.0/netcdf-c-4.7.4-n7hweek4e4l7z424tytkvm7zs7xkz2y5;/home/serac/serac_tpls/gcc-14.2.0/slepc-3.21.2-toj3h2dah2t5ptq456kgqkluo35h6h5m;/home/serac/serac_tpls/gcc-14.2.0/sundials-6.7.0-bnjclc6rr4tdcrye7s44cn5dlaoqbmeo;/home/serac/serac_tpls/gcc-14.2.0/camp-2024.07.0-r6yrhlse676pzry225kxim6w2ri4ywxs;/home/serac/serac_tpls/gcc-14.2.0/fmt-11.0.2-ht2idt2ah5wkaf2qxcobbccu6lzlmb33;/home/serac/serac_tpls/gcc-14.2.0/hdf5-1.8.23-crboya2gv7d3qwkz7l5sznsqorucooqn;/home/serac/serac_tpls/gcc-14.2.0/arpack-ng-3.9.1-f2o4etq7lzo7gyymjfpitasrhqdd6rt7;/home/serac/serac_tpls/gcc-14.2.0/petsc-3.21.6-dodsuk6hdprsvpfb7bzyv5nm7c2als43;/home/serac/serac_tpls/gcc-14.2.0/hypre-2.26.0-pamvjykkiskrudquhqh3tzmyafolowqf;/home/serac/serac_tpls/gcc-14.2.0/strumpack-8.0.0-uww3gzqgff2cuhqks65fz572svx3fk4r;/home/serac/serac_tpls/gcc-14.2.0/superlu-dist-8.1.2-tku2zum5uc4etnqubqsi3b4735ceoytk;/home/serac/serac_tpls/gcc-14.2.0/netlib-scalapack-2.2.2-wbnniby6qznaurgoco6vvsxm2aod5zmf;/home/serac/serac_tpls/gcc-14.2.0/parmetis-4.0.3-c3y4s5kwdhsprddhtcey42hej6f5ou3a;/home/serac/serac_tpls/gcc-14.2.0/metis-5.1.0-ypp5h6p4n6evogx2wng2eqnp74a4losv;/home/serac/serac_tpls/gcc-14.2.0/mpich-4.2.0-nsv6egqtra6rlwyfouhma2bku23mjf4u;/home/serac/serac_tpls/gcc-14.2.0/hwloc-2.11.1-shknwspkkbovk43s4cko23fvxfpxyahn;/home/serac/serac_tpls/gcc-14.2.0/libfabric-2.2.0-evvznwth4eytgtzrhbv43pg6qkcxped3;/home/serac/serac_tpls/gcc-14.2.0/yaksa-0.3-2b3vqz4dmnnfiomkz7escyx3ws7w5roo;/home/serac/serac_tpls/gcc-14.2.0/libpciaccess-0.17-lwsnk2jlatm34qsj2zbkthnl6h7twfed;/home/serac/serac_tpls/gcc-14.2.0/libxml2-2.13.5-b2zl6sf7caqugntrt2j27vmprqmv3c6w;/home/serac/serac_tpls/gcc-14.2.0/ncurses-6.5-20250705-gahbb26hdvnncrliitzzsubprxnentte;/home/serac/serac_tpls/gcc-14.2.0/libiconv-1.18-675kuqysxbbn3qyulkos2ktqm253hhc2;/home/serac/serac_tpls/gcc-14.2.0/xz-5.6.3-35m7lld4lmcwmq72r7ivi25ydxvgtvth;/home/serac/serac_tpls/none-none/gcc-runtime-14.2.0-732djrphgfjipas5vfbmlvwfci4ui4za;/home/serac/serac_tpls/none-none/compiler-wrapper-1.0-adr4m722sut3yibwgl2ehvjbtuzeozzm" CACHE STRING "")
+set(CMAKE_PREFIX_PATH "/home/smith/smith_tpls/gcc-14.2.0/tribol-0.1.0.25-6y5kpce53jwamc7xq44kzej2ekj7qejo;/home/smith/smith_tpls/gcc-14.2.0/axom-0.12.0.1-vczl3ae5hkjeth2w3msg7c7yxag6prsd;/home/smith/smith_tpls/gcc-14.2.0/conduit-0.9.5-an6lgnv2wosycyrwmlwwsre5v24eehrf;/home/smith/smith_tpls/gcc-14.2.0/mfem-4.9.1.1-njai3fezw45u3gkq7vlimo3vubmgluo7;/home/smith/smith_tpls/gcc-14.2.0/raja-2025.09.0-6coqg3v76zxvqoubbq3m5kb4pz4aetcq;/home/smith/smith_tpls/gcc-14.2.0/umpire-2025.09.0-3dejdu7quycjtikogju7aseulzna3eny;/home/smith/smith_tpls/gcc-14.2.0/netcdf-c-4.7.4-6k4xq27gbyjar7wskzq5dhjgkxlbzmb5;/home/smith/smith_tpls/gcc-14.2.0/slepc-3.21.2-atawbo7jfyai4zwaj2d7syyxtvzqimf7;/home/smith/smith_tpls/gcc-14.2.0/sundials-7.5.0-ne74sv2nuvh7xsq5rqxrpzqjb2lzskrq;/home/smith/smith_tpls/gcc-14.2.0/superlu-dist-8.1.2-tg7e6njcyn4fonx7ncxm3dlsluxppein;/home/smith/smith_tpls/gcc-14.2.0/camp-2025.09.2-si4b5sh5sinbirzw45mgj74pzchhzmjm;/home/smith/smith_tpls/gcc-14.2.0/fmt-11.0.2-ufhkktndklljmnsp6ec7sxroumecq34t;/home/smith/smith_tpls/gcc-14.2.0/hdf5-1.8.23-pnp3k6jpbuhrg3gthey3mob3gfz53hpg;/home/smith/smith_tpls/gcc-14.2.0/arpack-ng-3.9.1-wgrhkla4i7kvhmig7xxdb64iw4srno7n;/home/smith/smith_tpls/gcc-14.2.0/petsc-3.21.6-k5wbbt6gpdqceiqwl3f6fdnwcdqp6vlq;/home/smith/smith_tpls/gcc-14.2.0/hypre-2.33.0-wb3iyb7nl6bpwrmftwnxlfkfvcbgxgbl;/home/smith/smith_tpls/gcc-14.2.0/strumpack-8.0.0-liiygmnxy2bthw3ca6x7pkflu222wnnt;/home/smith/smith_tpls/gcc-14.2.0/netlib-scalapack-2.2.2-6ipqgujeofvverykin65w57iacy7twhj;/home/smith/smith_tpls/gcc-14.2.0/parmetis-4.0.3-dh34towgicfstf37dtmk4l7z73ave62z;/home/smith/smith_tpls/gcc-14.2.0/openblas-0.3.30-heqvc4c45vnxfai5xqcgjv4foilwtbdh;/home/smith/smith_tpls/gcc-14.2.0/metis-5.1.0-x6cbvn7ffihc2yxxtcoztbzqhv3xecbr;/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-52g4dozom7jd7m4mmy2qtay77ei3foz3;/home/smith/smith_tpls/gcc-14.2.0/hwloc-2.12.2-4h4goxji77xo2vunl6qbao3obg5y6s6s;/home/smith/smith_tpls/gcc-14.2.0/libfabric-2.4.0-zryeonlpck4o3fwuiceokjvhfbaddsuu;/home/smith/smith_tpls/gcc-14.2.0/yaksa-0.4-alttpthabjee4cdh4zqqq72frxn4vpbj;/home/smith/smith_tpls/gcc-14.2.0/libpciaccess-0.17-azaevba24f7yfjz23wyf2uakf3rscpyc;/home/smith/smith_tpls/gcc-14.2.0/libxml2-2.15.1-u3drorczqrzd4rca3b7v4wvneg7pzdgk;/home/smith/smith_tpls/gcc-14.2.0/ncurses-6.5-20250705-mqevvzhb2baxbcvkvzmi4g4infjrvt6s;/home/smith/smith_tpls/gcc-14.2.0/libiconv-1.18-yw5ygcmfbrlifsd6njij6dm2a42r3gye;/home/smith/smith_tpls/gcc-14.2.0/xz-5.6.3-wt4cklfzfc2zt5f7zokdvom4qke2yfdq;/home/smith/smith_tpls/none-none/gcc-runtime-14.2.0-xixp2gqgzzdiuaowdfuzwz3wb57xludc;/home/smith/smith_tpls/none-none/compiler-wrapper-1.0-u5fjo4cce7cqt6425ipfxnafausfog7z" CACHE STRING "")
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH "ON" CACHE STRING "")
 
-set(CMAKE_BUILD_RPATH "/home/serac/serac_tpls/gcc-14.2.0/serac-develop-vt72oztqtxwepru3o2giletqdnxhqtma/lib;/home/serac/serac_tpls/gcc-14.2.0/serac-develop-vt72oztqtxwepru3o2giletqdnxhqtma/lib64;;" CACHE STRING "")
+set(CMAKE_BUILD_RPATH "/home/smith/smith_tpls/gcc-14.2.0/smith-develop-pb6h4gcfmluggisuhsanqap22p6nzffw/lib;/home/smith/smith_tpls/gcc-14.2.0/smith-develop-pb6h4gcfmluggisuhsanqap22p6nzffw/lib64;;" CACHE STRING "")
 
-set(CMAKE_INSTALL_RPATH "/home/serac/serac_tpls/gcc-14.2.0/serac-develop-vt72oztqtxwepru3o2giletqdnxhqtma/lib;/home/serac/serac_tpls/gcc-14.2.0/serac-develop-vt72oztqtxwepru3o2giletqdnxhqtma/lib64;;" CACHE STRING "")
+set(CMAKE_INSTALL_RPATH "/home/smith/smith_tpls/gcc-14.2.0/smith-develop-pb6h4gcfmluggisuhsanqap22p6nzffw/lib;/home/smith/smith_tpls/gcc-14.2.0/smith-develop-pb6h4gcfmluggisuhsanqap22p6nzffw/lib64;;" CACHE STRING "")
 
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 
 #------------------------------------------------------------------------------
 # Compilers
 #------------------------------------------------------------------------------
-# Compiler Spec: gcc@14.2.0/na7vd37xl45hztvg4h4fojpnqlfxgd2r
+# Compiler Spec: gcc@14.2.0/tojnadwjp2mzzugcwcugexka7vm7n5gr
 #------------------------------------------------------------------------------
 if(DEFINED ENV{SPACK_CC})
 
-  set(CMAKE_C_COMPILER "/home/serac/serac_tpls/none-none/compiler-wrapper-1.0-adr4m722sut3yibwgl2ehvjbtuzeozzm/libexec/spack/gcc/gcc" CACHE PATH "")
+  set(CMAKE_C_COMPILER "/home/smith/smith_tpls/none-none/compiler-wrapper-1.0-u5fjo4cce7cqt6425ipfxnafausfog7z/libexec/spack/gcc/gcc" CACHE PATH "")
 
-  set(CMAKE_CXX_COMPILER "/home/serac/serac_tpls/none-none/compiler-wrapper-1.0-adr4m722sut3yibwgl2ehvjbtuzeozzm/libexec/spack/gcc/g++" CACHE PATH "")
+  set(CMAKE_CXX_COMPILER "/home/smith/smith_tpls/none-none/compiler-wrapper-1.0-u5fjo4cce7cqt6425ipfxnafausfog7z/libexec/spack/gcc/g++" CACHE PATH "")
 
-  set(CMAKE_Fortran_COMPILER "/home/serac/serac_tpls/none-none/compiler-wrapper-1.0-adr4m722sut3yibwgl2ehvjbtuzeozzm/libexec/spack/gcc/gfortran" CACHE PATH "")
+  set(CMAKE_Fortran_COMPILER "/home/smith/smith_tpls/none-none/compiler-wrapper-1.0-u5fjo4cce7cqt6425ipfxnafausfog7z/libexec/spack/gcc/gfortran" CACHE PATH "")
 
 else()
 
@@ -47,13 +47,13 @@ set(CMAKE_Fortran_FLAGS "-fPIC -pthread" CACHE STRING "")
 # MPI
 #------------------------------------------------------------------------------
 
-set(MPI_C_COMPILER "/home/serac/serac_tpls/gcc-14.2.0/mpich-4.2.0-nsv6egqtra6rlwyfouhma2bku23mjf4u/bin/mpicc" CACHE PATH "")
+set(MPI_C_COMPILER "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-52g4dozom7jd7m4mmy2qtay77ei3foz3/bin/mpicc" CACHE PATH "")
 
-set(MPI_CXX_COMPILER "/home/serac/serac_tpls/gcc-14.2.0/mpich-4.2.0-nsv6egqtra6rlwyfouhma2bku23mjf4u/bin/mpicxx" CACHE PATH "")
+set(MPI_CXX_COMPILER "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-52g4dozom7jd7m4mmy2qtay77ei3foz3/bin/mpicxx" CACHE PATH "")
 
-set(MPI_Fortran_COMPILER "/home/serac/serac_tpls/gcc-14.2.0/mpich-4.2.0-nsv6egqtra6rlwyfouhma2bku23mjf4u/bin/mpif90" CACHE PATH "")
+set(MPI_Fortran_COMPILER "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-52g4dozom7jd7m4mmy2qtay77ei3foz3/bin/mpif90" CACHE PATH "")
 
-set(MPIEXEC_EXECUTABLE "/home/serac/serac_tpls/gcc-14.2.0/mpich-4.2.0-nsv6egqtra6rlwyfouhma2bku23mjf4u/bin/mpirun" CACHE PATH "")
+set(MPIEXEC_EXECUTABLE "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-52g4dozom7jd7m4mmy2qtay77ei3foz3/bin/mpirun" CACHE PATH "")
 
 set(MPIEXEC_NUMPROC_FLAG "-np" CACHE STRING "")
 
@@ -69,31 +69,31 @@ set(ENABLE_OPENMP ON CACHE BOOL "")
 # TPLs
 #------------------------------------------------------------------------------
 
-set(TPL_ROOT "/home/serac/serac_tpls/gcc-14.2.0" CACHE PATH "")
+set(TPL_ROOT "/home/smith/smith_tpls/gcc-14.2.0" CACHE PATH "")
 
-set(AXOM_DIR "${TPL_ROOT}/axom-0.11.0.1-qs45ql23enjk5icq6yasgpjict4ovgge" CACHE PATH "")
+set(AXOM_DIR "${TPL_ROOT}/axom-0.12.0.1-vczl3ae5hkjeth2w3msg7c7yxag6prsd" CACHE PATH "")
 
-set(CAMP_DIR "${TPL_ROOT}/camp-2024.07.0-r6yrhlse676pzry225kxim6w2ri4ywxs" CACHE PATH "")
+set(CAMP_DIR "${TPL_ROOT}/camp-2025.09.2-si4b5sh5sinbirzw45mgj74pzchhzmjm" CACHE PATH "")
 
-set(CONDUIT_DIR "${TPL_ROOT}/conduit-0.9.2-a2ql5k5t2bdur2yxekjzgznggvvrxtyn" CACHE PATH "")
+set(CONDUIT_DIR "${TPL_ROOT}/conduit-0.9.5-an6lgnv2wosycyrwmlwwsre5v24eehrf" CACHE PATH "")
 
 set(LUA_DIR "/usr" CACHE PATH "")
 
-set(MFEM_DIR "${TPL_ROOT}/mfem-4.9.0.1-sgfrwx6qadkzigkocbwxfi2rxd4bdg5c" CACHE PATH "")
+set(MFEM_DIR "${TPL_ROOT}/mfem-4.9.1.1-njai3fezw45u3gkq7vlimo3vubmgluo7" CACHE PATH "")
 
-set(HDF5_DIR "${TPL_ROOT}/hdf5-1.8.23-crboya2gv7d3qwkz7l5sznsqorucooqn" CACHE PATH "")
+set(HDF5_DIR "${TPL_ROOT}/hdf5-1.8.23-pnp3k6jpbuhrg3gthey3mob3gfz53hpg" CACHE PATH "")
 
-set(HYPRE_DIR "${TPL_ROOT}/hypre-2.26.0-pamvjykkiskrudquhqh3tzmyafolowqf" CACHE PATH "")
+set(HYPRE_DIR "${TPL_ROOT}/hypre-2.33.0-wb3iyb7nl6bpwrmftwnxlfkfvcbgxgbl" CACHE PATH "")
 
-set(METIS_DIR "${TPL_ROOT}/metis-5.1.0-ypp5h6p4n6evogx2wng2eqnp74a4losv" CACHE PATH "")
+set(METIS_DIR "${TPL_ROOT}/metis-5.1.0-x6cbvn7ffihc2yxxtcoztbzqhv3xecbr" CACHE PATH "")
 
-set(PARMETIS_DIR "${TPL_ROOT}/parmetis-4.0.3-c3y4s5kwdhsprddhtcey42hej6f5ou3a" CACHE PATH "")
+set(PARMETIS_DIR "${TPL_ROOT}/parmetis-4.0.3-dh34towgicfstf37dtmk4l7z73ave62z" CACHE PATH "")
 
-set(NETCDF_DIR "${TPL_ROOT}/netcdf-c-4.7.4-n7hweek4e4l7z424tytkvm7zs7xkz2y5" CACHE PATH "")
+set(NETCDF_DIR "${TPL_ROOT}/netcdf-c-4.7.4-6k4xq27gbyjar7wskzq5dhjgkxlbzmb5" CACHE PATH "")
 
-set(SUPERLUDIST_DIR "${TPL_ROOT}/superlu-dist-8.1.2-tku2zum5uc4etnqubqsi3b4735ceoytk" CACHE PATH "")
+set(SUPERLUDIST_DIR "${TPL_ROOT}/superlu-dist-8.1.2-tg7e6njcyn4fonx7ncxm3dlsluxppein" CACHE PATH "")
 
-set(ARPACK_DIR "${TPL_ROOT}/arpack-ng-3.9.1-f2o4etq7lzo7gyymjfpitasrhqdd6rt7" CACHE PATH "")
+set(ARPACK_DIR "${TPL_ROOT}/arpack-ng-3.9.1-wgrhkla4i7kvhmig7xxdb64iw4srno7n" CACHE PATH "")
 
 # ADIAK not built
 
@@ -103,19 +103,19 @@ set(ARPACK_DIR "${TPL_ROOT}/arpack-ng-3.9.1-f2o4etq7lzo7gyymjfpitasrhqdd6rt7" CA
 
 # ENZYME not built
 
-set(PETSC_DIR "${TPL_ROOT}/petsc-3.21.6-dodsuk6hdprsvpfb7bzyv5nm7c2als43" CACHE PATH "")
+set(PETSC_DIR "${TPL_ROOT}/petsc-3.21.6-k5wbbt6gpdqceiqwl3f6fdnwcdqp6vlq" CACHE PATH "")
 
-set(RAJA_DIR "${TPL_ROOT}/raja-2024.07.0-hbxa5g4eqneaq3e2pnyaouk2mnrk47zc" CACHE PATH "")
+set(RAJA_DIR "${TPL_ROOT}/raja-2025.09.0-6coqg3v76zxvqoubbq3m5kb4pz4aetcq" CACHE PATH "")
 
-set(SLEPC_DIR "${TPL_ROOT}/slepc-3.21.2-toj3h2dah2t5ptq456kgqkluo35h6h5m" CACHE PATH "")
+set(SLEPC_DIR "${TPL_ROOT}/slepc-3.21.2-atawbo7jfyai4zwaj2d7syyxtvzqimf7" CACHE PATH "")
 
-set(STRUMPACK_DIR "${TPL_ROOT}/strumpack-8.0.0-uww3gzqgff2cuhqks65fz572svx3fk4r" CACHE PATH "")
+set(STRUMPACK_DIR "${TPL_ROOT}/strumpack-8.0.0-liiygmnxy2bthw3ca6x7pkflu222wnnt" CACHE PATH "")
 
-set(SUNDIALS_DIR "${TPL_ROOT}/sundials-6.7.0-bnjclc6rr4tdcrye7s44cn5dlaoqbmeo" CACHE PATH "")
+set(SUNDIALS_DIR "${TPL_ROOT}/sundials-7.5.0-ne74sv2nuvh7xsq5rqxrpzqjb2lzskrq" CACHE PATH "")
 
-set(UMPIRE_DIR "${TPL_ROOT}/umpire-2024.07.0-yvluhnikhhswrlvuhfwbgcbur55jtxlu" CACHE PATH "")
+set(UMPIRE_DIR "${TPL_ROOT}/umpire-2025.09.0-3dejdu7quycjtikogju7aseulzna3eny" CACHE PATH "")
 
-set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.22-wazfmdbkalzczo7r5y2utwnimbwjkhnx" CACHE PATH "")
+set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.25-6y5kpce53jwamc7xq44kzej2ekj7qejo" CACHE PATH "")
 
 #------------------------------------------------------------------------------
 # Devtools

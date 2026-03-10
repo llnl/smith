@@ -45,10 +45,8 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # Can be removed once this BLT PR is merged https://github.com/LLNL/blt/pull/585 (?)
         find_package(CUDAToolkit REQUIRED)
         set(smith_device_depends blt::cuda CUDA::cublasLt CACHE STRING "" FORCE)
-        set(SMITH_ENABLE_CONTINUATION FALSE)
     elseif(SMITH_ENABLE_HIP)
         set(smith_device_depends blt::hip CACHE STRING "" FORCE)
-        set(SMITH_ENABLE_CONTINUATION FALSE)
     else()
         set(smith_device_depends "" CACHE STRING "" FORCE)
     endif()
@@ -198,6 +196,40 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     message(STATUS "ARPACK support is ${ARPACK_FOUND}")
 
     #------------------------------------------------------------------------------
+    # Enzyme
+    #------------------------------------------------------------------------------
+    if (ENZYME_DIR)
+        smith_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
+        set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
+        find_dependency(Enzyme REQUIRED)
+
+        smith_assert_find_succeeded(PROJECT_NAME Enzyme
+                                    TARGET       ClangEnzymeFlags
+                                    DIR_VARIABLE ENZYME_DIR)
+
+        message(STATUS "Checking for Target 'ClangEnzymeFlags' plugin target exists..")
+        get_target_property(_clangenzyme_opts ClangEnzymeFlags INTERFACE_COMPILE_OPTIONS)
+        if("${_clangenzyme_opts}" MATCHES "\\$<TARGET_FILE:([^>]+)>")
+            set(_enzyme_target "${CMAKE_MATCH_1}")
+
+            # Check if the extracted target exists
+            if(TARGET "${_enzyme_target}")
+                message(STATUS "Found 'ClangEnzymeFlags' plugin target: ${_enzyme_target}")
+            else()
+                message(FATAL_ERROR "'ClangEnzymeFlags' plugin target '${_enzyme_target}' referenced in INTERFACE_COMPILE_OPTIONS does not exist.")
+            endif()
+        else()
+            message(STATUS "Skipped check. `ClangEnzymeFlags` target does not reference another target")
+        endif()
+
+        message(STATUS "Enzyme support is ON")
+        set(ENZYME_FOUND TRUE)
+    else()
+        message(STATUS "Enzyme support is OFF")
+        set(ENZYME_FOUND FALSE)
+    endif()
+
+    #------------------------------------------------------------------------------
     # MFEM
     #------------------------------------------------------------------------------
     if(NOT SMITH_ENABLE_CODEVELOP)
@@ -235,21 +267,20 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(MFEM_USE_HIP ${SMITH_ENABLE_HIP} CACHE BOOL "")
         set(MFEM_USE_LAPACK ON CACHE BOOL "")
         # mfem+mpi requires metis
-        set(MFEM_USE_METIS ${SMITH_ENABLE_MPI} CACHE BOOL "")
-        set(MFEM_USE_METIS_5 ${SMITH_ENABLE_MPI} CACHE BOOL "")
-        set(MFEM_USE_MPI ${SMITH_ENABLE_MPI} CACHE BOOL "")
+        set(MFEM_USE_METIS ON CACHE BOOL "")
+        set(MFEM_USE_METIS_5 ON CACHE BOOL "")
+        set(MFEM_USE_MPI ON CACHE BOOL "")
         if(NETCDF_DIR)
             smith_assert_is_directory(DIR_VARIABLE NETCDF_DIR)
             set(MFEM_USE_NETCDF ON CACHE BOOL "")
         endif()
-        # mfem+mpi also needs parmetis
-        if(SMITH_ENABLE_MPI)
-            smith_assert_is_directory(DIR_VARIABLE PARMETIS_DIR)
-            # Slightly different naming convention
-            set(ParMETIS_DIR ${PARMETIS_DIR} CACHE PATH "")
-        endif()
-        set(MFEM_USE_OPENMP ${SMITH_ENABLE_OPENMP} CACHE BOOL "")
 
+        # mfem+mpi also needs parmetis
+        smith_assert_is_directory(DIR_VARIABLE PARMETIS_DIR)
+        # Slightly different naming convention
+        set(ParMETIS_DIR ${PARMETIS_DIR} CACHE PATH "")
+
+        set(MFEM_USE_OPENMP ${SMITH_ENABLE_OPENMP} CACHE BOOL "")
         if(PETSC_DIR)
             set(MFEM_USE_PETSC ON CACHE BOOL "")
             set(PETSC_ARCH "" CACHE STRING "")
@@ -263,14 +294,12 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             set(MFEM_USE_PETSC OFF CACHE BOOL "")
             set(MFEM_USE_SLEPC OFF CACHE BOOL "")
         endif()
-
-        set(MFEM_USE_RAJA OFF CACHE BOOL "")
         set(MFEM_USE_SUNDIALS ${SMITH_USE_SUNDIALS} CACHE BOOL "")
         if(SUPERLUDIST_DIR)
             smith_assert_is_directory(DIR_VARIABLE SUPERLUDIST_DIR)
             # MFEM uses a slightly different naming convention
             set(SuperLUDist_DIR ${SUPERLUDIST_DIR} CACHE PATH "")
-            set(MFEM_USE_SUPERLU ${SMITH_ENABLE_MPI} CACHE BOOL "")
+            set(MFEM_USE_SUPERLU ON CACHE BOOL "")
         endif()
         if(STRUMPACK_DIR)
             smith_assert_is_directory(DIR_VARIABLE STRUMPACK_DIR)
@@ -292,8 +321,22 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
                 "Additional packages required by STRUMPACK.")
             set(STRUMPACK_TARGET_NAMES STRUMPACK::strumpack CACHE STRING "")
         endif()
-        set(MFEM_USE_UMPIRE OFF CACHE BOOL "")
         set(MFEM_USE_ZLIB ON CACHE BOOL "")
+        if(ENZYME_DIR)
+            smith_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
+            set(MFEM_USE_ENZYME ON CACHE BOOL "")
+        else()
+            set(MFEM_USE_ENZYME OFF CACHE BOOL "")
+        endif()
+
+        # MFEM uses Raja/ Umpire if GPU enabled
+        if (SMITH_ENABLE_HIP OR SMITH_ENABLE_CUDA)
+            set(MFEM_USE_RAJA ON CACHE BOOL "")
+            set(MFEM_USE_UMPIRE ON CACHE BOOL "")
+        else()
+            set(MFEM_USE_RAJA OFF CACHE BOOL "")
+            set(MFEM_USE_UMPIRE OFF CACHE BOOL "")
+        endif()
 
         #### MFEM Configuration Options
 
@@ -368,12 +411,10 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
 
         set(MFEM_BUILT_WITH_CMAKE TRUE)
     endif()
+
     #------------------------------------------------------------------------------
     # ContinuationSolvers
     #------------------------------------------------------------------------------
-    if (NOT DEFINED SMITH_ENABLE_CONTINUATION)
-        set(SMITH_ENABLE_CONTINUATION ON)
-    endif()
     message(STATUS "Smith Enable Continuation: ${SMITH_ENABLE_CONTINUATION}")
     
     if(SMITH_ENABLE_CONTINUATION)
@@ -406,6 +447,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(CONTINUATION_FOUND TRUE)
         add_subdirectory("${CONTINUATION_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/ContinuationSolvers)
     endif()
+
     #------------------------------------------------------------------------------
     # Axom
     #------------------------------------------------------------------------------
@@ -509,38 +551,32 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
     #------------------------------------------------------------------------------
-    # Enzyme
+    # Gretl
     #------------------------------------------------------------------------------
-    if (ENZYME_DIR)
-        smith_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
-        set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
-        find_dependency(Enzyme REQUIRED)
-
-        smith_assert_find_succeeded(PROJECT_NAME Enzyme
-                                    TARGET       ClangEnzymeFlags
-                                    DIR_VARIABLE ENZYME_DIR)
-
-        message(STATUS "Checking for Target 'ClangEnzymeFlags' plugin target exists..")
-        get_target_property(_clangenzyme_opts ClangEnzymeFlags INTERFACE_COMPILE_OPTIONS)
-        if("${_clangenzyme_opts}" MATCHES "\\$<TARGET_FILE:([^>]+)>")
-            set(_enzyme_target "${CMAKE_MATCH_1}")
-
-            # Check if the extracted target exists
-            if(TARGET "${_enzyme_target}")
-                message(STATUS "Found 'ClangEnzymeFlags' plugin target: ${_enzyme_target}")
-            else()
-                message(FATAL_ERROR "'ClangEnzymeFlags' plugin target '${_enzyme_target}' referenced in INTERFACE_COMPILE_OPTIONS does not exist.")
-            endif()
-        else()
-            message(STATUS "Skipped check. `ClangEnzymeFlags` target does not reference another target")
+    message(STATUS "Smith Enable Gretl: ${SMITH_ENABLE_GRETL}")
+    
+    if(SMITH_ENABLE_GRETL)
+        if (NOT DEFINED GRETL_SOURCE_DIR)
+            set(GRETL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/gretl" CACHE PATH "")
         endif()
 
-        message(STATUS "Enzyme support is ON")
-        set(ENZYME_FOUND TRUE)
-    else()
-        message(STATUS "Enzyme support is OFF")
-        set(ENZYME_FOUND FALSE)
+        # check if gretl exists in the GRETL_SOURCE_DIR, if not, try looking through the smith submodule
+        if (NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
+            set(GRETL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/smith/gretl" CACHE PATH "" FORCE)
+        endif()
+
+        if (NOT EXISTS "${GRETL_SOURCE_DIR}/CMakeLists.txt")
+            message(FATAL_ERROR
+                "The gretl repo is not present. "
+                "Either run the following command in your git repository: \n"
+                "    git submodule update --init --recursive\n"
+                "Or add -DGRETL_SOURCE_DIR=/path/to/gretl to your CMake command." )
+        endif()
+
+        add_subdirectory("${GRETL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/gretl)
+        set(GRETL_FOUND TRUE)
     endif()
+
 
     #------------------------------------------------------------------------------
     # Tribol
@@ -565,8 +601,8 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(ENABLE_FORTRAN OFF CACHE BOOL "" FORCE)
         # Otherwise we use the submodule
         message(STATUS "Using Tribol submodule")
-        set(BUILD_REDECOMP ${SMITH_ENABLE_MPI} CACHE BOOL "")
-        set(TRIBOL_USE_MPI ${SMITH_ENABLE_MPI} CACHE BOOL "")
+        set(BUILD_REDECOMP ON CACHE BOOL "")
+        set(TRIBOL_USE_MPI ON CACHE BOOL "")
         set(TRIBOL_ENABLE_TESTS OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_EXAMPLES OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_DOCS OFF CACHE BOOL "")
@@ -577,8 +613,17 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/tribol")
         endif()
 
+        # User enabled tribol profiling, briefly restore CALIPER_DIR
+        if(TRIBOL_ENABLE_PROFILING)
+            set(CALIPER_DIR ${_caliper_dir} CACHE STRING "" FORCE)
+        endif()
+
         add_subdirectory(${tribol_repo_dir}  ${CMAKE_BINARY_DIR}/tribol)
         
+        if(TRIBOL_ENABLE_PROFILING)
+            unset(CALIPER_DIR CACHE)
+        endif()
+
         target_include_directories(redecomp PUBLIC
             $<BUILD_INTERFACE:${tribol_repo_dir}/src>
         )
@@ -667,12 +712,13 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     # Restore cleared Adiak/Caliper directories, reason at top of file.
     set(ADIAK_DIR ${_adiak_dir} CACHE PATH "" FORCE)
     set(CALIPER_DIR ${_caliper_dir} CACHE PATH "" FORCE)
+
     #------------------------------------------------------------------------------
     # Adiak
     #------------------------------------------------------------------------------
     if(SMITH_ENABLE_PROFILING AND NOT ADIAK_DIR)
         message(FATAL_ERROR "SMITH_ENABLE_PROFILING cannot be ON without ADIAK_DIR defined. Either specify a host \
-                             config with ADIAK_DIR, or rebuild Smith TPLs with +profiling variant.")
+                             config with ADIAK_DIR, or rebuild Smith TPLs with +adiak variant.")
     endif()
 
     if(ADIAK_DIR AND SMITH_ENABLE_PROFILING)
@@ -694,7 +740,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     if(SMITH_ENABLE_PROFILING AND NOT CALIPER_DIR)
         message(FATAL_ERROR "SMITH_ENABLE_PROFILING cannot be ON without CALIPER_DIR defined. Either specify a host \
-                             config with CALIPER_DIR, or rebuild Smith TPLs with +profiling variant.")
+                             config with CALIPER_DIR, or rebuild Smith TPLs with +caliper variant.")
     endif()
 
     if(CALIPER_DIR AND SMITH_ENABLE_PROFILING)
