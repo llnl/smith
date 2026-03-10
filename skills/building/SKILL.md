@@ -1,4 +1,7 @@
-# Building Smith
+---
+name: building
+description: Instructions for building Smith
+---
 
 ## Compute-node requirement (Codex)
 
@@ -26,7 +29,7 @@ git submodule update --init --recursive
 2) Configure (recommended wrapper around CMake):
 
 ```bash
-./config-build.py -bp build -ip install -hc host-configs/<file>.cmake -bt RelWithDebInfo --exportcompilercommands
+./config-build.py -bp build -ip install -hc host-configs/<file>.cmake --exportcompilercommands
 ```
 
 3) Build and test:
@@ -49,7 +52,7 @@ git submodule update --init --recursive
 2) Configure with co-develop enabled:
 
 ```bash
-./config-build.py -bp build-codevelop -ip install-codevelop -hc host-configs/<file>.cmake -bt RelWithDebInfo -DSMITH_ENABLE_CODEVELOP=ON --exportcompilercommands
+./config-build.py -bp build-codevelop -ip install-codevelop -hc host-configs/<file>.cmake -DSMITH_ENABLE_CODEVELOP=ON --exportcompilercommands
 ```
 
 3) Build and test:
@@ -67,17 +70,18 @@ Common CMake options (and their defaults) live in `cmake/SmithBasics.cmake`. Pas
 ./config-build.py -hc host-configs/<file>.cmake -DENABLE_ASAN=ON
 ```
 
-### Debug builds (when requested)
+### Build types (when requested)
 
-When a user explicitly asks for a debug build, use `-bt Debug` in the configure step:
+Only set a build type when the user explicitly asks for one. Use `config-build.py`'s `-bt` option, which takes a CMake build type (e.g., `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`):
 
 ```bash
-./config-build.py -bp build -ip install -hc host-configs/<file>.cmake -bt Debug --exportcompilercommands
+./config-build.py -bp build -ip install -hc host-configs/<file>.cmake -bt <CMAKE_BUILD_TYPE> --exportcompilercommands
 ```
 
 ### AddressSanitizer (`ENABLE_ASAN`)
 
 AddressSanitizer is available via the `ENABLE_ASAN` CMake option (default: `OFF`). It is supported with GCC or Clang.
+This should also build in with the CMake build type Debug by default.
 
 ```bash
 ./config-build.py -hc host-configs/<file>.cmake -bt Debug -DENABLE_ASAN=ON

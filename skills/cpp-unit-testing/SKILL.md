@@ -1,4 +1,7 @@
-# Smith Unit Test Guidance
+---
+name: cpp-unit-testing
+description: Instructions for creating unit tests for Smith
+---
 
 This repo’s unit tests:
 - Use GoogleTest (`TEST`, `TEST_F`, etc.).
