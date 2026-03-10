@@ -64,9 +64,9 @@ void Mesh::notifyIfRankHasNoElements() const
     }
     if (0 < ranksWithNoElements.size()) {
       ::std::ostringstream msg;
-      msg << "\nAfter refining and distributing mesh, the following " << ranksWithNoElements.size() 
+      msg << "\nAfter refining and distributing mesh, the following " << ranksWithNoElements.size()
           << " ranks own zero elements:\n[";
-      for (const ::std::size_t &rank : ranksWithNoElements) {
+      for (const ::std::size_t& rank : ranksWithNoElements) {
         msg << "  " << rank;
       }
       msg << "]\n";
