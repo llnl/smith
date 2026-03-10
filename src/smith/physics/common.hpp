@@ -22,9 +22,6 @@ struct TimeInfo {
   {
   }
 
-  /// @brief accessor for time previous time
-  double time_old() const { return time_.first; }
-
   /// @brief accessor for the current time
   double time() const { return time_.first + dt_.first; }
 

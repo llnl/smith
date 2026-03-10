@@ -131,7 +131,7 @@ class QuasiStaticRule : public TimeIntegrationRule {
   }
 };
 
-/// Altenative name for Backward Euler which makes sense when restricting what are typically second order odes,
+/// Alternative name for Backward Euler which makes sense when restricting what are typically second order odes,
 /// for example transient solid mechanics, to the quasi-static approximation.  It happens that the implementation is
 /// identical to backward-Euler applied to first order systems as we want to be able to capture current velocity
 /// dependencies.
