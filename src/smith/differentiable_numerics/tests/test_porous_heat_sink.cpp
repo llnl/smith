@@ -301,7 +301,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
 
   auto time = graph->create_state<double, double>(0.0);
   auto dt = graph->create_state<double, double>(0.025);
-  int cycle = 0;
+  size_t cycle = 0;
   std::vector<smith::FieldState> params;
   auto& T1_params = params;
   auto& T2_params = params;
