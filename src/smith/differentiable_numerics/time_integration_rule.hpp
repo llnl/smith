@@ -34,27 +34,25 @@ struct BackwardEulerFirstOrderTimeIntegrationRule {
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1, typename T2>
-  SMITH_HOST_DEVICE auto derivative(const TimeInfo& t, const T1& field_new, const T2& field_old) const
+  SMITH_HOST_DEVICE auto dot(const TimeInfo& t, const T1& field_new, const T2& field_old) const
   {
     return (1.0 / t.dt()) * (field_new - field_old);
   }
 };
 
-/// @brief Options for second order time integration methods
-enum class SecondOrderTimeIntegrationMethod
-{
-  IMPLICIT_NEWMARK,  /// implicit newmark discretization
-  QUASI_STATIC  /// quasi-static, specifies current field, velocity is central difference (for quasi-static artificial
-                /// viscosity), and acceleration is lagged for cases where it is set to some fixed value in time.
-};
+/// Alternative name for Backward Euler which makes sense when restricting what are typically second order odes,
+/// for example transient solid mechanics, to the quasi-static approximation.  It happens that the implementation is
+/// identical to backward-Euler applied to first order systems as we want to be able to capture current velocity
+/// dependencies.
+using QuasiStaticFirstOrderTimeIntegrationRule = BackwardEulerFirstOrderTimeIntegrationRule;
 
 /// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
 /// When solving f(u, u_dot, u_dot_dot, t) = 0
 /// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of
 /// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
-struct SecondOrderTimeIntegrationRule {
+struct ImplicitNewmarkSecondOrderTimeIntegrationRule {
   /// @brief Constructor
-  SecondOrderTimeIntegrationRule(SecondOrderTimeIntegrationMethod method) : method_(method) {}
+  ImplicitNewmarkSecondOrderTimeIntegrationRule() {}
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
@@ -67,24 +65,22 @@ struct SecondOrderTimeIntegrationRule {
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
-  SMITH_HOST_DEVICE auto derivative([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
-                                    [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
-                                    [[maybe_unused]] const T4& accel_old) const
+  SMITH_HOST_DEVICE auto dot([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
+                             [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                             [[maybe_unused]] const T4& accel_old) const
   {
     return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
-  SMITH_HOST_DEVICE auto second_derivative([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
-                                           [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
-                                           [[maybe_unused]] const T4& accel_old) const
+  SMITH_HOST_DEVICE auto ddot([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
+                              [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                              [[maybe_unused]] const T4& accel_old) const
   {
     auto dt = t.dt();
     return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
   }
-
-  SecondOrderTimeIntegrationMethod method_;  ///< method specifying time integration rule to inject into the q-function.
 };
 
 }  // namespace smith

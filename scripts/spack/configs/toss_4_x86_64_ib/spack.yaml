@@ -258,7 +258,7 @@ spack:
     cmake:
       buildable: false
       externals:
-      - spec: cmake@3.30.5
+      - spec: cmake@3.26.5
         prefix: /usr
     cppcheck:
       version: [2.9]

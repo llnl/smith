@@ -452,7 +452,7 @@ struct NonlinearSolverOptions {
   int max_iterations = 20;
 
   /// Maximum line search cutbacks
-  int max_line_search_iterations = 0;
+  int max_line_search_iterations = 8;
 
   /// Debug print level
   int print_level = 0;
