@@ -458,6 +458,16 @@ BlockSchurPreconditioner::BuildSchurDiagApprox_(const mfem::HypreParMatrix& A11,
     return S; // caller owns
 }
 
+/// @brief Utility to compute the matrix norm
+double matrixNorm(const mfem::HypreParMatrix& K)
+{
+  const mfem::HypreParMatrix* H = &K;
+  hypre_ParCSRMatrix* Hhypre = static_cast<hypre_ParCSRMatrix*>(*H);
+  double Hfronorm;
+  hypre_ParCSRMatrixNormFro(Hhypre, &Hfronorm);
+  return Hfronorm;
+}
+
 /**
 * @brief Set the preconditioner to use the supplied linearized block Jacobian.
 *
@@ -494,13 +504,16 @@ void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
     mfem_solvers[0]->SetOperator(*op);
 
 
+    std::cout << matrixNorm(*A22);
     // Build Schur complement approximation
     if (approxType_ == SchurApproxType::DiagInv) {
       S_approx = BuildSchurDiagApprox_(*A11, *A12, *A21, *A22);
     } else if (approxType_ == SchurApproxType::A22Only) {
       S_approx = new mfem::HypreParMatrix(*A22);
+      std::cout << matrixNorm(*dynamic_cast<const mfem::HypreParMatrix*>(S_approx)) << std::endl;
     } else if (block_op_overrides_[1]) {
       S_approx = block_op_overrides_[1].get();      // use override
+      std::cout << matrixNorm(*dynamic_cast<const mfem::HypreParMatrix*>(S_approx)) << std::endl;
     }
 
     // Set the Schur complement preconditioner for block (1,1)
