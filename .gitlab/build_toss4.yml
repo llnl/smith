@@ -13,7 +13,7 @@
   before_script:
     # We could also extract the CMake executable location from the hostconfig in common_build_functions
     # like we do in config-build
-    - module load cmake/3.23.1
+    - module load cmake/3.30.5
     - module load texlive
 
 ####
