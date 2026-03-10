@@ -18,4 +18,4 @@ class Smithdevtools(BundlePackage):
     # depends_on('py-ats')
     depends_on('py-sphinx')
     depends_on('python')
-    depends_on("llvm@19+clang+python")
+    depends_on("llvm@19+clang")
