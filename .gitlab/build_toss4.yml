@@ -94,7 +94,6 @@ toss4-llvm_19_1_3-src-asan:
     HOST_CONFIG: "dane-toss_4_x86_64_ib-${COMPILER}.cmake"
     EXTRA_CMAKE_OPTIONS: "-DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON"
     LSAN_OPTIONS: "suppressions=${CI_PROJECT_DIR}/suppressions.asan"
-    ASAN_OPTIONS: "log_path=${CI_PROJECT_DIR}/asan_logs/asan.txt:log_exe_name=true"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
   extends: .src_build_on_toss4
