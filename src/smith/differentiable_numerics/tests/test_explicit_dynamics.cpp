@@ -21,6 +21,7 @@
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/evaluate_objective.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
+#include "gretl/strumm_walther_checkpoint_strategy.hpp"
 
 // This tests the interface between the new smith::WeakForm with gretl and its conformity to the existing base_physics
 // interface
@@ -121,7 +122,7 @@ struct MeshFixture : public testing::Test {
         mfem::Mesh::MakeCartesian2D(num_elems_x, num_elems_y, mfem_shape, true, length, width), MESHTAG,
         num_refine_serial, num_refine_parallel);
     // checkpointing graph
-    checkpointer_ = std::make_shared<gretl::DataStore>(200);
+    checkpointer_ = std::make_shared<gretl::DataStore>(std::make_unique<gretl::StrummWaltherCheckpointStrategy>(100));
 
     // create residual evaluator
     const double density = 1.0;
