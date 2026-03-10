@@ -153,6 +153,11 @@ spack:
       externals:
       - spec: findutils@4.6.0
         prefix: /usr
+    gdbm:
+      buildable: false
+      externals:
+      - spec: gdbm@1.18
+        prefix: /usr
     gettext:
       buildable: false
       externals:
@@ -197,6 +202,11 @@ spack:
       buildable: false
       externals:
       - spec: libx11@1.6.8
+        prefix: /usr
+    libxcrypt:
+      buildable: false
+      externals:
+      - spec: libxcrypt@4.1.1
         prefix: /usr
     lua:
       buildable: false
