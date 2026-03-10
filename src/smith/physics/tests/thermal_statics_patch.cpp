@@ -73,8 +73,6 @@ class AffineSolution {
   void applyLoads(const Material& material, HeatTransfer<p, dim>& physics, Domain &essential_domain, Domain & boundary) const
   {
     // essential BCs
-    // auto ebc_func = [*this](const auto& X, auto){ return this->operator()(X); };
-    // physics.setTemperatureBCs(essential_boundaries, ebc_func);
     auto ebc_func = [*this](const auto &X, auto) {
       mfem::Vector X_mfem(dim);
       X_mfem(0) = X[0];
