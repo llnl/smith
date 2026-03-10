@@ -280,6 +280,13 @@ TEST_P(BlockPreconditionerTest, BlockSolve) {
             T2_field_ptrs.push_back(f.get().get());  // FieldState -> shared_ptr -> raw ptr
             }
             auto S_approx = T2_form.jacobian(smith::TimeInfo(time.get(), dt.get(), cycle), shape_disp.get().get(), T2_field_ptrs, jacobian_weights);
+            // Match block_solve's BC elimination on the (1,1) block (rows+cols).
+            {
+              const auto ess_tdofs = T2_bc_manager->allEssentialTrueDofs();
+              mfem::HypreParMatrix* eliminated_entries = S_approx->EliminateRowsCols(ess_tdofs);
+              delete eliminated_entries;
+            }
+
             std::vector<BlockOverride> overrides;
             overrides.emplace_back(
             1,

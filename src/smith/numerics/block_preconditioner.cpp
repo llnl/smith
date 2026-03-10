@@ -502,18 +502,13 @@ void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
       op = A11;  // use Jacobian diagonal block
     }
     mfem_solvers[0]->SetOperator(*op);
-
-
-    std::cout << matrixNorm(*A22);
     // Build Schur complement approximation
     if (approxType_ == SchurApproxType::DiagInv) {
       S_approx = BuildSchurDiagApprox_(*A11, *A12, *A21, *A22);
     } else if (approxType_ == SchurApproxType::A22Only) {
       S_approx = new mfem::HypreParMatrix(*A22);
-      std::cout << matrixNorm(*dynamic_cast<const mfem::HypreParMatrix*>(S_approx)) << std::endl;
     } else if (block_op_overrides_[1]) {
       S_approx = block_op_overrides_[1].get();      // use override
-      std::cout << matrixNorm(*dynamic_cast<const mfem::HypreParMatrix*>(S_approx)) << std::endl;
     }
 
     // Set the Schur complement preconditioner for block (1,1)
