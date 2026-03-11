@@ -24,7 +24,7 @@ void BlockDiagonalPreconditioner::SetOperator(const mfem::Operator& jacobian)
   block_jacobian_ = dynamic_cast<const mfem::BlockOperator*>(&jacobian);
 
   // For each diagonal block A_ii, configure the corresponding solver
-  for (int i = 0; i < nblocks_; i++) {
+  for (int i = 0; i < num_blocks_; i++) {
     const mfem::Operator& A_ii = block_jacobian_->GetBlock(i, i);
 
     // Attach operator to solver
