@@ -41,7 +41,7 @@ BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& o
                                                              std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                                              BlockTriangularType type)
     : block_offsets_(offsets),
-      nblocks_(offsets.Size() - 1),
+      num_blocks_(offsets.Size() - 1),
       block_jacobian_(nullptr),
       mfem_solvers_(std::move(solvers)),
       type_(type)
