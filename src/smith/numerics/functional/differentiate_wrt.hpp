@@ -16,7 +16,7 @@ struct DifferentiateWRT {};
 
 /**
  * @brief this type exists solely as a way to signal to `smith::Functional` that the function
- * smith::Functional::operator()` should differentiate w.r.t. a specific argument
+ * `smith::Functional::operator()` should differentiate w.r.t. a specific argument
  */
 struct differentiate_wrt_this {
   const mfem::Vector& ref;  ///< the actual data wrapped by this type

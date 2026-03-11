@@ -18,11 +18,13 @@ class WeakForm;
 class DifferentiableBlockSolver;
 class BoundaryConditionManager;
 
+/// @brief Orchestrates staggered solution for multiphysics systems.
 class SystemSolver {
  public:
+  /// @brief Represents a single stage in a staggered iteration.
   struct Stage {
-    std::vector<size_t> block_indices;  // which blocks (residuals) to solve in this stage
-    std::shared_ptr<DifferentiableBlockSolver> solver;
+    std::vector<size_t> block_indices;                  ///< Which blocks (residuals) to solve in this stage.
+    std::shared_ptr<DifferentiableBlockSolver> solver;  ///< Solver to use for this stage.
   };
 
   /// @brief Construct a SystemSolver for staggered iteration.
@@ -35,9 +37,24 @@ class SystemSolver {
   ///        partitioned-stagger steps is required regardless of residual level.
   SystemSolver(MPI_Comm comm, int max_staggered_iterations, bool exact_staggered_steps = false);
 
+  /// @brief Adds a solver stage defined by a Stage struct.
+  /// @param stage Stage configuration.
   void addStage(const Stage& stage);
+
+  /// @brief Convenience method to add a solver stage.
+  /// @param block_indices Indices of the blocks to solve.
+  /// @param solver Differentiable solver for this stage.
   void addStage(const std::vector<size_t>& block_indices, std::shared_ptr<DifferentiableBlockSolver> solver);
 
+  /// @brief Solves the multiphysics system using staggered iterations.
+  /// @param residual_evals Vector of WeakForm evaluations for each block.
+  /// @param block_indices Block indices for each residual evaluation.
+  /// @param shape_disp Current shape displacement.
+  /// @param states Nested vector of field states.
+  /// @param params Nested vector of parameters.
+  /// @param time_info Current time information.
+  /// @param bc_managers Managers for boundary conditions.
+  /// @return Updated field states.
   std::vector<FieldState> solve(const std::vector<WeakForm*>& residual_evals,
                                 const std::vector<std::vector<size_t>>& block_indices, const FieldState& shape_disp,
                                 const std::vector<std::vector<FieldState>>& states,

@@ -20,14 +20,16 @@
 
 ### Immediate TODOs
 
-#### A. Nits (HIGH, ~30 min)
-- [x] Add `&& iter < max_staggered_iterations_ - 1` guard in `system_solver.cpp:98` to skip useless last-iteration convergence check
-- [x] Add `SLIC_INFO_ROOT` logging of per-stage residual norms and iteration count during staggered convergence
+#### A. Nits — DONE
+- [x] Add `&& iter < max_staggered_iterations_ - 1` guard in `system_solver.cpp:98`
+- [x] Add `SLIC_INFO_ROOT` logging of per-stage residual norms and iteration count
 - [x] Delete `system_solver.cpp.orig`
+- [x] Parallel norms: already uses `mfem::ParNormlp` correctly throughout
 
-#### B. Parallel Norm Correctness (HIGH, ~1 hr)
-- [ ] Trace what type `WeakForm::residual()` returns — `mfem::Vector` or `HypreParVector`
-- [ ] If parallel, replace `Norml2()` with `ParNorml2()` or `GlobalLpNorm(2, local_norm, comm)` in both `checkConvergence` implementations and in `SystemSolver::solve()`
+#### B. Bug Fix (MUST FIX, ~15 min)
+`system_solver.cpp:129-133` — convergence-check residual eval omits `params` from `input_ptrs`. The initial-norm-capture loop (lines 61-63) correctly includes params; the convergence-check is a drifted copy that doesn't. Any parameterized system with `max_staggered_iterations > 1` will SLIC_ERROR. Undetected because all tests use `SystemSolver(comm, 1)`.
+
+**Fix**: add `for (const auto& param_state : params[global_row]) input_ptrs.push_back(param_state.get().get());` after the states loop at line 133.
 
 #### C. Staggered Convergence Tests (HIGHEST, ~3-4 hrs)
 All existing tests use `SystemSolver(1)` — zero coverage of the new staggered convergence logic.
@@ -48,6 +50,10 @@ All existing tests use `SystemSolver(1)` — zero coverage of the new staggered 
    - Synthetic vectors with known norms; test abs/rel tolerance logic, `resetConvergenceState`
 
 ### Backlog (lower priority)
+- Extract helper lambda for "build input_ptrs → call residual() → zero BC dofs" in `system_solver.cpp` — duplication is what caused Bug B
+- `SLIC_ERROR_IF(max_staggered_iterations <= 0, ...)` in `SystemSolver` constructor
+- `1e12` trick in `checkConvergence(1e12, ...)` call: consider named constant or dedicated `recordInitialResidual()` method
+- Error messages in `nonlinear_solve.cpp` — add actual size values via `axom::fmt::format`
 - Per-block tolerance vector (only needed for mixed-physics stages with staggered iterations)
 - Adjoint correctness through staggered iterations (VJP for outer loop)
 - Pressure BC total net force investigation
