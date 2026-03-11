@@ -44,9 +44,7 @@ BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& o
       mfem_solvers_(std::move(solvers)),
       type_(type)
 {
-  if (mfem_solvers_.size() != static_cast<size_t>(nblocks_)) {
-    throw std::invalid_argument("Number of solvers must match number of blocks");
-  }
+  SLIC_ERROR_IF(mfem_solvers_.size() != static_cast<size_t>(num_blocks_), "Number of solvers must match number of blocks");
 }
 
 void BlockTriangularPreconditioner::LowerSweep(const mfem::Vector& in, mfem::Vector& out) const
