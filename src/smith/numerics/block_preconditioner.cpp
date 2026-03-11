@@ -177,6 +177,7 @@ BlockSchurPreconditioner::BlockSchurPreconditioner(mfem::Array<int>& offsets,
       mfem_solvers_(std::move(solvers)),
       type_(type)
 {
+  SLIC_ERROR_IF(block_offsets_.Size() - 1 != 2, "This precondition is specifically for 2X2 block systems");
 }
 
 void BlockSchurPreconditioner::LowerBlock(const mfem::Vector& in, mfem::Vector& out) const
