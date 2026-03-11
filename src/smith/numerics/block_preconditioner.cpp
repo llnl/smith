@@ -6,7 +6,7 @@ namespace smith {
 BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offsets,
                                                          std::vector<std::unique_ptr<mfem::Solver>> solvers)
     : block_offsets_(offsets),
-      nblocks_(offsets.Size() - 1),
+      num_blocks_(offsets.Size() - 1),
       block_jacobian_(nullptr),
       solver_diag_(block_offsets_),
       mfem_solvers_(std::move(solvers))
