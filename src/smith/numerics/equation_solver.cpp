@@ -1014,26 +1014,25 @@ void StrumpackSolver::SetOperator(const mfem::Operator& op)
     strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*matrix);
   }
   height = op.Height();
-  width  = op.Width();
+  width = op.Width();
   strumpack_solver_.SetOperator(*strumpack_mat_);
 }
 
 #endif
 
-std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(const NonlinearSolverOptions& nonlinear_opts,
+std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions nonlinear_opts,
                                                          const LinearSolverOptions& linear_opts, mfem::Solver& prec,
                                                          MPI_Comm comm)
 {
   std::unique_ptr<mfem::NewtonSolver> nonlinear_solver;
 
   if (nonlinear_opts.nonlin_solver == NonlinearSolver::Newton) {
-    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0 || nonlinear_opts.max_line_search_iterations != 0,
-                       "Newton's method does not support nonzero min_iterations or max_line_search_iterations");
+    nonlinear_opts.max_line_search_iterations = 0;
+    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0, "Newton's method does not support nonzero min_iterations");
     nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts);
-    // nonlinear_solver = std::make_unique<mfem::NewtonSolver>(comm);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::LBFGS) {
-    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0 || nonlinear_opts.max_line_search_iterations != 0,
-                       "LBFGS does not support nonzero min_iterations or max_line_search_iterations");
+    nonlinear_opts.max_line_search_iterations = 0;
+    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0, "LBFGS does not support nonzero min_iterations");
     nonlinear_solver = std::make_unique<mfem::LBFGSSolver>(comm);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::NewtonLineSearch) {
     nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts);
@@ -1053,9 +1052,8 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(const NonlinearSolverOp
   // KINSOL
   else {
 #ifdef SMITH_USE_SUNDIALS
-
-    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0 || nonlinear_opts.max_line_search_iterations != 0,
-                       "kinsol solvers do not support min_iterations or max_line_search_iterations");
+    nonlinear_opts.max_line_search_iterations = 0;
+    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0, "kinsol solvers do not support min_iterations");
 
     int kinsol_strat = KIN_NONE;
 

@@ -15,7 +15,9 @@ using namespace mfem;
 std::unique_ptr<SparseMatrix> makeScaledIdentity(int n, double c)
 {
   auto A = std::make_unique<SparseMatrix>(n);
-  for (int i = 0; i < n; i++) { A->Add(i, i, c); }
+  for (int i = 0; i < n; i++) {
+    A->Add(i, i, c);
+  }
   A->Finalize();
   return A;
 }
@@ -24,70 +26,62 @@ std::unique_ptr<SparseMatrix> makeScaledIdentity(int n, double c)
 std::unique_ptr<SparseMatrix> makeSPDMatrix(int n)
 {
   auto A = std::make_unique<SparseMatrix>(n);
-  for (int i = 0; i < n; i++)
-  {
+  for (int i = 0; i < n; i++) {
     A->Add(i, i, 2.0);
-    if (i > 0)     A->Add(i, i-1, -1.0);
-    if (i < n - 1) A->Add(i, i+1, -1.0);
+    if (i > 0) A->Add(i, i - 1, -1.0);
+    if (i < n - 1) A->Add(i, i + 1, -1.0);
   }
   A->Finalize();
   return A;
 }
 
-class IdentitySolver : public mfem::Solver
-{
-public:
+class IdentitySolver : public mfem::Solver {
+ public:
   IdentitySolver() = default;
 
-  void SetOperator(const mfem::Operator &op) override
+  void SetOperator(const mfem::Operator& op) override
   {
     height = op.Height();
-    width  = op.Width();
+    width = op.Width();
   }
 
-  void Mult(const mfem::Vector &x, mfem::Vector &y) const override
-  {
-    y = x;
-  }
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override { y = x; }
 };
 
 // Exact diagonal inverse solver
-class ExactDiagonalSolver : public mfem::Solver
-{
-public:
+class ExactDiagonalSolver : public mfem::Solver {
+ public:
   ExactDiagonalSolver() = default;
 
-  void SetOperator(const mfem::Operator &op) override
+  void SetOperator(const mfem::Operator& op) override
   {
-    const auto *A = dynamic_cast<const mfem::SparseMatrix *>(&op);
+    const auto* A = dynamic_cast<const mfem::SparseMatrix*>(&op);
     MFEM_VERIFY(A, "ExactDiagonalSolver requires SparseMatrix");
 
     A_ = A;
     height = A_->Height();
-    width  = A_->Width();
+    width = A_->Width();
 
     diag_.SetSize(height);
     A_->GetDiag(diag_);
   }
 
-  void Mult(const mfem::Vector &x, mfem::Vector &y) const override
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
   {
     MFEM_ASSERT(A_, "Operator not set");
 
     y.SetSize(x.Size());
-    for (int i = 0; i < x.Size(); i++)
-    {
+    for (int i = 0; i < x.Size(); i++) {
       y[i] = x[i] / diag_[i];
     }
   }
 
-private:
-  const mfem::SparseMatrix *A_ = nullptr;
+ private:
+  const mfem::SparseMatrix* A_ = nullptr;
   mfem::Vector diag_;
 };
 
-std::vector<std::unique_ptr<Solver>>
-makeExactDiagonalSolvers()
+std::vector<std::unique_ptr<Solver>> makeExactDiagonalSolvers()
 {
   std::vector<std::unique_ptr<Solver>> solvers;
   solvers.push_back(std::make_unique<ExactDiagonalSolver>());
@@ -100,11 +94,10 @@ std::unique_ptr<SparseMatrix> makeRectTridiagonal(int rows, int cols)
 {
   auto A = std::make_unique<SparseMatrix>(rows, cols);
 
-  for (int i = 0; i < rows; i++)
-  {
-    if (i < cols)         A->Add(i, i, 2.0);       // main diagonal
-    if (i > 0 && i-1 < cols) A->Add(i, i-1, -1.0); // lower diagonal
-    if (i+1 < cols)       A->Add(i, i+1, -1.0);   // upper diagonal
+  for (int i = 0; i < rows; i++) {
+    if (i < cols) A->Add(i, i, 2.0);                    // main diagonal
+    if (i > 0 && i - 1 < cols) A->Add(i, i - 1, -1.0);  // lower diagonal
+    if (i + 1 < cols) A->Add(i, i + 1, -1.0);           // upper diagonal
   }
 
   A->Finalize();
@@ -112,7 +105,7 @@ std::unique_ptr<SparseMatrix> makeRectTridiagonal(int rows, int cols)
 }
 
 /* ============================================================
-   Tests 
+   Tests
    ============================================================ */
 
 // Makes sure an error is thrown when length of solvers does not match the
@@ -127,8 +120,8 @@ TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity)
   auto A22 = makeScaledIdentity(3, 2.0);
 
   BlockOperator A(offsets);
-  A.SetBlock(0,0, A11.get());
-  A.SetBlock(1,1, A22.get());
+  A.SetBlock(0, 0, A11.get());
+  A.SetBlock(1, 1, A22.get());
 
   std::vector<std::unique_ptr<Solver>> solvers;
   solvers.push_back(std::make_unique<ExactDiagonalSolver>());
@@ -141,10 +134,9 @@ TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity)
   std::shared_ptr<const mfem::Operator> M1(std::move(M1u));
   std::shared_ptr<const mfem::Operator> M2(std::move(M2u));
 
-  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers),
-                                            { {0, M1}, {1, M2} });
+  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers), {{0, M1}, {1, M2}});
 
-  P.SetOperator(A); // This actually doesn't use A. It's overidden by M1, M2
+  P.SetOperator(A);  // This actually doesn't use A. It's overidden by M1, M2
 
   Vector x(5), y(5);
   x.Randomize();
@@ -157,7 +149,6 @@ TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity)
   EXPECT_NEAR(diff.Norml2(), 0.0, 1e-14);
 }
 
-
 // If the solver for second block is identity, the block solver is identity
 TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity2)
 {
@@ -167,8 +158,8 @@ TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity2)
   auto A22 = makeScaledIdentity(3, 2.0);
 
   BlockOperator A(offsets);
-  A.SetBlock(0,0, A11.get());
-  A.SetBlock(1,1, A22.get());
+  A.SetBlock(0, 0, A11.get());
+  A.SetBlock(1, 1, A22.get());
 
   std::vector<std::unique_ptr<Solver>> solvers;
   solvers.push_back(std::make_unique<ExactDiagonalSolver>());
@@ -179,8 +170,7 @@ TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity2)
 
   std::shared_ptr<const mfem::Operator> M2(std::move(M2u));
 
-  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers),
-                                            { {1, M2} });
+  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers), {{1, M2}});
 
   P.SetOperator(A);
 
@@ -199,7 +189,7 @@ TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity2)
    main
    ============================================================ */
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   smith::ApplicationManager applicationManager(argc, argv);
