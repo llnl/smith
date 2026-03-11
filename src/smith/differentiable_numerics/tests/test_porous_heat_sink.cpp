@@ -311,6 +311,10 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
                           {T1_params, T2_params}, smith::TimeInfo(time.get(), dt.get(), cycle), d_linear_solver.get(),
                           {T1_bc_manager.get(), T2_bc_manager.get()});
 
+  // Convergence check
+  const double rel = iter_lin_solver->GetFinalRelNorm();
+  EXPECT_LT(rel, default_linear_options.relative_tol) << "GMRES final relative norm too large";
+
   auto pv_writer = smith::createParaviewWriter(*mesh, sols, physics_name);
   pv_writer.write(0, 0.0, sols);
 
