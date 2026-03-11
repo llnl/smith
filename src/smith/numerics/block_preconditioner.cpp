@@ -52,8 +52,8 @@ void BlockTriangularPreconditioner::LowerSweep(const mfem::Vector& in, mfem::Vec
   mfem::BlockVector b(const_cast<mfem::Vector&>(in), block_offsets_);
   mfem::BlockVector x(out, block_offsets_);
 
-  // Forward sweep: i = 0..nblocks_-1
-  for (int i = 0; i < nblocks_; i++) {
+  // Forward sweep: i = 0 .. num_blocks_ - 1
+  for (int i = 0; i < num_blocks_; i++) {
     mfem::Vector& bi = b.GetBlock(i);
     mfem::Vector& xi = x.GetBlock(i);
 
