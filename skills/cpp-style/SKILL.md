@@ -27,6 +27,7 @@ cmake --build build --target style
 - **Doxygen file header**: Use a `/** ... */` block with `@file` and `@brief`.
 - **Namespaces**: Prefer nested namespaces like `namespace smith::input { ... }`.
 - **Namespace closing comment**: Close with `}  // namespace smith::input` (match the opened namespace).
+- **Trailing newline**: Ensure each file ends with a newline.
 
 ## Includes
 
