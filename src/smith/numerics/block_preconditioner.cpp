@@ -136,7 +136,7 @@ void BlockTriangularPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& o
       {
         mfem::BlockVector tmp_block(tmp, block_offsets_);
 
-        for (int i = 0; i < nblocks_; i++) {
+        for (int i = 0; i < num_blocks_; i++) {
           mfem::Vector& tmp_i = tmp_block.GetBlock(i);
           mfem::Vector tmp_i_scaled(tmp_i.Size());
 
