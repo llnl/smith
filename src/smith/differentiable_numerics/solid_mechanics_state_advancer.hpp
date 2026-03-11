@@ -40,7 +40,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   SolidMechanicsStateAdvancer(std::shared_ptr<DifferentiableSolver> solid_solver,
                               std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
                               std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_dynamic_weak_forms,
-                              SecondOrderTimeIntegrationRule time_rule);
+                              ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule);
 
   /// State enum for indexing convenience
   enum STATE
@@ -70,7 +70,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   /// application you will get back: shape_disp, states, params, time, and solid_mechanics_weak_form
   template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
   static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<gretl::DataStore>& graph,
-                                     SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+                                     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string physics_name,
                                      const std::vector<std::string>& param_names, double initial_time = 0.0)
   {
     auto shape_disp = createFieldState(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
@@ -111,8 +111,9 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   std::shared_ptr<SecondOrderTimeDiscretizedWeakForms>
       solid_dynamic_weak_forms_;  ///< Solid mechanics time discretized weak forms, user must setup the appropriate
                                   ///< integrals.  Has both the time discretized and the undiscretized weak forms.
-  SecondOrderTimeIntegrationRule time_rule_;  ///< second order time integration rule.  Can compute u, u_dot, u_dot_dot,
-                                              ///< given the current predicted u and the previous u, u_dot, u_dot_dot
+  ImplicitNewmarkSecondOrderTimeIntegrationRule
+      time_rule_;  ///< second order time integration rule.  Can compute u, u_dot, u_dot_dot,
+                   ///< given the current predicted u and the previous u, u_dot, u_dot_dot
 };
 
 }  // namespace smith

@@ -1647,9 +1647,16 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     }
 
     if (use_warm_start_) {
-      // Update external forcing
+      // We want to solve using the forcing from the actual end of step, but, there are cases where the initial
+      // configuration is already out of equilibrium.  In that case, we really want to consider the change in the
+      // forcing.  For most runs, the previous state will be solved for equilibrium, so evaluating with displacement_,
+      // at time_ would give ~zero for unconstrained nodes.
       auto r = (*residual_)(time_ + dt, shapeDisplacement(), displacement_, acceleration_,
                             *parameters_[parameter_indices].state...);
+      auto r_previous = (*residual_)(time_, shapeDisplacement(), displacement_, acceleration_,
+                                     *parameters_[parameter_indices].state...);
+
+      r -= r_previous;
 
       // use the most recently evaluated Jacobian
       auto [_, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(displacement_), acceleration_,

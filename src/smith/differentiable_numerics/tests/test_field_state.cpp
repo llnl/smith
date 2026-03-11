@@ -12,6 +12,7 @@
 #include "gretl/data_store.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
+#include "gretl/strumm_walther_checkpoint_strategy.hpp"
 
 // This tests the interface between the new smith::WeakForm with gretl and its conformity to the existing base_physics
 // interface
@@ -33,7 +34,8 @@ struct MeshFixture : public ::testing::Test {
     double width = 1.0;
     mesh_ = std::make_shared<smith::Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem_shape, true, length, width), MESHTAG,
                                           0, 0);
-    checkpointer_ = std::make_shared<gretl::DataStore>(5);
+
+    checkpointer_ = std::make_shared<gretl::DataStore>(std::make_unique<gretl::StrummWaltherCheckpointStrategy>(5));
 
     std::string physics_name = "generic";
     auto disp = createFieldState(*checkpointer_, VectorSpace{}, physics_name + "_displacement", mesh_->tag());
