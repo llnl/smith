@@ -54,10 +54,10 @@ struct FieldStore {
    */
   enum class TimeDerivative
   {
-    VAL,    //< The value of the field.
-    DOT,    ///< The first time derivative.
-    DDOT,   ///< The second time derivative.
-    DDDOT   ///< The third time derivative.
+    VAL,   //< The value of the field.
+    DOT,   ///< The first time derivative.
+    DDOT,  ///< The second time derivative.
+    DDDOT  ///< The third time derivative.
   };
 
   /**
