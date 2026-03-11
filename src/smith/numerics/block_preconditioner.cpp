@@ -160,7 +160,7 @@ void BlockTriangularPreconditioner::SetOperator(const mfem::Operator& jacobian)
   block_jacobian_ = dynamic_cast<const mfem::BlockOperator*>(&jacobian);
 
   // Configure all diagonal solves
-  for (int i = 0; i < nblocks_; i++) {
+  for (int i = 0; i < num_blocks_; i++) {
     const mfem::Operator& A_ii = block_jacobian_->GetBlock(i, i);
     mfem_solvers_[static_cast<size_t>(i)]->SetOperator(A_ii);
   }
