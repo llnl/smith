@@ -20,16 +20,10 @@ This repository supports two build workflows:
 
 ## Smith-only build (default)
 
-1) (Recommended) Initialize required submodules (at least `cmake/blt`):
+1) Configure (recommended wrapper around CMake):
 
 ```bash
-git submodule update --init --recursive
-```
-
-2) Configure (recommended wrapper around CMake):
-
-```bash
-./config-build.py -bp build -ip install -hc host-configs/<file>.cmake --exportcompilercommands
+./config-build.py -bp build -ip install -hc "$(./skills/building/scripts/determine_host_config)" --exportcompilercommands
 ```
 
 3) Build and test:
@@ -52,7 +46,7 @@ git submodule update --init --recursive
 2) Configure with co-develop enabled:
 
 ```bash
-./config-build.py -bp build-codevelop -ip install-codevelop -hc host-configs/<file>.cmake -DSMITH_ENABLE_CODEVELOP=ON --exportcompilercommands
+./config-build.py -bp build-codevelop -ip install-codevelop -hc "$(./skills/building/scripts/determine_host_config)" -DSMITH_ENABLE_CODEVELOP=ON --exportcompilercommands
 ```
 
 3) Build and test:
@@ -67,7 +61,7 @@ ctest --test-dir build-codevelop
 Common CMake options (and their defaults) live in `cmake/SmithBasics.cmake`. Pass them at configure time as `-D<OPTION>=ON|OFF`, for example:
 
 ```bash
-./config-build.py -hc host-configs/<file>.cmake -DENABLE_ASAN=ON
+./config-build.py -hc "$(./skills/building/scripts/determine_host_config)" -DENABLE_ASAN=ON
 ```
 
 ### Build types (when requested)
@@ -75,7 +69,7 @@ Common CMake options (and their defaults) live in `cmake/SmithBasics.cmake`. Pas
 Only set a build type when the user explicitly asks for one. Use `config-build.py`'s `-bt` option, which takes a CMake build type (e.g., `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`):
 
 ```bash
-./config-build.py -bp build -ip install -hc host-configs/<file>.cmake -bt <CMAKE_BUILD_TYPE> --exportcompilercommands
+./config-build.py -bp build -ip install -hc "$(./skills/building/scripts/determine_host_config)" -bt <CMAKE_BUILD_TYPE> --exportcompilercommands
 ```
 
 ### AddressSanitizer (`ENABLE_ASAN`)
@@ -84,5 +78,15 @@ AddressSanitizer is available via the `ENABLE_ASAN` CMake option (default: `OFF`
 This should also build in with the CMake build type Debug by default.
 
 ```bash
-./config-build.py -hc host-configs/<file>.cmake -bt Debug -DENABLE_ASAN=ON
+./config-build.py -hc "$(./skills/building/scripts/determine_host_config)" -bt Debug -DENABLE_ASAN=ON
 ```
+
+### Host-config selection (`-hc`)
+
+If the user does **not** specify a host-config file, determine the best match by running:
+
+```bash
+./skills/building/scripts/determine_host_config
+```
+
+Use its output as the `-hc` argument (as shown in the examples above). If the user explicitly provides a host-config file/path, use that instead.
