@@ -1250,7 +1250,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
     auto amgfcontact_preconditioner = std::make_unique<mfem::AMGFSolver>();
     auto amgfcontact_opts = linear_opts.amgfcontact_options;
     amgfcontact_preconditioner->GetAMG().SetPrintLevel(preconditioner_print_level);
-    amgfcontact_preconditioner->GetAMG().SetSystemsOptions(amgfcontact_opts.systems_options);
+    amgfcontact_preconditioner->GetAMG().SetSystemsOptions(amgfcontact_opts.dim_systems_options);
     amgfcontact_preconditioner->GetAMG().SetRelaxType(amgfcontact_opts.relax_type);
     preconditioner_solver = std::move(amgfcontact_preconditioner);
   } else {

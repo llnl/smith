@@ -44,20 +44,20 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
     offsets_up_to_date_ = false;
   }
   // specify all contact boundaries
-  mfem::Array<int> ess_bdry;
-  ess_bdry.SetSize(mesh_.bdr_attributes.Max());
-  ess_bdry = 0;
+  mfem::Array<int> contact_bdry_attribs;
+  contact_bdry_attribs.SetSize(mesh_.bdr_attributes.Max());
+  contact_bdry_attribs = 0;
   // attributes start at 1,
   // shift by -1 to account for zero-based array indexing
   for (const auto& bdry_attr : bdry_attr_surf1) {
-    ess_bdry[bdry_attr - 1] = 1;
+    contact_bdry_attribs[bdry_attr - 1] = 1;
   }
   for (const auto& bdry_attr : bdry_attr_surf2) {
-    ess_bdry[bdry_attr - 1] = 1;
+    contact_bdry_attribs[bdry_attr - 1] = 1;
   }
   // dofs for the current contact interaction
   mfem::Array<int> contact_interaction_dofs_;
-  reference_nodes_->ParFESpace()->GetEssentialTrueDofs(ess_bdry, contact_interaction_dofs_);
+  reference_nodes_->ParFESpace()->GetEssentialTrueDofs(contact_bdry_attribs, contact_interaction_dofs_);
   // add dofs for current contact interaction call to all contact_dofs_
   contact_dofs_.Append(contact_interaction_dofs_.GetData(), contact_interaction_dofs_.Size());
   // sort and delete duplicates
@@ -506,7 +506,6 @@ void ContactData::setDisplacements([[maybe_unused]] const mfem::Vector& u_shape,
 
 std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperator()
 {
-  // TODO: if there is no tribol contact what should be done here?
   std::unique_ptr<mfem::HypreParMatrix> transfer_operator = nullptr;
   return transfer_operator;
 }

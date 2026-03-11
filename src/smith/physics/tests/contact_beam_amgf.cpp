@@ -12,12 +12,12 @@
 #include "gtest/gtest.h"
 #include "mfem.hpp"
 
+#include "smith/smith_config.hpp"
 #include "smith/physics/solid_mechanics_contact.hpp"
 #include "smith/numerics/functional/domain.hpp"
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/materials/solid_material.hpp"
-#include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/mesh_utils/mesh_utils.hpp"
 #include "smith/numerics/functional/tensor.hpp"
@@ -53,8 +53,7 @@ TEST_P(ContactTestAMGF, beam)
                                      .absolute_tol = 1.0e-13,
                                      .print_level = 2};
 #ifndef MFEM_USE_STRUMPACK
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return;
+#error "Strumpack is required for contact amgf tests"
 #endif
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,

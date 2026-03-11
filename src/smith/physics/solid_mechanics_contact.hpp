@@ -395,15 +395,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
         auto iterative_solver = dynamic_cast<mfem::IterativeSolver*>(&lin_solver);
         SLIC_ERROR_ROOT_IF(!iterative_solver,
                            "AMGFContact should only be used as a preconditioner for an iterative solver");
-#ifdef SMITH_USE_MPI
         // better solution: retrieve print level from .preconditioner_print_level from linear_solver_options
         int filter_solver_print_level = 0;
         filter_solver_ =
             std::make_unique<StrumpackSolver>(filter_solver_print_level, contact_dof_prolongation_->GetComm());
         amgf_prec->SetFilteredSubspaceSolver(*filter_solver_.get());
-#else
-        SLIC_ERROR_ROOT("AMGFContact can only be used with MPI builds");
-#endif
       }
       lin_solver.SetOperator(*J_operator_);
       lin_solver.Mult(augmented_residual, augmented_solution);
