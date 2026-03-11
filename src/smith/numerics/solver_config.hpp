@@ -257,11 +257,12 @@ struct AMGFContactOptions {
   /**
    * @brief The amg relaxation type
    */
-  int relax_type = 88; // l1-hybrid symmetric Gauss-Seidel smoother
+  int relax_type = 88;  // l1-hybrid symmetric Gauss-Seidel smoother
   /**
    * @brief amg DimSystemsOptions
    */
-  int dim_systems_options = 3; // geometric dimension of problem, used to set more robust options for systems such as elasticity
+  int dim_systems_options =
+      3;  // geometric dimension of problem, used to set more robust options for systems such as elasticity
 };
 
 /**
@@ -342,7 +343,7 @@ enum class Preconditioner
   AMGX,             /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
   Petsc,            /**< PETSc preconditioner,  */
   AMGFContact,      /**< MFEM-based AMG with filtering (AMGF), contact problems only */
-  None             /**< No preconditioner used */
+  None              /**< No preconditioner used */
 };
 // _preconditioners_end
 

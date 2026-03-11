@@ -47,13 +47,16 @@ TEST_P(ContactTestAMGF, beam)
 
   auto mesh = std::make_shared<smith::Mesh>(buildMeshFromFile(filename), "beam_mesh", 1, 0);
 
+#ifdef MFEM_USE_STRUMPACK
   LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
                                      .preconditioner = Preconditioner::AMGFContact,
                                      .relative_tol = 0.0,
                                      .absolute_tol = 1.0e-13,
                                      .print_level = 2};
-#ifndef MFEM_USE_STRUMPACK
-#error "Strumpack is required for contact amgf tests"
+#else
+  LinearSolverOptions linear_options{};
+  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
+  return;
 #endif
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
