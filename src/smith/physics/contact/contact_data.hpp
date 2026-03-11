@@ -157,6 +157,13 @@ class ContactData {
   std::unique_ptr<mfem::BlockOperator> jacobianFunction(std::unique_ptr<mfem::HypreParMatrix> orig_J) const;
 
   /**
+   * @brief Computes the subspace transfer operator
+   *
+   * @return Contact subspace transfer operator (mapping from contact_dofs to all displacement dofs)
+   */
+  std::unique_ptr<mfem::HypreParMatrix> contactSubspaceTransferOperator();
+
+  /**
    * @brief Set the pressure field
    *
    * This sets Tribol's pressure degrees of freedom based on
@@ -295,6 +302,11 @@ class ContactData {
    * @note This is mutable so it can be updated when pressures/gaps/Jacobians are retrieved.
    */
   mutable mfem::Array<HYPRE_BigInt> global_pressure_dof_offsets_;
+
+  /**
+   * @brief Array of dofs associated to contact
+   */
+  mfem::Array<int> contact_dofs_;
 
   int cycle_{0};
   double time_{0.0};
