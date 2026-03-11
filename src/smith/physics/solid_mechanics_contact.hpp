@@ -221,7 +221,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
    */
   void computeContactSubspaceTransferOperator()
   {
-    contact_dof_prolongation_ = contact_.contactSubspaceTransferOperator();
+    // compute contact dof --> displacement dof prolongation operator
+    // if not previously computed
+    if (!contact_dof_prolongation_) {
+      contact_dof_prolongation_ = contact_.contactSubspaceTransferOperator();
+    }
   }
 
   /**
