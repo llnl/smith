@@ -19,7 +19,7 @@ namespace smith {
 class BlockDiagonalPreconditioner : public mfem::Solver {
  public:
   /**
-   * @brief Construct a new nxn block diagonal preconditioner.
+   * @brief Construct a new N by N block diagonal preconditioner.
    *
    * @param offsets Offsets describing the block layout.
    * @param solvers One solver per block (size must match number of blocks).
