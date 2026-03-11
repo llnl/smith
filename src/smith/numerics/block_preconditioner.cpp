@@ -95,7 +95,7 @@ void BlockTriangularPreconditioner::UpperSweep(const mfem::Vector& in, mfem::Vec
     rhs_i = bi;
 
     // Subtract sum_{j > i} A_ij x_j
-    for (int j = i + 1; j < nblocks_; j++) {
+    for (int j = i + 1; j < num_blocks_; j++) {
       if (block_jacobian_->IsZeroBlock(i, j)) {
         continue;  // no coupling
       }
