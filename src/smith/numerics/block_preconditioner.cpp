@@ -6,14 +6,12 @@ namespace smith {
 BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offsets,
                                                          std::vector<std::unique_ptr<mfem::Solver>> solvers)
     : block_offsets_(offsets),
-      nblocks_(offsets.Size() - 1),
+      num_blocks_(offsets.Size() - 1),
       block_jacobian_(nullptr),
       solver_diag_(block_offsets_),
       mfem_solvers_(std::move(solvers))
 {
-  if (mfem_solvers_.size() != static_cast<size_t>(nblocks_)) {
-    throw std::invalid_argument("Number of solvers must match number of blocks");
-  }
+  SLIC_ERROR_IF(mfem_solvers_.size() != static_cast<size_t>(num_blocks_), "Number of solvers must match number of blocks");
 }
 
 void BlockDiagonalPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) const { solver_diag_.Mult(in, out); }
@@ -26,7 +24,7 @@ void BlockDiagonalPreconditioner::SetOperator(const mfem::Operator& jacobian)
   block_jacobian_ = dynamic_cast<const mfem::BlockOperator*>(&jacobian);
 
   // For each diagonal block A_ii, configure the corresponding solver
-  for (int i = 0; i < nblocks_; i++) {
+  for (int i = 0; i < num_blocks_; i++) {
     const mfem::Operator& A_ii = block_jacobian_->GetBlock(i, i);
 
     // Attach operator to solver
@@ -43,14 +41,12 @@ BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& o
                                                              std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                                              BlockTriangularType type)
     : block_offsets_(offsets),
-      nblocks_(offsets.Size() - 1),
+      num_blocks_(offsets.Size() - 1),
       block_jacobian_(nullptr),
       mfem_solvers_(std::move(solvers)),
       type_(type)
 {
-  if (mfem_solvers_.size() != static_cast<size_t>(nblocks_)) {
-    throw std::invalid_argument("Number of solvers must match number of blocks");
-  }
+  SLIC_ERROR_IF(mfem_solvers_.size() != static_cast<size_t>(num_blocks_), "Number of solvers must match number of blocks");
 }
 
 void BlockTriangularPreconditioner::LowerSweep(const mfem::Vector& in, mfem::Vector& out) const
@@ -58,8 +54,8 @@ void BlockTriangularPreconditioner::LowerSweep(const mfem::Vector& in, mfem::Vec
   mfem::BlockVector b(const_cast<mfem::Vector&>(in), block_offsets_);
   mfem::BlockVector x(out, block_offsets_);
 
-  // Forward sweep: i = 0..nblocks_-1
-  for (int i = 0; i < nblocks_; i++) {
+  // Forward sweep: i = 0 .. num_blocks_ - 1
+  for (int i = 0; i < num_blocks_; i++) {
     mfem::Vector& bi = b.GetBlock(i);
     mfem::Vector& xi = x.GetBlock(i);
 
@@ -91,8 +87,8 @@ void BlockTriangularPreconditioner::UpperSweep(const mfem::Vector& in, mfem::Vec
   mfem::BlockVector b(const_cast<mfem::Vector&>(in), block_offsets_);
   mfem::BlockVector x(out, block_offsets_);
 
-  // Backward sweep: i = nblocks_-1..0
-  for (int i = nblocks_ - 1; i >= 0; i--) {
+  // Backward sweep: i = num_blocks_ - 1 .. 0
+  for (int i = num_blocks_ - 1; i >= 0; i--) {
     mfem::Vector& bi = b.GetBlock(i);
     mfem::Vector& xi = x.GetBlock(i);
 
@@ -101,7 +97,7 @@ void BlockTriangularPreconditioner::UpperSweep(const mfem::Vector& in, mfem::Vec
     rhs_i = bi;
 
     // Subtract sum_{j > i} A_ij x_j
-    for (int j = i + 1; j < nblocks_; j++) {
+    for (int j = i + 1; j < num_blocks_; j++) {
       if (block_jacobian_->IsZeroBlock(i, j)) {
         continue;  // no coupling
       }
@@ -142,7 +138,7 @@ void BlockTriangularPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& o
       {
         mfem::BlockVector tmp_block(tmp, block_offsets_);
 
-        for (int i = 0; i < nblocks_; i++) {
+        for (int i = 0; i < num_blocks_; i++) {
           mfem::Vector& tmp_i = tmp_block.GetBlock(i);
           mfem::Vector tmp_i_scaled(tmp_i.Size());
 
@@ -168,7 +164,7 @@ void BlockTriangularPreconditioner::SetOperator(const mfem::Operator& jacobian)
   block_jacobian_ = dynamic_cast<const mfem::BlockOperator*>(&jacobian);
 
   // Configure all diagonal solves
-  for (int i = 0; i < nblocks_; i++) {
+  for (int i = 0; i < num_blocks_; i++) {
     const mfem::Operator& A_ii = block_jacobian_->GetBlock(i, i);
     mfem_solvers_[static_cast<size_t>(i)]->SetOperator(A_ii);
   }
@@ -185,6 +181,7 @@ BlockSchurPreconditioner::BlockSchurPreconditioner(mfem::Array<int>& offsets,
       mfem_solvers_(std::move(solvers)),
       type_(type)
 {
+  SLIC_ERROR_IF(block_offsets_.Size() - 1 != 2, "This precondition is specifically for 2X2 block systems");
 }
 
 void BlockSchurPreconditioner::LowerBlock(const mfem::Vector& in, mfem::Vector& out) const
