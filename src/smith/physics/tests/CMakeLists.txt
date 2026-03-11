@@ -85,11 +85,16 @@ set(physics_parallel_tribol_test_sources
     contact_patch.cpp
     contact_patch_tied.cpp
     contact_beam.cpp
-    contact_beam_amgf.cpp
     )
 blt_list_append(TO       physics_parallel_test_sources
                 ELEMENTS ${physics_parallel_tribol_test_sources}
                 IF       TRIBOL_FOUND)
+set(physics_parallel_tribol_amgf_test_sources
+    contact_beam_amgf.cpp
+    )
+blt_list_append(TO       physics_parallel_test_sources
+                ELEMENTS ${physics_parallel_tribol_amgf_test_sources}
+                IF       TRIBOL_FOUND AND SMITH_USE_STRUMPACK)
 
 smith_add_tests(SOURCES       ${physics_parallel_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
