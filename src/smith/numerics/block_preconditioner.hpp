@@ -210,7 +210,7 @@ class BlockSchurPreconditioner : public mfem::Solver {
   // Views of the linearized Jacobian blocks
   const mfem::Operator *A_12_, *A_21_;
 
-  mutable mfem::HypreParMatrix* S_approx_;
+  mutable std::unique_ptr<mfem::HypreParMatrix> S_approx_;
 
   BlockSchurType type_;
 

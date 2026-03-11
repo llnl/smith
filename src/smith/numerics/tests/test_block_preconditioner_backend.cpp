@@ -95,7 +95,8 @@ TEST_P(BlockPreconditionerParamTest, SolvesBlockSystemApproximately)
   BlockOperator J(block_offsets);
 
   J.SetBlock(0, 0, A_hypre);
-  J.SetBlock(1, 1, new HypreParMatrix(*A_hypre));  // Deep copy
+  auto A11_copy = std::make_unique<HypreParMatrix>(*A_hypre);
+  J.SetBlock(1, 1, A11_copy.get());
 
   HypreParMatrix* C = nullptr;
   if (params.pattern == BlockPrecTestParams::BlockPattern::Lower2x2) {

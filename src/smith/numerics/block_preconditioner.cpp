@@ -20,6 +20,8 @@ void BlockDiagonalPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out
 
 void BlockDiagonalPreconditioner::SetOperator(const mfem::Operator& jacobian)
 {
+  height = jacobian.Height();
+  width = jacobian.Width();
   // Cast the supplied jacobian to a block operator object
   block_jacobian_ = dynamic_cast<const mfem::BlockOperator*>(&jacobian);
 
@@ -160,6 +162,8 @@ void BlockTriangularPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& o
 
 void BlockTriangularPreconditioner::SetOperator(const mfem::Operator& jacobian)
 {
+  height = jacobian.Height();
+  width = jacobian.Width();
   // Cast the supplied jacobian to a block operator object
   block_jacobian_ = dynamic_cast<const mfem::BlockOperator*>(&jacobian);
 
@@ -271,6 +275,8 @@ void BlockSchurPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) c
 
 void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
 {
+  height = jacobian.Height();
+  width = jacobian.Width();
   block_jacobian_ = dynamic_cast<const mfem::BlockOperator*>(&jacobian);
   MFEM_VERIFY(block_jacobian_, "Jacobian must be a BlockOperator");
 
@@ -292,7 +298,7 @@ void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
   mfem_solvers_[0]->SetOperator(*A11);
 
   // Extract the diagonal of A11 (no inversion!)
-  mfem::HypreParVector* Md = new mfem::HypreParVector(MPI_COMM_WORLD, A11->GetGlobalNumRows(), A11->GetRowStarts());
+  mfem::HypreParVector* Md = new mfem::HypreParVector(A11->GetComm(), A11->GetGlobalNumRows(), A11->GetRowStarts());
   A11->GetDiag(*Md);
 
   // Scale ROWS of A12 by Md^{-1}
@@ -305,7 +311,7 @@ void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
   delete A12_scaled;
 
   // S_approx = A22 - A21 * diag(A11)^{-1} * A12
-  S_approx_ = mfem::Add(1.0, *A22, -1.0, *A21DinvA12);
+  S_approx_.reset(mfem::Add(1.0, *A22, -1.0, *A21DinvA12));
   delete A21DinvA12;
 
   // Set the Schur complement preconditioner for block (1,1)
