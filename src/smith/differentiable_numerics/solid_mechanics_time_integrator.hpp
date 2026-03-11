@@ -69,7 +69,7 @@ class SolidMechanicsTimeIntegrator : public StateAdvancer {
 
     // Add dependent fields for time integration history
     auto disp_old_type =
-        field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, physics_name + "_displacement");
+        field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, physics_name + "_displacement");
     auto velo_old_type =
         field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, physics_name + "_velocity");
     auto accel_old_type =

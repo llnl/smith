@@ -309,7 +309,7 @@ SolidDynamicsSystem<dim, order, parameter_space...> buildSolidDynamicsSystem(
   auto disp_bc = field_store->addIndependent(disp_type, time_rule_ptr);
 
   // Add dependent fields for time integration history
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, prefix("displacement"));
+  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
   auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, prefix("velocity"));
   auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, prefix("acceleration"));
 

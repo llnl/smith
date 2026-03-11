@@ -172,13 +172,13 @@ SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space.
   auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
   FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, prefix("displacement"));
+  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
 
   // 2. State variable fields
   auto state_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
   FieldType<StateSpace> state_type(prefix("state_predicted"));
   auto state_bc = field_store->addIndependent(state_type, state_time_rule);
-  auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VALUE, prefix("state"));
+  auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, prefix("state"));
 
   // 3. Parameters
   std::vector<FieldState> parameter_fields;

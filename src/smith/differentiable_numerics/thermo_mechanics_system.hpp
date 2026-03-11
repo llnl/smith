@@ -410,14 +410,14 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
   FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, prefix("displacement"));
+  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
 
   // Temperature field with backward Euler time integration
   auto temperature_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
   FieldType<H1<temp_order>> temperature_type(prefix("temperature_predicted"));
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
   auto temperature_old_type =
-      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE, prefix("temperature"));
+      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, prefix("temperature"));
 
   std::vector<FieldState> parameter_fields;
   (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);

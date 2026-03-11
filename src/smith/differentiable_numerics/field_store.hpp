@@ -54,7 +54,7 @@ struct FieldStore {
    */
   enum class TimeDerivative
   {
-    VALUE,  ///< The value of the field.
+    VAL,    //< The value of the field.
     DOT,    ///< The first time derivative.
     DDOT,   ///< The second time derivative.
     DDDOT   ///< The third time derivative.
@@ -154,7 +154,7 @@ struct FieldStore {
   auto addDependent(FieldType<Space> independent_field, TimeDerivative derivative, std::string name_override = "")
   {
     std::string suffix;
-    if (derivative == TimeDerivative::VALUE) {
+    if (derivative == TimeDerivative::VAL) {
       suffix = "_old";
     } else if (derivative == TimeDerivative::DOT) {
       suffix = "_dot_old";
@@ -169,7 +169,7 @@ struct FieldStore {
     if (independent_name_to_rule_index_.count(independent_field.name)) {
       size_t rule_idx = independent_name_to_rule_index_.at(independent_field.name);
       auto& mapping = time_integration_rules_[rule_idx].second;
-      if (derivative == TimeDerivative::VALUE) {
+      if (derivative == TimeDerivative::VAL) {
         mapping.history_name = name;
       } else if (derivative == TimeDerivative::DOT) {
         mapping.dot_name = name;

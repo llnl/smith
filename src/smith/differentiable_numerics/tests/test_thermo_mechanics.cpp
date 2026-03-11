@@ -136,51 +136,9 @@ struct ThermoMechanicsMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh_;
 };
 
-template <typename Space, typename Time = void*>
-struct FieldType {
-  FieldType(std::string n, int unknown_index_ = -1) : name(n), unknown_index(unknown_index_) {}
-  std::string name;
-  int unknown_index;
-};
-
-struct FieldStore {
-  FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size = 50)
-      : mesh_(mesh),
-        data_store_(
-            std::make_shared<gretl::DataStore>(std::make_unique<gretl::StrummWaltherCheckpointStrategy>(storage_size)))
-  {
-  }
-
-  template <typename Space>
-  void addShapeDisp(FieldType<Space> type)
-  {
-    shape_disp_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, type.name, mesh_->tag()));
-  }
-
-  template <typename Space>
-  std::shared_ptr<DirichletBoundaryConditions>& addUnknown(FieldType<Space>& type)
-  {
-    type.unknown_index = static_cast<int>(num_unknowns_);
-    to_fields_index_[type.name] = fields_.size();
-    to_unknown_index_[type.name] = num_unknowns_;
-    FieldState new_field = smith::createFieldState<Space>(*data_store_, Space{}, type.name, mesh_->tag());
-    fields_.push_back(new_field);
-    ++num_unknowns_;
-    boundary_conditions_.push_back(
-        std::make_shared<DirichletBoundaryConditions>(mesh_->mfemParMesh(), new_field.get()->space()));
-    SLIC_ERROR_IF(num_unknowns_ != boundary_conditions_.size(),
-                  "Inconsistency between num unknowns and boundary condition size");
-    return boundary_conditions_.back();
-  }
-
-  template <typename Space>
-  auto addDerived(FieldType<Space>, std::string name)
-  {
-    to_fields_index_[name] = fields_.size();
-    fields_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, name, mesh_->tag()));
-    return FieldType<Space>(name);
-  }
-
+TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
+{
+  SMITH_MARK_FUNCTION;
   double rho = 1.0;
   double E0 = 100.0;
   double nu = 0.25;
