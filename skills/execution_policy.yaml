@@ -1,0 +1,104 @@
+# execution_safety.yaml
+# Purpose: Broad environment and execution safety rules for Codex CLI agents.
+
+metadata:
+  name: execution_safety
+  description: "Global execution safety: shell, file, network, and external effects."
+  priority: critical
+  scope: global
+
+rules:
+  - id: disallow_rm_rf_root
+    title: "Disallow destructive filesystem commands"
+    severity: critical
+    match_commands:
+      - "(^|\\s)rm\\s+-rf\\s+/(\\s|$)"
+      - "(^|\\s)rm\\s+-rf\\s+\\.\\.?/(\\s|$)"
+      - "(^|\\s)rm\\s+-rf\\s+.*--no-preserve-root"
+    action: block
+    enforcement:
+      - reply_message: "Blocked: destructive filesystem operation detected."
+
+  - id: disallow_direct_service_restart
+    title: "No direct restart/stop of system services without explicit approval"
+    severity: high
+    match_commands:
+      - "^systemctl\\s+(restart|stop|disable)"
+      - "^service\\s+.*\\s+(stop|restart)"
+    action: require_approval
+    enforcement:
+      - approval_prompt: "This operation affects system services. Provide human approval."
+
+  - id: restrict_network_access
+    title: "Restrict network operations by default"
+    severity: high
+    match_commands:
+      - "curl "
+      - "wget "
+      - "scp "
+      - "rsync "
+    action: conditional
+    enforcement:
+      - condition: "request.explicit.allow_network == true"
+      - if_true:
+          - action: allow
+      - if_false:
+          - action: block
+          - reply_message: "Blocked: network access is restricted. Add allow_network flag with justification."
+
+  - id: restrict_package_install
+    title: "Require approval for package installs / remote code execution"
+    severity: high
+    match_commands:
+      - "npm\\s+install"
+      - "pip\\s+install"
+      - "cargo\\s+install"
+      - "brew\\s+install"
+    action: require_approval
+    enforcement:
+      - reply_message: "Installing packages can execute remote code. Request approval and a hash/lockfile."
+
+  - id: require_explicit_write_scope
+    title: "Never modify files outside the repo root"
+    severity: critical
+    condition: "target_path not under repo_root"
+    action: block
+    enforcement:
+      - reply_message: "Blocked: attempted modification outside repository root."
+
+  - id: sandbox_execution
+    title: "Prefer sandboxed or dry-run execution"
+    severity: best_practice
+    action: recommend
+    enforcement:
+      - suggestion: "Run commands with dry-run or in a container; capture stdout/stderr and diff before applying."
+
+  - id: secrets_handling
+    title: "Never exfiltrate or print secrets"
+    severity: critical
+    patterns:
+      - "API_KEY"
+      - "PRIVATE_KEY"
+      - "password"
+    action: block_and_redact
+    enforcement:
+      - reply_message: "Blocked: detected secrets exposure. Redacting sensitive content and halting."
+
+logging:
+  enable_command_audit: true
+  log_retention_days: 90
+  redact_patterns:
+    - "AKIA[0-9A-Z]{16}"
+    - "-----BEGIN PRIVATE KEY-----"
+
+exceptions:
+  - id: testing_mode
+    description: "Allow certain operations when running in an isolated test sandbox."
+    allowed_when:
+      - "env.TEST_SANDBOX == true"
+
+integration:
+  recommended_hooks:
+    - preflight-check (validate rules before executing)
+    - dry-run (capture proposed changes)
+    - human_approval (for require_approval rules)

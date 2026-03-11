@@ -1,0 +1,92 @@
+---
+name: building
+description: Instructions for building Smith
+---
+
+## Compute-node requirement (Codex)
+
+Only run compilation and test commands on a compute node. Determine this by running:
+
+```bash
+./skills/building/scripts/is_compute_node
+```
+
+If it prints `login`, do **not** run `./config-build.py`, `cmake --build ...`, or `ctest ...`. Stop and ask the user to switch to/allocate a compute node, then continue once `is_compute_node` prints `compute`.
+
+This repository supports two build workflows:
+
+- **Smith-only (default):** builds Smith against externally provided TPLs (e.g., via Spack/uberenv + a host-config).
+- **Co-develop Smith (opt-in):** additionally builds the `mfem`, `axom`, and `tribol` git submodules as CMake subdirectories.
+
+## Smith-only build (default)
+
+1) Configure (recommended wrapper around CMake):
+
+```bash
+./config-build.py -bp build -ip install -hc "$(./skills/building/scripts/determine_host_config)" --exportcompilercommands
+```
+
+3) Build and test:
+
+```bash
+cmake --build build -j
+ctest --test-dir build
+```
+
+## Co-develop Smith (MFEM + Axom + Tribol)
+
+Use this only when you intend to modify/build Smith against the submodules.
+
+1) Initialize submodules (required):
+
+```bash
+git submodule update --init --recursive
+```
+
+2) Configure with co-develop enabled:
+
+```bash
+./config-build.py -bp build-codevelop -ip install-codevelop -hc "$(./skills/building/scripts/determine_host_config)" -DSMITH_ENABLE_CODEVELOP=ON --exportcompilercommands
+```
+
+3) Build and test:
+
+```bash
+cmake --build build-codevelop -j
+ctest --test-dir build-codevelop
+```
+
+## Common build options
+
+Common CMake options (and their defaults) live in `cmake/SmithBasics.cmake`. Pass them at configure time as `-D<OPTION>=ON|OFF`, for example:
+
+```bash
+./config-build.py -hc "$(./skills/building/scripts/determine_host_config)" -DENABLE_ASAN=ON
+```
+
+### Build types (when requested)
+
+Only set a build type when the user explicitly asks for one. Use `config-build.py`'s `-bt` option, which takes a CMake build type (e.g., `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`):
+
+```bash
+./config-build.py -bp build -ip install -hc "$(./skills/building/scripts/determine_host_config)" -bt <CMAKE_BUILD_TYPE> --exportcompilercommands
+```
+
+### AddressSanitizer (`ENABLE_ASAN`)
+
+AddressSanitizer is available via the `ENABLE_ASAN` CMake option (default: `OFF`). It is supported with GCC or Clang.
+This should also build in with the CMake build type Debug by default.
+
+```bash
+./config-build.py -hc "$(./skills/building/scripts/determine_host_config)" -bt Debug -DENABLE_ASAN=ON
+```
+
+### Host-config selection (`-hc`)
+
+If the user does **not** specify a host-config file, determine the best match by running:
+
+```bash
+./skills/building/scripts/determine_host_config
+```
+
+Use its output as the `-hc` argument (as shown in the examples above). If the user explicitly provides a host-config file/path, use that instead.
