@@ -11,6 +11,7 @@ set(material_test_sources
     neohookean_additive_split.cpp
     parameterized_nonlinear_J2_material.cpp
     thermomechanical_material.cpp
+    test_viscoelastic.cpp
 )
 
 smith_add_tests( SOURCES    ${material_test_sources}
