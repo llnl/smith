@@ -60,9 +60,10 @@ class SystemSolver {
                                 const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                 const std::vector<const BoundaryConditionManager*>& bc_managers) const;
 
-  int max_staggered_iterations_;
-  bool exact_staggered_steps_;
-  std::vector<Stage> stages_;
+ private:
+  int max_staggered_iterations_;  ///< Maximum number of staggered iterations.
+  bool exact_staggered_steps_;     ///< If true, no early-exit convergence check.
+  std::vector<Stage> stages_;     ///< Solver stages for the staggered iterations.
 };
 
 }  // namespace smith
