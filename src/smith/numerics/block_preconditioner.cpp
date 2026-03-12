@@ -11,7 +11,8 @@ BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offse
       solver_diag_(block_offsets_),
       mfem_solvers_(std::move(solvers))
 {
-  SLIC_ERROR_IF(mfem_solvers_.size() != static_cast<size_t>(num_blocks_), "Number of solvers must match number of blocks");
+  SLIC_ERROR_IF(mfem_solvers_.size() != static_cast<size_t>(num_blocks_),
+                "Number of solvers must match number of blocks");
 }
 
 void BlockDiagonalPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) const { solver_diag_.Mult(in, out); }
@@ -46,7 +47,8 @@ BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& o
       mfem_solvers_(std::move(solvers)),
       type_(type)
 {
-  SLIC_ERROR_IF(mfem_solvers_.size() != static_cast<size_t>(num_blocks_), "Number of solvers must match number of blocks");
+  SLIC_ERROR_IF(mfem_solvers_.size() != static_cast<size_t>(num_blocks_),
+                "Number of solvers must match number of blocks");
 }
 
 void BlockTriangularPreconditioner::LowerSweep(const mfem::Vector& in, mfem::Vector& out) const
