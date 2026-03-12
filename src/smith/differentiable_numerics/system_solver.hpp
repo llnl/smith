@@ -62,7 +62,7 @@ class SystemSolver {
 
  private:
   int max_staggered_iterations_;  ///< Maximum number of staggered iterations.
-  bool exact_staggered_steps_;     ///< If true, no early-exit convergence check.
+  bool exact_staggered_steps_;    ///< If true, no early-exit convergence check.
   std::vector<Stage> stages_;     ///< Solver stages for the staggered iterations.
 };
 
