@@ -26,12 +26,12 @@
 - [x] Delete `system_solver.cpp.orig`
 - [x] Parallel norms: already uses `mfem::ParNormlp` correctly throughout
 
-#### B. Bug Fix (MUST FIX, ~15 min)
+#### B. Bug Fix — DONE
 `system_solver.cpp:129-133` — convergence-check residual eval omits `params` from `input_ptrs`. The initial-norm-capture loop (lines 61-63) correctly includes params; the convergence-check is a drifted copy that doesn't. Any parameterized system with `max_staggered_iterations > 1` will SLIC_ERROR. Undetected because all tests use `SystemSolver(comm, 1)`.
 
-**Fix**: add `for (const auto& param_state : params[global_row]) input_ptrs.push_back(param_state.get().get());` after the states loop at line 133.
+**Fix**: added `for (const auto& param_state : params[global_row]) input_ptrs.push_back(param_state.get().get());` after the states loop at line 133.
 
-#### C. Staggered Convergence Tests (HIGHEST, ~3-4 hrs)
+#### C. Staggered Convergence Tests — DONE
 All existing tests use `SystemSolver(1)` — zero coverage of the new staggered convergence logic.
 
 1. **Thermo-Mechanics Staggered vs Monolithic** (most important)
@@ -45,11 +45,16 @@ All existing tests use `SystemSolver(1)` — zero coverage of the new staggered 
    - Same setup but `SystemSolver(3, /*exact_staggered_steps=*/true)`
    - Check: completes without error, solution is reasonable
 
-3. **Unit Test for `checkConvergence`**
-   - File: new `test_differentiable_block_solver.cpp` or add to existing
-   - Synthetic vectors with known norms; test abs/rel tolerance logic, `resetConvergenceState`
+#### D. MacOS Apple Clang Lapack Linking Issue (NEW HIGH PRIORITY)
+Tests on macOS with Apple Clang (specifically `test_solid_dynamics` and `test_thermo_mechanics`) are crashing immediately with:
+`dyld[...]: Library not loaded: @rpath/liblapack.3.dylib`
+even though `liblapack.3.dylib` exists in the Spack install tree (e.g. `smith-tpls/apple-clang-17.0.0/netlib-lapack-3.12.1-.../lib/liblapack.3.dylib`).
+
+**Workaround**: Setting `DYLD_LIBRARY_PATH` or `DYLD_FALLBACK_LIBRARY_PATH` to the Lapack lib dir allows tests to pass.
+**Fix Needed**: The CMake RPATH configuration needs to ensure the Lapack `lib` directory is included in `CMAKE_BUILD_RPATH` or `CMAKE_INSTALL_RPATH` for binaries, possibly in the host-config or in the CMake logic for resolving TPL dependencies on macOS.
 
 ### Backlog (lower priority)
+- Unit Test for `checkConvergence` (Synthetic vectors with known norms; test abs/rel tolerance logic, `resetConvergenceState` in `test_differentiable_block_solver.cpp`)
 - Extract helper lambda for "build input_ptrs → call residual() → zero BC dofs" in `system_solver.cpp` — duplication is what caused Bug B
 - `SLIC_ERROR_IF(max_staggered_iterations <= 0, ...)` in `SystemSolver` constructor
 - `1e12` trick in `checkConvergence(1e12, ...)` call: consider named constant or dedicated `recordInitialResidual()` method

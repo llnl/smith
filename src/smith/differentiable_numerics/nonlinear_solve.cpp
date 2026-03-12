@@ -12,6 +12,9 @@ namespace smith {
 void applyBoundaryConditions(double time, const smith::BoundaryConditionManager* bc_manager,
                              smith::FEFieldPtr& primal_field, const smith::FEFieldPtr& bc_field_ptr)
 {
+  if (!bc_manager) {
+    return;
+  }
   if (bc_field_ptr) {
     auto constrained_dofs = bc_manager->allEssentialTrueDofs();
     for (int i = 0; i < constrained_dofs.Size(); i++) {

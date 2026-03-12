@@ -16,8 +16,8 @@
 
 namespace smith {
 
-SystemSolver::SystemSolver(MPI_Comm comm, int max_staggered_iterations, bool exact_staggered_steps)
-    : comm_(comm), max_staggered_iterations_(max_staggered_iterations), exact_staggered_steps_(exact_staggered_steps)
+SystemSolver::SystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
+    : max_staggered_iterations_(max_staggered_iterations), exact_staggered_steps_(exact_staggered_steps)
 {
 }
 
@@ -37,6 +37,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
                                             const std::vector<const BoundaryConditionManager*>& bc_managers) const
 {
   SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
+  MPI_Comm comm = shape_disp.get()->space().GetComm();
 
   // Reset each stage solver's convergence tracking (e.g. initial residual norm for rel-tol)
   for (const auto& stage : stages_) {
@@ -130,6 +131,9 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
           for (const auto& field_state : current_states[global_row]) {
             input_ptrs.push_back(field_state.get().get());
           }
+          for (const auto& param_state : params[global_row]) {
+            input_ptrs.push_back(param_state.get().get());
+          }
           mfem::Vector res = residual_evals[global_row]->residual(time_info, shape_disp.get().get(), input_ptrs);
           if (bc_managers[global_row]) {
             res.SetSubVector(bc_managers[global_row]->allEssentialTrueDofs(), 0.0);
@@ -141,7 +145,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         // Compute per-stage residual norm for diagnostics (parallel-correct)
         double stage_norm_sq = 0.0;
         for (const auto& r : stage_residuals) {
-          double n = mfem::ParNormlp(r, 2.0, comm_);
+          double n = mfem::ParNormlp(r, 2.0, comm);
           stage_norm_sq += n * n;
         }
         SLIC_INFO_ROOT(axom::fmt::format("Staggered iter {}/{}: stage {} residual norm = {:.6e}, converged = {}",

@@ -203,6 +203,12 @@ struct FieldStore {
   void addWeakFormArg(std::string weak_form_name, std::string argument_name, size_t argument_index);
 
   /**
+   * @brief Get the number of unknowns in the field store.
+   * @return size_t Number of unknowns.
+   */
+  size_t getNumUnknowns() const { return num_unknowns_; }
+
+  /**
    * @brief Register the reaction (test) field for a weak form.
    *
    * The reaction field is the field whose test function space the weak form integrates against.

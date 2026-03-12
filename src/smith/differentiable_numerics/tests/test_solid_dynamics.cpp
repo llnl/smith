@@ -83,7 +83,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto d_solid_nonlinear_solver =
       buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  auto system_solver = std::make_shared<SystemSolver>(mesh->getComm(), 1);
+  auto system_solver = std::make_shared<SystemSolver>(1);
   system_solver->addStage({0}, d_solid_nonlinear_solver);
   auto system = buildSolidDynamicsSystem<dim, order>(
       mesh, system_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, FieldType<ScalarParameterSpace>("bulk"),
@@ -183,7 +183,7 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 
-  auto system_solver = std::make_shared<SystemSolver>(mesh->getComm(), 1);
+  auto system_solver = std::make_shared<SystemSolver>(1);
   system_solver->addStage({0}, d_solid_nonlinear_solver);
   auto system = buildSolidDynamicsSystem<dim, order>(mesh, system_solver, time_rule, physics_name,
                                                      FieldType<ScalarParameterSpace>("bulk"),

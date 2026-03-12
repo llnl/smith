@@ -108,6 +108,11 @@ else()
         set(_mfem_tpl_list ${mfem_tpl_lnk_flags})
         separate_arguments(_mfem_tpl_list)
         list(FILTER _mfem_tpl_list EXCLUDE REGEX Xlinker)
+        # On Apple, -Wl,-rpath,... entries duplicate CMake's own rpath management
+        # (CMAKE_INSTALL_RPATH_USE_LINK_PATH) and cause ld "duplicate -rpath" warnings
+        if(APPLE)
+            list(FILTER _mfem_tpl_list EXCLUDE REGEX "^-Wl,-rpath,")
+        endif()
         list(JOIN _mfem_tpl_list " " mfem_tpl_lnk_flags)
     else()
         message(WARNING "No third party library flags found in ${MFEM_CFG_DIR}/config.mk")
