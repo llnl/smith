@@ -33,14 +33,16 @@ using VectorSpace = smith::H1<disp_order, dim>;
 using DensitySpace = smith::L2<disp_order - 1>;
 
 using SolidMaterial = smith::solid_mechanics::NeoHookeanWithFieldDensity;
-using SolidWeakFormT = smith::SolidWeakForm<disp_order, dim, smith::Parameters<DensitySpace>>;
+using SolidWeakFormT = smith::TimeDiscretizedWeakForm<
+    dim, smith::H1<disp_order, dim>,
+    smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>, smith::H1<disp_order, dim>, DensitySpace>>;
 
 enum FIELD
 {
-  DISP = SolidWeakFormT::DISPLACEMENT,
-  VELO = SolidWeakFormT::VELOCITY,
-  ACCEL = SolidWeakFormT::ACCELERATION,
-  DENSITY = SolidWeakFormT::NUM_STATES
+  DISP = 0,
+  VELO = 1,
+  ACCEL = 2,
+  DENSITY = 3
 };
 
 class ParaviewWriter {
@@ -200,19 +202,24 @@ int main(int argc, char* argv[])
   SolidMaterial mat;
   mat.K = 1.0;
   mat.G = 0.5;
-  solid_mechanics_weak_form->setMaterial(smith::DependsOn<0>{}, mesh->entireBodyName(), mat);
+  solid_mechanics_weak_form->addBodyIntegral(smith::DependsOn<0>{}, mesh->entireBodyName(),
+    [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
+      typename SolidMaterial::State state;
+      auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), density);
+      return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(density), pk_stress};
+    });
 
   // apply some traction boundary conditions
   std::string surface_name = "side";
   mesh->addDomainOfBoundaryElements(surface_name, smith::by_attr<dim>(1));
-  solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
+  solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*t_info*/, auto /*X*/, auto n, auto /*u*/, auto /*v*/, auto /*a*/, auto /*density*/) { return 1.0 * n; });
 
   smith::tensor<double, dim> constant_force{};
   for (int i = 0; i < dim; i++) {
     constant_force[i] = 1.e0;
   }
 
-  solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
+  solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](auto /* t_info */, auto x) {
     return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(x)};
   });
 

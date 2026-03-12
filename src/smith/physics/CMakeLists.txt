@@ -37,7 +37,6 @@ set(physics_headers
     thermomechanics_monolithic.hpp
     weak_form.hpp
     functional_weak_form.hpp
-    solid_weak_form.hpp
     scalar_objective.hpp
     functional_objective.hpp
     constraint.hpp
