@@ -45,13 +45,13 @@ All existing tests use `SystemSolver(1)` — zero coverage of the new staggered 
    - Same setup but `SystemSolver(3, /*exact_staggered_steps=*/true)`
    - Check: completes without error, solution is reasonable
 
-#### D. MacOS Apple Clang Lapack Linking Issue (NEW HIGH PRIORITY)
+#### D. MacOS Apple Clang Lapack Linking Issue — DONE
 Tests on macOS with Apple Clang (specifically `test_solid_dynamics` and `test_thermo_mechanics`) are crashing immediately with:
 `dyld[...]: Library not loaded: @rpath/liblapack.3.dylib`
 even though `liblapack.3.dylib` exists in the Spack install tree (e.g. `smith-tpls/apple-clang-17.0.0/netlib-lapack-3.12.1-.../lib/liblapack.3.dylib`).
 
 **Workaround**: Setting `DYLD_LIBRARY_PATH` or `DYLD_FALLBACK_LIBRARY_PATH` to the Lapack lib dir allows tests to pass.
-**Fix Needed**: The CMake RPATH configuration needs to ensure the Lapack `lib` directory is included in `CMAKE_BUILD_RPATH` or `CMAKE_INSTALL_RPATH` for binaries, possibly in the host-config or in the CMake logic for resolving TPL dependencies on macOS.
+**Fix**: Modified `cmake/thirdparty/FindMFEM.cmake` to specifically scrape `MFEM_LIBRARIES` for `-L` paths containing `lapack` and injected them firmly into `CMAKE_BUILD_RPATH` and `CMAKE_INSTALL_RPATH` if on Apple frameworks `(APPLE)`.
 
 ### Backlog (lower priority)
 - Unit Test for `checkConvergence` (Synthetic vectors with known norms; test abs/rel tolerance logic, `resetConvergenceState` in `test_differentiable_block_solver.cpp`)

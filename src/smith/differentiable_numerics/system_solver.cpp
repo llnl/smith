@@ -48,25 +48,29 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
   std::vector<std::vector<FieldState>> current_states = states;
   size_t num_residuals = residual_evals.size();
 
+  // Helper lambda to assemble input pointers, evaluate residual, and zero essential BCs
+  auto eval_residual_and_zero_bcs = [&](size_t global_row) {
+    std::vector<const FiniteElementState*> input_ptrs;
+    for (const auto& field_state : current_states[global_row]) {
+      input_ptrs.push_back(field_state.get().get());
+    }
+    for (const auto& param_state : params[global_row]) {
+      input_ptrs.push_back(param_state.get().get());
+    }
+    mfem::Vector res = residual_evals[global_row]->residual(time_info, shape_disp.get().get(), input_ptrs);
+    if (bc_managers[global_row]) {
+      res.SetSubVector(bc_managers[global_row]->allEssentialTrueDofs(), 0.0);
+    }
+    return res;
+  };
+
   // Evaluate and register true initial residuals before block sweeps mutate the state
   for (size_t stage_idx = 0; stage_idx < stages_.size(); ++stage_idx) {
     const auto& stage = stages_[stage_idx];
     size_t num_stage_blocks = stage.block_indices.size();
     std::vector<mfem::Vector> stage_init_residuals;
     for (size_t i = 0; i < num_stage_blocks; ++i) {
-      size_t global_row = stage.block_indices[i];
-      std::vector<const FiniteElementState*> input_ptrs;
-      for (const auto& field_state : current_states[global_row]) {
-        input_ptrs.push_back(field_state.get().get());
-      }
-      for (const auto& param_state : params[global_row]) {
-        input_ptrs.push_back(param_state.get().get());
-      }
-      mfem::Vector res = residual_evals[global_row]->residual(time_info, shape_disp.get().get(), input_ptrs);
-      if (bc_managers[global_row]) {
-        res.SetSubVector(bc_managers[global_row]->allEssentialTrueDofs(), 0.0);
-      }
-      stage_init_residuals.push_back(std::move(res));
+      stage_init_residuals.push_back(eval_residual_and_zero_bcs(stage.block_indices[i]));
     }
     // Checking convergence with a huge multiplier safely records the initial norm internally
     // without triggering an early global exit or failing assertions
@@ -126,19 +130,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         size_t num_stage_blocks = stage.block_indices.size();
         std::vector<mfem::Vector> stage_residuals;
         for (size_t i = 0; i < num_stage_blocks; ++i) {
-          size_t global_row = stage.block_indices[i];
-          std::vector<const FiniteElementState*> input_ptrs;
-          for (const auto& field_state : current_states[global_row]) {
-            input_ptrs.push_back(field_state.get().get());
-          }
-          for (const auto& param_state : params[global_row]) {
-            input_ptrs.push_back(param_state.get().get());
-          }
-          mfem::Vector res = residual_evals[global_row]->residual(time_info, shape_disp.get().get(), input_ptrs);
-          if (bc_managers[global_row]) {
-            res.SetSubVector(bc_managers[global_row]->allEssentialTrueDofs(), 0.0);
-          }
-          stage_residuals.push_back(std::move(res));
+          stage_residuals.push_back(eval_residual_and_zero_bcs(stage.block_indices[i]));
         }
         bool stage_converged = stage.solver->checkConvergence(1.0, stage_residuals);
 
