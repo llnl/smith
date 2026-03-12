@@ -180,14 +180,14 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
             return *J_constraint_;
           });
     } else {
-      // If all of the contact interactions are penalty, then there will be no blocks.  Jacobian operator is a single
+      // If all of the contact interactions are penalty, then there will be no blocks. Jacobian operator is a single
       // mfem::HypreParMatrix
       return std::make_unique<mfem_ext::StdFunctionOperator>(
           displacement_.space().TrueVSize(), residual_fn, [this](const mfem::Vector& u) -> mfem::Operator& {
             auto [r, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(u), acceleration_,
                                           *parameters_[parameter_indices].state...);
 
-            // get 11-block holding jacobian contributions
+            // get 11-block holding Jacobian contributions
             auto block_J = contact_.jacobianFunction(assemble(drdu));
             block_J->owns_blocks = false;
             J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
@@ -214,6 +214,18 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     SLIC_ERROR_ROOT_IF(!is_quasistatic_, "Contact can only be applied to quasistatic problems.");
     SLIC_ERROR_ROOT_IF(order > 1, "Contact can only be applied to linear (order = 1) meshes.");
     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts);
+  }
+
+  /**
+   * @brief create a contactSubspaceTransferOperator for AMGF
+   */
+  void computeContactSubspaceTransferOperator()
+  {
+    // compute contact dof --> displacement dof prolongation operator
+    // if not previously computed
+    if (!contact_dof_prolongation_) {
+      contact_dof_prolongation_ = contact_.contactSubspaceTransferOperator();
+    }
   }
 
   /**
@@ -377,8 +389,23 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
       auto& lin_solver = nonlin_solver_->linearSolver();
 
+      auto amgf_prec = dynamic_cast<mfem::AMGFSolver*>(&nonlin_solver_->preconditioner());
+      if (amgf_prec) {
+        // compute contact_dof_prolongation
+        computeContactSubspaceTransferOperator();
+        // set AMGF subspace transfer operator
+        amgf_prec->SetFilteredSubspaceTransferOperator(*(contact_dof_prolongation_.get()));
+        // set the filteredsubspace solver component of AMGF
+        auto iterative_solver = dynamic_cast<mfem::IterativeSolver*>(&lin_solver);
+        SLIC_ERROR_ROOT_IF(!iterative_solver,
+                           "AMGFContact should only be used as a preconditioner for an iterative solver");
+        // better solution: retrieve print level from .preconditioner_print_level from linear_solver_options
+        int filter_solver_print_level = 0;
+        filter_solver_ =
+            std::make_unique<StrumpackSolver>(filter_solver_print_level, contact_dof_prolongation_->GetComm());
+        amgf_prec->SetFilteredSubspaceSolver(*filter_solver_.get());
+      }
       lin_solver.SetOperator(*J_operator_);
-
       lin_solver.Mult(augmented_residual, augmented_solution);
 
       du_ = du;
@@ -484,6 +511,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
   /// forces for output
   FiniteElementDual forces_;
+
+  /// contactDOFProlongationOperator
+  std::unique_ptr<mfem::HypreParMatrix> contact_dof_prolongation_;
+
+  /// filter solver (for use with AMGF preconditioner)
+  std::unique_ptr<mfem::Solver> filter_solver_;
 };
 
 }  // namespace smith

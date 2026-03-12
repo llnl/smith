@@ -43,6 +43,26 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
     num_pressure_dofs_ += interactions_.back().numPressureDofs();
     offsets_up_to_date_ = false;
   }
+  // specify all contact boundaries
+  mfem::Array<int> contact_bdry_attribs;
+  contact_bdry_attribs.SetSize(mesh_.bdr_attributes.Max());
+  contact_bdry_attribs = 0;
+  // attributes start at 1,
+  // shift by -1 to account for zero-based array indexing
+  for (const auto& bdry_attr : bdry_attr_surf1) {
+    contact_bdry_attribs[bdry_attr - 1] = 1;
+  }
+  for (const auto& bdry_attr : bdry_attr_surf2) {
+    contact_bdry_attribs[bdry_attr - 1] = 1;
+  }
+  // dofs for the current contact interaction
+  mfem::Array<int> contact_interaction_dofs_;
+  reference_nodes_->ParFESpace()->GetEssentialTrueDofs(contact_bdry_attribs, contact_interaction_dofs_);
+  // add dofs for current contact interaction call to all contact_dofs_
+  contact_dofs_.Append(contact_interaction_dofs_.GetData(), contact_interaction_dofs_.Size());
+  // sort and delete duplicates
+  contact_dofs_.Sort();
+  contact_dofs_.Unique();
 }
 
 void ContactData::reset()
@@ -363,6 +383,62 @@ void ContactData::updateDofOffsets() const
   offsets_up_to_date_ = true;
 }
 
+std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperator()
+{
+  const MPI_Comm comm = reference_nodes_->ParFESpace()->GetComm();
+  HYPRE_BigInt* col_offsets = reference_nodes_->ParFESpace()->GetTrueDofOffsets();
+  HYPRE_BigInt ncols_glb = reference_nodes_->ParFESpace()->GlobalTrueVSize();
+
+  // number of rows of the restriction
+  // operator owned by the local MPI process
+  int nrows_loc = contact_dofs_.Size();
+  // should nrows_glb be of type HYPRE_BigInt?
+  // global number of rows of restriction
+  // operator
+  int nrows_glb = 0;
+  MPI_Allreduce(&nrows_loc, &nrows_glb, 1, MPI_INT, MPI_SUM, comm);
+  // determine rows offsets of the restriction operator
+  int row_offset = 0;
+  MPI_Scan(&nrows_loc, &row_offset, 1, MPI_INT, MPI_SUM, comm);
+  row_offset -= nrows_loc;
+  HYPRE_BigInt row_offsets[2];
+  row_offsets[0] = row_offset;
+  row_offsets[1] = row_offset + nrows_loc;
+
+  // create mfem::SparseMatrix restriction matrix
+  // restriction from displacement dofs to
+  // contact dofs
+  // one nonzero (unit) entry per row
+  mfem::SparseMatrix Rsparse(nrows_loc, ncols_glb);
+  mfem::Array<int> col(1);
+  col = 0;
+  mfem::Vector entry(1);
+  entry = 1.0;
+  HYPRE_BigInt col_offset = col_offsets[0];
+  for (int k = 0; k < nrows_loc; k++) {
+    // local per process contact dof
+    // to global column number
+    col[0] = col_offset + contact_dofs_[k];
+    Rsparse.SetRow(k, col, entry);
+  }
+  Rsparse.Finalize();
+
+  // convert local sparse restriction matrix
+  // to distributed mfem::HypreParMatrix
+  int* I = Rsparse.GetI();
+  HYPRE_BigInt* J = Rsparse.GetJ();
+  double* data = Rsparse.GetData();
+
+  std::unique_ptr<mfem::HypreParMatrix> restriction_operator = std::make_unique<mfem::HypreParMatrix>(
+      comm, nrows_loc, nrows_glb, ncols_glb, I, J, data, row_offsets, col_offsets);
+  // convert restriction operator
+  // to a contact dof to displacement
+  // dof transfer operator
+  std::unique_ptr<mfem::HypreParMatrix> transfer_operator;
+  transfer_operator.reset(restriction_operator->Transpose());
+  return transfer_operator;
+}
+
 #else
 
 ContactData::ContactData([[maybe_unused]] const mfem::ParMesh& mesh)
@@ -426,6 +502,12 @@ void ContactData::setPressures([[maybe_unused]] const mfem::Vector& true_pressur
 void ContactData::setDisplacements([[maybe_unused]] const mfem::Vector& u_shape,
                                    [[maybe_unused]] const mfem::Vector& true_displacement)
 {
+}
+
+std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperator()
+{
+  std::unique_ptr<mfem::HypreParMatrix> transfer_operator = nullptr;
+  return transfer_operator;
 }
 
 #endif
