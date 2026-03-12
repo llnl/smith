@@ -3,8 +3,6 @@
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/differentiable_solver.hpp"
-#include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
 namespace smith {
 

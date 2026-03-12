@@ -46,27 +46,13 @@ All existing tests use `SystemSolver(1)` — zero coverage of the new staggered 
    - Check: completes without error, solution is reasonable
 
 #### D. MacOS Apple Clang Lapack Linking Issue — DONE
-Tests on macOS with Apple Clang (specifically `test_solid_dynamics` and `test_thermo_mechanics`) are crashing immediately with:
-`dyld[...]: Library not loaded: @rpath/liblapack.3.dylib`
-even though `liblapack.3.dylib` exists in the Spack install tree (e.g. `smith-tpls/apple-clang-17.0.0/netlib-lapack-3.12.1-.../lib/liblapack.3.dylib`).
+A dyld linking error (`Library not loaded: @rpath/liblapack.3.dylib`) was occurring on macOS. This was fixed by correctly propagating the Lapack library path to the RPATH in `FindMFEM.cmake`.
 
-**Workaround**: Setting `DYLD_LIBRARY_PATH` or `DYLD_FALLBACK_LIBRARY_PATH` to the Lapack lib dir allows tests to pass.
-**Fix**: Modified `cmake/thirdparty/FindMFEM.cmake` to specifically scrape `MFEM_LIBRARIES` for `-L` paths containing `lapack` and injected them firmly into `CMAKE_BUILD_RPATH` and `CMAKE_INSTALL_RPATH` if on Apple frameworks `(APPLE)`.
-
-### Backlog (lower priority)
-- Unit Test for `checkConvergence` (Synthetic vectors with known norms; test abs/rel tolerance logic, `resetConvergenceState` in `test_differentiable_block_solver.cpp`)
-- Extract helper lambda for "build input_ptrs → call residual() → zero BC dofs" in `system_solver.cpp` — duplication is what caused Bug B
-- `SLIC_ERROR_IF(max_staggered_iterations <= 0, ...)` in `SystemSolver` constructor
-- `1e12` trick in `checkConvergence(1e12, ...)` call: consider named constant or dedicated `recordInitialResidual()` method
-- Error messages in `nonlinear_solve.cpp` — add actual size values via `axom::fmt::format`
-- Per-block tolerance vector (only needed for mixed-physics stages with staggered iterations)
-- Adjoint correctness through staggered iterations (VJP for outer loop)
-- Pressure BC total net force investigation
-- L2 stress visualization projection
-
----
-
-## Stress Output Notes
+#### E. Backlog Items — DONE
+- [x] **Extract helper lambda for residual evaluation** — `system_solver.cpp`
+  Extracted duplicated code for residual evaluation and BC zeroing into a helper lambda `eval_residual_and_zero_bcs` to reduce duplication and avoid future bugs.
+- [x] **Unit test for `checkConvergence`** — `test_differentiable_block_solver.cpp`
+  Created a new unit test covering absolute/relative tolerances, `resetConvergenceState`, and `tolerance_multiplier` using synthetic inputs.
 
 See [stress_output_plan.md](stress_output_plan.md) for full details.
 
@@ -93,7 +79,6 @@ See [stress_output_plan.md](stress_output_plan.md) for full details.
 
 ### IN PROGRESS
 6. ⚙️ **Clean Interface** — Simplify user-facing `addBodyForce`/`addTraction` with automatic time integration handling
-9. ⚙️ **Pressure BCs** — Follower forces exist; investigating non-zero net force on closed body
 11. ⚙️ **Stress Output** — L2 projection of quadrature fields to L2 nodal fields (see above)
 
 ### NOT STARTED — Next Up

@@ -19,6 +19,7 @@ namespace smith {
 SystemSolver::SystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
     : max_staggered_iterations_(max_staggered_iterations), exact_staggered_steps_(exact_staggered_steps)
 {
+  SLIC_ERROR_IF(max_staggered_iterations <= 0, "max_staggered_iterations must be > 0");
 }
 
 void SystemSolver::addStage(const Stage& stage) { stages_.push_back(stage); }
