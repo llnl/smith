@@ -1,5 +1,6 @@
 #include "smith/numerics/block_preconditioner.hpp"
 #include "mfem.hpp"
+#include "axom/slic/core/SimpleLogger.hpp"
 
 namespace smith {
 
