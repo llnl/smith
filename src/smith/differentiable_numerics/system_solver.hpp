@@ -27,6 +27,10 @@ class SystemSolver {
     std::shared_ptr<DifferentiableBlockSolver> solver;  ///< Solver to use for this stage.
   };
 
+  /// @brief Construct a monolithic SystemSolver from a single block solver.
+  /// @param single_solver The solver to use for all blocks simultaneously.
+  SystemSolver(std::shared_ptr<DifferentiableBlockSolver> single_solver);
+
   /// @brief Construct a SystemSolver for staggered iteration.
   /// @param max_staggered_iterations Maximum number of staggered sweeps across all stages.  When
   ///        @p exact_staggered_steps is false, the solver may exit early once all stage solvers

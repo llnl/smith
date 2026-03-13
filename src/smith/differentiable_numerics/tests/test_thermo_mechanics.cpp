@@ -137,69 +137,96 @@ struct ThermoMechanicsMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh_;
 };
 
-TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalCoupled)
+TEST_F(ThermoMechanicsMeshFixture, MonolithicVsStaggered)
 {
   SMITH_MARK_FUNCTION;
-  double rho = 1.0;
-  double E0 = 100.0;
-  double nu = 0.25;
-  double specific_heat = 1.0;
-  double kappa = 0.1;
-  GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 1.0, kappa};
+  
+  auto run_problem = [&](std::shared_ptr<SystemSolver> sys_solver, bool test_gradients) {
+    double rho = 1.0;
+    double E0 = 100.0;
+    double nu = 0.25;
+    double specific_heat = 1.0;
+    double kappa = 0.1;
+    // Use alpha = 0.01 to ensure coupling
+    GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.01, 1.0, kappa};
+
+    FieldType<L2<0>> youngs_modulus("youngs_modulus");
+    auto system =
+        buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
+    system.setMaterial(material, mesh_->entireBodyName());
+
+    system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
+
+    system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim> X) {
+      auto bc = 0.0 * X;
+      bc[0] = 0.01 * t;
+      return bc;
+    });
+    system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh_->domain("right"));
+    system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+    system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
+
+    system.addThermalHeatSource(mesh_->entireBodyName(), [](auto /*t*/, auto /*x*/, auto /*u*/, auto /*v*/, auto /*T*/,
+                                                            auto /*T_dot*/, auto /*E_param*/) { return 100.0; });
+
+    double dt = 0.001;
+    double time = 0.0;
+    int cycle = 0;
+
+    auto shape_disp = system.field_store->getShapeDisp();
+    auto states = system.getStateFields();
+    auto params = system.getParameterFields();
+    std::vector<ReactionState> reactions;
+
+    for (size_t step = 0; step < 2; ++step) {
+      TimeInfo t_info(time, dt, step);
+      std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
+      time += dt;
+      cycle++;
+    }
+
+    // Check that reactions are zero for unconstrained DOFs (should be within solver tolerance)
+    checkUnconstrainedReactions(*reactions[0].get(), system.disp_bc->getBoundaryConditionManager());
+    checkUnconstrainedReactions(*reactions[1].get(), system.temperature_bc->getBoundaryConditionManager());
+
+    if (test_gradients) {
+      auto reaction_squared = innerProduct(reactions[0], reactions[0]);
+      gretl::set_as_objective(reaction_squared);
+
+      EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
+      EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
+    }
+
+    // Return copies of the final fields
+    auto disp_idx = system.field_store->getFieldIndex("displacement_predicted");
+    auto temp_idx = system.field_store->getFieldIndex("temperature_predicted");
+    return std::make_pair(mfem::Vector(*states[disp_idx].get()), mfem::Vector(*states[temp_idx].get()));
+  };
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
 
-  FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(1);
-  sys_solver->addStage({0, 1}, solver);
-  auto system =
-      buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
-  system.setMaterial(material, mesh_->entireBodyName());
+  // Run Monolithic
+  auto mono_sys_solver = std::make_shared<SystemSolver>(solver);
+  auto mono_result = run_problem(mono_sys_solver, true);
 
-  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
+  // Reset StateManager for the next run
+  smith::StateManager::reset();
+  smith::StateManager::initialize(datastore_, "solid");
 
-  system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim> X) {
-    auto bc = 0.0 * X;
-    bc[0] = 0.01 * t;
-    return bc;
-  });
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh_->domain("right"));
-  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
-  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
+  // Run Staggered
+  auto stag_sys_solver = std::make_shared<SystemSolver>(10);
+  stag_sys_solver->addStage({0}, solver);
+  stag_sys_solver->addStage({1}, solver);
+  auto stag_result = run_problem(stag_sys_solver, false); // Skip gradients for staggered for now
 
-  system.addThermalHeatSource(mesh_->entireBodyName(), [](auto /*t*/, auto /*x*/, auto /*u*/, auto /*v*/, auto /*T*/,
-                                                          auto /*T_dot*/, auto /*E_param*/) { return 100.0; });
+  // Compare results
+  mfem::Vector diff_disp = mono_result.first;
+  diff_disp -= stag_result.first;
+  EXPECT_LT(diff_disp.Normlinf(), 1e-6);
 
-  std::string pv_dir = "paraview_thermo_mechanics";
-  auto pv_writer = smith::createParaviewWriter(*mesh_, system.getStateFields(), pv_dir);
-
-  double dt = 0.001;
-  double time = 0.0;
-  int cycle = 0;
-
-  auto shape_disp = system.field_store->getShapeDisp();
-  auto states = system.getStateFields();
-  auto params = system.getParameterFields();
-  std::vector<ReactionState> reactions;
-
-  pv_writer.write(cycle, time, states);
-  for (size_t step = 0; step < 2; ++step) {
-    TimeInfo t_info(time, dt, step);
-    std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
-    time += dt;
-    cycle++;
-    pv_writer.write(cycle, time, states);
-  }
-
-  // Check that reactions are zero for unconstrained DOFs (should be within solver tolerance)
-  checkUnconstrainedReactions(*reactions[0].get(), system.disp_bc->getBoundaryConditionManager());
-  checkUnconstrainedReactions(*reactions[1].get(), system.temperature_bc->getBoundaryConditionManager());
-
-  auto reaction_squared = innerProduct(reactions[0], reactions[0]);
-  gretl::set_as_objective(reaction_squared);
-
-  EXPECT_GT(checkGradWrt(reaction_squared, shape_disp, 1.1e-2, 4, true), 0.7);
-  EXPECT_GT(checkGradWrt(reaction_squared, params[0], 6.2e-1, 4, true), 0.7);
+  mfem::Vector diff_temp = mono_result.second;
+  diff_temp -= stag_result.second;
+  EXPECT_LT(diff_temp.Normlinf(), 1e-6);
 }
 
 TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
@@ -215,8 +242,7 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(1);
-  sys_solver->addStage({0, 1}, solver);
+  auto sys_solver = std::make_shared<SystemSolver>(solver);
   auto system =
       buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
@@ -284,8 +310,7 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<H1<1>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(1);
-  sys_solver->addStage({0, 1}, solver);
+  auto sys_solver = std::make_shared<SystemSolver>(solver);
   auto system =
       buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
@@ -364,8 +389,7 @@ TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
   auto solver = buildDifferentiableNonlinearBlockSolver(fast_nonlinear_opts, linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(1);
-  sys_solver->addStage({0, 1}, solver);
+  auto sys_solver = std::make_shared<SystemSolver>(solver);
   auto system =
       buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
@@ -417,8 +441,7 @@ TEST_F(ThermoMechanicsMeshFixture, PressureBC)
 
   auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(1);
-  sys_solver->addStage({0, 1}, solver);
+  auto sys_solver = std::make_shared<SystemSolver>(solver);
   auto system =
       buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
@@ -455,66 +478,80 @@ TEST_F(ThermoMechanicsMeshFixture, PressureBC)
   EXPECT_GT(disp_norm, 1e-6);
 }
 
-TEST_F(ThermoMechanicsMeshFixture, RunThermoMechanicalStaggered)
+
+
+TEST_F(ThermoMechanicsMeshFixture, StaggeredWithDifferentSolvers)
 {
   SMITH_MARK_FUNCTION;
+  // Use a material with actual thermal expansion
   double rho = 1.0;
-  double E0 = 100.0;
-  double nu = 0.25;
-  double specific_heat = 1.0;
-  double kappa = 0.1;
-  GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 1.0, kappa};
+  double E0 = 1000.0;
+  double nu = 0.3;
+  double specific_heat = 10.0;
+  double alpha = 0.01;
+  double kappa = 1.0;
+  GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, alpha, 0.0, kappa};
 
-  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+  // Mechanics Solver: CG with HypreJacobi
+  smith::LinearSolverOptions mech_lin_opts{.linear_solver = smith::LinearSolver::CG,
+                                           .preconditioner = smith::Preconditioner::HypreJacobi,
+                                           .relative_tol = 1e-6,
+                                           .absolute_tol = 1e-6,
+                                           .max_iterations = 200,
+                                           .print_level = 0};
+  smith::NonlinearSolverOptions mech_nonlin_opts = nonlinear_opts; // Newton Line Search
+  auto mech_solver = buildDifferentiableNonlinearBlockSolver(mech_nonlin_opts, mech_lin_opts, *mesh_);
+
+  // Thermal Solver: GMRES with HypreAMG
+  smith::LinearSolverOptions therm_lin_opts{.linear_solver = smith::LinearSolver::GMRES,
+                                            .preconditioner = smith::Preconditioner::HypreAMG,
+                                            .relative_tol = 1e-6,
+                                            .absolute_tol = 1e-6,
+                                            .max_iterations = 200,
+                                            .print_level = 0};
+  smith::NonlinearSolverOptions therm_nonlin_opts = nonlinear_opts;
+  auto therm_solver = buildDifferentiableNonlinearBlockSolver(therm_nonlin_opts, therm_lin_opts, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  // Configure staged solver: Stage 0 = Displacement (block 0), Stage 1 = Temperature (block 1)
-  // max_staggered_iterations = 10 to trigger convergence check logic (which uses params)
-  auto sys_solver = std::make_shared<SystemSolver>(10);
-  sys_solver->addStage({0}, solver);
-  sys_solver->addStage({1}, solver);
+  auto sys_solver = std::make_shared<SystemSolver>(15);
+  sys_solver->addStage({0}, mech_solver);
+  sys_solver->addStage({1}, therm_solver);
+
   auto system =
       buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, sys_solver, youngs_modulus);
   system.setMaterial(material, mesh_->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
 
-  system.disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim> X) {
-    auto bc = 0.0 * X;
-    bc[0] = 0.01 * t;
-    return bc;
+  // Fixed on the left
+  system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
+  // Heat up the left boundary
+  system.temperature_bc->setScalarBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim>) {
+    return 100.0 * std::min(t, 1.0); // Ramp up temperature
   });
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh_->domain("right"));
-  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
-  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
-
-  system.addThermalHeatSource(mesh_->entireBodyName(), [](auto /*t*/, auto /*x*/, auto /*u*/, auto /*v*/, auto /*T*/,
-                                                          auto /*T_dot*/, auto /*E_param*/) { return 100.0; });
-
-  double dt = 0.001;
-  double time = 0.0;
 
   auto shape_disp = system.field_store->getShapeDisp();
   auto states = system.getStateFields();
   auto params = system.getParameterFields();
   std::vector<ReactionState> reactions;
 
-  // Advance state should now use staggered solver with convergence check
-  // Bug B would have caused a SLIC_ERROR here because it missedparams in input_ptrs
-  for (size_t step = 0; step < 2; ++step) {
+  double dt = 0.1;
+  double time = 0.0;
+
+  // Solve for 5 steps to see expansion
+  for (size_t step = 0; step < 5; ++step) {
     TimeInfo t_info(time, dt, step);
     std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
     time += dt;
   }
 
-  // Check that reactions are zero for unconstrained DOFs
-  checkUnconstrainedReactions(*reactions[0].get(), system.disp_bc->getBoundaryConditionManager());
-  checkUnconstrainedReactions(*reactions[1].get(), system.temperature_bc->getBoundaryConditionManager());
-
-  // Check that we got a reasonable displacement (staggered solve worked)
+  // Check that the bar expanded in the x-direction due to thermal heating
   auto disp_idx = system.field_store->getFieldIndex("displacement_predicted");
-  double disp_norm = states[disp_idx].get()->Norml2();
-  EXPECT_GT(disp_norm, 1e-6);
+  FieldState final_disp = states[disp_idx];
+  
+  double disp_norm = final_disp.get()->Normlinf();
+  EXPECT_GT(disp_norm, 1e-3);
+  SLIC_INFO_ROOT("Max displacement after heating: " << disp_norm);
 }
 
 }  // namespace smith

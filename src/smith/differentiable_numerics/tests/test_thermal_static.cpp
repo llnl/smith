@@ -51,8 +51,7 @@ struct ThermalStaticFixture : public testing::Test {
     auto linear_options = LinearSolverOptions();
     auto block_solver = buildDifferentiableNonlinearBlockSolver(solver_options, linear_options, *mesh);
 
-    auto sys_solver = std::make_shared<SystemSolver>(1);
-    sys_solver->addStage({0}, block_solver);
+    auto sys_solver = std::make_shared<SystemSolver>(block_solver);
     auto thermal_system = buildThermalSystem<2, temp_order>(mesh, sys_solver);
 
     double k = 1.0;

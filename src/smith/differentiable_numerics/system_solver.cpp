@@ -11,10 +11,17 @@
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "mfem.hpp"
 
+#include <numeric>
 #include <axom/slic.hpp>
 #include <axom/fmt.hpp>
 
 namespace smith {
+
+SystemSolver::SystemSolver(std::shared_ptr<DifferentiableBlockSolver> single_solver)
+    : max_staggered_iterations_(1), exact_staggered_steps_(false)
+{
+  addStage({}, std::move(single_solver));
+}
 
 SystemSolver::SystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
     : max_staggered_iterations_(max_staggered_iterations), exact_staggered_steps_(exact_staggered_steps)
@@ -40,14 +47,22 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
   SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
   MPI_Comm comm = shape_disp.get()->space().GetComm();
 
+  size_t num_residuals = residual_evals.size();
+  std::vector<Stage> active_stages = stages_;
+  for (auto& stage : active_stages) {
+    if (stage.block_indices.empty()) {
+      stage.block_indices.resize(num_residuals);
+      std::iota(stage.block_indices.begin(), stage.block_indices.end(), 0);
+    }
+  }
+
   // Reset each stage solver's convergence tracking (e.g. initial residual norm for rel-tol)
-  for (const auto& stage : stages_) {
+  for (const auto& stage : active_stages) {
     stage.solver->resetConvergenceState();
   }
 
   // Working copy of states, updated in-place as stages solve
   std::vector<std::vector<FieldState>> current_states = states;
-  size_t num_residuals = residual_evals.size();
 
   // Helper lambda to assemble input pointers, evaluate residual, and zero essential BCs
   auto eval_residual_and_zero_bcs = [&](size_t global_row) {
@@ -66,8 +81,8 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
   };
 
   // Evaluate and register true initial residuals before block sweeps mutate the state
-  for (size_t stage_idx = 0; stage_idx < stages_.size(); ++stage_idx) {
-    const auto& stage = stages_[stage_idx];
+  for (size_t stage_idx = 0; stage_idx < active_stages.size(); ++stage_idx) {
+    const auto& stage = active_stages[stage_idx];
     size_t num_stage_blocks = stage.block_indices.size();
     std::vector<mfem::Vector> stage_init_residuals;
     for (size_t i = 0; i < num_stage_blocks; ++i) {
@@ -80,8 +95,8 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
 
   for (int iter = 0; iter < max_staggered_iterations_; ++iter) {
     // --- Run each stage ---
-    for (size_t stage_idx = 0; stage_idx < stages_.size(); ++stage_idx) {
-      const auto& stage = stages_[stage_idx];
+    for (size_t stage_idx = 0; stage_idx < active_stages.size(); ++stage_idx) {
+      const auto& stage = active_stages[stage_idx];
       size_t num_stage_blocks = stage.block_indices.size();
 
       std::vector<WeakForm*> stage_residuals;
@@ -126,8 +141,8 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
     //     or on the last iteration where a break has no effect) ---
     if (!exact_staggered_steps_ && max_staggered_iterations_ > 1 && iter < max_staggered_iterations_ - 1) {
       bool all_converged = true;
-      for (size_t s = 0; s < stages_.size(); ++s) {
-        const auto& stage = stages_[s];
+      for (size_t s = 0; s < active_stages.size(); ++s) {
+        const auto& stage = active_stages[s];
         size_t num_stage_blocks = stage.block_indices.size();
         std::vector<mfem::Vector> stage_residuals;
         for (size_t i = 0; i < num_stage_blocks; ++i) {
