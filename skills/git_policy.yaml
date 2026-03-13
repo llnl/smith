@@ -1,0 +1,92 @@
+# git_policy.yaml
+# Purpose: Global git safety rules for AI agents (Codex CLI). High-priority, always-loaded.
+
+metadata:
+  name: git_policy
+  description: "Git safety rules to prevent destructive history edits and accidental repo damage."
+  priority: high
+  scope: global  # applies to all languages / agents
+
+rules:
+  - id: disallow_reset_hard
+    title: "Disallow `git reset --hard`"
+    severity: critical
+    match_commands:
+      - "^git\\s+reset\\s+--hard"
+    rationale: "Hard reset changes working tree and index and can lose local work. Always require human approval and a backup."
+    action: block
+    enforcement:
+      - reply_message: "Blocked: 'git reset --hard' is disallowed by policy. Create a backup branch or request approval."
+
+  - id: disallow_force_push
+    title: "Disallow `git push --force` and equivalent"
+    severity: critical
+    match_commands:
+      - "^git\\s+push\\s+--force"
+      - "^git\\s+push\\s+-f"
+      - "git push --force-with-lease"
+    action: block
+    enforcement:
+      - reply_message: "Blocked: force-push is disallowed. Use a PR or coordinate with repo owners."
+
+  - id: disallow_delete_remote_branch
+    title: "Disallow deleting remote branches without approval"
+    severity: high
+    match_commands:
+      - "^git\\s+push\\s+origin\\s+:"
+      - "^git\\s+push\\s+--delete"
+    action: require_approval
+    enforcement:
+      - approval_prompt: "Attempted to delete remote branch. Provide human approval (reason + approver)."
+
+  - id: default_revert_policy
+    title: "Revert policy (configurable)"
+    severity: medium
+    match_commands:
+      - "^git\\s+revert"
+    action: conditional
+    enforcement:
+      - condition: "org_policy.restrict_revert == true"
+      - if_true:
+          - action: block
+          - reply_message: "git revert is blocked by org policy. Open a PR to revert instead."
+      - if_false:
+          - action: allow
+          - reply_message: "git revert is allowed but will be performed as a commit (history preserved)."
+
+  - id: require_corresponding_pr
+    title: "Require PR for non-trivial changes"
+    severity: medium
+    conditions:
+      - "detected_change_count > 5"
+      - "or files_modified include 'src/*' or 'lib/*'"
+    action: require_pr
+    enforcement:
+      - reply_message: "Changes are large: open a PR and request review before merging."
+
+  - id: audit_log
+    title: "Audit and log all git operations"
+    severity: info
+    action: audit
+    enforcement:
+      - log: true
+      - redact_sensitive: true
+
+exceptions:
+  - id: emergency_admin_override
+    description: "Allow specific approvers to bypass certain blocks (requires multi-party approval)."
+    allowed_commands:
+      - "^git\\s+reset\\s+--hard"
+      - "^git\\s+push\\s+--force"
+    require_approval_from:
+      - "team_lead"
+      - "repo_owner"
+
+examples:
+  - input: "git reset --hard origin/main"
+    result: "blocked: asks for human approval and suggests creating a backup branch"
+
+integration:
+  place: ".codex/skills/ or skills/"
+  recommend_preflight: true
+  recommended_enforcement_points: ["preflight", "execute-server", "pre-commit-hook"]
