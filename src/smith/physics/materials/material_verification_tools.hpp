@@ -56,7 +56,7 @@ auto uniaxial_stress_test(double t_max, size_t num_steps, const MaterialType mat
     du_dx[1][1] = epsilon_yy;
     du_dx[2][2] = epsilon_zz;
     auto state_copy = state;
-    auto stress = material(state_copy, du_dx, parameter_functions(t)...);
+    auto stress = material.pkStress(state_copy, dt, du_dx, parameter_functions(t)...);
     return tensor{{stress[1][1], stress[2][2]}};
   };
 
@@ -71,7 +71,8 @@ auto uniaxial_stress_test(double t_max, size_t num_steps, const MaterialType mat
     dudx[1][1] = epsilon_yy_and_zz[0];
     dudx[2][2] = epsilon_yy_and_zz[1];
 
-    auto stress = material(state, dudx, parameter_functions(t)...);
+    auto [stress, state_new] = material.update(state, dt, dudx, parameter_functions(t)...);
+    state = state_new;
     output_history.push_back(tuple{t, dudx, stress, state});
 
     t += dt;

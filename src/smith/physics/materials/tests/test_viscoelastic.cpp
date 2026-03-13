@@ -11,8 +11,11 @@
 
 #include "smith/physics/materials/viscoelastic.hpp"
 
-#include "gtest/gtest.h"
+#include <iostream>
+#include <fstream>
 
+#include "gtest/gtest.h"
+ 
 #include "smith/numerics/functional/tensor.hpp"
 #include "smith/physics/materials/material_verification_tools.hpp"
 #include "smith/infrastructure/application_manager.hpp"
@@ -34,27 +37,34 @@ TEST(ViscoelasticMaterial, Basic) {
     Viscoelastic material{.K_inf = K_inf, .G_inf = G_inf, .alpha_inf = alpha_inf,
       .G_0 = G_0, .eta_0 = eta_0, .theta_r = theta_r, .rho_r = rho_r};
     
-    constexpr double t_max = 10.0;
+    constexpr double max_strain = 0.1;
+    constexpr double strain_rate = 1.0e-1;
+    constexpr double t_max = 2.0*max_strain/strain_rate;
     size_t num_steps = 100;
-    auto strain_cycle = [](double t) {
+    auto applied_strain = [](double t) {
       if (t < 0.5*t_max) {
-        return t;
+        return strain_rate*t;
       } else {
-        return t_max - t;
+        return strain_rate*(t_max - t);
       }
     };
     
-    double t = 0;
-    const double dt = t_max / double(num_steps - 1);
     tensor<double, 9> internal_state{1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
-    tensor<double, 3, 3> dudX{{{0.015, 0, 0},
-                               {0.0, 0.0, 0.0},
-                               {0.0, 0.0, 0.0}}};
     double theta = 350.0;
+    auto temperature_cycle = [theta](double) { return theta; };
 
-    auto P = material.pkStress(dt, internal_state, dudX, theta);
-    std::cout << "P = \n" << P << "\n";
+    auto history = uniaxial_stress_test(t_max, num_steps, material, internal_state,
+                                        applied_strain, temperature_cycle);
     
+    std::ofstream file("viscoelastic_uniaxial.csv");
+    for (const auto& timestep : history) {
+      double t = get<0>(timestep);
+      tensor<double, 3, 3> disp_grad = get<1>(timestep);
+      tensor<double, 3, 3> stress = get<2>(timestep);
+      tensor<double, 9> isv = get<3>(timestep);
+      file << t << " " << disp_grad[0][0] << " " << stress[0][0] << " " << isv[0] << "\n";
+    }
+    file.close();
 }
 
 } // namespace smith

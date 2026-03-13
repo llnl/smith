@@ -10,7 +10,9 @@
  * @brief A finite deformation viscoelastic material model
  */
 
- #include "smith/numerics/functional/tensor.hpp"
+#include "smith/infrastructure/accelerator.hpp"
+#include "smith/numerics/functional/tensor.hpp"
+
 
 #pragma once
 
@@ -39,7 +41,7 @@ struct Viscoelastic {
   }
 
   template <typename T1, typename T2, typename T3>
-  SMITH_HOST_DEVICE auto update(double dt, const InternalState<T1>& Q, const Tensor<T2>& du_dX, T3 theta) const
+  SMITH_HOST_DEVICE auto update(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
   {
     auto P_inf = equilibrium_stress(du_dX, theta);
 
@@ -52,7 +54,7 @@ struct Viscoelastic {
     auto devM = 2.0*G_0*dev(Ee);
     auto M = devM;
     auto tau_bar = std::sqrt(0.5)*norm(devM);
-    auto denom = (tau_bar > 0)? (1.0/tau_bar) : 1.0;
+    auto denom = (tau_bar > 0)? (tau_bar) : (1.0 + tau_bar);
     auto N = 0.5*devM/denom;
     
     auto dg = tau_bar/(eta_0/dt + G_0);
@@ -71,16 +73,16 @@ struct Viscoelastic {
   }
 
   template <typename T1, typename T2, typename T3>
-  SMITH_HOST_DEVICE auto pkStress(double dt, const InternalState<T1>& Q, const Tensor<T2>& du_dX, T3 theta) const
+  SMITH_HOST_DEVICE auto pkStress(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
   {
-    auto [P, Q_new] = update(dt, Q, du_dX, theta);
+    auto [P, Q_new] = update(Q, dt, du_dX, theta);
     return P;
   }
 
   template <typename T1, typename T2, typename T3>
-  SMITH_HOST_DEVICE auto update_intenal_state(double dt, const InternalState<T1>& Q, const Tensor<T2>& du_dX, T3 theta) const
+  SMITH_HOST_DEVICE auto intenalState(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
   {
-    auto [P, Q_new] = update(dt, Q, du_dX, theta);
+    auto [P, Q_new] = update(Q, dt, du_dX, theta);
     return Q_new;
   }
 
