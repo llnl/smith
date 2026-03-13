@@ -11,7 +11,7 @@ bool abort_called = false;
 
 void testAbortHandler()
 {
-  abort_called = true;   // record abort instead of exiting
+  abort_called = true;  // record abort instead of exiting
 }
 
 using namespace mfem;
