@@ -604,6 +604,9 @@ auto solve_scalar_equation(const function& f, double x0, double lower_bound, dou
     if (fl > 0) {
       xl = upper_bound;
       xh = lower_bound;
+      double tmp = fl;
+      fl = fh;
+      fh = tmp;
     }
 
     // move initial guess if it is not between brackets
@@ -650,8 +653,10 @@ auto solve_scalar_equation(const function& f, double x0, double lower_bound, dou
       // maintain bracket on root
       if (fval < 0) {
         xl = x;
+        fl = R;
       } else {
         xh = x;
+        fh = R;
       }
 
       ++iterations;
