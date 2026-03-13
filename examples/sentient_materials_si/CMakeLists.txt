@@ -17,11 +17,29 @@ smith_add_executable(NAME       extended_thermomechanics
                      DEPENDS_ON smith
                      )
 
+smith_add_executable(NAME       iterative_extended_thermomechanics
+                     SOURCES    iterative_extended_thermomechanics.cpp
+                                iterative_extended_thermomechanics.hpp
+                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                     DEPENDS_ON smith
+                     )
+
+smith_add_executable(NAME       quasistaticsolid
+                     SOURCES    solid_mechanics_example.cpp
+                                quasistatic_solid.hpp
+                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                     DEPENDS_ON smith
+                     )
 install(
     FILES
         thermomechanics.cpp
+
         extended_thermomechanics.cpp
         extended_thermomechanics.hpp
+        iterative_extended_thermomechanics.cpp
+        iterative_extended_thermomechanics.hpp
+        solid_mechanics_example.cpp
+        quasistatic_solid.hpp
     DESTINATION
         examples/smith/sentient_materials_si
 )
@@ -32,5 +50,8 @@ if(SMITH_ENABLE_TESTS)
                            NUM_MPI_TASKS 1)
     smith_add_example_test(NAME          extended_thermomechanics
                            COMMAND       extended_thermomechanics
+                           NUM_MPI_TASKS 1)
+    smith_add_example_test(NAME          iterative_extended_thermomechanics
+                           COMMAND       iterative_extended_thermomechanics
                            NUM_MPI_TASKS 1)
 endif()
