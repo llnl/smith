@@ -24,7 +24,7 @@
 
 namespace smith {
 
-TEST(ViscoelasticMaterial, Basic) {
+TEST(ViscoelasticMaterial, Uniaxial) {
     double K_inf = 3.0e3;
     double G_inf = 500.0;
     double alpha_inf = 0.0;
@@ -71,6 +71,54 @@ TEST(ViscoelasticMaterial, Basic) {
       file << t << " " << disp_grad[0][0] << " " << stress[0][0] << " " << isv[0] << "\n";
     }
     file.close();
+}
+
+class TestViscoelasticModel : public ::testing::Test {
+ protected:
+  TestViscoelasticModel(): material{.K_inf = 3.0e3, .G_inf = 500.0,
+      .alpha_inf = 45e-6, .theta_sf = 300.0, .G_0 = 1.5e3, .eta_0 = 200.0,
+      .theta_r = 350.0, .C1 = 15.0, .C2 = 50.0, .rho_r = 1.1e3} {}
+
+  Viscoelastic material;
+  static constexpr int dim = 3;
+};
+
+TEST_F(TestViscoelasticModel, Symmetry) {
+  tensor Fv{{{1.13999899223343, -0.37663886065084, -0.01845954094274},
+             {0.23118557813617,  1.25824266214259,  0.36905241011185},
+             {0.12569218571529, -0.33628257758523,  0.57289115431496}}};
+
+  // The model expects volume-preserving inelastic distortion,
+  // so require this for the test.
+  ASSERT_NEAR(det(Fv), 1.0, 1e-14);
+
+  auto internal_state = make_tensor<dim*dim>([&Fv](int ij) {
+    int i = ij / 3;
+    int j = ij % 3;
+    return Fv[i][j];
+  });
+
+  tensor H{{{0.84410694508235, 0.04541258512666, 0.22498462569285},
+            {0.06438560513367, 0.01193894509204, 0.83425129331962},
+            {0.62563720341404, 0.76924029241284, 0.85235964292579}}};
+
+  double theta = 330.0;
+  double dt = 0.1;
+
+  auto stress = material.pkStress(internal_state, dt, make_dual(H), theta);
+  auto C = get_gradient(stress);
+
+  for (int i = 0; i < dim; i++) {
+    for (int j = 0; j < dim; j++) {
+      for (int k = 0; k < dim; k++) {
+        for (int l = 0; l < dim; l++) {
+          double rel = std::abs(C[i][j][k][l]);
+          rel = rel != 0? rel : 1.0;
+          EXPECT_NEAR(C[i][j][k][l], C[k][l][i][j], 1e-13*rel);
+        }
+      }
+    }
+  }
 }
 
 } // namespace smith
