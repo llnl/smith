@@ -28,14 +28,20 @@ TEST(ViscoelasticMaterial, Basic) {
     double K_inf = 3.0e3;
     double G_inf = 500.0;
     double alpha_inf = 0.0;
+    double theta_sf = 350.0;
+
     double G_0 = 1.5e3;
     double eta_0 = 200.0;
 
     double theta_r = 350.0;
+    double C1 = 15.0;
+    double C2 = 50.0;
+
     double rho_r = 1000.0;
 
-    Viscoelastic material{.K_inf = K_inf, .G_inf = G_inf, .alpha_inf = alpha_inf,
-      .G_0 = G_0, .eta_0 = eta_0, .theta_r = theta_r, .rho_r = rho_r};
+    Viscoelastic material{.K_inf = K_inf, .G_inf = G_inf,
+      .alpha_inf = alpha_inf, .theta_sf = theta_sf, .G_0 = G_0, .eta_0 = eta_0,
+      .theta_r = theta_r, .C1 = C1, .C2 = C2, .rho_r = rho_r};
     
     constexpr double max_strain = 0.1;
     constexpr double strain_rate = 1.0e-1;
