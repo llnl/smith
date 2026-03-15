@@ -149,8 +149,13 @@ std::vector<DifferentiableBlockSolver::FieldPtr> DifferentiableSolver::solve(
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
         }
-        block_jac_ = std::make_unique<mfem::BlockOperator>(block_offsets);
         matrix_of_jacs_ = jacobian_funcs(u_guesses);
+        if (num_rows == 1) {
+          auto& J = matrix_of_jacs_[0][0];
+          SLIC_ERROR_IF(!J, "Jacobian block (0,0) is null in single-block solve");
+          return *J;
+        }
+        block_jac_ = std::make_unique<mfem::BlockOperator>(block_offsets);
         for (int i = 0; i < num_rows; ++i) {
           for (int j = 0; j < num_rows; ++j) {
             auto& J = matrix_of_jacs_[static_cast<size_t>(i)][static_cast<size_t>(j)];

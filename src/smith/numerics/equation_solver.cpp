@@ -1020,9 +1020,9 @@ void SuperLUSolver::SetOperator(const mfem::Operator& op)
 
   // If it is, make a monolithic system from the underlying blocks
   if (block_operator) {
-    auto monolithic_mat = buildMonolithicMatrix(*block_operator);
+    monolithic_mat_ = buildMonolithicMatrix(*block_operator);
 
-    superlu_mat_ = std::make_unique<mfem::SuperLURowLocMatrix>(*monolithic_mat);
+    superlu_mat_ = std::make_unique<mfem::SuperLURowLocMatrix>(*monolithic_mat_);
   } else {
     // If this is not a block system, check that the input operator is a HypreParMatrix as expected
     auto* matrix = dynamic_cast<const mfem::HypreParMatrix*>(&op);
@@ -1052,9 +1052,9 @@ void StrumpackSolver::SetOperator(const mfem::Operator& op)
 
   // If it is, make a monolithic system from the underlying blocks
   if (block_operator) {
-    auto monolithic_mat = buildMonolithicMatrix(*block_operator);
+    monolithic_mat_ = buildMonolithicMatrix(*block_operator);
 
-    strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*monolithic_mat);
+    strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*monolithic_mat_);
   } else {
     // If this is not a block system, check that the input operator is a HypreParMatrix as expected
     auto* matrix = dynamic_cast<const mfem::HypreParMatrix*>(&op);

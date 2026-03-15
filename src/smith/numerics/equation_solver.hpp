@@ -190,6 +190,12 @@ class SuperLUSolver : public mfem::Solver {
   mutable std::unique_ptr<mfem::SuperLURowLocMatrix> superlu_mat_;
 
   /**
+   * @brief The owner of the monolithic matrix for the gradient, stored
+   * as a member variable for lifetime purposes
+   */
+  mutable std::unique_ptr<mfem::HypreParMatrix> monolithic_mat_;
+
+  /**
    * @brief The underlying MFEM-based SuperLU solver. It requires a special
    * SuperLU matrix type which we store in this object. This enables compatibility
    * with HypreParMatrix when used as an input.
@@ -241,6 +247,12 @@ class StrumpackSolver : public mfem::Solver {
    * as a member variable for lifetime purposes
    */
   mutable std::unique_ptr<mfem::STRUMPACKRowLocMatrix> strumpack_mat_;
+
+  /**
+   * @brief The owner of the monolithic matrix for the gradient, stored
+   * as a member variable for lifetime purposes
+   */
+  mutable std::unique_ptr<mfem::HypreParMatrix> monolithic_mat_;
 
   /**
    * @brief The underlying MFEM-based Strumpack solver. It requires a special

@@ -14,7 +14,7 @@
 
 namespace smith {
 
-LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::CG,
+LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::SuperLU,
                                          .preconditioner = Preconditioner::None,
                                          .relative_tol = 1e-12,
                                          .absolute_tol = 1e-12,
@@ -92,7 +92,7 @@ struct StrainNormEvolution {
   {
     using std::sqrt;
     auto epsilon = sym(deriv_u);
-    auto eps_norm = sqrt(inner(epsilon, epsilon));
+    auto eps_norm = sqrt(inner(epsilon, epsilon) + 1e-16);
 
     // ODE: isv_dot = (1 - isv) * eps_norm
     return isv_dot - (1.0 - isv) * eps_norm;
