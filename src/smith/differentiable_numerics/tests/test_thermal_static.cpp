@@ -49,7 +49,7 @@ struct ThermalStaticFixture : public testing::Test {
     solver_options.relative_tol = 1e-12;
     solver_options.force_monolithic = true;
     auto linear_options = LinearSolverOptions();
-    auto block_solver = buildDifferentiableNonlinearBlockSolver(solver_options, linear_options, *mesh);
+    auto block_solver = buildDifferentiableSolver(solver_options, linear_options, *mesh);
 
     auto sys_solver = std::make_shared<SystemSolver>(block_solver);
     auto thermal_system = buildThermalSystem<2, temp_order>(mesh, sys_solver);

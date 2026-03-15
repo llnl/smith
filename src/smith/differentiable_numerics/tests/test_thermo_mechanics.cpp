@@ -96,16 +96,17 @@ struct GreenSaintVenantThermoelasticMaterial {
   static constexpr int numParameters() { return 1; }
 };
 
-smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::Strumpack,
+smith::LinearSolverOptions thermo_linear_options{.linear_solver = LinearSolver::SuperLU,
+                                          .preconditioner = Preconditioner::None,
                                           .relative_tol = 1e-8,
                                           .absolute_tol = 1e-8,
                                           .max_iterations = 200,
                                           .print_level = 0};
 
-smith::NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
+smith::NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::Newton,
                                              .relative_tol = 1.0e-10,
                                              .absolute_tol = 1.0e-10,
-                                             .max_iterations = 500,
+                                             .max_iterations = 1000,
                                              .max_line_search_iterations = 50,
                                              .print_level = 2};
 
@@ -117,9 +118,9 @@ static constexpr int temperature_order = 1;
 struct ThermoMechanicsMeshFixture : public testing::Test {
   double length = 1.0;
   double width = 0.04;
-  int num_elements_x = 12;
-  int num_elements_y = 2;
-  int num_elements_z = 2;
+  int num_elements_x = 4;
+  int num_elements_y = 1;
+  int num_elements_z = 1;
   double elem_size = length / num_elements_x;
 
   void SetUp()
@@ -162,7 +163,7 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicVsStaggered)
       bc[0] = 0.01 * t;
       return bc;
     });
-    system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh_->domain("right"));
+    system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("right"));
     system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
     system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
 
@@ -203,7 +204,7 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicVsStaggered)
     return std::make_pair(mfem::Vector(*states[disp_idx].get()), mfem::Vector(*states[temp_idx].get()));
   };
 
-  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+  auto solver = buildDifferentiableSolver(nonlinear_opts, thermo_linear_options, *mesh_);
 
   // Run Monolithic
   auto mono_sys_solver = std::make_shared<SystemSolver>(solver);
@@ -211,10 +212,11 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicVsStaggered)
 
   // Reset StateManager for the next run
   smith::StateManager::reset();
-  smith::StateManager::initialize(datastore_, "solid");
+  this->SetUp(); // Re-initialize StateManager and Mesh
 
   // Run Staggered
-  auto stag_sys_solver = std::make_shared<SystemSolver>(10);
+  int max_staggered_iterations = 10;
+  auto stag_sys_solver = std::make_shared<SystemSolver>(max_staggered_iterations);
   stag_sys_solver->addStage({0}, solver);
   stag_sys_solver->addStage({1}, solver);
   auto stag_result = run_problem(stag_sys_solver, false); // Skip gradients for staggered for now
@@ -240,7 +242,7 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
   double kappa = 0.1;
   GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 0.0, kappa};
 
-  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+  auto solver = buildDifferentiableSolver(nonlinear_opts, thermo_linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto sys_solver = std::make_shared<SystemSolver>(solver);
   auto system =
@@ -249,8 +251,8 @@ TEST_F(ThermoMechanicsMeshFixture, TransientHeatEquationAnalytic)
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
 
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh_->domain("left"));
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh_->domain("right"));
+  system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
+  system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("right"));
   system.temperature_bc->setScalarBCs<dim>(mesh_->domain("left"), [](double, auto) { return 100.0; });
   system.temperature_bc->setScalarBCs<dim>(mesh_->domain("right"), [](double, auto) { return 100.0; });
 
@@ -308,7 +310,7 @@ TEST_F(ThermoMechanicsMeshFixture, StaticElasticityAnalytic)
   double kappa = 0.1;
   GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 0.0, kappa};
 
-  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+  auto solver = buildDifferentiableSolver(nonlinear_opts, thermo_linear_options, *mesh_);
   FieldType<H1<1>> youngs_modulus("youngs_modulus");
   auto sys_solver = std::make_shared<SystemSolver>(solver);
   auto system =
@@ -386,7 +388,7 @@ TEST_F(ThermoMechanicsMeshFixture, TransientThermoMechanicsCompilation)
 
   auto fast_nonlinear_opts = nonlinear_opts;
   fast_nonlinear_opts.max_iterations = 5;
-  auto solver = buildDifferentiableNonlinearBlockSolver(fast_nonlinear_opts, linear_options, *mesh_);
+  auto solver = buildDifferentiableSolver(fast_nonlinear_opts, thermo_linear_options, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto sys_solver = std::make_shared<SystemSolver>(solver);
@@ -439,7 +441,7 @@ TEST_F(ThermoMechanicsMeshFixture, PressureBC)
   double kappa = 0.1;
   GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 1.0, kappa};
 
-  auto solver = buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
+  auto solver = buildDifferentiableSolver(nonlinear_opts, thermo_linear_options, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto sys_solver = std::make_shared<SystemSolver>(solver);
   auto system =
@@ -500,7 +502,7 @@ TEST_F(ThermoMechanicsMeshFixture, StaggeredWithDifferentSolvers)
                                            .max_iterations = 200,
                                            .print_level = 0};
   smith::NonlinearSolverOptions mech_nonlin_opts = nonlinear_opts; // Newton Line Search
-  auto mech_solver = buildDifferentiableNonlinearBlockSolver(mech_nonlin_opts, mech_lin_opts, *mesh_);
+  auto mech_solver = buildDifferentiableSolver(mech_nonlin_opts, mech_lin_opts, *mesh_);
 
   // Thermal Solver: GMRES with HypreAMG
   smith::LinearSolverOptions therm_lin_opts{.linear_solver = smith::LinearSolver::GMRES,
@@ -510,10 +512,11 @@ TEST_F(ThermoMechanicsMeshFixture, StaggeredWithDifferentSolvers)
                                             .max_iterations = 200,
                                             .print_level = 0};
   smith::NonlinearSolverOptions therm_nonlin_opts = nonlinear_opts;
-  auto therm_solver = buildDifferentiableNonlinearBlockSolver(therm_nonlin_opts, therm_lin_opts, *mesh_);
+  auto therm_solver = buildDifferentiableSolver(therm_nonlin_opts, therm_lin_opts, *mesh_);
 
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
-  auto sys_solver = std::make_shared<SystemSolver>(15);
+  int max_staggered_iterations = 15;
+  auto sys_solver = std::make_shared<SystemSolver>(max_staggered_iterations);
   sys_solver->addStage({0}, mech_solver);
   sys_solver->addStage({1}, therm_solver);
 

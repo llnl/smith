@@ -41,7 +41,7 @@ TEST(DifferentiableBlockSolverTest, ConvergenceChecks)
   double rel_tol = 1e-2;
 
   auto mock_solver = std::make_unique<MockEquationSolver>(comm);
-  NonlinearDifferentiableBlockSolver solver(std::move(mock_solver), comm, abs_tol, rel_tol);
+  DifferentiableSolver solver(std::move(mock_solver), comm, abs_tol, rel_tol);
 
   // Create a synthetic vector
   // Local size = 2 for both ranks, so global size = 4

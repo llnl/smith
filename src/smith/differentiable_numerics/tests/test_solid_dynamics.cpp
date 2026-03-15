@@ -81,7 +81,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   SMITH_MARK_FUNCTION;
 
   auto d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+      buildDifferentiableSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   auto system_solver = std::make_shared<SystemSolver>(d_solid_nonlinear_solver);
   auto system = buildSolidDynamicsSystem<dim, order>(
@@ -178,7 +178,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh)
 {
   std::shared_ptr<DifferentiableBlockSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+      buildDifferentiableSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 

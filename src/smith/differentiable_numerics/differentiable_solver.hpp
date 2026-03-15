@@ -87,13 +87,13 @@ class DifferentiableBlockSolver {
 
 /// @brief Implementation of the DifferentiableBlockSolver interface for the special case of nonlinear solves with
 /// linear adjoint solves
-class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
+class DifferentiableSolver : public DifferentiableBlockSolver {
  public:
   /// @brief Construct from a nonlinear equation solver.
   /// @note The caller is responsible for choosing inner vs outer tolerance when using this
-  /// constructor directly.  The builder function buildDifferentiableNonlinearBlockSolver
+  /// constructor directly.  The builder function buildDifferentiableSolver
   /// applies a 0.6x inner-tolerance factor automatically.
-  NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol = 1e-12,
+  DifferentiableSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol = 1e-12,
                                      double rel_tol = 1e-8);
 
   /// @overload
@@ -134,7 +134,7 @@ class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
 /// @param nonlinear_opts nonlinear options struct
 /// @param linear_opts linear options struct
 /// @param mesh mesh
-std::shared_ptr<NonlinearDifferentiableBlockSolver> buildDifferentiableNonlinearBlockSolver(
+std::shared_ptr<DifferentiableSolver> buildDifferentiableSolver(
     NonlinearSolverOptions nonlinear_opts, LinearSolverOptions linear_opts, const smith::Mesh& mesh);
 
 }  // namespace smith

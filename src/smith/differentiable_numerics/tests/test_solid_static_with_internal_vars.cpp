@@ -14,8 +14,8 @@
 
 namespace smith {
 
-LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::Strumpack,
-                                         .preconditioner = Preconditioner::HypreJacobi,
+LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::CG,
+                                         .preconditioner = Preconditioner::None,
                                          .relative_tol = 1e-12,
                                          .absolute_tol = 1e-12,
                                          .max_iterations = 2000,
@@ -101,7 +101,7 @@ struct StrainNormEvolution {
 
 TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
 {
-  auto solver = buildDifferentiableNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto solver = buildDifferentiableSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   auto sys_solver = std::make_shared<SystemSolver>(solver);
   auto system = buildSolidStaticsWithL2StateSystem<dim, disp_order, StateSpace>(mesh, sys_solver,
