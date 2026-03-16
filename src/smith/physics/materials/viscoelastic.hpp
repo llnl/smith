@@ -23,16 +23,12 @@ struct Viscoelastic {
   template <typename T> using InternalState = tensor<T, dim*dim>;  ///< Fv
   template <typename T> using Tensor = tensor<T, dim, dim>;
 
-  /**
-   * Stress due to the equilibrium branch.
-   *
-   * The Hencky model is used here.
-   */
+  /// @brief Stress due to the equilibrium branch
   template <typename T1, typename T2>
   SMITH_HOST_DEVICE auto equilibrium_stress(const Tensor<T1>& H, T2 theta) const
   {
     // The spatial version of Hencky elasticity is used as it avoids the need
-    // to compute the rotation tensor.
+    // to compute the rotation tensor to pull back to the Piola stress
     auto BmI = H + transpose(H) + H*transpose(H);
     auto E = 0.5*logIp_symm(BmI);
     auto Em = E - alpha_inf*(theta - theta_sf)*Identity<dim>();
@@ -44,19 +40,18 @@ struct Viscoelastic {
     return M*inv(transpose(F));
   }
 
-  /**
-   * WLF shift factor for time-temperature superposition 
-   */
+
+  /// @brief WLF shift factor for time-temperature superposition 
   template <typename T>
   SMITH_HOST_DEVICE auto shift_factor(T theta) const {
     auto dT = theta - theta_r;
+    // The WLF equation makes sense only or dT > -C2, otherwise results are not physical
+    SLIC_WARNING_IF(dT < -C2, "Temperature difference from reference is out of range for WLF shift");
     using std::pow;
     return pow(10.0, -C1*dT/(C2 + dT));
   }
 
-  /**
-   * Compute the current Piola stress and the new viscous deformation tensor
-   */
+  /// @brief Compute updated Piola stress and viscous deformation tensor
   template <typename T1, typename T2, typename T3>
   SMITH_HOST_DEVICE auto update(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
   {
@@ -65,12 +60,13 @@ struct Viscoelastic {
     // Compute the stress in the spring-dashpot branch.
     // Possible generalizations:
     // - add more branches, giving more distinct relaxation time scales
-    // - add spring-dashpot branch(es) for the volumetric response
+    // - add spring-dashpot branch(es) for the volumetric response, and a glassy thermal expansion term
     // - make the viscosity-strain rate relationship nonlinear, such as a power law
 
     // Reshape the flattened inelastic distortion back into a tensor
     auto Fv = make_tensor<dim, dim>([&Q](int i, int j) { return Q[dim*i + j]; });
     auto F = du_dX + Identity<dim>();
+    // Trial elastic values
     auto Fe = F*inv(Fv);
     auto Ce = transpose(Fe)*Fe;
     auto Ee = 0.5*log_symm(Ce);
@@ -88,7 +84,7 @@ struct Viscoelastic {
     // If the viscosity relation is made nonlinear, this explicit relation will
     // be replaced with a nonlinear solve.
     auto dg = tau_bar/(a*eta_0/dt + G_0);
-    // update elastic predictor stress
+    // update elastic trial stress
     M -= 2*G_0*dg*N;
     // update inelastic distortion tensor
     auto Fv_new = exp_symm(dg*N)*Fv;
@@ -96,7 +92,7 @@ struct Viscoelastic {
     Fe = F*inv(Fv_new);
     auto P_0 = transpose(inv(Fv_new)*M*inv(Fe));
 
-    // Flatten the inelastic distortion tensor
+    // Flatten the inelastic distortion tensor for packing into the global array
     auto internal_state_new = make_tensor<dim*dim>(
       [&Fv_new](int ij) { 
         int i = ij / dim;
@@ -107,6 +103,7 @@ struct Viscoelastic {
     return make_tuple(P_inf + P_0, internal_state_new);
   }
 
+  /// @brief Return updated Piola stress
   template <typename T1, typename T2, typename T3>
   SMITH_HOST_DEVICE auto pkStress(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
   {
@@ -114,6 +111,7 @@ struct Viscoelastic {
     return P;
   }
 
+  /// @brief Return updated internal state variables
   template <typename T1, typename T2, typename T3>
   SMITH_HOST_DEVICE auto intenalState(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
   {
