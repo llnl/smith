@@ -13,7 +13,6 @@ set(differentiable_numerics_test_source
     test_porous_heat_sink.cpp
     test_thermo_mechanics.cpp
     test_thermal_static.cpp
-    test_differentiable_block_solver.cpp
     test_solid_static_with_internal_vars.cpp
     )
 

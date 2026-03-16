@@ -138,28 +138,6 @@ else()
         TREAT_INCLUDES_AS_SYSTEM ON
         EXPORTABLE    ON)
 
-    # Ensure Lapack is in the RPATH on Apple since we stripped literal rpaths
-    # or CMake might miss it from the raw -L string in MFEM_LIBRARIES.
-    # Note: MFEM_LIBRARIES may contain space-separated strings.
-    if (APPLE)
-        set(_extra_rpaths "")
-        # First ensure we iterate over all parts if separated by space or semicolon
-        set(_mfem_libs_list "${MFEM_LIBRARIES}")
-        separate_arguments(_mfem_libs_list)
-        foreach(_flag ${_mfem_libs_list})
-            if ("${_flag}" MATCHES "^-L(.*lapack.*)$")
-                list(APPEND _extra_rpaths "${CMAKE_MATCH_1}")
-            endif()
-        endforeach()
-        if (_extra_rpaths)
-            list(REMOVE_DUPLICATES _extra_rpaths)
-            list(APPEND CMAKE_BUILD_RPATH ${_extra_rpaths})
-            list(APPEND CMAKE_INSTALL_RPATH ${_extra_rpaths})
-            set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" CACHE STRING "" FORCE)
-            set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH}" CACHE STRING "" FORCE)
-        endif()
-    endif()
-
     install(TARGETS          mfem
         EXPORT               smith-targets
         DESTINATION          lib
