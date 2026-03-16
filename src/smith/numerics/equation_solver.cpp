@@ -1309,8 +1309,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
              preconditioner == Preconditioner::BlockTriangularUpper ||
              preconditioner == Preconditioner::BlockTriangularSymmetric ||
              preconditioner == Preconditioner::BlockSchurDiagonal ||
-             preconditioner == Preconditioner::BlockSchurLower ||
-             preconditioner == Preconditioner::BlockSchurUpper ||
+             preconditioner == Preconditioner::BlockSchurLower || preconditioner == Preconditioner::BlockSchurUpper ||
              preconditioner == Preconditioner::BlockSchurFull) {
     std::vector<std::unique_ptr<mfem::Solver>> inner_solvers;
     for (const auto& opt : linear_opts.block_options) {
@@ -1321,19 +1320,26 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
     if (preconditioner == Preconditioner::BlockDiagonal) {
       preconditioner_solver = std::make_unique<BlockDiagonalPreconditioner>(std::move(inner_solvers));
     } else if (preconditioner == Preconditioner::BlockTriangularLower) {
-      preconditioner_solver = std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Lower);
+      preconditioner_solver =
+          std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Lower);
     } else if (preconditioner == Preconditioner::BlockTriangularUpper) {
-      preconditioner_solver = std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Upper);
+      preconditioner_solver =
+          std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Upper);
     } else if (preconditioner == Preconditioner::BlockTriangularSymmetric) {
-      preconditioner_solver = std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Symmetric);
+      preconditioner_solver =
+          std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Symmetric);
     } else if (preconditioner == Preconditioner::BlockSchurDiagonal) {
-      preconditioner_solver = std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Diagonal);
+      preconditioner_solver =
+          std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Diagonal);
     } else if (preconditioner == Preconditioner::BlockSchurLower) {
-      preconditioner_solver = std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Lower);
+      preconditioner_solver =
+          std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Lower);
     } else if (preconditioner == Preconditioner::BlockSchurUpper) {
-      preconditioner_solver = std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Upper);
+      preconditioner_solver =
+          std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Upper);
     } else if (preconditioner == Preconditioner::BlockSchurFull) {
-      preconditioner_solver = std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Full);
+      preconditioner_solver =
+          std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Full);
     }
   } else {
     SLIC_ERROR_ROOT_IF(preconditioner != Preconditioner::None, "Unknown preconditioner type requested");

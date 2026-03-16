@@ -69,10 +69,10 @@ class SystemSolver {
                                 const std::vector<const BoundaryConditionManager*>& bc_managers) const;
 
  private:
-  int max_staggered_iterations_;  ///< Maximum number of staggered iterations.
-  bool exact_staggered_steps_;    ///< If true, no early-exit convergence check.
-  double relaxation_factor_ = 1.0; ///< Relaxation factor for staggered updates.
-  std::vector<Stage> stages_;     ///< Solver stages for the staggered iterations.
+  int max_staggered_iterations_;    ///< Maximum number of staggered iterations.
+  bool exact_staggered_steps_;      ///< If true, no early-exit convergence check.
+  double relaxation_factor_ = 1.0;  ///< Relaxation factor for staggered updates.
+  std::vector<Stage> stages_;       ///< Solver stages for the staggered iterations.
 };
 
 }  // namespace smith

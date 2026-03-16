@@ -144,7 +144,8 @@ struct MeshFixture : public testing::Test {
     params_ = {density0};
     std::vector<smith::FieldState> states{disp, velo, accel};
 
-    std::vector<const mfem::ParFiniteElementSpace*> trial_spaces = {&disp.get()->space(), &disp.get()->space(), &disp.get()->space(), &density0.get()->space()};
+    std::vector<const mfem::ParFiniteElementSpace*> trial_spaces = {&disp.get()->space(), &disp.get()->space(),
+                                                                    &disp.get()->space(), &density0.get()->space()};
     auto solid_mechanics_residual = std::make_shared<smith::TimeDiscretizedWeakForm<
         dim, VectorSpace, smith::Parameters<VectorSpace, VectorSpace, VectorSpace, DensitySpace>>>(
         physics_name, mesh_, disp.get()->space(), trial_spaces);
@@ -154,12 +155,12 @@ struct MeshFixture : public testing::Test {
     mat.K = 1.0;
     mat.G = 0.5;
 
-    solid_mechanics_residual->addBodyIntegral(mesh_->entireBodyName(),
-      [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto /*density*/) {
-        typename SolidMaterial::State state;
-        auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u));
-        return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(), pk_stress};
-      });
+    solid_mechanics_residual->addBodyIntegral(
+        mesh_->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto /*density*/) {
+          typename SolidMaterial::State state;
+          auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u));
+          return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(), pk_stress};
+        });
 
     solid_mechanics_residual->addBodySource(smith::DependsOn<>{}, mesh_->entireBodyName(), [](auto /*t_info*/, auto X) {
       auto b = 0.0 * X;

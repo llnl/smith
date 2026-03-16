@@ -63,8 +63,8 @@ void initializeSolver(mfem::Solver* mfem_solver, const smith::FiniteElementState
 #endif
 }
 
-DifferentiableSolver::DifferentiableSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm,
-                                                       double abs_tol, double rel_tol)
+DifferentiableSolver::DifferentiableSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol,
+                                           double rel_tol)
     : nonlinear_solver_(std::move(s)), comm_(comm), abs_tol_(abs_tol), rel_tol_(rel_tol)
 {
 }
@@ -77,7 +77,7 @@ void DifferentiableSolver::completeSetup(const std::vector<FieldT>&)
 void DifferentiableSolver::resetConvergenceState() const { initial_residual_norm_.reset(); }
 
 bool DifferentiableSolver::checkConvergence(double tolerance_multiplier,
-                                                          const std::vector<mfem::Vector>& residuals) const
+                                            const std::vector<mfem::Vector>& residuals) const
 {
   double r_norm_sq = 0.0;
   for (const auto& r : residuals) {
@@ -160,9 +160,10 @@ std::vector<DifferentiableBlockSolver::FieldPtr> DifferentiableSolver::solve(
           for (int j = 0; j < num_rows; ++j) {
             auto& J = matrix_of_jacs_[static_cast<size_t>(i)][static_cast<size_t>(j)];
             if (J) {
-              int row_size = block_offsets[i+1] - block_offsets[i];
-              int col_size = block_offsets[j+1] - block_offsets[j];
-              SLIC_INFO_ROOT("SetBlock(" << i << ", " << j << "): expected " << row_size << "x" << col_size << ", got " << J->NumRows() << "x" << J->NumCols());
+              int row_size = block_offsets[i + 1] - block_offsets[i];
+              int col_size = block_offsets[j + 1] - block_offsets[j];
+              SLIC_INFO_ROOT("SetBlock(" << i << ", " << j << "): expected " << row_size << "x" << col_size << ", got "
+                                         << J->NumRows() << "x" << J->NumCols());
               block_jac_->SetBlock(i, j, J.get());
             }
           }
@@ -235,8 +236,9 @@ std::vector<DifferentiableBlockSolver::FieldPtr> DifferentiableSolver::solveAdjo
   return u_duals;
 }
 
-std::shared_ptr<DifferentiableSolver> buildDifferentiableSolver(
-    NonlinearSolverOptions nonlinear_opts, LinearSolverOptions linear_opts, const smith::Mesh& mesh)
+std::shared_ptr<DifferentiableSolver> buildDifferentiableSolver(NonlinearSolverOptions nonlinear_opts,
+                                                                LinearSolverOptions linear_opts,
+                                                                const smith::Mesh& mesh)
 {
   // The inner solver is configured to a stricter tolerance (0.6x) so that after each sub-system solve
   // in a staggered iteration, residuals have sufficient margin below the stage's target tolerance.
@@ -247,8 +249,7 @@ std::shared_ptr<DifferentiableSolver> buildDifferentiableSolver(
   inner_opts.absolute_tol = inner_tol_factor * outer_abs_tol;
   inner_opts.relative_tol = inner_tol_factor * outer_rel_tol;
   auto solid_solver = std::make_unique<EquationSolver>(inner_opts, linear_opts, mesh.getComm());
-  return std::make_shared<DifferentiableSolver>(std::move(solid_solver), mesh.getComm(), outer_abs_tol,
-                                                               outer_rel_tol);
+  return std::make_shared<DifferentiableSolver>(std::move(solid_solver), mesh.getComm(), outer_abs_tol, outer_rel_tol);
 }
 
 }  // namespace smith

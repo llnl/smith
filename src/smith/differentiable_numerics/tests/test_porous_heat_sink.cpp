@@ -227,13 +227,15 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
     default_linear_options.block_options.push_back(iter_solver_options);
     default_linear_options.block_options.push_back(iter_solver_options);
   } else if (test_params.solver_type == BlockSolverType::BoomerAMG) {
-    smith::LinearSolverOptions amg_solver_options = {.linear_solver = smith::LinearSolver::GMRES, // Not quite exact but BoomerAMG isn't a direct LinearSolver enum type without preconditioner wrapper?
-                                                     .preconditioner = smith::Preconditioner::HypreAMG};
+    smith::LinearSolverOptions amg_solver_options = {
+        .linear_solver = smith::LinearSolver::GMRES,  // Not quite exact but BoomerAMG isn't a direct LinearSolver enum
+                                                      // type without preconditioner wrapper?
+        .preconditioner = smith::Preconditioner::HypreAMG};
     // Wait, the previous test constructed mfem::HypreBoomerAMG natively.
     // Let's use CG + AMG here.
     amg_solver_options.linear_solver = smith::LinearSolver::CG;
     amg_solver_options.preconditioner = smith::Preconditioner::HypreAMG;
-    amg_solver_options.max_iterations = 1; // Since it's a preconditioner-only analog
+    amg_solver_options.max_iterations = 1;  // Since it's a preconditioner-only analog
     default_linear_options.block_options.push_back(amg_solver_options);
     default_linear_options.block_options.push_back(amg_solver_options);
   }

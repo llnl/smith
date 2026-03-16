@@ -5,9 +5,7 @@
 namespace smith {
 
 BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers)
-    : num_blocks_(static_cast<int>(solvers.size())),
-      block_jacobian_(nullptr),
-      mfem_solvers_(std::move(solvers))
+    : num_blocks_(static_cast<int>(solvers.size())), block_jacobian_(nullptr), mfem_solvers_(std::move(solvers))
 {
 }
 
@@ -175,9 +173,7 @@ BlockTriangularPreconditioner::~BlockTriangularPreconditioner() {}
 
 BlockSchurPreconditioner::BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                                    BlockSchurType type)
-    : block_jacobian_(nullptr),
-      mfem_solvers_(std::move(solvers)),
-      type_(type)
+    : block_jacobian_(nullptr), mfem_solvers_(std::move(solvers)), type_(type)
 {
 }
 

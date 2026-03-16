@@ -16,7 +16,8 @@ class SolverWithPreconditioner : public mfem::Solver {
 
   virtual void Mult(const mfem::Vector& in, mfem::Vector& out) const { solver_->Mult(in, out); }
 
-  virtual void SetOperator(const mfem::Operator& op) {
+  virtual void SetOperator(const mfem::Operator& op)
+  {
     height = op.Height();
     width = op.Width();
     solver_->SetOperator(op);

@@ -80,8 +80,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;
 
-  auto d_solid_nonlinear_solver =
-      buildDifferentiableSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto d_solid_nonlinear_solver = buildDifferentiableSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   auto system_solver = std::make_shared<SystemSolver>(d_solid_nonlinear_solver);
   auto system = buildSolidDynamicsSystem<dim, order>(
