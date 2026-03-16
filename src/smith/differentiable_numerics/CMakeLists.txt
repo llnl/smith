@@ -39,8 +39,11 @@ set(differentiable_numerics_headers
     paraview_writer.hpp
     multiphysics_time_integrator.hpp
     solid_dynamics_system.hpp
+    solid_statics_with_internal_vars_system.hpp
+    thermal_system.hpp
     thermo_mechanics_system.hpp
     system_base.hpp
+    differentiable_test_utils.hpp
     )
 
 set(differentiable_numerics_depends
