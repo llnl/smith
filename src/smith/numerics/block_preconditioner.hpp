@@ -7,15 +7,28 @@
 
 namespace smith {
 
+/**
+ * @brief Combine a solver with a (stored) preconditioner.
+ *
+ * Utility wrapper that keeps a preconditioner alive alongside a solver.
+ */
 class SolverWithPreconditioner : public mfem::Solver {
  public:
+  /**
+   * @brief Construct a solver wrapper.
+   *
+   * @param solver The solver to apply in Mult().
+   * @param preconditioner Preconditioner object to keep alive.
+   */
   SolverWithPreconditioner(std::unique_ptr<mfem::Solver> solver, std::unique_ptr<mfem::Solver> preconditioner)
       : solver_(std::move(solver)), preconditioner_(std::move(preconditioner))
   {
   }
 
+  /// Apply the wrapped solver.
   virtual void Mult(const mfem::Vector& in, mfem::Vector& out) const { solver_->Mult(in, out); }
 
+  /// Set the operator on the wrapped solver.
   virtual void SetOperator(const mfem::Operator& op)
   {
     height = op.Height();
@@ -45,7 +58,6 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
   /**
    * @brief Construct a new N by N block diagonal preconditioner.
    *
-   * @param offsets Offsets describing the block layout.
    * @param solvers One solver per block (size must match number of blocks).
    */
   BlockDiagonalPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers);
@@ -110,7 +122,6 @@ class BlockTriangularPreconditioner : public mfem::Solver {
   /**
    * @brief Construct a new nxn block triangular preconditioner.
    *
-   * @param offsets Offsets describing the block layout.
    * @param solvers One solver per diagonal block (size must match number of blocks).
    * @param type Sweep type (lower, upper, or symmetric).
    */
@@ -192,7 +203,6 @@ class BlockSchurPreconditioner : public mfem::Solver {
   /**
    * @brief Construct a new 2x2 block Schur complement preconditioner.
    *
-   * @param offsets Offsets describing the 2-block layout.
    * @param solvers Two solvers, for $ A_{11} $ and the Schur complement approximation.
    * @param type Preconditioner variant (diagonal, lower, upper, or full).
    */
