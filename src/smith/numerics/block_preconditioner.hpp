@@ -6,7 +6,7 @@
 
 namespace smith {
 
-using BlockOverride = std::pair<int, std::shared_ptr<const mfem::Operator>>;
+using BlockOverride = std::pair<int, std::unique_ptr<const mfem::Operator>>;
 
 /**
  * @class BlockDiagonalPreconditioner
@@ -21,7 +21,7 @@ using BlockOverride = std::pair<int, std::shared_ptr<const mfem::Operator>>;
 class BlockDiagonalPreconditioner : public mfem::Solver {
  public:
   /**
-   * @brief Construct a new nxn block diagonal preconditioner.
+   * @brief Construct a new N by N block diagonal preconditioner.
    *
    * @param offsets Offsets describing the block layout.
    * @param solvers One solver per block (size must match number of blocks).
@@ -51,7 +51,7 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
   mfem::Array<int>& block_offsets_;
 
   // Number of blocks
-  const int nblocks_;
+  const int num_blocks_;
 
   // Jacobian view for block access
   const mfem::BlockOperator* block_jacobian_;
@@ -62,8 +62,8 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
   // mfem solvers for each block
   mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 
-  // size nblocks_, nullptr means "use Jacobian diagonal block"
-  std::vector<std::shared_ptr<const mfem::Operator>> block_op_overrides_;
+  // size num_blocks_, nullptr means "use Jacobian diagonal block"
+  std::vector<std::unique_ptr<const mfem::Operator>> block_op_overrides_;
 };
 
 /**
@@ -122,7 +122,7 @@ class BlockTriangularPreconditioner : public mfem::Solver {
   mfem::Array<int>& block_offsets_;
 
   // Number of blocks
-  const int nblocks_;
+  const int num_blocks_;
 
   // Jacobian view for block access
   const mfem::BlockOperator* block_jacobian_;
@@ -149,8 +149,8 @@ class BlockTriangularPreconditioner : public mfem::Solver {
    */
   void UpperSweep(const mfem::Vector& in, mfem::Vector& out) const;
 
-  // size nblocks_, nullptr means "use Jacobian diagonal block"
-  std::vector<std::shared_ptr<const mfem::Operator>> block_op_overrides_;
+  // size num_blocks_, nullptr means "use Jacobian diagonal block"
+  std::vector<std::unique_ptr<const mfem::Operator>> block_op_overrides_;
 };
 
 /**
@@ -229,7 +229,7 @@ class BlockSchurPreconditioner : public mfem::Solver {
   // Views of the linearized Jacobian blocks
   const mfem::Operator *A_12_, *A_21_;
 
-  const mfem::Operator* S_approx_;
+  mutable std::unique_ptr<const mfem::Operator> S_approx_;
 
   BlockSchurType type_;
 
@@ -251,8 +251,8 @@ class BlockSchurPreconditioner : public mfem::Solver {
    */
   void UpperBlock(const mfem::Vector& in, mfem::Vector& out) const;
 
-  // size nblocks_, nullptr means "use Jacobian diagonal block"
-  std::vector<std::shared_ptr<const mfem::Operator>> block_op_overrides_;
+  // size num_blocks_, nullptr means "use Jacobian diagonal block"
+  std::vector<std::unique_ptr<const mfem::Operator>> block_op_overrides_;
 
   mfem::HypreParMatrix* BuildSchurDiagApprox_(const mfem::HypreParMatrix& A11, const mfem::HypreParMatrix& A12,
                                               const mfem::HypreParMatrix& A21, const mfem::HypreParMatrix& A22) const;

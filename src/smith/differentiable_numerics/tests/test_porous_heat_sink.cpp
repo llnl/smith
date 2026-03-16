@@ -306,13 +306,16 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
       break;
     case BlockPrecondType::SchurFullCustom:
       std::vector<double> jacobian_weights{0.0, 1.0, 0.0};
+
       std::vector<smith::ConstFieldPtr> T2_field_ptrs;
       T2_field_ptrs.reserve(T2_arguments.size());
       for (const auto& f : T2_arguments) {
         T2_field_ptrs.push_back(f.get().get());  // FieldState -> shared_ptr -> raw ptr
       }
+
       auto S_approx = T2_form.jacobian(smith::TimeInfo(time.get(), dt.get(), cycle), shape_disp.get().get(),
                                        T2_field_ptrs, jacobian_weights);
+
       // Match block_solve's BC elimination on the (1,1) block (rows+cols).
       {
         const auto ess_tdofs = T2_bc_manager->allEssentialTrueDofs();
@@ -322,10 +325,12 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
 
       std::vector<BlockOverride> overrides;
       overrides.emplace_back(1,
-                             std::shared_ptr<const mfem::Operator>(std::move(S_approx))  // transfer ownership
+                             std::unique_ptr<const mfem::Operator>(std::move(S_approx))  // transfer ownership
       );
+
       diff_precond = std::make_unique<smith::BlockSchurPreconditioner>(
-          block_offsets_, std::move(solvers), smith::BlockSchurType::Full, smith::SchurApproxType::Custom, overrides);
+          block_offsets_, std::move(solvers), smith::BlockSchurType::Full, smith::SchurApproxType::Custom,
+          std::move(overrides));
       break;
   }
 
@@ -345,6 +350,10 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   auto sols = block_solve({&T1_form, &T2_form}, {{0, 1}, {0, 1}}, shape_disp, {T1_arguments, T2_arguments},
                           {T1_params, T2_params}, smith::TimeInfo(time.get(), dt.get(), cycle), d_linear_solver.get(),
                           {T1_bc_manager.get(), T2_bc_manager.get()});
+
+  // Convergence check
+  const double rel = iter_lin_solver->GetFinalRelNorm();
+  EXPECT_LT(rel, default_linear_options.relative_tol) << "GMRES final relative norm too large";
 
   auto pv_writer = smith::createParaviewWriter(*mesh, sols, physics_name);
   pv_writer.write(0, 0.0, sols);

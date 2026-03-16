@@ -128,13 +128,13 @@ TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity)
   solvers.push_back(std::make_unique<ExactDiagonalSolver>());
 
   // Define custom operators to be used in the preconditioner
-  auto M1u = makeScaledIdentity(2, 1.0);  // unique_ptr<mfem::SparseMatrix>
-  auto M2u = makeScaledIdentity(3, 1.0);
+  auto M1 = makeScaledIdentity(2, 1.0);
+  auto M2 = makeScaledIdentity(3, 1.0);
+  std::vector<std::pair<int, std::unique_ptr<const mfem::Operator>>> overrides;
+  overrides.emplace_back(0, std::unique_ptr<const mfem::Operator>(std::move(M1)));
+  overrides.emplace_back(1, std::unique_ptr<const mfem::Operator>(std::move(M2)));
 
-  std::shared_ptr<const mfem::Operator> M1(std::move(M1u));
-  std::shared_ptr<const mfem::Operator> M2(std::move(M2u));
-
-  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers), {{0, M1}, {1, M2}});
+  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers), std::move(overrides));
 
   P.SetOperator(A);  // This actually doesn't use A. It's overidden by M1, M2
 
@@ -166,11 +166,12 @@ TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity2)
   solvers.push_back(std::make_unique<ExactDiagonalSolver>());
 
   // Define custom operators to be used in the preconditioner
-  auto M2u = makeScaledIdentity(3, 1.0);
+  auto M2 = makeScaledIdentity(3, 1.0);
 
-  std::shared_ptr<const mfem::Operator> M2(std::move(M2u));
+  std::vector<std::pair<int, std::unique_ptr<const mfem::Operator>>> overrides;
+  overrides.emplace_back(1, std::unique_ptr<const mfem::Operator>(std::move(M2)));
 
-  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers), {{1, M2}});
+  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers), std::move(overrides));
 
   P.SetOperator(A);
 

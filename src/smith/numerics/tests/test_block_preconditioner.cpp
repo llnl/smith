@@ -5,6 +5,15 @@
 #include "smith/numerics/block_preconditioner.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 
+#include "axom/slic.hpp"
+
+bool abort_called = false;
+
+void testAbortHandler()
+{
+  abort_called = true;  // record abort instead of exiting
+}
+
 using namespace mfem;
 
 /* ============================================================
@@ -112,11 +121,20 @@ std::unique_ptr<SparseMatrix> makeRectTridiagonal(int rows, int cols)
 // number of blocks
 TEST(BlockDiagonal, ThrowsOnWrongNumberOfSolvers)
 {
+  // Replace abort handler
+  axom::slic::setAbortFunction(testAbortHandler);
+
+  abort_called = false;
+
   Array<int> offsets({0, 2, 4});
   std::vector<std::unique_ptr<Solver>> solvers;
   solvers.push_back(std::make_unique<IdentitySolver>());
 
-  EXPECT_THROW(smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers)), std::invalid_argument);
+  std::cout << abort_called << std::endl;
+  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers));
+  std::cout << abort_called << std::endl;
+
+  EXPECT_TRUE(abort_called);
 }
 
 // If the solver for each block is identity, the block solver is identity
