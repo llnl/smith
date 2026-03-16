@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "smith/numerics/equation_solver.hpp"
+#include "smith/numerics/block_preconditioner.hpp"
 
 #include <cstdlib>
 #include <iomanip>
@@ -1031,7 +1032,8 @@ void SuperLUSolver::SetOperator(const mfem::Operator& op)
 
     superlu_mat_ = std::make_unique<mfem::SuperLURowLocMatrix>(*matrix);
   }
-
+  height = op.Height();
+  width = op.Width();
   superlu_solver_.SetOperator(*superlu_mat_);
 }
 
@@ -1302,6 +1304,37 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
     amgfcontact_preconditioner->GetAMG().SetSystemsOptions(amgfcontact_opts.dim_systems_options);
     amgfcontact_preconditioner->GetAMG().SetRelaxType(amgfcontact_opts.relax_type);
     preconditioner_solver = std::move(amgfcontact_preconditioner);
+  } else if (preconditioner == Preconditioner::BlockDiagonal ||
+             preconditioner == Preconditioner::BlockTriangularLower ||
+             preconditioner == Preconditioner::BlockTriangularUpper ||
+             preconditioner == Preconditioner::BlockTriangularSymmetric ||
+             preconditioner == Preconditioner::BlockSchurDiagonal ||
+             preconditioner == Preconditioner::BlockSchurLower ||
+             preconditioner == Preconditioner::BlockSchurUpper ||
+             preconditioner == Preconditioner::BlockSchurFull) {
+    std::vector<std::unique_ptr<mfem::Solver>> inner_solvers;
+    for (const auto& opt : linear_opts.block_options) {
+      auto [lin, prec] = buildLinearSolverAndPreconditioner(opt, comm);
+      inner_solvers.push_back(std::make_unique<SolverWithPreconditioner>(std::move(lin), std::move(prec)));
+    }
+
+    if (preconditioner == Preconditioner::BlockDiagonal) {
+      preconditioner_solver = std::make_unique<BlockDiagonalPreconditioner>(std::move(inner_solvers));
+    } else if (preconditioner == Preconditioner::BlockTriangularLower) {
+      preconditioner_solver = std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Lower);
+    } else if (preconditioner == Preconditioner::BlockTriangularUpper) {
+      preconditioner_solver = std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Upper);
+    } else if (preconditioner == Preconditioner::BlockTriangularSymmetric) {
+      preconditioner_solver = std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Symmetric);
+    } else if (preconditioner == Preconditioner::BlockSchurDiagonal) {
+      preconditioner_solver = std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Diagonal);
+    } else if (preconditioner == Preconditioner::BlockSchurLower) {
+      preconditioner_solver = std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Lower);
+    } else if (preconditioner == Preconditioner::BlockSchurUpper) {
+      preconditioner_solver = std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Upper);
+    } else if (preconditioner == Preconditioner::BlockSchurFull) {
+      preconditioner_solver = std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Full);
+    }
   } else {
     SLIC_ERROR_ROOT_IF(preconditioner != Preconditioner::None, "Unknown preconditioner type requested");
   }

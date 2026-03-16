@@ -128,6 +128,12 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
       for (size_t i = 0; i < num_stage_blocks; ++i) {
         size_t global_col = stage.block_indices[i];
         FieldState new_state = stage_solutions[i];
+
+        if (relaxation_factor_ != 1.0) {
+          FieldState old_state = current_states[global_col][block_indices[global_col][global_col]];
+          new_state = weighted_average(new_state, old_state, relaxation_factor_);
+        }
+
         for (size_t r = 0; r < num_residuals; ++r) {
           size_t c = block_indices[r][global_col];
           if (c != invalid_block_index) {

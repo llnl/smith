@@ -40,6 +40,10 @@ class SystemSolver {
   ///        partitioned-stagger steps is required regardless of residual level.
   SystemSolver(int max_staggered_iterations, bool exact_staggered_steps = false);
 
+  /// @brief Sets the relaxation factor for staggered iterations.
+  /// @param relaxation_factor The relaxation factor (default is 1.0).
+  void setRelaxationFactor(double relaxation_factor) { relaxation_factor_ = relaxation_factor; }
+
   /// @brief Adds a solver stage defined by a Stage struct.
   /// @param stage Stage configuration.
   void addStage(const Stage& stage);
@@ -67,6 +71,7 @@ class SystemSolver {
  private:
   int max_staggered_iterations_;  ///< Maximum number of staggered iterations.
   bool exact_staggered_steps_;    ///< If true, no early-exit convergence check.
+  double relaxation_factor_ = 1.0; ///< Relaxation factor for staggered updates.
   std::vector<Stage> stages_;     ///< Solver stages for the staggered iterations.
 };
 

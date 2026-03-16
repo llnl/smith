@@ -160,6 +160,9 @@ std::vector<DifferentiableBlockSolver::FieldPtr> DifferentiableSolver::solve(
           for (int j = 0; j < num_rows; ++j) {
             auto& J = matrix_of_jacs_[static_cast<size_t>(i)][static_cast<size_t>(j)];
             if (J) {
+              int row_size = block_offsets[i+1] - block_offsets[i];
+              int col_size = block_offsets[j+1] - block_offsets[j];
+              SLIC_INFO_ROOT("SetBlock(" << i << ", " << j << "): expected " << row_size << "x" << col_size << ", got " << J->NumRows() << "x" << J->NumCols());
               block_jac_->SetBlock(i, j, J.get());
             }
           }

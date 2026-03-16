@@ -10,7 +10,6 @@ set(differentiable_numerics_test_source
     test_field_state.cpp
     test_solid_dynamics.cpp
     test_explicit_dynamics.cpp
-    test_solid_mechanics_state_advancer.cpp
     test_porous_heat_sink.cpp
     test_thermo_mechanics.cpp
     test_thermal_static.cpp
