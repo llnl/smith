@@ -45,7 +45,8 @@ TEST(BeamBending, TwoDimensional)
                                             .relative_tol = 1.0e-6,
                                             .absolute_tol = 1.0e-14,
                                             .max_iterations = 500,
-                                            .print_level = 1};
+                                            .print_level = 1,
+                                            .block_options = {}};
 
   // TODO (EBC): investigate sundials usage (or deprecate sundials).  the result is not converging with these options
   // #ifdef SMITH_USE_SUNDIALS

@@ -335,23 +335,23 @@ inline std::ostream& operator<<(std::ostream& os, PetscPCType s) { return os << 
 /// The type of preconditioner to be used
 enum class Preconditioner
 {
-  HypreJacobi,      /**< Hypre-based Jacobi */
-  HypreL1Jacobi,    /**< Hypre-based L1-scaled Jacobi */
-  HypreGaussSeidel, /**< Hypre-based Gauss-Seidel */
-  HypreAMG,         /**< Hypre's BoomerAMG algebraic multi-grid */
-  HypreILU,         /**< Hypre's Incomplete LU */
-  AMGX,             /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
-  Petsc,            /**< PETSc preconditioner,  */
-  AMGFContact,      /**< MFEM-based AMG with filtering (AMGF), contact problems only */
-  BlockDiagonal,    /**< Block diagonal preconditioner */
-  BlockTriangularLower, /**< Block lower triangular preconditioner */
-  BlockTriangularUpper, /**< Block upper triangular preconditioner */
+  HypreJacobi,              /**< Hypre-based Jacobi */
+  HypreL1Jacobi,            /**< Hypre-based L1-scaled Jacobi */
+  HypreGaussSeidel,         /**< Hypre-based Gauss-Seidel */
+  HypreAMG,                 /**< Hypre's BoomerAMG algebraic multi-grid */
+  HypreILU,                 /**< Hypre's Incomplete LU */
+  AMGX,                     /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
+  Petsc,                    /**< PETSc preconditioner,  */
+  AMGFContact,              /**< MFEM-based AMG with filtering (AMGF), contact problems only */
+  BlockDiagonal,            /**< Block diagonal preconditioner */
+  BlockTriangularLower,     /**< Block lower triangular preconditioner */
+  BlockTriangularUpper,     /**< Block upper triangular preconditioner */
   BlockTriangularSymmetric, /**< Block symmetric triangular preconditioner */
-  BlockSchurDiagonal, /**< Block diagonal Schur preconditioner */
-  BlockSchurLower, /**< Block lower Schur preconditioner */
-  BlockSchurUpper, /**< Block upper Schur preconditioner */
-  BlockSchurFull, /**< Block full Schur preconditioner */
-  None              /**< No preconditioner used */
+  BlockSchurDiagonal,       /**< Block diagonal Schur preconditioner */
+  BlockSchurLower,          /**< Block lower Schur preconditioner */
+  BlockSchurUpper,          /**< Block upper Schur preconditioner */
+  BlockSchurFull,           /**< Block full Schur preconditioner */
+  None                      /**< No preconditioner used */
 };
 // _preconditioners_end
 
@@ -456,7 +456,7 @@ struct LinearSolverOptions {
   int preconditioner_print_level = 0;
 
   /// Block solver options for block preconditioners
-  std::vector<LinearSolverOptions> block_options;
+  std::vector<LinearSolverOptions> block_options = {};
 };
 // _linear_options_end
 

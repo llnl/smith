@@ -205,8 +205,7 @@ int main(int argc, char* argv[])
   mat.K = 1.0;
   mat.G = 0.5;
   solid_mechanics_weak_form->addBodyIntegral(
-      smith::DependsOn<0>{}, mesh->entireBodyName(),
-      [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
+      mesh->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
         typename SolidMaterial::State state;
         auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), density);
         return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(density), pk_stress};
@@ -225,9 +224,10 @@ int main(int argc, char* argv[])
     constant_force[i] = 1.e0;
   }
 
-  solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](auto /* t_info */, auto x) {
-    return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(x)};
-  });
+  solid_mechanics_weak_form->addBodyIntegral(
+      mesh->entireBodyName(), [constant_force](auto /*t_info*/, auto X, auto... /*inputs*/) {
+        return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(X)};
+      });
 
   // construct constraints
   params[0] = 1.;

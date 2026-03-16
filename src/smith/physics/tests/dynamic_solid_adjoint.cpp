@@ -309,7 +309,8 @@ struct SolidMechanicsSensitivityFixture : public ::testing::Test {
                                      .relative_tol = 1.0e-10,
                                      .absolute_tol = 1.0e-16,
                                      .max_iterations = 2000,
-                                     .print_level = 0};
+                                     .print_level = 0,
+                                     .block_options = {}};
 
   bool dispBc = true;
   TimesteppingOptions dyn_opts{.timestepper = TimestepMethod::Newmark,
@@ -479,7 +480,8 @@ struct BucklingSensitivityFixture : public ::testing::Test {
                                   .relative_tol = 1.0e-9,
                                   .absolute_tol = 1.0e-14,
                                   .max_iterations = 2000,
-                                  .print_level = 0};
+                                  .print_level = 0,
+                                  .block_options = {}};
 
   bool dispBc = true;
   TimesteppingOptions dyn_opts{.timestepper = TimestepMethod::Newmark,

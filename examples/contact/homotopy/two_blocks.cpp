@@ -29,9 +29,10 @@ using VectorSpace = smith::H1<disp_order, dim>;
 using DensitySpace = smith::L2<disp_order - 1>;
 
 using SolidMaterial = smith::solid_mechanics::NeoHookeanWithFieldDensity;
-using SolidWeakFormT = smith::TimeDiscretizedWeakForm<
-    dim, smith::H1<disp_order, dim>,
-    smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>, smith::H1<disp_order, dim>, DensitySpace>>;
+using SolidWeakFormT =
+    smith::TimeDiscretizedWeakForm<dim, smith::H1<disp_order, dim>,
+                                   smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>,
+                                                     smith::H1<disp_order, dim>, DensitySpace>>;
 
 enum FIELD
 {
@@ -229,12 +230,12 @@ int main(int argc, char* argv[])
   SolidMaterial mat;
   mat.K = 1.0;
   mat.G = 0.5;
-  solid_mechanics_weak_form->addBodyIntegral(smith::DependsOn<0>{}, mesh->entireBodyName(),
-    [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
-      typename SolidMaterial::State state;
-      auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), density);
-      return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(density), pk_stress};
-    });
+  solid_mechanics_weak_form->addBodyIntegral(
+      mesh->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
+        typename SolidMaterial::State state;
+        auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), density);
+        return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(density), pk_stress};
+      });
 
   // constant body force
   smith::tensor<double, dim> constant_force{};
@@ -243,9 +244,10 @@ int main(int argc, char* argv[])
   }
   constant_force[dim - 1] = -1.e-4;
 
-  solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](auto /* t_info */, auto x) {
-    return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(x)};
-  });
+  solid_mechanics_weak_form->addBodyIntegral(
+      mesh->entireBodyName(), [constant_force](auto /*t_info*/, auto X, auto... /*inputs*/) {
+        return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(X)};
+      });
 
   auto residual_state_ptrs = smith::getFieldPointers(states, params);
   auto contact_state_ptrs = smith::getFieldPointers(contact_states);

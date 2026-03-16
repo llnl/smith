@@ -131,7 +131,9 @@ TEST(BlockDiagonal, ThrowsOnWrongNumberOfSolvers)
   solvers.push_back(std::make_unique<IdentitySolver>());
 
   std::cout << abort_called << std::endl;
-  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers));
+  mfem::BlockOperator A(offsets);
+  smith::BlockDiagonalPreconditioner P(std::move(solvers));
+  P.SetOperator(A);
   std::cout << abort_called << std::endl;
 
   EXPECT_TRUE(abort_called);
@@ -153,7 +155,7 @@ TEST(BlockTriangular, IdentityActsAsIdentity)
   solvers.push_back(std::make_unique<IdentitySolver>());
   solvers.push_back(std::make_unique<IdentitySolver>());
 
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Symmetric);
+  smith::BlockTriangularPreconditioner P(std::move(solvers), smith::BlockTriangularType::Symmetric);
   P.SetOperator(A);
 
   Vector x(5), y(5);
@@ -184,7 +186,7 @@ TEST(BlockDiagonal, IgnoresOffDiagonalBlocks)
   A.SetBlock(1, 1, A22.get());
 
   auto solvers = makeExactDiagonalSolvers();
-  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers));
+  smith::BlockDiagonalPreconditioner P(std::move(solvers));
   P.SetOperator(A);
 
   Vector b(4), x(4);
@@ -213,7 +215,7 @@ TEST(BlockTriangular, LowerTriangularExactSolve)
   A.SetBlock(1, 1, A22.get());
 
   auto solvers = makeExactDiagonalSolvers();
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Lower);
+  smith::BlockTriangularPreconditioner P(std::move(solvers), smith::BlockTriangularType::Lower);
   P.SetOperator(A);
 
   Vector b(4), x(4), Ax(4);
@@ -244,7 +246,7 @@ TEST(BlockTriangular, SymmetricGSIsSelfAdjoint)
   A.SetBlock(1, 1, A22.get());
 
   auto solvers = makeExactDiagonalSolvers();
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Symmetric);
+  smith::BlockTriangularPreconditioner P(std::move(solvers), smith::BlockTriangularType::Symmetric);
   P.SetOperator(A);
 
   Vector x(4), y(4), Px(4), Py(4);
@@ -293,7 +295,7 @@ TEST(BlockTriangular, LowerTriangularExactSolve_3Blocks)
   solvers.push_back(std::make_unique<ExactDiagonalSolver>());
   solvers.push_back(std::make_unique<ExactDiagonalSolver>());
 
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Lower);
+  smith::BlockTriangularPreconditioner P(std::move(solvers), smith::BlockTriangularType::Lower);
 
   P.SetOperator(A);
 
@@ -324,7 +326,7 @@ TEST(BlockTriangular, UpperTriangularExactSolve)
   A.SetBlock(1, 1, A22.get());
 
   auto solvers = makeExactDiagonalSolvers();
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Upper);
+  smith::BlockTriangularPreconditioner P(std::move(solvers), smith::BlockTriangularType::Upper);
 
   P.SetOperator(A);
 
@@ -355,7 +357,7 @@ TEST(BlockTriangular, ZeroInputGivesZeroOutput)
   solvers.push_back(std::make_unique<IdentitySolver>());
   solvers.push_back(std::make_unique<IdentitySolver>());
 
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Symmetric);
+  smith::BlockTriangularPreconditioner P(std::move(solvers), smith::BlockTriangularType::Symmetric);
 
   P.SetOperator(A);
 
@@ -379,7 +381,7 @@ TEST(BlockTriangular, HandlesMissingOffDiagonalBlocks)
   A.SetBlock(1, 1, A22.get());
 
   auto solvers = makeExactDiagonalSolvers();
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Symmetric);
+  smith::BlockTriangularPreconditioner P(std::move(solvers), smith::BlockTriangularType::Symmetric);
 
   EXPECT_NO_THROW(P.SetOperator(A));
 }
@@ -398,7 +400,7 @@ TEST(BlockDiagonal, WorksForSingleBlock)
   std::vector<std::unique_ptr<Solver>> solvers;
   solvers.push_back(std::make_unique<ExactDiagonalSolver>());
 
-  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers));
+  smith::BlockDiagonalPreconditioner P(std::move(solvers));
   EXPECT_NO_THROW(P.SetOperator(A));
 
   // Apply preconditioner
@@ -426,7 +428,7 @@ TEST(BlockTriangular, WorksForSingleBlockAllTypes)
     std::vector<std::unique_ptr<Solver>> solvers;
     solvers.push_back(std::make_unique<ExactDiagonalSolver>());
 
-    smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), type);
+    smith::BlockTriangularPreconditioner P(std::move(solvers), type);
     EXPECT_NO_THROW(P.SetOperator(A));
 
     Vector b(3), x(3), Ax(3);

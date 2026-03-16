@@ -35,13 +35,16 @@ const LinearSolverOptions default_linear_options = {.linear_solver = LinearSolve
                                                     .preconditioner = Preconditioner::HypreL1Jacobi,
                                                     .relative_tol = 1.0e-6,
                                                     .absolute_tol = 1.0e-12,
-                                                    .max_iterations = 200};
+                                                    .max_iterations = 200,
+                                                    .block_options = {}};
 
 /// the default direct solver option for solving the linear stiffness equations
 #ifdef MFEM_USE_STRUMPACK
-const LinearSolverOptions direct_linear_options = {.linear_solver = LinearSolver::Strumpack, .print_level = 0};
+const LinearSolverOptions direct_linear_options = {
+    .linear_solver = LinearSolver::Strumpack, .print_level = 0, .block_options = {}};
 #else
-const LinearSolverOptions direct_linear_options = {.linear_solver = LinearSolver::SuperLU, .print_level = 0};
+const LinearSolverOptions direct_linear_options = {
+    .linear_solver = LinearSolver::SuperLU, .print_level = 0, .block_options = {}};
 #endif
 
 /**

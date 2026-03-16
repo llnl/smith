@@ -29,9 +29,11 @@ namespace thermomechanics {
 
 /// @brief the default direct solver option for solving the linear stiffness equations
 #ifdef MFEM_USE_STRUMPACK
-const smith::LinearSolverOptions direct_linear_options = {.linear_solver = LinearSolver::Strumpack, .print_level = 0};
+const smith::LinearSolverOptions direct_linear_options = {
+    .linear_solver = LinearSolver::Strumpack, .print_level = 0, .block_options = {}};
 #else
-const smith::LinearSolverOptions direct_linear_options = {.linear_solver = LinearSolver::SuperLU, .print_level = 0};
+const smith::LinearSolverOptions direct_linear_options = {
+    .linear_solver = LinearSolver::SuperLU, .print_level = 0, .block_options = {}};
 #endif
 
 /**
