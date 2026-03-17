@@ -205,10 +205,10 @@ int main(int argc, char* argv[])
   mat.K = 1.0;
   mat.G = 0.5;
   solid_mechanics_weak_form->addBodyIntegral(
-      mesh->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
+      mesh->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto rho) {
         typename SolidMaterial::State state;
-        auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), density);
-        return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(density), pk_stress};
+        auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), rho);
+        return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(rho), pk_stress};
       });
 
   // apply some traction boundary conditions

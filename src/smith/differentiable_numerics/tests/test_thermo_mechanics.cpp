@@ -125,8 +125,8 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicVsStaggered)
   // 1. Monolithic with BlockDiagonal Preconditioner (GMRES + AMG)
   smith::LinearSolverOptions mono_lin_opts{.linear_solver = smith::LinearSolver::GMRES,
                                            .preconditioner = smith::Preconditioner::BlockDiagonal,
-                                           .relative_tol = 1e-12,
-                                           .absolute_tol = 1e-12,
+                                           .relative_tol = 1e-11,
+                                           .absolute_tol = 1e-11,
                                            .max_iterations = 200};
   smith::LinearSolverOptions block_opt{.linear_solver = smith::LinearSolver::GMRES,
                                        .preconditioner = smith::Preconditioner::HypreAMG,

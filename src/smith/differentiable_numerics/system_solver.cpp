@@ -45,7 +45,6 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
                                             const std::vector<const BoundaryConditionManager*>& bc_managers) const
 {
   SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
-  MPI_Comm comm = shape_disp.get()->space().GetComm();
 
   size_t num_residuals = residual_evals.size();
   std::vector<Stage> active_stages = stages_;
@@ -155,16 +154,6 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
           stage_residuals.push_back(eval_residual_and_zero_bcs(stage.block_indices[i]));
         }
         bool stage_converged = stage.solver->checkConvergence(1.0, stage_residuals);
-
-        // Compute per-stage residual norm for diagnostics (parallel-correct)
-        double stage_norm_sq = 0.0;
-        for (const auto& r : stage_residuals) {
-          double n = mfem::ParNormlp(r, 2.0, comm);
-          stage_norm_sq += n * n;
-        }
-        SLIC_INFO_ROOT(axom::fmt::format("Staggered iter {}/{}: stage {} residual norm = {:.6e}, converged = {}",
-                                         iter + 1, max_staggered_iterations_, s, std::sqrt(stage_norm_sq),
-                                         stage_converged ? "true" : "false"));
 
         if (!stage_converged) {
           all_converged = false;
