@@ -18,8 +18,8 @@ set(differentiable_numerics_sources
     multiphysics_time_integrator.cpp
     )
 
-set(differentiable_numerics_public_headers
-    field_state.hpp
+set(differentiable_numerics_headers
+      field_state.hpp
     field_store.hpp
     state_advancer.hpp
     reaction.hpp
@@ -45,15 +45,6 @@ set(differentiable_numerics_public_headers
     system_base.hpp
     )
 
-set(differentiable_numerics_private_headers
-    differentiable_test_utils.hpp
-    )
-
-set(differentiable_numerics_headers
-    ${differentiable_numerics_public_headers}
-    ${differentiable_numerics_private_headers}
-    )
-
 set(differentiable_numerics_depends
     gretl
     smith_state
@@ -72,10 +63,10 @@ smith_add_library(
 
 smith_write_unified_header(
     NAME    differentiable_numerics
-    HEADERS ${differentiable_numerics_public_headers}
+    HEADERS ${differentiable_numerics_headers}
     )
 
-install(FILES ${differentiable_numerics_public_headers} DESTINATION include/smith/differentiable_numerics )
+install(FILES ${differentiable_numerics_headers} DESTINATION include/smith/differentiable_numerics )
 
 install(TARGETS              smith_differentiable_numerics
         EXPORT               smith-targets

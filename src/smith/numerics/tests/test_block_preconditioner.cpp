@@ -121,8 +121,11 @@ std::unique_ptr<SparseMatrix> makeRectTridiagonal(int rows, int cols)
 // number of blocks
 TEST(BlockDiagonal, ThrowsOnWrongNumberOfSolvers)
 {
+  // Ensure that SLIC uses the abort handler for errors.
   // Replace abort handler
   axom::slic::setAbortFunction(testAbortHandler);
+  axom::slic::setAbortOnError(true);
+  axom::slic::setAbortOnWarning(false);
 
   abort_called = false;
 
@@ -130,11 +133,14 @@ TEST(BlockDiagonal, ThrowsOnWrongNumberOfSolvers)
   std::vector<std::unique_ptr<Solver>> solvers;
   solvers.push_back(std::make_unique<IdentitySolver>());
 
-  std::cout << abort_called << std::endl;
   mfem::BlockOperator A(offsets);
+  // Set diagonal blocks so BlockDiagonalPreconditioner can query them.
+  auto A11 = makeScaledIdentity(2, 1.0);
+  auto A22 = makeScaledIdentity(2, 1.0);
+  A.SetBlock(0, 0, A11.get());
+  A.SetBlock(1, 1, A22.get());
   smith::BlockDiagonalPreconditioner P(std::move(solvers));
   P.SetOperator(A);
-  std::cout << abort_called << std::endl;
 
   EXPECT_TRUE(abort_called);
 }
