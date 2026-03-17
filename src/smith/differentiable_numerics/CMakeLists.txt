@@ -19,7 +19,7 @@ set(differentiable_numerics_sources
     )
 
 set(differentiable_numerics_headers
-      field_state.hpp
+    field_state.hpp
     field_store.hpp
     state_advancer.hpp
     reaction.hpp
@@ -43,6 +43,7 @@ set(differentiable_numerics_headers
     thermal_system.hpp
     thermo_mechanics_system.hpp
     system_base.hpp
+    differentiable_test_utils.hpp
     )
 
 set(differentiable_numerics_depends
