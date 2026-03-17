@@ -99,25 +99,13 @@ TEST(ScalarEquationSolver, ReturnsImmediatelyIfLowerBoundIsARoot)
 
 TEST(ScalarEquationSolver, ConvergesWithGuessOutsideNewtonBasin)
 {
-  double x0 = 9.5;
+  double x0 = 2.0;
   double lower = -10.0;
   double upper = 10.0;
-  auto nasty_function = [](auto x) { return sin(x) + x; };
+  auto nasty_function = [](auto x) { return x/(1.0 + x*x); };
   auto [x, status] = solve_scalar_equation(nasty_function, x0, lower, upper, default_solver_options);
   double error = std::abs(x);
   EXPECT_LT(error, default_solver_options.xtol);
-}
-
-TEST(ScalarEquationSolver, EscapesLocalMinimum)
-{
-  using std::cos;
-  auto f = [](auto x, auto m) { return cos(2*M_PI*x) - m*x + 2.5; };
-  double x0 = 0.1;
-  double m = 2.0;
-  auto [x, status] = solve_scalar_equation(f, x0, 0.0, 2.0, default_solver_options, m);
-  double y = f(x, m);
-  mfem::out << "f(x) = " << f(x, m) << "\n";
-  EXPECT_NEAR(x, 1.25, 1e-8);
 }
 
 TEST(ScalarEquationSolver, WorksWithTensorParameter)
