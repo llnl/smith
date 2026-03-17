@@ -27,7 +27,7 @@
 namespace smith {
 
 class ContactTestAMGF
-    : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactType, ContactJacobian, std::string>> {};
+    : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactType, ContactJacobian, std::string, bool>> {};
 
 TEST_P(ContactTestAMGF, beam)
 {
@@ -48,7 +48,7 @@ TEST_P(ContactTestAMGF, beam)
   auto mesh = std::make_shared<smith::Mesh>(buildMeshFromFile(filename), "beam_mesh", 1, 0);
 
 #ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::GMRES,
                                      .preconditioner = Preconditioner::AMGFContact,
                                      .relative_tol = 0.0,
                                      .absolute_tol = 1.0e-13,
@@ -71,8 +71,15 @@ TEST_P(ContactTestAMGF, beam)
                                  .penalty = 1.0e4,
                                  .jacobian = std::get<2>(GetParam())};
 
+  std::vector<std::string> parameter_names = {};
+  int cycle = 0;
+  double time = 0.0;
+  bool checkpoint_to_disk = false;
+  bool use_warm_start = std::get<4>(GetParam());
+
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
-                                             solid_mechanics::default_quasistatic_options, name, mesh);
+                                             solid_mechanics::default_quasistatic_options, name, mesh, parameter_names,
+                                             cycle, time, checkpoint_to_disk, use_warm_start);
 
   double K = 10.0;
   double G = 0.25;
@@ -119,9 +126,16 @@ TEST_P(ContactTestAMGF, beam)
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTestAMGF,
     testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Approximate,
-                                    "penalty_tiednormal_Japprox_amgf"),
+                                    "penalty_tiednormal_Japprox_amgf", true),
                     std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox_amgf")));
+                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox_amgf", true),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Approximate,
+                                    "penalty_tiednormal_Japprox_amgf_nowarmstart", false),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
+                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox_amgf_nowarmstart",
+                                    false)
+
+                        ));
 
 }  // namespace smith
 
