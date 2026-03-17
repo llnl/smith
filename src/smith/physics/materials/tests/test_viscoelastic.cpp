@@ -121,6 +121,42 @@ TEST_F(TestViscoelasticModel, Symmetry) {
   }
 }
 
+TEST_F(TestViscoelasticModel, isVariational)
+{
+  tensor Fv{{{1.13999899223343, -0.37663886065084, -0.01845954094274},
+             {0.23118557813617,  1.25824266214259,  0.36905241011185},
+             {0.12569218571529, -0.33628257758523,  0.57289115431496}}};
+
+  // The model expects volume-preserving inelastic distortion,
+  // so require this for the test.
+  ASSERT_NEAR(det(Fv), 1.0, 1e-14);
+
+  auto internal_state = make_tensor<dim*dim>([&Fv](int ij) {
+    int i = ij / 3;
+    int j = ij % 3;
+    return Fv[i][j];
+  });
+
+  tensor H{{{0.84410694508235, 0.04541258512666, 0.22498462569285},
+            {0.06438560513367, 0.01193894509204, 0.83425129331962},
+            {0.62563720341404, 0.76924029241284, 0.85235964292579}}};
+
+  double theta = 330.0;
+  double dt = 0.1;
+
+  auto energy = material.potential(internal_state, dt, make_dual(H), theta);
+  auto P_from_energy = get_gradient(energy);
+
+  auto P = material.pkStress(internal_state, dt, H, theta);
+  for (int i = 0; i < dim; i++) {
+    for (int j = 0; j < dim; j++) {
+      double absP = std::abs(P[i][j]);
+      double rel = absP != 0? absP : 1.0;
+      EXPECT_NEAR(P[i][j], P_from_energy[i][j], 3e-10*rel);
+    }
+  }
+}
+
 } // namespace smith
 
 int main(int argc, char* argv[])
