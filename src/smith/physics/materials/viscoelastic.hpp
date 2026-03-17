@@ -18,12 +18,17 @@
 
 namespace smith {
 
+/**
+ * @brief Finite deformation viscoelastic model
+ */
 struct Viscoelastic {
-  static constexpr int dim = 3;
-  template <typename T> using InternalState = tensor<T, dim*dim>;  ///< Fv
+  static constexpr int dim = 3; ///< This model is implemented in 3D only. 
+  template <typename T> using InternalState = tensor<T, dim*dim>;  ///< Internal state variable: inelastic distortion tensor (flattened)
   template <typename T> using Tensor = tensor<T, dim, dim>;
 
-  /// @brief Stress due to the equilibrium branch
+  /** 
+   * @brief Stress due to the equilibrium branch
+   */
   template <typename T1, typename T2>
   SMITH_HOST_DEVICE auto equilibrium_stress(const Tensor<T1>& H, T2 theta) const
   {
@@ -41,7 +46,9 @@ struct Viscoelastic {
   }
 
 
-  /// @brief WLF shift factor for time-temperature superposition 
+  /**
+   * @brief WLF shift factor for time-temperature superposition
+   */
   template <typename T>
   SMITH_HOST_DEVICE auto shift_factor(T theta) const {
     auto dT = theta - theta_r;
@@ -51,7 +58,9 @@ struct Viscoelastic {
     return pow(10.0, -C1*dT/(C2 + dT));
   }
 
-  /// @brief Compute updated Piola stress and viscous deformation tensor
+  /** 
+   * @brief Compute updated Piola stress and viscous deformation tensor
+   */
   template <typename T1, typename T2, typename T3>
   SMITH_HOST_DEVICE auto update(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
   {
@@ -103,7 +112,9 @@ struct Viscoelastic {
     return make_tuple(P_inf + P_0, internal_state_new);
   }
 
-  /// @brief Return updated Piola stress
+  /**
+   * @brief Return updated Piola stress
+   */
   template <typename T1, typename T2, typename T3>
   SMITH_HOST_DEVICE auto pkStress(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
   {
@@ -111,7 +122,9 @@ struct Viscoelastic {
     return P;
   }
 
-  /// @brief Return updated internal state variables
+  /**
+   * @brief Return updated internal state variables
+   */
   template <typename T1, typename T2, typename T3>
   SMITH_HOST_DEVICE auto intenalState(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
   {
@@ -119,10 +132,61 @@ struct Viscoelastic {
     return Q_new;
   }
 
-  /// @brief interpolates density field
+  /**
+   * @brief interpolates density field
+   */
   SMITH_HOST_DEVICE auto density() const
   {
     return rho_r;
+  }
+
+  /**
+   * @brief Discrete potential (pseudo-enregy) which generates the stress relation
+   *
+   * This model has the special property that the stress derives from a scalar
+   * potential. That is, there is a scalar energy density-like quantity W
+   * such that P = ∂W / ∂F. This method computes the scalar
+   * algorithmic potential W.
+   *
+   * The potential formulation allows us to use robust minimization-based
+   * solvers (such as the trust region solver in Smith).
+   *
+   * For background on this subject, see:
+   * Ortiz, M. and Stainier, L., 1999. The variational formulation of 
+   * viscoplastic constitutive updates. Computer methods in applied mechanics
+   * and engineering, 171(3-4), pp.419-444.
+   */
+  template <typename T1, typename T2, typename T3>
+  SMITH_HOST_DEVICE auto potential(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
+  {
+    auto BmI = du_dX + transpose(du_dX) + du_dX*transpose(du_dX);
+    auto E = 0.5*logIp_symm(BmI);
+    auto Em = E - alpha_inf*(theta - theta_sf)*Identity<dim>();
+    auto devEm = dev(Em);
+    auto trEm = tr(Em);
+    auto psi_inf = G_inf*inner(devEm, devEm) + 0.5*K_inf*trEm*trEm;
+
+    auto Fv = make_tensor<dim, dim>([&Q](int i, int j) { return Q[dim*i + j]; });
+    auto F = du_dX + Identity<dim>();
+    // Trial elastic values
+    auto Fe = F*inv(Fv);
+    auto Ce = transpose(Fe)*Fe;
+    auto Ee = 0.5*log_symm(Ce);
+    auto devM = 2.0*G_0*dev(Ee);
+    auto tau_bar = std::sqrt(0.5)*norm(devM);
+    auto denom = (tau_bar > 0)? (tau_bar) : (1.0 + tau_bar);
+    auto N = 0.5*devM/denom;
+    
+    auto a = shift_factor(theta);
+    auto dg = tau_bar/(a*eta_0/dt + G_0);
+    Ee = Ee - dg*N;
+    auto devEe = dev(Ee);
+    auto psi_0 = G_0*inner(devEe, devEe);
+
+    // discrete dual kinetic potential
+    auto Pi = 0.5*eta_0/dt*dg*dg;
+
+    return psi_inf + psi_0 + Pi;
   }
 
   double K_inf;  ///< equiibrium bulk modulus
