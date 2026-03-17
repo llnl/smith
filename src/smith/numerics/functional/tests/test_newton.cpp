@@ -108,6 +108,18 @@ TEST(ScalarEquationSolver, ConvergesWithGuessOutsideNewtonBasin)
   EXPECT_LT(error, default_solver_options.xtol);
 }
 
+TEST(ScalarEquationSolver, EscapesLocalMinimum)
+{
+  using std::cos;
+  auto f = [](auto x, auto m) { return cos(2*M_PI*x) - m*x + 2.5; };
+  double x0 = 0.1;
+  double m = 2.0;
+  auto [x, status] = solve_scalar_equation(f, x0, 0.0, 2.0, default_solver_options, m);
+  double y = f(x, m);
+  mfem::out << "f(x) = " << f(x, m) << "\n";
+  EXPECT_NEAR(x, 1.25, 1e-8);
+}
+
 TEST(ScalarEquationSolver, WorksWithTensorParameter)
 {
   auto my_norm = [](auto A) {
