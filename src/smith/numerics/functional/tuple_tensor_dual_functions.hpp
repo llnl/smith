@@ -653,10 +653,10 @@ auto solve_scalar_equation(const function& f, double x0, double lower_bound, dou
       // maintain bracket on root
       if (fval < 0) {
         xl = x;
-        fl = R;
+        fl = get_value(R);
       } else {
         xh = x;
-        fh = R;
+        fh = get_value(R);
       }
 
       ++iterations;
