@@ -321,34 +321,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     return SolidMechanicsBase::dualAdjoint(dual_name);
   }
 
-#ifdef SMITH_USE_TRIBOL
-  /**
-   * @brief Evaluate contact forces for a single interaction at a provided shape displacement
-   *
-   * This method holds the current displacement state fixed and evaluates Tribol contact at the provided shape
-   * displacement (i.e. perturbed geometry), returning the nodal contact forces for the specified interaction.
-   *
-   * @param interaction_id The unique identifier for the contact interaction
-   * @param shape_disp Shape displacement (true DOFs) used to perturb the geometry
-   * @return Nodal contact forces for the requested interaction
-   *
-   * @note This method updates internal Tribol/contact state to be consistent with @p shape_disp.
-   */
-  FiniteElementDual evalContactInteractionForcesAtShape(int interaction_id, const FiniteElementState& shape_disp)
-  {
-    mfem::Vector u_aug(displacement_.Size() + contact_.numPressureDofs());
-    u_aug.SetVector(displacement_, 0);
-    if (contact_.numPressureDofs() > 0) {
-      u_aug.SetVector(contact_.mergedPressures(), displacement_.Size());
-    }
-
-    mfem::Vector r(u_aug.Size());
-    r = 0.0;
-    contact_.residualFunction(shape_disp, u_aug, r);
-    return contactInteraction(interaction_id).forces();
-  }
-#endif
-
   /**
    * @brief Complete the initialization and allocation of the data structures.
    *
@@ -387,67 +359,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     return contact_.getContactInteractions().front();
   }
 #endif
-
-  /**
-   * @brief Computes the shape sensitivity of the residual contribution from a single contact interaction
-   *
-   * @param interaction_id The unique identifier for the contact interaction
-   * @return Contact-only shape sensitivity (as a dual on the shape displacement space)
-   *
-   * @pre The contact interaction must be penalty-enforced.
-   * @pre ContactData/Tribol must have been updated for the current configuration so the interaction Jacobian is
-   * up-to-date. For penalty enforcement this implies the same two-stage update sequence used by
-   * ContactData::residualFunction() (update gaps -> set penalty pressures -> update).
-   */
-  const FiniteElementDual& computeTimestepContactShapeSensitivity(int interaction_id)
-  {
-#ifdef SMITH_USE_TRIBOL
-    const ContactInteraction* interaction_ptr = nullptr;
-    for (const auto& interaction : contact_.getContactInteractions()) {
-      if (interaction.getInteractionId() == interaction_id) {
-        interaction_ptr = &interaction;
-        break;
-      }
-    }
-    SLIC_ERROR_ROOT_IF(!interaction_ptr,
-                       axom::fmt::format("No contact interaction found with interaction_id={}", interaction_id));
-
-    const auto& interaction = *interaction_ptr;
-    SLIC_ERROR_ROOT_IF(
-        interaction.getContactOptions().enforcement != ContactEnforcement::Penalty,
-        "computeTimestepContactShapeSensitivity currently only supports penalty-enforced contact interactions.");
-
-    auto interaction_J = interaction.jacobianContribution();
-    interaction_J->owns_blocks = false;  // this method manages ownership of blocks
-
-    std::unique_ptr<mfem::HypreParMatrix> dfdx;
-    if (!interaction_J->IsZeroBlock(0, 0)) {
-      auto* block_0_0 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
-      SLIC_ERROR_ROOT_IF(!block_0_0, "Only HypreParMatrix constraint matrix blocks are currently supported.");
-      dfdx.reset(block_0_0);
-    }
-
-    SLIC_ERROR_ROOT_IF(!dfdx,
-                       axom::fmt::format("Contact interaction {} produced a zero df/dx contribution.", interaction_id));
-
-    auto it = contact_interaction_shape_sensitivities_.find(interaction_id);
-    if (it == contact_interaction_shape_sensitivities_.end()) {
-      const auto sens_name =
-          detail::addPrefix(name_, axom::fmt::format("contact_shape_sensitivity_{}", interaction_id));
-      auto sens = std::make_unique<FiniteElementDual>(BasePhysics::shapeDisplacementSensitivity().space(), sens_name);
-      *sens = 0.0;
-      it = contact_interaction_shape_sensitivities_.emplace(interaction_id, std::move(sens)).first;
-    }
-
-    auto& contact_shape_sensitivity = *it->second;
-    contact_shape_sensitivity = 0.0;
-    dfdx->MultTranspose(adjoint_displacement_, contact_shape_sensitivity);
-    return contact_shape_sensitivity;
-#else
-    SLIC_ERROR_ROOT("Smith built without Tribol support. Cannot compute contact shape sensitivities.");
-    return BasePhysics::shapeDisplacementSensitivity();
-#endif
-  }
 
   /// @overload
   void setDualAdjointBcs(std::unordered_map<std::string, const smith::FiniteElementState&> bcs) override

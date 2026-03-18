@@ -362,59 +362,6 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionForceMagnitudeQoiShape
   EXPECT_NEAR(directional_deriv, directional_deriv_fd, 10.0 * eps);
 }
 
-TEST_F(ContactSensitivityFixture, SingleContactInteractionResidualShapeSensitivityDirectionalDerivative)
-{
-  // This test directly exercises SolidMechanicsContact::computeTimestepContactShapeSensitivity(interaction_id) by
-  // verifying its directional derivative against a finite-difference check of the scalar functional:
-  //   G(S) = <lambda, f_contact,i(u, S)>
-  // holding the displacement u fixed and perturbing only the shape displacement S.
-  //
-  // Here, lambda is the displacement adjoint obtained from a simple displacement QoI.
-  constexpr int contact_interaction_id = 0;
-  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
-
-  // Forward solve once to establish equilibrium at the end of the step.
-  solid_solver->resetStates();
-  solid_solver->advanceTimestep(1.0);
-  EXPECT_EQ(1, solid_solver->cycle());
-
-  // Solve a displacement adjoint for a simple displacement QoI.
-  FiniteElementDual adjoint_load(solid_solver->state("displacement").space(), "adjoint_displacement_load");
-  auto displacement_end = solid_solver->loadCheckpointedState("displacement", solid_solver->cycle());
-  computeStepAdjointLoad(displacement_end, adjoint_load);
-  solid_solver->setAdjointLoad({{"displacement", adjoint_load}});
-  solid_solver->reverseAdjointTimestep();
-
-  // Ensure the contact Jacobian/forces correspond to the current configuration before taking derivatives.
-  FiniteElementState base_shape_disp(solid_solver->shapeDisplacement().space(), "base_shape_displacement");
-  base_shape_disp = solid_solver->shapeDisplacement();
-  (void)solid_solver->evalContactInteractionForcesAtShape(contact_interaction_id, base_shape_disp);
-
-  const auto& contact_shape_sens = solid_solver->computeTimestepContactShapeSensitivity(contact_interaction_id);
-  const auto& lambda = solid_solver->adjoint("displacement");
-
-  FiniteElementState derivative_direction(contact_shape_sens.space(), "derivative_direction");
-  fillDirection(*solid_solver, derivative_direction);
-
-  const double eps_contact = 1.0e-3;
-
-  auto compute_linear_form_at_shape = [&](double scale) -> double {
-    FiniteElementState shape_disp(base_shape_disp.space(), "shape_displacement");
-    shape_disp = base_shape_disp;
-    shape_disp.Add(scale, derivative_direction);
-    const auto f = solid_solver->evalContactInteractionForcesAtShape(contact_interaction_id, shape_disp);
-    return innerProduct(f, lambda);
-  };
-
-  const double g_plus = compute_linear_form_at_shape(eps_contact);
-  const double g_minus = compute_linear_form_at_shape(-eps_contact);
-
-  const double directional_deriv = innerProduct(derivative_direction, contact_shape_sens);
-  const double directional_deriv_fd = (g_plus - g_minus) / (2.0 * eps_contact);
-
-  EXPECT_NEAR(directional_deriv, directional_deriv_fd, 10.0 * eps_contact);
-}
-
 TEST_F(ContactSensitivityFixture, ContactForceDualAdjointBcsMatchesEquivalentAdjointLoad)
 {
   // Verify that providing a seed for a contact force dual via setDualAdjointBcs({"contact_force_<id>", seed})
