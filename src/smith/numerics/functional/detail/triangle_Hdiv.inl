@@ -61,6 +61,58 @@ struct finite_element<mfem::Geometry::TRIANGLE, Hdiv<p> > {
       phi_2 = (x-1, y)       div = 2
   */
 
+  // DOF locations (edge midpoints for edge DOFs, interior points for interior DOFs)
+  // and associated normal directions for the Kronecker delta property.
+  // For RT_0 (p=1): 3 edge DOFs at edge midpoints
+  // For RT_1 (p=2): 2 DOFs per edge (at 1/3, 2/3 points) + 2 interior DOFs
+  static constexpr auto nodes = [] {
+    tensor<double, ndof, dim> nodes{};
+    if constexpr (p == 1) {
+      // Edge midpoints
+      nodes[0] = {0.5, 0.0};   // edge 0: (0,0)-(1,0)
+      nodes[1] = {0.5, 0.5};   // edge 1: (1,0)-(0,1)
+      nodes[2] = {0.0, 0.5};   // edge 2: (0,1)-(0,0)
+    }
+    if constexpr (p == 2) {
+      // Edge 0: (0,0)-(1,0), 2 DOFs
+      nodes[0] = {1.0 / 3.0, 0.0};
+      nodes[1] = {2.0 / 3.0, 0.0};
+      // Edge 1: (1,0)-(0,1), 2 DOFs
+      nodes[2] = {2.0 / 3.0, 1.0 / 3.0};
+      nodes[3] = {1.0 / 3.0, 2.0 / 3.0};
+      // Edge 2: (0,1)-(0,0), 2 DOFs
+      nodes[4] = {0.0, 2.0 / 3.0};
+      nodes[5] = {0.0, 1.0 / 3.0};
+      // Interior DOFs
+      nodes[6] = {1.0 / 3.0, 1.0 / 3.0};
+      nodes[7] = {1.0 / 3.0, 1.0 / 3.0};
+    }
+    return nodes;
+  }();
+
+  static constexpr auto directions = [] {
+    tensor<double, ndof, dim> directions{};
+    if constexpr (p == 1) {
+      // Outward normals (not normalized — matches shape function scaling)
+      directions[0] = {0.0, -1.0};   // edge 0
+      directions[1] = {1.0, 1.0};    // edge 1
+      directions[2] = {-1.0, 0.0};   // edge 2
+    }
+    if constexpr (p == 2) {
+      // Edge normals (same for both DOFs on an edge)
+      directions[0] = {0.0, -1.0};
+      directions[1] = {0.0, -1.0};
+      directions[2] = {1.0, 1.0};
+      directions[3] = {1.0, 1.0};
+      directions[4] = {-1.0, 0.0};
+      directions[5] = {-1.0, 0.0};
+      // Interior DOFs
+      directions[6] = {1.0, 0.0};
+      directions[7] = {0.0, 1.0};
+    }
+    return directions;
+  }();
+
   SMITH_HOST_DEVICE static constexpr tensor<double, ndof, dim> shape_functions(
       [[maybe_unused]] tensor<double, dim> xi)
   {

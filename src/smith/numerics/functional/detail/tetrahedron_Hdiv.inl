@@ -59,6 +59,31 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
       phi_3 = (x, y, z-1)           div = 3
   */
 
+  // DOF locations (face centroids) and associated normal directions
+  static constexpr auto nodes = [] {
+    tensor<double, ndof, dim> nodes{};
+    if constexpr (p == 1) {
+      // Face centroids
+      nodes[0] = {1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0};  // face 0
+      nodes[1] = {0.0, 1.0 / 3.0, 1.0 / 3.0};          // face 1
+      nodes[2] = {1.0 / 3.0, 0.0, 1.0 / 3.0};          // face 2
+      nodes[3] = {1.0 / 3.0, 1.0 / 3.0, 0.0};          // face 3
+    }
+    return nodes;
+  }();
+
+  static constexpr auto directions = [] {
+    tensor<double, ndof, dim> directions{};
+    if constexpr (p == 1) {
+      // Outward normals (not normalized — matches shape function scaling)
+      directions[0] = {1.0, 1.0, 1.0};    // face 0
+      directions[1] = {-1.0, 0.0, 0.0};   // face 1
+      directions[2] = {0.0, -1.0, 0.0};   // face 2
+      directions[3] = {0.0, 0.0, -1.0};   // face 3
+    }
+    return directions;
+  }();
+
   SMITH_HOST_DEVICE static constexpr tensor<double, ndof, dim> shape_functions(
       [[maybe_unused]] tensor<double, dim> xi)
   {

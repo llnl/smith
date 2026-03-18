@@ -22,26 +22,17 @@
 
 using namespace smith;
 
-// Hdiv<p> -> RT_FECollection(p-1, dim) via generateParFiniteElementSpace
-// Minimum usable order is p=1 (RT_0).
-template <int p>
-void hdiv_test_2D()
+template <int p, int dim>
+void hdiv_test_impl(std::unique_ptr<mfem::ParMesh>& mesh)
 {
-  constexpr int dim = 2;
   using test_space = Hdiv<p>;
   using trial_space = Hdiv<p>;
-
-  std::string meshfile = SMITH_REPO_DIR "/data/meshes/patch2D_quads.mesh";
-
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 1);
 
   auto [fespace, fec] = smith::generateParFiniteElementSpace<Hdiv<p>>(mesh.get());
 
   mfem::Vector U(fespace->TrueVSize());
-  int seed = 7;
-  U.Randomize(seed);
+  U.Randomize(7);
 
-  // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space)> residual(fespace.get(), {fespace.get()});
 
   auto d00 = make_tensor<dim, dim>([](int i, int j) { return i + j * j - 1; });
@@ -65,48 +56,32 @@ void hdiv_test_2D()
 }
 
 template <int p>
-void hdiv_test_3D()
+void hdiv_test(std::string meshfile)
 {
-  constexpr int dim = 3;
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(SMITH_REPO_DIR + meshfile), 1);
 
-  std::string meshfile = SMITH_REPO_DIR "/data/meshes/patch3D.mesh";
+  if (mesh->Dimension() == 2) {
+    hdiv_test_impl<p, 2>(mesh);
+  }
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 1);
-
-  auto [fespace, fec] = smith::generateParFiniteElementSpace<Hdiv<p>>(mesh.get());
-
-  mfem::Vector U(fespace->TrueVSize());
-  int seed = 8;
-  U.Randomize(seed);
-
-  using test_space = Hdiv<p>;
-  using trial_space = Hdiv<p>;
-
-  Functional<test_space(trial_space)> residual(fespace.get(), {fespace.get()});
-
-  auto d00 = make_tensor<dim, dim>([](int i, int j) { return i + j * j - 1; });
-  auto d01 = make_tensor<dim>([](int i) { return i * i + 3; });
-  auto d10 = make_tensor<dim>([](int i) { return 3 * i - 2; });
-  auto d11 = 1.0;
-
-  Domain whole_domain = EntireDomain(*mesh);
-  residual.AddDomainIntegral(
-      Dimension<dim>{}, DependsOn<0>{},
-      [=](double /*t*/, auto /*x*/, auto sigma) {
-        auto [val, div_val] = sigma;
-        auto source = dot(d00, val) + d01 * div_val;
-        auto flux = dot(d10, val) + d11 * div_val;
-        return smith::tuple{source, flux};
-      },
-      whole_domain);
-
-  double t = 0.0;
-  check_gradient(residual, t, U);
+  if (mesh->Dimension() == 3) {
+    hdiv_test_impl<p, 3>(mesh);
+  }
 }
 
-TEST(basic, hdiv_test_2D_linear) { hdiv_test_2D<1>(); }
+// 2D tests
+TEST(basic, hdiv_quads) { hdiv_test<1>("/data/meshes/patch2D_quads.mesh"); }
+TEST(basic, hdiv_tris) { hdiv_test<1>("/data/meshes/patch2D_tris.mesh"); }
+TEST(basic, hdiv_tris_and_quads) { hdiv_test<1>("/data/meshes/patch2D_tris_and_quads.mesh"); }
 
-TEST(basic, hdiv_test_3D_linear) { hdiv_test_3D<1>(); }
+// 3D tests
+TEST(basic, hdiv_hexes) { hdiv_test<1>("/data/meshes/patch3D_hexes.mesh"); }
+TEST(basic, hdiv_tets) { hdiv_test<1>("/data/meshes/patch3D_tets.mesh"); }
+TEST(basic, hdiv_tets_and_hexes) { hdiv_test<1>("/data/meshes/patch3D_tets_and_hexes.mesh"); }
+
+// Higher order (quads/hexes have full p support; simplices only p=1 for now)
+TEST(basic, hdiv_quads_p2) { hdiv_test<2>("/data/meshes/patch2D_quads.mesh"); }
+TEST(basic, hdiv_hexes_p2) { hdiv_test<2>("/data/meshes/patch3D_hexes.mesh"); }
 
 int main(int argc, char* argv[])
 {

@@ -119,6 +119,22 @@ TEST(HdivDiv, HexahedronQuadratic) { verify_div_calculation<finite_element<::mfe
 
 TEST(HdivDiv, HexahedronCubic) { verify_div_calculation<finite_element<::mfem::Geometry::CUBE, Hdiv<3>>>(); }
 
+// Triangle (only p=1 shape functions fully implemented)
+TEST(HdivKroneckerDelta, TriangleLinear)
+{
+  verify_kronecker_delta_property<finite_element<::mfem::Geometry::TRIANGLE, Hdiv<1>>>();
+}
+
+TEST(HdivDiv, TriangleLinear) { verify_div_calculation<finite_element<::mfem::Geometry::TRIANGLE, Hdiv<1>>>(); }
+
+// Tetrahedron (only p=1 shape functions fully implemented)
+TEST(HdivKroneckerDelta, TetrahedronLinear)
+{
+  verify_kronecker_delta_property<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<1>>>();
+}
+
+TEST(HdivDiv, TetrahedronLinear) { verify_div_calculation<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<1>>>(); }
+
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
