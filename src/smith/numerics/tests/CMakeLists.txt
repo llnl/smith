@@ -11,6 +11,7 @@ set(numerics_serial_test_sources
     operator.cpp
     odes.cpp
     test_block_preconditioner.cpp
+    test_block_preconditioner_old.cpp
     test_block_preconditioner_backend.cpp
     test_block_preconditioner_custom_operators.cpp
     )
