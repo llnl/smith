@@ -314,7 +314,7 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionForceMagnitudeQoiShape
     return 0.5 * innerProduct(f, f);
   };
 
-  const double qoi_base = compute_contact_force_qoi(*solid_solver);
+  (void)compute_contact_force_qoi(*solid_solver);
 
   // Compute adjoint/shape sensitivity for this QoI.
   const auto f_base = solid_solver->dual(axom::fmt::format("contact_force_{}", contact_interaction_id));
@@ -355,9 +355,10 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionForceMagnitudeQoiShape
   };
 
   const double qoi_plus = compute_qoi_adjusting_shape(*solid_solver, eps);
+  const double qoi_minus = compute_qoi_adjusting_shape(*solid_solver, -eps);
 
   const double directional_deriv = innerProduct(derivative_direction, total_shape_sensitivity);
-  const double directional_deriv_fd = (qoi_plus - qoi_base) / eps;
+  const double directional_deriv_fd = (qoi_plus - qoi_minus) / (2.0 * eps);
 
   EXPECT_NEAR(directional_deriv, directional_deriv_fd, 10.0 * eps);
 }
