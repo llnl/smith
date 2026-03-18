@@ -449,6 +449,34 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 #endif
   }
 
+  /// @overload
+  void setDualAdjointBcs(std::unordered_map<std::string, const smith::FiniteElementState&> bcs) override
+  {
+    SLIC_ERROR_ROOT_IF(bcs.size() == 0, "Adjoint load container size must be greater than 0 in SolidMechanicsContact.");
+
+    auto reaction_adjoint_load = bcs.find("reactions");
+    if (reaction_adjoint_load != bcs.end()) {
+      SolidMechanicsBase::setDualAdjointBcs({{"reactions", reaction_adjoint_load->second}});
+    }
+
+    for (const auto& [name, bc] : bcs) {
+      if (name == "reactions") {
+        continue;
+      }
+
+      const auto interaction_id = parseContactInteractionForceId(name);
+      SLIC_ERROR_ROOT_IF(!interaction_id.has_value(),
+                         axom::fmt::format("Unknown dual adjoint BC '{}' for SolidMechanicsContact.", name));
+
+      auto it = contact_interaction_force_adjoint_bcs_.find(*interaction_id);
+      SLIC_ERROR_ROOT_IF(
+          it == contact_interaction_force_adjoint_bcs_.end(),
+          axom::fmt::format("No contact force adjoint BC registered for interaction_id={}", *interaction_id));
+
+      *it->second = bc;
+    }
+  }
+
  protected:
   static std::optional<int> parseContactInteractionForceId(std::string_view dual_name)
   {
@@ -629,34 +657,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     }
 
     displacement_ += du_;
-  }
-
-  /// @overload
-  void setDualAdjointBcs(std::unordered_map<std::string, const smith::FiniteElementState&> bcs) override
-  {
-    SLIC_ERROR_ROOT_IF(bcs.size() == 0, "Adjoint load container size must be greater than 0 in SolidMechanicsContact.");
-
-    auto reaction_adjoint_load = bcs.find("reactions");
-    if (reaction_adjoint_load != bcs.end()) {
-      SolidMechanicsBase::setDualAdjointBcs({{"reactions", reaction_adjoint_load->second}});
-    }
-
-    for (const auto& [name, bc] : bcs) {
-      if (name == "reactions") {
-        continue;
-      }
-
-      const auto interaction_id = parseContactInteractionForceId(name);
-      SLIC_ERROR_ROOT_IF(!interaction_id.has_value(),
-                         axom::fmt::format("Unknown dual adjoint BC '{}' for SolidMechanicsContact.", name));
-
-      auto it = contact_interaction_force_adjoint_bcs_.find(*interaction_id);
-      SLIC_ERROR_ROOT_IF(
-          it == contact_interaction_force_adjoint_bcs_.end(),
-          axom::fmt::format("No contact force adjoint BC registered for interaction_id={}", *interaction_id));
-
-      *it->second = bc;
-    }
   }
 
   /// @brief Solve the Quasi-static Newton system

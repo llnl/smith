@@ -415,6 +415,59 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionResidualShapeSensitivi
   EXPECT_NEAR(directional_deriv, directional_deriv_fd, 10.0 * eps_contact);
 }
 
+TEST_F(ContactSensitivityFixture, ContactForceDualAdjointBcsMatchesEquivalentAdjointLoad)
+{
+  // Verify that providing a seed for a contact force dual via setDualAdjointBcs({"contact_force_<id>", seed})
+  // produces the same displacement adjoint as providing the equivalent adjoint load
+  //   dJ/du = (df_i/du)^T * dJ/df_i
+  // directly via setAdjointLoad.
+  constexpr int contact_interaction_id = 0;
+
+  auto solver_with_dual_seed = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+  auto solver_with_load = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  solver_with_dual_seed->resetStates();
+  solver_with_dual_seed->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver_with_dual_seed->cycle());
+
+  solver_with_load->resetStates();
+  solver_with_load->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver_with_load->cycle());
+
+  FiniteElementState dJ_df(solver_with_dual_seed->state("displacement").space(), "dJ_df");
+  fillDirection(*solver_with_dual_seed, dJ_df);
+
+  FiniteElementState dJ_df_load_space(solver_with_load->state("displacement").space(), "dJ_df");
+  dJ_df_load_space = dJ_df;
+
+  const auto interaction_jacobian =
+      solver_with_load->contactInteraction(contact_interaction_id).jacobianContribution();
+  auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
+  SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
+
+  FiniteElementDual equivalent_load(solver_with_load->state("displacement").space(), "equivalent_load");
+  equivalent_load = 0.0;
+  J00->MultTranspose(dJ_df_load_space, equivalent_load);
+
+  FiniteElementDual zero_load(solver_with_dual_seed->state("displacement").space(), "zero_load");
+  zero_load = 0.0;
+
+  solver_with_dual_seed->setAdjointLoad({{"displacement", zero_load}});
+  solver_with_dual_seed->setDualAdjointBcs({{axom::fmt::format("contact_force_{}", contact_interaction_id), dJ_df}});
+  solver_with_dual_seed->reverseAdjointTimestep();
+
+  solver_with_load->setAdjointLoad({{"displacement", equivalent_load}});
+  solver_with_load->reverseAdjointTimestep();
+
+  const auto& lambda_from_seed = solver_with_dual_seed->adjoint("displacement");
+  const auto& lambda_from_load = solver_with_load->adjoint("displacement");
+
+  FiniteElementState diff(lambda_from_seed);
+  diff.Add(-1.0, lambda_from_load);
+
+  EXPECT_NEAR(diff.Norml2(), 0.0, 1.0e-10);
+}
+
 }  // namespace smith
 
 int main(int argc, char* argv[])
