@@ -370,44 +370,46 @@ TEST_F(ContactSensitivityFixture, ContactForceDualAdjointBcsMatchesEquivalentAdj
   // directly via setAdjointLoad.
   constexpr int contact_interaction_id = 0;
 
-  auto solver_with_dual_seed = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
-  auto solver_with_load = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+  auto solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
 
-  solver_with_dual_seed->resetStates();
-  solver_with_dual_seed->advanceTimestep(1.0);
-  EXPECT_EQ(1, solver_with_dual_seed->cycle());
+  solver->resetStates();
+  solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver->cycle());
 
-  solver_with_load->resetStates();
-  solver_with_load->advanceTimestep(1.0);
-  EXPECT_EQ(1, solver_with_load->cycle());
+  FiniteElementState dJ_df(solver->state("displacement").space(), "dJ_df");
+  fillDirection(*solver, dJ_df);
 
-  FiniteElementState dJ_df(solver_with_dual_seed->state("displacement").space(), "dJ_df");
-  fillDirection(*solver_with_dual_seed, dJ_df);
+  // 1) Solve adjoint with the contact-force seed provided via setDualAdjointBcs.
+  FiniteElementDual zero_load(solver->state("displacement").space(), "zero_load");
+  zero_load = 0.0;
+  solver->setAdjointLoad({{"displacement", zero_load}});
+  solver->setDualAdjointBcs({{axom::fmt::format("contact_force_{}", contact_interaction_id), dJ_df}});
+  solver->reverseAdjointTimestep();
 
-  FiniteElementState dJ_df_load_space(solver_with_load->state("displacement").space(), "dJ_df");
-  dJ_df_load_space = dJ_df;
+  FiniteElementState lambda_from_seed(solver->adjoint("displacement"));
 
-  const auto interaction_jacobian =
-      solver_with_load->contactInteraction(contact_interaction_id).jacobianContribution();
+  // 2) Re-run the forward step and solve the adjoint using the equivalent adjoint load.
+  solver->resetStates();
+  solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver->cycle());
+
+  const auto interaction_jacobian = solver->contactInteraction(contact_interaction_id).jacobianContribution();
   auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
   SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
 
-  FiniteElementDual equivalent_load(solver_with_load->state("displacement").space(), "equivalent_load");
+  FiniteElementDual equivalent_load(solver->state("displacement").space(), "equivalent_load");
   equivalent_load = 0.0;
-  J00->MultTranspose(dJ_df_load_space, equivalent_load);
+  J00->MultTranspose(dJ_df, equivalent_load);
 
-  FiniteElementDual zero_load(solver_with_dual_seed->state("displacement").space(), "zero_load");
-  zero_load = 0.0;
+  // Clear the contact-force dual-adjoint seed so the quasiStaticAdjointSolve() path doesn't add it again.
+  FiniteElementState zero_seed(solver->state("displacement").space(), "zero_seed");
+  zero_seed = 0.0;
+  solver->setDualAdjointBcs({{axom::fmt::format("contact_force_{}", contact_interaction_id), zero_seed}});
 
-  solver_with_dual_seed->setAdjointLoad({{"displacement", zero_load}});
-  solver_with_dual_seed->setDualAdjointBcs({{axom::fmt::format("contact_force_{}", contact_interaction_id), dJ_df}});
-  solver_with_dual_seed->reverseAdjointTimestep();
+  solver->setAdjointLoad({{"displacement", equivalent_load}});
+  solver->reverseAdjointTimestep();
 
-  solver_with_load->setAdjointLoad({{"displacement", equivalent_load}});
-  solver_with_load->reverseAdjointTimestep();
-
-  const auto& lambda_from_seed = solver_with_dual_seed->adjoint("displacement");
-  const auto& lambda_from_load = solver_with_load->adjoint("displacement");
+  const auto& lambda_from_load = solver->adjoint("displacement");
 
   FiniteElementState diff(lambda_from_seed);
   diff.Add(-1.0, lambda_from_load);
