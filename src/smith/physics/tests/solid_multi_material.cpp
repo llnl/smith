@@ -66,7 +66,7 @@ TEST(Solid, MultiMaterial)
   mesh->addDomainOfBoundaryElements("end_face", by_attr<dim>(3));
 
   // _solver_params_start
-  smith::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU, .block_options = {}};
+  smith::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
   smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-12,
@@ -185,7 +185,7 @@ TEST(Solid, MultiMaterialWithState)
   mesh->addDomainOfBoundaryElements("y_min_face", by_attr<dim>(2));
   mesh->addDomainOfBoundaryElements("z_min_face", by_attr<dim>(1));
 
-  smith::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU, .block_options = {}};
+  smith::LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
   smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-12,

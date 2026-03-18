@@ -1312,7 +1312,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
              preconditioner == Preconditioner::BlockSchurLower || preconditioner == Preconditioner::BlockSchurUpper ||
              preconditioner == Preconditioner::BlockSchurFull) {
     std::vector<std::unique_ptr<mfem::Solver>> inner_solvers;
-    for (const auto& opt : linear_opts.block_options) {
+    for (const auto& opt : linear_opts.subblock_linear_options) {
       auto [lin, prec] = buildLinearSolverAndPreconditioner(opt, comm);
       inner_solvers.push_back(std::make_unique<SolverWithPreconditioner>(std::move(lin), std::move(prec)));
     }

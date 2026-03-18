@@ -205,18 +205,18 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
                               [heatsink_options = heatsink_options](double, auto) { return heatsink_options.q_app; });
 
   // Block Preconditioner Options
-  smith::LinearSolverOptions default_linear_options;
-  default_linear_options.linear_solver = smith::LinearSolver::GMRES;
-  default_linear_options.relative_tol = 1.0e-3;
-  default_linear_options.absolute_tol = 1.0e-6;
-  default_linear_options.max_iterations = 100;
-  default_linear_options.print_level = 1;
+  smith::LinearSolverOptions linear_options;
+  linear_options.linear_solver = smith::LinearSolver::GMRES;
+  linear_options.relative_tol = 1.0e-3;
+  linear_options.absolute_tol = 1.0e-6;
+  linear_options.max_iterations = 100;
+  linear_options.print_level = 0;
 
   // Parameter sweep: construct solvers according to test parameters
   if (test_params.solver_type == BlockSolverType::Direct) {
     smith::LinearSolverOptions direct_solver_options{.linear_solver = smith::LinearSolver::SuperLU};
-    default_linear_options.block_options.push_back(direct_solver_options);
-    default_linear_options.block_options.push_back(direct_solver_options);
+    linear_options.subblock_linear_options.push_back(direct_solver_options);
+    linear_options.subblock_linear_options.push_back(direct_solver_options);
   } else if (test_params.solver_type == BlockSolverType::Iterative) {
     smith::LinearSolverOptions iter_solver_options = {.linear_solver = smith::LinearSolver::GMRES,
                                                       .preconditioner = smith::Preconditioner::HypreAMG,
@@ -224,57 +224,52 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
                                                       .absolute_tol = 1.0e-6,
                                                       .max_iterations = 100,
                                                       .print_level = 1};
-    default_linear_options.block_options.push_back(iter_solver_options);
-    default_linear_options.block_options.push_back(iter_solver_options);
+    linear_options.subblock_linear_options.push_back(iter_solver_options);
+    linear_options.subblock_linear_options.push_back(iter_solver_options);
   } else if (test_params.solver_type == BlockSolverType::BoomerAMG) {
-    smith::LinearSolverOptions amg_solver_options = {
-        .linear_solver = smith::LinearSolver::GMRES,  // Not quite exact but BoomerAMG isn't a direct LinearSolver enum
-                                                      // type without preconditioner wrapper?
-        .preconditioner = smith::Preconditioner::HypreAMG};
-    // Wait, the previous test constructed mfem::HypreBoomerAMG natively.
-    // Let's use CG + AMG here.
+    smith::LinearSolverOptions amg_solver_options;
     amg_solver_options.linear_solver = smith::LinearSolver::CG;
     amg_solver_options.preconditioner = smith::Preconditioner::HypreAMG;
     amg_solver_options.max_iterations = 1;  // Since it's a preconditioner-only analog
-    default_linear_options.block_options.push_back(amg_solver_options);
-    default_linear_options.block_options.push_back(amg_solver_options);
+    linear_options.subblock_linear_options.push_back(amg_solver_options);
+    linear_options.subblock_linear_options.push_back(amg_solver_options);
   }
 
   switch (test_params.precond_type) {
     case BlockPrecondType::Diagonal:
-      default_linear_options.preconditioner = smith::Preconditioner::BlockDiagonal;
+      linear_options.preconditioner = smith::Preconditioner::BlockDiagonal;
       break;
     case BlockPrecondType::TriLower:
-      default_linear_options.preconditioner = smith::Preconditioner::BlockTriangularLower;
+      linear_options.preconditioner = smith::Preconditioner::BlockTriangularLower;
       break;
     case BlockPrecondType::TriUpper:
-      default_linear_options.preconditioner = smith::Preconditioner::BlockTriangularUpper;
+      linear_options.preconditioner = smith::Preconditioner::BlockTriangularUpper;
       break;
     case BlockPrecondType::TriSym:
-      default_linear_options.preconditioner = smith::Preconditioner::BlockTriangularSymmetric;
+      linear_options.preconditioner = smith::Preconditioner::BlockTriangularSymmetric;
       break;
     case BlockPrecondType::SchurLower:
-      default_linear_options.preconditioner = smith::Preconditioner::BlockSchurLower;
+      linear_options.preconditioner = smith::Preconditioner::BlockSchurLower;
       break;
     case BlockPrecondType::SchurUpper:
-      default_linear_options.preconditioner = smith::Preconditioner::BlockSchurUpper;
+      linear_options.preconditioner = smith::Preconditioner::BlockSchurUpper;
       break;
     case BlockPrecondType::SchurDiag:
-      default_linear_options.preconditioner = smith::Preconditioner::BlockSchurDiagonal;
+      linear_options.preconditioner = smith::Preconditioner::BlockSchurDiagonal;
       break;
     case BlockPrecondType::SchurFull:
-      default_linear_options.preconditioner = smith::Preconditioner::BlockSchurFull;
+      linear_options.preconditioner = smith::Preconditioner::BlockSchurFull;
       break;
   }
 
   smith::NonlinearSolverOptions nonlin_opts;
   nonlin_opts.nonlin_solver = smith::NonlinearSolver::Newton;
-  nonlin_opts.relative_tol = default_linear_options.relative_tol;
-  nonlin_opts.absolute_tol = default_linear_options.absolute_tol;
+  nonlin_opts.relative_tol = linear_options.relative_tol;
+  nonlin_opts.absolute_tol = linear_options.absolute_tol;
   nonlin_opts.max_iterations = 1;
-  nonlin_opts.print_level = default_linear_options.print_level;
+  nonlin_opts.print_level = linear_options.print_level;
 
-  auto d_linear_solver = smith::buildDifferentiableSolver(nonlin_opts, default_linear_options, *mesh);
+  auto d_linear_solver = smith::buildDifferentiableSolver(nonlin_opts, linear_options, *mesh);
 
   auto time = graph->create_state<double, double>(0.0);
   auto dt = graph->create_state<double, double>(0.025);

@@ -46,12 +46,12 @@ class SystemSolver {
 
   /// @brief Adds a solver stage defined by a Stage struct.
   /// @param stage Stage configuration.
-  void addStage(const Stage& stage);
+  void addSubsystemSolver(const Stage& stage);
 
   /// @brief Convenience method to add a solver stage.
   /// @param block_indices Indices of the blocks to solve.
   /// @param solver Differentiable solver for this stage.
-  void addStage(const std::vector<size_t>& block_indices, std::shared_ptr<DifferentiableBlockSolver> solver);
+  void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<DifferentiableBlockSolver> solver);
 
   /// @brief Solves the multiphysics system using staggered iterations.
   /// @param residual_evals Vector of WeakForm evaluations for each block.

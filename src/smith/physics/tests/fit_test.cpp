@@ -51,7 +51,7 @@ void stress_extrapolation_test()
   auto mesh =
       std::make_shared<smith::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU, .block_options = {}};
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::SuperLU};
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
                                            .relative_tol = 1.0e-12,

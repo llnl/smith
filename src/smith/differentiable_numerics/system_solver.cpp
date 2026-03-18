@@ -20,7 +20,7 @@ namespace smith {
 SystemSolver::SystemSolver(std::shared_ptr<DifferentiableBlockSolver> single_solver)
     : max_staggered_iterations_(1), exact_staggered_steps_(false)
 {
-  addStage({}, std::move(single_solver));
+  addSubsystemSolver({}, std::move(single_solver));
 }
 
 SystemSolver::SystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
@@ -29,9 +29,10 @@ SystemSolver::SystemSolver(int max_staggered_iterations, bool exact_staggered_st
   SLIC_ERROR_IF(max_staggered_iterations <= 0, "max_staggered_iterations must be > 0");
 }
 
-void SystemSolver::addStage(const Stage& stage) { stages_.push_back(stage); }
+void SystemSolver::addSubsystemSolver(const Stage& stage) { stages_.push_back(stage); }
 
-void SystemSolver::addStage(const std::vector<size_t>& block_indices, std::shared_ptr<DifferentiableBlockSolver> solver)
+void SystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
+                                      std::shared_ptr<DifferentiableBlockSolver> solver)
 {
   stages_.push_back({block_indices, std::move(solver)});
 }

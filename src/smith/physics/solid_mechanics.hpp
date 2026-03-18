@@ -80,16 +80,13 @@ const LinearSolverOptions default_linear_options = {.linear_solver = LinearSolve
                                                     .relative_tol = 1.0e-6,
                                                     .absolute_tol = 1.0e-16,
                                                     .max_iterations = 500,
-                                                    .print_level = 0,
-                                                    .block_options = {}};
+                                                    .print_level = 0};
 
 /// the default direct solver option for solving the linear stiffness equations
 #ifdef MFEM_USE_STRUMPACK
-const LinearSolverOptions direct_linear_options = {
-    .linear_solver = LinearSolver::Strumpack, .print_level = 0, .block_options = {}};
+const LinearSolverOptions direct_linear_options = {.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #else
-const LinearSolverOptions direct_linear_options = {
-    .linear_solver = LinearSolver::SuperLU, .print_level = 0, .block_options = {}};
+const LinearSolverOptions direct_linear_options = {.linear_solver = LinearSolver::SuperLU, .print_level = 0};
 #endif
 
 /**

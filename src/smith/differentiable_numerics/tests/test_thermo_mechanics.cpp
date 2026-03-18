@@ -133,8 +133,8 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicVsStaggered)
                                        .relative_tol = 1e-6,
                                        .absolute_tol = 1e-12,
                                        .max_iterations = 50};
-  mono_lin_opts.block_options.push_back(block_opt);
-  mono_lin_opts.block_options.push_back(block_opt);
+  mono_lin_opts.subblock_linear_options.push_back(block_opt);
+  mono_lin_opts.subblock_linear_options.push_back(block_opt);
 
   smith::NonlinearSolverOptions mono_nonlin_opts{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
                                                  .relative_tol = 1e-12,
@@ -173,10 +173,16 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicVsStaggered)
                                                   .absolute_tol = 1e-12,
                                                   .max_iterations = 100};
 
+  // where to put all the tolerances?
+  // option struct:
+  // inject function to specifying tolernces.  what are the args?  u, v, du, dv, res(u), res(v)
+  // u, thermal, concentration
+
   auto solver_disp = buildDifferentiableSolver(mech_nonlin_opts, mech_lin_opts, *mesh_);
   auto solver_temp = buildDifferentiableSolver(therm_nonlin_opts, therm_lin_opts, *mesh_);
-  stag_sys_solver->addStage({0}, solver_disp);
-  stag_sys_solver->addStage({1}, solver_temp);
+  stag_sys_solver->addSubsystemSolver({0}, solver_disp);
+  stag_sys_solver->addSubsystemSolver({1}, solver_temp);
+
   auto stag_result = run_problem(stag_sys_solver, true);
 
   double disp_diff = mfem::Vector(mono_result.first).Add(-1.0, stag_result.first).Normlinf();

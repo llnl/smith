@@ -92,7 +92,6 @@ TEST(LiquidCrystalElastomer, Brighenti)
       .absolute_tol = 1.0e-14,
       .max_iterations = 600,
       .print_level = 0,
-      .block_options = {},
   };
 
 #ifdef SMITH_USE_SUNDIALS
