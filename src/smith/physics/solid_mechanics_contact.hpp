@@ -401,6 +401,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   }
 
  protected:
+  /// @brief Converts a dual name into an interaction id (if it exists)
   static std::optional<int> parseContactInteractionForceId(std::string_view dual_name)
   {
     constexpr std::string_view prefix = "contact_force_";
@@ -736,6 +737,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
   /// per-interaction contact forces for output
   std::unordered_map<int, std::unique_ptr<FiniteElementDual>> contact_interaction_forces_;
+
+  /// sorted list of all contact interaction ids
   std::vector<int> contact_interaction_ids_sorted_;
 
   /// per-interaction dual-adjoint (BC) fields for contact force duals
