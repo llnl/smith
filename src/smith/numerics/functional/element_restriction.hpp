@@ -28,6 +28,11 @@ inline bool isHcurl(const mfem::FiniteElementSpace& fes)
   return (fes.FEColl()->GetContType() == mfem::FiniteElementCollection::TANGENTIAL);
 }
 
+inline bool isHdiv(const mfem::FiniteElementSpace& fes)
+{
+  return (fes.FEColl()->GetContType() == mfem::FiniteElementCollection::NORMAL);
+}
+
 inline bool isDG(const mfem::FiniteElementSpace& fes)
 {
   return (fes.FEColl()->GetContType() == mfem::FiniteElementCollection::DISCONTINUOUS);
@@ -48,7 +53,7 @@ struct DoF {
 
   static constexpr uint64_t sign_mask = 0x8000'0000'0000'0000;         ///< bits for sign field
   static constexpr uint64_t orientation_mask = 0x7000'0000'0000'0000;  ///< bits for orientation field
-  static constexpr uint64_t index_mask = 0x0000'FFFF'FFFF'FFFF'FFFF;   ///< bits for the index field
+  static constexpr uint64_t index_mask = 0x0000'FFFF'FFFF'FFFF;        ///< bits for the index field
 
   static constexpr uint64_t sign_shift = 63;         ///< number of trailing zeros in `sign_mask`
   static constexpr uint64_t orientation_shift = 60;  ///< number of trailing zeros in `orientation_mask`
@@ -74,7 +79,7 @@ struct DoF {
 
   /// create a `DoF` from the given index, sign and orientation values
   DoF(uint64_t index, uint64_t sign = 0, uint64_t orientation = 0)
-      : bits((sign & 0x1ULL << sign_shift) + ((orientation & 0x7ULL) << orientation_shift) + index)
+      : bits(((sign & 0x1ULL) << sign_shift) + ((orientation & 0x7ULL) << orientation_shift) + index)
   {
   }
 

@@ -66,6 +66,18 @@ struct QFunctionArgument<Hcurl<p>, Dimension<3>> {
   using type = tuple<tensor<double, 3>, tensor<double, 3>>;  ///< what will be passed to the q-function
 };
 
+/// @overload
+template <int p>
+struct QFunctionArgument<Hdiv<p>, Dimension<2>> {
+  using type = tuple<tensor<double, 2>, double>;  ///< (value, divergence) passed to the q-function
+};
+
+/// @overload
+template <int p>
+struct QFunctionArgument<Hdiv<p>, Dimension<3>> {
+  using type = tuple<tensor<double, 3>, double>;  ///< (value, divergence) passed to the q-function
+};
+
 /// @brief layer of indirection needed to unpack the entries of the argument tuple
 SMITH_SUPPRESS_NVCC_HOSTDEVICE_WARNING
 template <typename lambda, typename coords_type, typename T, typename qpt_data_type, int... i>
@@ -257,7 +269,7 @@ SMITH_HOST_DEVICE auto batch_apply_chain_rule(derivative_type* qf_derivatives, c
  *
  * @tparam test The type of the test function space
  * @tparam trial The type of the trial function space
- * The above spaces can be any combination of {H1, Hcurl, Hdiv (TODO), L2 (TODO), QOI}
+ * The above spaces can be any combination of {H1, Hcurl, Hdiv, L2 (TODO), QOI}
  *
  * Template parameters other than the test and trial spaces are used for customization + optimization
  * and are erased through the @p std::function members of @p DomainIntegral
@@ -311,7 +323,7 @@ void action_of_gradient_kernel(const double* dU, double* dR, derivatives_type* q
  *
  * @tparam test The type of the test function space
  * @tparam trial The type of the trial function space
- * The above spaces can be any combination of {H1, Hcurl, Hdiv (TODO), L2 (TODO), QOI}
+ * The above spaces can be any combination of {H1, Hcurl, Hdiv, L2 (TODO), QOI}
  *
  * Template parameters other than the test and trial spaces are used for customization + optimization
  * and are erased through the @p std::function members of @p Integral

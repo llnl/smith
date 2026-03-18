@@ -250,17 +250,14 @@ axom::Array<DoF, 2, smith::detail::host_memory_space> GetElementRestriction(cons
       }
     }
 
-    // the dofs mfem returns for Hcurl include information about
-    // dof orientation, but not for triangle faces on 3D elements.
-    // So, we need to manually
-    if (isHcurl(*fes)) {
-      // TODO
-      // TODO
-      // TODO
-      uint64_t sign = 1;
-      uint64_t orientation = 0;
+    // mfem uses negative dof values to indicate sign flips for Hcurl/Hdiv
+    if (isHcurl(*fes) || isHdiv(*fes)) {
       for (int k = 0; k < dofs.Size(); k++) {
-        elem_dofs.push_back({uint64_t(dofs[k]), sign, orientation});
+        if (dofs[k] >= 0) {
+          elem_dofs.push_back(DoF{uint64_t(dofs[k]), 0});
+        } else {
+          elem_dofs.push_back(DoF{uint64_t(-1 - dofs[k]), 1});
+        }
       }
     }
 
@@ -316,17 +313,44 @@ axom::Array<DoF, 2, smith::detail::host_memory_space> GetElementDofs(const smith
       }
     }
 
-    // the dofs mfem returns for Hcurl include information about
-    // dof orientation, but not for triangle faces on 3D elements.
-    // So, we need to manually
+    // mfem uses negative dof values to indicate sign flips for Hcurl/Hdiv
     if (isHcurl(*fes)) {
-      // TODO
-      // TODO
-      // TODO
-      uint64_t sign = 1;
-      uint64_t orientation = 0;
       for (int k = 0; k < dofs.Size(); k++) {
-        elem_dofs.push_back({uint64_t(dofs[k]), sign, orientation});
+        if (dofs[k] >= 0) {
+          elem_dofs.push_back(DoF{uint64_t(dofs[k]), 0});
+        } else {
+          elem_dofs.push_back(DoF{uint64_t(-1 - dofs[k]), 1});
+        }
+      }
+    }
+
+    // For Hdiv (RT) tensor elements, the element's dof_map permutation must be applied
+    // to reorder mfem's DOF-number order into smith's logical (i,j) order, and to
+    // combine the reference-element orientation sign with the mesh orientation sign.
+    // Simplex Hdiv elements fall back to the plain sign-only behavior.
+    if (isHdiv(*fes)) {
+      const auto* vtfe = dynamic_cast<const mfem::VectorTensorFiniteElement*>(fes->GetFE(elem));
+      if (vtfe != nullptr) {
+        const mfem::Array<int>& dof_perm = vtfe->GetDofMap();
+        for (int k = 0; k < dofs.Size(); k++) {
+          int dp           = dof_perm[k];
+          int elem_sign    = (dp < 0) ? 1 : 0;       // reference-element orientation sign bit
+          int local_idx    = (dp >= 0) ? dp : -1 - dp;
+          int gd           = dofs[local_idx];
+          int mesh_sign    = (gd < 0) ? 1 : 0;       // mesh orientation sign bit
+          int global_idx   = (gd >= 0) ? gd : -1 - gd;
+          int combined     = (elem_sign + mesh_sign) % 2;
+          elem_dofs.push_back(DoF{uint64_t(global_idx), uint64_t(combined)});
+        }
+      } else {
+        // Simplex (triangle/tet): no dof_map reordering, only mesh sign
+        for (int k = 0; k < dofs.Size(); k++) {
+          if (dofs[k] >= 0) {
+            elem_dofs.push_back(DoF{uint64_t(dofs[k]), 0});
+          } else {
+            elem_dofs.push_back(DoF{uint64_t(-1 - dofs[k]), 1});
+          }
+        }
       }
     }
 
@@ -436,7 +460,7 @@ axom::Array<DoF, 2, smith::detail::host_memory_space> GetFaceDofs(const smith::f
 
       fes->GetFaceDofs(f, dofs);
 
-      if (isHcurl(*fes)) {
+      if (isHcurl(*fes) || isHdiv(*fes)) {
         for (int k = 0; k < dofs.Size(); k++) {
           if (dofs[k] >= 0) {
             face_dofs.push_back(DoF{uint64_t(dofs[k]), 0});
@@ -609,7 +633,7 @@ axom::Array<DoF, 2, smith::detail::host_memory_space> GetFaceDofs(const smith::f
 
       fes->GetFaceDofs(f, dofs);
 
-      if (isHcurl(*fes)) {
+      if (isHcurl(*fes) || isHdiv(*fes)) {
         for (int k = 0; k < dofs.Size(); k++) {
           if (dofs[k] >= 0) {
             face_dofs.push_back(DoF{uint64_t(dofs[k]), 0});
@@ -692,8 +716,8 @@ void ElementRestriction::Gather(const mfem::Vector& L_vector, mfem::Vector& E_ve
     for (uint64_t c = 0; c < components; c++) {
       for (uint64_t j = 0; j < nodes_per_elem; j++) {
         uint64_t E_id = (i * components + c) * nodes_per_elem + j;
-        uint64_t L_id = GetVDof(dof_info(i, j), c).index();
-        E_vector[int(E_id)] = L_vector[int(L_id)];
+        auto     vdof = GetVDof(dof_info(i, j), c);
+        E_vector[int(E_id)] = double(vdof.sign()) * L_vector[int(vdof.index())];
       }
     }
   }
@@ -705,8 +729,8 @@ void ElementRestriction::ScatterAdd(const mfem::Vector& E_vector, mfem::Vector& 
     for (uint64_t c = 0; c < components; c++) {
       for (uint64_t j = 0; j < nodes_per_elem; j++) {
         uint64_t E_id = (i * components + c) * nodes_per_elem + j;
-        uint64_t L_id = GetVDof(dof_info(i, j), c).index();
-        L_vector[int(L_id)] += E_vector[int(E_id)];
+        auto     vdof = GetVDof(dof_info(i, j), c);
+        L_vector[int(vdof.index())] += double(vdof.sign()) * E_vector[int(E_id)];
       }
     }
   }

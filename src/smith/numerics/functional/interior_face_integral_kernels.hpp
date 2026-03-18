@@ -63,6 +63,18 @@ struct QFunctionArgument<L2<p, c>, Dimension<dim>> {
 };
 
 /// @overload
+template <int p>
+struct QFunctionArgument<Hdiv<p>, Dimension<2>> {
+  using type = smith::tuple<tensor<double, 2>, double>;  ///< (value, divergence) passed to the q-function
+};
+
+/// @overload
+template <int p>
+struct QFunctionArgument<Hdiv<p>, Dimension<3>> {
+  using type = smith::tuple<tensor<double, 3>, double>;  ///< (value, divergence) passed to the q-function
+};
+
+/// @overload
 SMITH_SUPPRESS_NVCC_HOSTDEVICE_WARNING
 template <typename lambda, typename T, int... i>
 SMITH_HOST_DEVICE auto apply_qf_helper(const lambda& qf, double t, const tensor<double, 2>& x_q, const T& arg_tuple,
@@ -228,7 +240,7 @@ SMITH_HOST_DEVICE auto batch_apply_chain_rule(derivative_type* qf_derivatives, c
  *
  * @tparam test The type of the test function space
  * @tparam trial The type of the trial function space
- * The above spaces can be any combination of {H1, Hcurl, Hdiv (TODO), L2 (TODO)}
+ * The above spaces can be any combination of {H1, Hcurl, Hdiv, L2 (TODO)}
  *
  * Template parameters other than the test and trial spaces are used for customization + optimization
  * and are erased through the @p std::function members of @p BoundaryIntegral
