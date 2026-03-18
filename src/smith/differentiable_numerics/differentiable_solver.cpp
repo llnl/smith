@@ -266,6 +266,133 @@ std::vector<DifferentiableBlockSolver::FieldPtr> LinearDifferentiableBlockSolver
   return u_duals;
 }
 
+NonlinearDifferentiableBlockSolver::NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s)
+    : nonlinear_solver_(std::move(s))
+{
+}
+
+void NonlinearDifferentiableBlockSolver::completeSetup(const std::vector<FieldT>&)
+{
+  // TODO: eventually may need something like: initializeSolver(&nonlinear_solver_->preconditioner(), u);
+}
+
+std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSolver::solve(
+    const std::vector<FieldPtr>& u_guesses,
+    std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> residual_funcs,
+    std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobian_funcs) const
+{
+  SMITH_MARK_FUNCTION;
+
+  int num_rows = static_cast<int>(u_guesses.size());
+  SLIC_ERROR_IF(num_rows < 0, "Number of residual rows must be non-negative");
+
+  mfem::Array<int> block_offsets;
+  block_offsets.SetSize(num_rows + 1);
+  block_offsets[0] = 0;
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    block_offsets[row_i + 1] = u_guesses[static_cast<size_t>(row_i)]->space().TrueVSize();
+  }
+  block_offsets.PartialSum();
+
+  auto block_u = std::make_unique<mfem::BlockVector>(block_offsets);
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    block_u->GetBlock(row_i) = *u_guesses[static_cast<size_t>(row_i)];
+  }
+
+  auto block_r = std::make_unique<mfem::BlockVector>(block_offsets);
+
+  auto residual_op_ = std::make_unique<mfem_ext::StdFunctionOperator>(
+      block_u->Size(),
+      [&residual_funcs, num_rows, &u_guesses, &block_r](const mfem::Vector& u_, mfem::Vector& r_) {
+        const mfem::BlockVector* u = dynamic_cast<const mfem::BlockVector*>(&u_);
+        SLIC_ERROR_IF(!u, "Invalid u cast in block differentiable solver to a block vector");
+        for (int row_i = 0; row_i < num_rows; ++row_i) {
+          *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
+        }
+        auto residuals = residual_funcs(u_guesses);
+        SLIC_ERROR_IF(!block_r, "Invalid r cast in block differentiable solver to a block vector");
+        for (int row_i = 0; row_i < num_rows; ++row_i) {
+          auto r = residuals[static_cast<size_t>(row_i)];
+          block_r->GetBlock(row_i) = r;
+        }
+        r_ = *block_r;
+      },
+      [this, &block_offsets, &u_guesses, jacobian_funcs, num_rows](const mfem::Vector& u_) -> mfem::Operator& {
+        const mfem::BlockVector* u = dynamic_cast<const mfem::BlockVector*>(&u_);
+        SLIC_ERROR_IF(!u, "Invalid u cast in block differentiable solver to a block vector");
+        for (int row_i = 0; row_i < num_rows; ++row_i) {
+          *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
+        }
+        block_jac_ = std::make_unique<mfem::BlockOperator>(block_offsets);
+        matrix_of_jacs_ = jacobian_funcs(u_guesses);
+        for (int i = 0; i < num_rows; ++i) {
+          for (int j = 0; j < num_rows; ++j) {
+            auto& J = matrix_of_jacs_[static_cast<size_t>(i)][static_cast<size_t>(j)];
+            if (J) {
+              block_jac_->SetBlock(i, j, J.get());
+            }
+          }
+        }
+        return *block_jac_;
+      });
+  nonlinear_solver_->setOperator(*residual_op_);
+  nonlinear_solver_->solve(*block_u);
+
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    *u_guesses[static_cast<size_t>(row_i)] = block_u->GetBlock(row_i);
+  }
+
+  return u_guesses;
+}
+
+std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSolver::solveAdjoint(
+    const std::vector<DualPtr>& u_bars, std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const
+{
+  SMITH_MARK_FUNCTION;
+
+  int num_rows = static_cast<int>(u_bars.size());
+  SLIC_ERROR_IF(num_rows < 0, "Number of residual rows must be non-negative");
+
+  std::vector<DifferentiableBlockSolver::FieldPtr> u_duals(static_cast<size_t>(num_rows));
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    u_duals[static_cast<size_t>(row_i)] = std::make_shared<DifferentiableBlockSolver::FieldT>(
+        u_bars[static_cast<size_t>(row_i)]->space(), "u_dual_" + std::to_string(row_i));
+  }
+
+  mfem::Array<int> block_offsets;
+  block_offsets.SetSize(num_rows + 1);
+  block_offsets[0] = 0;
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    block_offsets[row_i + 1] = u_bars[static_cast<size_t>(row_i)]->space().TrueVSize();
+  }
+  block_offsets.PartialSum();
+
+  auto block_ds = std::make_unique<mfem::BlockVector>(block_offsets);
+  *block_ds = 0.0;
+
+  auto block_r = std::make_unique<mfem::BlockVector>(block_offsets);
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    block_r->GetBlock(row_i) = *u_bars[static_cast<size_t>(row_i)];
+  }
+
+  auto block_jac = std::make_unique<mfem::BlockOperator>(block_offsets);
+  for (int i = 0; i < num_rows; ++i) {
+    for (int j = 0; j < num_rows; ++j) {
+      block_jac->SetBlock(i, j, jacobian_transposed[static_cast<size_t>(i)][static_cast<size_t>(j)].get());
+    }
+  }
+
+  auto& linear_solver = nonlinear_solver_->linearSolver();
+  linear_solver.SetOperator(*block_jac);
+  linear_solver.Mult(*block_r, *block_ds);
+
+  for (int row_i = 0; row_i < num_rows; ++row_i) {
+    *u_duals[static_cast<size_t>(row_i)] = block_ds->GetBlock(row_i);
+  }
+
+  return u_duals;
+}
+
 std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolver(LinearSolverOptions linear_opts,
                                                                             const smith::Mesh& mesh)
 {
@@ -273,11 +400,19 @@ std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolver(Line
   return std::make_shared<smith::LinearDifferentiableSolver>(std::move(linear_solver), std::move(precond));
 }
 
-std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolver(
-    smith::NonlinearSolverOptions nonlinear_opts, LinearSolverOptions linear_opts, const smith::Mesh& mesh)
+std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolver(NonlinearSolverOptions nonlinear_opts,
+                                                                                  LinearSolverOptions linear_opts,
+                                                                                  const smith::Mesh& mesh)
 {
-  auto solid_solver = std::make_unique<smith::EquationSolver>(nonlinear_opts, linear_opts, mesh.getComm());
-  return std::make_shared<smith::NonlinearDifferentiableSolver>(std::move(solid_solver));
+  auto solid_solver = std::make_unique<EquationSolver>(nonlinear_opts, linear_opts, mesh.getComm());
+  return std::make_shared<NonlinearDifferentiableSolver>(std::move(solid_solver));
+}
+
+std::shared_ptr<NonlinearDifferentiableBlockSolver> buildDifferentiableNonlinearBlockSolver(
+    NonlinearSolverOptions nonlinear_opts, LinearSolverOptions linear_opts, const smith::Mesh& mesh)
+{
+  auto solid_solver = std::make_unique<EquationSolver>(nonlinear_opts, linear_opts, mesh.getComm());
+  return std::make_shared<NonlinearDifferentiableBlockSolver>(std::move(solid_solver));
 }
 
 }  // namespace smith
