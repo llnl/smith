@@ -26,10 +26,8 @@
 
 namespace smith {
 
-class ContactTestAMGF
-    : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactType, ContactJacobian, std::string, bool>> {};
-
-TEST_P(ContactTestAMGF, beam)
+void contact_beam_amgf_test(ContactEnforcement contact_enforcement, ContactType contact_type, std::string name_ext,
+                            bool use_warm_start)
 {
   // NOTE: p must be equal to 1 for now
   constexpr int p = 1;
@@ -38,7 +36,7 @@ TEST_P(ContactTestAMGF, beam)
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
-  std::string name = "contact_beam_" + std::get<3>(GetParam());
+  std::string name = "contact_beam_" + name_ext;
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
@@ -66,16 +64,15 @@ TEST_P(ContactTestAMGF, beam)
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
-                                 .enforcement = std::get<0>(GetParam()),
-                                 .type = std::get<1>(GetParam()),
+                                 .enforcement = contact_enforcement,
+                                 .type = contact_type,
                                  .penalty = 1.0e4,
-                                 .jacobian = std::get<2>(GetParam())};
+                                 .jacobian = ContactJacobian::Approximate};
 
   std::vector<std::string> parameter_names = {};
   int cycle = 0;
   double time = 0.0;
   bool checkpoint_to_disk = false;
-  bool use_warm_start = std::get<4>(GetParam());
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
                                              solid_mechanics::default_quasistatic_options, name, mesh, parameter_names,
@@ -115,27 +112,37 @@ TEST_P(ContactTestAMGF, beam)
 
   // Check the l2 norm of the displacement dofs
   auto u_l2 = mfem::ParNormlp(solid_solver.displacement(), 2, MPI_COMM_WORLD);
-  if (std::get<1>(GetParam()) == ContactType::TiedNormal) {
+  if (contact_type == ContactType::TiedNormal) {
     EXPECT_NEAR(1.465, u_l2, 1.0e-2);
-  } else if (std::get<1>(GetParam()) == ContactType::Frictionless) {
+  } else if (contact_type == ContactType::Frictionless) {
     EXPECT_NEAR(1.526, u_l2, 1.0e-2);
   }
 }
 
-// NOTE: if Penalty is first and Lagrange Multiplier is second, SuperLU gives a zero diagonal error
-INSTANTIATE_TEST_SUITE_P(
-    tribol, ContactTestAMGF,
-    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Approximate,
-                                    "penalty_tiednormal_Japprox_amgf", true),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox_amgf", true),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Approximate,
-                                    "penalty_tiednormal_Japprox_amgf_nowarmstart", false),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,
-                                    ContactJacobian::Approximate, "penalty_frictionless_Japprox_amgf_nowarmstart",
-                                    false)
-
-                        ));
+TEST(ContactBeamAMGF, PenaltyTiedNormalWarmStart)
+{
+  bool use_warm_start = true;
+  contact_beam_amgf_test(ContactEnforcement::Penalty, ContactType::TiedNormal, "penalty_tiednormal_amgf",
+                         use_warm_start);
+}
+TEST(ContactBeamAMGF, PenaltyFrictionlessWarmStart)
+{
+  bool use_warm_start = true;
+  contact_beam_amgf_test(ContactEnforcement::Penalty, ContactType::Frictionless, "penalty_frictionless_amgf",
+                         use_warm_start);
+}
+TEST(ContactBeamAMGF, PenaltyTiedNormalNoWarmStart)
+{
+  bool use_warm_start = false;
+  contact_beam_amgf_test(ContactEnforcement::Penalty, ContactType::TiedNormal, "penalty_tiednormal_amgf_nowarmstart",
+                         use_warm_start);
+}
+TEST(ContactBeamAMGF, PenaltyFrictionlessNoWarmStart)
+{
+  bool use_warm_start = false;
+  contact_beam_amgf_test(ContactEnforcement::Penalty, ContactType::Frictionless,
+                         "penalty_frictionless_amgf_nowarmstart", use_warm_start);
+}
 
 }  // namespace smith
 
