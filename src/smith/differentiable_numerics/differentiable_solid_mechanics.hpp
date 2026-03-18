@@ -46,4 +46,28 @@ auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
   return std::make_tuple(physics, solid_mechanics_weak_form, vector_bcs);
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
+auto buildSolidMechanicsForOptimization(std::shared_ptr<smith::Mesh> mesh,
+                         std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
+                         smith::SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+                         const std::vector<std::string>& param_names = {})
+{
+  auto graph = std::make_shared<gretl::DataStore>(100);
+  auto [shape_disp, states, params, time, solid_mechanics_weak_form] =
+      SolidMechanicsStateAdvancer::buildWeakFormAndStates<dim, ShapeDispSpace, VectorSpace, ParamSpaces...>(
+          mesh, graph, time_rule, physics_name, param_names);
+
+  auto vector_bcs = std::make_shared<DirichletBoundaryConditions>(
+      mesh->mfemParMesh(), space(states[SolidMechanicsStateAdvancer::DISPLACEMENT]));
+
+  auto state_advancer = std::make_shared<SolidMechanicsStateAdvancer>(d_solid_nonlinear_solver, vector_bcs,
+                                                                      solid_mechanics_weak_form, time_rule);
+
+  auto physics = std::make_unique<DifferentiablePhysics>(mesh, graph, shape_disp, states, params, state_advancer,
+                                                         physics_name, std::vector<std::string>{"reactions"});
+
+  return std::make_tuple(std::move(physics), solid_mechanics_weak_form, vector_bcs);
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }  // namespace smith

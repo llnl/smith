@@ -64,6 +64,43 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
     end_spaces.insert(end_spaces.begin(), newParam);
     return end_spaces;
   }
+////////////////////////////////////////////////////////////////////////////////////
+  // // Base case: no parameter spaces
+  // static std::vector<FieldState>
+  // createParams(gretl::DataStore&,
+  //             const std::string&,
+  //             const std::vector<std::string>&,
+  //             const std::string&,
+  //             size_t = 0)
+  // {
+  //   return {};
+  // }
+
+  // // Recursive case: one or more parameter spaces
+  // template <typename FirstParamSpace, typename... ParamSpaces>
+  // static std::vector<FieldState>
+  // createParams(gretl::DataStore& graph,
+  //             const std::string& name,
+  //             const std::vector<std::string>& param_names,
+  //             const std::string& tag,
+  //             size_t index = 0)
+  // {
+  //   // Optional safety check (recommended)
+  //   if (index >= param_names.size()) {
+  //     throw std::runtime_error("createParams: param_names too short for ParamSpaces pack");
+  //   }
+
+  //   FieldState newParam =
+  //     create_field_state(graph, FirstParamSpace{}, name + "_" + param_names[index], tag);
+
+  //   std::vector<FieldState> rest{};
+  //   if constexpr (sizeof...(ParamSpaces) > 0) {
+  //     rest = createParams<ParamSpaces...>(graph, name, param_names, tag, index + 1);
+  //   }
+  //   rest.insert(rest.begin(), newParam);
+  //   return rest;
+  // }
+////////////////////////////////////////////////////////////////////////////////////
 
   /// @brief Utility function to consistently construct all the weak forms and FieldStates for a solid mechanics
   /// application You will get back: shape_disp, states, params, time, and solid_mechanics_weak_form
