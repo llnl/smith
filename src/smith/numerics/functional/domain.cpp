@@ -726,12 +726,12 @@ Domain domain_of_interior_faces(const mesh_t& mesh, std::function<bool(std::vect
 
 Domain Domain::ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func)
 {
-  return domain_of_interior_boundary_faces<2>(mesh, func);
+  return domain_of_interior_faces<2>(mesh, func);
 }
 
 Domain Domain::ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func)
 {
-  return domain_of_interior_boundary_faces<3>(mesh, func);
+  return domain_of_interior_faces<3>(mesh, func);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
