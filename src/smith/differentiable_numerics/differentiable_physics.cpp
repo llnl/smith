@@ -160,7 +160,10 @@ void DifferentiablePhysics::setParameter(const size_t parameter_index, const Fin
   *field_params_[parameter_index].get() = parameter_state;
 }
 
-void DifferentiablePhysics::setShapeDisplacement(const FiniteElementState& s) { *field_shape_displacement_->get() = s; }
+void DifferentiablePhysics::setShapeDisplacement(const FiniteElementState& shape_displacement)
+{
+  *field_shape_displacement_->get() = shape_displacement;
+}
 
 void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_name,
                                      [[maybe_unused]] const FiniteElementState& s)
