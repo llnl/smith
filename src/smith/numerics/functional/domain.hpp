@@ -268,7 +268,18 @@ Domain EntireDomain(const mesh_t& mesh);
 Domain EntireBoundary(const mesh_t& mesh);
 
 /// @brief constructs a domain from all the interior face elements in a mesh
-Domain InteriorFaces(const mesh_t& mesh);
+Domain EntireInteriorFaces(const mesh_t& mesh);
+
+ /**
+   * @brief create a domain from some subset of the interior faces in an a mesh
+   * @param mesh the entire mesh
+   * @param func predicate function for determining which interior faces will be
+   * included in this domain. The function's arguments are the list of vertex coordinates and
+   * an attribute index (if appropriate).
+   */
+Domain ofInteriorFaces(const mesh_t& mesh,std::function<bool(std::vector<vec2>, int)> func);
+
+Domain ofInteriorFaces(const mesh_t& mesh,std::function<bool(std::vector<vec3>, int)> func);
 
 /// @brief create a new domain that is the union of `a` and `b`
 Domain operator|(const Domain& a, const Domain& b);
