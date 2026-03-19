@@ -662,7 +662,8 @@ Domain EntireInteriorFaces(const mesh_t& mesh)
 
 /// @brief constructs a domain from some subset of the interior face elements in a mesh
 template <int d>
-Domain domain_of_interior_boundary_faces(const mesh_t& mesh, std::function<bool(std::vector<tensor<double, d>>, int)> predicate)
+Domain domain_of_interior_boundary_faces(const mesh_t& mesh,
+                                         std::function<bool(std::vector<tensor<double, d>>, int)> predicate)
 {
   assert(mesh.SpaceDimension() == d);
   Domain output{mesh, d - 1, Domain::Type::InteriorFaces};
@@ -733,7 +734,6 @@ Domain Domain::ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vecto
 {
   return domain_of_interior_boundary_faces<3>(mesh, func);
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////

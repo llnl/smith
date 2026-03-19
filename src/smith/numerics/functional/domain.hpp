@@ -168,12 +168,12 @@ struct Domain {
   static Domain ofBoundaryElements(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func);
 
   /**
-  * @brief create a domain from some subset of the interior faces in an a mesh
-  * @param mesh the entire mesh
-  * @param func predicate function for determining which interior faces will be
-  * included in this domain. The function's arguments are the list of vertex coordinates and
-  * an attribute index (if appropriate).
-  */
+   * @brief create a domain from some subset of the interior faces in an a mesh
+   * @param mesh the entire mesh
+   * @param func predicate function for determining which interior faces will be
+   * included in this domain. The function's arguments are the list of vertex coordinates and
+   * an attribute index (if appropriate).
+   */
   static Domain ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func);
 
   /// @overload
