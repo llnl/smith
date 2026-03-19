@@ -12,7 +12,7 @@
 #pragma once
 
 #include "smith/differentiable_numerics/field_store.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
@@ -391,7 +391,7 @@ struct ThermoMechanicsSystem : public SystemBase {
  */
 template <int dim, int disp_order, int temp_order, typename... parameter_space>
 ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, std::string prepend_name = "",
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
@@ -468,7 +468,7 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
  */
 template <int dim, int disp_order, int temp_order, typename... parameter_space>
 ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, FieldType<parameter_space>... parameter_types)
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, FieldType<parameter_space>... parameter_types)
 {
   return buildThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>(mesh, solver, "",
                                                                                      parameter_types...);

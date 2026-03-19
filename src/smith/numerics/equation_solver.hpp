@@ -294,6 +294,12 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
     LinearSolverOptions linear_opts = {}, MPI_Comm comm = MPI_COMM_WORLD);
 
 /**
+ * @brief Return true if the configured linear solve stack requires block operators to be merged.
+ * @param linear_opts Linear solver and preconditioner options.
+ */
+bool requiresMonolithicOperator(const LinearSolverOptions& linear_opts);
+
+/**
  * @brief Build a preconditioner from the available options
  * @param linear_opts The options to configure the linear solver and preconditioner
  * @param comm The communicator for the underlying operator and HypreParVectors

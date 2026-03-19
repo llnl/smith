@@ -6,20 +6,20 @@
 
 #include "smith/physics/weak_form.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_time_integrator.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
-#include "smith/differentiable_numerics/system_solver.hpp"
+#include "smith/differentiable_numerics/coupled_system_solver.hpp"
 
 namespace smith {
 
 SolidMechanicsTimeIntegrator::SolidMechanicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
                                                            std::shared_ptr<WeakForm> solid_weak_form,
                                                            std::shared_ptr<WeakForm> cycle_zero_weak_form,
-                                                           std::shared_ptr<smith::SystemSolver> solver)
+                                                           std::shared_ptr<smith::CoupledSystemSolver> solver)
     : field_store_(field_store), cycle_zero_weak_form_(cycle_zero_weak_form), solver_(solver)
 {
   std::vector<std::shared_ptr<WeakForm>> weak_forms = {solid_weak_form};

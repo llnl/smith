@@ -13,8 +13,8 @@
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/physics/mesh.hpp"
 
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
-#include "smith/differentiable_numerics/system_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
+#include "smith/differentiable_numerics/coupled_system_solver.hpp"
 #include "smith/differentiable_numerics/thermo_mechanics_system.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
@@ -83,14 +83,14 @@ struct ThermoMechanicsMeshFixture : public testing::Test {
 TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
 {
   constexpr double compressive_traction = 0.015;
-  constexpr double lateral_body_force = 2.5e-4;
+  constexpr double lateral_body_force = 2.5e-5;
   constexpr double thermal_source = 1.0;
 
-  auto run_problem = [&](const std::string& label, std::shared_ptr<SystemSolver> system_solver) {
+  auto run_problem = [&](const std::string& label, std::shared_ptr<CoupledSystemSolver> coupled_solver) {
     GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
     FieldType<L2<0>> youngs_modulus("youngs_modulus");
     auto system =
-        buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, system_solver, youngs_modulus);
+        buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, coupled_solver, youngs_modulus);
     system.setMaterial(material, mesh_->entireBodyName());
     system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 100.0; });
     system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
@@ -132,29 +132,32 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
                                                  .relative_tol = 1e-10,
                                                  .absolute_tol = 1e-10,
                                                  .max_iterations = 100,
-                                                 .print_level = 1};
-  smith::LinearSolverOptions block_opt{.linear_solver = smith::LinearSolver::SuperLU, .print_level = 0};
+                                                 .print_level = 0};
+  smith::LinearSolverOptions block_opt{.linear_solver = smith::LinearSolver::SuperLU};
   monolithic_lin_opts.sub_block_linear_solver_options.push_back(block_opt);
   monolithic_lin_opts.sub_block_linear_solver_options.push_back(block_opt);
 
+  smith::BlockConvergenceTolerances monolithic_block_tolerances{.relative_tols = {1e-10, 1e-7},
+                                                                .absolute_tols = {1e-10, 1e-8}};
   smith::NonlinearSolverOptions monolithic_nonlin_opts{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
                                                        .relative_tol = 1e-10,
                                                        .absolute_tol = 1e-10,
-                                                       .max_iterations = 2,
+                                                       .max_iterations = 5,
                                                        .max_line_search_iterations = 6,
-                                                       .print_level = 2};
+                                                       .print_level = 2,
+                                                       .block_tolerances = monolithic_block_tolerances};
 
-  auto monolithic_solver = buildDifferentiableSolver(monolithic_nonlin_opts, monolithic_lin_opts, *mesh_);
-  auto monolithic_result = run_problem("monolithic", std::make_shared<SystemSolver>(monolithic_solver));
-  bool monolithic_converged = monolithic_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
-  int monolithic_iterations = monolithic_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
+  auto monolithic_block_solver = buildNonlinearBlockSolver(monolithic_nonlin_opts, monolithic_lin_opts, *mesh_);
+  auto monolithic_result = run_problem("monolithic", std::make_shared<CoupledSystemSolver>(monolithic_block_solver));
+  bool monolithic_converged = monolithic_block_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
+  int monolithic_iterations = monolithic_block_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
 
   this->mesh_.reset();
   smith::StateManager::reset();
   this->SetUp();
 
-  auto staggered_system_solver = std::make_shared<SystemSolver>(10);
-  staggered_system_solver->setRelaxationFactor(0.8);
+  auto staggered_coupled_solver = std::make_shared<CoupledSystemSolver>(10);
+  staggered_coupled_solver->setRelaxationFactor(1.0);
 
   smith::LinearSolverOptions mech_lin_opts{.linear_solver = smith::LinearSolver::CG,
                                            .preconditioner = smith::Preconditioner::HypreAMG,
@@ -179,18 +182,20 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
                                                   .absolute_tol = 1e-7,
                                                   .max_iterations = 12,
                                                   .max_line_search_iterations = 6,
-                                                  .print_level = 0};
+                                                  .print_level = 1};
 
-  auto solver_disp = buildDifferentiableSolver(mech_nonlin_opts, mech_lin_opts, *mesh_);
-  auto solver_temp = buildDifferentiableSolver(therm_nonlin_opts, therm_lin_opts, *mesh_);
-  staggered_system_solver->addSubsystemSolver({0}, solver_disp);
-  staggered_system_solver->addSubsystemSolver({1}, solver_temp);
+  auto solid_block_solver = buildNonlinearBlockSolver(mech_nonlin_opts, mech_lin_opts, *mesh_);
+  auto thermal_block_solver = buildNonlinearBlockSolver(therm_nonlin_opts, therm_lin_opts, *mesh_);
+  staggered_coupled_solver->addSubsystemSolver({0}, solid_block_solver,
+                                               {.relative_tols = {5e-6}, .absolute_tols = {1e-6}});
+  staggered_coupled_solver->addSubsystemSolver({0, 1}, thermal_block_solver,
+                                               {.relative_tols = {5e-6, 1e-6}, .absolute_tols = {1e-7, 1e-7}});
 
-  auto staggered_result = run_problem("staggered", staggered_system_solver);
-  bool staggered_solid_converged = solver_disp->nonlinear_solver_->nonlinearSolver().GetConverged();
-  int staggered_solid_iterations = solver_disp->nonlinear_solver_->nonlinearSolver().GetNumIterations();
-  bool staggered_thermal_converged = solver_temp->nonlinear_solver_->nonlinearSolver().GetConverged();
-  int staggered_thermal_iterations = solver_temp->nonlinear_solver_->nonlinearSolver().GetNumIterations();
+  auto staggered_result = run_problem("staggered", staggered_coupled_solver);
+  bool staggered_solid_converged = solid_block_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
+  int staggered_solid_iterations = solid_block_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
+  bool staggered_thermal_converged = thermal_block_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
+  int staggered_thermal_iterations = thermal_block_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
 
   double disp_diff = mfem::Vector(monolithic_result.first).Add(-1.0, staggered_result.first).Normlinf();
   double temp_diff = mfem::Vector(monolithic_result.second).Add(-1.0, staggered_result.second).Normlinf();
@@ -204,20 +209,26 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   }
 
   SLIC_INFO_ROOT("Monolithic converged: " << monolithic_converged << ", iterations: " << monolithic_iterations);
+  SLIC_INFO_ROOT("Monolithic per-block tolerances (solid, thermal): rel = [1e-10, 1e-7], abs = [1e-10, 1e-8]");
   SLIC_INFO_ROOT("Monolithic max lateral deflection: " << monolithic_lateral_deflection);
   SLIC_INFO_ROOT("Staggered solid converged: " << staggered_solid_converged
                                                << ", iterations: " << staggered_solid_iterations);
   SLIC_INFO_ROOT("Staggered thermal converged: " << staggered_thermal_converged
                                                  << ", iterations: " << staggered_thermal_iterations);
+  SLIC_INFO_ROOT(
+      "Staggered outer per-weak-form tolerances: solid rel/abs = 5e-6/1e-6, combined thermo-mechanics rel = [5e-6, "
+      "1e-6], abs = [1e-7, 1e-7]");
   SLIC_INFO_ROOT("Buckling displacement discrepancy: " << disp_diff);
   SLIC_INFO_ROOT("Buckling temperature discrepancy: " << temp_diff);
   SLIC_INFO_ROOT("Staggered max lateral deflection: " << staggered_lateral_deflection);
 
-  EXPECT_FALSE(monolithic_converged);
+  EXPECT_TRUE(monolithic_converged);
   EXPECT_TRUE(staggered_solid_converged);
   EXPECT_TRUE(staggered_thermal_converged);
+  EXPECT_GE(monolithic_iterations, staggered_thermal_iterations);
   EXPECT_GT(staggered_lateral_deflection, 1e-5);
   EXPECT_GT(disp_diff, 1e-8);
+  EXPECT_GT(temp_diff, 1e-8);
 }
 
 }  // namespace smith

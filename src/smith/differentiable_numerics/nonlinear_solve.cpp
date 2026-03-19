@@ -2,7 +2,7 @@
 #include "smith/physics/field_types.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 
 namespace smith {
 
@@ -30,7 +30,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
                                     const std::vector<std::vector<size_t>> block_indices, const FieldState& shape_disp,
                                     const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
-                                    const DifferentiableBlockSolver* solver,
+                                    const NonlinearBlockSolver* solver,
                                     const std::vector<const BoundaryConditionManager*>& bc_managers)
 {
   SMITH_MARK_FUNCTION;

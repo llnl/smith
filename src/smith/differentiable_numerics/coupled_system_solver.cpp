@@ -4,8 +4,8 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "smith/differentiable_numerics/system_solver.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/coupled_system_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
@@ -17,35 +17,86 @@
 
 namespace smith {
 
-SystemSolver::SystemSolver(std::shared_ptr<DifferentiableBlockSolver> single_solver)
+namespace {
+
+void validateStageToleranceSizes(const CoupledSystemSolver::Stage& stage, size_t expected_blocks, size_t stage_index)
+{
+  if (!stage.block_tolerances.relative_tols.empty()) {
+    SLIC_ERROR_IF(stage.block_tolerances.relative_tols.size() != expected_blocks,
+                  axom::fmt::format("Stage {} relative_tols size {} does not match number of stage blocks {}",
+                                    stage_index, stage.block_tolerances.relative_tols.size(), expected_blocks));
+  }
+  if (!stage.block_tolerances.absolute_tols.empty()) {
+    SLIC_ERROR_IF(stage.block_tolerances.absolute_tols.size() != expected_blocks,
+                  axom::fmt::format("Stage {} absolute_tols size {} does not match number of stage blocks {}",
+                                    stage_index, stage.block_tolerances.absolute_tols.size(), expected_blocks));
+  }
+}
+
+void validateStageToleranceLooseness(const CoupledSystemSolver::Stage& stage, size_t stage_index)
+{
+  if (stage.block_tolerances.empty()) {
+    return;
+  }
+
+  auto* equation_block_solver = dynamic_cast<const EquationNonlinearBlockSolver*>(stage.solver.get());
+  SLIC_ERROR_IF(!equation_block_solver,
+                axom::fmt::format("Stage {} uses stage-local tolerances, but the solver does not support tolerance "
+                                  "introspection",
+                                  stage_index));
+
+  size_t num_blocks = stage.block_indices.size();
+  BlockConvergenceTolerances no_overrides{};
+  auto solver_relative_tols = equation_block_solver->effectiveRelativeTolerances(num_blocks, no_overrides);
+  auto solver_absolute_tols = equation_block_solver->effectiveAbsoluteTolerances(num_blocks, no_overrides);
+  auto stage_relative_tols = equation_block_solver->effectiveRelativeTolerances(num_blocks, stage.block_tolerances);
+  auto stage_absolute_tols = equation_block_solver->effectiveAbsoluteTolerances(num_blocks, stage.block_tolerances);
+
+  for (size_t i = 0; i < num_blocks; ++i) {
+    SLIC_ERROR_IF(stage_relative_tols[i] < solver_relative_tols[i],
+                  axom::fmt::format("Stage {} block {} relative tolerance {} is tighter than solver tolerance {}",
+                                    stage_index, i, stage_relative_tols[i], solver_relative_tols[i]));
+    SLIC_ERROR_IF(stage_absolute_tols[i] < solver_absolute_tols[i],
+                  axom::fmt::format("Stage {} block {} absolute tolerance {} is tighter than solver tolerance {}",
+                                    stage_index, i, stage_absolute_tols[i], solver_absolute_tols[i]));
+  }
+}
+
+}  // namespace
+
+CoupledSystemSolver::CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolver> single_solver)
     : max_staggered_iterations_(1), exact_staggered_steps_(false)
 {
   addSubsystemSolver({}, std::move(single_solver));
 }
 
-SystemSolver::SystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
+CoupledSystemSolver::CoupledSystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
     : max_staggered_iterations_(max_staggered_iterations), exact_staggered_steps_(exact_staggered_steps)
 {
   SLIC_ERROR_IF(max_staggered_iterations <= 0, "max_staggered_iterations must be > 0");
 }
 
-void SystemSolver::addSubsystemSolver(const Stage& stage) { stages_.push_back(stage); }
+void CoupledSystemSolver::addSubsystemSolver(const Stage& stage) { stages_.push_back(stage); }
 
-void SystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
-                                      std::shared_ptr<DifferentiableBlockSolver> solver)
+void CoupledSystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
+                                             std::shared_ptr<NonlinearBlockSolver> solver,
+                                             BlockConvergenceTolerances block_tolerances)
 {
-  stages_.push_back({block_indices, std::move(solver)});
+  Stage stage{block_indices, std::move(solver), std::move(block_tolerances)};
+  if (!stage.block_indices.empty()) {
+    validateStageToleranceSizes(stage, stage.block_indices.size(), stages_.size());
+    validateStageToleranceLooseness(stage, stages_.size());
+  }
+  stages_.push_back(std::move(stage));
 }
 
-std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residual_evals,
-                                            const std::vector<std::vector<size_t>>& block_indices,
-                                            const FieldState& shape_disp,
-                                            const std::vector<std::vector<FieldState>>& states,
-                                            const std::vector<std::vector<FieldState>>& params,
-                                            const TimeInfo& time_info,
-                                            const std::vector<const BoundaryConditionManager*>& bc_managers) const
+std::vector<FieldState> CoupledSystemSolver::solve(
+    const std::vector<WeakForm*>& residual_evals, const std::vector<std::vector<size_t>>& block_indices,
+    const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
+    const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
+    const std::vector<const BoundaryConditionManager*>& bc_managers) const
 {
-  SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
+  SLIC_ERROR_IF(stages_.empty(), "CoupledSystemSolver has no stages defined.");
 
   size_t num_residuals = residual_evals.size();
   std::vector<Stage> active_stages = stages_;
@@ -54,6 +105,10 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
       stage.block_indices.resize(num_residuals);
       std::iota(stage.block_indices.begin(), stage.block_indices.end(), 0);
     }
+  }
+  for (size_t s = 0; s < active_stages.size(); ++s) {
+    validateStageToleranceSizes(active_stages[s], active_stages[s].block_indices.size(), s);
+    validateStageToleranceLooseness(active_stages[s], s);
   }
 
   // Reset each stage solver's convergence tracking (e.g. initial residual norm for rel-tol)
@@ -90,7 +145,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
     }
     // Checking convergence with a huge multiplier safely records the initial norm internally
     // without triggering an early global exit or failing assertions
-    stage.solver->checkConvergence(1e12, stage_init_residuals);
+    stage.solver->checkConvergence(1e12, stage_init_residuals, stage.block_tolerances);
   }
 
   for (int iter = 0; iter < max_staggered_iterations_; ++iter) {
@@ -154,7 +209,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         for (size_t i = 0; i < num_stage_blocks; ++i) {
           stage_residuals.push_back(eval_residual_and_zero_bcs(stage.block_indices[i]));
         }
-        bool stage_converged = stage.solver->checkConvergence(1.0, stage_residuals);
+        bool stage_converged = stage.solver->checkConvergence(1.0, stage_residuals, stage.block_tolerances);
 
         if (!stage_converged) {
           all_converged = false;

@@ -23,7 +23,7 @@
 
 namespace smith {
 
-class SystemSolver;
+class CoupledSystemSolver;
 class DirichletBoundaryConditions;
 
 /// @brief Implementation of the StateAdvancer interface for advancing the solution of solid mechanics problems
@@ -38,7 +38,7 @@ class SolidMechanicsTimeIntegrator : public StateAdvancer {
    */
   SolidMechanicsTimeIntegrator(std::shared_ptr<FieldStore> field_store, std::shared_ptr<WeakForm> solid_weak_form,
                                std::shared_ptr<WeakForm> cycle_zero_weak_form,
-                               std::shared_ptr<smith::SystemSolver> solver);
+                               std::shared_ptr<smith::CoupledSystemSolver> solver);
 
   /// State enum for indexing convenience (deprecated, use FieldType instead)
   enum STATE
@@ -104,7 +104,7 @@ class SolidMechanicsTimeIntegrator : public StateAdvancer {
  private:
   std::shared_ptr<FieldStore> field_store_;
   std::shared_ptr<WeakForm> cycle_zero_weak_form_;
-  std::shared_ptr<SystemSolver> solver_;
+  std::shared_ptr<CoupledSystemSolver> solver_;
   std::shared_ptr<MultiphysicsTimeIntegrator> integrator_;
 };
 

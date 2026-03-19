@@ -26,8 +26,7 @@ NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::Ne
                                             .absolute_tol = 1.0e-10,
                                             .max_iterations = 100,
                                             .max_line_search_iterations = 50,
-                                            .print_level = 1,
-                                            .force_monolithic = true};
+                                            .print_level = 1};
 
 static constexpr int dim = 3;
 static constexpr int disp_order = 1;
@@ -101,10 +100,10 @@ struct StrainNormEvolution {
 
 TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
 {
-  auto solver = buildDifferentiableSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto nonlinear_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  auto sys_solver = std::make_shared<SystemSolver>(solver);
-  auto system = buildSolidStaticsWithL2StateSystem<dim, disp_order, StateSpace>(mesh, sys_solver,
+  auto coupled_solver = std::make_shared<CoupledSystemSolver>(nonlinear_block_solver);
+  auto system = buildSolidStaticsWithL2StateSystem<dim, disp_order, StateSpace>(mesh, coupled_solver,
                                                                                 "solid_static_with_internal_vars");
 
   // Material and Evolution

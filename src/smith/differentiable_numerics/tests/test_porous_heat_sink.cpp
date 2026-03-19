@@ -10,7 +10,7 @@
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/smith_config.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/numerics/block_preconditioner.hpp"
@@ -269,7 +269,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   nonlin_opts.max_iterations = 1;
   nonlin_opts.print_level = linear_options.print_level;
 
-  auto d_linear_solver = smith::buildDifferentiableSolver(nonlin_opts, linear_options, *mesh);
+  auto nonlinear_block_solver = smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh);
 
   auto time = graph->create_state<double, double>(0.0);
   auto dt = graph->create_state<double, double>(0.025);
@@ -280,8 +280,8 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   std::vector<FieldState> T1_arguments{T1, T2, gamma};
   std::vector<FieldState> T2_arguments{T1, T2, gamma};
   auto sols = block_solve({&T1_form, &T2_form}, {{0, 1}, {0, 1}}, shape_disp, {T1_arguments, T2_arguments},
-                          {T1_params, T2_params}, smith::TimeInfo(time.get(), dt.get(), cycle), d_linear_solver.get(),
-                          {T1_bc_manager.get(), T2_bc_manager.get()});
+                          {T1_params, T2_params}, smith::TimeInfo(time.get(), dt.get(), cycle),
+                          nonlinear_block_solver.get(), {T1_bc_manager.get(), T2_bc_manager.get()});
 
   auto pv_writer = smith::createParaviewWriter(*mesh, sols, physics_name);
   pv_writer.write(0, 0.0, sols);

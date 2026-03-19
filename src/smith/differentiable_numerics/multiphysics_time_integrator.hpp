@@ -8,7 +8,7 @@
 
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
@@ -17,7 +17,7 @@
 
 namespace smith {
 
-class SystemSolver;
+class CoupledSystemSolver;
 class DirichletBoundaryConditions;
 class BoundaryConditionManager;
 
@@ -31,7 +31,7 @@ class BoundaryConditionManager;
  * @return std::vector<FieldState> The updated state fields.
  */
 std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
-                              const SystemSolver* solver, const TimeInfo& time_info,
+                              const CoupledSystemSolver* solver, const TimeInfo& time_info,
                               const std::vector<FieldState>& params = {});
 
 /**
@@ -47,7 +47,7 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
    */
   MultiphysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
                              const std::vector<std::shared_ptr<WeakForm>>& weak_forms,
-                             std::shared_ptr<smith::SystemSolver> solver);
+                             std::shared_ptr<smith::CoupledSystemSolver> solver);
 
   /**
    * @brief Advance the multiphysics state by one time step.
@@ -64,7 +64,7 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
  private:
   std::shared_ptr<FieldStore> field_store_;
   std::vector<std::shared_ptr<WeakForm>> weak_forms_;
-  std::shared_ptr<smith::SystemSolver> solver_;
+  std::shared_ptr<smith::CoupledSystemSolver> solver_;
 };
 
 }  // namespace smith

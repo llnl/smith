@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file differentiable_solver.hpp
+ * @file nonlinear_block_solver.hpp
  *
- * @brief This file contains the declaration of the DifferentiableSolver interface
+ * @brief This file contains nonlinear block solver interfaces and helpers
  */
 
 #pragma once
@@ -17,6 +17,8 @@
 #include <optional>
 #include <vector>
 #include <mpi.h>
+
+#include "smith/numerics/solver_config.hpp"
 
 namespace mfem {
 class Solver;
@@ -35,12 +37,11 @@ class Mesh;
 struct NonlinearSolverOptions;
 struct LinearSolverOptions;
 
-/// @brief Abstract interface to DifferentiableBlockSolver interface. Each differentiable block solve should provide
-/// both its forward solve and an adjoint solve
-class DifferentiableBlockSolver {
+/// @brief Abstract interface for nonlinear block solvers that provide both forward and adjoint solves.
+class NonlinearBlockSolver {
  public:
   /// @brief destructor
-  virtual ~DifferentiableBlockSolver() {}
+  virtual ~NonlinearBlockSolver() {}
 
   using FieldT = FiniteElementState;                        ///< using
   using FieldPtr = std::shared_ptr<FieldT>;                 ///< using
@@ -77,6 +78,22 @@ class DifferentiableBlockSolver {
   /// @return true if all residuals satisfy the convergence criterion
   virtual bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals) const = 0;
 
+  /// @brief Check convergence with optional per-block tolerance overrides.
+  /// @param tolerance_multiplier Multiplier applied to the configured tolerance.
+  /// @param residuals The current residual vectors for each block in this solver.
+  /// @param tolerance_overrides Optional per-block tolerances used for this specific convergence check.
+  /// @return true if all residual blocks satisfy the effective convergence criterion.
+  virtual bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
+                                const BlockConvergenceTolerances& tolerance_overrides) const = 0;
+
+  /// @brief Return effective relative tolerances for the given number of residual blocks.
+  virtual std::vector<double> effectiveRelativeTolerances(
+      size_t num_blocks, const BlockConvergenceTolerances& tolerance_overrides) const = 0;
+
+  /// @brief Return effective absolute tolerances for the given number of residual blocks.
+  virtual std::vector<double> effectiveAbsoluteTolerances(
+      size_t num_blocks, const BlockConvergenceTolerances& tolerance_overrides) const = 0;
+
   /// @brief Reset internal convergence tracking state (e.g. the stored initial residual norm used for relative
   /// tolerance). Call this at the start of each new solve sequence.
   virtual void resetConvergenceState() const {}
@@ -85,21 +102,33 @@ class DifferentiableBlockSolver {
   virtual void clearMemory() const {}
 };
 
-/// @brief Implementation of the DifferentiableBlockSolver interface for the special case of nonlinear solves with
-/// linear adjoint solves
-class DifferentiableSolver : public DifferentiableBlockSolver {
+/// @brief Nonlinear block solver backed by an EquationSolver forward solve and linear adjoint solves.
+class EquationNonlinearBlockSolver : public NonlinearBlockSolver {
  public:
   /// @brief Construct from a nonlinear equation solver.
   /// @note The caller is responsible for choosing inner vs outer tolerance when using this
-  /// constructor directly.  The builder function buildDifferentiableSolver
+  /// constructor directly.  The builder function buildNonlinearBlockSolver
   /// applies a 0.6x inner-tolerance factor automatically.
-  DifferentiableSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol = 1e-12, double rel_tol = 1e-8);
+  EquationNonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol = 1e-12,
+                               double rel_tol = 1e-8, BlockConvergenceTolerances block_tolerances = {});
 
   /// @overload
   void completeSetup(const std::vector<FieldT>& us) override;
 
   /// @overload
   bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals) const override;
+
+  /// @overload
+  bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
+                        const BlockConvergenceTolerances& tolerance_overrides) const override;
+
+  /// @brief Return effective relative tolerances for a given block count.
+  std::vector<double> effectiveRelativeTolerances(size_t num_blocks,
+                                                  const BlockConvergenceTolerances& tolerance_overrides) const override;
+
+  /// @brief Return effective absolute tolerances for a given block count.
+  std::vector<double> effectiveAbsoluteTolerances(size_t num_blocks,
+                                                  const BlockConvergenceTolerances& tolerance_overrides) const override;
 
   /// @overload
   void resetConvergenceState() const override;
@@ -123,18 +152,19 @@ class DifferentiableSolver : public DifferentiableBlockSolver {
   mutable std::unique_ptr<EquationSolver>
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 
-  MPI_Comm comm_;                                        ///< MPI communicator for parallel norm computation
-  double abs_tol_;                                       ///< absolute residual tolerance for convergence check
-  double rel_tol_;                                       ///< relative residual tolerance for convergence check
-  mutable std::optional<double> initial_residual_norm_;  ///< residual norm at first convergence check (for rel tol)
+  MPI_Comm comm_;                                       ///< MPI communicator for parallel norm computation
+  double abs_tol_;                                      ///< absolute residual tolerance for convergence check
+  double rel_tol_;                                      ///< relative residual tolerance for convergence check
+  BlockConvergenceTolerances block_tolerances_;         ///< optional per-block convergence tolerances
+  mutable std::vector<double> initial_residual_norms_;  ///< per-block residual norms at first convergence check
 };
 
-/// @brief Create a differentiable nonlinear block solver
+/// @brief Create an equation-backed nonlinear block solver.
 /// @param nonlinear_opts nonlinear options struct
 /// @param linear_opts linear options struct
 /// @param mesh mesh
-std::shared_ptr<DifferentiableSolver> buildDifferentiableSolver(NonlinearSolverOptions nonlinear_opts,
-                                                                LinearSolverOptions linear_opts,
-                                                                const smith::Mesh& mesh);
+std::shared_ptr<EquationNonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverOptions nonlinear_opts,
+                                                                        LinearSolverOptions linear_opts,
+                                                                        const smith::Mesh& mesh);
 
 }  // namespace smith

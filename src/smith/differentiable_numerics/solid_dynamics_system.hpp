@@ -12,7 +12,7 @@
 #pragma once
 
 #include "smith/differentiable_numerics/field_store.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_time_integrator.hpp"
@@ -278,7 +278,7 @@ struct SolidDynamicsSystem : public SystemBase {
  * @tparam order Polynomial order for displacement field.
  * @tparam parameter_space Parameter spaces for material properties.
  * @param mesh The mesh.
- * @param solver The differentiable block solver.
+ * @param solver The coupled system solver.
  * @param time_rule The time integration rule.
  * @param prepend_name The name of the physics (used as field prefix).
  * @param parameter_types Parameter field types.
@@ -286,7 +286,7 @@ struct SolidDynamicsSystem : public SystemBase {
  */
 template <int dim, int order, typename... parameter_space>
 SolidDynamicsSystem<dim, order, parameter_space...> buildSolidDynamicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
@@ -356,14 +356,14 @@ SolidDynamicsSystem<dim, order, parameter_space...> buildSolidDynamicsSystem(
  * @tparam order Polynomial order for displacement field.
  * @tparam parameter_space Parameter spaces for material properties.
  * @param mesh The mesh.
- * @param solver The differentiable block solver.
+ * @param solver The coupled system solver.
  * @param time_rule The time integration rule.
  * @param parameter_types Parameter field types.
  * @return SolidDynamicsSystem with all components initialized.
  */
 template <int dim, int order, typename... parameter_space>
 SolidDynamicsSystem<dim, order, parameter_space...> buildSolidDynamicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, FieldType<parameter_space>... parameter_types)
 {
   return buildSolidDynamicsSystem<dim, order, parameter_space...>(mesh, solver, time_rule, "", parameter_types...);

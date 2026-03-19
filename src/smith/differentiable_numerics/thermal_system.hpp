@@ -12,7 +12,7 @@
 #pragma once
 
 #include "smith/differentiable_numerics/field_store.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
@@ -121,7 +121,7 @@ struct ThermalSystem : public SystemBase {
  */
 template <int dim, int temp_order, typename... parameter_space>
 ThermalSystem<dim, temp_order, parameter_space...> buildThermalSystem(std::shared_ptr<Mesh> mesh,
-                                                                      std::shared_ptr<SystemSolver> solver,
+                                                                      std::shared_ptr<CoupledSystemSolver> solver,
                                                                       std::string prepend_name = "",
                                                                       FieldType<parameter_space>... parameter_types)
 {

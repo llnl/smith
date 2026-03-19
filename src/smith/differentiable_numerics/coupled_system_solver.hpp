@@ -10,35 +10,37 @@
 #include <memory>
 #include <mpi.h>
 #include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/numerics/solver_config.hpp"
 #include "smith/physics/common.hpp"
 
 namespace smith {
 
 class WeakForm;
-class DifferentiableBlockSolver;
+class NonlinearBlockSolver;
 class BoundaryConditionManager;
 
 /// @brief Orchestrates staggered solution for multiphysics systems.
-class SystemSolver {
+class CoupledSystemSolver {
  public:
   /// @brief Represents a single stage in a staggered iteration.
   struct Stage {
-    std::vector<size_t> block_indices;                  ///< Which blocks (residuals) to solve in this stage.
-    std::shared_ptr<DifferentiableBlockSolver> solver;  ///< Solver to use for this stage.
+    std::vector<size_t> block_indices;                 ///< Which blocks (residuals) to solve in this stage.
+    std::shared_ptr<NonlinearBlockSolver> solver;      ///< Solver to use for this stage.
+    BlockConvergenceTolerances block_tolerances = {};  ///< Optional stage-local convergence overrides.
   };
 
-  /// @brief Construct a monolithic SystemSolver from a single block solver.
+  /// @brief Construct a monolithic CoupledSystemSolver from a single block solver.
   /// @param single_solver The solver to use for all blocks simultaneously.
-  SystemSolver(std::shared_ptr<DifferentiableBlockSolver> single_solver);
+  CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolver> single_solver);
 
-  /// @brief Construct a SystemSolver for staggered iteration.
+  /// @brief Construct a CoupledSystemSolver for staggered iteration.
   /// @param max_staggered_iterations Maximum number of staggered sweeps across all stages.  When
   ///        @p exact_staggered_steps is false, the solver may exit early once all stage solvers
   ///        report convergence.
   /// @param exact_staggered_steps If true, always perform exactly @p max_staggered_iterations
   ///        sweeps with no early-exit convergence check.  Useful when a fixed number of
   ///        partitioned-stagger steps is required regardless of residual level.
-  SystemSolver(int max_staggered_iterations, bool exact_staggered_steps = false);
+  CoupledSystemSolver(int max_staggered_iterations, bool exact_staggered_steps = false);
 
   /// @brief Sets the relaxation factor for staggered iterations.
   /// @param relaxation_factor The relaxation factor (default is 1.0).
@@ -50,8 +52,10 @@ class SystemSolver {
 
   /// @brief Convenience method to add a solver stage.
   /// @param block_indices Indices of the blocks to solve.
-  /// @param solver Differentiable solver for this stage.
-  void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<DifferentiableBlockSolver> solver);
+  /// @param solver Nonlinear block solver for this stage.
+  /// @param block_tolerances Optional stage-local convergence overrides.
+  void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<NonlinearBlockSolver> solver,
+                          BlockConvergenceTolerances block_tolerances = {});
 
   /// @brief Solves the multiphysics system using staggered iterations.
   /// @param residual_evals Vector of WeakForm evaluations for each block.

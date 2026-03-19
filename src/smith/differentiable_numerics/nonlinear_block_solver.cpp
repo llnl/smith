@@ -4,8 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
-#include "smith/numerics/solver_config.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
 #include "smith/physics/state/finite_element_dual.hpp"
 #include "smith/numerics/stdfunction_operator.hpp"
@@ -63,38 +62,95 @@ void initializeSolver(mfem::Solver* mfem_solver, const smith::FiniteElementState
 #endif
 }
 
-DifferentiableSolver::DifferentiableSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol,
-                                           double rel_tol)
-    : nonlinear_solver_(std::move(s)), comm_(comm), abs_tol_(abs_tol), rel_tol_(rel_tol)
+namespace {
+
+std::vector<double> expandTolerances(const std::vector<double>& block_tols, double scalar_tol, size_t num_blocks,
+                                     const std::string& tol_name)
+{
+  if (block_tols.empty()) {
+    return std::vector<double>(num_blocks, scalar_tol);
+  }
+
+  SLIC_ERROR_IF(block_tols.size() != num_blocks,
+                axom::fmt::format("{} size {} does not match number of residual blocks {}", tol_name, block_tols.size(),
+                                  num_blocks));
+  return block_tols;
+}
+
+}  // namespace
+
+std::vector<double> EquationNonlinearBlockSolver::effectiveRelativeTolerances(
+    size_t num_blocks, const BlockConvergenceTolerances& tolerance_overrides) const
+{
+  return expandTolerances(
+      tolerance_overrides.relative_tols.empty() ? block_tolerances_.relative_tols : tolerance_overrides.relative_tols,
+      rel_tol_, num_blocks, "relative block tolerances");
+}
+
+std::vector<double> EquationNonlinearBlockSolver::effectiveAbsoluteTolerances(
+    size_t num_blocks, const BlockConvergenceTolerances& tolerance_overrides) const
+{
+  return expandTolerances(
+      tolerance_overrides.absolute_tols.empty() ? block_tolerances_.absolute_tols : tolerance_overrides.absolute_tols,
+      abs_tol_, num_blocks, "absolute block tolerances");
+}
+
+EquationNonlinearBlockSolver::EquationNonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm,
+                                                           double abs_tol, double rel_tol,
+                                                           BlockConvergenceTolerances block_tolerances)
+    : nonlinear_solver_(std::move(s)),
+      comm_(comm),
+      abs_tol_(abs_tol),
+      rel_tol_(rel_tol),
+      block_tolerances_(std::move(block_tolerances))
 {
 }
 
-void DifferentiableSolver::completeSetup(const std::vector<FieldT>&)
+void EquationNonlinearBlockSolver::completeSetup(const std::vector<FieldT>&)
 {
   // TODO: eventually may need something like: initializeSolver(&nonlinear_solver_->preconditioner(), u);
 }
 
-void DifferentiableSolver::resetConvergenceState() const { initial_residual_norm_.reset(); }
+void EquationNonlinearBlockSolver::resetConvergenceState() const { initial_residual_norms_.clear(); }
 
-bool DifferentiableSolver::checkConvergence(double tolerance_multiplier,
-                                            const std::vector<mfem::Vector>& residuals) const
+bool EquationNonlinearBlockSolver::checkConvergence(double tolerance_multiplier,
+                                                    const std::vector<mfem::Vector>& residuals) const
 {
-  double r_norm_sq = 0.0;
-  for (const auto& r : residuals) {
-    double n = mfem::ParNormlp(r, 2.0, comm_);
-    r_norm_sq += n * n;
-  }
-  double r_norm = std::sqrt(r_norm_sq);
-
-  if (!initial_residual_norm_) {
-    initial_residual_norm_ = r_norm;
-  }
-
-  double tol = std::max(abs_tol_, rel_tol_ * (*initial_residual_norm_));
-  return r_norm <= tolerance_multiplier * tol;
+  return checkConvergence(tolerance_multiplier, residuals, {});
 }
 
-std::vector<DifferentiableBlockSolver::FieldPtr> DifferentiableSolver::solve(
+bool EquationNonlinearBlockSolver::checkConvergence(double tolerance_multiplier,
+                                                    const std::vector<mfem::Vector>& residuals,
+                                                    const BlockConvergenceTolerances& tolerance_overrides) const
+{
+  size_t num_blocks = residuals.size();
+  auto relative_tols = effectiveRelativeTolerances(num_blocks, tolerance_overrides);
+  auto absolute_tols = effectiveAbsoluteTolerances(num_blocks, tolerance_overrides);
+
+  if (initial_residual_norms_.empty()) {
+    initial_residual_norms_.resize(num_blocks, 0.0);
+  }
+
+  SLIC_ERROR_IF(initial_residual_norms_.size() != num_blocks,
+                axom::fmt::format("Stored initial residual count {} does not match number of residual blocks {}",
+                                  initial_residual_norms_.size(), num_blocks));
+
+  for (size_t i = 0; i < num_blocks; ++i) {
+    double residual_norm = mfem::ParNormlp(residuals[i], 2.0, comm_);
+    if (initial_residual_norms_[i] == 0.0) {
+      initial_residual_norms_[i] = residual_norm;
+    }
+
+    double block_tol = std::max(absolute_tols[i], relative_tols[i] * initial_residual_norms_[i]);
+    if (residual_norm > tolerance_multiplier * block_tol) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+std::vector<NonlinearBlockSolver::FieldPtr> EquationNonlinearBlockSolver::solve(
     const std::vector<FieldPtr>& u_guesses,
     std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> residual_funcs,
     std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobian_funcs) const
@@ -132,7 +188,7 @@ std::vector<DifferentiableBlockSolver::FieldPtr> DifferentiableSolver::solve(
           *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
         }
         auto residuals = residual_funcs(u_guesses);
-        SLIC_ERROR_IF(!block_r, "Invalid r cast in block differentiable solver to a block vector");
+        SLIC_ERROR_IF(!block_r, "Invalid residual block cast to an mfem::BlockVector");
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           auto r = residuals[static_cast<size_t>(row_i)];
           block_r->GetBlock(row_i) = r;
@@ -176,7 +232,7 @@ std::vector<DifferentiableBlockSolver::FieldPtr> DifferentiableSolver::solve(
   return u_guesses;
 }
 
-std::vector<DifferentiableBlockSolver::FieldPtr> DifferentiableSolver::solveAdjoint(
+std::vector<NonlinearBlockSolver::FieldPtr> EquationNonlinearBlockSolver::solveAdjoint(
     const std::vector<DualPtr>& u_bars, std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const
 {
   SMITH_MARK_FUNCTION;
@@ -184,9 +240,9 @@ std::vector<DifferentiableBlockSolver::FieldPtr> DifferentiableSolver::solveAdjo
   int num_rows = static_cast<int>(u_bars.size());
   SLIC_ERROR_IF(num_rows < 0, "Number of residual rows must be non-negative");
 
-  std::vector<DifferentiableBlockSolver::FieldPtr> u_duals(static_cast<size_t>(num_rows));
+  std::vector<NonlinearBlockSolver::FieldPtr> u_duals(static_cast<size_t>(num_rows));
   for (int row_i = 0; row_i < num_rows; ++row_i) {
-    u_duals[static_cast<size_t>(row_i)] = std::make_shared<DifferentiableBlockSolver::FieldT>(
+    u_duals[static_cast<size_t>(row_i)] = std::make_shared<NonlinearBlockSolver::FieldT>(
         u_bars[static_cast<size_t>(row_i)]->space(), "u_dual_" + std::to_string(row_i));
   }
 
@@ -232,9 +288,9 @@ std::vector<DifferentiableBlockSolver::FieldPtr> DifferentiableSolver::solveAdjo
   return u_duals;
 }
 
-std::shared_ptr<DifferentiableSolver> buildDifferentiableSolver(NonlinearSolverOptions nonlinear_opts,
-                                                                LinearSolverOptions linear_opts,
-                                                                const smith::Mesh& mesh)
+std::shared_ptr<EquationNonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverOptions nonlinear_opts,
+                                                                        LinearSolverOptions linear_opts,
+                                                                        const smith::Mesh& mesh)
 {
   // The inner solver is configured to a stricter tolerance (0.6x) so that after each sub-system solve
   // in a staggered iteration, residuals have sufficient margin below the stage's target tolerance.
@@ -244,8 +300,15 @@ std::shared_ptr<DifferentiableSolver> buildDifferentiableSolver(NonlinearSolverO
   NonlinearSolverOptions inner_opts = nonlinear_opts;
   inner_opts.absolute_tol = inner_tol_factor * outer_abs_tol;
   inner_opts.relative_tol = inner_tol_factor * outer_rel_tol;
+  for (auto& tol : inner_opts.block_tolerances.absolute_tols) {
+    tol *= inner_tol_factor;
+  }
+  for (auto& tol : inner_opts.block_tolerances.relative_tols) {
+    tol *= inner_tol_factor;
+  }
   auto solid_solver = std::make_unique<EquationSolver>(inner_opts, linear_opts, mesh.getComm());
-  return std::make_shared<DifferentiableSolver>(std::move(solid_solver), mesh.getComm(), outer_abs_tol, outer_rel_tol);
+  return std::make_shared<EquationNonlinearBlockSolver>(std::move(solid_solver), mesh.getComm(), outer_abs_tol,
+                                                        outer_rel_tol, nonlinear_opts.block_tolerances);
 }
 
 }  // namespace smith

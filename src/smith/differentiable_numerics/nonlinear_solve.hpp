@@ -20,7 +20,7 @@
 namespace smith {
 
 class WeakForm;
-class DifferentiableBlockSolver;
+class NonlinearBlockSolver;
 class BoundaryConditionManager;
 class DirichletBoundaryConditions;
 
@@ -40,14 +40,14 @@ static constexpr size_t invalid_block_index = std::numeric_limits<size_t>::max()
 /// @param states The time varying states as inputs to the weak form
 /// @param params The fixed field parameters as inputs to the weak form
 /// @param time_info Timestep information (time, dt, cycle)
-/// @param solver The differentiable, potentially nonlinear, equation solver used to solve the system of equations
+/// @param solver The nonlinear block solver used to solve the system of equations
 /// @param bc_managers Holds information about which degrees of freedom (DOFS)
 /// @return Vector of field solutions satisfying the weak forms
 std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
                                     const std::vector<std::vector<size_t>> block_indices, const FieldState& shape_disp,
                                     const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
-                                    const DifferentiableBlockSolver* solver,
+                                    const NonlinearBlockSolver* solver,
                                     const std::vector<const BoundaryConditionManager*>& bc_managers);
 
 }  // namespace smith

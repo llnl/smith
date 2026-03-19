@@ -13,6 +13,7 @@
 #pragma once
 
 #include <variant>
+#include <vector>
 
 #include "mfem.hpp"
 #include "axom/fmt.hpp"
@@ -469,6 +470,18 @@ enum SubSpaceOptions
   ALWAYS
 };
 
+/// Per-block nonlinear convergence tolerances.
+struct BlockConvergenceTolerances {
+  /// Relative residual tolerances, one per residual block.
+  std::vector<double> relative_tols = {};
+
+  /// Absolute residual tolerances, one per residual block.
+  std::vector<double> absolute_tols = {};
+
+  /// @brief Return true if no per-block overrides are present.
+  bool empty() const { return relative_tols.empty() && absolute_tols.empty(); }
+};
+
 // _nonlinear_options_start
 /// Nonlinear solution scheme parameters
 struct NonlinearSolverOptions {
@@ -493,6 +506,9 @@ struct NonlinearSolverOptions {
   /// Debug print level
   int print_level = 0;
 
+  /// Optional per-block convergence tolerances used by NonlinearBlockSolver convergence checks.
+  BlockConvergenceTolerances block_tolerances = {};
+
   /// Scaling for the initial trust region size
   double trust_region_scaling = 0.1;
 
@@ -501,9 +517,6 @@ struct NonlinearSolverOptions {
 
   /// Number of extra leftmost eigenvector to be stored between solves
   int num_leftmost = 1;
-
-  /// Should the gradient be converted to a monolithic matrix
-  bool force_monolithic = false;
 };
 // _nonlinear_options_end
 

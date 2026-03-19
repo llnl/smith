@@ -24,6 +24,69 @@
 
 namespace smith {
 
+namespace {
+
+bool preconditionerSupportsBlockOperator(Preconditioner preconditioner)
+{
+  switch (preconditioner) {
+    case Preconditioner::None:
+    case Preconditioner::BlockDiagonal:
+    case Preconditioner::BlockTriangularLower:
+    case Preconditioner::BlockTriangularUpper:
+    case Preconditioner::BlockTriangularSymmetric:
+    case Preconditioner::BlockSchurDiagonal:
+    case Preconditioner::BlockSchurLower:
+    case Preconditioner::BlockSchurUpper:
+    case Preconditioner::BlockSchurFull:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool linearSolverSupportsBlockOperator(LinearSolver linear_solver)
+{
+  switch (linear_solver) {
+    case LinearSolver::CG:
+    case LinearSolver::GMRES:
+    case LinearSolver::SuperLU:
+#ifdef MFEM_USE_STRUMPACK
+    case LinearSolver::Strumpack:
+#endif
+#ifdef SMITH_USE_PETSC
+    case LinearSolver::PetscCG:
+    case LinearSolver::PetscGMRES:
+#endif
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool monolithicizeOperatorIfNeeded(const LinearSolverOptions& linear_options, mfem::Operator& assembled_gradient,
+                                   mfem::Operator*& gradient_operator)
+{
+  auto* block_gradient = dynamic_cast<const mfem::BlockOperator*>(&assembled_gradient);
+  if (!block_gradient) {
+    gradient_operator = &assembled_gradient;
+    return false;
+  }
+
+  if (!requiresMonolithicOperator(linear_options)) {
+    gradient_operator = &assembled_gradient;
+    return false;
+  }
+
+  gradient_operator = buildMonolithicMatrix(*block_gradient).release();
+  SLIC_DEBUG_ROOT(
+      axom::fmt::format("Automatically monolithicizing block Jacobian for linear solver {} with "
+                        "preconditioner {}",
+                        linear_options.linear_solver, linear_options.preconditioner));
+  return true;
+}
+
+}  // namespace
+
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
 class NewtonSolver : public mfem::NewtonSolver {
  protected:
@@ -33,6 +96,9 @@ class NewtonSolver : public mfem::NewtonSolver {
   /// nonlinear solver options
   NonlinearSolverOptions nonlinear_options;
 
+  /// linear solver options
+  LinearSolverOptions linear_options;
+
   /// reconstructed smith print level
   mutable size_t print_level = 0;
 
@@ -41,12 +107,15 @@ class NewtonSolver : public mfem::NewtonSolver {
 
  public:
   /// constructor
-  NewtonSolver(const NonlinearSolverOptions& nonlinear_opts) : nonlinear_options(nonlinear_opts) {}
+  NewtonSolver(const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts)
+      : nonlinear_options(nonlinear_opts), linear_options(linear_opts)
+  {
+  }
 
 #ifdef MFEM_USE_MPI
   /// parallel constructor
-  NewtonSolver(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts)
-      : mfem::NewtonSolver(comm_), nonlinear_options(nonlinear_opts)
+  NewtonSolver(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts)
+      : mfem::NewtonSolver(comm_), nonlinear_options(nonlinear_opts), linear_options(linear_opts)
   {
   }
 #endif
@@ -80,14 +149,8 @@ class NewtonSolver : public mfem::NewtonSolver {
       grad = nullptr;
       grad_monolithic = false;
     }
-    grad = &oper->GetGradient(x);
-    if (nonlinear_options.force_monolithic) {
-      auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
-      if (grad_blocked) {
-        grad = buildMonolithicMatrix(*grad_blocked).release();
-        grad_monolithic = true;
-      }
-    }
+    mfem::Operator& assembled_gradient = oper->GetGradient(x);
+    grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
   }
 
   /// set the preconditioner for the linear solver
@@ -629,14 +692,8 @@ class TrustRegion : public mfem::NewtonSolver {
       grad = nullptr;
       grad_monolithic = false;
     }
-    grad = &oper->GetGradient(x);
-    if (nonlinear_options.force_monolithic) {
-      auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
-      if (grad_blocked) {
-        grad = buildMonolithicMatrix(*grad_blocked).release();
-        grad_monolithic = true;
-      }
-    }
+    mfem::Operator& assembled_gradient = oper->GetGradient(x);
+    grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
   }
 
   /// evaluate the nonlinear residual
@@ -1081,13 +1138,13 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions 
   if (nonlinear_opts.nonlin_solver == NonlinearSolver::Newton) {
     nonlinear_opts.max_line_search_iterations = 0;
     SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0, "Newton's method does not support nonzero min_iterations");
-    nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts);
+    nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts, linear_opts);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::LBFGS) {
     nonlinear_opts.max_line_search_iterations = 0;
     SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0, "LBFGS does not support nonzero min_iterations");
     nonlinear_solver = std::make_unique<mfem::LBFGSSolver>(comm);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::NewtonLineSearch) {
-    nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts);
+    nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts, linear_opts);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::TrustRegion) {
     nonlinear_solver = std::make_unique<TrustRegion>(comm, nonlinear_opts, linear_opts, prec);
 #ifdef SMITH_USE_PETSC
@@ -1200,6 +1257,12 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
   }
 
   return {std::move(iter_lin_solver), std::move(preconditioner)};
+}
+
+bool requiresMonolithicOperator(const LinearSolverOptions& linear_opts)
+{
+  return !linearSolverSupportsBlockOperator(linear_opts.linear_solver) ||
+         !preconditionerSupportsBlockOperator(linear_opts.preconditioner);
 }
 
 #ifdef MFEM_USE_AMGX
