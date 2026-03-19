@@ -456,7 +456,7 @@ struct LinearSolverOptions {
   int preconditioner_print_level = 0;
 
   /// Subblock linear solver options for block preconditioners
-  std::vector<LinearSolverOptions> subblock_linear_options = {};
+  std::vector<LinearSolverOptions> sub_block_linear_solver_options = {};
 };
 // _linear_options_end
 

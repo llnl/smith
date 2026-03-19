@@ -215,8 +215,8 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   // Parameter sweep: construct solvers according to test parameters
   if (test_params.solver_type == BlockSolverType::Direct) {
     smith::LinearSolverOptions direct_solver_options{.linear_solver = smith::LinearSolver::SuperLU};
-    linear_options.subblock_linear_options.push_back(direct_solver_options);
-    linear_options.subblock_linear_options.push_back(direct_solver_options);
+    linear_options.sub_block_linear_solver_options.push_back(direct_solver_options);
+    linear_options.sub_block_linear_solver_options.push_back(direct_solver_options);
   } else if (test_params.solver_type == BlockSolverType::Iterative) {
     smith::LinearSolverOptions iter_solver_options = {.linear_solver = smith::LinearSolver::GMRES,
                                                       .preconditioner = smith::Preconditioner::HypreAMG,
@@ -224,15 +224,15 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
                                                       .absolute_tol = 1.0e-6,
                                                       .max_iterations = 100,
                                                       .print_level = 1};
-    linear_options.subblock_linear_options.push_back(iter_solver_options);
-    linear_options.subblock_linear_options.push_back(iter_solver_options);
+    linear_options.sub_block_linear_solver_options.push_back(iter_solver_options);
+    linear_options.sub_block_linear_solver_options.push_back(iter_solver_options);
   } else if (test_params.solver_type == BlockSolverType::BoomerAMG) {
     smith::LinearSolverOptions amg_solver_options;
     amg_solver_options.linear_solver = smith::LinearSolver::CG;
     amg_solver_options.preconditioner = smith::Preconditioner::HypreAMG;
     amg_solver_options.max_iterations = 1;  // Since it's a preconditioner-only analog
-    linear_options.subblock_linear_options.push_back(amg_solver_options);
-    linear_options.subblock_linear_options.push_back(amg_solver_options);
+    linear_options.sub_block_linear_solver_options.push_back(amg_solver_options);
+    linear_options.sub_block_linear_solver_options.push_back(amg_solver_options);
   }
 
   switch (test_params.precond_type) {
