@@ -507,6 +507,25 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       du_[j] -= displacement_(j);
     }
 
+    auto amgf_prec = dynamic_cast<mfem::AMGFSolver*>(&nonlin_solver_->preconditioner());
+    if (amgf_prec) {
+      // compute contact_dof_prolongation
+      computeContactSubspaceTransferOperator();
+      // set AMGF subspace transfer operator
+      amgf_prec->SetFilteredSubspaceTransferOperator(*(contact_dof_prolongation_.get()));
+      // set the filteredsubspace solver component of AMGF
+      // better solution: retrieve print level from .preconditioner_print_level from linear_solver_options
+      int filter_solver_print_level = 0;
+      filter_solver_ =
+          std::make_unique<StrumpackSolver>(filter_solver_print_level, contact_dof_prolongation_->GetComm());
+      amgf_prec->SetFilteredSubspaceSolver(*filter_solver_.get());
+
+      auto& lin_solver = nonlin_solver_->linearSolver();
+      auto iterative_solver = dynamic_cast<mfem::IterativeSolver*>(&lin_solver);
+      SLIC_WARNING_ROOT_IF(!iterative_solver,
+                           "AMGFContact should only be used as a preconditioner for an iterative solver");
+    }
+
     if (use_warm_start_) {
       // Update the system residual
       mfem::Vector augmented_residual(displacement_.Size() + contact_.numPressureDofs());
@@ -572,23 +591,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       }
 
       auto& lin_solver = nonlin_solver_->linearSolver();
-
-      auto amgf_prec = dynamic_cast<mfem::AMGFSolver*>(&nonlin_solver_->preconditioner());
-      if (amgf_prec) {
-        // compute contact_dof_prolongation
-        computeContactSubspaceTransferOperator();
-        // set AMGF subspace transfer operator
-        amgf_prec->SetFilteredSubspaceTransferOperator(*(contact_dof_prolongation_.get()));
-        // set the filteredsubspace solver component of AMGF
-        auto iterative_solver = dynamic_cast<mfem::IterativeSolver*>(&lin_solver);
-        SLIC_ERROR_ROOT_IF(!iterative_solver,
-                           "AMGFContact should only be used as a preconditioner for an iterative solver");
-        // better solution: retrieve print level from .preconditioner_print_level from linear_solver_options
-        int filter_solver_print_level = 0;
-        filter_solver_ =
-            std::make_unique<StrumpackSolver>(filter_solver_print_level, contact_dof_prolongation_->GetComm());
-        amgf_prec->SetFilteredSubspaceSolver(*filter_solver_.get());
-      }
       lin_solver.SetOperator(*J_operator_);
       lin_solver.Mult(augmented_residual, augmented_solution);
 
