@@ -1043,8 +1043,8 @@ EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolv
   lin_solver_ = std::move(lin_solver);
   preconditioner_ = std::move(preconditioner);
   nonlin_solver_ = buildNonlinearSolver(nonlinear_opts, lin_opts, *preconditioner_, comm);
-  convergence_manager_ =
-      std::make_shared<EquationSolverConvergenceManager>(comm, nonlinear_opts.absolute_tol, nonlinear_opts.relative_tol);
+  convergence_manager_ = std::make_shared<EquationSolverConvergenceManager>(comm, nonlinear_opts.absolute_tol,
+                                                                            nonlinear_opts.relative_tol);
   attachConvergenceManager();
 }
 

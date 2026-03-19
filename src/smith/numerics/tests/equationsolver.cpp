@@ -119,8 +119,7 @@ void expectBlockOnlyConvergence(const smith::EquationSolver& eq_solver, const Tw
   EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
   EXPECT_LT(std::abs(residual(0)), 0.2);
   EXPECT_LT(std::abs(residual(1)), 20.0);
-  EXPECT_GT(eq_solver.nonlinearSolver().GetFinalNorm(),
-            global_rel_tol * eq_solver.nonlinearSolver().GetInitialNorm());
+  EXPECT_GT(eq_solver.nonlinearSolver().GetFinalNorm(), global_rel_tol * eq_solver.nonlinearSolver().GetInitialNorm());
 }
 
 }  // namespace

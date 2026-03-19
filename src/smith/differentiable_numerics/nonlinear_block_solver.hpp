@@ -178,10 +178,10 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   mutable std::unique_ptr<EquationSolver>
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 
-  MPI_Comm comm_;                                       ///< MPI communicator for parallel norm computation
-  double abs_tol_;                                      ///< absolute residual tolerance for convergence check
-  double rel_tol_;                                      ///< relative residual tolerance for convergence check
-  BlockConvergenceTolerances block_tolerances_;         ///< optional per-block convergence tolerances
+  MPI_Comm comm_;                                ///< MPI communicator for parallel norm computation
+  double abs_tol_;                               ///< absolute residual tolerance for convergence check
+  double rel_tol_;                               ///< relative residual tolerance for convergence check
+  BlockConvergenceTolerances block_tolerances_;  ///< optional per-block convergence tolerances
 };
 
 /// @brief Create an equation-backed nonlinear block solver.

@@ -70,9 +70,9 @@ std::vector<double> computeResidualBlockNorms(const mfem::Vector& residual, cons
 
   SLIC_ERROR_IF(block_offsets.size() < 2, "Block offsets must contain at least two entries");
   SLIC_ERROR_IF(block_offsets.front() != 0, "Block offsets must start at zero");
-  SLIC_ERROR_IF(block_offsets.back() != residual.Size(),
-                axom::fmt::format("Block offsets end at {}, but residual size is {}", block_offsets.back(),
-                                  residual.Size()));
+  SLIC_ERROR_IF(
+      block_offsets.back() != residual.Size(),
+      axom::fmt::format("Block offsets end at {}, but residual size is {}", block_offsets.back(), residual.Size()));
 
   size_t num_blocks = block_offsets.size() - 1;
   std::vector<double> local_squared_norms(num_blocks, 0.0);
@@ -113,9 +113,10 @@ ConvergenceStatus evaluateResidualConvergence(double tolerance_multiplier, doubl
     context.initial_block_norms.assign(block_norms.size(), -1.0);
   }
 
-  SLIC_ERROR_IF(context.initial_block_norms.size() != block_norms.size(),
-                axom::fmt::format("Stored initial block residual count {} does not match current residual block count {}",
-                                  context.initial_block_norms.size(), block_norms.size()));
+  SLIC_ERROR_IF(
+      context.initial_block_norms.size() != block_norms.size(),
+      axom::fmt::format("Stored initial block residual count {} does not match current residual block count {}",
+                        context.initial_block_norms.size(), block_norms.size()));
 
   double global_norm_squared = 0.0;
   for (size_t i = 0; i < block_norms.size(); ++i) {
@@ -162,13 +163,14 @@ void EquationSolverConvergenceManager::setBlockData(const std::vector<int>& bloc
 
 bool EquationSolverConvergenceManager::blockPathEnabled() const { return hasPerBlockTolerances(block_tolerances_); }
 
-ConvergenceStatus EquationSolverConvergenceManager::evaluate(double tolerance_multiplier, const mfem::Vector& residual) const
+ConvergenceStatus EquationSolverConvergenceManager::evaluate(double tolerance_multiplier,
+                                                             const mfem::Vector& residual) const
 {
   auto block_norms = computeResidualBlockNorms(residual, block_offsets_, comm_);
-  auto block_abs_tols = expandPerBlockTolerances(block_tolerances_.absolute_tols, block_norms.size(), 0.0,
-                                                 "absolute block tolerances");
-  auto block_rel_tols = expandPerBlockTolerances(block_tolerances_.relative_tols, block_norms.size(), 0.0,
-                                                 "relative block tolerances");
+  auto block_abs_tols =
+      expandPerBlockTolerances(block_tolerances_.absolute_tols, block_norms.size(), 0.0, "absolute block tolerances");
+  auto block_rel_tols =
+      expandPerBlockTolerances(block_tolerances_.relative_tols, block_norms.size(), 0.0, "relative block tolerances");
 
   return evaluateResidualConvergence(tolerance_multiplier, abs_tol_, rel_tol_, block_abs_tols, block_rel_tols,
                                      blockPathEnabled(), block_norms, context_);

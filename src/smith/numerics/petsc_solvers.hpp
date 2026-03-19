@@ -387,10 +387,9 @@ class PetscKSPSolver : virtual public mfem::IterativeSolver, public mfem::PetscL
 /**
  * @brief Wrapper for PETSc based nonlinear solvers
  */
-class PetscNewtonSolver
-    : public mfem::NewtonSolver,
-      public mfem::PetscNonlinearSolver,
-      public smith::ConvergenceManagedNonlinearSolver {
+class PetscNewtonSolver : public mfem::NewtonSolver,
+                          public mfem::PetscNonlinearSolver,
+                          public smith::ConvergenceManagedNonlinearSolver {
  protected:
   friend PetscErrorCode snesConvergenceGlobalOrBlock(SNES, PetscInt, PetscReal, PetscReal, PetscReal,
                                                      SNESConvergedReason*, void*);

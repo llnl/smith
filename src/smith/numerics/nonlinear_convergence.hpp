@@ -18,20 +18,20 @@ namespace smith {
 
 /// @brief Detailed status from evaluating nonlinear residual convergence.
 struct ConvergenceStatus {
-  bool global_converged = false;    ///< True when the scalar global residual criterion passes.
-  bool block_converged = false;     ///< True when all per-block residual criteria pass.
-  bool converged = false;           ///< True when either the global or block criterion passes.
-  bool block_path_enabled = false;  ///< True when per-block tolerances are active for this evaluation.
-  double global_norm = 0.0;         ///< Current scalar global residual norm.
-  double global_goal = 0.0;         ///< Scalar convergence threshold used for the global check.
+  bool global_converged = false;         ///< True when the scalar global residual criterion passes.
+  bool block_converged = false;          ///< True when all per-block residual criteria pass.
+  bool converged = false;                ///< True when either the global or block criterion passes.
+  bool block_path_enabled = false;       ///< True when per-block tolerances are active for this evaluation.
+  double global_norm = 0.0;              ///< Current scalar global residual norm.
+  double global_goal = 0.0;              ///< Scalar convergence threshold used for the global check.
   std::vector<double> block_norms = {};  ///< Current residual norm for each block.
   std::vector<double> block_goals = {};  ///< Convergence threshold used for each residual block.
 };
 
 /// @brief Stores initial residual norms used for relative nonlinear convergence checks.
 struct NonlinearConvergenceContext {
-  double initial_global_norm = -1.0;              ///< Initial scalar global residual norm for the current solve.
-  std::vector<double> initial_block_norms = {};   ///< Initial residual norm for each block for the current solve.
+  double initial_global_norm = -1.0;             ///< Initial scalar global residual norm for the current solve.
+  std::vector<double> initial_block_norms = {};  ///< Initial residual norm for each block for the current solve.
 
   /// @brief Clear all stored initial norms for a new solve.
   void reset();

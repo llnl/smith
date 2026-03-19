@@ -52,8 +52,9 @@ class FakeNonlinearBlockSolver : public NonlinearBlockSolverBase {
   {
     auto relative_tols = effectiveRelativeTolerances(residuals.size(), tolerance_overrides);
     auto absolute_tols = effectiveAbsoluteTolerances(residuals.size(), tolerance_overrides);
-    bool block_path_enabled = !tolerance_overrides.relative_tols.empty() || !tolerance_overrides.absolute_tols.empty() ||
-                              !block_tolerances_.relative_tols.empty() || !block_tolerances_.absolute_tols.empty();
+    bool block_path_enabled = !tolerance_overrides.relative_tols.empty() ||
+                              !tolerance_overrides.absolute_tols.empty() || !block_tolerances_.relative_tols.empty() ||
+                              !block_tolerances_.absolute_tols.empty();
     auto block_norms = computeResidualBlockNorms(residuals, MPI_COMM_SELF);
     return evaluateResidualConvergence(tolerance_multiplier, abs_tol_, rel_tol_, absolute_tols, relative_tols,
                                        block_path_enabled, block_norms, context);
