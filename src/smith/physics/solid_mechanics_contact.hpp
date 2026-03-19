@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "smith/physics/base_physics.hpp"
 #include "smith/physics/solid_mechanics.hpp"
 #include "smith/physics/contact/contact_data.hpp"
 
@@ -269,6 +270,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     // solve the non-linear system resid = 0 and pressure * gap = 0
     nonlin_solver_->solve(augmented_solution);
     displacement_.Set(1.0, mfem::Vector(augmented_solution, 0, displacement_.Size()));
+    contact_.setDisplacements(BasePhysics::shapeDisplacement(), displacement_);
     contact_.setPressures(mfem::Vector(augmented_solution, displacement_.Size(), contact_.numPressureDofs()));
     contact_.update(cycle_, time_, dt);
     forces_.SetVector(contact_.forces(), 0);
