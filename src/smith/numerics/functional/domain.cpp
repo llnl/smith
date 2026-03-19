@@ -661,9 +661,15 @@ Domain EntireInteriorFaces(const mesh_t& mesh)
 }
 
 /// @brief constructs a domain from some subset of the interior face elements in a mesh
-Domain ofInteriorFaces(const mesh_t& mesh)
+template <int d>
+Domain domain_of_interior_boundary_faces(const mesh_t& mesh, std::function<bool(std::vector<tensor<double, d>>, int)> predicate)
 {
-  Domain output{mesh, mesh.SpaceDimension() - 1, Domain::Type::InteriorFaces};
+  assert(mesh.SpaceDimension() == d);
+  Domain output{mesh, d - 1, Domain::Type::InteriorFaces};
+
+  mfem::Array<int> face_id_to_bdr_id = mesh.GetFaceToBdrElMap();
+  mfem::Vector vertices;
+  mesh.GetVertices(vertices);
 
   int edge_id = 0;
   int tri_id = 0;
@@ -702,10 +708,10 @@ Domain ofInteriorFaces(const mesh_t& mesh)
         break;
       case mfem::Geometry::SQUARE:
         if (add) {
-          output.quad_ids_.push_back(quad_id;);
+          output.quad_ids_.push_back(quad_id);
           output.mfem_quad_ids_.push_back(f);
         }
-        quad_id++
+        quad_id++;
         break;
       default:
         SLIC_ERROR("unsupported element type");
@@ -717,6 +723,17 @@ Domain ofInteriorFaces(const mesh_t& mesh)
 
   return output;
 }
+
+Domain Domain::ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func)
+{
+  return domain_of_interior_boundary_faces<2>(mesh, func);
+}
+
+Domain Domain::ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func)
+{
+  return domain_of_interior_boundary_faces<3>(mesh, func);
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////

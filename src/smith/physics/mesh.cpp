@@ -82,7 +82,7 @@ void Mesh::createDomains()
 {
   domains_.insert({entireBodyName(), smith::EntireDomain(*mfem_mesh_)});
   domains_.insert({entireBoundaryName(), smith::EntireBoundary(*mfem_mesh_)});
-  domains_.insert({internalBoundaryName(), smith::InteriorFaces(*mfem_mesh_)});
+  domains_.insert({internalBoundaryName(), smith::EntireInteriorFaces(*mfem_mesh_)});
 }
 
 void Mesh::errorIfDomainExists(const std::string& domain_name) const

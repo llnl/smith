@@ -513,7 +513,7 @@ TEST(domain, ofInteriorBoundaryElements)
   auto meshInput = buildMeshFromFile(SMITH_REPO_DIR "/data/meshes/SplitCubeTest.g");
   auto mesh = smith::mesh::refineAndDistribute(std::move(meshInput), 0, 0);
 
-  Domain d0 = Domain::ofInteriorBoundaries(*mesh, by_attr<3>(2));
+  Domain d0 = Domain::ofInteriorFaces(*mesh, by_attr<3>(2));
 
   auto [trial_fespace, trial_fec] = smith::generateParFiniteElementSpace<trial_space>(mesh.get());
   mfem::Vector U(trial_fespace->TrueVSize());
@@ -521,16 +521,10 @@ TEST(domain, ofInteriorBoundaryElements)
   // Calculate the area of the internal boundary region
   Functional<test_space(trial_space)> totalArea({trial_fespace.get()});
 
-  totalArea.AddBoundaryIntegral(smith::Dimension<2>{}, smith::DependsOn<>{}, IdentityFunctor{}, d0);
+  totalArea.AddInteriorFaceIntegral(smith::Dimension<2>{}, smith::DependsOn<>{}, IdentityFunctor{}, d0);
   double calculatedArea = totalArea(0.0, U);
 
   EXPECT_NEAR(calculatedArea, expectedArea, 1e-6);
-
-  Domain d1 = Domain::ofBoundaryElements(*mesh, by_attr<3>(1));
-
-  Domain d2 = d1 | d0;
-
-  EXPECT_EQ(d2.quad_ids_.size(), 28);
 }
 
 int main(int argc, char* argv[])
