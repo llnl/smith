@@ -146,23 +146,22 @@ struct NeoHookeanThermoelasticMaterial {
   }
 };
 
-
 //////////////////////////////////////////////////////////////////////////////
 /// Fictitious thermally responsive material (softening when heating)
 struct ThermalSofteningDummyMaterial {
   static constexpr int dim = 3;
-  double density;      ///< density
-  double E;            ///< Young's modulus
-  double nu;           ///< Poisson's ratio
-  double C_v;          ///< volumetric heat capacity
-  double alpha;        ///< thermal expansion coefficient
-  double theta_ref;    ///< datum temperature for thermal expansion
-  double kappa;        ///< thermal conductivity
-  double mu;           ///< viscous parameter
+  double density;    ///< density
+  double E;          ///< Young's modulus
+  double nu;         ///< Poisson's ratio
+  double C_v;        ///< volumetric heat capacity
+  double alpha;      ///< thermal expansion coefficient
+  double theta_ref;  ///< datum temperature for thermal expansion
+  double kappa;      ///< thermal conductivity
+  double mu;         ///< viscous parameter
 
   // Bounds for temperature-dependent scaling of mechanical properties
-  double theta_low  = 293.15;   ///< lower temperature bound for scaling
-  double theta_high = 473.15;   ///< upper temperature bound for scaling
+  double theta_low = 293.15;   ///< lower temperature bound for scaling
+  double theta_high = 473.15;  ///< upper temperature bound for scaling
 
   // Maximum softening factor at low temperature
   // E_eff(theta_low)   = scale_factor * E
@@ -172,11 +171,7 @@ struct ThermalSofteningDummyMaterial {
   using State = Empty;
 
   template <typename T1, typename T2, typename T3, typename T4, int dim_>
-  auto operator()(double,
-                  State&,
-                  const tensor<T1, dim_, dim_>& grad_u,
-                  const tensor<T2, dim_, dim_>& grad_v,
-                  T3 theta,
+  auto operator()(double, State&, const tensor<T1, dim_, dim_>& grad_u, const tensor<T2, dim_, dim_>& grad_v, T3 theta,
                   const tensor<T4, dim_>& grad_theta) const
   {
     static_assert(dim_ == dim, "Dimension mismatch in ThermalSofteningDummyMaterial");
@@ -201,12 +196,13 @@ struct ThermalSofteningDummyMaterial {
     }
 
     // Apply scaling to E and mu (promote doubles to AD type via multiplication)
-    auto E_eff  = s_mech * E;
+    auto E_eff = s_mech * E;
     auto mu_eff = s_mech * mu;
 
     auto K = E_eff / (3.0 * (1.0 - 2.0 * nu));
     auto G = 0.5 * E_eff / (1.0 + nu);
-// std::cout<<"... theta = "<<get_value(theta)<<", s_mech = "<<get_value(s_mech)<<", K = "<<get_value(K)<<", G = "<<get_value(G)<<std::endl;
+    // std::cout<<"... theta = "<<get_value(theta)<<", s_mech = "<<get_value(s_mech)<<", K = "<<get_value(K)<<", G =
+    // "<<get_value(G)<<std::endl;
     constexpr auto I = smith::DenseIdentity<dim_>();
     auto lambda = K - (2.0 / 3.0) * G;
 
@@ -231,9 +227,7 @@ struct ThermalSofteningDummyMaterial {
 
     // Internal heat power
     auto greenStrainRate =
-        0.5 * (grad_v + transpose(grad_v)
-               + dot(transpose(grad_v), grad_u)
-               + dot(transpose(grad_u), grad_v));
+        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
     auto s0 = -dim_ * K * alpha * (theta + 273.1) * tr(greenStrainRate);
 
     // Heat flux
@@ -247,18 +241,18 @@ struct ThermalSofteningDummyMaterial {
 /// Fictitious thermally responsive material (softening when heating)
 struct ThermalStiffeningDummyMaterial {
   static constexpr int dim = 3;
-  double density;      ///< density
-  double E;            ///< Young's modulus
-  double nu;           ///< Poisson's ratio
-  double C_v;          ///< volumetric heat capacity
-  double alpha;        ///< thermal expansion coefficient
-  double theta_ref;    ///< datum temperature for thermal expansion
-  double kappa;        ///< thermal conductivity
-  double mu;           ///< viscous parameter
+  double density;    ///< density
+  double E;          ///< Young's modulus
+  double nu;         ///< Poisson's ratio
+  double C_v;        ///< volumetric heat capacity
+  double alpha;      ///< thermal expansion coefficient
+  double theta_ref;  ///< datum temperature for thermal expansion
+  double kappa;      ///< thermal conductivity
+  double mu;         ///< viscous parameter
 
   // Bounds for temperature-dependent scaling of mechanical properties
-  double theta_low  = 293.15;   ///< lower temperature bound for scaling
-  double theta_high = 473.15;   ///< upper temperature bound for scaling
+  double theta_low = 293.15;   ///< lower temperature bound for scaling
+  double theta_high = 473.15;  ///< upper temperature bound for scaling
 
   // Maximum softening factor at low temperature
   // E_eff(theta_low)   = scale_factor * E
@@ -268,11 +262,7 @@ struct ThermalStiffeningDummyMaterial {
   using State = Empty;
 
   template <typename T1, typename T2, typename T3, typename T4, int dim_>
-  auto operator()(double,
-                  State&,
-                  const tensor<T1, dim_, dim_>& grad_u,
-                  const tensor<T2, dim_, dim_>& grad_v,
-                  T3 theta,
+  auto operator()(double, State&, const tensor<T1, dim_, dim_>& grad_u, const tensor<T2, dim_, dim_>& grad_v, T3 theta,
                   const tensor<T4, dim_>& grad_theta) const
   {
     static_assert(dim_ == dim, "Dimension mismatch in ThermalSofteningDummyMaterial");
@@ -297,7 +287,7 @@ struct ThermalStiffeningDummyMaterial {
     }
 
     // Apply scaling to E and mu (promote doubles to AD type via multiplication)
-    auto E_eff  = s_mech * E;
+    auto E_eff = s_mech * E;
     auto mu_eff = s_mech * mu;
 
     auto K = E_eff / (3.0 * (1.0 - 2.0 * nu));
@@ -327,9 +317,7 @@ struct ThermalStiffeningDummyMaterial {
 
     // Internal heat power
     auto greenStrainRate =
-        0.5 * (grad_v + transpose(grad_v)
-               + dot(transpose(grad_v), grad_u)
-               + dot(transpose(grad_u), grad_v));
+        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
     auto s0 = -dim_ * K * alpha * (theta + 273.1) * tr(greenStrainRate);
 
     // Heat flux
@@ -339,46 +327,43 @@ struct ThermalStiffeningDummyMaterial {
   }
 };
 
-
 ///////////////////////////////////////////////////////////////////////////////
 
 /// PNC thermal stiffening material model
 struct ThermalStiffeningMaterial {
-  double Km;       ///< matrix bulk modulus, MPa
-  double Gm;       ///< matrix shear modulus, MPa
-  double betam;    ///< matrix volumetric thermal expansion coefficient
-  double rhom0;    ///< matrix initial density
-  double etam;     ///< matrix viscosity, MPa-s
+  double Km;     ///< matrix bulk modulus, MPa
+  double Gm;     ///< matrix shear modulus, MPa
+  double betam;  ///< matrix volumetric thermal expansion coefficient
+  double rhom0;  ///< matrix initial density
+  double etam;   ///< matrix viscosity, MPa-s
 
-  double Ke;       ///< entanglement bulk modulus, MPa
-  double Ge;       ///< entanglement shear modulus, MPa
-  double betae;    ///< entanglement volumetric thermal expansion coefficient
-  double rhoe0;    ///< entanglement (chain) initial density
-  double etae;     ///< entanglement viscosity, MPa-s
+  double Ke;     ///< entanglement bulk modulus, MPa
+  double Ge;     ///< entanglement shear modulus, MPa
+  double betae;  ///< entanglement volumetric thermal expansion coefficient
+  double rhoe0;  ///< entanglement (chain) initial density
+  double etae;   ///< entanglement viscosity, MPa-s
 
-  double C_v;      ///< net volumetric heat capacity (must account for matrix+chain+particle)
-  double kappa;    ///< net thermal conductivity (must account for matrix+chain+particle)
+  double C_v;    ///< net volumetric heat capacity (must account for matrix+chain+particle)
+  double kappa;  ///< net thermal conductivity (must account for matrix+chain+particle)
 
   // E_a and R can be SI units since they cancel out in the exponent
-  double Af;       ///< forward (low-high) exponential prefactor, 1/s
-  double E_af;     ///< forward (low-high) activation energy, J/mol
-  double Ar;       ///< reverse exponential prefactor, 1/s
-  double E_ar;     ///< reverse activation energy, J/mol
-  double R;        ///< universal gas constant, J/mol/K
-  double Tr;       ///< reference temperature, K
+  double Af;    ///< forward (low-high) exponential prefactor, 1/s
+  double E_af;  ///< forward (low-high) activation energy, J/mol
+  double Ar;    ///< reverse exponential prefactor, 1/s
+  double E_ar;  ///< reverse activation energy, J/mol
+  double R;     ///< universal gas constant, J/mol/K
+  double Tr;    ///< reference temperature, K
 
-  double gw;       ///< particle weight fraction
-  double wm;       ///< matrix mass fraction (set to 0.5, not real for now)
-
+  double gw;  ///< particle weight fraction
+  double wm;  ///< matrix mass fraction (set to 0.5, not real for now)
 
   struct State {
-    double w_e = 0.0;   //entangled mass fraction
-    tensor<double,3,3> Cp{{{1.0, 0.0, 0.0},
-                           {0.0, 1.0, 0.0},
-                           {0.0, 0.0, 1.0}}}; // previous value of right Cauchy-Green
-    tensor<double,3,3> Fesi{{{1.0, 0.0, 0.0},
-                             {0.0, 1.0, 0.0},
-                             {0.0, 0.0, 1.0}}}; //Inverse of effective mapping tensor F^{es} where F=F^e \dot F^{es}
+    double w_e = 0.0;  // entangled mass fraction
+    tensor<double, 3, 3> Cp{
+        {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}};  // previous value of right Cauchy-Green
+    tensor<double, 3, 3> Fesi{{{1.0, 0.0, 0.0},
+                               {0.0, 1.0, 0.0},
+                               {0.0, 0.0, 1.0}}};  // Inverse of effective mapping tensor F^{es} where F=F^e \dot F^{es}
   };
 
   /**
@@ -392,7 +377,7 @@ struct ThermalStiffeningMaterial {
    * @param[in] grad_u Displacement gradient
    * @param[in] grad_v Velocity gradient
    * @param[in] theta Temperature
-   * @param[in] grad_theta Temperature 
+   * @param[in] grad_theta Temperature
    * @param[in,out] state State variables for this material
    *
    * @return[out] tuple of constitutive outputs. Contains the
@@ -403,74 +388,80 @@ struct ThermalStiffeningMaterial {
    */
 
   // this function calculates the equilibrium low-T mass fraction as a function of temperature
-  
-  template<typename scalar>
-  SMITH_HOST_DEVICE auto equilibrium_xi(scalar temp) const{
+
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto equilibrium_xi(scalar temp) const
+  {
     using std::pow, std::exp;
     auto Tt = 443.0;
     auto k = 36.0;
-    return exp(-(pow(temp/Tt,k)));
+    return exp(-(pow(temp / Tt, k)));
   }
 
-  template<typename scalar>
-  SMITH_HOST_DEVICE auto Gm0(scalar g) const{
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto Gm0(scalar g) const
+  {
     // low-T shear modulus at reference temperature as a function of particle wt% g
     auto junk = g;
-    return Gm*junk/g;
+    return Gm * junk / g;
   }
-  
-  template<typename scalar>
-  SMITH_HOST_DEVICE auto f1(scalar T) const{
+
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto f1(scalar T) const
+  {
     using std::exp;
     // thermal softening function for low-T modulus
     auto N = 0.02;
     return exp(-N * (T - Tr));
   }
 
-  template<typename scalar>
-  SMITH_HOST_DEVICE auto df1(scalar T) const{
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto df1(scalar T) const
+  {
     using std::exp;
     // thermal softening function for low-T modulus
     auto N = 0.02;
-    return -N*exp(-N * (T - Tr));
+    return -N * exp(-N * (T - Tr));
   }
 
-  template<typename scalar>
-  SMITH_HOST_DEVICE auto Ge0(scalar g) const{
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto Ge0(scalar g) const
+  {
     // high-T shear modulus at reference temperature as a function of particle wt% g
     auto junk = g;
-    return Ge*junk/g;
+    return Ge * junk / g;
   }
 
   template <typename T1, typename T2, typename T3, typename T4, int dim>
-  auto operator()(double dt, State& state, const tensor<T1, dim, dim>& grad_u, const tensor<T2, dim, dim>& grad_v, T3 theta,
-                  const tensor<T4, dim>& grad_theta) const
+  auto operator()(double dt, State& state, const tensor<T1, dim, dim>& grad_u, const tensor<T2, dim, dim>& grad_v,
+                  T3 theta, const tensor<T4, dim>& grad_theta) const
   {
     using std::pow, std::exp;
-    
-    // Tr is a double but I need auto to add to theta
-    auto tempref = Tr; // 353.0;
 
-    theta=theta+tempref;
+    // Tr is a double but I need auto to add to theta
+    auto tempref = Tr;  // 353.0;
+
+    theta = theta + tempref;
 
     auto wep = state.w_e;     // previous entangled fraction
-    auto wfp = 1.0-wep;       // previous free fraction
+    auto wfp = 1.0 - wep;     // previous free fraction
     auto Fesip = state.Fesi;  // previous inverse of mapping F^{es}
 
     // get equilibrium wl=xi
     auto xi = equilibrium_xi(theta);
-    //std::cout << "wh: " << wh << "\n";
+    // std::cout << "wh: " << wh << "\n";
 
     // get kinematics
     constexpr auto I = Identity<dim>();
 
     auto F = grad_u + I;
-    auto FeIni = dot(F,Fesip); // Fe for the extant entangled material, called Fh1 in my notes about the relaxation method
+    auto FeIni =
+        dot(F, Fesip);  // Fe for the extant entangled material, called Fh1 in my notes about the relaxation method
     auto Je = det(FeIni);
 
     auto C = dot(transpose(F), F);
     auto Ci = inv(C);
-    auto D = 0.5*(grad_v+transpose(grad_v));//dot(inv(transpose(F)),CdFi)*0.5;
+    auto D = 0.5 * (grad_v + transpose(grad_v));  // dot(inv(transpose(F)),CdFi)*0.5;
 
     auto B = dot(F, transpose(F));
     auto trB = tr(B);
@@ -478,33 +469,31 @@ struct ThermalStiffeningMaterial {
     auto J = det(F);
 
     // get moduli
-    auto Gm_eff = Gm0(gw)*f1(theta);
+    auto Gm_eff = Gm0(gw) * f1(theta);
     auto Ge_eff = Ge0(gw);
 
     // calculate forward and reverse reaction rate
-    auto kf = Af * exp(-E_af / (R*theta));
-    auto kr = Ar * exp(-E_ar / (R*theta));
+    auto kf = Af * exp(-E_af / (R * theta));
+    auto kr = Ar * exp(-E_ar / (R * theta));
 
     // get mass fraction supplies, forward and reverse
-    auto dwff = (xi-wfp)*kf*dt/(1.+kf*dt);
-    auto dwer = (1.-xi-wep)*kr*dt/(1.+kr*dt);
+    auto dwff = (xi - wfp) * kf * dt / (1. + kf * dt);
+    auto dwer = (1. - xi - wep) * kr * dt / (1. + kr * dt);
     // get net mass fraction supply
     auto dwe = -dwff + dwer;
 
     auto aux1 = 0.0, aux2 = 0.0, aux3 = 0.0;
     // if dwh>0, I need to get the new equivalent Fhsi
-    if (dwe>0 && wep==0) {
-      aux1 = 1.0; // initialize Fhsi as the inverse of F at the current time
-    }
-    else if (dwe>0) { // calculate the current elastic deformation of the high-T material
-      aux2 = 1.0; // update the effective value of Fhsi
-    }
-    else {
+    if (dwe > 0 && wep == 0) {
+      aux1 = 1.0;          // initialize Fhsi as the inverse of F at the current time
+    } else if (dwe > 0) {  // calculate the current elastic deformation of the high-T material
+      aux2 = 1.0;          // update the effective value of Fhsi
+    } else {
       aux3 = 1.0;
     }
 
-    auto Fesi = aux1 * inv(F) + aux2 * (wep/(wep+dwe))*Fesip + aux3 * Fesip;
-    auto Fe = dot(F,Fesi);
+    auto Fesi = aux1 * inv(F) + aux2 * (wep / (wep + dwe)) * Fesip + aux3 * Fesip;
+    auto Fe = dot(F, Fesi);
     state.Fesi = get_value(Fesi);
 
     // update mass fractions
@@ -512,17 +501,17 @@ struct ThermalStiffeningMaterial {
 
     // std::cout << "we: " << we << "\n";
 
-  // calculate B_bar, J based on Fh
+    // calculate B_bar, J based on Fh
     auto Be = dot(Fe, transpose(Fe));
     auto trBe = tr(Be);
     auto Be_bar = Be - (trBe / 3.0) * I;
 
     // calculate kirchoff stress
-    auto Tm = Gm_eff * pow(J, -2./3.) * B_bar + J * Km * (J - 1. - betam*(theta-Tr)) * I; // + etal * D;
-    auto Te = Ge_eff * pow(Je, -2./3.) * Be_bar + Je * Ke * (Je - 1.) * I; // + etah * D;
+    auto Tm = Gm_eff * pow(J, -2. / 3.) * B_bar + J * Km * (J - 1. - betam * (theta - Tr)) * I;  // + etal * D;
+    auto Te = Ge_eff * pow(Je, -2. / 3.) * Be_bar + Je * Ke * (Je - 1.) * I;                     // + etah * D;
 
-    auto TK = wm * Tm + (1. - wm) * we * Te + 2*((1.-we)*etam+we*etae)*D;
-  
+    auto TK = wm * Tm + (1. - wm) * we * Te + 2 * ((1. - we) * etam + we * etae) * D;
+
     // 1st Piola from Kirchhoff
     const auto Piola = dot(TK, inv(transpose(F)));
 
@@ -530,18 +519,18 @@ struct ThermalStiffeningMaterial {
     const auto q0 = -kappa * grad_theta;
 
     state.w_e = get_value(we);
-    state.Cp = get_value(dot(transpose(F),F));
+    state.Cp = get_value(dot(transpose(F), F));
 
     // internal heat power
     auto greenStrainRate =
         0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
     // viscous stress
-    auto Sv = 2*((1.-we)*etam+we*etae)*dot(Ci,dot(greenStrainRate,Ci));
+    auto Sv = 2 * ((1. - we) * etam + we * etae) * dot(Ci, dot(greenStrainRate, Ci));
     // derivative of elastic S with respect to T
-    auto dtmdT = Gm0(gw)*df1(theta)*pow(J,-2./3)*B_bar-Km*J*betam*I;
-    auto dSedT = dot(inv(F),dot(wm*dtmdT,transpose(inv(F))));
-    const auto s0 = tr(dot(Sv+theta*dSedT,greenStrainRate));
-    //const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate);
+    auto dtmdT = Gm0(gw) * df1(theta) * pow(J, -2. / 3) * B_bar - Km * J * betam * I;
+    auto dSedT = dot(inv(F), dot(wm * dtmdT, transpose(inv(F))));
+    const auto s0 = tr(dot(Sv + theta * dSedT, greenStrainRate));
+    // const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate);
 
     return smith::tuple{Piola, C_v, s0, q0};
   }

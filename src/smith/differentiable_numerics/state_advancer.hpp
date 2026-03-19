@@ -39,8 +39,7 @@ class StateAdvancer {
 
   // Backward-compat signature for older examples/tests.
   virtual std::vector<FieldState> advanceState(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                                               const std::vector<FieldState>& params,
-                                               const TimeInfo& time_info) const
+                                               const std::vector<FieldState>& params, const TimeInfo& time_info) const
   {
     return advanceState(time_info, shape_disp, states, params);
   }
