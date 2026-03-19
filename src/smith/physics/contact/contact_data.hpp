@@ -77,8 +77,10 @@ class ContactData {
    * @param dt The timestep size to attempt
    * @param u_shape Shape displacement vector
    * @param u Current displacement dof values
+   * @param eval_jacobian Whether to also evaluate the Jacobian contributions (default false)
    */
-  void updateGaps(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u);
+  void updateGaps(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u,
+                  bool eval_jacobian = false);
 
   /**
    * @brief Updates the positions, forces, and Jacobian contributions associated with contact

@@ -74,7 +74,8 @@ void ContactData::reset()
   }
 }
 
-void ContactData::updateGaps(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u)
+void ContactData::updateGaps(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u,
+                         bool eval_jacobian)
 {
   cycle_ = cycle;
   time_ = time;
@@ -82,14 +83,13 @@ void ContactData::updateGaps(int cycle, double time, double& dt, const mfem::Vec
 
   setDisplacements(u_shape, u);
 
-  // we only need gaps, so don't evaluate the Jacobian
   for (auto& interaction : interactions_) {
-    interaction.evalJacobian(false);
+    interaction.evalJacobian(eval_jacobian);
   }
   // This updates the redecomposed surface mesh based on the current displacement, then transfers field quantities to
   // the updated mesh.
   tribol::updateMfemParallelDecomposition();
-  // This function computes gaps based on the current mesh.
+  // This function computes gaps (and optionally geometric Jacobian blocks) based on the current mesh.
   tribol::update(cycle, time, dt);
 }
 
@@ -468,7 +468,8 @@ void ContactData::addContactInteraction([[maybe_unused]] int interaction_id,
 }
 
 void ContactData::updateGaps([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
-                             [[maybe_unused]] const mfem::Vector& u_shape, [[maybe_unused]] const mfem::Vector& u)
+                             [[maybe_unused]] const mfem::Vector& u_shape, [[maybe_unused]] const mfem::Vector& u,
+                             [[maybe_unused]] bool eval_jacobian)
 {
 }
 

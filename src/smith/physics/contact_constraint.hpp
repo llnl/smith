@@ -144,8 +144,7 @@ class ContactConstraint : public Constraint {
     // otherwise use previously cached Jacobian
     if (update_fields || fresh_derivative) {
       int cycle = 0;
-      mfem::Vector p = contact_.mergedPressures();
-      contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], p);
+      contact_.updateGaps(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], true);
       J_contact_ = contact_.mergedJacobian();
     }
     // obtain (1, 0) block entry from the 2 x 2 block contact linear system
