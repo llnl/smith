@@ -38,10 +38,10 @@ struct NonlinearSolverOptions;
 struct LinearSolverOptions;
 
 /// @brief Abstract interface for nonlinear block solvers that provide both forward and adjoint solves.
-class NonlinearBlockSolver {
+class NonlinearBlockSolverBase {
  public:
   /// @brief destructor
-  virtual ~NonlinearBlockSolver() {}
+  virtual ~NonlinearBlockSolverBase() {}
 
   using FieldT = FiniteElementState;                        ///< using
   using FieldPtr = std::shared_ptr<FieldT>;                 ///< using
@@ -103,14 +103,14 @@ class NonlinearBlockSolver {
 };
 
 /// @brief Nonlinear block solver backed by an EquationSolver forward solve and linear adjoint solves.
-class EquationNonlinearBlockSolver : public NonlinearBlockSolver {
+class NonlinearBlockSolver : public NonlinearBlockSolverBase {
  public:
   /// @brief Construct from a nonlinear equation solver.
   /// @note The caller is responsible for choosing inner vs outer tolerance when using this
   /// constructor directly.  The builder function buildNonlinearBlockSolver
   /// applies a 0.6x inner-tolerance factor automatically.
-  EquationNonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol = 1e-12,
-                               double rel_tol = 1e-8, BlockConvergenceTolerances block_tolerances = {});
+  NonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol = 1e-12, double rel_tol = 1e-8,
+                       BlockConvergenceTolerances block_tolerances = {});
 
   /// @overload
   void completeSetup(const std::vector<FieldT>& us) override;
@@ -163,8 +163,8 @@ class EquationNonlinearBlockSolver : public NonlinearBlockSolver {
 /// @param nonlinear_opts nonlinear options struct
 /// @param linear_opts linear options struct
 /// @param mesh mesh
-std::shared_ptr<EquationNonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverOptions nonlinear_opts,
-                                                                        LinearSolverOptions linear_opts,
-                                                                        const smith::Mesh& mesh);
+std::shared_ptr<NonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverOptions nonlinear_opts,
+                                                                LinearSolverOptions linear_opts,
+                                                                const smith::Mesh& mesh);
 
 }  // namespace smith

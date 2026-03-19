@@ -23,7 +23,7 @@ namespace smith {
 
 namespace {
 
-class FakeNonlinearBlockSolver : public NonlinearBlockSolver {
+class FakeNonlinearBlockSolver : public NonlinearBlockSolverBase {
  public:
   FakeNonlinearBlockSolver(double abs_tol, double rel_tol, BlockConvergenceTolerances block_tolerances = {})
       : abs_tol_(abs_tol), rel_tol_(rel_tol), block_tolerances_(std::move(block_tolerances))
@@ -158,7 +158,7 @@ TEST(SolverConvergence, StageConstructorRejectsMismatchedToleranceSizes)
 TEST(SolverConvergence, StageConstructorRejectsTighterRelativeTolerance)
 {
   auto solver =
-      std::make_shared<EquationNonlinearBlockSolver>(std::unique_ptr<EquationSolver>{}, MPI_COMM_SELF, 1.0e-6, 1.0e-3);
+      std::make_shared<NonlinearBlockSolver>(std::unique_ptr<EquationSolver>{}, MPI_COMM_SELF, 1.0e-6, 1.0e-3);
   EXPECT_DEATH(
       {
         CoupledSystemSolver staggered_solver(2);
@@ -170,7 +170,7 @@ TEST(SolverConvergence, StageConstructorRejectsTighterRelativeTolerance)
 TEST(SolverConvergence, StageConstructorRejectsTighterAbsoluteTolerance)
 {
   auto solver =
-      std::make_shared<EquationNonlinearBlockSolver>(std::unique_ptr<EquationSolver>{}, MPI_COMM_SELF, 1.0e-6, 1.0e-3);
+      std::make_shared<NonlinearBlockSolver>(std::unique_ptr<EquationSolver>{}, MPI_COMM_SELF, 1.0e-6, 1.0e-3);
   EXPECT_DEATH(
       {
         CoupledSystemSolver staggered_solver(2);

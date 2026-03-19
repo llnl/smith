@@ -16,7 +16,7 @@
 namespace smith {
 
 class WeakForm;
-class NonlinearBlockSolver;
+class NonlinearBlockSolverBase;
 class BoundaryConditionManager;
 
 /// @brief Orchestrates staggered solution for multiphysics systems.
@@ -25,13 +25,13 @@ class CoupledSystemSolver {
   /// @brief Represents a single stage in a staggered iteration.
   struct Stage {
     std::vector<size_t> block_indices;                 ///< Which blocks (residuals) to solve in this stage.
-    std::shared_ptr<NonlinearBlockSolver> solver;      ///< Solver to use for this stage.
+    std::shared_ptr<NonlinearBlockSolverBase> solver;  ///< Solver to use for this stage.
     BlockConvergenceTolerances block_tolerances = {};  ///< Optional stage-local convergence overrides.
   };
 
   /// @brief Construct a monolithic CoupledSystemSolver from a single block solver.
   /// @param single_solver The solver to use for all blocks simultaneously.
-  CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolver> single_solver);
+  CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolverBase> single_solver);
 
   /// @brief Construct a CoupledSystemSolver for staggered iteration.
   /// @param max_staggered_iterations Maximum number of staggered sweeps across all stages.  When
@@ -54,7 +54,7 @@ class CoupledSystemSolver {
   /// @param block_indices Indices of the blocks to solve.
   /// @param solver Nonlinear block solver for this stage.
   /// @param block_tolerances Optional stage-local convergence overrides.
-  void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<NonlinearBlockSolver> solver,
+  void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<NonlinearBlockSolverBase> solver,
                           BlockConvergenceTolerances block_tolerances = {});
 
   /// @brief Solves the multiphysics system using staggered iterations.

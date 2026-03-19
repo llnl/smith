@@ -79,7 +79,7 @@ std::vector<double> expandTolerances(const std::vector<double>& block_tols, doub
 
 }  // namespace
 
-std::vector<double> EquationNonlinearBlockSolver::effectiveRelativeTolerances(
+std::vector<double> NonlinearBlockSolver::effectiveRelativeTolerances(
     size_t num_blocks, const BlockConvergenceTolerances& tolerance_overrides) const
 {
   return expandTolerances(
@@ -87,7 +87,7 @@ std::vector<double> EquationNonlinearBlockSolver::effectiveRelativeTolerances(
       rel_tol_, num_blocks, "relative block tolerances");
 }
 
-std::vector<double> EquationNonlinearBlockSolver::effectiveAbsoluteTolerances(
+std::vector<double> NonlinearBlockSolver::effectiveAbsoluteTolerances(
     size_t num_blocks, const BlockConvergenceTolerances& tolerance_overrides) const
 {
   return expandTolerances(
@@ -95,9 +95,8 @@ std::vector<double> EquationNonlinearBlockSolver::effectiveAbsoluteTolerances(
       abs_tol_, num_blocks, "absolute block tolerances");
 }
 
-EquationNonlinearBlockSolver::EquationNonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm,
-                                                           double abs_tol, double rel_tol,
-                                                           BlockConvergenceTolerances block_tolerances)
+NonlinearBlockSolver::NonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol,
+                                           double rel_tol, BlockConvergenceTolerances block_tolerances)
     : nonlinear_solver_(std::move(s)),
       comm_(comm),
       abs_tol_(abs_tol),
@@ -106,22 +105,21 @@ EquationNonlinearBlockSolver::EquationNonlinearBlockSolver(std::unique_ptr<Equat
 {
 }
 
-void EquationNonlinearBlockSolver::completeSetup(const std::vector<FieldT>&)
+void NonlinearBlockSolver::completeSetup(const std::vector<FieldT>&)
 {
   // TODO: eventually may need something like: initializeSolver(&nonlinear_solver_->preconditioner(), u);
 }
 
-void EquationNonlinearBlockSolver::resetConvergenceState() const { initial_residual_norms_.clear(); }
+void NonlinearBlockSolver::resetConvergenceState() const { initial_residual_norms_.clear(); }
 
-bool EquationNonlinearBlockSolver::checkConvergence(double tolerance_multiplier,
-                                                    const std::vector<mfem::Vector>& residuals) const
+bool NonlinearBlockSolver::checkConvergence(double tolerance_multiplier,
+                                            const std::vector<mfem::Vector>& residuals) const
 {
   return checkConvergence(tolerance_multiplier, residuals, {});
 }
 
-bool EquationNonlinearBlockSolver::checkConvergence(double tolerance_multiplier,
-                                                    const std::vector<mfem::Vector>& residuals,
-                                                    const BlockConvergenceTolerances& tolerance_overrides) const
+bool NonlinearBlockSolver::checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
+                                            const BlockConvergenceTolerances& tolerance_overrides) const
 {
   size_t num_blocks = residuals.size();
   auto relative_tols = effectiveRelativeTolerances(num_blocks, tolerance_overrides);
@@ -150,7 +148,7 @@ bool EquationNonlinearBlockSolver::checkConvergence(double tolerance_multiplier,
   return true;
 }
 
-std::vector<NonlinearBlockSolver::FieldPtr> EquationNonlinearBlockSolver::solve(
+std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
     const std::vector<FieldPtr>& u_guesses,
     std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> residual_funcs,
     std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobian_funcs) const
@@ -232,7 +230,7 @@ std::vector<NonlinearBlockSolver::FieldPtr> EquationNonlinearBlockSolver::solve(
   return u_guesses;
 }
 
-std::vector<NonlinearBlockSolver::FieldPtr> EquationNonlinearBlockSolver::solveAdjoint(
+std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solveAdjoint(
     const std::vector<DualPtr>& u_bars, std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const
 {
   SMITH_MARK_FUNCTION;
@@ -240,9 +238,9 @@ std::vector<NonlinearBlockSolver::FieldPtr> EquationNonlinearBlockSolver::solveA
   int num_rows = static_cast<int>(u_bars.size());
   SLIC_ERROR_IF(num_rows < 0, "Number of residual rows must be non-negative");
 
-  std::vector<NonlinearBlockSolver::FieldPtr> u_duals(static_cast<size_t>(num_rows));
+  std::vector<NonlinearBlockSolverBase::FieldPtr> u_duals(static_cast<size_t>(num_rows));
   for (int row_i = 0; row_i < num_rows; ++row_i) {
-    u_duals[static_cast<size_t>(row_i)] = std::make_shared<NonlinearBlockSolver::FieldT>(
+    u_duals[static_cast<size_t>(row_i)] = std::make_shared<NonlinearBlockSolverBase::FieldT>(
         u_bars[static_cast<size_t>(row_i)]->space(), "u_dual_" + std::to_string(row_i));
   }
 
@@ -288,9 +286,9 @@ std::vector<NonlinearBlockSolver::FieldPtr> EquationNonlinearBlockSolver::solveA
   return u_duals;
 }
 
-std::shared_ptr<EquationNonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverOptions nonlinear_opts,
-                                                                        LinearSolverOptions linear_opts,
-                                                                        const smith::Mesh& mesh)
+std::shared_ptr<NonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverOptions nonlinear_opts,
+                                                                LinearSolverOptions linear_opts,
+                                                                const smith::Mesh& mesh)
 {
   // The inner solver is configured to a stricter tolerance (0.6x) so that after each sub-system solve
   // in a staggered iteration, residuals have sufficient margin below the stage's target tolerance.
@@ -307,8 +305,8 @@ std::shared_ptr<EquationNonlinearBlockSolver> buildNonlinearBlockSolver(Nonlinea
     tol *= inner_tol_factor;
   }
   auto solid_solver = std::make_unique<EquationSolver>(inner_opts, linear_opts, mesh.getComm());
-  return std::make_shared<EquationNonlinearBlockSolver>(std::move(solid_solver), mesh.getComm(), outer_abs_tol,
-                                                        outer_rel_tol, nonlinear_opts.block_tolerances);
+  return std::make_shared<NonlinearBlockSolver>(std::move(solid_solver), mesh.getComm(), outer_abs_tol, outer_rel_tol,
+                                                nonlinear_opts.block_tolerances);
 }
 
 }  // namespace smith

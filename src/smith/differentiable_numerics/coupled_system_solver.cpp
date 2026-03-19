@@ -39,7 +39,7 @@ void validateStageToleranceLooseness(const CoupledSystemSolver::Stage& stage, si
     return;
   }
 
-  auto* equation_block_solver = dynamic_cast<const EquationNonlinearBlockSolver*>(stage.solver.get());
+  auto* equation_block_solver = dynamic_cast<const NonlinearBlockSolver*>(stage.solver.get());
   SLIC_ERROR_IF(!equation_block_solver,
                 axom::fmt::format("Stage {} uses stage-local tolerances, but the solver does not support tolerance "
                                   "introspection",
@@ -64,7 +64,7 @@ void validateStageToleranceLooseness(const CoupledSystemSolver::Stage& stage, si
 
 }  // namespace
 
-CoupledSystemSolver::CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolver> single_solver)
+CoupledSystemSolver::CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolverBase> single_solver)
     : max_staggered_iterations_(1), exact_staggered_steps_(false)
 {
   addSubsystemSolver({}, std::move(single_solver));
@@ -79,7 +79,7 @@ CoupledSystemSolver::CoupledSystemSolver(int max_staggered_iterations, bool exac
 void CoupledSystemSolver::addSubsystemSolver(const Stage& stage) { stages_.push_back(stage); }
 
 void CoupledSystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
-                                             std::shared_ptr<NonlinearBlockSolver> solver,
+                                             std::shared_ptr<NonlinearBlockSolverBase> solver,
                                              BlockConvergenceTolerances block_tolerances)
 {
   Stage stage{block_indices, std::move(solver), std::move(block_tolerances)};
