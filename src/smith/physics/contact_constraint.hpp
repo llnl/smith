@@ -113,8 +113,7 @@ class ContactConstraint : public Constraint {
     if (update_fields) {
       // note: Tribol does not use cycle.
       int cycle = 0;
-      mfem::Vector p = contact_.mergedPressures();
-      contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], p);
+      contact_.updateGaps(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       auto gaps_hpv = contact_.mergedGaps(false);
       // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
       // https://github.com/mfem/mfem/issues/5029

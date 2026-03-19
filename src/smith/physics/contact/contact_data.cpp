@@ -74,33 +74,40 @@ void ContactData::reset()
   }
 }
 
-void ContactData::update(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u, const mfem::Vector& p)
+void ContactData::updateGaps(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u)
 {
   cycle_ = cycle;
   time_ = time;
   dt_ = dt;
-  
+
   setDisplacements(u_shape, u);
 
-  // we need to call update first to update gaps
+  // we only need gaps, so don't evaluate the Jacobian
   for (auto& interaction : interactions_) {
     interaction.evalJacobian(false);
   }
   // This updates the redecomposed surface mesh based on the current displacement, then transfers field quantities to
   // the updated mesh.
   tribol::updateMfemParallelDecomposition();
-  // This function computes forces, gaps, and Jacobian contributions based on the current field quantities. Note the
-  // fields (with the exception of pressure) are stored on the redecomposed surface mesh until transferred by calling
-  // forces(), mergedGaps(), etc.
+  // This function computes gaps based on the current mesh.
   tribol::update(cycle, time, dt);
+}
 
-  // with updated gaps, we can update pressure for contact interactions with penalty enforcement
+void ContactData::update(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u,
+                         const mfem::Vector& p)
+{
+  // First pass: update gaps
+  updateGaps(cycle, time, dt, u_shape, u);
+
+  // with updated gaps, we can update pressure for contact interactions (active set detection and penalty)
   setPressures(p);
 
-  // call update again with the right pressures
+  // second pass: compute forces and Jacobians
   for (auto& interaction : interactions_) {
     interaction.evalJacobian(true);
   }
+  // This second call is required to synchronize the updated pressures to Tribol's internal redecomposed surface mesh
+  // and to ensure Tribol's internal state is correctly reset for the second pass.
   tribol::updateMfemParallelDecomposition();
   tribol::update(cycle, time, dt);
 }
@@ -458,6 +465,11 @@ void ContactData::addContactInteraction([[maybe_unused]] int interaction_id,
                                         [[maybe_unused]] ContactOptions contact_opts)
 {
   SLIC_WARNING_ROOT("Smith built without Tribol support. No contact interaction will be added.");
+}
+
+void ContactData::updateGaps([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
+                             [[maybe_unused]] const mfem::Vector& u_shape, [[maybe_unused]] const mfem::Vector& u)
+{
 }
 
 void ContactData::update([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,

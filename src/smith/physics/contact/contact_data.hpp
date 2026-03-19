@@ -70,6 +70,17 @@ class ContactData {
                              const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts);
 
   /**
+   * @brief Updates only the gap contributions associated with contact
+   *
+   * @param cycle The current simulation cycle
+   * @param time The current time
+   * @param dt The timestep size to attempt
+   * @param u_shape Shape displacement vector
+   * @param u Current displacement dof values
+   */
+  void updateGaps(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u);
+
+  /**
    * @brief Updates the positions, forces, and Jacobian contributions associated with contact
    *
    * @param cycle The current simulation cycle
