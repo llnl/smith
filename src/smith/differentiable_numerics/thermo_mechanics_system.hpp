@@ -468,7 +468,8 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
  */
 template <int dim, int disp_order, int temp_order, typename... parameter_space>
 ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, FieldType<parameter_space>... parameter_types)
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
+    FieldType<parameter_space>... parameter_types)
 {
   return buildThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>(mesh, solver, "",
                                                                                      parameter_types...);
