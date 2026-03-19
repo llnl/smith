@@ -12,6 +12,7 @@
 #include "mfem.hpp"
 
 #include "smith/smith_config.hpp"
+#include "smith/numerics/nonlinear_convergence.hpp"
 #include "smith/numerics/solver_config.hpp"
 
 #ifdef SMITH_USE_PETSC
@@ -386,8 +387,14 @@ class PetscKSPSolver : virtual public mfem::IterativeSolver, public mfem::PetscL
 /**
  * @brief Wrapper for PETSc based nonlinear solvers
  */
-class PetscNewtonSolver : public mfem::NewtonSolver, public mfem::PetscNonlinearSolver {
+class PetscNewtonSolver
+    : public mfem::NewtonSolver,
+      public mfem::PetscNonlinearSolver,
+      public smith::ConvergenceManagedNonlinearSolver {
  protected:
+  friend PetscErrorCode snesConvergenceGlobalOrBlock(SNES, PetscInt, PetscReal, PetscReal, PetscReal,
+                                                     SNESConvergedReason*, void*);
+
   /// @brief Convergence tolerance for norm of solution update
   mfem::real_t step_tol_ = PETSC_DEFAULT;
   /// @brief Type of PETSc nonlinear solver
@@ -396,6 +403,7 @@ class PetscNewtonSolver : public mfem::NewtonSolver, public mfem::PetscNonlinear
   SNESLineSearchType linesearch_type_;
   /// @brief Nonlinear solver options
   NonlinearSolverOptions nonlinear_options_;
+  std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
 
   static SNESType SNESTypeFromOptions(NonlinearSolverOptions nonlinear_opts)
   {
@@ -432,6 +440,8 @@ class PetscNewtonSolver : public mfem::NewtonSolver, public mfem::PetscNonlinear
    */
   virtual void SetTolerances();
 
+  void ConfigureConvergenceTest();
+
   /**
    * @brief Wrap a non-PETSc linear solver in a PCSHELL
    * @param solver The solver to wrap
@@ -466,6 +476,8 @@ class PetscNewtonSolver : public mfem::NewtonSolver, public mfem::PetscNonlinear
    * @note If @a prefix is provided, the options should be set as `-[prefix]_[option] [value]`.
    */
   PetscNewtonSolver(MPI_Comm comm, NonlinearSolverOptions nonlinear_opts, const std::string& prefix = std::string());
+
+  void setConvergenceManager(std::shared_ptr<EquationSolverConvergenceManager> convergence_manager) override;
 
   /**
    * @brief Set the linear solver for the algorithn

@@ -21,6 +21,7 @@
 #include "mfem.hpp"
 
 #include "smith/infrastructure/input.hpp"
+#include "smith/numerics/nonlinear_convergence.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/numerics/petsc_solvers.hpp"
 
@@ -83,6 +84,18 @@ class EquationSolver {
    */
   void solve(mfem::Vector& x) const;
 
+  /// @brief Configure optional block convergence metadata for the nonlinear solver.
+  void setConvergenceBlockData(const std::vector<int>& block_offsets,
+                               const BlockConvergenceTolerances& block_tolerances) const;
+
+  /// @brief Configure block convergence metadata, lazily creating convergence state if needed.
+  void setConvergenceBlockData(const std::vector<int>& block_offsets,
+                               const BlockConvergenceTolerances& block_tolerances, double abs_tol, double rel_tol,
+                               MPI_Comm comm) const;
+
+  /// @brief Reset nonlinear convergence state stored across iterations of a single solve.
+  void resetConvergenceState() const;
+
   /**
    * Returns the underlying solver object
    * @return A non-owning reference to the underlying nonlinear solver
@@ -123,6 +136,9 @@ class EquationSolver {
   static void defineInputFileSchema(axom::inlet::Container& container);
 
  private:
+  void attachConvergenceManager() const;
+  void initializeConvergenceManager(double abs_tol, double rel_tol, MPI_Comm comm) const;
+
   /**
    * @brief The optional preconditioner (used for an iterative solver only)
    */
@@ -144,6 +160,8 @@ class EquationSolver {
    * before SetSolver
    */
   bool nonlin_solver_set_solver_called_ = false;
+
+  mutable std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
 };
 
 /**

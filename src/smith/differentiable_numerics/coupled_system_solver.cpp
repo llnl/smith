@@ -115,6 +115,7 @@ std::vector<FieldState> CoupledSystemSolver::solve(
   for (const auto& stage : active_stages) {
     stage.solver->resetConvergenceState();
   }
+  std::vector<NonlinearConvergenceContext> stage_convergence_contexts(active_stages.size());
 
   // Working copy of states, updated in-place as stages solve
   std::vector<std::vector<FieldState>> current_states = states;
@@ -135,7 +136,7 @@ std::vector<FieldState> CoupledSystemSolver::solve(
     return res;
   };
 
-  // Evaluate and register true initial residuals before block sweeps mutate the state
+  // Evaluate and register true initial residuals before block sweeps mutate the state.
   for (size_t stage_idx = 0; stage_idx < active_stages.size(); ++stage_idx) {
     const auto& stage = active_stages[stage_idx];
     size_t num_stage_blocks = stage.block_indices.size();
@@ -143,9 +144,8 @@ std::vector<FieldState> CoupledSystemSolver::solve(
     for (size_t i = 0; i < num_stage_blocks; ++i) {
       stage_init_residuals.push_back(eval_residual_and_zero_bcs(stage.block_indices[i]));
     }
-    // Checking convergence with a huge multiplier safely records the initial norm internally
-    // without triggering an early global exit or failing assertions
-    stage.solver->checkConvergence(1e12, stage_init_residuals, stage.block_tolerances);
+    stage.solver->primeConvergenceContext(stage_init_residuals, stage.block_tolerances,
+                                          stage_convergence_contexts[stage_idx]);
   }
 
   for (int iter = 0; iter < max_staggered_iterations_; ++iter) {
@@ -209,9 +209,10 @@ std::vector<FieldState> CoupledSystemSolver::solve(
         for (size_t i = 0; i < num_stage_blocks; ++i) {
           stage_residuals.push_back(eval_residual_and_zero_bcs(stage.block_indices[i]));
         }
-        bool stage_converged = stage.solver->checkConvergence(1.0, stage_residuals, stage.block_tolerances);
+        auto stage_status = stage.solver->convergenceStatus(1.0, stage_residuals, stage.block_tolerances,
+                                                            stage_convergence_contexts[s]);
 
-        if (!stage_converged) {
+        if (!stage_status.converged) {
           all_converged = false;
           break;
         }

@@ -19,6 +19,7 @@
 #include <mpi.h>
 
 #include "smith/numerics/solver_config.hpp"
+#include "smith/numerics/nonlinear_convergence.hpp"
 
 namespace mfem {
 class Solver;
@@ -71,20 +72,41 @@ class NonlinearBlockSolverBase {
   virtual std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
                                              std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const = 0;
 
-  /// @brief Check whether the stage residuals satisfy convergence for this solver's configured tolerance.
-  /// @param tolerance_multiplier Multiplier applied to the configured tolerance (e.g. 1.0 for the final check,
-  ///        or a smaller value for a stricter intermediate check)
-  /// @param residuals The current residual vectors for each block in this solver
-  /// @return true if all residuals satisfy the convergence criterion
-  virtual bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals) const = 0;
+  /// @brief Evaluate convergence for this solver's configured tolerance using solver-owned convergence state.
+  ConvergenceStatus convergenceStatus(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals) const
+  {
+    return convergenceStatus(tolerance_multiplier, residuals, {});
+  }
+
+  /// @brief Evaluate convergence with optional per-block tolerance overrides using solver-owned convergence state.
+  ConvergenceStatus convergenceStatus(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
+                                      const BlockConvergenceTolerances& tolerance_overrides) const
+  {
+    return convergenceStatus(tolerance_multiplier, residuals, tolerance_overrides, convergence_context_);
+  }
+
+  /// @brief Evaluate convergence with externally owned convergence state.
+  virtual ConvergenceStatus convergenceStatus(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
+                                              const BlockConvergenceTolerances& tolerance_overrides,
+                                              NonlinearConvergenceContext& context) const = 0;
+
+  /// @brief Initialize a convergence context from a residual snapshot without relying on a fake convergence test.
+  virtual void primeConvergenceContext(const std::vector<mfem::Vector>& residuals,
+                                       const BlockConvergenceTolerances& tolerance_overrides,
+                                       NonlinearConvergenceContext& context) const = 0;
+
+  /// @brief Check whether the current residuals satisfy the convergence criterion.
+  bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals) const
+  {
+    return convergenceStatus(tolerance_multiplier, residuals).converged;
+  }
 
   /// @brief Check convergence with optional per-block tolerance overrides.
-  /// @param tolerance_multiplier Multiplier applied to the configured tolerance.
-  /// @param residuals The current residual vectors for each block in this solver.
-  /// @param tolerance_overrides Optional per-block tolerances used for this specific convergence check.
-  /// @return true if all residual blocks satisfy the effective convergence criterion.
-  virtual bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
-                                const BlockConvergenceTolerances& tolerance_overrides) const = 0;
+  bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
+                        const BlockConvergenceTolerances& tolerance_overrides) const
+  {
+    return convergenceStatus(tolerance_multiplier, residuals, tolerance_overrides).converged;
+  }
 
   /// @brief Return effective relative tolerances for the given number of residual blocks.
   virtual std::vector<double> effectiveRelativeTolerances(
@@ -96,15 +118,20 @@ class NonlinearBlockSolverBase {
 
   /// @brief Reset internal convergence tracking state (e.g. the stored initial residual norm used for relative
   /// tolerance). Call this at the start of each new solve sequence.
-  virtual void resetConvergenceState() const {}
+  virtual void resetConvergenceState() const { convergence_context_.reset(); }
 
   /// @brief Interface option to clear memory between solves to avoid high-water mark memory usage.
   virtual void clearMemory() const {}
+
+ protected:
+  mutable NonlinearConvergenceContext convergence_context_ = {};  ///< Solver-owned convergence state for one solve.
 };
 
 /// @brief Nonlinear block solver backed by an EquationSolver forward solve and linear adjoint solves.
 class NonlinearBlockSolver : public NonlinearBlockSolverBase {
  public:
+  using NonlinearBlockSolverBase::convergenceStatus;
+
   /// @brief Construct from a nonlinear equation solver.
   /// @note The caller is responsible for choosing inner vs outer tolerance when using this
   /// constructor directly.  The builder function buildNonlinearBlockSolver
@@ -116,11 +143,13 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   void completeSetup(const std::vector<FieldT>& us) override;
 
   /// @overload
-  bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals) const override;
+  ConvergenceStatus convergenceStatus(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
+                                      const BlockConvergenceTolerances& tolerance_overrides,
+                                      NonlinearConvergenceContext& context) const override;
 
-  /// @overload
-  bool checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
-                        const BlockConvergenceTolerances& tolerance_overrides) const override;
+  void primeConvergenceContext(const std::vector<mfem::Vector>& residuals,
+                               const BlockConvergenceTolerances& tolerance_overrides,
+                               NonlinearConvergenceContext& context) const override;
 
   /// @brief Return effective relative tolerances for a given block count.
   std::vector<double> effectiveRelativeTolerances(size_t num_blocks,
@@ -129,9 +158,6 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   /// @brief Return effective absolute tolerances for a given block count.
   std::vector<double> effectiveAbsoluteTolerances(size_t num_blocks,
                                                   const BlockConvergenceTolerances& tolerance_overrides) const override;
-
-  /// @overload
-  void resetConvergenceState() const override;
 
   /// @overload
   std::vector<FieldPtr> solve(
@@ -156,7 +182,6 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   double abs_tol_;                                      ///< absolute residual tolerance for convergence check
   double rel_tol_;                                      ///< relative residual tolerance for convergence check
   BlockConvergenceTolerances block_tolerances_;         ///< optional per-block convergence tolerances
-  mutable std::vector<double> initial_residual_norms_;  ///< per-block residual norms at first convergence check
 };
 
 /// @brief Create an equation-backed nonlinear block solver.

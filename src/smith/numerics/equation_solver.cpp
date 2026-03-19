@@ -87,8 +87,9 @@ bool monolithicizeOperatorIfNeeded(const LinearSolverOptions& linear_options, mf
 
 }  // namespace
 
+/// @cond
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
-class NewtonSolver : public mfem::NewtonSolver {
+class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonlinearSolver {
  protected:
   /// initial solution vector to do line-search off of
   mutable mfem::Vector x0;
@@ -104,6 +105,8 @@ class NewtonSolver : public mfem::NewtonSolver {
 
   /// Tracks if grad was monolithicized and needs deletion
   mutable bool grad_monolithic = false;
+
+  std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
 
  public:
   /// constructor
@@ -126,18 +129,35 @@ class NewtonSolver : public mfem::NewtonSolver {
     if (grad_monolithic) delete grad;
   }
 
-  /// Evaluate the residual, put in rOut and return its norm.
-  double evaluateNorm(const mfem::Vector& x, mfem::Vector& rOut) const
+  void setConvergenceManager(std::shared_ptr<EquationSolverConvergenceManager> convergence_manager) override
+  {
+    convergence_manager_ = std::move(convergence_manager);
+  }
+
+  /// Evaluate the residual and convergence status.
+  ConvergenceStatus evaluateConvergence(const mfem::Vector& x, mfem::Vector& rOut) const
   {
     SMITH_MARK_FUNCTION;
-    double normEval = std::numeric_limits<double>::max();
+    ConvergenceStatus status;
+    status.global_norm = std::numeric_limits<double>::max();
+    status.global_goal = std::numeric_limits<double>::max();
     try {
       oper->Mult(x, rOut);
-      normEval = Norm(rOut);
+      if (convergence_manager_) {
+        status = convergence_manager_->evaluate(1.0, rOut);
+      } else {
+        status.block_norms = {Norm(rOut)};
+        status.block_goals = {0.0};
+        status.global_norm = status.block_norms.front();
+        status.global_goal = std::max(rel_tol * initial_norm, abs_tol);
+        status.global_converged = status.global_norm <= status.global_goal;
+        status.converged = status.global_converged;
+      }
     } catch (const std::exception&) {
-      normEval = std::numeric_limits<double>::max();
+      status.global_norm = std::numeric_limits<double>::max();
+      status.global_goal = std::numeric_limits<double>::max();
     }
-    return normEval;
+    return status;
   }
 
   /// assemble the jacobian
@@ -168,7 +188,7 @@ class NewtonSolver : public mfem::NewtonSolver {
   }
 
   /// @overload
-  void Mult(const mfem::Vector&, mfem::Vector& x) const
+  void Mult(const mfem::Vector&, mfem::Vector& x) const override
   {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
@@ -178,14 +198,14 @@ class NewtonSolver : public mfem::NewtonSolver {
 
     using real_t = mfem::real_t;
 
-    real_t norm, norm_goal = 0;
-    norm = initial_norm = evaluateNorm(x, r);
+    ConvergenceStatus status = evaluateConvergence(x, r);
+    real_t norm = status.global_norm;
+    initial_norm = norm;
 
     if (print_level == 1) {
       mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
     }
 
-    norm_goal = std::max(rel_tol * initial_norm, abs_tol);
     prec->iterative_mode = false;
 
     int it = 0;
@@ -205,7 +225,7 @@ class NewtonSolver : public mfem::NewtonSolver {
         return;
       }
 
-      if (norm <= norm_goal && it >= nonlinear_options.min_iterations) {
+      if (status.converged && it >= nonlinear_options.min_iterations) {
         converged = true;
         break;
       } else if (it >= max_iter) {
@@ -226,7 +246,8 @@ class NewtonSolver : public mfem::NewtonSolver {
 
       real_t stepScale = 1.0;
       add(x0, -stepScale, c, x);
-      norm = evaluateNorm(x, r);
+      status = evaluateConvergence(x, r);
+      norm = status.global_norm;
 
       const int max_ls_iters = nonlinear_options.max_line_search_iterations;
       static constexpr real_t reduction = 0.5;
@@ -244,20 +265,23 @@ class NewtonSolver : public mfem::NewtonSolver {
       for (; !is_improved(norm, stepScale) && ls_iter < max_ls_iters; ++ls_iter, ++ls_iter_sum) {
         stepScale *= reduction;
         add(x0, -stepScale, c, x);
-        norm = evaluateNorm(x, r);
+        status = evaluateConvergence(x, r);
+        norm = status.global_norm;
       }
 
       // try the opposite direction and linesearch back from there
       if (max_ls_iters > 0 && ls_iter == max_ls_iters && !is_improved(norm, stepScale)) {
         stepScale = 1.0;
         add(x0, stepScale, c, x);
-        norm = evaluateNorm(x, r);
+        status = evaluateConvergence(x, r);
+        norm = status.global_norm;
 
         ls_iter = 0;
         for (; !is_improved(norm, stepScale) && ls_iter < max_ls_iters; ++ls_iter, ++ls_iter_sum) {
           stepScale *= reduction;
           add(x0, stepScale, c, x);
-          norm = evaluateNorm(x, r);
+          status = evaluateConvergence(x, r);
+          norm = status.global_norm;
         }
 
         // ok, the opposite direction was also terrible, lets go back, cut in half 1 last time and accept it hoping for
@@ -266,7 +290,8 @@ class NewtonSolver : public mfem::NewtonSolver {
           ++ls_iter_sum;
           stepScale *= reduction;
           add(x0, -stepScale, c, x);
-          norm = evaluateNorm(x, r);
+          status = evaluateConvergence(x, r);
+          norm = status.global_norm;
         }
       }
 
@@ -393,7 +418,7 @@ void printTrustRegionInfo(double realObjective, double modelObjective, size_t cg
  * rely on an incremental work approximation: 0.5 (f^n + f^{n+1}) dot (u^{n+1} - u^n).  While less theoretically sound,
  * it appears to be very effective in practice.
  */
-class TrustRegion : public mfem::NewtonSolver {
+class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinearSolver {
  protected:
   /// predicted solution
   mutable mfem::Vector x_pred;
@@ -421,6 +446,8 @@ class TrustRegion : public mfem::NewtonSolver {
   /// Tracks if grad was monolithicized and needs deletion
   mutable bool grad_monolithic = false;
 
+  std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
+
  public:
   /// internal counter for hess-vecs
   mutable size_t num_hess_vecs = 0;
@@ -446,6 +473,11 @@ class TrustRegion : public mfem::NewtonSolver {
   virtual ~TrustRegion()
   {
     if (grad_monolithic) delete grad;
+  }
+
+  void setConvergenceManager(std::shared_ptr<EquationSolverConvergenceManager> convergence_manager) override
+  {
+    convergence_manager_ = std::move(convergence_manager);
   }
 
   /// finds tau s.t. (z + tau*d)^2 = trSize^2
@@ -705,6 +737,29 @@ class TrustRegion : public mfem::NewtonSolver {
     return Norm(r_);
   }
 
+  ConvergenceStatus evaluateConvergence(const mfem::Vector& x_, mfem::Vector& r_) const
+  {
+    ConvergenceStatus status;
+    status.global_norm = std::numeric_limits<double>::max();
+    status.global_goal = std::numeric_limits<double>::max();
+    try {
+      status.global_norm = computeResidual(x_, r_);
+      if (convergence_manager_) {
+        status = convergence_manager_->evaluate(1.0, r_);
+      } else {
+        status.block_norms = {status.global_norm};
+        status.block_goals = {0.0};
+        status.global_goal = std::max(rel_tol * initial_norm, abs_tol);
+        status.global_converged = status.global_norm <= status.global_goal;
+        status.converged = status.global_converged;
+      }
+    } catch (const std::exception&) {
+      status.global_norm = std::numeric_limits<double>::max();
+      status.global_goal = std::numeric_limits<double>::max();
+    }
+    return status;
+  }
+
   /// apply the action of the assembled Jacobian matrix to a vector
   void hessVec(const mfem::Vector& x_, mfem::Vector& v_) const
   {
@@ -722,7 +777,7 @@ class TrustRegion : public mfem::NewtonSolver {
   };
 
   /// @overload
-  void Mult(const mfem::Vector&, mfem::Vector& X) const
+  void Mult(const mfem::Vector&, mfem::Vector& X) const override
   {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
@@ -738,9 +793,10 @@ class TrustRegion : public mfem::NewtonSolver {
     num_subspace_solves = 0;
     num_jacobian_assembles = 0;
 
-    real_t norm, norm_goal = 0.0;
-    norm = initial_norm = computeResidual(X, r);
-    norm_goal = std::max(rel_tol * initial_norm, abs_tol);
+    ConvergenceStatus status = evaluateConvergence(X, r);
+    real_t norm = status.global_norm;
+    real_t norm_goal = status.global_goal;
+    initial_norm = norm;
 
     if (print_level == 1) {
       mfem::out << "TrustRegion iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -790,7 +846,7 @@ class TrustRegion : public mfem::NewtonSolver {
         return;
       }
 
-      if (norm <= norm_goal && it >= nonlinear_options.min_iterations) {
+      if (status.converged && it >= nonlinear_options.min_iterations) {
         converged = true;
         break;
       } else if (it >= max_iter) {
@@ -888,25 +944,25 @@ class TrustRegion : public mfem::NewtonSolver {
         double realObjective = std::numeric_limits<double>::max();
         double normPred = std::numeric_limits<double>::max();
         try {
-          normPred = computeResidual(x_pred, r_pred);
+          auto predicted_status = evaluateConvergence(x_pred, r_pred);
+          normPred = predicted_status.global_norm;
           double obj1 = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
           realObjective = obj1;
+          if (predicted_status.converged) {
+            trResults.d_old = trResults.d;
+            X = x_pred;
+            r = r_pred;
+            status = predicted_status;
+            norm = status.global_norm;
+            if (print_level >= 2) {
+              printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
+              trResults.cg_iterations_count = 0;
+            }
+            break;
+          }
         } catch (const std::exception&) {
           realObjective = std::numeric_limits<double>::max();
           normPred = std::numeric_limits<double>::max();
-        }
-
-        if (normPred <= norm_goal) {
-          trResults.d_old = trResults.d;
-          X = x_pred;
-          r = r_pred;
-          norm = normPred;
-          if (print_level >= 2) {
-            printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
-            trResults.cg_iterations_count =
-                0;  // zero this output so it doesn't look like the linesearch is doing cg iterations
-          }
-          break;
         }
 
         double modelImprove = -modelObjective;
@@ -951,6 +1007,7 @@ class TrustRegion : public mfem::NewtonSolver {
           trResults.d_old = trResults.d;
           X = x_pred;
           r = r_pred;
+          status = convergence_manager_ ? convergence_manager_->evaluate(1.0, r_pred) : status;
           norm = normPred;
           break;
         }
@@ -977,6 +1034,7 @@ class TrustRegion : public mfem::NewtonSolver {
     }
   }
 };
+/// @endcond
 
 EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolverOptions lin_opts, MPI_Comm comm)
 {
@@ -985,6 +1043,9 @@ EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolv
   lin_solver_ = std::move(lin_solver);
   preconditioner_ = std::move(preconditioner);
   nonlin_solver_ = buildNonlinearSolver(nonlinear_opts, lin_opts, *preconditioner_, comm);
+  convergence_manager_ =
+      std::make_shared<EquationSolverConvergenceManager>(comm, nonlinear_opts.absolute_tol, nonlinear_opts.relative_tol);
+  attachConvergenceManager();
 }
 
 EquationSolver::EquationSolver(std::unique_ptr<mfem::NewtonSolver> nonlinear_solver,
@@ -999,8 +1060,28 @@ EquationSolver::EquationSolver(std::unique_ptr<mfem::NewtonSolver> nonlinear_sol
   preconditioner_ = std::move(preconditioner);
 }
 
+void EquationSolver::attachConvergenceManager() const
+{
+  if (!convergence_manager_ || !nonlin_solver_) {
+    return;
+  }
+
+  if (auto* managed_solver = dynamic_cast<ConvergenceManagedNonlinearSolver*>(nonlin_solver_.get())) {
+    managed_solver->setConvergenceManager(convergence_manager_);
+  }
+}
+
+void EquationSolver::initializeConvergenceManager(double abs_tol, double rel_tol, MPI_Comm comm) const
+{
+  if (!convergence_manager_) {
+    convergence_manager_ = std::make_shared<EquationSolverConvergenceManager>(comm, abs_tol, rel_tol);
+  }
+  attachConvergenceManager();
+}
+
 void EquationSolver::setOperator(const mfem::Operator& op)
 {
+  attachConvergenceManager();
   nonlin_solver_->SetOperator(op);
 
   // Now that the nonlinear solver knows about the operator, we can set its linear solver
@@ -1010,8 +1091,36 @@ void EquationSolver::setOperator(const mfem::Operator& op)
   }
 }
 
+void EquationSolver::setConvergenceBlockData(const std::vector<int>& block_offsets,
+                                             const BlockConvergenceTolerances& block_tolerances) const
+{
+  if (!convergence_manager_) {
+    return;
+  }
+
+  convergence_manager_->setBlockData(block_offsets, block_tolerances);
+
+  attachConvergenceManager();
+}
+
+void EquationSolver::setConvergenceBlockData(const std::vector<int>& block_offsets,
+                                             const BlockConvergenceTolerances& block_tolerances, double abs_tol,
+                                             double rel_tol, MPI_Comm comm) const
+{
+  initializeConvergenceManager(abs_tol, rel_tol, comm);
+  setConvergenceBlockData(block_offsets, block_tolerances);
+}
+
+void EquationSolver::resetConvergenceState() const
+{
+  if (convergence_manager_) {
+    convergence_manager_->reset();
+  }
+}
+
 void EquationSolver::solve(mfem::Vector& x) const
 {
+  resetConvergenceState();
   mfem::Vector zero(x);
   zero = 0.0;
   // KINSOL does not handle non-zero RHS, so we enforce that the RHS

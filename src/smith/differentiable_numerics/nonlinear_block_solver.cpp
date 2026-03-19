@@ -62,37 +62,20 @@ void initializeSolver(mfem::Solver* mfem_solver, const smith::FiniteElementState
 #endif
 }
 
-namespace {
-
-std::vector<double> expandTolerances(const std::vector<double>& block_tols, double scalar_tol, size_t num_blocks,
-                                     const std::string& tol_name)
-{
-  if (block_tols.empty()) {
-    return std::vector<double>(num_blocks, scalar_tol);
-  }
-
-  SLIC_ERROR_IF(block_tols.size() != num_blocks,
-                axom::fmt::format("{} size {} does not match number of residual blocks {}", tol_name, block_tols.size(),
-                                  num_blocks));
-  return block_tols;
-}
-
-}  // namespace
-
 std::vector<double> NonlinearBlockSolver::effectiveRelativeTolerances(
     size_t num_blocks, const BlockConvergenceTolerances& tolerance_overrides) const
 {
-  return expandTolerances(
-      tolerance_overrides.relative_tols.empty() ? block_tolerances_.relative_tols : tolerance_overrides.relative_tols,
-      rel_tol_, num_blocks, "relative block tolerances");
+  const auto& relative_tols =
+      tolerance_overrides.relative_tols.empty() ? block_tolerances_.relative_tols : tolerance_overrides.relative_tols;
+  return expandPerBlockTolerances(relative_tols, num_blocks, 0.0, "relative block tolerances");
 }
 
 std::vector<double> NonlinearBlockSolver::effectiveAbsoluteTolerances(
     size_t num_blocks, const BlockConvergenceTolerances& tolerance_overrides) const
 {
-  return expandTolerances(
-      tolerance_overrides.absolute_tols.empty() ? block_tolerances_.absolute_tols : tolerance_overrides.absolute_tols,
-      abs_tol_, num_blocks, "absolute block tolerances");
+  const auto& absolute_tols =
+      tolerance_overrides.absolute_tols.empty() ? block_tolerances_.absolute_tols : tolerance_overrides.absolute_tols;
+  return expandPerBlockTolerances(absolute_tols, num_blocks, 0.0, "absolute block tolerances");
 }
 
 NonlinearBlockSolver::NonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol,
@@ -110,42 +93,27 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldT>&)
   // TODO: eventually may need something like: initializeSolver(&nonlinear_solver_->preconditioner(), u);
 }
 
-void NonlinearBlockSolver::resetConvergenceState() const { initial_residual_norms_.clear(); }
-
-bool NonlinearBlockSolver::checkConvergence(double tolerance_multiplier,
-                                            const std::vector<mfem::Vector>& residuals) const
-{
-  return checkConvergence(tolerance_multiplier, residuals, {});
-}
-
-bool NonlinearBlockSolver::checkConvergence(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
-                                            const BlockConvergenceTolerances& tolerance_overrides) const
+ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
+                                                          const std::vector<mfem::Vector>& residuals,
+                                                          const BlockConvergenceTolerances& tolerance_overrides,
+                                                          NonlinearConvergenceContext& context) const
 {
   size_t num_blocks = residuals.size();
   auto relative_tols = effectiveRelativeTolerances(num_blocks, tolerance_overrides);
   auto absolute_tols = effectiveAbsoluteTolerances(num_blocks, tolerance_overrides);
+  bool block_path_enabled = !tolerance_overrides.relative_tols.empty() || !tolerance_overrides.absolute_tols.empty() ||
+                            !block_tolerances_.relative_tols.empty() || !block_tolerances_.absolute_tols.empty();
+  auto block_norms = computeResidualBlockNorms(residuals, comm_);
 
-  if (initial_residual_norms_.empty()) {
-    initial_residual_norms_.resize(num_blocks, 0.0);
-  }
+  return evaluateResidualConvergence(tolerance_multiplier, abs_tol_, rel_tol_, absolute_tols, relative_tols,
+                                     block_path_enabled, block_norms, context);
+}
 
-  SLIC_ERROR_IF(initial_residual_norms_.size() != num_blocks,
-                axom::fmt::format("Stored initial residual count {} does not match number of residual blocks {}",
-                                  initial_residual_norms_.size(), num_blocks));
-
-  for (size_t i = 0; i < num_blocks; ++i) {
-    double residual_norm = mfem::ParNormlp(residuals[i], 2.0, comm_);
-    if (initial_residual_norms_[i] == 0.0) {
-      initial_residual_norms_[i] = residual_norm;
-    }
-
-    double block_tol = std::max(absolute_tols[i], relative_tols[i] * initial_residual_norms_[i]);
-    if (residual_norm > tolerance_multiplier * block_tol) {
-      return false;
-    }
-  }
-
-  return true;
+void NonlinearBlockSolver::primeConvergenceContext(const std::vector<mfem::Vector>& residuals,
+                                                   const BlockConvergenceTolerances& tolerance_overrides,
+                                                   NonlinearConvergenceContext& context) const
+{
+  static_cast<void>(convergenceStatus(1.0, residuals, tolerance_overrides, context));
 }
 
 std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
@@ -154,6 +122,9 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
     std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobian_funcs) const
 {
   SMITH_MARK_FUNCTION;
+  SLIC_ERROR_IF(!nonlinear_solver_, "NonlinearBlockSolver requires an EquationSolver instance before solve()");
+
+  nonlinear_solver_->resetConvergenceState();
 
   int num_rows = static_cast<int>(u_guesses.size());
   SLIC_ERROR_IF(num_rows < 0, "Number of residual rows must be non-negative");
@@ -165,6 +136,10 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
     block_offsets[row_i + 1] = u_guesses[static_cast<size_t>(row_i)]->space().TrueVSize();
   }
   block_offsets.PartialSum();
+  std::vector<int> local_block_offsets(static_cast<size_t>(block_offsets.Size()));
+  for (int i = 0; i < block_offsets.Size(); ++i) {
+    local_block_offsets[static_cast<size_t>(i)] = block_offsets[i];
+  }
 
   auto block_u = std::make_unique<mfem::BlockVector>(block_offsets);
   for (int row_i = 0; row_i < num_rows; ++row_i) {
@@ -220,6 +195,7 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
         }
         return *block_jac_;
       });
+  nonlinear_solver_->setConvergenceBlockData(local_block_offsets, block_tolerances_, abs_tol_, rel_tol_, comm_);
   nonlinear_solver_->setOperator(*residual_op_);
   nonlinear_solver_->solve(*block_u);
 
