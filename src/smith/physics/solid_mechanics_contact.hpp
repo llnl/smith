@@ -115,10 +115,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     SolidMechanicsBase::resetStates(cycle, time);
     forces_ = 0.0;
-    contact_.setDisplacements(BasePhysics::shapeDisplacement(), displacement_);
     contact_.reset();
     double dt = 0.0;
-    contact_.update(cycle, time, dt);
+    mfem::Vector p(contact_.numPressureDofs());
+    p = 0.0;
+    contact_.update(cycle, time, dt, BasePhysics::shapeDisplacement(), displacement_, p);
   }
 
   /// @brief Build the quasi-static operator corresponding to the total Lagrangian formulation
@@ -236,7 +237,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   void completeSetup() override
   {
     double dt = 0.0;
-    contact_.update(cycle_, time_, dt);
+    mfem::Vector p = pressure();
+    contact_.update(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
 
     SolidMechanicsBase::completeSetup();
   }
@@ -269,8 +271,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     // solve the non-linear system resid = 0 and pressure * gap = 0
     nonlin_solver_->solve(augmented_solution);
     displacement_.Set(1.0, mfem::Vector(augmented_solution, 0, displacement_.Size()));
-    contact_.setPressures(mfem::Vector(augmented_solution, displacement_.Size(), contact_.numPressureDofs()));
-    contact_.update(cycle_, time_, dt);
+    mfem::Vector p(augmented_solution, displacement_.Size(), contact_.numPressureDofs());
+    contact_.update(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
     forces_.SetVector(contact_.forces(), 0);
   }
 
@@ -349,8 +351,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       const mfem::Vector res = (*residual_)(time_ + dt, BasePhysics::shapeDisplacement(), displacement_, acceleration_,
                                             *parameters_[parameter_indices].state...);
 
-      contact_.setPressures(mfem::Vector(augmented_residual, displacement_.Size(), contact_.numPressureDofs()));
-      contact_.update(cycle_, time_, dt);
+      mfem::Vector p(augmented_residual, displacement_.Size(), contact_.numPressureDofs());
+      contact_.update(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
       mfem::Vector r_blk(augmented_residual, 0, displacement_.space().TrueVSize());
       r_blk = res;
 
@@ -366,7 +368,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
                                     acceleration_, *parameters_[parameter_indices].previous_state...);
 
-      contact_.update(cycle_, time_, dt);
+      mfem::Vector p2(augmented_solution, displacement_.Size(), contact_.numPressureDofs());
+      contact_.update(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p2);
       if (contact_.haveLagrangeMultipliers()) {
         J_offsets_ = mfem::Array<int>({0, displacement_.Size(), displacement_.Size() + contact_.numPressureDofs()});
         J_constraint_ = contact_.jacobianFunction(assemble(drdu));

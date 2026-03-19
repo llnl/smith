@@ -111,10 +111,10 @@ class ContactConstraint : public Constraint {
                         bool update_fields = true) const override
   {
     if (update_fields) {
-      contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       // note: Tribol does not use cycle.
       int cycle = 0;
-      contact_.update(cycle, time, dt);
+      mfem::Vector p = contact_.mergedPressures();
+      contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], p);
       auto gaps_hpv = contact_.mergedGaps(false);
       // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
       // https://github.com/mfem/mfem/issues/5029
@@ -140,19 +140,13 @@ class ContactConstraint : public Constraint {
                                                  [[maybe_unused]] bool fresh_derivative = true) const override
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
-    // if the fields are to be updated then we update the displacement field
-    if (update_fields) {
-      contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    }
     // if the field has been updated or we are requesting a fresh derivative
     // then re-compute the gap Jacobian
     // otherwise use previously cached Jacobian
     if (update_fields || fresh_derivative) {
-      for (auto& interaction : contact_.getContactInteractions()) {
-        interaction.evalJacobian(true);
-      }
       int cycle = 0;
-      contact_.update(cycle, time, dt);
+      mfem::Vector p = contact_.mergedPressures();
+      contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], p);
       J_contact_ = contact_.mergedJacobian();
     }
     // obtain (1, 0) block entry from the 2 x 2 block contact linear system
@@ -179,22 +173,8 @@ class ContactConstraint : public Constraint {
   {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     int cycle = 0;
-    if (update_fields) {
-      contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-      // first update gaps
-      for (auto& interaction : contact_.getContactInteractions()) {
-        interaction.evalJacobian(false);
-      }
-      contact_.update(cycle, time, dt);
-    }
     if (update_fields || fresh_derivative) {
-      // with updated gaps, then update pressure for contact interactions with penalty enforcement
-      contact_.setPressures(multipliers);
-      // call update again with the right pressures
-      for (auto& interaction : contact_.getContactInteractions()) {
-        interaction.evalJacobian(true);
-      }
-      contact_.update(cycle, time, dt);
+      contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], multipliers);
     }
     return contact_.forces();
   };
@@ -220,22 +200,8 @@ class ContactConstraint : public Constraint {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
 
     int cycle = 0;
-    if (update_fields) {
-      contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-      // first update gaps
-      for (auto& interaction : contact_.getContactInteractions()) {
-        interaction.evalJacobian(false);
-      }
-      contact_.update(cycle, time, dt);
-    }
     if (update_fields || fresh_derivative) {
-      // with updated gaps, we can update pressure for contact interactions with penalty enforcement
-      contact_.setPressures(multipliers);
-      // call update again with the right pressures
-      for (auto& interaction : contact_.getContactInteractions()) {
-        interaction.evalJacobian(true);
-      }
-      contact_.update(cycle, time, dt);
+      contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], multipliers);
       J_contact_ = contact_.mergedJacobian();
     }
     // obtain (0, 0) block entry from the 2 x 2 block contact linear system
@@ -260,14 +226,9 @@ class ContactConstraint : public Constraint {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
 
     int cycle = 0;
-    if (update_fields) {
-      contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    }
     if (update_fields || fresh_derivative) {
-      for (auto& interaction : contact_.getContactInteractions()) {
-        interaction.evalJacobian(true);
-      }
-      contact_.update(cycle, time, dt);
+      mfem::Vector p = contact_.mergedPressures();
+      contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], p);
       J_contact_ = contact_.mergedJacobian();
     }
     // obtain (0, 1) block entry from the 2 x 2 block contact linear system
