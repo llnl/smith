@@ -116,6 +116,9 @@ class DifferentiablePhysics : public BasePhysics {
   /// @brief Get all the current FieldStates
   std::vector<FieldState> getFieldStates() const { return field_states_; }
 
+  // Backward-compat alias for older examples/tests.
+  std::vector<FieldState> getFieldStatesOld() const { return field_states_; }
+
   /// @brief Get all the parameter FieldStates
   std::vector<FieldState> getFieldParams() const { return field_params_; }
 
