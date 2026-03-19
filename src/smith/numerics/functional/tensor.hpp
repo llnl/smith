@@ -1112,9 +1112,9 @@ SMITH_HOST_DEVICE constexpr auto norm(zero) { return zero{}; }
  * @param[in] A The tensor to normalize
  */
 template <typename T, int... n>
-SMITH_HOST_DEVICE auto normalize(const tensor<T, n...>& A)
+SMITH_HOST_DEVICE auto normalize(const tensor<T, n...>& A, double const &epsilon = 0.0)
 {
-  return A / norm(A);
+  return A / (norm(A) + epsilon);
 }
 
 /**
