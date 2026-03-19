@@ -474,7 +474,9 @@ void ContactData::updateGaps([[maybe_unused]] int cycle, [[maybe_unused]] double
 
 void ContactData::update([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
                          [[maybe_unused]] const mfem::Vector& u_shape, [[maybe_unused]] const mfem::Vector& u,
-                         [[maybe_unused]] const mfem::Vector& p) {}
+                         [[maybe_unused]] const mfem::Vector& p)
+{
+}
 
 FiniteElementDual ContactData::forces() const
 {

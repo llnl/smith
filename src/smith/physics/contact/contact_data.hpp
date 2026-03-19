@@ -90,7 +90,8 @@ class ContactData {
    * @param u Current displacement dof values
    * @param p Current pressure true dof values
    */
-  void update(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u, const mfem::Vector& p);
+  void update(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u,
+              const mfem::Vector& p);
 
   /**
    * @brief Resets the contact pressures to zero
