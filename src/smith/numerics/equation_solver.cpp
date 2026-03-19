@@ -201,6 +201,7 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
     ConvergenceStatus status = evaluateConvergence(x, r);
     real_t norm = status.global_norm;
     initial_norm = norm;
+    if (norm == 0.0) return;
 
     if (print_level == 1) {
       mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -797,6 +798,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     real_t norm = status.global_norm;
     real_t norm_goal = status.global_goal;
     initial_norm = norm;
+    if (norm == 0.0) return;
 
     if (print_level == 1) {
       mfem::out << "TrustRegion iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
