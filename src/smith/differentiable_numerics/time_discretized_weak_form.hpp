@@ -149,6 +149,35 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
     addBodyIntegral(DependsOn<>{}, body_name, body_integral);
   }
 
+  template <int... active_parameters, typename BodyLoadType>
+  void addBodySource(DependsOn<active_parameters...> /*depends_on*/, std::string body_name, BodyLoadType load_function)
+  {
+    auto time_rule = time_rule_;
+    time_discretized_weak_form_->addBodyIntegral(
+        DependsOn<0, 1, 2, 3, NUM_STATE_VARS + active_parameters...>{}, body_name,
+        [load_function, time_rule](const TimeInfo& t, auto X, auto U, auto U_old, auto U_dot_old, auto U_dot_dot_old,
+                                   auto... inputs) {
+          return smith::tuple{
+              -load_function(t.time(), get<VALUE>(X),
+                             get<VALUE>(time_rule.value(t, U, U_old, U_dot_old, U_dot_dot_old)),
+                             get<VALUE>(time_rule.dot(t, U, U_old, U_dot_old, U_dot_dot_old)),
+                             get<VALUE>(time_rule.ddot(t, U, U_old, U_dot_old, U_dot_dot_old)),
+                             get<VALUE>(inputs)...),
+              smith::zero{}};
+        });
+    final_reaction_weak_form_->addBodyIntegral(
+        DependsOn<0, 1, 2, NUM_STATE_VARS - 1 + active_parameters...>{}, body_name,
+        [load_function](const TimeInfo& t, auto X, auto... inputs) {
+          return smith::tuple{-load_function(t.time(), get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
+        });
+  }
+
+  template <typename BodyLoadType>
+  void addBodySource(std::string body_name, BodyLoadType load_function)
+  {
+    addBodySource(DependsOn<>{}, body_name, load_function);
+  }
+
  private:
   std::shared_ptr<TimeDiscretizedWeakFormT>
       time_discretized_weak_form_;  ///< fully templated time discretized weak form (with time integration rule injected

@@ -43,6 +43,16 @@ FieldState solve(const WeakForm& residual_eval, const FieldState& shape_disp, co
                  const std::vector<FieldState>& params, const TimeInfo& time_info, const DifferentiableSolver& solver,
                  const DirichletBoundaryConditions& bcs, size_t unknown_state_index = 0);
 
+// Backward-compat overload for older examples/tests that passed an initial guess
+// followed by one combined vector of weak-form inputs.
+inline FieldState solve([[maybe_unused]] const FieldState& initial_guess, const FieldState& shape_disp,
+                        const std::vector<FieldState>& weak_form_inputs, const TimeInfo& time_info,
+                        const WeakForm& residual_eval, const DifferentiableSolver& solver,
+                        const DirichletBoundaryConditions& bcs, size_t unknown_state_index = 0)
+{
+  return solve(residual_eval, shape_disp, weak_form_inputs, {}, time_info, solver, bcs, unknown_state_index);
+}
+
 /// @brief Solve a block nonlinear system of equations as defined by the vector of weak form
 /// @param residual_evals Vector of weak forms which define the equations to be solved
 /// @param block_indices Matrix of index arguments specifying where in each WeakForm the unknown fields are passed in.

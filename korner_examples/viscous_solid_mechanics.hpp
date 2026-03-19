@@ -20,7 +20,8 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
  public:
   SolidMechanicsStateAdvancer(std::shared_ptr<DifferentiableSolver> solid_solver,
                               std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
-                              std::shared_ptr<WeakForm> weak_form, SecondOrderTimeIntegrationRule time_rule)
+                              std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> weak_form,
+                              SecondOrderTimeIntegrationRule time_rule)
       : solver_(solid_solver), vector_bcs_(vector_bcs), weak_form_(weak_form), time_rule_(time_rule)
   {
   }
@@ -90,7 +91,8 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
     solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
 
     auto displacement =
-        solve(displacement_guess, shape_disp, solid_inputs, final_time_info, *weak_form_, *solver_, *vector_bcs_);
+        solve(displacement_guess, shape_disp, solid_inputs, final_time_info, *weak_form_->time_discretized_weak_form,
+              *solver_, *vector_bcs_);
 
     std::vector<FieldState> states = states_old;
 
@@ -112,13 +114,14 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
     std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
                                          states_old[ACCELERATION]};
     solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-    return {evaluateWeakForm(weak_form_, time_info, shape_disp, solid_inputs, states[DISPLACEMENT])};
+    return {evaluateWeakForm(weak_form_->final_reaction_weak_form, time_info, shape_disp, solid_inputs,
+                             states[DISPLACEMENT])};
   }
 
  private:
   std::shared_ptr<DifferentiableSolver> solver_;
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;
-  std::shared_ptr<WeakForm> weak_form_;
+  std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> weak_form_;
   SecondOrderTimeIntegrationRule time_rule_;
 };
 

@@ -19,6 +19,8 @@
 
 namespace smith {
 
+using ResultantState = ReactionState;
+
 /// Base state advancer class, allows specification for quasi-static solve strategies, or time integration algorithms
 class StateAdvancer {
  public:
@@ -30,15 +32,37 @@ class StateAdvancer {
   /// gretl::State in order to record the duals on the reverse pass
   virtual std::vector<FieldState> advanceState(const TimeInfo& time_info, const FieldState& shape_disp,
                                                const std::vector<FieldState>& states,
-                                               const std::vector<FieldState>& params) const = 0;
+                                               const std::vector<FieldState>& params) const
+  {
+    return advanceState(shape_disp, states, params, time_info);
+  }
+
+  // Backward-compat signature for older examples/tests.
+  virtual std::vector<FieldState> advanceState(const FieldState& shape_disp, const std::vector<FieldState>& states,
+                                               const std::vector<FieldState>& params,
+                                               const TimeInfo& time_info) const
+  {
+    return advanceState(time_info, shape_disp, states, params);
+  }
 
   /// @brief interface method to compute reactions given previous, current states and
   /// parameters.
-  virtual std::vector<ReactionState> computeReactions(const TimeInfo& /*time_info*/, const FieldState& /*shape_disp*/,
-                                                      const std::vector<FieldState>& /*states*/,
-                                                      const std::vector<FieldState>& /*params*/) const
+  virtual std::vector<ReactionState> computeReactions(const TimeInfo& time_info, const FieldState& shape_disp,
+                                                      const std::vector<FieldState>& states,
+                                                      const std::vector<FieldState>& params) const
   {
-    return std::vector<ReactionState>{};
+    return computeResultants(shape_disp, states, states, params, time_info);
+  }
+
+  // Backward-compat signature for older examples/tests.
+  virtual std::vector<ResultantState> computeResultants(const FieldState& shape_disp,
+                                                        const std::vector<FieldState>& states,
+                                                        const std::vector<FieldState>& states_old,
+                                                        const std::vector<FieldState>& params,
+                                                        const TimeInfo& time_info) const
+  {
+    (void)states_old;
+    return computeReactions(time_info, shape_disp, states, params);
   }
 };
 

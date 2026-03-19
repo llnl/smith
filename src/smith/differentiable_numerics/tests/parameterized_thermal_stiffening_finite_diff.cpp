@@ -162,7 +162,7 @@ void FiniteDifferenceParameter()
   // Add body integrals to the weak forms
   solid_mechanics_weak_form->addBodyIntegral(
     smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-    [material, dim](const TimeInfo& time_info, auto /*X*/, auto u, auto v, auto /*a*/, auto theta, auto /*theta_dot*/,
+    [material](const TimeInfo& time_info, auto /*X*/, auto u, auto v, auto /*a*/, auto theta, auto /*theta_dot*/,
                  auto /*theta_dot_dot*/, auto fictDens){
       thermalStiffMaterial::State<dim> state;
       auto [pk, C_v, s0, q0] = material(time_info.dt(), state, get<DERIVATIVE>(u),
@@ -172,7 +172,7 @@ void FiniteDifferenceParameter()
 
   heat_transfer_weak_form->addBodyIntegral(
     smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-    [material, dim](const TimeInfo& time_info, auto /*X*/, auto theta, auto theta_dot, auto /*theta_dot_dot*/, auto u, auto v,
+    [material](const TimeInfo& time_info, auto /*X*/, auto theta, auto theta_dot, auto /*theta_dot_dot*/, auto u, auto v,
                  auto /*a*/, auto fictDens)  {
       thermalStiffMaterial::State<dim> state;
       auto [pk, C_v, s0, q0] = material(time_info.dt(), state, get<DERIVATIVE>(u), 
@@ -181,10 +181,11 @@ void FiniteDifferenceParameter()
       return smith::tuple{C_v * dT_dt - s0, -q0};
     });
 
-  heat_transfer_weak_form->addBodySource(
-      smith::DependsOn<0>(), mesh->entireBodyName(),
-      [external_heat_source](auto /*t*/, auto /* x */, auto fictDens) { 
-        return external_heat_source * fictDens; 
+  heat_transfer_weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
+      [external_heat_source](const TimeInfo&, auto /*X*/, auto /*theta*/, auto /*theta_dot*/, auto /*theta_dot_dot*/,
+                             auto /*u*/, auto /*v*/, auto /*a*/, auto fictDens) {
+        return smith::tuple{-external_heat_source * get<VALUE>(fictDens), smith::zero{}};
       });
   
   // Extract fields from the physics object

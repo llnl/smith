@@ -245,10 +245,12 @@ int main(int argc, char* argv[])
       return smith::tuple{C_v * dT_dt - s0, -q0};
     });
 
-  heat_transfer_weak_form->addBodySource(
-      smith::DependsOn<>(), mesh->entireBodyName(),
-      [external_heat_source](auto /*t*/, auto /* x */) { return external_heat_source; });
-  // heat_transfer_weak_form->addBodySource(smith::DependsOn<>(), mesh->entireBodyName(), external_heat_source);
+  heat_transfer_weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
+      [external_heat_source](const TimeInfo&, auto /*X*/, auto /*theta*/, auto /*theta_dot*/, auto /*theta_dot_dot*/,
+                             auto /*u*/, auto /*v*/, auto /*a*/) {
+        return smith::tuple{-external_heat_source, smith::zero{}};
+      });
   
   auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();

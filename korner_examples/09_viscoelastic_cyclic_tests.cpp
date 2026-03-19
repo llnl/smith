@@ -144,7 +144,7 @@ int SolveProblem(const Problem_Params& problem_params)
     return output;
   });
   if (problem_params.use_2D) {
-    bcs->setFixedVectorBCs<dim>(mesh->entireBody(), {2});
+    bcs->setFixedVectorBCs<dim>(mesh->entireBody(), 2);
   }
 
   double E = 100.0;

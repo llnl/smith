@@ -83,4 +83,23 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule {
   }
 };
 
+// Backward-compat wrapper for older examples/tests.
+struct SecondOrderTimeIntegrationRule : ImplicitNewmarkSecondOrderTimeIntegrationRule {
+  explicit SecondOrderTimeIntegrationRule([[maybe_unused]] double gamma = 1.0) {}
+
+  template <typename T1, typename T2, typename T3, typename T4>
+  SMITH_HOST_DEVICE auto derivative(const TimeInfo& t, const T1& field_new, const T2& field_old, const T3& velo_old,
+                                    const T4& accel_old) const
+  {
+    return dot(t, field_new, field_old, velo_old, accel_old);
+  }
+
+  template <typename T1, typename T2, typename T3, typename T4>
+  SMITH_HOST_DEVICE auto second_derivative(const TimeInfo& t, const T1& field_new, const T2& field_old,
+                                           const T3& velo_old, const T4& accel_old) const
+  {
+    return ddot(t, field_new, field_old, velo_old, accel_old);
+  }
+};
+
 }  // namespace smith

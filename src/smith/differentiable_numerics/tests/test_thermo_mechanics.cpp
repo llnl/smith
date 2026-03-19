@@ -417,8 +417,10 @@ TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
     return smith::tuple{C_v * dT_dt - s0, -q0};
   });
 
-  thermal_weak_form->addBodySource(smith::DependsOn<>(), mesh_->entireBodyName(),
-                                   [](auto /*t*/, auto /* x */) { return 100.0; });
+  thermal_weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1, 2>{}, mesh_->entireBodyName(),
+      [](const TimeInfo&, auto /*X*/, auto /*temperature*/, auto /*temperature_old*/, auto /*disp*/,
+         auto /*disp_old*/) { return smith::tuple{-100.0, smith::zero{}}; });
 
   std::vector<WeakForm*> weak_forms{solid_weak_form.get(), thermal_weak_form.get()};
   std::vector<FieldState> disp_temp = solve(weak_forms, field_store, d_nonlinear_solver.get(), TimeInfo(0.0, 1.0));

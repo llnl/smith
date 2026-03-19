@@ -15,6 +15,8 @@
 #include <memory>
 #include <functional>
 
+#include "smith/numerics/solver_config.hpp"
+
 namespace mfem {
 class Solver;
 class Vector;
@@ -29,8 +31,6 @@ class BoundaryConditionManager;
 class FiniteElementState;
 class FiniteElementDual;
 class Mesh;
-struct NonlinearSolverOptions;
-struct LinearSolverOptions;
 
 /// @brief Abstract interface to DifferentiableSolver interface.  Each differentiable solve should provide both its
 /// forward solve and an adjoint solve
@@ -212,6 +212,12 @@ class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
 std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolver(LinearSolverOptions linear_opts,
                                                                             const smith::Mesh& mesh);
 
+inline std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolve(
+    const LinearSolverOptions& linear_opts, const smith::Mesh& mesh)
+{
+  return buildDifferentiableLinearSolver(linear_opts, mesh);
+}
+
 /// @brief Create a differentiable nonlinear solver
 /// @param nonlinear_opts nonlinear options struct
 /// @param linear_opts linear options struct
@@ -219,6 +225,12 @@ std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolver(Line
 std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolver(NonlinearSolverOptions nonlinear_opts,
                                                                                   LinearSolverOptions linear_opts,
                                                                                   const smith::Mesh& mesh);
+
+inline std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolve(
+    const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts, const smith::Mesh& mesh)
+{
+  return buildDifferentiableNonlinearSolver(nonlinear_opts, linear_opts, mesh);
+}
 
 /// @brief Create a differentiable nonlinear block solver
 /// @param nonlinear_opts nonlinear options struct

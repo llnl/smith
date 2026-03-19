@@ -20,7 +20,8 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
   QuasistaticSolidThermoMechanicsStateAdvancer(
       std::shared_ptr<DifferentiableSolver> solid_solver, std::shared_ptr<DifferentiableSolver> thermal_solver,
       std::shared_ptr<DirichletBoundaryConditions> vector_bcs, std::shared_ptr<DirichletBoundaryConditions> scalar_bcs,
-      std::shared_ptr<WeakForm> solid_weak_form, std::shared_ptr<WeakForm> thermal_weak_form,
+      std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_weak_form,
+      std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> thermal_weak_form,
       SecondOrderTimeIntegrationRule solid_time_rule, SecondOrderTimeIntegrationRule thermal_time_rule)
       : solid_solver_(solid_solver),
         thermal_solver_(thermal_solver),
@@ -129,8 +130,9 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
                                            states_old[VELOCITY],         states_old[ACCELERATION]};
     thermal_inputs.insert(thermal_inputs.end(), params.begin(), params.end());
 
-    auto temperature = solve(temperature_guess, shape_disp, thermal_inputs, final_time_info, *thermal_weak_form_,
-                             *thermal_solver_, *scalar_bcs_);
+    auto temperature =
+        solve(temperature_guess, shape_disp, thermal_inputs, final_time_info,
+              *thermal_weak_form_->time_discretized_weak_form, *thermal_solver_, *scalar_bcs_);
 
     // Evolve Deformation
     // evaluate initial guess
@@ -141,8 +143,8 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
                                          states_old[ACCELERATION],    temperature,
                                          states_old[TEMPERATURE_DOT], states_old[TEMPERATURE_DDOT]};
     solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-    auto displacement = solve(displacement_guess, shape_disp, solid_inputs, final_time_info, *solid_weak_form_,
-                              *solid_solver_, *vector_bcs_);
+    auto displacement = solve(displacement_guess, shape_disp, solid_inputs, final_time_info,
+                              *solid_weak_form_->time_discretized_weak_form, *solid_solver_, *vector_bcs_);
 
     std::vector<FieldState> states = states_old;
     states[DISPLACEMENT] = displacement;
@@ -169,7 +171,8 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
                                    states_old[ACCELERATION],    states_old[TEMPERATURE],  states_old[TEMPERATURE_DOT],
                                    states_old[TEMPERATURE_DDOT]};
     inputs.insert(inputs.end(), params.begin(), params.end());
-    return {evaluateWeakForm(solid_weak_form_, time_info, shape_disp, inputs, states[DISPLACEMENT])};
+    return {evaluateWeakForm(solid_weak_form_->final_reaction_weak_form, time_info, shape_disp, inputs,
+                             states[DISPLACEMENT])};
   }
 
  private:
@@ -177,8 +180,8 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
   std::shared_ptr<DifferentiableSolver> thermal_solver_;
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;
   std::shared_ptr<DirichletBoundaryConditions> scalar_bcs_;
-  std::shared_ptr<WeakForm> solid_weak_form_;
-  std::shared_ptr<WeakForm> thermal_weak_form_;
+  std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_weak_form_;
+  std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> thermal_weak_form_;
   SecondOrderTimeIntegrationRule solid_time_rule_;
   SecondOrderTimeIntegrationRule thermal_time_rule_;
 };
