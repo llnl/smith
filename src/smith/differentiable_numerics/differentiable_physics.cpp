@@ -18,6 +18,7 @@
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "gretl/data_store.hpp"
+#include "gretl/upstream_state.hpp"
 
 namespace smith {
 
@@ -248,7 +249,7 @@ void DifferentiablePhysics::reverseAdjointTimestep()
     current_step = checkpointer_->currentStep_;
   }
 
-  auto& upstreams = checkpointer_->upstreams_[milestone];
+  gretl::UpstreamStates upstreams(*checkpointer_, checkpointer_->upstreamSteps_[milestone]);
 
   SLIC_ERROR_IF(field_states_.size() != upstreams.size(), "field states and upstream sizes do not match.");
   // recreate the upstream field states with upstream step, field, and dual values.
