@@ -1013,26 +1013,26 @@ void StrumpackSolver::SetOperator(const mfem::Operator& op)
 
     strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*matrix);
   }
-
+  height = op.Height();
+  width = op.Width();
   strumpack_solver_.SetOperator(*strumpack_mat_);
 }
 
 #endif
 
-std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(const NonlinearSolverOptions& nonlinear_opts,
+std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions nonlinear_opts,
                                                          const LinearSolverOptions& linear_opts, mfem::Solver& prec,
                                                          MPI_Comm comm)
 {
   std::unique_ptr<mfem::NewtonSolver> nonlinear_solver;
 
   if (nonlinear_opts.nonlin_solver == NonlinearSolver::Newton) {
-    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0 || nonlinear_opts.max_line_search_iterations != 0,
-                       "Newton's method does not support nonzero min_iterations or max_line_search_iterations");
+    nonlinear_opts.max_line_search_iterations = 0;
+    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0, "Newton's method does not support nonzero min_iterations");
     nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts);
-    // nonlinear_solver = std::make_unique<mfem::NewtonSolver>(comm);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::LBFGS) {
-    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0 || nonlinear_opts.max_line_search_iterations != 0,
-                       "LBFGS does not support nonzero min_iterations or max_line_search_iterations");
+    nonlinear_opts.max_line_search_iterations = 0;
+    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0, "LBFGS does not support nonzero min_iterations");
     nonlinear_solver = std::make_unique<mfem::LBFGSSolver>(comm);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::NewtonLineSearch) {
     nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts);
@@ -1052,9 +1052,8 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(const NonlinearSolverOp
   // KINSOL
   else {
 #ifdef SMITH_USE_SUNDIALS
-
-    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0 || nonlinear_opts.max_line_search_iterations != 0,
-                       "kinsol solvers do not support min_iterations or max_line_search_iterations");
+    nonlinear_opts.max_line_search_iterations = 0;
+    SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0, "kinsol solvers do not support min_iterations");
 
     int kinsol_strat = KIN_NONE;
 
@@ -1210,12 +1209,12 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
 {
   std::unique_ptr<mfem::Solver> preconditioner_solver;
   auto preconditioner = linear_opts.preconditioner;
-  auto print_level = linear_opts.print_level;
+  auto preconditioner_print_level = linear_opts.preconditioner_print_level;
 
   // Handle the preconditioner - currently just BoomerAMG and HypreSmoother are supported
   if (preconditioner == Preconditioner::HypreAMG) {
     auto amg_preconditioner = std::make_unique<mfem::HypreBoomerAMG>();
-    amg_preconditioner->SetPrintLevel(print_level);
+    amg_preconditioner->SetPrintLevel(preconditioner_print_level);
     preconditioner_solver = std::move(amg_preconditioner);
   } else if (preconditioner == Preconditioner::HypreJacobi) {
     auto jac_preconditioner = std::make_unique<mfem::HypreSmoother>();
@@ -1232,7 +1231,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
   } else if (preconditioner == Preconditioner::HypreILU) {
     auto ilu_preconditioner = std::make_unique<mfem::HypreILU>();
     ilu_preconditioner->SetLevelOfFill(1);
-    ilu_preconditioner->SetPrintLevel(print_level);
+    ilu_preconditioner->SetPrintLevel(preconditioner_print_level);
     preconditioner_solver = std::move(ilu_preconditioner);
   } else if (preconditioner == Preconditioner::AMGX) {
 #ifdef MFEM_USE_AMGX
@@ -1246,6 +1245,13 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
 #else
     SLIC_ERROR_ROOT("PETSc preconditioner requested in non-PETSc build");
 #endif
+  } else if (preconditioner == Preconditioner::AMGFContact) {
+    auto amgfcontact_preconditioner = std::make_unique<mfem::AMGFSolver>();
+    auto amgfcontact_opts = linear_opts.amgfcontact_options;
+    amgfcontact_preconditioner->GetAMG().SetPrintLevel(preconditioner_print_level);
+    amgfcontact_preconditioner->GetAMG().SetSystemsOptions(amgfcontact_opts.dim_systems_options);
+    amgfcontact_preconditioner->GetAMG().SetRelaxType(amgfcontact_opts.relax_type);
+    preconditioner_solver = std::move(amgfcontact_preconditioner);
   } else {
     SLIC_ERROR_ROOT_IF(preconditioner != Preconditioner::None, "Unknown preconditioner type requested");
   }
@@ -1344,6 +1350,8 @@ smith::LinearSolverOptions FromInlet<smith::LinearSolverOptions>::operator()(con
     options.preconditioner = smith::Preconditioner::Petsc;
     options.petsc_preconditioner = smith::mfem_ext::stringToPetscPCType(petsc_prec);
 #endif
+  } else if (prec_type == "AMGFContact") {
+    options.preconditioner = smith::Preconditioner::AMGFContact;
   } else {
     std::string msg = axom::fmt::format("Unknown preconditioner type given: '{0}'", prec_type);
     SLIC_ERROR_ROOT(msg);

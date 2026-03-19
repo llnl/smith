@@ -161,7 +161,7 @@ class StateManager {
           axom::sidre::Group* geom_group = qdatas_group->getGroup(std::string(geom_name));
 
           // Verify size correctness
-          auto verify_size = [](axom::sidre::Group* group, int value, const std::string& view_name,
+          auto verify_size = [](axom::sidre::Group* group, axom::IndexType value, const std::string& view_name,
                                 const std::string& err_msg) {
             SLIC_ERROR_IF(
                 !group->hasView(view_name),

@@ -17,13 +17,42 @@
 
 namespace smith {
 
-/// @brief encodes rules for 2-point integration rules for a first order ode discretization.
-/// When solving u_dot = f(u, t),
-/// this discretizes as derivative(u,u_old) = f(value(u,u_old,t)).
-struct SecondOrderTimeIntegrationRule {
-  /// @brief
-  /// @param theta weighting on current vs previous state value.
-  SecondOrderTimeIntegrationRule(double theta = 1.0) : theta_(theta) {}
+/// @brief encodes rules for time discretizing first order odes (involving first time derivatives).
+/// When solving f(u, u_dot, t) = 0
+/// this class provides the current discrete approximation for u and u_dot as a function of
+/// (u^{n+1}, u^n).
+struct BackwardEulerFirstOrderTimeIntegrationRule {
+  /// @brief Constructor
+  BackwardEulerFirstOrderTimeIntegrationRule() {}
+
+  /// @brief evaluate value of the ode state as used by the integration rule
+  template <typename T1, typename T2>
+  SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new, const T2& /*field_old*/) const
+  {
+    return field_new;
+  }
+
+  /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
+  template <typename T1, typename T2>
+  SMITH_HOST_DEVICE auto dot(const TimeInfo& t, const T1& field_new, const T2& field_old) const
+  {
+    return (1.0 / t.dt()) * (field_new - field_old);
+  }
+};
+
+/// Alternative name for Backward Euler which makes sense when restricting what are typically second order odes,
+/// for example transient solid mechanics, to the quasi-static approximation.  It happens that the implementation is
+/// identical to backward-Euler applied to first order systems as we want to be able to capture current velocity
+/// dependencies.
+using QuasiStaticFirstOrderTimeIntegrationRule = BackwardEulerFirstOrderTimeIntegrationRule;
+
+/// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
+/// When solving f(u, u_dot, u_dot_dot, t) = 0
+/// this class provides the current discrete approximation for u, u_dot, and u_dot_dot as a function of
+/// (u^{n+1},u^n,u_dot^n,u_dot_dot^n).
+struct ImplicitNewmarkSecondOrderTimeIntegrationRule {
+  /// @brief Constructor
+  ImplicitNewmarkSecondOrderTimeIntegrationRule() {}
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
@@ -36,25 +65,22 @@ struct SecondOrderTimeIntegrationRule {
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
-  SMITH_HOST_DEVICE auto derivative([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
-                                    [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
-                                    [[maybe_unused]] const T4& accel_old) const
+  SMITH_HOST_DEVICE auto dot([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
+                             [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                             [[maybe_unused]] const T4& accel_old) const
   {
-    // return velo_old;  //(1.0 / t.dt()) * (field_new - field_old);
-    return (1.0 / t.dt()) * (field_new - field_old);
+    return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
-  SMITH_HOST_DEVICE auto second_derivative([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
-                                           [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
-                                           [[maybe_unused]] const T4& accel_old) const
+  SMITH_HOST_DEVICE auto ddot([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
+                              [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
+                              [[maybe_unused]] const T4& accel_old) const
   {
-    return accel_old;
+    auto dt = t.dt();
+    return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
   }
-
-  double theta_;  ///< parameter specifying the particular integration rule for integrating second order systems with
-                  ///< two steps
 };
 
 }  // namespace smith

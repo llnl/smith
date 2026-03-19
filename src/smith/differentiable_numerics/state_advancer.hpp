@@ -28,19 +28,17 @@ class StateAdvancer {
   /// @brief interface method to advance the states from a given cycle and time, to the next cycle (cycle+1) and time
   /// (time+dt). shape_disp and params are assumed to be fixed in this advance.  Time and time increment (dt) are
   /// gretl::State in order to record the duals on the reverse pass
-  virtual std::vector<FieldState> advanceState(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                                               const std::vector<FieldState>& params,
-                                               const TimeInfo& time_info) const = 0;
+  virtual std::vector<FieldState> advanceState(const TimeInfo& time_info, const FieldState& shape_disp,
+                                               const std::vector<FieldState>& states,
+                                               const std::vector<FieldState>& params) const = 0;
 
-  /// @brief interface method to compute resultants (e.g. nodal reaction forces) given previous, current states and
+  /// @brief interface method to compute reactions given previous, current states and
   /// parameters.
-  virtual std::vector<ResultantState> computeResultants(const FieldState& /*shape_disp*/,
-                                                        const std::vector<FieldState>& /*states*/,
-                                                        const std::vector<FieldState>& /*states_old*/,
-                                                        const std::vector<FieldState>& /*params*/,
-                                                        const TimeInfo& /*time_info*/) const
+  virtual std::vector<ReactionState> computeReactions(const TimeInfo& /*time_info*/, const FieldState& /*shape_disp*/,
+                                                      const std::vector<FieldState>& /*states*/,
+                                                      const std::vector<FieldState>& /*params*/) const
   {
-    return std::vector<ResultantState>{};
+    return std::vector<ReactionState>{};
   }
 };
 

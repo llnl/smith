@@ -19,6 +19,7 @@ namespace mfem {
 class Solver;
 class Vector;
 class HypreParMatrix;
+class BlockOperator;
 }  // namespace mfem
 
 namespace smith {
@@ -31,14 +32,14 @@ class Mesh;
 struct NonlinearSolverOptions;
 struct LinearSolverOptions;
 
-/// @brief Abstract interface to DifferentiableSolver inteface.  Each dfferenriable solve should provide both its
+/// @brief Abstract interface to DifferentiableSolver interface.  Each differentiable solve should provide both its
 /// forward solve and an adjoint solve
 class DifferentiableSolver {
  public:
   /// @brief destructor
   virtual ~DifferentiableSolver() {}
 
-  /// @brief required for certain solvers/preconditions, e.g. when multigrid algorithms want a near null-space
+  /// @brief Required for certain solvers/preconditioners, e.g. when multigrid algorithms want a near null-space
   /// For these cases, it should be called before solve
   virtual void completeSetup(const smith::FiniteElementState& u) = 0;
 
@@ -66,7 +67,7 @@ class DifferentiableSolver {
 /// adjoint solves
 class LinearDifferentiableSolver : public DifferentiableSolver {
  public:
-  /// @brief Construct from a linear solver and linear precondition which may be used by the linear solver
+  /// @brief Construct from a linear solver and linear precondition which may also be used by a nonlinear solver
   LinearDifferentiableSolver(std::unique_ptr<mfem::Solver> s, std::unique_ptr<mfem::Solver> p);
 
   /// @overload
@@ -112,18 +113,118 @@ class NonlinearDifferentiableSolver : public DifferentiableSolver {
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 };
 
+/// @brief Abstract interface to DifferentiableBlockSolver interface. Each differentiable block solve should provide
+/// both its forward solve and an adjoint solve
+class DifferentiableBlockSolver {
+ public:
+  /// @brief destructor
+  virtual ~DifferentiableBlockSolver() {}
+
+  using FieldT = FiniteElementState;                        ///< using
+  using FieldPtr = std::shared_ptr<FieldT>;                 ///< using
+  using FieldD = FiniteElementDual;                         ///< using
+  using DualPtr = std::shared_ptr<FieldD>;                  ///< using
+  using MatrixPtr = std::unique_ptr<mfem::HypreParMatrix>;  ///< using
+
+  /// @brief Required for certain solvers/preconditions, e.g. when multigrid algorithms want a near null-space
+  /// For these cases, it should be called before solve
+  virtual void completeSetup(const std::vector<FieldT>& us) = 0;
+
+  /// @brief Solve a set of equations with a vector of FiniteElementState as unknown
+  /// @param u_guesses initial guess for solver
+  /// @param residuals std::vector<std::function> for equations to be solved
+  /// @param jacobians std::vector<std::vector>> of std::function for evaluating the linearized Jacobians about the
+  /// current solution
+  /// @return std::vector of solution vectors (FiniteElementState)
+  virtual std::vector<FieldPtr> solve(
+      const std::vector<FieldPtr>& u_guesses,
+      std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> residuals,
+      std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobians) const = 0;
+
+  /// @brief Solve the (linear) adjoint set of equations with a vector of FiniteElementState as unknown
+  /// @param u_bars std::vector of right hand sides (rhs) for the solve
+  /// @param jacobian_transposed std::vector<std::vector>> of evaluated linearized adjoint space matrices
+  /// @return The adjoint vector of solution field
+  virtual std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
+                                             std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const = 0;
+
+  /// @brief Interface option to clear memory between solves to avoid high-water mark memory usage.
+  virtual void clearMemory() const {}
+};
+
+/// @brief Implementation of the DifferentiableBlockSolver interface for the special case of linear solves with linear
+/// adjoint solves
+class LinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
+ public:
+  /// @brief Construct from a linear solver and linear block precondition which may be used by the linear solver
+  LinearDifferentiableBlockSolver(std::unique_ptr<mfem::Solver> s, std::unique_ptr<mfem::Solver> p);
+
+  /// @overload
+  void completeSetup(const std::vector<FieldT>& us) override;
+
+  /// @overload
+  std::vector<FieldPtr> solve(
+      const std::vector<FieldPtr>& u_guesses,
+      std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> residuals,
+      std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobians) const override;
+
+  /// @overload
+  std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
+                                     std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const override;
+
+  mutable std::unique_ptr<mfem::Solver> mfem_solver;          ///< stored mfem block solver
+  mutable std::unique_ptr<mfem::Solver> mfem_preconditioner;  ///< stored mfem block preconditioner
+};
+
+/// @brief Implementation of the DifferentiableBlockSolver interface for the special case of nonlinear solves with
+/// linear adjoint solves
+class NonlinearDifferentiableBlockSolver : public DifferentiableBlockSolver {
+ public:
+  /// @brief Construct from a linear solver and linear block precondition which may be used by the linear solver
+  NonlinearDifferentiableBlockSolver(std::unique_ptr<EquationSolver> s);
+
+  /// @overload
+  void completeSetup(const std::vector<FieldT>& us) override;
+
+  /// @overload
+  std::vector<FieldPtr> solve(
+      const std::vector<FieldPtr>& u_guesses,
+      std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> residuals,
+      std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobians) const override;
+
+  /// @overload
+  std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
+                                     std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const override;
+
+  mutable std::unique_ptr<mfem::BlockOperator>
+      block_jac_;  ///< Need to hold an instance of a block operator to work with the mfem solver interface
+  mutable std::vector<std::vector<MatrixPtr>>
+      matrix_of_jacs_;  ///< Holding vectors of block matrices to that do not going out of scope before the mfem solver
+                        ///< is done with using them in the block_jac_
+
+  mutable std::unique_ptr<EquationSolver>
+      nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
+};
+
 /// @brief Create a differentiable linear solver
 /// @param linear_opts linear options struct
 /// @param mesh mesh
-std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolve(LinearSolverOptions linear_opts,
-                                                                           const smith::Mesh& mesh);
+std::shared_ptr<LinearDifferentiableSolver> buildDifferentiableLinearSolver(LinearSolverOptions linear_opts,
+                                                                            const smith::Mesh& mesh);
 
 /// @brief Create a differentiable nonlinear solver
 /// @param nonlinear_opts nonlinear options struct
 /// @param linear_opts linear options struct
 /// @param mesh mesh
-std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolve(NonlinearSolverOptions nonlinear_opts,
-                                                                                 LinearSolverOptions linear_opts,
-                                                                                 const smith::Mesh& mesh);
+std::shared_ptr<NonlinearDifferentiableSolver> buildDifferentiableNonlinearSolver(NonlinearSolverOptions nonlinear_opts,
+                                                                                  LinearSolverOptions linear_opts,
+                                                                                  const smith::Mesh& mesh);
+
+/// @brief Create a differentiable nonlinear block solver
+/// @param nonlinear_opts nonlinear options struct
+/// @param linear_opts linear options struct
+/// @param mesh mesh
+std::shared_ptr<NonlinearDifferentiableBlockSolver> buildDifferentiableNonlinearBlockSolver(
+    NonlinearSolverOptions nonlinear_opts, LinearSolverOptions linear_opts, const smith::Mesh& mesh);
 
 }  // namespace smith

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -8,7 +8,7 @@
  * @file solid_mechanics_state_advancer.hpp
  * .hpp
  *
- * @brief Specifies parametrized residuals and various linearized evaluations for arbitrary nonlinear systems of
+ * @brief Specifies parameterized residuals and various linearized evaluations for arbitrary nonlinear systems of
  * equations
  */
 
@@ -27,7 +27,7 @@ namespace smith {
 
 class DifferentiableSolver;
 class DirichletBoundaryConditions;
-class WeakForm;
+class SecondOrderTimeDiscretizedWeakForms;
 
 /// @brief Implementation of the StateAdvancer interface for advancing the solution of solid mechanics problems
 class SolidMechanicsStateAdvancer : public StateAdvancer {
@@ -35,11 +35,12 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   /// @brief Constructor
   /// @param solid_solver differentiable solve
   /// @param vector_bcs Dirichlet boundary conditions that can be applies to vector unknowns
-  /// @param solid_weak_form The weak-form for solid mechanics equations
+  /// @param solid_dynamic_weak_forms The weak-forms for time discretized solid mechanics equations
   /// @param time_rule The specific time-integration rule, typically Implicit Newmark or Quasi-static
   SolidMechanicsStateAdvancer(std::shared_ptr<DifferentiableSolver> solid_solver,
                               std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
-                              std::shared_ptr<WeakForm> solid_weak_form, SecondOrderTimeIntegrationRule time_rule);
+                              std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_dynamic_weak_forms,
+                              ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule);
 
   /// State enum for indexing convenience
   enum STATE
@@ -56,7 +57,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
                                               const std::vector<std::string>& param_names, const std::string& tag,
                                               size_t index = 0)
   {
-    FieldState newParam = create_field_state(graph, FirstParamSpace{}, name + "_" + param_names[index], tag);
+    FieldState newParam = createFieldState(graph, FirstParamSpace{}, name + "_" + param_names[index], tag);
     std::vector<FieldState> end_spaces{};
     if constexpr (sizeof...(ParamSpaces) > 0) {
       end_spaces = createParams<ParamSpaces...>(graph, name, param_names, tag, ++index);
@@ -66,16 +67,16 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   }
 
   /// @brief Utility function to consistently construct all the weak forms and FieldStates for a solid mechanics
-  /// application You will get back: shape_disp, states, params, time, and solid_mechanics_weak_form
+  /// application you will get back: shape_disp, states, params, time, and solid_mechanics_weak_form
   template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
   static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<gretl::DataStore>& graph,
-                                     SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+                                     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string physics_name,
                                      const std::vector<std::string>& param_names, double initial_time = 0.0)
   {
-    auto shape_disp = create_field_state(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
-    auto disp = create_field_state(*graph, VectorSpace{}, physics_name + "_displacement", mesh->tag());
-    auto velo = create_field_state(*graph, VectorSpace{}, physics_name + "_velocity", mesh->tag());
-    auto acceleration = create_field_state(*graph, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
+    auto shape_disp = createFieldState(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
+    auto disp = createFieldState(*graph, VectorSpace{}, physics_name + "_displacement", mesh->tag());
+    auto velo = createFieldState(*graph, VectorSpace{}, physics_name + "_velocity", mesh->tag());
+    auto acceleration = createFieldState(*graph, VectorSpace{}, physics_name + "_acceleration", mesh->tag());
     auto time = graph->create_state<double, double>(initial_time);
     std::vector<FieldState> params =
         createParams<ParamSpaces...>(*graph, physics_name + "_param", param_names, mesh->tag());
@@ -95,21 +96,24 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   }
 
   /// @overload
-  std::vector<FieldState> advanceState(const FieldState& shape_disp, const std::vector<FieldState>& states_old,
-                                       const std::vector<FieldState>& params, const TimeInfo& time_info) const override;
+  std::vector<FieldState> advanceState(const TimeInfo& time_info, const FieldState& shape_disp,
+                                       const std::vector<FieldState>& states_old,
+                                       const std::vector<FieldState>& params) const override;
 
   /// @overload
-  std::vector<ResultantState> computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                                                const std::vector<FieldState>& states_old,
-                                                const std::vector<FieldState>& params,
-                                                const TimeInfo& time_info) const override;
+  std::vector<ReactionState> computeReactions(const TimeInfo& time_info, const FieldState& shape_disp,
+                                              const std::vector<FieldState>& states,
+                                              const std::vector<FieldState>& params) const override;
 
  private:
   std::shared_ptr<DifferentiableSolver> solver_;             ///< Differentiable solver
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;  ///< Dirichlet boundary conditions on a vector-field
-  std::shared_ptr<WeakForm> weak_form_;       ///< Solid mechanics weak form, user must setup the appropriate integrals
-  SecondOrderTimeIntegrationRule time_rule_;  ///< second order time integration rule.  Can compute u, u_dot, u_dot_dot,
-                                              ///< given the current predicted u and the previous u, u_dot, u_dot_dot
+  std::shared_ptr<SecondOrderTimeDiscretizedWeakForms>
+      solid_dynamic_weak_forms_;  ///< Solid mechanics time discretized weak forms, user must setup the appropriate
+                                  ///< integrals.  Has both the time discretized and the undiscretized weak forms.
+  ImplicitNewmarkSecondOrderTimeIntegrationRule
+      time_rule_;  ///< second order time integration rule.  Can compute u, u_dot, u_dot_dot,
+                   ///< given the current predicted u and the previous u, u_dot, u_dot_dot
 };
 
 }  // namespace smith

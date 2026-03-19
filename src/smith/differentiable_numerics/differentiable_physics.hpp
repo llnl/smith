@@ -36,7 +36,7 @@ class DifferentiablePhysics : public BasePhysics {
   DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                         const FieldState& shape_disp, const std::vector<FieldState>& states,
                         const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer,
-                        std::string physics_name, const std::vector<std::string>& resultant_names = {});
+                        std::string physics_name, const std::vector<std::string>& reaction_names = {});
   /// @brief destructor
   ~DifferentiablePhysics() {}
 
@@ -116,9 +116,6 @@ class DifferentiablePhysics : public BasePhysics {
   /// @brief Get all the current FieldStates
   std::vector<FieldState> getFieldStates() const { return field_states_; }
 
-  /// @brief Get all the previous FieldStates
-  std::vector<FieldState> getFieldStatesOld() const { return field_states_old_; }
-
   /// @brief Get all the parameter FieldStates
   std::vector<FieldState> getFieldParams() const { return field_params_; }
 
@@ -128,8 +125,8 @@ class DifferentiablePhysics : public BasePhysics {
   /// @brief Get the shape displacement FieldState
   FieldState getShapeDispFieldState() const;
 
-  /// @brief Get the current ResultantStates
-  std::vector<ResultantState> getResultantStates() const { return resultant_states_; }
+  /// @brief Get the current reactionStates
+  std::vector<ReactionState> getReactionStates() const { return reaction_states_; }
 
   /// @brief Get state advancer
   std::shared_ptr<StateAdvancer> getStateAdvancer() const { return advancer_; }
@@ -141,8 +138,7 @@ class DifferentiablePhysics : public BasePhysics {
   std::vector<FieldState> initial_field_states_;  ///< hold a copy of the initial states, mostly to have a record of
                                                   ///< initial condition sensitivities
   std::vector<FieldState> field_states_;          ///< all the states that may be changed by the StateAdvancer
-  std::vector<FieldState> field_states_old_;  ///< all the old states that were recently changed by the StateAdvancer
-  std::vector<FieldState> field_params_;      ///< all the parameters which should not be changed by the StateAdvancer
+  std::vector<FieldState> field_params_;  ///< all the parameters which should not be changed by the StateAdvancer
   std::unique_ptr<FieldState>
       field_shape_displacement_;  ///< shape displacement which is also fixed for a given simulation
 
@@ -151,18 +147,21 @@ class DifferentiablePhysics : public BasePhysics {
   std::vector<std::string> state_names_;                     ///< names of all the states in order
   std::vector<std::string> param_names_;                     ///< names of all the states in order
 
-  mutable std::vector<ResultantState> resultant_states_;             ///< all the resultants registered for the physics
-  std::map<std::string, size_t> resultant_name_to_resultant_index_;  ///< map from reaction names to resultant index
-  std::vector<std::string> resultant_names_;  ///< names for all the relevant resultants/reactions
+  mutable std::vector<ReactionState> reaction_states_;             ///< all the reactions registered for the physics
+  std::map<std::string, size_t> reaction_name_to_reaction_index_;  ///< map from reaction names to reaction index
+  std::vector<std::string> reaction_names_;                        ///< names for all the relevant reactions/reactions
 
   std::vector<gretl::Int> milestones_;  ///< a record of the steps in the graph that represent the end conditions of
                                         ///< advanceTimestep(dt). this information is used to halt the gretl graph when
                                         ///< back-propagating to allow users of reverseAdjointTimestep to specify
                                         ///< adjoint loads and to retrieve timestep sensitivity information.
 
-  double time_old_ = 0.0;
-  double dt_old_ = 0.0;
-  int cycle_old_ = 0;
+  double time_prev_ =
+      0.0;  ///< previous time, saved to reconstruct the start of step time used in computing reaction forces
+  double dt_prev_ =
+      0.0;  ///< previous time increment, saved to reconstruct the start of step time used in computing reaction forces
+  int cycle_prev_ =
+      0;  ///< previous cycle, saved to reconstruct the start of step time used in computing reaction forces
 };
 
 }  // namespace smith

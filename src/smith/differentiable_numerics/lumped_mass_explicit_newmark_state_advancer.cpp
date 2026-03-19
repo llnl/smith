@@ -13,7 +13,7 @@
 
 namespace smith {
 
-/// @brief uses the constrained docs on the bc_manager to zero the corresponding dofs in FieldState s.
+/// @brief uses the constrained dofs on the bc_manager to zero the corresponding dofs in FieldState s.
 FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryConditionManager* bc_manager)
 {
   auto s_bc = s.clone({s});
@@ -33,10 +33,9 @@ FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryCondit
   return s_bc.finalize();
 }
 
-std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(const FieldState& shape_disp,
-                                                                             const std::vector<FieldState>& states_in,
-                                                                             const std::vector<FieldState>& params,
-                                                                             const TimeInfo& time_info) const
+std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
+    const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states_in,
+    const std::vector<FieldState>& params) const
 {
   SMITH_MARK_FUNCTION;
   SLIC_ERROR_IF(states_in.size() != 3, "ExplicitNewmark is a 2nd order time integrator requiring 3 states.");
@@ -61,7 +60,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(con
     auto diag_inv = diagInverse(lumped_mass);  // should return inverse of diagonal matrix as a field state
     m_diag_inv = std::make_unique<FieldState>(diag_inv);
     auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, states, params, time_info, ACCEL);
-    auto a_initial = componentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
+    auto a_initial = negativeComponentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
     states[ACCEL] = a_initial;
   }
 
@@ -91,13 +90,14 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(con
     // zeroing out u predictor dofs associated with zero BCs
     u_pred = applyZeroBoundaryConditions(u_pred, bc_manager_.get());
     // create a vector of type FieldState called state_pred and put the u and v predictors into it
-    std::vector<FieldState> state_pred{u_pred, v_half_step, zero_copy(a)};
+    std::vector<FieldState> state_pred{u_pred, v_half_step, zeroCopy(a)};
 
     // should return the evaluation of the residual for the current state variables
-    auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, state_pred, params, time_info, ACCEL);
+    auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, state_pred, params,
+                                      TimeInfo(time.get(), time_info.dt(), time_info.cycle()), ACCEL);
 
     // m_diag_inv*zero_mass_res; // calculate the acceleration
-    auto a_pred = componentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
+    auto a_pred = negativeComponentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
 
     // update the v predictor after a predictor solves
     FieldState v_pred = v_half_step + 0.5 * (stable_dt * a_pred);

@@ -311,6 +311,26 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
   /**
    * @brief Set essential temperature boundary conditions (strongly enforced)
    *
+   * @param[in] applied_temperature The prescribed boundary temperature function
+   * @param[in] domain  The domain over which the temperature is prescribed
+   *
+   * @note This should be called prior to completeSetup()
+   */
+  template <typename AppliedTemperatureFunction>
+  void setTemperatureBCs(AppliedTemperatureFunction applied_temperature, Domain& domain)
+  {
+    auto mfem_coefficient_function = ([applied_temperature](const mfem::Vector& X_mfem, double t) {
+      auto X = make_tensor<dim>([&X_mfem](int k) { return X_mfem[k]; });
+      return applied_temperature(X, t);
+    });
+    temp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
+    auto dof_list = domain.dof_list(&temperature_.space());
+    bcs_.addEssential(dof_list, temp_bdr_coef_, temperature_.space(), 0);
+  }
+
+  /**
+   * @brief Set essential temperature boundary conditions (strongly enforced)
+   *
    * @param[in] temp_bdr The boundary attributes on which to enforce a temperature
    * @param[in] temp The prescribed boundary temperature function
    *

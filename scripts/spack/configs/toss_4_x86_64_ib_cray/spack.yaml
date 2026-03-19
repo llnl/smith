@@ -1,20 +1,8 @@
 spack:
-  config:
-    install_tree:
-      root: $spack/..
-      projections:
-        all: '{compiler.name}-{compiler.version}/{name}-{version}-{hash}'
-    misc_cache: $spack/../misc_cache
-    test_stage: $spack/../test_stage
-    build_stage::
-    - $spack/../build_stage
-
-  # Regular TPLs do not need views
-  view: false
-
   include:
   - ../defaults.yaml
   - ../versions.yaml
+
 
   toolchains:
     rocm_6_4_2:
@@ -26,6 +14,7 @@ spack:
       when: '%fortran'
     - spec: '%cray-mpich@8.1.29.rocm_6_4_2'
       when: '%mpi'
+
 
   packages:
     all:
@@ -39,7 +28,7 @@ spack:
     llvm-amdgpu:
       externals:
       - spec: llvm-amdgpu@6.4.2
-        prefix: /opt/rocm-6.4.2/llvm
+        prefix: /opt/rocm-6.4.2
         extra_attributes:
           compilers:
             c: /opt/rocm-6.4.2/llvm/bin/amdclang
@@ -316,8 +305,9 @@ spack:
     cmake:
       buildable: false
       externals:
-      - spec: cmake@3.24.2
-        prefix: /usr/tce
+      - spec: cmake@3.29.2
+        modules:
+        - cmake/3.29.2
     python:
       buildable: false
       externals:

@@ -18,15 +18,6 @@
 
 namespace smith {
 
-/// Evaluates a DoubleState using a provided ScalarObjective instance, and the input arguments to that objective. This
-/// operation is tracked on the gretl graph.  ScalarObjective must remain in scope for the
-DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const TimeInfo& time_info,
-                              const FieldState& shape_disp, const std::vector<FieldState>& inputs);
-
-/// operation is tracked on the gretl graph.
-DoubleState evaluateObjective(std::shared_ptr<ScalarObjective> objective, const FieldState& shape_disp,
-                              const std::vector<FieldState>& inputs);
-
 /// @brief Utility function to construct a smith::functional which evaluates the total kinetic energy
 template <typename DispSpace, typename DensitySpace>
 auto createKineticEnergyIntegrator(smith::Domain& domain, const mfem::ParFiniteElementSpace& velocity_space,
@@ -83,7 +74,7 @@ gretl::State<double> computeKineticEnergy(
       disp, velo, density);
 }
 
-/// testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
+/// @brief testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
 inline auto checkGradients(const gretl::State<double>& objectiveState, FieldState& inputState,
                            FiniteElementDual& inputDual, double objectiveBase, gretl::DataStore& dataStore, double eps)
 {
@@ -110,7 +101,7 @@ inline auto checkGradients(const gretl::State<double>& objectiveState, FieldStat
   return std::make_pair(directionDeriv, (objectivePlus - objectiveBase) / eps);
 }
 
-/// testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
+/// @brief testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
 inline auto checkGradients(const gretl::State<double>& objectiveState, gretl::State<double, double>& inputState,
                            double& inputDual, double objectiveBase, gretl::DataStore& dataStore, double eps)
 {

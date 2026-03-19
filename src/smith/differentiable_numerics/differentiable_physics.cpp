@@ -1,3 +1,15 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #include "gretl/data_store.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
@@ -34,11 +46,11 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
                                              const FieldState& shape_disp, const std::vector<FieldState>& states,
                                              const std::vector<FieldState>& params,
                                              std::shared_ptr<StateAdvancer> advancer, std::string mech_name,
-                                             const std::vector<std::string>& resultant_names)
+                                             const std::vector<std::string>& reaction_names)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
       advancer_(advancer),
-      resultant_names_(resultant_names)
+      reaction_names_(reaction_names)
 {
   SLIC_ERROR_IF(states.size() == 0, "Must have a least 1 state for a mechanics.");
   field_shape_displacement_ = std::make_unique<FieldState>(shape_disp);
@@ -57,8 +69,8 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
     param_names_.push_back(p.get()->name());
   }
 
-  for (size_t i = 0; i < resultant_names_.size(); ++i) {
-    resultant_name_to_resultant_index_[resultant_names_[i]] = i;
+  for (size_t i = 0; i < reaction_names_.size(); ++i) {
+    reaction_name_to_reaction_index_[reaction_names_[i]] = i;
   }
 
   completeSetup();
@@ -91,7 +103,7 @@ std::vector<std::string> DifferentiablePhysics::stateNames() const { return stat
 
 std::vector<std::string> DifferentiablePhysics::parameterNames() const { return param_names_; }
 
-std::vector<std::string> DifferentiablePhysics::dualNames() const { return resultant_names_; }
+std::vector<std::string> DifferentiablePhysics::dualNames() const { return reaction_names_; }
 
 const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const std::string& field_name) const
 {
@@ -99,25 +111,22 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
       state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
       axom::fmt::format("Could not find field named {0} in mesh with tag \"{1}\" to get", field_name, mesh_->tag()));
   size_t state_index = state_name_to_field_index_.at(field_name);
-  SLIC_ERROR_IF(state_index >= field_states_.size(),
-                "Field states not correctly allocated yet, cannot get state until after initializationStep is called.");
   return *field_states_[state_index].get();
 }
 
 const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_name) const
 {
   SLIC_ERROR_IF(
-      resultant_name_to_resultant_index_.find(dual_name) == resultant_name_to_resultant_index_.end(),
+      reaction_name_to_reaction_index_.find(dual_name) == reaction_name_to_reaction_index_.end(),
       axom::fmt::format("Could not find dual named {0} in mesh with tag \"{1}\" to get", dual_name, mesh_->tag()));
-  size_t reaction_index = resultant_name_to_resultant_index_.at(dual_name);
+  size_t reaction_index = reaction_name_to_reaction_index_.at(dual_name);
   SLIC_ERROR_IF(
-      reaction_index >= resultant_names_.size(),
+      reaction_index >= reaction_names_.size(),
       "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
 
-  TimeInfo time_info(time_old_, dt_old_, static_cast<size_t>(cycle_old_));
-  resultant_states_ = advancer_->computeResultants(*field_shape_displacement_, field_states_, field_states_old_,
-                                                   field_params_, time_info);
-  return *resultant_states_[reaction_index].get();
+  TimeInfo time_info(time_prev_, dt_prev_, static_cast<size_t>(cycle_prev_));
+  reaction_states_ = advancer_->computeReactions(time_info, *field_shape_displacement_, field_states_, field_params_);
+  return *reaction_states_[reaction_index].get();
 }
 
 FiniteElementState DifferentiablePhysics::loadCheckpointedState(const std::string& state_name, int cycle)
@@ -189,11 +198,11 @@ void DifferentiablePhysics::setDualAdjointBcs(
     std::string reaction_name = string_bc_pair.first;
     const smith::FiniteElementState& reaction_dual = string_bc_pair.second;
     SLIC_ERROR_IF(
-        resultant_name_to_resultant_index_.find(reaction_name) == resultant_name_to_resultant_index_.end(),
+        reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
         axom::fmt::format("When calling setDualAdjointBcs, could not find reaction named {0} in mesh with tag {1}",
                           reaction_name, mesh_->tag()));
-    size_t reaction_index = resultant_name_to_resultant_index_.at(reaction_name);
-    *resultant_states_[reaction_index].get_dual() += reaction_dual;
+    size_t reaction_index = reaction_name_to_reaction_index_.at(reaction_name);
+    *reaction_states_[reaction_index].get_dual() += reaction_dual;
   }
 }
 
@@ -211,13 +220,12 @@ void DifferentiablePhysics::advanceTimestep(double dt)
     milestones_.push_back(make_milestone(field_states_).step());
   }
 
-  field_states_old_ = field_states_;
-  cycle_old_ = cycle_;
-  time_old_ = time_;
-  dt_old_ = dt;
+  cycle_prev_ = cycle_;
+  time_prev_ = time_;
+  dt_prev_ = dt;
 
   TimeInfo time_info(time_, dt, static_cast<size_t>(cycle_));
-  field_states_ = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_, time_info);
+  field_states_ = advancer_->advanceState(time_info, *field_shape_displacement_, field_states_, field_params_);
 
   cycle_++;
   time_ += dt;
