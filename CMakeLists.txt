@@ -81,7 +81,7 @@ endif()
 
 # Tune BLT to our needs
 if (NOT BLT_CXX_STD)
-    set(BLT_CXX_STD "c++17" CACHE STRING "")
+    set(BLT_CXX_STD "c++20" CACHE STRING "")
 endif()
 
 # These BLT tools are not used in Smith, turn them off
