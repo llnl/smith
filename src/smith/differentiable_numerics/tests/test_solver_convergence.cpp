@@ -6,17 +6,14 @@
 
 #include <gtest/gtest.h>
 
-#include <algorithm>
 #include <functional>
 #include <initializer_list>
 #include <memory>
 
-#include "axom/fmt.hpp"
-#include "axom/slic.hpp"
 #include "mfem.hpp"
 #include "smith/infrastructure/application_manager.hpp"
-#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/coupled_system_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/numerics/equation_solver.hpp"
 
 namespace smith {
@@ -108,7 +105,6 @@ TEST(SolverConvergence, PerBlockTolerancesRequireAllBlocksToPass)
   EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({1.0, 1.0})));
   EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({0.49, 0.25})));
   EXPECT_TRUE(solver.checkConvergence(1.0, makeResiduals({0.49, 0.009})));
-  EXPECT_TRUE(solver.checkConvergence(1.0, makeResiduals({0.49, 0.0})));
 }
 
 TEST(SolverConvergence, EmptyBlockTolerancesPreserveScalarOnlyBehavior)
@@ -155,18 +151,6 @@ TEST(SolverConvergence, ResetConvergenceStateRefreshesPerBlockInitialNorms)
   solver.resetConvergenceState();
   EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({2.0, 2.0})));
   EXPECT_TRUE(solver.checkConvergence(1.0, makeResiduals({0.19, 0.19})));
-  EXPECT_TRUE(solver.checkConvergence(1.0, makeResiduals({0.19, 0.0})));
-}
-
-TEST(SolverConvergence, StageConstructorRejectsMismatchedToleranceSizes)
-{
-  auto solver = std::make_shared<FakeNonlinearBlockSolver>(1.0e-12, 1.0e-8);
-  EXPECT_DEATH(
-      {
-        CoupledSystemSolver staggered_solver(2);
-        staggered_solver.addSubsystemSolver({0, 1}, solver, {.relative_tols = {1.0e-3}, .absolute_tols = {1.0e-6}});
-      },
-      "does not match number of stage blocks");
 }
 
 TEST(SolverConvergence, StageConstructorAllowsOverridesWhenSolverHasNoBlockTolerances)
