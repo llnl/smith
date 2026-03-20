@@ -61,10 +61,10 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 /// @param bcs Boundary conditions applied to the primary unknown field.
 /// @param unknown_state_index Index of the primary unknown within @p states.
 /// @return The solved primary field.
-inline FieldState solve(const WeakForm& residual_eval, const FieldState& shape_disp, const std::vector<FieldState>& states,
-                        const std::vector<FieldState>& params, const TimeInfo& time_info,
-                        const NonlinearBlockSolverBase& solver, const DirichletBoundaryConditions& bcs,
-                        size_t unknown_state_index = 0)
+inline FieldState solve(const WeakForm& residual_eval, const FieldState& shape_disp,
+                        const std::vector<FieldState>& states, const std::vector<FieldState>& params,
+                        const TimeInfo& time_info, const NonlinearBlockSolverBase& solver,
+                        const DirichletBoundaryConditions& bcs, size_t unknown_state_index = 0)
 {
   std::vector<const BoundaryConditionManager*> bc_managers{&bcs.getBoundaryConditionManager()};
   auto solutions = block_solve({const_cast<WeakForm*>(&residual_eval)}, {{unknown_state_index}}, shape_disp, {states},

@@ -148,8 +148,8 @@ struct ExampleThermoMechanicsSystem : public smith::SystemBase {
   std::shared_ptr<smith::DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
     return std::make_shared<smith::DifferentiablePhysics>(
-        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-        advancer, std::move(physics_name),
+        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
+        getParameterFields(), advancer, std::move(physics_name),
         std::vector<std::string>{prefix("solid_force"), prefix("thermal_flux")});
   }
 
@@ -166,9 +166,9 @@ struct ExampleThermoMechanicsSystem : public smith::SystemBase {
       auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
 
       typename MaterialType::State state;
-      auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<smith::DERIVATIVE>(u_current),
-                                        get<smith::DERIVATIVE>(v_current), get<smith::VALUE>(T),
-                                        get<smith::DERIVATIVE>(T), params...);
+      auto [pk, C_v, s0, q0] =
+          material(t_info.dt(), state, get<smith::DERIVATIVE>(u_current), get<smith::DERIVATIVE>(v_current),
+                   get<smith::VALUE>(T), get<smith::DERIVATIVE>(T), params...);
       return smith::tuple{smith::zero{}, pk};
     });
 
@@ -180,9 +180,8 @@ struct ExampleThermoMechanicsSystem : public smith::SystemBase {
           auto v = captured_disp_rule->dot(t_info, disp, disp_old);
 
           typename MaterialType::State state;
-          auto [pk, C_v, s0, q0] =
-              material(t_info.dt(), state, get<smith::DERIVATIVE>(u), get<smith::DERIVATIVE>(v), get<smith::VALUE>(T_current),
-                       get<smith::DERIVATIVE>(T_current), params...);
+          auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<smith::DERIVATIVE>(u), get<smith::DERIVATIVE>(v),
+                                            get<smith::VALUE>(T_current), get<smith::DERIVATIVE>(T_current), params...);
           auto dT_dt = get<smith::VALUE>(T_dot);
           return smith::tuple{C_v * dT_dt - s0, -q0};
         });
@@ -257,7 +256,8 @@ struct ExampleThermoMechanicsSystem : public smith::SystemBase {
   template <typename BodySourceType>
   void addThermalHeatSource(const std::string& domain_name, BodySourceType source_function)
   {
-    addThermalHeatSourceAllParams(domain_name, source_function, std::make_index_sequence<4 + sizeof...(parameter_space)>{});
+    addThermalHeatSourceAllParams(domain_name, source_function,
+                                  std::make_index_sequence<4 + sizeof...(parameter_space)>{});
   }
 
   template <int... active_parameters, typename SurfaceFluxType>
@@ -372,7 +372,8 @@ ExampleThermoMechanicsSystem<d, disp_order, temp_order, parameter_space...> buil
   auto disp_time_rule = std::make_shared<smith::QuasiStaticFirstOrderTimeIntegrationRule>();
   smith::FieldType<smith::H1<disp_order, d>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  auto disp_old_type = field_store->addDependent(disp_type, smith::FieldStore::TimeDerivative::VAL, prefix("displacement"));
+  auto disp_old_type =
+      field_store->addDependent(disp_type, smith::FieldStore::TimeDerivative::VAL, prefix("displacement"));
 
   auto temperature_time_rule = std::make_shared<smith::BackwardEulerFirstOrderTimeIntegrationRule>();
   smith::FieldType<smith::H1<temp_order>> temperature_type(prefix("temperature_predicted"));
@@ -423,7 +424,14 @@ ExampleThermoMechanicsSystem<d, disp_order, temp_order, parameter_space...> buil
                                                                                           parameter_types...);
 }
 
-enum class Mode { Coupled, Heat, Elastic, Pressure, Compilation };
+enum class Mode
+{
+  Coupled,
+  Heat,
+  Elastic,
+  Pressure,
+  Compilation
+};
 
 Mode parseMode(int argc, char** argv)
 {
@@ -454,7 +462,8 @@ int runCoupled(const std::shared_ptr<smith::Mesh>& mesh)
   auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
 
   smith::FieldType<smith::L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
+  auto system =
+      buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
   system.setMaterial(material, mesh->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -469,7 +478,7 @@ int runCoupled(const std::shared_ptr<smith::Mesh>& mesh)
   system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("right"));
 
   system.addThermalHeatSource(mesh->entireBodyName(), [](auto /*t*/, auto /*x*/, auto /*u*/, auto /*v*/, auto /*T*/,
-                                                        auto /*T_dot*/, auto /*E_param*/) { return 100.0; });
+                                                         auto /*T_dot*/, auto /*E_param*/) { return 100.0; });
 
   std::string pv_dir = "paraview_thermomechanics";
   auto pv_writer = smith::createParaviewWriter(*mesh, system.getStateFields(), pv_dir);
@@ -513,7 +522,8 @@ int runTransientHeatAnalytic(const std::shared_ptr<smith::Mesh>& mesh)
 
   auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
   smith::FieldType<smith::L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
+  auto system =
+      buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
   system.setMaterial(material, mesh->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -523,7 +533,8 @@ int runTransientHeatAnalytic(const std::shared_ptr<smith::Mesh>& mesh)
   system.temperature_bc->setScalarBCs<dim>(mesh->domain("left"), [](double, auto) { return 100.0; });
   system.temperature_bc->setScalarBCs<dim>(mesh->domain("right"), [](double, auto) { return 100.0; });
 
-  auto& temp_field = const_cast<smith::FiniteElementState&>(*system.field_store->getField("temperature_predicted").get());
+  auto& temp_field =
+      const_cast<smith::FiniteElementState&>(*system.field_store->getField("temperature_predicted").get());
   temp_field.setFromFieldFunction([](smith::tensor<double, dim> x) { return 100.0 + std::sin(M_PI * x[0]); });
   const_cast<smith::FiniteElementState&>(*system.field_store->getField("temperature").get()) = temp_field;
 
@@ -570,7 +581,8 @@ int runStaticElasticityAnalytic(const std::shared_ptr<smith::Mesh>& mesh)
 
   auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
   smith::FieldType<smith::H1<1>> youngs_modulus("youngs_modulus");
-  auto system = buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
+  auto system =
+      buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
   system.setMaterial(material, mesh->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -587,7 +599,8 @@ int runStaticElasticityAnalytic(const std::shared_ptr<smith::Mesh>& mesh)
   G[2][2] = 0.015;
 
   auto u_exact_func = [G](auto X) { return dot(G, X); };
-  system.disp_bc->setVectorBCs<dim>(mesh->entireBoundary(), [=](double, smith::tensor<double, dim> X) { return u_exact_func(X); });
+  system.disp_bc->setVectorBCs<dim>(mesh->entireBoundary(),
+                                    [=](double, smith::tensor<double, dim> X) { return u_exact_func(X); });
   system.temperature_bc->setFixedScalarBCs<dim>(mesh->entireBoundary());
 
   double dt = 1.0;
@@ -602,8 +615,8 @@ int runStaticElasticityAnalytic(const std::shared_ptr<smith::Mesh>& mesh)
   auto disp_idx = system.field_store->getFieldIndex("displacement_predicted");
   smith::FieldState final_disp = states[disp_idx];
 
-  smith::FunctionalObjective<dim, smith::Parameters<smith::H1<displacement_order, vdim>>> error_obj("error", mesh,
-                                                                                                    smith::spaces({final_disp}));
+  smith::FunctionalObjective<dim, smith::Parameters<smith::H1<displacement_order, vdim>>> error_obj(
+      "error", mesh, smith::spaces({final_disp}));
   error_obj.addBodyIntegral(smith::DependsOn<0>{}, mesh->entireBodyName(), [=](auto /*t*/, auto X, auto U) {
     auto u_val = get<smith::VALUE>(U);
     auto x_val = get<0>(X);
@@ -611,9 +624,8 @@ int runStaticElasticityAnalytic(const std::shared_ptr<smith::Mesh>& mesh)
     return smith::inner(u_val - exact, u_val - exact);
   });
 
-  double l2_error_sq =
-      error_obj.evaluate(smith::TimeInfo(time + dt, dt, 0), shape_disp.get().get(),
-                         smith::getConstFieldPointers({final_disp}));
+  double l2_error_sq = error_obj.evaluate(smith::TimeInfo(time + dt, dt, 0), shape_disp.get().get(),
+                                          smith::getConstFieldPointers({final_disp}));
   double l2_error = std::sqrt(l2_error_sq);
 
   std::cout << "Static Elasticity L2 Error (affine patch test): " << l2_error << "\n";
@@ -631,7 +643,8 @@ int runPressureBC(const std::shared_ptr<smith::Mesh>& mesh)
 
   auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
   smith::FieldType<smith::L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
+  auto system =
+      buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
   system.setMaterial(material, mesh->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
@@ -675,17 +688,17 @@ int runCompilationOnly(const std::shared_ptr<smith::Mesh>& mesh)
   auto solver = smith::buildNonlinearBlockSolver(fast_nonlinear_opts, linear_options, *mesh);
 
   smith::FieldType<smith::L2<0>> youngs_modulus("youngs_modulus");
-  auto system = buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
+  auto system =
+      buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
   system.setMaterial(material, mesh->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
 
-  system.addSolidBodyForce(mesh->entireBodyName(),
-                           [](double, auto, auto, auto, auto, auto, auto...) {
-                             smith::tensor<double, dim> f{};
-                             f[1] = -9.81;
-                             return f;
-                           });
+  system.addSolidBodyForce(mesh->entireBodyName(), [](double, auto, auto, auto, auto, auto, auto...) {
+    smith::tensor<double, dim> f{};
+    f[1] = -9.81;
+    return f;
+  });
 
   system.addSolidTraction("right", [](double, auto, auto, auto, auto, auto, auto, auto...) {
     smith::tensor<double, dim> t{};
@@ -693,7 +706,8 @@ int runCompilationOnly(const std::shared_ptr<smith::Mesh>& mesh)
     return t;
   });
 
-  system.addThermalHeatSource(mesh->entireBodyName(), [](double, auto, auto, auto, auto, auto, auto...) { return 10.0; });
+  system.addThermalHeatSource(mesh->entireBodyName(),
+                              [](double, auto, auto, auto, auto, auto, auto...) { return 10.0; });
 
   system.addThermalHeatFlux("left", [](double, auto, auto, auto, auto, auto, auto, auto...) { return 5.0; });
 

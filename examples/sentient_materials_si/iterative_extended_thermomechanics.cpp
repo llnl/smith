@@ -136,8 +136,8 @@ struct GreenSaintVenantThermoelasticWithExtendedStateMaterial {
   }
 
   template <typename T1, typename T2, typename T3, typename T4, typename T5, int d, int sd>
-  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const smith::tensor<T2, d, d>& grad_v, T3 theta,
-                  const smith::tensor<T4, d>& grad_theta, const smith::tensor<T5, sd>& alpha_old) const
+  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const smith::tensor<T2, d, d>& grad_v,
+                  T3 theta, const smith::tensor<T4, d>& grad_theta, const smith::tensor<T5, sd>& alpha_old) const
   {
     auto [w_old, F_old] = StateDemuxer<T5, d, sd>(alpha_old);
 
@@ -204,9 +204,9 @@ int runIterativeCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh)
     }
   };
 
-  auto system =
-      smith::buildIterativeExtendedThermoMechanicsSystem<dim, displacement_order, temperature_order, ExtendedStateSpace>(
-          mesh, solid_solver, thermal_solver, state_solver, update_rule, "");
+  auto system = smith::buildIterativeExtendedThermoMechanicsSystem<dim, displacement_order, temperature_order,
+                                                                   ExtendedStateSpace>(
+      mesh, solid_solver, thermal_solver, state_solver, update_rule, "");
 
   system.setMaterial(material, mesh->entireBodyName());
 
@@ -222,7 +222,8 @@ int runIterativeCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh)
                               [](double, auto, auto, auto, auto, auto, auto, auto, auto...) { return 0.0; });
 
   // Initialize displacement fields (avoid solver starting from uninitialized/NaN values).
-  auto& disp_pred = const_cast<smith::FiniteElementState&>(*system.field_store->getField("displacement_predicted").get());
+  auto& disp_pred =
+      const_cast<smith::FiniteElementState&>(*system.field_store->getField("displacement_predicted").get());
   disp_pred.setFromFieldFunction([](smith::tensor<double, dim>) { return smith::tensor<double, dim>{}; });
   const_cast<smith::FiniteElementState&>(*system.field_store->getField("displacement").get()) = disp_pred;
 

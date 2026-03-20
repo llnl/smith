@@ -79,11 +79,7 @@ class IterativeExtendedThermoMechanicsTimeIntegrator : public StateAdvancer {
    public:
     Context(const IterativeExtendedThermoMechanicsTimeIntegrator& integrator, const TimeInfo& time_info,
             const FieldState& shape_disp, std::vector<FieldState>& states, const std::vector<FieldState>& params)
-        : integrator_(integrator),
-          time_info_(time_info),
-          shape_disp_(shape_disp),
-          states_(states),
-          params_(params)
+        : integrator_(integrator), time_info_(time_info), shape_disp_(shape_disp), states_(states), params_(params)
     {
     }
 
@@ -92,7 +88,10 @@ class IterativeExtendedThermoMechanicsTimeIntegrator : public StateAdvancer {
     std::vector<FieldState>& states() { return states_; }
     const std::vector<FieldState>& params() const { return params_; }
 
-    void solveSolid(double relaxation = 1.0) { integrator_.solveSolid(time_info_, shape_disp_, states_, params_, relaxation); }
+    void solveSolid(double relaxation = 1.0)
+    {
+      integrator_.solveSolid(time_info_, shape_disp_, states_, params_, relaxation);
+    }
     void solveThermal(double relaxation = 1.0)
     {
       integrator_.solveThermal(time_info_, shape_disp_, states_, params_, relaxation);
@@ -203,8 +202,8 @@ class IterativeExtendedThermoMechanicsTimeIntegrator : public StateAdvancer {
                   const std::vector<FieldState>& params, double relaxation) const
   {
     std::vector<FieldState> wf_states{states[indices_.displacement_pred], states[indices_.displacement_old],
-                                      states[indices_.temperature_pred], states[indices_.temperature_old],
-                                      states[indices_.state_pred], states[indices_.state_old]};
+                                      states[indices_.temperature_pred],  states[indices_.temperature_old],
+                                      states[indices_.state_pred],        states[indices_.state_old]};
 
     FieldState sol =
         smith::solve(*weak_forms_.solid, shape_disp, wf_states, params, time_info, *solvers_.solid, *bcs_.displacement);
@@ -217,12 +216,12 @@ class IterativeExtendedThermoMechanicsTimeIntegrator : public StateAdvancer {
   void solveThermal(const TimeInfo& time_info, const FieldState& shape_disp, std::vector<FieldState>& states,
                     const std::vector<FieldState>& params, double relaxation) const
   {
-    std::vector<FieldState> wf_states{states[indices_.temperature_pred], states[indices_.temperature_old],
+    std::vector<FieldState> wf_states{states[indices_.temperature_pred],  states[indices_.temperature_old],
                                       states[indices_.displacement_pred], states[indices_.displacement_old],
-                                      states[indices_.state_pred], states[indices_.state_old]};
+                                      states[indices_.state_pred],        states[indices_.state_old]};
 
-    FieldState sol =
-        smith::solve(*weak_forms_.thermal, shape_disp, wf_states, params, time_info, *solvers_.thermal, *bcs_.temperature);
+    FieldState sol = smith::solve(*weak_forms_.thermal, shape_disp, wf_states, params, time_info, *solvers_.thermal,
+                                  *bcs_.temperature);
     if (relaxation != 1.0) {
       sol = smith::weighted_average(sol, states[indices_.temperature_pred], relaxation);
     }
@@ -232,9 +231,9 @@ class IterativeExtendedThermoMechanicsTimeIntegrator : public StateAdvancer {
   void solveState(const TimeInfo& time_info, const FieldState& shape_disp, std::vector<FieldState>& states,
                   const std::vector<FieldState>& params, double relaxation) const
   {
-    std::vector<FieldState> wf_states{states[indices_.state_pred], states[indices_.state_old],
+    std::vector<FieldState> wf_states{states[indices_.state_pred],        states[indices_.state_old],
                                       states[indices_.displacement_pred], states[indices_.displacement_old],
-                                      states[indices_.temperature_pred], states[indices_.temperature_old]};
+                                      states[indices_.temperature_pred],  states[indices_.temperature_old]};
 
     FieldState sol =
         smith::solve(*weak_forms_.state, shape_disp, wf_states, params, time_info, *solvers_.state, *bcs_.state);
@@ -257,20 +256,20 @@ class IterativeExtendedThermoMechanicsTimeIntegrator : public StateAdvancer {
  */
 template <int dim, int disp_order, int temp_order, typename StateSpace, typename... parameter_space>
 struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
-  using SolidWeakFormType = TimeDiscretizedWeakForm<
-      dim, H1<disp_order, dim>,
-      Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<temp_order>, H1<temp_order>, StateSpace, StateSpace,
-                 parameter_space...>>;
+  using SolidWeakFormType =
+      TimeDiscretizedWeakForm<dim, H1<disp_order, dim>,
+                              Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<temp_order>, H1<temp_order>,
+                                         StateSpace, StateSpace, parameter_space...>>;
 
-  using ThermalWeakFormType = TimeDiscretizedWeakForm<
-      dim, H1<temp_order>,
-      Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>, StateSpace, StateSpace,
-                 parameter_space...>>;
+  using ThermalWeakFormType =
+      TimeDiscretizedWeakForm<dim, H1<temp_order>,
+                              Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>,
+                                         StateSpace, StateSpace, parameter_space...>>;
 
-  using StateWeakFormType = TimeDiscretizedWeakForm<
-      dim, StateSpace,
-      Parameters<StateSpace, StateSpace, H1<disp_order, dim>, H1<disp_order, dim>, H1<temp_order>, H1<temp_order>,
-                 parameter_space...>>;
+  using StateWeakFormType =
+      TimeDiscretizedWeakForm<dim, StateSpace,
+                              Parameters<StateSpace, StateSpace, H1<disp_order, dim>, H1<disp_order, dim>,
+                                         H1<temp_order>, H1<temp_order>, parameter_space...>>;
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;
   std::shared_ptr<ThermalWeakFormType> thermal_weak_form;
@@ -286,19 +285,16 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
 
   std::vector<FieldState> getStateFields() const
   {
-    return {field_store->getField(prefix("displacement_predicted")),
-            field_store->getField(prefix("displacement")),
-            field_store->getField(prefix("temperature_predicted")),
-            field_store->getField(prefix("temperature")),
-            field_store->getField(prefix("state_predicted")),
-            field_store->getField(prefix("state"))};
+    return {field_store->getField(prefix("displacement_predicted")), field_store->getField(prefix("displacement")),
+            field_store->getField(prefix("temperature_predicted")),  field_store->getField(prefix("temperature")),
+            field_store->getField(prefix("state_predicted")),        field_store->getField(prefix("state"))};
   }
 
   std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
     return std::make_shared<DifferentiablePhysics>(
-        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-        advancer, std::move(physics_name),
+        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
+        getParameterFields(), advancer, std::move(physics_name),
         std::vector<std::string>{prefix("solid_force"), prefix("thermal_flux"), prefix("state_residual")});
   }
 
@@ -310,8 +306,8 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
     auto captured_state_rule = state_time_rule;
 
     solid_weak_form->addBodyIntegral(
-        domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto temperature, auto temperature_old, auto /*alpha*/,
-                         auto alpha_old, auto... params) {
+        domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto temperature, auto temperature_old,
+                         auto /*alpha*/, auto alpha_old, auto... params) {
           auto u_current = captured_disp_rule->value(t_info, u, u_old);
           auto v_current = captured_disp_rule->dot(t_info, u, u_old);
           auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
@@ -324,40 +320,37 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
           return smith::tuple{zero{}, pk};
         });
 
-    thermal_weak_form->addBodyIntegral(
-        domain_name,
-        [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp, auto disp_old, auto /*alpha*/, auto alpha_old,
-            auto... params) {
-          auto T_current = captured_temp_rule->value(t_info, T, T_old);
-          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-          auto u = captured_disp_rule->value(t_info, disp, disp_old);
-          auto v = captured_disp_rule->dot(t_info, disp, disp_old);
+    thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp,
+                                                        auto disp_old, auto /*alpha*/, auto alpha_old, auto... params) {
+      auto T_current = captured_temp_rule->value(t_info, T, T_old);
+      auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
+      auto u = captured_disp_rule->value(t_info, disp, disp_old);
+      auto v = captured_disp_rule->dot(t_info, disp, disp_old);
 
-          typename MaterialType::State state;
-          auto [pk, C_v, s0, q0, alpha_new] =
-              material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T_current),
-                       get<DERIVATIVE>(T_current), get<VALUE>(alpha_old), params...);
+      typename MaterialType::State state;
+      auto [pk, C_v, s0, q0, alpha_new] =
+          material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T_current),
+                   get<DERIVATIVE>(T_current), get<VALUE>(alpha_old), params...);
 
-          auto dT_dt = get<VALUE>(T_dot);
-          return smith::tuple{C_v * dT_dt - s0, -q0};
-        });
+      auto dT_dt = get<VALUE>(T_dot);
+      return smith::tuple{C_v * dT_dt - s0, -q0};
+    });
 
-    state_weak_form->addBodyIntegral(
-        domain_name, [=](auto t_info, auto /*X*/, auto alpha, auto alpha_old, auto disp, auto disp_old, auto T,
-                         auto T_old, auto... params) {
-          auto T_current = captured_temp_rule->value(t_info, T, T_old);
-          auto u = captured_disp_rule->value(t_info, disp, disp_old);
-          auto v = captured_disp_rule->dot(t_info, disp, disp_old);
+    state_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto alpha, auto alpha_old, auto disp,
+                                                      auto disp_old, auto T, auto T_old, auto... params) {
+      auto T_current = captured_temp_rule->value(t_info, T, T_old);
+      auto u = captured_disp_rule->value(t_info, disp, disp_old);
+      auto v = captured_disp_rule->dot(t_info, disp, disp_old);
 
-          typename MaterialType::State state;
-          auto [pk, C_v, s0, q0, alpha_new] =
-              material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T_current),
-                       get<DERIVATIVE>(T_current), get<VALUE>(alpha_old), params...);
+      typename MaterialType::State state;
+      auto [pk, C_v, s0, q0, alpha_new] =
+          material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T_current),
+                   get<DERIVATIVE>(T_current), get<VALUE>(alpha_old), params...);
 
-          using FluxType = std::decay_t<decltype(get<DERIVATIVE>(alpha))>;
-          FluxType flux{};
-          return smith::tuple{get<VALUE>(alpha) - alpha_new, flux};
-        });
+      using FluxType = std::decay_t<decltype(get<DERIVATIVE>(alpha))>;
+      FluxType flux{};
+      return smith::tuple{get<VALUE>(alpha) - alpha_new, flux};
+    });
   }
 
   template <int... active_parameters, typename BodyForceType>
@@ -368,20 +361,19 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
     auto captured_temp_rule = temperature_time_rule;
     auto captured_state_rule = state_time_rule;
 
-    solid_weak_form->addBodySource(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto temperature, auto temperature_old, auto alpha, auto alpha_old,
-            auto... params) {
-          auto u_current = captured_disp_rule->value(t_info, u, u_old);
-          auto v_current = captured_disp_rule->dot(t_info, u, u_old);
-          auto T_current = captured_temp_rule->value(t_info, temperature, temperature_old);
-          auto T_dot = captured_temp_rule->dot(t_info, temperature, temperature_old);
-          auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
-          auto alpha_dot = captured_state_rule->dot(t_info, alpha, alpha_old);
+    solid_weak_form->addBodySource(depends_on, domain_name,
+                                   [=](auto t_info, auto X, auto u, auto u_old, auto temperature, auto temperature_old,
+                                       auto alpha, auto alpha_old, auto... params) {
+                                     auto u_current = captured_disp_rule->value(t_info, u, u_old);
+                                     auto v_current = captured_disp_rule->dot(t_info, u, u_old);
+                                     auto T_current = captured_temp_rule->value(t_info, temperature, temperature_old);
+                                     auto T_dot = captured_temp_rule->dot(t_info, temperature, temperature_old);
+                                     auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
+                                     auto alpha_dot = captured_state_rule->dot(t_info, alpha, alpha_old);
 
-          return force_function(t_info.time(), X, u_current, v_current, T_current, T_dot, alpha_current, alpha_dot,
-                                params...);
-        });
+                                     return force_function(t_info.time(), X, u_current, v_current, T_current, T_dot,
+                                                           alpha_current, alpha_dot, params...);
+                                   });
   }
 
   template <typename BodyForceType>
@@ -398,20 +390,19 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
     auto captured_temp_rule = temperature_time_rule;
     auto captured_state_rule = state_time_rule;
 
-    solid_weak_form->addBoundaryFlux(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto n, auto u, auto u_old, auto temperature, auto temperature_old, auto alpha,
-            auto alpha_old, auto... params) {
-          auto u_current = captured_disp_rule->value(t_info, u, u_old);
-          auto v_current = captured_disp_rule->dot(t_info, u, u_old);
-          auto T_current = captured_temp_rule->value(t_info, temperature, temperature_old);
-          auto T_dot = captured_temp_rule->dot(t_info, temperature, temperature_old);
-          auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
-          auto alpha_dot = captured_state_rule->dot(t_info, alpha, alpha_old);
+    solid_weak_form->addBoundaryFlux(depends_on, domain_name,
+                                     [=](auto t_info, auto X, auto n, auto u, auto u_old, auto temperature,
+                                         auto temperature_old, auto alpha, auto alpha_old, auto... params) {
+                                       auto u_current = captured_disp_rule->value(t_info, u, u_old);
+                                       auto v_current = captured_disp_rule->dot(t_info, u, u_old);
+                                       auto T_current = captured_temp_rule->value(t_info, temperature, temperature_old);
+                                       auto T_dot = captured_temp_rule->dot(t_info, temperature, temperature_old);
+                                       auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
+                                       auto alpha_dot = captured_state_rule->dot(t_info, alpha, alpha_old);
 
-          return flux_function(t_info.time(), X, n, u_current, v_current, T_current, T_dot, alpha_current, alpha_dot,
-                               params...);
-        });
+                                       return flux_function(t_info.time(), X, n, u_current, v_current, T_current, T_dot,
+                                                            alpha_current, alpha_dot, params...);
+                                     });
   }
 
   template <typename SurfaceFluxType>
@@ -428,20 +419,19 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
     auto captured_temp_rule = temperature_time_rule;
     auto captured_state_rule = state_time_rule;
 
-    thermal_weak_form->addBodySource(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto T, auto T_old, auto disp, auto disp_old, auto alpha, auto alpha_old,
-            auto... params) {
-          auto u_current = captured_disp_rule->value(t_info, disp, disp_old);
-          auto v_current = captured_disp_rule->dot(t_info, disp, disp_old);
-          auto T_current = captured_temp_rule->value(t_info, T, T_old);
-          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-          auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
-          auto alpha_dot = captured_state_rule->dot(t_info, alpha, alpha_old);
+    thermal_weak_form->addBodySource(depends_on, domain_name,
+                                     [=](auto t_info, auto X, auto T, auto T_old, auto disp, auto disp_old, auto alpha,
+                                         auto alpha_old, auto... params) {
+                                       auto u_current = captured_disp_rule->value(t_info, disp, disp_old);
+                                       auto v_current = captured_disp_rule->dot(t_info, disp, disp_old);
+                                       auto T_current = captured_temp_rule->value(t_info, T, T_old);
+                                       auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
+                                       auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
+                                       auto alpha_dot = captured_state_rule->dot(t_info, alpha, alpha_old);
 
-          return source_function(t_info.time(), X, u_current, v_current, T_current, T_dot, alpha_current, alpha_dot,
-                                 params...);
-        });
+                                       return source_function(t_info.time(), X, u_current, v_current, T_current, T_dot,
+                                                              alpha_current, alpha_dot, params...);
+                                     });
   }
 
   template <typename BodySourceType>
@@ -459,20 +449,19 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
     auto captured_temp_rule = temperature_time_rule;
     auto captured_state_rule = state_time_rule;
 
-    thermal_weak_form->addBoundaryFlux(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto n, auto T, auto T_old, auto disp, auto disp_old, auto alpha, auto alpha_old,
-            auto... params) {
-          auto u_current = captured_disp_rule->value(t_info, disp, disp_old);
-          auto v_current = captured_disp_rule->dot(t_info, disp, disp_old);
-          auto T_current = captured_temp_rule->value(t_info, T, T_old);
-          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-          auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
-          auto alpha_dot = captured_state_rule->dot(t_info, alpha, alpha_old);
+    thermal_weak_form->addBoundaryFlux(depends_on, domain_name,
+                                       [=](auto t_info, auto X, auto n, auto T, auto T_old, auto disp, auto disp_old,
+                                           auto alpha, auto alpha_old, auto... params) {
+                                         auto u_current = captured_disp_rule->value(t_info, disp, disp_old);
+                                         auto v_current = captured_disp_rule->dot(t_info, disp, disp_old);
+                                         auto T_current = captured_temp_rule->value(t_info, T, T_old);
+                                         auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
+                                         auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
+                                         auto alpha_dot = captured_state_rule->dot(t_info, alpha, alpha_old);
 
-          return -flux_function(t_info.time(), X, n, u_current, v_current, T_current, T_dot, alpha_current, alpha_dot,
-                                params...);
-        });
+                                         return -flux_function(t_info.time(), X, n, u_current, v_current, T_current,
+                                                               T_dot, alpha_current, alpha_dot, params...);
+                                       });
   }
 
   template <typename SurfaceFluxType>
@@ -504,9 +493,8 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
           auto n_deformed = cross(get<DERIVATIVE>(x_current));
           auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
 
-          auto pressure =
-              pressure_function(t_info.time(), get<VALUE>(X), u_current, v_current, T_current, T_dot, alpha_current,
-                                alpha_dot, get<VALUE>(params)...);
+          auto pressure = pressure_function(t_info.time(), get<VALUE>(X), u_current, v_current, T_current, T_dot,
+                                            alpha_current, alpha_dot, get<VALUE>(params)...);
 
           return pressure * n_deformed * (1.0 / n_shape_norm);
         });
@@ -556,11 +544,13 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
 
 template <int dim, int disp_order, int temp_order, typename StateSpace, typename... parameter_space>
 IterativeExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter_space...>
-buildIterativeExtendedThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<NonlinearBlockSolverBase> solid_solver,
-    std::shared_ptr<NonlinearBlockSolverBase> thermal_solver, std::shared_ptr<NonlinearBlockSolverBase> state_solver,
-    IterativeExtendedThermoMechanicsTimeIntegrator::UpdateRule update_rule, std::string prepend_name = "",
-    FieldType<parameter_space>... parameter_types)
+buildIterativeExtendedThermoMechanicsSystem(std::shared_ptr<Mesh> mesh,
+                                            std::shared_ptr<NonlinearBlockSolverBase> solid_solver,
+                                            std::shared_ptr<NonlinearBlockSolverBase> thermal_solver,
+                                            std::shared_ptr<NonlinearBlockSolverBase> state_solver,
+                                            IterativeExtendedThermoMechanicsTimeIntegrator::UpdateRule update_rule,
+                                            std::string prepend_name = "",
+                                            FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
@@ -595,28 +585,31 @@ buildIterativeExtendedThermoMechanicsSystem(
   (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
 
   std::string solid_force_name = prefix("solid_force");
-  auto solid_weak_form = std::make_shared<
-      typename IterativeExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter_space...>::SolidWeakFormType>(
-      solid_force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
-      field_store->createSpaces(solid_force_name, disp_type.name, disp_type, disp_old_type, temperature_type,
-                                temperature_old_type, state_type, state_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+  auto solid_weak_form =
+      std::make_shared<typename IterativeExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace,
+                                                                       parameter_space...>::SolidWeakFormType>(
+          solid_force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
+          field_store->createSpaces(solid_force_name, disp_type.name, disp_type, disp_old_type, temperature_type,
+                                    temperature_old_type, state_type, state_old_type,
+                                    FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   std::string thermal_flux_name = prefix("thermal_flux");
-  auto thermal_weak_form = std::make_shared<
-      typename IterativeExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter_space...>::ThermalWeakFormType>(
-      thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
-      field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
-                                disp_type, disp_old_type, state_type, state_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+  auto thermal_weak_form =
+      std::make_shared<typename IterativeExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace,
+                                                                       parameter_space...>::ThermalWeakFormType>(
+          thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
+          field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
+                                    disp_type, disp_old_type, state_type, state_old_type,
+                                    FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   std::string state_residual_name = prefix("state_residual");
-  auto state_weak_form = std::make_shared<
-      typename IterativeExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter_space...>::StateWeakFormType>(
-      state_residual_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
-      field_store->createSpaces(state_residual_name, state_type.name, state_type, state_old_type, disp_type, disp_old_type,
-                                temperature_type, temperature_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+  auto state_weak_form =
+      std::make_shared<typename IterativeExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace,
+                                                                       parameter_space...>::StateWeakFormType>(
+          state_residual_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
+          field_store->createSpaces(state_residual_name, state_type.name, state_type, state_old_type, disp_type,
+                                    disp_old_type, temperature_type, temperature_old_type,
+                                    FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   IterativeExtendedThermoMechanicsTimeIntegrator::Indices indices{
       .displacement_pred = field_store->getFieldIndex(disp_type.name),
@@ -631,9 +624,9 @@ buildIterativeExtendedThermoMechanicsSystem(
       field_store,
       IterativeExtendedThermoMechanicsTimeIntegrator::WeakForms{solid_weak_form, thermal_weak_form, state_weak_form},
       IterativeExtendedThermoMechanicsTimeIntegrator::Solvers{std::move(solid_solver), std::move(thermal_solver),
-                                                             std::move(state_solver)},
-      IterativeExtendedThermoMechanicsTimeIntegrator::Bcs{disp_bc, temperature_bc, state_bc},
-      indices, std::move(update_rule));
+                                                              std::move(state_solver)},
+      IterativeExtendedThermoMechanicsTimeIntegrator::Bcs{disp_bc, temperature_bc, state_bc}, indices,
+      std::move(update_rule));
 
   return IterativeExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter_space...>{
       {field_store, nullptr, advancer, parameter_fields, prepend_name},

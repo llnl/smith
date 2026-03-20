@@ -324,8 +324,7 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
               -load_function(t.time(), get<VALUE>(X),
                              get<VALUE>(time_rule.value(t, U, U_old, U_dot_old, U_dot_dot_old)),
                              get<VALUE>(time_rule.dot(t, U, U_old, U_dot_old, U_dot_dot_old)),
-                             get<VALUE>(time_rule.ddot(t, U, U_old, U_dot_old, U_dot_dot_old)),
-                             get<VALUE>(inputs)...),
+                             get<VALUE>(time_rule.ddot(t, U, U_old, U_dot_old, U_dot_dot_old)), get<VALUE>(inputs)...),
               smith::zero{}};
         });
     final_reaction_weak_form_->addBodyIntegral(
