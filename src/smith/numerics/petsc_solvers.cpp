@@ -6,6 +6,7 @@
 
 #include "smith/numerics/petsc_solvers.hpp"
 
+#include <cmath>
 #include <unordered_map>
 
 #include "smith/infrastructure/logger.hpp"
@@ -856,6 +857,40 @@ PetscErrorCode linesearchPreCheckBackoffOnNan(SNESLineSearch linesearch, Vec X, 
   PetscFunctionReturn(PETSC_SUCCESS);
 }
 
+PetscErrorCode snesConvergenceGlobalOrBlock(SNES snes, PetscInt it, PetscReal xnorm, PetscReal snorm, PetscReal fnorm,
+                                            SNESConvergedReason* reason, void* ctx)
+{
+  auto* solver = static_cast<PetscNewtonSolver*>(ctx);
+  if (!solver->convergence_manager_ || !solver->convergence_manager_->blockPathEnabled()) {
+    return SNESConvergedDefault(snes, it, xnorm, snorm, fnorm, reason, nullptr);
+  }
+
+  Vec residual;
+  PetscCall(SNESGetFunction(snes, &residual, nullptr, nullptr));
+
+  const PetscScalar* residual_data = nullptr;
+  PetscInt local_size = 0;
+  PetscCall(VecGetLocalSize(residual, &local_size));
+  PetscCall(VecGetArrayRead(residual, &residual_data));
+  mfem::Vector residual_view(const_cast<PetscScalar*>(residual_data), local_size);
+  auto status = solver->convergence_manager_->evaluate(1.0, residual_view);
+  PetscCall(VecRestoreArrayRead(residual, &residual_data));
+
+  if (!std::isfinite(status.global_norm)) {
+    *reason = SNES_DIVERGED_FNORM_NAN;
+  } else if (it < solver->nonlinear_options_.min_iterations) {
+    *reason = SNES_CONVERGED_ITERATING;
+  } else if (status.converged) {
+    *reason = SNES_CONVERGED_FNORM_ABS;
+  } else if (it >= solver->max_iter) {
+    *reason = SNES_DIVERGED_MAX_IT;
+  } else {
+    *reason = SNES_CONVERGED_ITERATING;
+  }
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
 PetscNewtonSolver::PetscNewtonSolver(MPI_Comm comm_, SNESType snes_type, SNESLineSearchType linesearch_type,
                                      const std::string& prefix)
     : mfem::NewtonSolver(comm_),
@@ -914,6 +949,16 @@ void PetscNewtonSolver::SetTolerances()
                                                           abs_ls_tol, PETSC_DEFAULT, max_ls_iters));
     // ensure we don't fail immediately if a nan occurs
     PetscCallAbort(GetComm(), SNESLineSearchSetPreCheck(linesearch, linesearchPreCheckBackoffOnNan, nullptr));
+  }
+  ConfigureConvergenceTest();
+}
+
+void PetscNewtonSolver::ConfigureConvergenceTest()
+{
+  if (convergence_manager_ && convergence_manager_->blockPathEnabled()) {
+    PetscCallAbort(GetComm(), SNESSetConvergenceTest(*this, snesConvergenceGlobalOrBlock, this, nullptr));
+  } else {
+    PetscCallAbort(GetComm(), SNESSetConvergenceTest(*this, SNESConvergedDefault, nullptr, nullptr));
   }
 }
 
@@ -986,6 +1031,14 @@ void PetscNewtonSolver::SetOperator(const mfem::Operator& op)
   SetTolerances();
   clcustom = false;
   Customize();
+}
+
+void PetscNewtonSolver::setConvergenceManager(std::shared_ptr<EquationSolverConvergenceManager> convergence_manager)
+{
+  convergence_manager_ = std::move(convergence_manager);
+  if (operatorset) {
+    ConfigureConvergenceTest();
+  }
 }
 
 void PetscNewtonSolver::Mult(const mfem::Vector& b, mfem::Vector& x) const

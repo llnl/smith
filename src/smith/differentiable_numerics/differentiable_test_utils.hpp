@@ -15,6 +15,7 @@
 #include "gretl/double_state.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/physics/scalar_objective.hpp"
+#include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 
 namespace smith {
 
@@ -131,15 +132,15 @@ inline double checkGradWrt(const gretl::State<double>& objective, smith::FieldSt
   gretl::set_as_objective(objective);
   graph.back_prop();
 
-  auto dual_vec = *input.get_dual();
+  auto dual_vec = input.get_dual();
 
   std::vector<double> grad_errors;
-  auto [grad, grad_fd] = checkGradients(objective, input, dual_vec, objectiveBase, graph, eps);
+  auto [grad, grad_fd] = checkGradients(objective, input, *dual_vec, objectiveBase, graph, eps);
   grad_errors.push_back(std::abs(grad - grad_fd));
 
   for (size_t step = 1; step < num_fd_steps; ++step) {
     eps /= 2;
-    std::tie(grad, grad_fd) = checkGradients(objective, input, dual_vec, objectiveBase, graph, eps);
+    std::tie(grad, grad_fd) = checkGradients(objective, input, *dual_vec, objectiveBase, graph, eps);
     if (printmore) std::cout << "grad    = " << grad << "\ngrad fd = " << grad_fd << std::endl;
     grad_errors.push_back(std::abs(grad - grad_fd));
   }

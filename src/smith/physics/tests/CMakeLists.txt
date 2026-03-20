@@ -29,12 +29,9 @@ set(physics_serial_test_sources
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
-    test_solid_weak_form.cpp
-    test_heat_weak_form.cpp
     test_functional_weak_form.cpp
     thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
-    test_kinematic_objective.cpp
     )
 
 if (TRIBOL_FOUND)

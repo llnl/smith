@@ -4,20 +4,12 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-// Copyright (c) Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
-// details.
-//
-// SPDX-License-Identifier: (BSD-3-Clause)
-
 #include "gretl/data_store.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/mesh.hpp"
-#include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
-#include "gretl/data_store.hpp"
 #include "gretl/upstream_state.hpp"
 
 namespace smith {
@@ -121,12 +113,14 @@ const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_nam
       reaction_name_to_reaction_index_.find(dual_name) == reaction_name_to_reaction_index_.end(),
       axom::fmt::format("Could not find dual named {0} in mesh with tag \"{1}\" to get", dual_name, mesh_->tag()));
   size_t reaction_index = reaction_name_to_reaction_index_.at(dual_name);
+
+  SLIC_ERROR_IF(reaction_states_.empty() && !reaction_names_.empty(),
+                "Reactions were not computed during advanceState, but were requested.");
+
   SLIC_ERROR_IF(
-      reaction_index >= reaction_names_.size(),
+      reaction_index >= reaction_states_.size(),
       "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
 
-  TimeInfo time_info(time_prev_, dt_prev_, static_cast<size_t>(cycle_prev_));
-  reaction_states_ = advancer_->computeReactions(time_info, *field_shape_displacement_, field_states_, field_params_);
   return *reaction_states_[reaction_index].get();
 }
 
@@ -166,7 +160,10 @@ void DifferentiablePhysics::setParameter(const size_t parameter_index, const Fin
   *field_params_[parameter_index].get() = parameter_state;
 }
 
-void DifferentiablePhysics::setShapeDisplacement(const FiniteElementState& s) { *field_shape_displacement_->get() = s; }
+void DifferentiablePhysics::setShapeDisplacement(const FiniteElementState& shape_displacement)
+{
+  *field_shape_displacement_->get() = shape_displacement;
+}
 
 void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_name,
                                      [[maybe_unused]] const FiniteElementState& s)
@@ -226,7 +223,10 @@ void DifferentiablePhysics::advanceTimestep(double dt)
   dt_prev_ = dt;
 
   TimeInfo time_info(time_, dt, static_cast<size_t>(cycle_));
-  field_states_ = advancer_->advanceState(time_info, *field_shape_displacement_, field_states_, field_params_);
+  auto [states, reactions] =
+      advancer_->advanceState(time_info, *field_shape_displacement_, field_states_, field_params_);
+  field_states_ = states;
+  reaction_states_ = reactions;
 
   cycle_++;
   time_ += dt;

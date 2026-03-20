@@ -18,7 +18,7 @@
 #include "smith/smith_config.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 // #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
@@ -159,12 +159,14 @@ int main(int argc, char* argv[])
                                                      .absolute_tol = 1.0e-11,
                                                      .max_iterations = 500,
                                                      .print_level = solid_nonlinear_print_level};
+  smith::NonlinearSolverOptions heat_nonlinear_opts{.nonlin_solver = NonlinearSolver::Newton,
+                                                    .relative_tol = 1.0e-8,
+                                                    .absolute_tol = 1.0e-11,
+                                                    .max_iterations = 50,
+                                                    .print_level = heat_linear_print_level};
 
-  std::shared_ptr<DifferentiableSolver> d_heat_linear_solver =
-      buildDifferentiableLinearSolve(heat_linear_options, *mesh);
-
-  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto d_heat_linear_solver = buildNonlinearBlockSolver(heat_nonlinear_opts, heat_linear_options, *mesh);
+  auto d_solid_nonlinear_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   SLIC_INFO_ROOT_FLUSH("Setting up time integration rules");
   /// -----------------------------------------------------
@@ -255,10 +257,6 @@ int main(int argc, char* argv[])
                              auto /*u*/, auto /*v*/,
                              auto /*a*/) { return smith::tuple{-external_heat_source, smith::zero{}}; });
 
-  auto shape_disp = physics->getShapeDispFieldState();
-  auto params = physics->getFieldParams();
-  auto states = physics->getInitialFieldStates();
-
   physics->resetStates();
 
   /// ==================================================================
@@ -279,9 +277,7 @@ int main(int argc, char* argv[])
     SLIC_INFO_ROOT_FLUSH(axom::fmt::format("\n... Solving Step = {}", m));
     physics->advanceTimestep(time_increment);
 
-    TimeInfo time_info(physics->time() - time_increment, time_increment);
-    auto reactions = physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(),
-                                                                    physics->getFieldStatesOld(), params, time_info);
+    auto reactions = physics->getReactionStates();
     double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
     SLIC_INFO_ROOT_FLUSH(axom::fmt::format("    Reaction = {}", reaction));
 

@@ -7,8 +7,17 @@
 /**
  * @file time_discretized_weak_form.hpp
  *
- * @brief Specifies parametrized residuals and various linearized evaluations for arbitrary nonlinear systems of
- * equations
+ * @brief Wraps FunctionalWeakForm to provide TimeInfo (time, dt, cycle) to integrands instead of just time.
+ *
+ * This class provides a thin wrapper around FunctionalWeakForm that automatically converts the time
+ * parameter into a TimeInfo struct containing time, timestep size (dt), and cycle number. This allows
+ * physics systems to access timestep information needed for time integration.
+ *
+ * Key features:
+ * - All integrands receive TimeInfo instead of just time
+ * - Systems are responsible for manually applying time integration rules
+ * - Supports body integrals, boundary integrals, boundary fluxes, and interior boundary integrals
+ * - Default behavior passes ALL input fields to integrands (can be overridden with DependsOn)
  */
 
 #pragma once
@@ -23,79 +32,236 @@ namespace smith {
 template <int spatial_dim, typename OutputSpace, typename inputs = Parameters<>>
 class TimeDiscretizedWeakForm;
 
-/// @brief A time discretized weakform gets a TimeInfo object passed as arguments to q-function (lambdas which are
-/// integrated over quadrature points) so users can have access to time increments, and timestep cycle.  These
-/// quantities are often valuable for time integrated PDEs.
-/// @tparam OutputSpace The output residual for the weak form (test-space)
-/// @tparam ...InputSpaces All the input FiniteElementState fields (trial-spaces)
-/// @tparam spatial_dim The spatial dimension for the problem
+/**
+ * @brief A time-discretized weak form that provides TimeInfo to integrands.
+ *
+ * This wraps FunctionalWeakForm to pass TimeInfo (containing time, dt, and cycle) to all
+ * integrand functions instead of just the time value. This allows physics models to access
+ * timestep information for time integration.
+ *
+ * @tparam spatial_dim The spatial dimension for the problem.
+ * @tparam OutputSpace The output residual for the weak form (test-space).
+ * @tparam InputSpaces All the input FiniteElementState fields (trial-spaces).
+ */
 template <int spatial_dim, typename OutputSpace, typename... InputSpaces>
 class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>
     : public FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>> {
  public:
-  using WeakFormT = FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>;  ///< using
+  using Base = FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>;  ///< Base class alias
 
-  /// Constructor
+  /**
+   * @brief Construct a time-discretized weak form.
+   * @param physics_name Unique name for this physics module.
+   * @param mesh The computational mesh.
+   * @param output_mfem_space The test function space (output/residual space).
+   * @param input_mfem_spaces Vector of trial function spaces (input field spaces).
+   */
   TimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
                           const mfem::ParFiniteElementSpace& output_mfem_space,
-                          const typename WeakFormT::SpacesT& input_mfem_spaces)
-      : WeakFormT(physics_name, mesh, output_mfem_space, input_mfem_spaces)
+                          const typename Base::SpacesT& input_mfem_spaces)
+      : Base(physics_name, mesh, output_mfem_space, input_mfem_spaces)
   {
   }
 
-  /// @overload
+  /**
+   * @brief Add a body integral with TimeInfo.
+   *
+   * The integrand receives TimeInfo (containing time, dt, cycle) instead of just time.
+   * The system is responsible for manually applying time integration rules inside the integrand
+   * to compute current state values from the raw field history.
+   *
+   * @tparam active_parameters Indices of fields this integral depends on.
+   * @tparam BodyIntegralType The integrand function type.
+   * @param depends_on Dependency specification for which input fields to pass.
+   * @param body_name The name of the domain.
+   * @param integrand Function with signature (TimeInfo, X, inputs...) -> residual.
+   */
   template <int... active_parameters, typename BodyIntegralType>
   void addBodyIntegral(DependsOn<active_parameters...> depends_on, std::string body_name, BodyIntegralType integrand)
   {
     const double* dt = &this->dt_;
     const size_t* cycle = &this->cycle_;
-    WeakFormT::addBodyIntegral(depends_on, body_name, [dt, cycle, integrand](double t, auto X, auto... inputs) {
+    Base::addBodyIntegral(depends_on, body_name, [dt, cycle, integrand](double t, auto X, auto... inputs) {
       TimeInfo time_info(t, *dt, *cycle);
       return integrand(time_info, X, inputs...);
     });
   }
 
-  /// @overload
-  template <typename BodyForceType, int... all_active_parameters>
-  void addBodyIntegralImpl(std::string body_name, BodyForceType body_integral,
-                           std::integer_sequence<int, all_active_parameters...>)
+  /**
+   * @brief Add a body integral with TimeInfo (defaults to all input fields).
+   * @tparam BodyIntegralType The integrand function type.
+   * @param body_name The name of the domain.
+   * @param integrand Function with signature (TimeInfo, X, inputs...) -> residual.
+   */
+  template <typename BodyIntegralType>
+  void addBodyIntegral(std::string body_name, BodyIntegralType integrand)
   {
-    addBodyIntegral(DependsOn<all_active_parameters...>{}, body_name, body_integral);
+    constexpr int num_inputs = sizeof...(InputSpaces);
+    addBodyIntegralWithAllParams(body_name, integrand, std::make_integer_sequence<int, num_inputs>{});
   }
 
-  /// @overload
-  template <typename BodyForceType>
-  void addBodyIntegral(std::string body_name, BodyForceType body_integral)
+  /**
+   * @brief Add a body source (body load) with TimeInfo.
+   * @tparam active_parameters Indices of fields this source depends on.
+   * @tparam BodyLoadType The load function type.
+   * @param depends_on Dependency specification.
+   * @param body_name The name of the domain.
+   * @param load_function Function with signature (TimeInfo, X, inputs...) -> load vector.
+   */
+  template <int... active_parameters, typename BodyLoadType>
+  void addBodySource(DependsOn<active_parameters...> depends_on, std::string body_name, BodyLoadType load_function)
   {
-    addBodyIntegralImpl(body_name, body_integral, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
+    addBodyIntegral(depends_on, body_name, [load_function](auto t_info, auto X, auto... inputs) {
+      return smith::tuple{-load_function(t_info, get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
+    });
+  }
+
+  /// defaults to use all parameters
+  /// @overload
+  template <typename BodyLoadType>
+  void addBodySource(std::string body_name, BodyLoadType load_function)
+  {
+    constexpr int num_inputs = sizeof...(InputSpaces);
+    addBodySourceWithAllParams(body_name, load_function, std::make_integer_sequence<int, num_inputs>{});
+  }
+
+  /**
+   * @brief Add a boundary integral with TimeInfo.
+   * @tparam active_parameters Indices of fields this integral depends on.
+   * @tparam BoundaryIntegralType The boundary integrand function type.
+   * @param depends_on Dependency specification.
+   * @param boundary_name The name of the boundary.
+   * @param integrand Function with signature (TimeInfo, X, inputs...) -> residual.
+   */
+  template <int... active_parameters, typename BoundaryIntegralType>
+  void addBoundaryIntegral(DependsOn<active_parameters...> depends_on, std::string boundary_name,
+                           BoundaryIntegralType integrand)
+  {
+    const double* dt = &this->dt_;
+    const size_t* cycle = &this->cycle_;
+    Base::addBoundaryIntegral(depends_on, boundary_name, [dt, cycle, integrand](double t, auto X, auto... inputs) {
+      TimeInfo time_info(t, *dt, *cycle);
+      return integrand(time_info, X, inputs...);
+    });
+  }
+
+  /// defaults to use all parameters
+  /// @overload
+  template <typename BoundaryIntegralType>
+  void addBoundaryIntegral(std::string boundary_name, BoundaryIntegralType integrand)
+  {
+    constexpr int num_inputs = sizeof...(InputSpaces);
+    addBoundaryIntegralWithAllParams(boundary_name, integrand, std::make_integer_sequence<int, num_inputs>{});
+  }
+
+  /**
+   * @brief Add a boundary flux with TimeInfo.
+   * @tparam active_parameters Indices of fields this integral depends on.
+   * @tparam BoundaryFluxType The flux function type.
+   * @param depends_on Dependency specification.
+   * @param boundary_name The name of the boundary.
+   * @param flux_function Function with signature (TimeInfo, X, n, inputs...) -> flux.
+   */
+  template <int... active_parameters, typename BoundaryFluxType>
+  void addBoundaryFlux(DependsOn<active_parameters...> depends_on, std::string boundary_name,
+                       BoundaryFluxType flux_function)
+  {
+    const double* dt = &this->dt_;
+    const size_t* cycle = &this->cycle_;
+    Base::addBoundaryFlux(depends_on, boundary_name,
+                          [dt, cycle, flux_function](double t, auto X, auto n, auto... inputs) {
+                            TimeInfo time_info(t, *dt, *cycle);
+                            return flux_function(time_info, X, n, inputs...);
+                          });
+  }
+
+  /// defaults to use all parameters
+  /// @overload
+  template <typename BoundaryFluxType>
+  void addBoundaryFlux(std::string boundary_name, BoundaryFluxType flux_function)
+  {
+    constexpr int num_inputs = sizeof...(InputSpaces);
+    addBoundaryFluxWithAllParams(boundary_name, flux_function, std::make_integer_sequence<int, num_inputs>{});
+  }
+
+  /**
+   * @brief Add an interior boundary integral with TimeInfo.
+   * @tparam active_parameters Indices of fields this integral depends on.
+   * @tparam InteriorIntegralType The integrand function type.
+   * @param depends_on Dependency specification.
+   * @param interior_name The name of the interior boundary.
+   * @param integrand Function with signature (TimeInfo, X, inputs...) -> residual.
+   */
+  template <int... active_parameters, typename InteriorIntegralType>
+  void addInteriorBoundaryIntegral(DependsOn<active_parameters...> depends_on, std::string interior_name,
+                                   InteriorIntegralType integrand)
+  {
+    const double* dt = &this->dt_;
+    const size_t* cycle = &this->cycle_;
+    Base::addInteriorBoundaryIntegral(depends_on, interior_name,
+                                      [dt, cycle, integrand](double t, auto X, auto... inputs) {
+                                        TimeInfo time_info(t, *dt, *cycle);
+                                        return integrand(time_info, X, inputs...);
+                                      });
+  }
+
+  /// defaults to use all parameters
+  /// @overload
+  template <typename InteriorIntegralType>
+  void addInteriorBoundaryIntegral(std::string interior_name, InteriorIntegralType integrand)
+  {
+    constexpr int num_inputs = sizeof...(InputSpaces);
+    addInteriorBoundaryIntegralWithAllParams(interior_name, integrand, std::make_integer_sequence<int, num_inputs>{});
+  }
+
+ private:
+  template <typename BodyIntegralType, int... all_params>
+  void addBodyIntegralWithAllParams(std::string body_name, BodyIntegralType integrand,
+                                    std::integer_sequence<int, all_params...>)
+  {
+    addBodyIntegral(DependsOn<all_params...>{}, body_name, integrand);
+  }
+
+  template <typename BodyLoadType, int... all_params>
+  void addBodySourceWithAllParams(std::string body_name, BodyLoadType load_function,
+                                  std::integer_sequence<int, all_params...>)
+  {
+    addBodySource(DependsOn<all_params...>{}, body_name, load_function);
+  }
+
+  template <typename BoundaryIntegralType, int... all_params>
+  void addBoundaryIntegralWithAllParams(std::string boundary_name, BoundaryIntegralType integrand,
+                                        std::integer_sequence<int, all_params...>)
+  {
+    addBoundaryIntegral(DependsOn<all_params...>{}, boundary_name, integrand);
+  }
+
+  template <typename InteriorIntegralType, int... all_params>
+  void addInteriorBoundaryIntegralWithAllParams(std::string interior_name, InteriorIntegralType integrand,
+                                                std::integer_sequence<int, all_params...>)
+  {
+    addInteriorBoundaryIntegral(DependsOn<all_params...>{}, interior_name, integrand);
+  }
+
+  template <typename BoundaryFluxType, int... all_params>
+  void addBoundaryFluxWithAllParams(std::string boundary_name, BoundaryFluxType flux_function,
+                                    std::integer_sequence<int, all_params...>)
+  {
+    addBoundaryFlux(DependsOn<all_params...>{}, boundary_name, flux_function);
   }
 };
 
-/// @brief A container holding the two types of weak forms useful for solving time discretized second order (in time)
-/// systems of equations
+/// @brief A container holding the weak forms useful for second-order time-discretized systems.
 class SecondOrderTimeDiscretizedWeakForms {
  public:
-  std::shared_ptr<WeakForm> time_discretized_weak_form;  ///< this publicly available abstract weak form is a
-                                                         ///< functions of the current u, u_old, v_old, and a_old,
-  std::shared_ptr<WeakForm>
-      final_reaction_weak_form;  ///< this publicly available abstract weak form is structly a
-                                 ///< function of the current u, v, and a (no time discretization)
-                                 ///< its main purpose is to compute reaction forces after the solve is completed
+  std::shared_ptr<WeakForm> time_discretized_weak_form;  ///< Weak form in terms of predicted/current unknown.
+  std::shared_ptr<WeakForm> final_reaction_weak_form;    ///< Weak form in terms of converged kinematic states.
 };
 
 template <int spatial_dim, typename OutputSpace, typename inputs = Parameters<>>
 class SecondOrderTimeDiscretizedWeakForm;
 
-/// @brief Useful for time-discretized PDEs of second order (involves for first and second derivatives of time).  Users
-/// write q-functions in terns of u, u_dot, u_dot_dot, and the weak form is transformed by the
-/// ImplicitNewmarkSecondOrderTimeIntegrationRule so that is it globally a function of u, u_old, u_dot_old,
-/// u_dot_dot_old, with u as the distinct unknown for the time discretized system.
-/// @tparam spatial_dim Spatial dimension, 2 or 3.
-/// @tparam OutputSpace The space corresponding to the output residual for the weak form (test-space).
-/// @tparam TrialInputSpace The space corresponding to the predicted solution u, i.e., the trial solution, the unique
-/// unknown of the time discretized equation.
-/// @tparam ...InputSpaces Spaces for all the remaining input FiniteElementState fields.
-/// @tparam spatial_dim The spatial dimension for the problem.
+/// @brief Convenience wrapper for second-order-in-time systems using an implicit Newmark rule.
 template <int spatial_dim, typename OutputSpace, typename TrialInputSpace, typename... InputSpaces>
 class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<TrialInputSpace, InputSpaces...>>
     : public SecondOrderTimeDiscretizedWeakForms {
@@ -103,10 +269,9 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
   static constexpr int NUM_STATE_VARS = 4;  ///< u, u_old, v_old, a_old
 
   using TimeDiscretizedWeakFormT =
-      TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<TrialInputSpace, InputSpaces...>>;        ///< using
-  using FinalReactionFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>;  ///< using
+      TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<TrialInputSpace, InputSpaces...>>;
+  using FinalReactionFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>;
 
-  /// @brief Constructor
   SecondOrderTimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
                                      ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule,
                                      const mfem::ParFiniteElementSpace& output_mfem_space,
@@ -117,14 +282,13 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
         std::make_shared<TimeDiscretizedWeakFormT>(physics_name, mesh, output_mfem_space, input_mfem_spaces);
     time_discretized_weak_form = time_discretized_weak_form_;
 
-    typename TimeDiscretizedWeakFormT::SpacesT input_mfem_spaces_trial_removed(std::next(input_mfem_spaces.begin()),
-                                                                               input_mfem_spaces.end());
+    typename TimeDiscretizedWeakFormT::SpacesT trial_removed_spaces(std::next(input_mfem_spaces.begin()),
+                                                                    input_mfem_spaces.end());
     final_reaction_weak_form_ =
-        std::make_shared<FinalReactionFormT>(physics_name, mesh, output_mfem_space, input_mfem_spaces_trial_removed);
+        std::make_shared<FinalReactionFormT>(physics_name, mesh, output_mfem_space, trial_removed_spaces);
     final_reaction_weak_form = final_reaction_weak_form_;
   }
 
-  /// @overload
   template <int... active_parameters, typename BodyIntegralType>
   void addBodyIntegral(DependsOn<active_parameters...> /*depends_on*/, std::string body_name,
                        BodyIntegralType integrand)
@@ -142,11 +306,10 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
                                                body_name, integrand);
   }
 
-  /// @overload
-  template <typename BodyForceType>
-  void addBodyIntegral(std::string body_name, BodyForceType body_integral)
+  template <typename BodyIntegralType>
+  void addBodyIntegral(std::string body_name, BodyIntegralType integrand)
   {
-    addBodyIntegral(DependsOn<>{}, body_name, body_integral);
+    addBodyIntegral(DependsOn<>{}, body_name, integrand);
   }
 
   template <int... active_parameters, typename BodyLoadType>
@@ -161,7 +324,8 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
               -load_function(t.time(), get<VALUE>(X),
                              get<VALUE>(time_rule.value(t, U, U_old, U_dot_old, U_dot_dot_old)),
                              get<VALUE>(time_rule.dot(t, U, U_old, U_dot_old, U_dot_dot_old)),
-                             get<VALUE>(time_rule.ddot(t, U, U_old, U_dot_old, U_dot_dot_old)), get<VALUE>(inputs)...),
+                             get<VALUE>(time_rule.ddot(t, U, U_old, U_dot_old, U_dot_dot_old)),
+                             get<VALUE>(inputs)...),
               smith::zero{}};
         });
     final_reaction_weak_form_->addBodyIntegral(
@@ -178,14 +342,9 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
   }
 
  private:
-  std::shared_ptr<TimeDiscretizedWeakFormT>
-      time_discretized_weak_form_;  ///< fully templated time discretized weak form (with time integration rule injected
-                                    ///< into the q-function)
-  std::shared_ptr<FinalReactionFormT>
-      final_reaction_weak_form_;  ///< fully template underlying weak form (no time integration included, a function of
-                                  ///< current u, v, and a)
-
-  ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule_;  ///< encodes the time integration rule
+  std::shared_ptr<TimeDiscretizedWeakFormT> time_discretized_weak_form_;
+  std::shared_ptr<FinalReactionFormT> final_reaction_weak_form_;
+  ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule_;
 };
 
 }  // namespace smith

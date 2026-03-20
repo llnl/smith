@@ -2,9 +2,46 @@
 
 #include <memory>
 #include <functional>
+#include <vector>
 #include "mfem.hpp"
 
 namespace smith {
+
+/**
+ * @brief Combine a solver with a (stored) preconditioner.
+ *
+ * Utility wrapper that keeps a preconditioner alive alongside a solver.
+ */
+class SolverWithPreconditioner : public mfem::Solver {
+ public:
+  /**
+   * @brief Construct a solver wrapper.
+   *
+   * @param solver The solver to apply in Mult().
+   * @param preconditioner Preconditioner object to keep alive.
+   */
+  SolverWithPreconditioner(std::unique_ptr<mfem::Solver> solver, std::unique_ptr<mfem::Solver> preconditioner)
+      : solver_(std::move(solver)), preconditioner_(std::move(preconditioner))
+  {
+  }
+
+  /// Apply the wrapped solver.
+  virtual void Mult(const mfem::Vector& in, mfem::Vector& out) const { solver_->Mult(in, out); }
+
+  /// Set the operator on the wrapped solver.
+  virtual void SetOperator(const mfem::Operator& op)
+  {
+    height = op.Height();
+    width = op.Width();
+    solver_->SetOperator(op);
+  }
+
+  virtual ~SolverWithPreconditioner() {}
+
+ private:
+  std::unique_ptr<mfem::Solver> solver_;
+  std::unique_ptr<mfem::Solver> preconditioner_;
+};
 
 /**
  * @class BlockDiagonalPreconditioner
@@ -21,10 +58,9 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
   /**
    * @brief Construct a new N by N block diagonal preconditioner.
    *
-   * @param offsets Offsets describing the block layout.
    * @param solvers One solver per block (size must match number of blocks).
    */
-  BlockDiagonalPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers);
+  BlockDiagonalPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers);
 
   /**
    * @brief The action of the precondition on the block vector (b_1, ..., b_n)
@@ -45,7 +81,7 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
 
  private:
   // Offsets for extracting block vector segments
-  mfem::Array<int>& block_offsets_;
+  mfem::Array<int> block_offsets_;
 
   // Number of blocks
   const int num_blocks_;
@@ -54,7 +90,7 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
   const mfem::BlockOperator* block_jacobian_;
 
   // The diagonal part of the preconditioner containing BoomerAMG applications
-  mfem::BlockOperator solver_diag_;
+  std::unique_ptr<mfem::BlockOperator> solver_diag_;
 
   // mfem solvers for each block
   mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
@@ -86,11 +122,10 @@ class BlockTriangularPreconditioner : public mfem::Solver {
   /**
    * @brief Construct a new nxn block triangular preconditioner.
    *
-   * @param offsets Offsets describing the block layout.
    * @param solvers One solver per diagonal block (size must match number of blocks).
    * @param type Sweep type (lower, upper, or symmetric).
    */
-  BlockTriangularPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
+  BlockTriangularPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                 BlockTriangularType type = BlockTriangularType::Lower);
 
   /**
@@ -112,7 +147,7 @@ class BlockTriangularPreconditioner : public mfem::Solver {
 
  private:
   // Offsets for extracting block vector segments
-  mfem::Array<int>& block_offsets_;
+  mfem::Array<int> block_offsets_;
 
   // Number of blocks
   const int num_blocks_;
@@ -168,11 +203,10 @@ class BlockSchurPreconditioner : public mfem::Solver {
   /**
    * @brief Construct a new 2x2 block Schur complement preconditioner.
    *
-   * @param offsets Offsets describing the 2-block layout.
    * @param solvers Two solvers, for $ A_{11} $ and the Schur complement approximation.
    * @param type Preconditioner variant (diagonal, lower, upper, or full).
    */
-  BlockSchurPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
+  BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
                            BlockSchurType type = BlockSchurType::Diagonal);
 
   /**
@@ -196,13 +230,13 @@ class BlockSchurPreconditioner : public mfem::Solver {
 
  private:
   // Offsets for extracting block vector segments
-  mfem::Array<int>& block_offsets_;
+  mfem::Array<int> block_offsets_;
 
   // Jacobian view for block access
   const mfem::BlockOperator* block_jacobian_;
 
   // The diagonal part of the preconditioner containing BoomerAMG applications
-  mfem::BlockOperator solver_diag_;
+  std::unique_ptr<mfem::BlockOperator> solver_diag_;
 
   // mfem solvers for each block
   mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;

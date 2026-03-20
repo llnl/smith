@@ -1,0 +1,82 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+#pragma once
+
+#include <vector>
+#include <memory>
+#include <mpi.h>
+#include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/numerics/solver_config.hpp"
+#include "smith/physics/common.hpp"
+
+namespace smith {
+
+class WeakForm;
+class NonlinearBlockSolverBase;
+class BoundaryConditionManager;
+
+/// @brief Orchestrates staggered solution for multiphysics systems.
+class CoupledSystemSolver {
+ public:
+  /// @brief Represents a single stage in a staggered iteration.
+  struct Stage {
+    std::vector<size_t> block_indices;                 ///< Which blocks (residuals) to solve in this stage.
+    std::shared_ptr<NonlinearBlockSolverBase> solver;  ///< Solver to use for this stage.
+    BlockConvergenceTolerances block_tolerances = {};  ///< Optional stage-local convergence overrides.
+  };
+
+  /// @brief Construct a monolithic CoupledSystemSolver from a single block solver.
+  /// @param single_solver The solver to use for all blocks simultaneously.
+  CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolverBase> single_solver);
+
+  /// @brief Construct a CoupledSystemSolver for staggered iteration.
+  /// @param max_staggered_iterations Maximum number of staggered sweeps across all stages.  When
+  ///        @p exact_staggered_steps is false, the solver may exit early once all stage solvers
+  ///        report convergence.
+  /// @param exact_staggered_steps If true, always perform exactly @p max_staggered_iterations
+  ///        sweeps with no early-exit convergence check.  Useful when a fixed number of
+  ///        partitioned-stagger steps is required regardless of residual level.
+  CoupledSystemSolver(int max_staggered_iterations, bool exact_staggered_steps = false);
+
+  /// @brief Sets the relaxation factor for staggered iterations.
+  /// @param relaxation_factor The relaxation factor (default is 1.0).
+  void setRelaxationFactor(double relaxation_factor) { relaxation_factor_ = relaxation_factor; }
+
+  /// @brief Adds a solver stage defined by a Stage struct.
+  /// @param stage Stage configuration.
+  void addSubsystemSolver(const Stage& stage);
+
+  /// @brief Convenience method to add a solver stage.
+  /// @param block_indices Indices of the blocks to solve.
+  /// @param solver Nonlinear block solver for this stage.
+  /// @param block_tolerances Optional stage-local convergence overrides.
+  void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<NonlinearBlockSolverBase> solver,
+                          BlockConvergenceTolerances block_tolerances = {});
+
+  /// @brief Solves the multiphysics system using staggered iterations.
+  /// @param residual_evals Vector of WeakForm evaluations for each block.
+  /// @param block_indices Block indices for each residual evaluation.
+  /// @param shape_disp Current shape displacement.
+  /// @param states Nested vector of field states.
+  /// @param params Nested vector of parameters.
+  /// @param time_info Current time information.
+  /// @param bc_managers Managers for boundary conditions.
+  /// @return Updated field states.
+  std::vector<FieldState> solve(const std::vector<WeakForm*>& residual_evals,
+                                const std::vector<std::vector<size_t>>& block_indices, const FieldState& shape_disp,
+                                const std::vector<std::vector<FieldState>>& states,
+                                const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
+                                const std::vector<const BoundaryConditionManager*>& bc_managers) const;
+
+ private:
+  int max_staggered_iterations_;    ///< Maximum number of staggered iterations.
+  bool exact_staggered_steps_;      ///< If true, no early-exit convergence check.
+  double relaxation_factor_ = 1.0;  ///< Relaxation factor for staggered updates.
+  std::vector<Stage> stages_;       ///< Solver stages for the staggered iterations.
+};
+
+}  // namespace smith

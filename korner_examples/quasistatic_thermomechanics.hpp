@@ -4,13 +4,13 @@
 
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_solve.hpp"
+#include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/reaction.hpp"
-#include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
 using namespace smith;
 
@@ -18,7 +18,7 @@ namespace custom_physics {
 class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
  public:
   QuasistaticSolidThermoMechanicsStateAdvancer(
-      std::shared_ptr<DifferentiableSolver> solid_solver, std::shared_ptr<DifferentiableSolver> thermal_solver,
+      std::shared_ptr<NonlinearBlockSolverBase> solid_solver, std::shared_ptr<NonlinearBlockSolverBase> thermal_solver,
       std::shared_ptr<DirichletBoundaryConditions> vector_bcs, std::shared_ptr<DirichletBoundaryConditions> scalar_bcs,
       std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_weak_form,
       std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> thermal_weak_form,
@@ -113,8 +113,9 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
     return std::make_tuple(shape_disp, states, params, time, solid_mechanics_weak_form, thermal_mechanics_weak_form);
   }
 
-  std::vector<FieldState> advanceState(const FieldState& shape_disp, const std::vector<FieldState>& states_old,
-                                       const std::vector<FieldState>& params, const TimeInfo& time_info) const override
+  std::pair<std::vector<FieldState>, std::vector<ReactionState>> advanceState(
+      const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states_old,
+      const std::vector<FieldState>& params) const override
   {
     double dt = time_info.dt();
     size_t cycle = time_info.cycle();
@@ -159,25 +160,18 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
     states[TEMPERATURE_DDOT] =
         thermal_time_rule_.second_derivative(final_time_info, temperature, states_old[TEMPERATURE],
                                              states_old[TEMPERATURE_DOT], states_old[TEMPERATURE_DDOT]);
-    return states;
-  }
-
-  std::vector<ResultantState> computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                                                const std::vector<FieldState>& states_old,
-                                                const std::vector<FieldState>& params,
-                                                const TimeInfo& time_info) const override
-  {
     std::vector<FieldState> inputs{states[DISPLACEMENT],        states_old[DISPLACEMENT], states_old[VELOCITY],
                                    states_old[ACCELERATION],    states_old[TEMPERATURE],  states_old[TEMPERATURE_DOT],
                                    states_old[TEMPERATURE_DDOT]};
     inputs.insert(inputs.end(), params.begin(), params.end());
-    return {evaluateWeakForm(solid_weak_form_->final_reaction_weak_form, time_info, shape_disp, inputs,
-                             states[DISPLACEMENT])};
+    auto reaction =
+        evaluateWeakForm(solid_weak_form_->final_reaction_weak_form, time_info, shape_disp, inputs, states[DISPLACEMENT]);
+    return {states, {reaction}};
   }
 
  private:
-  std::shared_ptr<DifferentiableSolver> solid_solver_;
-  std::shared_ptr<DifferentiableSolver> thermal_solver_;
+  std::shared_ptr<NonlinearBlockSolverBase> solid_solver_;
+  std::shared_ptr<NonlinearBlockSolverBase> thermal_solver_;
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;
   std::shared_ptr<DirichletBoundaryConditions> scalar_bcs_;
   std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_weak_form_;
@@ -188,8 +182,8 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
 
 template <int dim, typename ShapeDispSpace, typename VectorSpace, typename ScalarSpace, typename... ParamSpaces>
 auto buildThermoMechanics(std::shared_ptr<smith::Mesh> mesh,
-                          std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
-                          std::shared_ptr<DifferentiableSolver> d_thermal_solver,
+                          std::shared_ptr<NonlinearBlockSolverBase> d_solid_nonlinear_solver,
+                          std::shared_ptr<NonlinearBlockSolverBase> d_thermal_solver,
                           smith::SecondOrderTimeIntegrationRule solid_time_rule,
                           smith::SecondOrderTimeIntegrationRule thermal_time_rule, std::string physics_name,
                           const std::vector<std::string>& param_names = {})
@@ -216,8 +210,8 @@ auto buildThermoMechanics(std::shared_ptr<smith::Mesh> mesh,
 
 template <int dim, typename ShapeDispSpace, typename VectorSpace, typename ScalarSpace, typename... ParamSpaces>
 auto buildThermoMechanicsForOptimization(std::shared_ptr<smith::Mesh> mesh,
-                          std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
-                          std::shared_ptr<DifferentiableSolver> d_thermal_solver,
+                          std::shared_ptr<NonlinearBlockSolverBase> d_solid_nonlinear_solver,
+                          std::shared_ptr<NonlinearBlockSolverBase> d_thermal_solver,
                           smith::SecondOrderTimeIntegrationRule solid_time_rule,
                           smith::SecondOrderTimeIntegrationRule thermal_time_rule, std::string physics_name,
                           const std::vector<std::string>& param_names = {})
