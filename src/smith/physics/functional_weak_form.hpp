@@ -407,7 +407,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     using JacFuncType = std::function<decltype((*weak_form_)(DifferentiateWRT<1>{}, time, *shape_disp, *fs[i]...))(
         double, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
     return std::array<JacFuncType, sizeof...(i)>{
-        [=](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
+        [this](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
           return (*weak_form_)(DifferentiateWRT<i + 1>{}, _time, *_shape_disp, *_fs[i]...);
         }...};
   };
@@ -421,7 +421,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         std::function<decltype((*v_dot_weak_form_residual_)(DifferentiateWRT<1>{}, time, *shape_disp, *v, *fs[i]...))(
             double, ConstFieldPtr, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
     return std::array<GradFuncType, sizeof...(i)>{
-        [=](double _time, ConstFieldPtr _shape_disp, ConstFieldPtr _v, const std::vector<ConstFieldPtr>& _fs) {
+        [this](double _time, ConstFieldPtr _shape_disp, ConstFieldPtr _v, const std::vector<ConstFieldPtr>& _fs) {
           return (*v_dot_weak_form_residual_)(DifferentiateWRT<i + 2>{}, _time, *_shape_disp, *_v, *_fs[i]...);
         }...};
   };
