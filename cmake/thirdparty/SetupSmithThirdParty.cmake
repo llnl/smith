@@ -707,6 +707,22 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             endif()
         endforeach()
     endif()
+
+    # On Apple, Spack-built cmake configs embed literal -Wl,-rpath,... entries in
+    # INTERFACE_LINK_LIBRARIES. These duplicate CMake's own rpath management
+    # (CMAKE_INSTALL_RPATH_USE_LINK_PATH) and cause ld "duplicate -rpath" warnings.
+    if(APPLE)
+        foreach(_target ${_mfem_targets})
+            if(TARGET ${_target})
+                get_target_property(_link_libs ${_target} INTERFACE_LINK_LIBRARIES)
+                if(_link_libs)
+                    list(FILTER _link_libs EXCLUDE REGEX "^-Wl,-rpath,")
+                    set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_libs}")
+                endif()
+            endif()
+        endforeach()
+        unset(_link_libs)
+    endif()
     unset(_mfem_targets)
 
     # Restore cleared Adiak/Caliper directories, reason at top of file.
