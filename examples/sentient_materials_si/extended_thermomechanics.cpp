@@ -8,8 +8,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
-#include <mfem/fem/dfem/doperator.hpp>
-#include <mfem/linalg/tensor.hpp>
+#include "mfem.hpp"
 #include <string>
 #include <vector>
 
@@ -20,7 +19,7 @@
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/state/state_manager.hpp"
 
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 // clang-format off
 //clang-format on
@@ -165,7 +164,7 @@ smith::NonlinearSolverOptions nonlinear_opts{.nonlin_solver = smith::NonlinearSo
                                              .max_line_search_iterations = 30,
                                              .print_level = 1};
 
-int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, double T)
+int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, double T, double alpha_T)
 {
   double rho = 1.0;
   double E0 = 100.0;
@@ -175,9 +174,9 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
   double initial_temperature = 0.0;
 
   using MaterialModel = GreenSaintVenantThermoelasticWithExtendedStateMaterial;
-  MaterialModel material{rho, E0, nu, specific_heat, 0.0, 1.0, kappa};
+  MaterialModel material{rho, E0, nu, specific_heat, alpha_T, 1.0, kappa};
 
-  auto solver = smith::buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
+  auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
 
   auto system = smith::buildExtendedThermoMechanicsSystem<dim, displacement_order, temperature_order, ExtendedStateSpace>(
       mesh, solver, "");
@@ -190,7 +189,7 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
     bc[0] = 0.01 * t;
     return bc;
   });
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
+  system.disp_bc->template setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
 
   system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("left"));
   // system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("right"));
@@ -272,8 +271,10 @@ int main(int argc, char** argv)
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg == "--help" || arg == "-h") {
-      std::cout << "Usage: extended_thermomechanics [--nx=<int>] [--ny=<int>] [--nz=<int>] [--dt=<real>] [--T=<real>]\n";
-      std::cout << "Defaults: nx=12 ny=2 nz=2 dt=0.01 T=0.1\n";
+      std::cout
+          << "Usage: extended_thermomechanics [--nx=<int>] [--ny=<int>] [--nz=<int>] [--dt=<real>] [--T=<real>] "
+             "[--alpha=<real>]\n";
+      std::cout << "Defaults: nx=12 ny=2 nz=2 dt=0.01 T=0.1 alpha=0.0\n";
       return 0;
     }
   }
@@ -288,6 +289,7 @@ int main(int argc, char** argv)
   int num_elements_z = 10;
   double dt = 0.01;
   double T = 1.0;
+  double alpha_T = 0.0;
 
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
@@ -304,6 +306,7 @@ int main(int argc, char** argv)
     parse_int("--nz=", num_elements_z);
     parse_double("--dt=", dt);
     parse_double("--T=", T);
+    parse_double("--alpha=", alpha_T);
   }
 
   auto mfem_shape = mfem::Element::QUADRILATERAL;
@@ -313,5 +316,5 @@ int main(int argc, char** argv)
   mesh->addDomainOfBoundaryElements("left", smith::by_attr<example_etm::dim>(3));
   mesh->addDomainOfBoundaryElements("right", smith::by_attr<example_etm::dim>(5));
 
-  return example_etm::runCoupledWithState(mesh, dt, T);
+  return example_etm::runCoupledWithState(mesh, dt, T, alpha_T);
 }

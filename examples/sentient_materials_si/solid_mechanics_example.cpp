@@ -9,8 +9,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
-#include <mfem/fem/dfem/doperator.hpp>
-#include <mfem/linalg/tensor.hpp>
+#include "mfem.hpp"
 #include <string>
 #include <vector>
 
@@ -21,7 +20,7 @@
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/state/state_manager.hpp"
 
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/solid_dynamics_system.hpp"
 // clang-format off
@@ -124,7 +123,7 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
   // that can prevent Newton from converging from the zero initial guess.
   MaterialModel material{rho, E0, nu, 0.0, 0.0, Temperature};
 
-  auto solver = smith::buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
+  auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
   auto system = smith::buildQuasiStaticSolidMechanicsSystem<dim, displacement_order>(mesh, solver);
 
 
@@ -136,7 +135,7 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
     bc[0] = 1.0 * t;
     return bc;
   });
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
+  system.disp_bc->template setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
 
 
   // Initialize displacement fields (avoid solver starting from uninitialized/NaN values).

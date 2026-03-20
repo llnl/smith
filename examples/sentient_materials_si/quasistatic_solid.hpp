@@ -15,7 +15,7 @@
 #include <type_traits>
 
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
@@ -215,7 +215,7 @@ struct QuasiStaticSolidMechanics: public SystemBase {
  */
 template <int dim, int disp_order, typename... parameter_space>
 QuasiStaticSolidMechanics<dim, disp_order, parameter_space...> buildQuasiStaticSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver, std::string prepend_name = "",
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<NonlinearBlockSolverBase> solver, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
@@ -234,7 +234,7 @@ QuasiStaticSolidMechanics<dim, disp_order, parameter_space...> buildQuasiStaticS
   auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
   FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, prefix("displacement"));
+  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
 
 
   std::vector<FieldState> parameter_fields;
@@ -250,10 +250,11 @@ QuasiStaticSolidMechanics<dim, disp_order, parameter_space...> buildQuasiStaticS
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form};
-  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
+  auto coupled_solver = std::make_shared<CoupledSystemSolver>(solver);
+  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, coupled_solver);
 
   return QuasiStaticSolidMechanics<dim, disp_order, parameter_space...>{
-      {field_store, solver, advancer, parameter_fields, prepend_name},
+      {field_store, coupled_solver, advancer, parameter_fields, prepend_name},
       solid_weak_form,
       disp_bc,
       disp_time_rule

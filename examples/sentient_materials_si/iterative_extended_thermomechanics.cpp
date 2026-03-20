@@ -11,7 +11,7 @@
 
 #include "iterative_extended_thermomechanics.hpp"
 
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/numerics/solver_config.hpp"
@@ -190,9 +190,9 @@ int runIterativeCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh)
   using MaterialModel = GreenSaintVenantThermoelasticWithExtendedStateMaterial;
   MaterialModel material{rho, E0, nu, specific_heat, 0.0, 1.0, kappa};
 
-  auto solid_solver = smith::buildDifferentiableNonlinearSolver(nonlinear_opts, linear_options, *mesh);
-  auto thermal_solver = smith::buildDifferentiableNonlinearSolver(nonlinear_opts, linear_options, *mesh);
-  auto state_solver = smith::buildDifferentiableNonlinearSolver(nonlinear_opts, linear_options, *mesh);
+  auto solid_solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
+  auto thermal_solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
+  auto state_solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
 
   auto update_rule = [](smith::IterativeExtendedThermoMechanicsTimeIntegrator::Context& ctx) {
     // Simple Gauss-Seidel fixed-point iteration.
@@ -215,7 +215,7 @@ int runIterativeCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh)
     bc[0] = 1.0 * t;
     return bc;
   });
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
+  system.disp_bc->template setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
 
   system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("left"));
   system.addThermalHeatSource(mesh->entireBodyName(),

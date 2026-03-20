@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
-#include <mfem/linalg/sparsemat.hpp>
+#include "mfem.hpp"
 #include <string>
 #include <tuple>
 #include <vector>
@@ -19,7 +19,7 @@
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/state/state_manager.hpp"
 
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
@@ -354,7 +354,7 @@ struct ExampleThermoMechanicsSystem : public smith::SystemBase {
 
 template <int d, int disp_order, int temp_order, typename... parameter_space>
 ExampleThermoMechanicsSystem<d, disp_order, temp_order, parameter_space...> buildExampleThermoMechanicsSystem(
-    std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<smith::DifferentiableBlockSolver> solver,
+    std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<smith::NonlinearBlockSolverBase> solver,
     std::string prepend_name, smith::FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<smith::FieldStore>(mesh, 100);
@@ -372,13 +372,13 @@ ExampleThermoMechanicsSystem<d, disp_order, temp_order, parameter_space...> buil
   auto disp_time_rule = std::make_shared<smith::QuasiStaticFirstOrderTimeIntegrationRule>();
   smith::FieldType<smith::H1<disp_order, d>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  auto disp_old_type = field_store->addDependent(disp_type, smith::FieldStore::TimeDerivative::VALUE, prefix("displacement"));
+  auto disp_old_type = field_store->addDependent(disp_type, smith::FieldStore::TimeDerivative::VAL, prefix("displacement"));
 
   auto temperature_time_rule = std::make_shared<smith::BackwardEulerFirstOrderTimeIntegrationRule>();
   smith::FieldType<smith::H1<temp_order>> temperature_type(prefix("temperature_predicted"));
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
   auto temperature_old_type =
-      field_store->addDependent(temperature_type, smith::FieldStore::TimeDerivative::VALUE, prefix("temperature"));
+      field_store->addDependent(temperature_type, smith::FieldStore::TimeDerivative::VAL, prefix("temperature"));
 
   std::vector<smith::FieldState> parameter_fields;
   (field_store->addParameter(smith::FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
@@ -401,10 +401,11 @@ ExampleThermoMechanicsSystem<d, disp_order, temp_order, parameter_space...> buil
                                 smith::FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   std::vector<std::shared_ptr<smith::WeakForm>> weak_forms{solid_weak_form, thermal_weak_form};
-  auto advancer = std::make_shared<smith::MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
+  auto coupled_solver = std::make_shared<smith::CoupledSystemSolver>(solver);
+  auto advancer = std::make_shared<smith::MultiphysicsTimeIntegrator>(field_store, weak_forms, coupled_solver);
 
   return ExampleThermoMechanicsSystem<d, disp_order, temp_order, parameter_space...>{
-      {field_store, solver, advancer, parameter_fields, prepend_name},
+      {field_store, coupled_solver, advancer, parameter_fields, prepend_name},
       solid_weak_form,
       thermal_weak_form,
       disp_bc,
@@ -415,7 +416,7 @@ ExampleThermoMechanicsSystem<d, disp_order, temp_order, parameter_space...> buil
 
 template <int d, int disp_order, int temp_order, typename... parameter_space>
 ExampleThermoMechanicsSystem<d, disp_order, temp_order, parameter_space...> buildExampleThermoMechanicsSystem(
-    std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<smith::DifferentiableBlockSolver> solver,
+    std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<smith::NonlinearBlockSolverBase> solver,
     smith::FieldType<parameter_space>... parameter_types)
 {
   return buildExampleThermoMechanicsSystem<d, disp_order, temp_order, parameter_space...>(mesh, solver, "",
@@ -450,7 +451,7 @@ int runCoupled(const std::shared_ptr<smith::Mesh>& mesh)
   double kappa = 0.1;
   GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 1.0, kappa};
 
-  auto solver = smith::buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
+  auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
 
   smith::FieldType<smith::L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
@@ -463,7 +464,7 @@ int runCoupled(const std::shared_ptr<smith::Mesh>& mesh)
     bc[0] = 0.01 * t;
     return bc;
   });
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
+  system.disp_bc->template setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
   system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("left"));
   system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("right"));
 
@@ -510,15 +511,15 @@ int runTransientHeatAnalytic(const std::shared_ptr<smith::Mesh>& mesh)
   double kappa = 0.1;
   GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 0.0, kappa};
 
-  auto solver = smith::buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
+  auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
   smith::FieldType<smith::L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
   system.setMaterial(material, mesh->entireBodyName());
 
   system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E0; });
 
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("left"));
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
+  system.disp_bc->template setFixedVectorBCs<dim, vdim>(mesh->domain("left"));
+  system.disp_bc->template setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
   system.temperature_bc->setScalarBCs<dim>(mesh->domain("left"), [](double, auto) { return 100.0; });
   system.temperature_bc->setScalarBCs<dim>(mesh->domain("right"), [](double, auto) { return 100.0; });
 
@@ -567,7 +568,7 @@ int runStaticElasticityAnalytic(const std::shared_ptr<smith::Mesh>& mesh)
   double kappa = 0.1;
   GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 0.0, kappa};
 
-  auto solver = smith::buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
+  auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
   smith::FieldType<smith::H1<1>> youngs_modulus("youngs_modulus");
   auto system = buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
   system.setMaterial(material, mesh->entireBodyName());
@@ -628,7 +629,7 @@ int runPressureBC(const std::shared_ptr<smith::Mesh>& mesh)
   double kappa = 0.1;
   GreenSaintVenantThermoelasticMaterial material{rho, E0, nu, specific_heat, 0.0, 1.0, kappa};
 
-  auto solver = smith::buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
+  auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
   smith::FieldType<smith::L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);
   system.setMaterial(material, mesh->entireBodyName());
@@ -671,7 +672,7 @@ int runCompilationOnly(const std::shared_ptr<smith::Mesh>& mesh)
 
   auto fast_nonlinear_opts = nonlinear_opts;
   fast_nonlinear_opts.max_iterations = 5;
-  auto solver = smith::buildDifferentiableNonlinearBlockSolver(fast_nonlinear_opts, linear_options, *mesh);
+  auto solver = smith::buildNonlinearBlockSolver(fast_nonlinear_opts, linear_options, *mesh);
 
   smith::FieldType<smith::L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildExampleThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh, solver, youngs_modulus);

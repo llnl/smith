@@ -34,7 +34,7 @@
 
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
@@ -104,11 +104,18 @@ void FiniteDifferenceParameter()
                                                      .print_level = 0};
 
   // Construct and initialize the linear and nonlinear solvers
-  std::shared_ptr<DifferentiableSolver> d_heat_linear_solver =
-      buildDifferentiableLinearSolve(heat_linear_options, *mesh);
+  smith::NonlinearSolverOptions heat_nonlinear_opts = {};
+  heat_nonlinear_opts.nonlin_solver = NonlinearSolver::Newton;
+  heat_nonlinear_opts.max_iterations = 1;
+  heat_nonlinear_opts.relative_tol = 0.0;
+  heat_nonlinear_opts.absolute_tol = 0.0;
+  heat_nonlinear_opts.print_level = 0;
 
-  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+  std::shared_ptr<NonlinearBlockSolverBase> d_heat_linear_solver =
+      buildNonlinearBlockSolver(heat_nonlinear_opts, heat_linear_options, *mesh);
+
+  std::shared_ptr<NonlinearBlockSolverBase> d_solid_nonlinear_solver =
+      buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   // Construct and initialize the time discretized weak form
   smith::SecondOrderTimeIntegrationRule backward_euler_heat(1.0);

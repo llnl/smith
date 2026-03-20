@@ -20,7 +20,7 @@
 #include <type_traits>
 
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
@@ -383,7 +383,7 @@ struct ExtendedThermoMechanicsSystem : public SystemBase {
  */
 template <int dim, int disp_order, int temp_order, typename StateSpace, typename... parameter_space>
 ExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter_space...> buildExtendedThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableBlockSolver> solver, std::string prepend_name = "",
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<NonlinearBlockSolverBase> solver, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
@@ -402,20 +402,20 @@ ExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter
   auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
   FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, prefix("displacement"));
+  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
 
   // Temperature: backward Euler
   auto temperature_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
   FieldType<H1<temp_order>> temperature_type(prefix("temperature_predicted"));
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
   auto temperature_old_type =
-      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE, prefix("temperature"));
+      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, prefix("temperature"));
 
   // State (L2): backward Euler by default
   auto state_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
   FieldType<StateSpace> state_type(prefix("state_predicted"));
   auto state_bc = field_store->addIndependent(state_type, state_time_rule);
-  auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VALUE, prefix("state"));
+  auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, prefix("state"));
 
   std::vector<FieldState> parameter_fields;
   (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
@@ -449,10 +449,11 @@ ExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form, state_weak_form};
-  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
+  auto coupled_solver = std::make_shared<CoupledSystemSolver>(solver);
+  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, coupled_solver);
 
   return ExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter_space...>{
-      {field_store, solver, advancer, parameter_fields, prepend_name},
+      {field_store, coupled_solver, advancer, parameter_fields, prepend_name},
       solid_weak_form,
       thermal_weak_form,
       state_weak_form,

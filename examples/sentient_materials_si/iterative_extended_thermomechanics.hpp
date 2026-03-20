@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
@@ -64,9 +64,9 @@ class IterativeExtendedThermoMechanicsTimeIntegrator : public StateAdvancer {
   };
 
   struct Solvers {
-    std::shared_ptr<DifferentiableSolver> solid;
-    std::shared_ptr<DifferentiableSolver> thermal;
-    std::shared_ptr<DifferentiableSolver> state;
+    std::shared_ptr<NonlinearBlockSolverBase> solid;
+    std::shared_ptr<NonlinearBlockSolverBase> thermal;
+    std::shared_ptr<NonlinearBlockSolverBase> state;
   };
 
   struct Bcs {
@@ -557,8 +557,8 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
 template <int dim, int disp_order, int temp_order, typename StateSpace, typename... parameter_space>
 IterativeExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter_space...>
 buildIterativeExtendedThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<DifferentiableSolver> solid_solver,
-    std::shared_ptr<DifferentiableSolver> thermal_solver, std::shared_ptr<DifferentiableSolver> state_solver,
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<NonlinearBlockSolverBase> solid_solver,
+    std::shared_ptr<NonlinearBlockSolverBase> thermal_solver, std::shared_ptr<NonlinearBlockSolverBase> state_solver,
     IterativeExtendedThermoMechanicsTimeIntegrator::UpdateRule update_rule, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
@@ -577,18 +577,18 @@ buildIterativeExtendedThermoMechanicsSystem(
   auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
   FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VALUE, prefix("displacement"));
+  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
 
   auto temperature_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
   FieldType<H1<temp_order>> temperature_type(prefix("temperature_predicted"));
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
   auto temperature_old_type =
-      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VALUE, prefix("temperature"));
+      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, prefix("temperature"));
 
   auto state_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
   FieldType<StateSpace> state_type(prefix("state_predicted"));
   auto state_bc = field_store->addIndependent(state_type, state_time_rule);
-  auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VALUE, prefix("state"));
+  auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, prefix("state"));
 
   std::vector<FieldState> parameter_fields;
   (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
