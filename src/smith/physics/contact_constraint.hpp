@@ -144,7 +144,11 @@ class ContactConstraint : public Constraint {
     // otherwise use previously cached Jacobian
     if (update_fields || fresh_derivative) {
       int cycle = 0;
-      contact_.updateGaps(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], true);
+      if (update_fields) {
+        contact_.updateGaps(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], true);
+      } else {
+        contact_.updateGaps(cycle, time, dt, std::nullopt, std::nullopt, true);
+      }
       J_contact_ = contact_.mergedJacobian();
     }
     // obtain (1, 0) block entry from the 2 x 2 block contact linear system
@@ -172,7 +176,11 @@ class ContactConstraint : public Constraint {
     SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     int cycle = 0;
     if (update_fields || fresh_derivative) {
-      contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], multipliers);
+      if (update_fields) {
+        contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], multipliers);
+      } else {
+        contact_.update(cycle, time, dt, std::nullopt, std::nullopt, multipliers);
+      }
     }
     return contact_.forces();
   };
@@ -199,7 +207,11 @@ class ContactConstraint : public Constraint {
 
     int cycle = 0;
     if (update_fields || fresh_derivative) {
-      contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], multipliers);
+      if (update_fields) {
+        contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], multipliers);
+      } else {
+        contact_.update(cycle, time, dt, std::nullopt, std::nullopt, multipliers);
+      }
       J_contact_ = contact_.mergedJacobian();
     }
     // obtain (0, 0) block entry from the 2 x 2 block contact linear system
@@ -226,7 +238,11 @@ class ContactConstraint : public Constraint {
     int cycle = 0;
     if (update_fields || fresh_derivative) {
       mfem::Vector p = contact_.mergedPressures();
-      contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], p);
+      if (update_fields) {
+        contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], p);
+      } else {
+        contact_.update(cycle, time, dt, std::nullopt, std::nullopt, p);
+      }
       J_contact_ = contact_.mergedJacobian();
     }
     // obtain (0, 1) block entry from the 2 x 2 block contact linear system

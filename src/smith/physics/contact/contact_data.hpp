@@ -15,6 +15,8 @@
 #include <memory>
 #include <set>
 #include <vector>
+#include <optional>
+#include <functional>
 
 #include "mfem.hpp"
 
@@ -75,11 +77,13 @@ class ContactData {
    * @param cycle The current simulation cycle
    * @param time The current time
    * @param dt The timestep size to attempt
-   * @param u_shape Shape displacement vector
-   * @param u Current displacement dof values
+   * @param u_shape Optional shape displacement vector
+   * @param u Optional current displacement dof values
    * @param eval_jacobian Whether to also evaluate the Jacobian contributions (default false)
    */
-  void updateGaps(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u,
+  void updateGaps(int cycle, double time, double& dt,
+                  std::optional<std::reference_wrapper<const mfem::Vector>> u_shape = std::nullopt,
+                  std::optional<std::reference_wrapper<const mfem::Vector>> u = std::nullopt,
                   bool eval_jacobian = false);
 
   /**
@@ -88,12 +92,14 @@ class ContactData {
    * @param cycle The current simulation cycle
    * @param time The current time
    * @param dt The timestep size to attempt
-   * @param u_shape Shape displacement vector
-   * @param u Current displacement dof values
-   * @param p Current pressure true dof values
+   * @param u_shape Optional shape displacement vector
+   * @param u Optional current displacement dof values
+   * @param p Optional current pressure true dof values
    */
-  void update(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u,
-              const mfem::Vector& p);
+  void update(int cycle, double time, double& dt,
+              std::optional<std::reference_wrapper<const mfem::Vector>> u_shape = std::nullopt,
+              std::optional<std::reference_wrapper<const mfem::Vector>> u = std::nullopt,
+              std::optional<std::reference_wrapper<const mfem::Vector>> p = std::nullopt);
 
   /**
    * @brief Resets the contact pressures to zero

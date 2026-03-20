@@ -74,42 +74,58 @@ void ContactData::reset()
   }
 }
 
-void ContactData::updateGaps(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u,
-                         bool eval_jacobian)
+void ContactData::updateGaps(int cycle, double time, double& dt,
+                             std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                             std::optional<std::reference_wrapper<const mfem::Vector>> u, bool eval_jacobian)
 {
   cycle_ = cycle;
   time_ = time;
   dt_ = dt;
 
-  setDisplacements(u_shape, u);
+  if (u_shape && u) {
+    setDisplacements(u_shape->get(), u->get());
+  }
 
   for (auto& interaction : interactions_) {
     interaction.evalJacobian(eval_jacobian);
   }
   // This updates the redecomposed surface mesh based on the current displacement, then transfers field quantities to
   // the updated mesh.
-  tribol::updateMfemParallelDecomposition();
+  if (u_shape && u) {
+    tribol::updateMfemParallelDecomposition();
+  }
   // This function computes gaps (and optionally geometric Jacobian blocks) based on the current mesh.
   tribol::update(cycle, time, dt);
 }
 
-void ContactData::update(int cycle, double time, double& dt, const mfem::Vector& u_shape, const mfem::Vector& u,
-                         const mfem::Vector& p)
+void ContactData::update(int cycle, double time, double& dt,
+                         std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                         std::optional<std::reference_wrapper<const mfem::Vector>> u,
+                         std::optional<std::reference_wrapper<const mfem::Vector>> p)
 {
-  // First pass: update gaps
-  updateGaps(cycle, time, dt, u_shape, u);
-
-  // with updated gaps, we can update pressure for contact interactions (active set detection and penalty)
-  setPressures(p);
-
-  // second pass: compute forces and Jacobians
-  for (auto& interaction : interactions_) {
-    interaction.evalJacobian(true);
+  // First pass: update gaps if coordinates are provided
+  if (u_shape && u) {
+    updateGaps(cycle, time, dt, u_shape, u, false);
+  } else {
+    // Ensure internal timing is updated even if coordinates are not
+    cycle_ = cycle;
+    time_ = time;
+    dt_ = dt;
   }
-  // This second call is required to synchronize the updated pressures to Tribol's internal redecomposed surface mesh
-  // and to ensure Tribol's internal state is correctly reset for the second pass.
-  tribol::updateMfemParallelDecomposition();
-  tribol::update(cycle, time, dt);
+
+  // second pass: update pressures and compute forces/Jacobians if p is provided
+  if (p) {
+    // with updated gaps, we can update pressure for contact interactions (active set detection and penalty)
+    setPressures(p->get());
+
+    for (auto& interaction : interactions_) {
+      interaction.evalJacobian(true);
+    }
+    // This second call is required to synchronize the updated pressures to Tribol's internal redecomposed surface mesh
+    // and to ensure Tribol's internal state is correctly reset for the second pass.
+    tribol::updateMfemParallelDecomposition();
+    tribol::update(cycle, time, dt);
+  }
 }
 
 FiniteElementDual ContactData::forces() const
@@ -468,14 +484,16 @@ void ContactData::addContactInteraction([[maybe_unused]] int interaction_id,
 }
 
 void ContactData::updateGaps([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
-                             [[maybe_unused]] const mfem::Vector& u_shape, [[maybe_unused]] const mfem::Vector& u,
+                             [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                             [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u,
                              [[maybe_unused]] bool eval_jacobian)
 {
 }
 
 void ContactData::update([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
-                         [[maybe_unused]] const mfem::Vector& u_shape, [[maybe_unused]] const mfem::Vector& u,
-                         [[maybe_unused]] const mfem::Vector& p)
+                         [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                         [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u,
+                         [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> p)
 {
 }
 
