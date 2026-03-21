@@ -163,9 +163,8 @@ class StateManager {
           verifyQuadratureDataSize(
               geom_group, num_states, "num_states",
               "Current number of Quadrature Data States '{}' does not match value in restart '{}'.");
-          verifyQuadratureDataSize(
-              geom_group, state_size, "state_size",
-              "Current size of Quadrature Data State '{}' does not match value in restart '{}'.");
+          verifyQuadratureDataSize(geom_group, state_size, "state_size",
+                                   "Current size of Quadrature Data State '{}' does not match value in restart '{}'.");
           verifyQuadratureDataSize(
               geom_group, total_size, "total_size",
               "Current total size of Quadrature Data States '{}' does not match value in restart '{}'.");
