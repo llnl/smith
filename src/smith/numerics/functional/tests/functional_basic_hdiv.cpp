@@ -79,9 +79,11 @@ TEST(basic, hdiv_hexes) { hdiv_test<1>("/data/meshes/patch3D_hexes.mesh"); }
 TEST(basic, hdiv_tets) { hdiv_test<1>("/data/meshes/patch3D_tets.mesh"); }
 TEST(basic, hdiv_tets_and_hexes) { hdiv_test<1>("/data/meshes/patch3D_tets_and_hexes.mesh"); }
 
-// Higher order (quads/hexes have full p support; simplices only p=1 for now)
+// Higher order
 TEST(basic, hdiv_quads_p2) { hdiv_test<2>("/data/meshes/patch2D_quads.mesh"); }
 TEST(basic, hdiv_hexes_p2) { hdiv_test<2>("/data/meshes/patch3D_hexes.mesh"); }
+TEST(basic, hdiv_tris_p2) { hdiv_test<2>("/data/meshes/patch2D_tris.mesh"); }
+TEST(basic, hdiv_tets_p2) { hdiv_test<2>("/data/meshes/patch3D_tets.mesh"); }
 
 int main(int argc, char* argv[])
 {

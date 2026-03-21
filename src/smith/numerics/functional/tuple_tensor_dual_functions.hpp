@@ -385,7 +385,7 @@ SMITH_HOST_DEVICE constexpr LuFactorization<T, n> factorize_lu(const tensor<T, n
   tensor<int, n> P(make_tensor<n>([](auto i) { return i; }));
 
   for (int i = 0; i < n; i++) {
-    // Search for maximum in this column
+    // Search for maximum in this column (partial pivoting on partially-eliminated U)
     double max_val = abs(get_value(U[i][i]));
 
     int max_row = i;
@@ -399,11 +399,12 @@ SMITH_HOST_DEVICE constexpr LuFactorization<T, n> factorize_lu(const tensor<T, n
 
     swap(P[max_row], P[i]);
     swap(U[max_row], U[i]);
-  }
+    // Swap already-computed L entries to keep L consistent with the row permutation
+    for (int k = 0; k < i; k++) {
+      swap(L[max_row][k], L[i][k]);
+    }
 
-  for (int i = 0; i < n; i++) {
-    // zero entries below in this column in U
-    // and fill in L entries
+    // zero entries below in this column in U and fill in L entries
     for (int j = i + 1; j < n; j++) {
       auto c = U[j][i] / U[i][i];
       L[j][i] = c;

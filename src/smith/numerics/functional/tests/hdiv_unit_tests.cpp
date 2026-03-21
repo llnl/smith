@@ -119,21 +119,49 @@ TEST(HdivDiv, HexahedronQuadratic) { verify_div_calculation<finite_element<::mfe
 
 TEST(HdivDiv, HexahedronCubic) { verify_div_calculation<finite_element<::mfem::Geometry::CUBE, Hdiv<3>>>(); }
 
-// Triangle (only p=1 shape functions fully implemented)
+// Triangle
 TEST(HdivKroneckerDelta, TriangleLinear)
 {
   verify_kronecker_delta_property<finite_element<::mfem::Geometry::TRIANGLE, Hdiv<1>>>();
 }
 
+TEST(HdivKroneckerDelta, TriangleQuadratic)
+{
+  verify_kronecker_delta_property<finite_element<::mfem::Geometry::TRIANGLE, Hdiv<2>>>();
+}
+
+TEST(HdivKroneckerDelta, TriangleCubic)
+{
+  verify_kronecker_delta_property<finite_element<::mfem::Geometry::TRIANGLE, Hdiv<3>>>();
+}
+
 TEST(HdivDiv, TriangleLinear) { verify_div_calculation<finite_element<::mfem::Geometry::TRIANGLE, Hdiv<1>>>(); }
 
-// Tetrahedron (only p=1 shape functions fully implemented)
+TEST(HdivDiv, TriangleQuadratic) { verify_div_calculation<finite_element<::mfem::Geometry::TRIANGLE, Hdiv<2>>>(); }
+
+TEST(HdivDiv, TriangleCubic) { verify_div_calculation<finite_element<::mfem::Geometry::TRIANGLE, Hdiv<3>>>(); }
+
+// Tetrahedron
 TEST(HdivKroneckerDelta, TetrahedronLinear)
 {
   verify_kronecker_delta_property<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<1>>>();
 }
 
+TEST(HdivKroneckerDelta, TetrahedronQuadratic)
+{
+  verify_kronecker_delta_property<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<2>>>();
+}
+
+TEST(HdivKroneckerDelta, TetrahedronCubic)
+{
+  verify_kronecker_delta_property<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<3>>>();
+}
+
 TEST(HdivDiv, TetrahedronLinear) { verify_div_calculation<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<1>>>(); }
+
+TEST(HdivDiv, TetrahedronQuadratic) { verify_div_calculation<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<2>>>(); }
+
+TEST(HdivDiv, TetrahedronCubic) { verify_div_calculation<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<3>>>(); }
 
 int main(int argc, char* argv[])
 {

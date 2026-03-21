@@ -16,9 +16,13 @@
 // Convention: Hdiv<p> corresponds to RT_FECollection(p-1, dim) in mfem.
 // RT_{p-1} on tetrahedra has ndof = p*(p+1)*(p+3)/2 DOFs.
 //   Hdiv<1> -> RT_0: 4 DOFs (one per face)
+//   Hdiv<2> -> RT_1: 15 DOFs (3 per face + 3 interior)
+//   Hdiv<3> -> RT_2: 36 DOFs (6 per face + 12 interior)
 //
-// The shape functions are vector-valued and the relevant derivative is the scalar divergence.
-// DOF ordering follows mfem's RT_FECollection convention.
+// Shape functions are computed via a Vandermonde approach matching mfem:
+//   1. Build a raw polynomial basis (Chebyshev polynomials in barycentric coords)
+//   2. Build the Vandermonde matrix T at DOF nodes
+//   3. Shape functions = inv(T) * raw_basis
 //
 // for additional information on the finite_element concept requirements, see finite_element.hpp
 /// @cond
@@ -28,7 +32,7 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
   static constexpr auto family = Family::HDIV;
   static constexpr int dim = 3;
   static constexpr int n = p;
-  static constexpr int ndof = p * (p + 1) * (p + 3) / 2;  // = RT_{p-1} on tet
+  static constexpr int ndof = p * (p + 1) * (p + 3) / 2;
   static constexpr int components = 1;
 
   static constexpr int VALUE = 0, DIV = 1;
@@ -38,82 +42,231 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
       typename std::conditional<components == 1, tensor<double, ndof>, tensor<double, ndof, components> >::type;
 
   using dof_type = tensor<double, ndof>;
+  using dof_type_if = dof_type;
 
   using value_type = tensor<double, dim>;
   using derivative_type = double;
   using qf_input_type = tuple<value_type, derivative_type>;
 
-  /*
-    Hdiv<1> -> RT_0 on tetrahedron: 4 DOFs (one per face, normal component)
+  // mfem polynomial order (RT_{mp} element)
+  static constexpr int mp = p - 1;
 
-    The 4 faces of the reference tet and their outward normals:
-    Face 0: {v1,v2,v3} = {(1,0,0),(0,1,0),(0,0,1)}, normal ~ (1,1,1)
-    Face 1: {v0,v2,v3} = {(0,0,0),(0,1,0),(0,0,1)}, normal ~ (-1,0,0)
-    Face 2: {v0,v1,v3} = {(0,0,0),(1,0,0),(0,0,1)}, normal ~ (0,-1,0)
-    Face 3: {v0,v1,v2} = {(0,0,0),(1,0,0),(0,1,0)}, normal ~ (0,0,-1)
-
-    RT0 basis functions (mfem convention):
-      phi_0 = (x, y, z)             div = 3
-      phi_1 = (x-1, y, z)           div = 3
-      phi_2 = (x, y-1, z)           div = 3
-      phi_3 = (x, y, z-1)           div = 3
-  */
-
-  // DOF locations (face centroids) and associated normal directions
-  static constexpr auto nodes = [] {
-    tensor<double, ndof, dim> nodes{};
-    if constexpr (p == 1) {
-      // Face centroids
-      nodes[0] = {1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0};  // face 0
-      nodes[1] = {0.0, 1.0 / 3.0, 1.0 / 3.0};          // face 1
-      nodes[2] = {1.0 / 3.0, 0.0, 1.0 / 3.0};          // face 2
-      nodes[3] = {1.0 / 3.0, 1.0 / 3.0, 0.0};          // face 3
+  // Evaluate Chebyshev polynomials T_0(2x-1), ..., T_order(2x-1) at x
+  SMITH_HOST_DEVICE static constexpr void chebyshev_eval(int order, double x, double* u)
+  {
+    u[0] = 1.0;
+    if (order < 1) return;
+    double z = 2.0 * x - 1.0;
+    u[1] = z;
+    for (int i = 1; i < order; i++) {
+      u[i + 1] = 2.0 * z * u[i] - u[i - 1];
     }
-    return nodes;
+  }
+
+  // Evaluate Chebyshev polynomials and their derivatives (w.r.t. x)
+  SMITH_HOST_DEVICE static constexpr void chebyshev_eval_d(int order, double x, double* u, double* d)
+  {
+    u[0] = 1.0;
+    d[0] = 0.0;
+    if (order < 1) return;
+    double z = 2.0 * x - 1.0;
+    u[1] = z;
+    d[1] = 2.0;
+    for (int i = 1; i < order; i++) {
+      u[i + 1] = 2.0 * z * u[i] - u[i - 1];
+      d[i + 1] = double(i + 1) * (z * d[i] / double(i) + 2.0 * u[i]);
+    }
+  }
+
+  // Raw (pre-Vandermonde) basis functions at point xi, matching mfem convention.
+  // Face DOFs: (s,0,0), (0,s,0), (0,0,s) where s = Tx_i * Ty_j * Tz_k * Tl_{mp-i-j-k}
+  // Interior DOFs: ((x-1/4)*s, (y-1/4)*s, (z-1/4)*s) where s = Tx_i * Ty_j * Tz_{mp-i-j}
+  SMITH_HOST_DEVICE static constexpr tensor<double, ndof, dim> raw_vshape(tensor<double, dim> xi)
+  {
+    double sx[mp + 1], sy[mp + 1], sz[mp + 1], sl[mp + 1];
+    chebyshev_eval(mp, xi[0], sx);
+    chebyshev_eval(mp, xi[1], sy);
+    chebyshev_eval(mp, xi[2], sz);
+    chebyshev_eval(mp, 1.0 - xi[0] - xi[1] - xi[2], sl);
+
+    tensor<double, ndof, dim> raw{};
+    int o = 0;
+    for (int k = 0; k <= mp; k++) {
+      for (int j = 0; j + k <= mp; j++) {
+        for (int i = 0; i + j + k <= mp; i++) {
+          double s = sx[i] * sy[j] * sz[k] * sl[mp - i - j - k];
+          raw[o][0] = s;  raw[o][1] = 0;  raw[o][2] = 0;  o++;
+          raw[o][0] = 0;  raw[o][1] = s;  raw[o][2] = 0;  o++;
+          raw[o][0] = 0;  raw[o][1] = 0;  raw[o][2] = s;  o++;
+        }
+      }
+    }
+    constexpr double c = 1.0 / 4.0;
+    for (int j = 0; j <= mp; j++) {
+      for (int i = 0; i + j <= mp; i++) {
+        double s = sx[i] * sy[j] * sz[mp - i - j];
+        raw[o][0] = (xi[0] - c) * s;
+        raw[o][1] = (xi[1] - c) * s;
+        raw[o][2] = (xi[2] - c) * s;
+        o++;
+      }
+    }
+    return raw;
+  }
+
+  // Raw divergence of the pre-Vandermonde basis
+  SMITH_HOST_DEVICE static constexpr tensor<double, ndof> raw_divshape(tensor<double, dim> xi)
+  {
+    double sx[mp + 1], sy[mp + 1], sz[mp + 1], sl[mp + 1];
+    double dsx[mp + 1], dsy[mp + 1], dsz[mp + 1], dsl[mp + 1];
+    chebyshev_eval_d(mp, xi[0], sx, dsx);
+    chebyshev_eval_d(mp, xi[1], sy, dsy);
+    chebyshev_eval_d(mp, xi[2], sz, dsz);
+    chebyshev_eval_d(mp, 1.0 - xi[0] - xi[1] - xi[2], sl, dsl);
+
+    tensor<double, ndof> raw{};
+    int o = 0;
+    for (int k = 0; k <= mp; k++) {
+      for (int j = 0; j + k <= mp; j++) {
+        for (int i = 0; i + j + k <= mp; i++) {
+          int l = mp - i - j - k;
+          // div(s,0,0) = ds/dx;  dl/dx = -1
+          raw[o++] = (dsx[i] * sl[l] - sx[i] * dsl[l]) * sy[j] * sz[k];
+          // div(0,s,0) = ds/dy;  dl/dy = -1
+          raw[o++] = (dsy[j] * sl[l] - sy[j] * dsl[l]) * sx[i] * sz[k];
+          // div(0,0,s) = ds/dz;  dl/dz = -1
+          raw[o++] = (dsz[k] * sl[l] - sz[k] * dsl[l]) * sx[i] * sy[j];
+        }
+      }
+    }
+    constexpr double c = 1.0 / 4.0;
+    for (int j = 0; j <= mp; j++) {
+      for (int i = 0; i + j <= mp; i++) {
+        int k = mp - i - j;
+        // div((x-c)*s, (y-c)*s, (z-c)*s) = 3*s + (x-c)*ds/dx + (y-c)*ds/dy + (z-c)*ds/dz
+        raw[o++] = (sx[i] + (xi[0] - c) * dsx[i]) * sy[j] * sz[k] +
+                   (sy[j] + (xi[1] - c) * dsy[j]) * sx[i] * sz[k] +
+                   (sz[k] + (xi[2] - c) * dsz[k]) * sx[i] * sy[j];
+      }
+    }
+    return raw;
+  }
+
+  // DOF node locations matching mfem's RT_TetrahedronElement constructor.
+  // Face DOFs at barycentric GL points on each face, interior DOFs at barycentric GL points.
+  // face_dofs_per_face = p*(p+1)/2
+  static constexpr auto nodes = [] {
+    tensor<double, ndof, dim> nd{};
+    constexpr auto bop = GaussLegendreNodes<p, mfem::Geometry::SEGMENT>();
+    int o = 0;
+
+    // face 0: vertices (1,0,0),(0,1,0),(0,0,1)  -- nk[0]=(1,1,1)
+    for (int j = 0; j <= mp; j++) {
+      for (int i = 0; i + j <= mp; i++) {
+        double w = bop[i] + bop[j] + bop[mp - i - j];
+        nd[o++] = {bop[mp - i - j] / w, bop[i] / w, bop[j] / w};
+      }
+    }
+    // face 1: vertices (0,0,0),(0,0,1),(0,1,0), x=0  -- nk[1]=(-1,0,0)
+    for (int j = 0; j <= mp; j++) {
+      for (int i = 0; i + j <= mp; i++) {
+        double w = bop[i] + bop[j] + bop[mp - i - j];
+        nd[o++] = {0.0, bop[j] / w, bop[i] / w};
+      }
+    }
+    // face 2: vertices (0,0,0),(1,0,0),(0,0,1), y=0  -- nk[2]=(0,-1,0)
+    for (int j = 0; j <= mp; j++) {
+      for (int i = 0; i + j <= mp; i++) {
+        double w = bop[i] + bop[j] + bop[mp - i - j];
+        nd[o++] = {bop[i] / w, 0.0, bop[j] / w};
+      }
+    }
+    // face 3: vertices (0,0,0),(0,1,0),(1,0,0), z=0  -- nk[3]=(0,0,-1)
+    for (int j = 0; j <= mp; j++) {
+      for (int i = 0; i + j <= mp; i++) {
+        double w = bop[i] + bop[j] + bop[mp - i - j];
+        nd[o++] = {bop[j] / w, bop[i] / w, 0.0};
+      }
+    }
+
+    // interior DOFs (3 per interior point)
+    if constexpr (p > 1) {
+      constexpr auto iop = GaussLegendreNodes<p - 1, mfem::Geometry::SEGMENT>();
+      for (int k = 0; k < p - 1; k++) {
+        for (int j = 0; j + k < p - 1; j++) {
+          for (int i = 0; i + j + k < p - 1; i++) {
+            double w = iop[i] + iop[j] + iop[k] + iop[p - 2 - i - j - k];
+            nd[o++] = {iop[i] / w, iop[j] / w, iop[k] / w};
+            nd[o++] = {iop[i] / w, iop[j] / w, iop[k] / w};
+            nd[o++] = {iop[i] / w, iop[j] / w, iop[k] / w};
+          }
+        }
+      }
+    }
+    return nd;
   }();
 
+  // Normal directions associated with each DOF
   static constexpr auto directions = [] {
-    tensor<double, ndof, dim> directions{};
-    if constexpr (p == 1) {
-      // Outward normals (not normalized — matches shape function scaling)
-      directions[0] = {1.0, 1.0, 1.0};    // face 0
-      directions[1] = {-1.0, 0.0, 0.0};   // face 1
-      directions[2] = {0.0, -1.0, 0.0};   // face 2
-      directions[3] = {0.0, 0.0, -1.0};   // face 3
+    tensor<double, ndof, dim> d{};
+    int o = 0;
+    constexpr int fdofs = p * (p + 1) / 2;  // DOFs per face
+    for (int i = 0; i < fdofs; i++) d[o++] = {1.0, 1.0, 1.0};    // face 0
+    for (int i = 0; i < fdofs; i++) d[o++] = {-1.0, 0.0, 0.0};   // face 1
+    for (int i = 0; i < fdofs; i++) d[o++] = {0.0, -1.0, 0.0};   // face 2
+    for (int i = 0; i < fdofs; i++) d[o++] = {0.0, 0.0, -1.0};   // face 3
+    if constexpr (p > 1) {
+      for (int k = 0; k < p - 1; k++) {
+        for (int j = 0; j + k < p - 1; j++) {
+          for (int i = 0; i + j + k < p - 1; i++) {
+            d[o++] = {-1.0, 0.0, 0.0};   // nk[1]
+            d[o++] = {0.0, -1.0, 0.0};   // nk[2]
+            d[o++] = {0.0, 0.0, -1.0};   // nk[3]
+          }
+        }
+      }
     }
-    return directions;
+    return d;
+  }();
+
+  // Inverse Vandermonde matrix
+  static constexpr auto Ti = [] {
+    tensor<double, ndof, ndof> T{};
+    for (int k = 0; k < ndof; k++) {
+      auto raw = raw_vshape(nodes[k]);
+      for (int r = 0; r < ndof; r++) {
+        T[r][k] = raw[r][0] * directions[k][0] + raw[r][1] * directions[k][1] +
+                  raw[r][2] * directions[k][2];
+      }
+    }
+    return inv(T);
   }();
 
   SMITH_HOST_DEVICE static constexpr tensor<double, ndof, dim> shape_functions(
       [[maybe_unused]] tensor<double, dim> xi)
   {
+    auto raw = raw_vshape(xi);
     tensor<double, ndof, dim> N{};
-
-    if constexpr (p == 1) {
-      // Hdiv<1> -> RT_0: 4 basis functions
-      double x = xi[0], y = xi[1], z = xi[2];
-      N[0] = {x, y, z};
-      N[1] = {x - 1.0, y, z};
-      N[2] = {x, y - 1.0, z};
-      N[3] = {x, y, z - 1.0};
+    for (int i = 0; i < ndof; i++) {
+      for (int j = 0; j < ndof; j++) {
+        N[i][0] += Ti[i][j] * raw[j][0];
+        N[i][1] += Ti[i][j] * raw[j][1];
+        N[i][2] += Ti[i][j] * raw[j][2];
+      }
     }
-
     return N;
   }
 
   SMITH_HOST_DEVICE static constexpr tensor<double, ndof> shape_function_div(
       [[maybe_unused]] tensor<double, dim> xi)
   {
+    auto raw = raw_divshape(xi);
     tensor<double, ndof> div{};
-
-    if constexpr (p == 1) {
-      // Hdiv<1> -> RT_0: constant divergence = 3
-      div[0] = 3.0;
-      div[1] = 3.0;
-      div[2] = 3.0;
-      div[3] = 3.0;
+    for (int i = 0; i < ndof; i++) {
+      for (int j = 0; j < ndof; j++) {
+        div[i] += Ti[i][j] * raw[j];
+      }
     }
-
     return div;
   }
 
@@ -186,15 +339,23 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
     [[maybe_unused]] constexpr auto weights = GaussLegendreWeights<q, mfem::Geometry::TETRAHEDRON>();
     constexpr int Q = q * (q + 1) * (q + 2) / 6;
 
+    if constexpr (is_zero<source_type>{} && is_zero<flux_type>{}) return;
+
     for (int i = 0; i < Q; i++) {
       auto N = shape_functions(xi[i]);
       auto divN = shape_function_div(xi[i]);
 
-      tensor<double, dim> s{get<SOURCE>(qf_output[i])};
-      double f = get<FLUX>(qf_output[i]);
-
       for (int j = 0; j < ndof; j++) {
-        element_residual[0][j] += (dot(s, N[j]) + f * divN[j]) * weights[i];
+        double contrib = 0.0;
+        if constexpr (!is_zero<source_type>{}) {
+          tensor<double, dim> s{get<SOURCE>(qf_output[i])};
+          contrib += dot(s, N[j]);
+        }
+        if constexpr (!is_zero<flux_type>{}) {
+          double f = get<FLUX>(qf_output[i]);
+          contrib += f * divN[j];
+        }
+        element_residual[0][j] += contrib * weights[i];
       }
     }
   }
