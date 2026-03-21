@@ -27,6 +27,8 @@ if(DEFINED ENV{SYS_TYPE} AND "$ENV{SYS_TYPE}" STREQUAL "blueos_3_ppc64le_ib_p9")
 endif()
 
 # Enable warnings for things not covered by -Wall -Wextra
-set(_extra_flags "-Wshadow -Wdouble-promotion -Wconversion -Wundef -Wnull-dereference -Wold-style-cast -Wpedantic -Wunused-private-field")
+set(_extra_flags "-Wshadow -Wdouble-promotion -Wconversion -Wundef -Wnull-dereference -Wold-style-cast -Wpedantic")
 blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS DEFAULT ${_extra_flags})
 
+# Clang specific warnings
+blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS CLANG "-Wunused-private-field")
