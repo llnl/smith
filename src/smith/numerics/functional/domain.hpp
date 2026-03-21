@@ -167,6 +167,16 @@ struct Domain {
   /// @overload
   static Domain ofBoundaryElements(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func);
 
+  /**
+   * @brief create a domain from some subset of the interior faces (spatial dim == geometry dim + 1) in an mfem::Mesh
+   * @param mesh the entire mesh
+   * @param func predicate function for determining which interior faces will be included in this domain
+   */
+  static Domain ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func);
+
+  /// @overload
+  static Domain ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func);
+
   /// @brief get elements by geometry type
   const std::vector<int>& get(mfem::Geometry::Type geom) const
   {

@@ -1,3 +1,4 @@
+
 // Copyright (c) Lawrence Livermore National Security, LLC and
 // other Smith Project Developers. See the top-level LICENSE file for
 // details.
@@ -21,25 +22,23 @@
 using namespace smith;
 using namespace smith::profiling;
 
-// This test initializes a DG field with nodal coordinates of the dofs, so that the
-// discontinuous dof pairs across the interior faces have the value. For example
-// on the interior face with the following dofs
-//        {1, 2} | {5, 6}
-//               |
-//               |
-//        {3, 4} | {7, 8}
-// we have {1, 2} = {5, 6} and {3, 4} = {7, 8}.
-// It then integrates the jump of dof values over all interior faces.
-// If the ghost dof data is constructed correctly to align with locally owned data,
-// then every entry in the residual vector should equal to zero. This is tested
-// by the L2 norm of the residual equal to zero.
 template <int dim, int p>
-void L2_index_test(std::string meshfile)
+void L2_periodic_index_test(mfem::Element::Type element_type)
 {
   using test_space = L2<p, dim>;
   using trial_space = L2<p, dim>;
 
-  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(meshfile), 1);
+  auto initial_mesh = mfem::Mesh(mfem::Mesh::MakeCartesian3D(4, 4, 4, element_type, 1.0, 1.0, 1.0));
+
+  mfem::Vector x_translation({1.0, 0.0, 0.0});
+  mfem::Vector y_translation({0.0, 1.0, 0.0});
+  mfem::Vector z_translation({0.0, 0.0, 1.0});
+  std::vector<mfem::Vector> translations = {x_translation, y_translation, z_translation};
+  double tol = 1e-6;
+
+  std::vector<int> periodicMap = initial_mesh.CreatePeriodicVertexMapping(translations, tol);
+
+  auto mesh = mesh::refineAndDistribute(mfem::Mesh::MakePeriodic(initial_mesh, periodicMap));
 
   auto [test_fespace, test_fec] = smith::generateParFiniteElementSpace<test_space>(mesh.get());
   auto [trial_fespace, trial_fec] = smith::generateParFiniteElementSpace<trial_space>(mesh.get());
@@ -61,7 +60,7 @@ void L2_index_test(std::string meshfile)
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space)> residual(test_fespace.get(), {trial_fespace.get()});
 
-  Domain interior_faces = InteriorFaces(*mesh);
+  Domain periodic_faces = Domain::ofInteriorFaces(*mesh, by_attr<dim>({1, 2, 3, 4, 5, 6}));
 
   // Define the integral of jumps over all interior faces
   residual.AddInteriorFaceIntegral(
@@ -78,13 +77,13 @@ void L2_index_test(std::string meshfile)
         SLIC_INFO(axom::fmt::format("One side = {}, The other side = {}, Jump = {}", axom::fmt::streamed(u_1),
                                     axom::fmt::streamed(u_2), axom::fmt::streamed(u_1 - u_2)));
 
-        auto a = dot(u_2 - u_1, n);
+        auto a = dot(u_1 - u_2, n) - 1.0;
 
         auto f_1 = u_1 * a;
         auto f_2 = u_2 * a;
         return smith::tuple{f_1, f_2};
       },
-      interior_faces);
+      periodic_faces);
 
   double t = 0.0;
 
@@ -92,20 +91,15 @@ void L2_index_test(std::string meshfile)
   EXPECT_NEAR(0., value.Norml2(), 1.e-12);
 }
 
-TEST(index, L2_test_tris_and_quads_linear)
+TEST(periodic_index, L2_test_tets_linear)
 {
-  L2_index_test<2, 1>(SMITH_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh");
-}
-TEST(index, L2_test_tris_and_quads_quadratic)
-{
-  L2_index_test<2, 2>(SMITH_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh");
+  L2_periodic_index_test<3, 1>(mfem::Element::Type::TETRAHEDRON);
 }
 
-TEST(index, L2_test_tets_linear) { L2_index_test<3, 1>(SMITH_REPO_DIR "/data/meshes/patch3D_tets.mesh"); }
-TEST(index, L2_test_tets_quadratic) { L2_index_test<3, 2>(SMITH_REPO_DIR "/data/meshes/patch3D_tets.mesh"); }
-
-TEST(index, L2_test_hexes_linear) { L2_index_test<3, 1>(SMITH_REPO_DIR "/data/meshes/patch3D_hexes.mesh"); }
-TEST(index, L2_test_hexes_quadratic) { L2_index_test<3, 2>(SMITH_REPO_DIR "/data/meshes/patch3D_hexes.mesh"); }
+TEST(periodic_index, L2_test_hex_linear)
+{
+  L2_periodic_index_test<3, 1>(mfem::Element::Type::HEXAHEDRON);
+}
 
 int main(int argc, char* argv[])
 {
