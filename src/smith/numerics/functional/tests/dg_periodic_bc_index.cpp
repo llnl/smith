@@ -91,15 +91,9 @@ void L2_periodic_index_test(mfem::Element::Type element_type)
   EXPECT_NEAR(0., value.Norml2(), 1.e-12);
 }
 
-TEST(periodic_index, L2_test_tets_linear)
-{
-  L2_periodic_index_test<3, 1>(mfem::Element::Type::TETRAHEDRON);
-}
+TEST(periodic_index, L2_test_tets_linear) { L2_periodic_index_test<3, 1>(mfem::Element::Type::TETRAHEDRON); }
 
-TEST(periodic_index, L2_test_hex_linear)
-{
-  L2_periodic_index_test<3, 1>(mfem::Element::Type::HEXAHEDRON);
-}
+TEST(periodic_index, L2_test_hex_linear) { L2_periodic_index_test<3, 1>(mfem::Element::Type::HEXAHEDRON); }
 
 int main(int argc, char* argv[])
 {

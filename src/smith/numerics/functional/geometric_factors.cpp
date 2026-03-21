@@ -93,7 +93,9 @@ GeometricFactors::GeometricFactors(const Domain& domain, int q, mfem::Geometry::
         for (uint64_t j = 0; j < restriction.nodes_per_elem; j++) {
           // ignore the coordinate dofs on the other side of the face
           // coordinate on both side of the face should have the same values
-          if (j >= new_nodes_per_elem) { continue; }
+          if (j >= new_nodes_per_elem) {
+            continue;
+          }
 
           uint64_t E_id = (i * restriction.components + c) * restriction.nodes_per_elem + j;
           X_h1[H1_id++] = X_e[int(E_id)];
