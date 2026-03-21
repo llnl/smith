@@ -118,7 +118,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
                          const std::vector<ConstFieldPtr>& fs) const
   {
     return (*objective_)(time, *shape_disp, *fs[i]...);
-  };
+  }
 
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
   template <int... i>
@@ -131,7 +131,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
         [this](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
           return (*objective_)(DifferentiateWRT<i + 1>{}, _time, *_shape_disp, *_fs[i]...);
         }...};
-  };
+  }
 
   /// @brief timestep, this needs to be held here and modified for rate dependent applications.
   mutable double dt_ = std::numeric_limits<double>::max();
