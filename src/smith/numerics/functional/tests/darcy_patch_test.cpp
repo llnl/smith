@@ -215,13 +215,158 @@ double darcy_solve()
   return err / (norm_ref > 0.0 ? norm_ref : 1.0);
 }
 
+// ─── 3D Darcy solve ──────────────────────────────────────────────────────────
+
+static void sigma_exact_3d_fn(const mfem::Vector& /*x*/, mfem::Vector& v)
+{
+  v(0) = -1.0;
+  v(1) = -2.0;
+  v(2) = -3.0;
+}
+
+static double u_exact_3d_fn(const mfem::Vector& x) { return x(0) + 2.0 * x(1) + 3.0 * x(2); }
+
+template <int p>
+double darcy_solve_3d()
+{
+  constexpr int dim = 3;
+
+  auto mesh = mesh::refineAndDistribute(
+      mfem::Mesh::MakeCartesian3D(2, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0), 0);
+
+  auto [fes_sigma, fec_sigma] = generateParFiniteElementSpace<Hdiv<p>>(mesh.get());
+  auto [fes_u, fec_u]         = generateParFiniteElementSpace<L2<p - 1>>(mesh.get());
+
+  mfem::VectorFunctionCoefficient sigma_coeff(dim, sigma_exact_3d_fn);
+  mfem::ParGridFunction sigma_gf(fes_sigma.get());
+  sigma_gf.ProjectCoefficient(sigma_coeff);
+
+  mfem::FunctionCoefficient u_coeff(u_exact_3d_fn);
+  mfem::ParGridFunction u_gf(fes_u.get());
+  u_gf.ProjectCoefficient(u_coeff);
+
+  mfem::Vector sigma_exact(fes_sigma->TrueVSize());
+  sigma_gf.GetTrueDofs(sigma_exact);
+  mfem::Vector u_exact(fes_u->TrueVSize());
+  u_gf.GetTrueDofs(u_exact);
+
+  mfem::Vector sigma_zero(fes_sigma->TrueVSize());
+  sigma_zero = 0.0;
+  mfem::Vector u_zero(fes_u->TrueVSize());
+  u_zero = 0.0;
+
+  Functional<Hdiv<p>(Hdiv<p>, L2<p - 1>)> res_sigma(fes_sigma.get(), {fes_sigma.get(), fes_u.get()});
+
+  Domain whole_domain = EntireDomain(*mesh);
+
+  res_sigma.AddDomainIntegral(
+      Dimension<dim>{}, DependsOn<0, 1>{},
+      [](double, auto, auto sigma_arg, auto u_arg) {
+        auto [sigma_val, sigma_div] = sigma_arg;
+        auto [u_val, u_grad]        = u_arg;
+        return smith::tuple{sigma_val, -u_val};
+      },
+      whole_domain);
+
+  constexpr double eps = 1.0e-10;
+  Functional<L2<p - 1>(Hdiv<p>, L2<p - 1>)> res_u(fes_u.get(), {fes_sigma.get(), fes_u.get()});
+
+  res_u.AddDomainIntegral(
+      Dimension<dim>{}, DependsOn<0, 1>{},
+      [=](double, auto, auto sigma_arg, auto u_arg) {
+        auto [sigma_val, sigma_div] = sigma_arg;
+        auto [u_val, u_grad]        = u_arg;
+        return smith::tuple{sigma_div + eps * u_val, tensor<double, dim>{}};
+      },
+      whole_domain);
+
+  double t = 0.0;
+
+  auto [r_sigma_0, dRsigma_dsigma] = res_sigma(t, differentiate_wrt(sigma_zero), u_zero);
+  auto [dummy0, dRsigma_du]        = res_sigma(t, sigma_zero, differentiate_wrt(u_zero));
+  auto [r_u_0, dRu_dsigma]         = res_u(t, differentiate_wrt(sigma_zero), u_zero);
+  auto [dummy1, dRu_du]            = res_u(t, sigma_zero, differentiate_wrt(u_zero));
+
+  auto J_00 = assemble(dRsigma_dsigma);
+  auto J_01 = assemble(dRsigma_du);
+  auto J_10 = assemble(dRu_dsigma);
+  auto J_11 = assemble(dRu_du);
+
+  mfem::Array<int> ess_bdr(mesh->bdr_attributes.Max());
+  ess_bdr = 1;
+  mfem::Array<int> ess_tdofs_sigma;
+  fes_sigma->GetEssentialTrueDofs(ess_bdr, ess_tdofs_sigma);
+
+  mfem::Vector sigma_bc(fes_sigma->TrueVSize());
+  sigma_bc = 0.0;
+  for (int i = 0; i < ess_tdofs_sigma.Size(); i++) {
+    sigma_bc[ess_tdofs_sigma[i]] = sigma_exact[ess_tdofs_sigma[i]];
+  }
+
+  mfem::Vector rhs_sigma(fes_sigma->TrueVSize());
+  rhs_sigma = 0.0;
+  {
+    mfem::Vector tmp(rhs_sigma.Size());
+    J_00->Mult(sigma_bc, tmp);
+    rhs_sigma -= tmp;
+  }
+
+  mfem::Vector rhs_u(fes_u->TrueVSize());
+  rhs_u = 0.0;
+  {
+    mfem::Vector tmp(rhs_u.Size());
+    J_10->Mult(sigma_bc, tmp);
+    rhs_u -= tmp;
+  }
+
+  {
+    auto* elim = J_00->EliminateRowsCols(ess_tdofs_sigma);
+    delete elim;
+  }
+  J_01->EliminateRows(ess_tdofs_sigma);
+  J_10->EliminateCols(ess_tdofs_sigma);
+
+  for (int i = 0; i < ess_tdofs_sigma.Size(); i++) {
+    rhs_sigma[ess_tdofs_sigma[i]] = sigma_exact[ess_tdofs_sigma[i]];
+  }
+
+  mfem::Array<int> offsets;
+  offsets.SetSize(3);
+  offsets[0] = 0;
+  offsets[1] = fes_sigma->TrueVSize();
+  offsets[2] = fes_sigma->TrueVSize() + fes_u->TrueVSize();
+
+  mfem::BlockOperator block_op(offsets);
+  block_op.SetBlock(0, 0, J_00.get());
+  block_op.SetBlock(0, 1, J_01.get());
+  block_op.SetBlock(1, 0, J_10.get());
+  block_op.SetBlock(1, 1, J_11.get());
+
+  mfem::BlockVector rhs_block(offsets), sol_block(offsets);
+  rhs_block.GetBlock(0) = rhs_sigma;
+  rhs_block.GetBlock(1) = rhs_u;
+  sol_block              = 0.0;
+
+  smith::SuperLUSolver superlu(0, mesh->GetComm());
+  superlu.SetOperator(block_op);
+  superlu.Mult(rhs_block, sol_block);
+
+  mfem::Vector sigma_err(sol_block.GetBlock(0));
+  sigma_err -= sigma_exact;
+  double err      = sigma_err.Norml2();
+  double norm_ref = sigma_exact.Norml2();
+  return err / (norm_ref > 0.0 ? norm_ref : 1.0);
+}
+
 // ─── tests ───────────────────────────────────────────────────────────────────
 
-// Hdiv<2> ↔ RT_1 × DG_1 — constant σ, linear u  (exact representation)
+// 2D tests
 TEST(DarcyPatch, RT1_DG1_2D) { EXPECT_LT(darcy_solve<2>(), 1.0e-8); }
-
-// Hdiv<3> ↔ RT_2 × DG_2 — same exact solution, higher order space
 TEST(DarcyPatch, RT2_DG2_2D) { EXPECT_LT(darcy_solve<3>(), 1.0e-8); }
+
+// 3D tests
+TEST(DarcyPatch, RT1_DG1_3D) { EXPECT_LT(darcy_solve_3d<2>(), 1.0e-8); }
+TEST(DarcyPatch, RT2_DG2_3D) { EXPECT_LT(darcy_solve_3d<3>(), 1.0e-8); }
 
 int main(int argc, char* argv[])
 {

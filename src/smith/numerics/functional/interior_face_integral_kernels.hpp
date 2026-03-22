@@ -63,15 +63,11 @@ struct QFunctionArgument<L2<p, c>, Dimension<dim>> {
 };
 
 /// @overload
+/// Hdiv on a segment face element (face of a 2D mesh).
+/// The face trace of Hdiv is the scalar normal flux sigma dot n.
 template <int p>
-struct QFunctionArgument<Hdiv<p>, Dimension<2>> {
-  using type = smith::tuple<tensor<double, 2>, double>;  ///< (value, divergence) passed to the q-function
-};
-
-/// @overload
-template <int p>
-struct QFunctionArgument<Hdiv<p>, Dimension<3>> {
-  using type = smith::tuple<tensor<double, 3>, double>;  ///< (value, divergence) passed to the q-function
+struct QFunctionArgument<Hdiv<p>, Dimension<1>> {
+  using type = smith::tuple<double, double>;  ///< (normal_flux, tangential_derivative) passed to the q-function
 };
 
 /// @overload

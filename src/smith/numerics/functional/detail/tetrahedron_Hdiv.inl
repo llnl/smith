@@ -51,33 +51,6 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
   // mfem polynomial order (RT_{mp} element)
   static constexpr int mp = p - 1;
 
-  // Evaluate Chebyshev polynomials T_0(2x-1), ..., T_order(2x-1) at x
-  SMITH_HOST_DEVICE static constexpr void chebyshev_eval(int order, double x, double* u)
-  {
-    u[0] = 1.0;
-    if (order < 1) return;
-    double z = 2.0 * x - 1.0;
-    u[1] = z;
-    for (int i = 1; i < order; i++) {
-      u[i + 1] = 2.0 * z * u[i] - u[i - 1];
-    }
-  }
-
-  // Evaluate Chebyshev polynomials and their derivatives (w.r.t. x)
-  SMITH_HOST_DEVICE static constexpr void chebyshev_eval_d(int order, double x, double* u, double* d)
-  {
-    u[0] = 1.0;
-    d[0] = 0.0;
-    if (order < 1) return;
-    double z = 2.0 * x - 1.0;
-    u[1] = z;
-    d[1] = 2.0;
-    for (int i = 1; i < order; i++) {
-      u[i + 1] = 2.0 * z * u[i] - u[i - 1];
-      d[i + 1] = double(i + 1) * (z * d[i] / double(i) + 2.0 * u[i]);
-    }
-  }
-
   // Raw (pre-Vandermonde) basis functions at point xi, matching mfem convention.
   // Face DOFs: (s,0,0), (0,s,0), (0,0,s) where s = Tx_i * Ty_j * Tz_k * Tl_{mp-i-j-k}
   // Interior DOFs: ((x-1/4)*s, (y-1/4)*s, (z-1/4)*s) where s = Tx_i * Ty_j * Tz_{mp-i-j}

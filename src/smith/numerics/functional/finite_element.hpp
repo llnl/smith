@@ -397,6 +397,9 @@ SMITH_HOST_DEVICE void physical_to_parent(tensor<T, q>& qf_output, const tensor<
 template <mfem::Geometry::Type g, typename family>
 struct finite_element;
 
+#include "detail/chebyshev_utils.hpp"
+#include "detail/tensor_product_basis.hpp"
+
 #include "detail/segment_H1.inl"
 #include "detail/segment_Hcurl.inl"
 #include "detail/segment_Hdiv.inl"

@@ -85,6 +85,12 @@ TEST(basic, hdiv_hexes_p2) { hdiv_test<2>("/data/meshes/patch3D_hexes.mesh"); }
 TEST(basic, hdiv_tris_p2) { hdiv_test<2>("/data/meshes/patch2D_tris.mesh"); }
 TEST(basic, hdiv_tets_p2) { hdiv_test<2>("/data/meshes/patch3D_tets.mesh"); }
 
+// p=3 assembly / gradient checks
+TEST(basic, hdiv_quads_p3) { hdiv_test<3>("/data/meshes/patch2D_quads.mesh"); }
+TEST(basic, hdiv_tris_p3) { hdiv_test<3>("/data/meshes/patch2D_tris.mesh"); }
+TEST(basic, hdiv_hexes_p3) { hdiv_test<3>("/data/meshes/patch3D_hexes.mesh"); }
+TEST(basic, hdiv_tets_p3) { hdiv_test<3>("/data/meshes/patch3D_tets.mesh"); }
+
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);

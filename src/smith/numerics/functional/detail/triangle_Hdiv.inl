@@ -54,33 +54,6 @@ struct finite_element<mfem::Geometry::TRIANGLE, Hdiv<p> > {
   // mfem polynomial order (RT_{mp} element)
   static constexpr int mp = p - 1;
 
-  // Evaluate Chebyshev polynomials T_0(2x-1), ..., T_order(2x-1) at x
-  SMITH_HOST_DEVICE static constexpr void chebyshev_eval(int order, double x, double* u)
-  {
-    u[0] = 1.0;
-    if (order < 1) return;
-    double z = 2.0 * x - 1.0;
-    u[1] = z;
-    for (int i = 1; i < order; i++) {
-      u[i + 1] = 2.0 * z * u[i] - u[i - 1];
-    }
-  }
-
-  // Evaluate Chebyshev polynomials and their derivatives (w.r.t. x, not z)
-  SMITH_HOST_DEVICE static constexpr void chebyshev_eval_d(int order, double x, double* u, double* d)
-  {
-    u[0] = 1.0;
-    d[0] = 0.0;
-    if (order < 1) return;
-    double z = 2.0 * x - 1.0;
-    u[1] = z;
-    d[1] = 2.0;
-    for (int i = 1; i < order; i++) {
-      u[i + 1] = 2.0 * z * u[i] - u[i - 1];
-      d[i + 1] = double(i + 1) * (z * d[i] / double(i) + 2.0 * u[i]);
-    }
-  }
-
   // Raw (pre-Vandermonde) basis functions at point xi, matching mfem convention.
   // Face DOFs: (s, 0) and (0, s)  where s = T_i(2x-1)*T_j(2y-1)*T_k(2(1-x-y)-1)
   // Interior DOFs: ((x-1/3)*s, (y-1/3)*s)  where s = T_i(2x-1)*T_j(2y-1)

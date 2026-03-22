@@ -38,6 +38,7 @@ set(functional_parallel_test_sources
     #functional_basic_hcurl.cpp
     functional_basic_hdiv.cpp
     darcy_patch_test.cpp
+    hdiv_convergence_test.cpp
     functional_with_domain.cpp
     functional_basic_h1_scalar.cpp
     functional_basic_h1_vector.cpp
@@ -57,6 +58,7 @@ smith_add_tests(SOURCES       ${functional_parallel_test_sources}
 
 target_link_libraries(bug_boundary_qoi PUBLIC smith_physics)
 target_link_libraries(darcy_patch_test PUBLIC smith_numerics)
+target_link_libraries(hdiv_convergence_test PUBLIC smith_numerics)
 
 if(SMITH_ENABLE_CUDA)
 
