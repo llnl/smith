@@ -24,44 +24,51 @@
 namespace smith {
 
 /**
- * @brief Container for a coupled thermo-mechanical system.
+ * @brief Container for a coupled thermo-mechanical system with configurable time integration.
+ *
+ * Uses 2-state layout for each field (predicted + history), for a total of 4 state fields.
+ *
  * @tparam dim Spatial dimension.
  * @tparam disp_order Order of the displacement basis.
  * @tparam temp_order Order of the temperature basis.
+ * @tparam DisplacementTimeRule Time integration rule type for displacement (must have num_states == 2).
+ * @tparam TemperatureTimeRule Time integration rule type for temperature (must have num_states == 2).
  * @tparam parameter_space Finite element spaces for optional parameters.
  */
-template <int dim, int disp_order, int temp_order, typename... parameter_space>
+template <int dim, int disp_order, int temp_order,
+          typename DisplacementTimeRule = BackwardEulerQuasiStaticRule,
+          typename TemperatureTimeRule = BackwardEulerFirstOrderTimeIntegrationRule, typename... parameter_space>
 struct ThermoMechanicsSystem : public SystemBase {
+  static_assert(DisplacementTimeRule::num_states == 2, "ThermoMechanicsSystem requires a 2-state displacement time rule");
+  static_assert(TemperatureTimeRule::num_states == 2, "ThermoMechanicsSystem requires a 2-state temperature time rule");
+
   /// @brief using for SolidWeakFormType
   using SolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<disp_order, dim>,
-      Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<temp_order>, H1<temp_order>, parameter_space...>>;
+      TimeRuleParams2<DisplacementTimeRule, H1<disp_order, dim>, TemperatureTimeRule, H1<temp_order>, parameter_space...>>;
 
   /// @brief using for ThermalWeakFormType
   using ThermalWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<temp_order>,
-      Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
+      TimeRuleParams2<TemperatureTimeRule, H1<temp_order>, DisplacementTimeRule, H1<disp_order, dim>, parameter_space...>>;
 
-  std::shared_ptr<SolidWeakFormType> solid_weak_form;                        ///< Solid mechanics weak form.
-  std::shared_ptr<ThermalWeakFormType> thermal_weak_form;                    ///< Thermal weak form.
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;                      ///< Displacement boundary conditions.
-  std::shared_ptr<DirichletBoundaryConditions> temperature_bc;               ///< Temperature boundary conditions.
-  std::shared_ptr<QuasiStaticFirstOrderTimeIntegrationRule> disp_time_rule;  ///< Time integration for displacement.
-  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule>
-      temperature_time_rule;  ///< Time integration for temperature.
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;                ///< Solid mechanics weak form.
+  std::shared_ptr<ThermalWeakFormType> thermal_weak_form;            ///< Thermal weak form.
+  std::shared_ptr<DirichletBoundaryConditions> disp_bc;              ///< Displacement boundary conditions.
+  std::shared_ptr<DirichletBoundaryConditions> temperature_bc;       ///< Temperature boundary conditions.
+  std::shared_ptr<DisplacementTimeRule> disp_time_rule;                          ///< Time integration for displacement.
+  std::shared_ptr<TemperatureTimeRule> temperature_time_rule;                   ///< Time integration for temperature.
 
   /**
-   * @brief Get the list of all state fields (current and old).
+   * @brief Get the list of all state fields (disp_predicted, disp, temp_predicted, temp).
    * @return std::vector<FieldState> List of state fields.
    */
   std::vector<FieldState> getStateFields() const
   {
-    std::vector<FieldState> states;
-    states.push_back(field_store->getField(prefix("displacement_predicted")));
-    states.push_back(field_store->getField(prefix("displacement")));
-    states.push_back(field_store->getField(prefix("temperature_predicted")));
-    states.push_back(field_store->getField(prefix("temperature")));
-    return states;
+    return {field_store->getField(prefix("displacement_predicted")),
+            field_store->getField(prefix("displacement")),
+            field_store->getField(prefix("temperature_predicted")),
+            field_store->getField(prefix("temperature"))};
   }
 
   /**
@@ -86,16 +93,12 @@ struct ThermoMechanicsSystem : public SystemBase {
   template <typename MaterialType>
   void setMaterial(const MaterialType& material, const std::string& domain_name)
   {
-    // Solid weak form: inputs are (u, u_old, temperature, temperature_old, params...)
-    // Manually apply time integration rules to get current state
     auto captured_disp_rule = disp_time_rule;
     auto captured_temp_rule = temperature_time_rule;
 
     solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto temperature,
                                                       auto temperature_old, auto... params) {
-      // Apply time integration to get current state
-      auto u_current = captured_disp_rule->value(t_info, u, u_old);
-      auto v_current = captured_disp_rule->dot(t_info, u, u_old);
+      auto [u_current, v_current] = captured_disp_rule->interpolate(t_info, u, u_old);
       auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
 
       typename MaterialType::State state;
@@ -104,15 +107,10 @@ struct ThermoMechanicsSystem : public SystemBase {
       return smith::tuple{zero{}, pk};
     });
 
-    // Thermal weak form: inputs are (T, T_old, u, u_old, params...)
-    // Manually apply time integration rules to get current state
     thermal_weak_form->addBodyIntegral(
         domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
-          // Apply time integration to get current state
-          auto T_current = captured_temp_rule->value(t_info, T, T_old);
-          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-          auto u = captured_disp_rule->value(t_info, disp, disp_old);
-          auto v = captured_disp_rule->dot(t_info, disp, disp_old);
+          auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, T, T_old);
+          auto [u, v] = captured_disp_rule->interpolate(t_info, disp, disp_old);
 
           typename MaterialType::State state;
           auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
@@ -124,12 +122,6 @@ struct ThermoMechanicsSystem : public SystemBase {
 
   /**
    * @brief Add a body force to the solid mechanics part of the system (with DependsOn).
-   * @tparam active_parameters Indices of fields this force depends on.
-   * @tparam BodyForceType The body force function type.
-   * @param depends_on Dependency specification for which input fields to pass.
-   * @param domain_name The name of the domain to apply the force to.
-   * @param force_function The force function (t, X, u, v, T, T_dot, selected params...).
-   * @note Time integration is applied to the state fields before calling the user function.
    */
   template <int... active_parameters, typename BodyForceType>
   void addSolidBodyForce(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
@@ -141,21 +133,14 @@ struct ThermoMechanicsSystem : public SystemBase {
     solid_weak_form->addBodySource(
         depends_on, domain_name,
         [=](auto t_info, auto X, auto u, auto u_old, auto temperature, auto temperature_old, auto... params) {
-          // Apply time integration to get current state
-          auto u_current = captured_disp_rule->value(t_info, u, u_old);
-          auto v_current = captured_disp_rule->dot(t_info, u, u_old);
-          auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
-          auto T_dot = captured_temp_rule->dot(t_info, temperature, temperature_old);
-
+          auto [u_current, v_current] = captured_disp_rule->interpolate(t_info, u, u_old);
+          auto [current_T, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
           return force_function(t_info.time(), X, u_current, v_current, current_T, T_dot, params...);
         });
   }
 
   /**
    * @brief Add a body force to the solid mechanics part of the system.
-   * @tparam BodyForceType The body force function type.
-   * @param domain_name The name of the domain to apply the force to.
-   * @param force_function The force function (t, X, u, v, T, T_dot, params...).
    */
   template <typename BodyForceType>
   void addSolidBodyForce(const std::string& domain_name, BodyForceType force_function)
@@ -164,13 +149,7 @@ struct ThermoMechanicsSystem : public SystemBase {
   }
 
   /**
-   * @brief Add a surface flux (traction) to the solid mechanics part of the system (with DependsOn).
-   * @tparam active_parameters Indices of fields this flux depends on.
-   * @tparam SurfaceFluxType The surface flux function type.
-   * @param depends_on Dependency specification for which input fields to pass.
-   * @param domain_name The name of the boundary domain to apply the flux to.
-   * @param flux_function The flux function (t, X, n, u, v, T, T_dot, selected params...).
-   * @note Time integration is applied to the state fields before calling the user function.
+   * @brief Add a surface traction to the solid mechanics part (with DependsOn).
    */
   template <int... active_parameters, typename SurfaceFluxType>
   void addSolidTraction(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
@@ -182,21 +161,14 @@ struct ThermoMechanicsSystem : public SystemBase {
     solid_weak_form->addBoundaryFlux(
         depends_on, domain_name,
         [=](auto t_info, auto X, auto n, auto u, auto u_old, auto temperature, auto temperature_old, auto... params) {
-          // Apply time integration to get current state
-          auto u_current = captured_disp_rule->value(t_info, u, u_old);
-          auto v_current = captured_disp_rule->dot(t_info, u, u_old);
-          auto current_T = captured_temp_rule->value(t_info, temperature, temperature_old);
-          auto T_dot = captured_temp_rule->dot(t_info, temperature, temperature_old);
-
+          auto [u_current, v_current] = captured_disp_rule->interpolate(t_info, u, u_old);
+          auto [current_T, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
           return flux_function(t_info.time(), X, n, u_current, v_current, current_T, T_dot, params...);
         });
   }
 
   /**
-   * @brief Add a surface flux (traction) to the solid mechanics part of the system.
-   * @tparam SurfaceFluxType The surface flux function type.
-   * @param domain_name The name of the boundary domain to apply the flux to.
-   * @param flux_function The flux function (t, X, n, u, v, T, T_dot, params...).
+   * @brief Add a surface traction to the solid mechanics part.
    */
   template <typename SurfaceFluxType>
   void addSolidTraction(const std::string& domain_name, SurfaceFluxType flux_function)
@@ -205,13 +177,7 @@ struct ThermoMechanicsSystem : public SystemBase {
   }
 
   /**
-   * @brief Add a body source (heat source) to the thermal part of the system (with DependsOn).
-   * @tparam active_parameters Indices of fields this source depends on.
-   * @tparam BodySourceType The body source function type.
-   * @param depends_on Dependency specification for which input fields to pass.
-   * @param domain_name The name of the domain to apply the source to.
-   * @param source_function The source function (t, X, u, v, T, T_dot, selected params...).
-   * @note Time integration is applied to the state fields before calling the user function.
+   * @brief Add a body heat source to the thermal part (with DependsOn).
    */
   template <int... active_parameters, typename BodySourceType>
   void addThermalHeatSource(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
@@ -223,21 +189,14 @@ struct ThermoMechanicsSystem : public SystemBase {
     thermal_weak_form->addBodySource(
         depends_on, domain_name,
         [=](auto t_info, auto X, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
-          // Apply time integration to get current state
-          auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
-          auto v_current = captured_disp_rule->dot(t_info, disp, disp_old);
-          auto T_current = captured_temp_rule->value(t_info, T, T_old);
-          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-
+          auto [current_u, v_current] = captured_disp_rule->interpolate(t_info, disp, disp_old);
+          auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, T, T_old);
           return source_function(t_info.time(), X, current_u, v_current, T_current, T_dot, params...);
         });
   }
 
   /**
-   * @brief Add a body source (heat source) to the thermal part of the system.
-   * @tparam BodySourceType The body source function type.
-   * @param domain_name The name of the domain to apply the source to.
-   * @param source_function The source function (t, X, u, v, T, T_dot, params...).
+   * @brief Add a body heat source to the thermal part.
    */
   template <typename BodySourceType>
   void addThermalHeatSource(const std::string& domain_name, BodySourceType source_function)
@@ -247,13 +206,7 @@ struct ThermoMechanicsSystem : public SystemBase {
   }
 
   /**
-   * @brief Add a surface flux (heat flux) to the thermal part of the system (with DependsOn).
-   * @tparam active_parameters Indices of fields this flux depends on.
-   * @tparam SurfaceFluxType The surface flux function type.
-   * @param depends_on Dependency specification for which input fields to pass.
-   * @param domain_name The name of the boundary domain to apply the flux to.
-   * @param flux_function The flux function (t, X, n, u, v, T, T_dot, selected params...).
-   * @note Time integration is applied to the state fields before calling the user function.
+   * @brief Add a boundary heat flux to the thermal part (with DependsOn).
    */
   template <int... active_parameters, typename SurfaceFluxType>
   void addThermalHeatFlux(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
@@ -265,21 +218,14 @@ struct ThermoMechanicsSystem : public SystemBase {
     thermal_weak_form->addBoundaryFlux(
         depends_on, domain_name,
         [=](auto t_info, auto X, auto n, auto T, auto T_old, auto disp, auto disp_old, auto... params) {
-          // Apply time integration to get current state
-          auto current_u = captured_disp_rule->value(t_info, disp, disp_old);
-          auto v_current = captured_disp_rule->dot(t_info, disp, disp_old);
-          auto T_current = captured_temp_rule->value(t_info, T, T_old);
-          auto T_dot = captured_temp_rule->dot(t_info, T, T_old);
-
+          auto [current_u, v_current] = captured_disp_rule->interpolate(t_info, disp, disp_old);
+          auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, T, T_old);
           return -flux_function(t_info.time(), X, n, current_u, v_current, T_current, T_dot, params...);
         });
   }
 
   /**
-   * @brief Add a surface flux (heat flux) to the thermal part of the system.
-   * @tparam SurfaceFluxType The surface flux function type.
-   * @param domain_name The name of the boundary domain to apply the flux to.
-   * @param flux_function The flux function (t, X, n, u, v, T, T_dot, params...).
+   * @brief Add a boundary heat flux to the thermal part.
    */
   template <typename SurfaceFluxType>
   void addThermalHeatFlux(const std::string& domain_name, SurfaceFluxType flux_function)
@@ -288,15 +234,7 @@ struct ThermoMechanicsSystem : public SystemBase {
   }
 
   /**
-   * @brief Add a pressure boundary condition (follower force) to the solid mechanics part of the system (with
-   * DependsOn).
-   * @tparam active_parameters Indices of fields this pressure depends on.
-   * @tparam PressureType The pressure function type.
-   * @param depends_on Dependency specification for which input fields to pass.
-   * @param domain_name The name of the boundary domain.
-   * @param pressure_function The pressure function (t, X, u, v, T, T_dot, selected params...).
-   * @note Pressure is applied in the current configuration: P * n_deformed.
-   * @note Time integration is applied to the state fields before calling the user function.
+   * @brief Add a pressure boundary condition (follower force) to the solid part (with DependsOn).
    */
   template <int... active_parameters, typename PressureType>
   void addPressure(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
@@ -308,13 +246,9 @@ struct ThermoMechanicsSystem : public SystemBase {
     solid_weak_form->addBoundaryIntegral(
         depends_on, domain_name,
         [=](auto t_info, auto X, auto u, auto u_old, auto temperature, auto temperature_old, auto... params) {
-          // Apply time integration to get current state
-          auto u_current = captured_disp_rule->value(t_info, u, u_old);
-          auto v_current = captured_disp_rule->dot(t_info, u, u_old);
-          auto T_current = captured_temp_rule->value(t_info, temperature, temperature_old);
-          auto T_dot = captured_temp_rule->dot(t_info, temperature, temperature_old);
+          auto [u_current, v_current] = captured_disp_rule->interpolate(t_info, u, u_old);
+          auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
 
-          // Compute deformed normal and apply correction for reference configuration integration
           auto x_current = X + u_current;
           auto n_deformed = cross(get<DERIVATIVE>(x_current));
           auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
@@ -322,17 +256,12 @@ struct ThermoMechanicsSystem : public SystemBase {
           auto pressure = pressure_function(t_info.time(), get<VALUE>(X), u_current, v_current, T_current, T_dot,
                                             get<VALUE>(params)...);
 
-          // Return traction vector (force)
           return pressure * n_deformed * (1.0 / n_shape_norm);
         });
   }
 
   /**
-   * @brief Add a pressure boundary condition (follower force) to the solid mechanics part of the system.
-   * @tparam PressureType The pressure function type.
-   * @param domain_name The name of the boundary domain.
-   * @param pressure_function The pressure function (t, X, u, v, T, T_dot, params...).
-   * @note Pressure is applied in the current configuration: P * n_deformed.
+   * @brief Add a pressure boundary condition (follower force) to the solid part.
    */
   template <typename PressureType>
   void addPressure(const std::string& domain_name, PressureType pressure_function)
@@ -341,7 +270,6 @@ struct ThermoMechanicsSystem : public SystemBase {
   }
 
  private:
-  // Helper functions to forward non-DependsOn calls to DependsOn versions with all parameters
   template <typename BodyForceType, std::size_t... Is>
   void addSolidBodyForceAllParams(const std::string& domain_name, BodyForceType force_function,
                                   std::index_sequence<Is...>)
@@ -379,20 +307,11 @@ struct ThermoMechanicsSystem : public SystemBase {
 
 /**
  * @brief Factory function to build a thermo-mechanical system.
- * @tparam dim Spatial dimension.
- * @tparam disp_order Order of the displacement basis.
- * @tparam temp_order Order of the temperature basis.
- * @tparam parameter_space Finite element spaces for optional parameters.
- * @param mesh The mesh.
- * @param solver The differentiable block solver.
- * @param prepend_name The name of the physics (used as field prefix).
- * @param parameter_types Parameter field types.
- * @return ThermoMechanicsSystem with all components initialized.
  */
-template <int dim, int disp_order, int temp_order, typename... parameter_space>
-ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, std::string prepend_name = "",
-    FieldType<parameter_space>... parameter_types)
+template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule, typename... parameter_space>
+ThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...> buildThermoMechanicsSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule,
+    std::string prepend_name = "", FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
@@ -406,14 +325,14 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   FieldType<H1<1, dim>> shape_disp_type(prefix("shape_displacement"));
   field_store->addShapeDisp(shape_disp_type);
 
-  // Displacement field with quasi-static time integration
-  auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
+  // Displacement field
+  auto disp_time_rule = std::make_shared<DisplacementTimeRule>(disp_rule);
   FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_predicted"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
   auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
 
-  // Temperature field with backward Euler time integration
-  auto temperature_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
+  // Temperature field
+  auto temperature_time_rule = std::make_shared<TemperatureTimeRule>(temp_rule);
   FieldType<H1<temp_order>> temperature_type(prefix("temperature_predicted"));
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
   auto temperature_old_type =
@@ -423,10 +342,11 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
   (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
 
+  using SystemType = ThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>;
+
   // Solid mechanics weak form
   std::string solid_force_name = prefix("solid_force");
-  auto solid_weak_form = std::make_shared<
-      typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::SolidWeakFormType>(
+  auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
       solid_force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
       field_store->createSpaces(solid_force_name, disp_type.name, disp_type, disp_old_type, temperature_type,
                                 temperature_old_type,
@@ -434,8 +354,7 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
 
   // Thermal weak form
   std::string thermal_flux_name = prefix("thermal_flux");
-  auto thermal_weak_form = std::make_shared<
-      typename ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>::ThermalWeakFormType>(
+  auto thermal_weak_form = std::make_shared<typename SystemType::ThermalWeakFormType>(
       thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
       field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
                                 disp_type, disp_old_type,
@@ -445,34 +364,37 @@ ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildTher
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form};
   auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
 
-  return ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>{
-      {field_store, solver, advancer, parameter_fields, prepend_name},
-      solid_weak_form,
-      thermal_weak_form,
-      disp_bc,
-      temperature_bc,
-      disp_time_rule,
-      temperature_time_rule};
+  return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
+                    solid_weak_form,
+                    thermal_weak_form,
+                    disp_bc,
+                    temperature_bc,
+                    disp_time_rule,
+                    temperature_time_rule};
 }
 
 /**
- * @brief Factory function to build a thermo-mechanical system (without physics name).
- * @tparam dim Spatial dimension.
- * @tparam disp_order Order of the displacement basis.
- * @tparam temp_order Order of the temperature basis.
- * @tparam parameter_space Finite element spaces for optional parameters.
- * @param mesh The mesh.
- * @param solver The differentiable block solver.
- * @param parameter_types Parameter field types.
- * @return ThermoMechanicsSystem with all components initialized.
+ * @brief Factory function to build a thermo-mechanical system with default rules (backward compatible, with name).
  */
 template <int dim, int disp_order, int temp_order, typename... parameter_space>
-ThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...> buildThermoMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-    FieldType<parameter_space>... parameter_types)
+auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
+                                std::string prepend_name, FieldType<parameter_space>... parameter_types)
 {
-  return buildThermoMechanicsSystem<dim, disp_order, temp_order, parameter_space...>(mesh, solver, "",
-                                                                                     parameter_types...);
+  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(
+      mesh, solver, BackwardEulerQuasiStaticRule{}, BackwardEulerFirstOrderTimeIntegrationRule{},
+      prepend_name, parameter_types...);
+}
+
+/**
+ * @brief Factory function to build a thermo-mechanical system with default rules (backward compatible, no name).
+ */
+template <int dim, int disp_order, int temp_order, typename... parameter_space>
+auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
+                                FieldType<parameter_space>... parameter_types)
+{
+  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(
+      mesh, solver, BackwardEulerQuasiStaticRule{}, BackwardEulerFirstOrderTimeIntegrationRule{}, "",
+      parameter_types...);
 }
 
 }  // namespace smith

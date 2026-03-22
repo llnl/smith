@@ -8,7 +8,7 @@
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/numerics/solver_config.hpp"
-#include "smith/differentiable_numerics/solid_statics_with_internal_vars_system.hpp"
+#include "smith/differentiable_numerics/solid_mechanics_with_internal_vars_system.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 
@@ -103,7 +103,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
   auto nonlinear_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   auto coupled_solver = std::make_shared<CoupledSystemSolver>(nonlinear_block_solver);
-  auto system = buildSolidStaticsWithL2StateSystem<dim, disp_order, StateSpace>(mesh, coupled_solver,
+  auto system = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(mesh, coupled_solver,
                                                                                 "solid_static_with_internal_vars");
 
   // Material and Evolution
@@ -133,6 +133,38 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
     physics->advanceTimestep(1.0);
     writer.write(step, step * 1.0, physics->getFieldStates());
     SLIC_INFO("Completed step " << step);
+  }
+}
+
+TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
+{
+  auto disp_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto state_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+
+  // Staggered solver: stage 0 solves displacement (block 0), stage 1 solves state (block 1).
+  // Use relaxation_factor = 0.5 on the displacement stage to exercise the relaxation path.
+  auto staggered_solver = std::make_shared<CoupledSystemSolver>(20);
+  staggered_solver->addSubsystemSolver(CoupledSystemSolver::Stage{{0}, disp_solver, {}, 0.5});
+  staggered_solver->addSubsystemSolver(CoupledSystemSolver::Stage{{1}, state_solver, {}, 1.0});
+
+  auto system = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
+      mesh, staggered_solver, "solid_staggered_relaxation");
+
+  system.setMaterial(DamageMaterial{}, mesh->entireBodyName());
+  system.addStateEvolution(mesh->entireBodyName(), StrainNormEvolution{});
+
+  system.disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));
+  double pull_rate = 0.05;
+  system.disp_bc->setVectorBCs<dim>(mesh->domain("top"), [pull_rate](double t, tensor<double, dim> /*X*/) {
+    tensor<double, dim> u{};
+    u[2] = pull_rate * t;
+    return u;
+  });
+
+  auto physics = system.createDifferentiablePhysics("physics_relaxed");
+  for (int step = 1; step <= 3; ++step) {
+    physics->advanceTimestep(1.0);
+    SLIC_INFO("Staggered relaxation step " << step << " completed");
   }
 }
 

@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file solid_statics_with_internal_vars_system.hpp
- * @brief Defines the SolidStaticsWithInternalVarsSystem struct and its factory function
+ * @file solid_mechanics_with_internal_vars_system.hpp
+ * @brief Defines the SolidMechanicsWithInternalVarsSystem struct and its factory function
  */
 
 #pragma once
@@ -28,33 +28,43 @@ namespace smith {
 
 /**
  * @brief System struct for solid statics with an additional L2 state variable.
+ *
+ * Uses 2-state layout for each field (predicted + history), for a total of 4 state fields.
+ *
  * @tparam dim Spatial dimension.
  * @tparam disp_order Polynomial order for displacement field.
  * @tparam StateSpace Finite element space for the state variable (e.g., L2<order>).
+ * @tparam DisplacementTimeRule Time integration rule for displacement (must have num_states == 2).
+ * @tparam InternalVarTimeRule Time integration rule for the state variable (must have num_states == 2).
  * @tparam parameter_space Parameter spaces for material properties.
  */
-template <int dim, int disp_order, typename StateSpace, typename... parameter_space>
-struct SolidStaticsWithInternalVarsSystem : public SystemBase {
+template <int dim, int disp_order, typename StateSpace,
+          typename DisplacementTimeRule = QuasiStaticFirstOrderTimeIntegrationRule,
+          typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule, typename... parameter_space>
+struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
+  static_assert(DisplacementTimeRule::num_states == 2, "SolidMechanicsWithInternalVarsSystem requires a 2-state displacement rule");
+  static_assert(InternalVarTimeRule::num_states == 2, "SolidMechanicsWithInternalVarsSystem requires a 2-state state rule");
+
   // Primary weak form: residual for displacement (u).
   // Inputs: u, u_old, alpha, alpha_old, params...
   /// using
   using SolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<disp_order, dim>,
-      Parameters<H1<disp_order, dim>, H1<disp_order, dim>, StateSpace, StateSpace, parameter_space...>>;
+      TimeRuleParams2<DisplacementTimeRule, H1<disp_order, dim>, InternalVarTimeRule, StateSpace, parameter_space...>>;
 
   // State weak form: residual for state variable (alpha).
   // Inputs: alpha, alpha_old, u, u_old, params...
   /// using
   using StateWeakFormType = TimeDiscretizedWeakForm<
       dim, StateSpace,
-      Parameters<StateSpace, StateSpace, H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
+      TimeRuleParams2<InternalVarTimeRule, StateSpace, DisplacementTimeRule, H1<disp_order, dim>, parameter_space...>>;
 
-  std::shared_ptr<SolidWeakFormType> solid_weak_form;                           ///< Solid mechanics weak form.
-  std::shared_ptr<StateWeakFormType> state_weak_form;                           ///< State variable weak form.
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;                         ///< Displacement boundary conditions.
-  std::shared_ptr<DirichletBoundaryConditions> state_bc;                        ///< State variable boundary conditions.
-  std::shared_ptr<QuasiStaticFirstOrderTimeIntegrationRule> disp_time_rule;     ///< Time integration for displacement.
-  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule> state_time_rule;  ///< Time integration for state.
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;                  ///< Solid mechanics weak form.
+  std::shared_ptr<StateWeakFormType> state_weak_form;                  ///< State variable weak form.
+  std::shared_ptr<DirichletBoundaryConditions> disp_bc;                ///< Displacement boundary conditions.
+  std::shared_ptr<DirichletBoundaryConditions> state_bc;               ///< State variable boundary conditions.
+  std::shared_ptr<DisplacementTimeRule> disp_time_rule;                            ///< Time integration for displacement.
+  std::shared_ptr<InternalVarTimeRule> state_time_rule;                          ///< Time integration for state.
 
   /**
    * @brief Get the list of all state fields.
@@ -84,7 +94,6 @@ struct SolidStaticsWithInternalVarsSystem : public SystemBase {
    * @tparam MaterialType The material model type.
    * @param material The material model instance.
    * @param domain_name The name of the domain to apply the material to.
-   * @note The material model should accept (state, deform_grad, alpha, params...).
    */
   template <typename MaterialType>
   void setMaterial(const MaterialType& material, const std::string& domain_name)
@@ -94,17 +103,12 @@ struct SolidStaticsWithInternalVarsSystem : public SystemBase {
 
     solid_weak_form->addBodyIntegral(
         domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto alpha, auto alpha_old, auto... params) {
-          // Apply time integration
           auto u_current = captured_disp_rule->value(t_info, u, u_old);
           auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
 
           typename MaterialType::State state;
-          // Material model typically needs deformation gradient and internal state variable
           auto pk_stress = material(state, get<DERIVATIVE>(u_current), get<VALUE>(alpha_current), params...);
 
-          // Return {source, flux}
-          // Source is body force (zero here, internal forces only)
-          // Flux is stress
           tensor<double, dim> source{};
           return smith::tuple{source, pk_stress};
         });
@@ -114,9 +118,7 @@ struct SolidStaticsWithInternalVarsSystem : public SystemBase {
    * @brief Add the evolution law for the state variable.
    * @tparam EvolutionType The evolution law function type.
    * @param domain_name The name of the domain.
-   * @param evolution_law Function with signature (t_info, alpha, alpha_dot, grad_u, params...) returning
-   *        the residual of the ODE: alpha_dot - f(alpha, grad_u, params...).
-   *        Time integration is applied so alpha and alpha_dot are the current predicted values.
+   * @param evolution_law Function returning the residual of the ODE.
    */
   template <typename EvolutionType>
   void addStateEvolution(const std::string& domain_name, EvolutionType evolution_law)
@@ -126,34 +128,27 @@ struct SolidStaticsWithInternalVarsSystem : public SystemBase {
 
     state_weak_form->addBodyIntegral(
         domain_name, [=](auto t_info, auto /*X*/, auto alpha, auto alpha_old, auto u, auto u_old, auto... params) {
-          // Apply time integration to get current state and rate
           auto u_current = captured_disp_rule->value(t_info, u, u_old);
-          auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
-          auto alpha_dot = captured_state_rule->dot(t_info, alpha, alpha_old);
+          auto [alpha_current, alpha_dot] = captured_state_rule->interpolate(t_info, alpha, alpha_old);
 
-          // The evolution law is in the form: alpha_dot = f(alpha, grad_u, params...)
-          // Residual: alpha_dot - f(alpha, grad_u, params...) = 0
-          // Pass only the scalar VALUE of alpha/alpha_dot (not the gradient) since this is a
-          // local pointwise ODE.  Dual numbers live in the VALUE part so Jacobians are preserved.
           auto residual_val = evolution_law(t_info, get<VALUE>(alpha_current), get<VALUE>(alpha_dot),
                                             get<DERIVATIVE>(u_current), params...);
 
-          // Flux is zero for a local (pointwise) ODE
           tensor<double, dim> flux{};
           return smith::tuple{residual_val, flux};
         });
   }
-
-  // Add other methods (body forces, etc.) as needed...
 };
 
 /**
  * @brief Factory function to build a solid statics system with L2 state variable.
  */
-template <int dim, int disp_order, typename StateSpace, typename... parameter_space>
-SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space...> buildSolidStaticsWithL2StateSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, std::string prepend_name = "",
-    FieldType<parameter_space>... parameter_types)
+template <int dim, int disp_order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
+          typename... parameter_space>
+SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTimeRule, InternalVarTimeRule, parameter_space...>
+buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
+                                   DisplacementTimeRule disp_rule, InternalVarTimeRule state_rule, std::string prepend_name = "",
+                                   FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
@@ -169,15 +164,15 @@ SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space.
   field_store->addShapeDisp(shape_disp_type);
 
   // 1. Displacement fields
-  auto disp_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
+  auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>(disp_rule);
   FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_predicted"));
-  auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule);
+  auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule_ptr);
   auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
 
   // 2. State variable fields
-  auto state_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
+  auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>(state_rule);
   FieldType<StateSpace> state_type(prefix("state_predicted"));
-  auto state_bc = field_store->addIndependent(state_type, state_time_rule);
+  auto state_bc = field_store->addIndependent(state_type, state_time_rule_ptr);
   auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, prefix("state"));
 
   // 3. Parameters
@@ -185,20 +180,19 @@ SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space.
   (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
   (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
 
+  using SystemType =
+      SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTimeRule, InternalVarTimeRule, parameter_space...>;
+
   // 4. Solid Weak Form (Residual for u)
-  // Inputs: u, u_old, alpha, alpha_old, params...
   std::string solid_res_name = prefix("solid_residual");
-  auto solid_weak_form = std::make_shared<
-      typename SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space...>::SolidWeakFormType>(
+  auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
       solid_res_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
       field_store->createSpaces(solid_res_name, disp_type.name, disp_type, disp_old_type, state_type, state_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   // 5. State Weak Form (Residual for alpha)
-  // Inputs: alpha, alpha_old, u, u_old, params...
   std::string state_res_name = prefix("state_residual");
-  auto state_weak_form = std::make_shared<
-      typename SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space...>::StateWeakFormType>(
+  auto state_weak_form = std::make_shared<typename SystemType::StateWeakFormType>(
       state_res_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
       field_store->createSpaces(state_res_name, state_type.name, state_type, state_old_type, disp_type, disp_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
@@ -207,14 +201,26 @@ SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space.
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, state_weak_form};
   auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
 
-  return SolidStaticsWithInternalVarsSystem<dim, disp_order, StateSpace, parameter_space...>{
-      {field_store, solver, advancer, parameter_fields, prepend_name},
-      solid_weak_form,
-      state_weak_form,
-      disp_bc,
-      state_bc,
-      disp_time_rule,
-      state_time_rule};
+  return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
+                    solid_weak_form,
+                    state_weak_form,
+                    disp_bc,
+                    state_bc,
+                    disp_time_rule_ptr,
+                    state_time_rule_ptr};
+}
+
+/**
+ * @brief Factory function with default rules (backward compatible).
+ */
+template <int dim, int disp_order, typename StateSpace, typename... parameter_space>
+auto buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
+                                        std::string prepend_name = "",
+                                        FieldType<parameter_space>... parameter_types)
+{
+  return buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
+      mesh, solver, QuasiStaticFirstOrderTimeIntegrationRule{}, BackwardEulerFirstOrderTimeIntegrationRule{},
+      prepend_name, parameter_types...);
 }
 
 }  // namespace smith

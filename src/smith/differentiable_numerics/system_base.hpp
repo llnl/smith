@@ -14,12 +14,44 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <utility>
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
 #include "smith/differentiable_numerics/coupled_system_solver.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
+#include "smith/physics/common.hpp"
 
 namespace smith {
+
+namespace detail {
+
+/// @brief Helper: given an index and a type, always produces the type (used to repeat a type N times via pack expansion)
+template <std::size_t, typename T>
+using always_t = T;
+
+/// @brief Implementation for TimeRuleParams: repeat Space N times, then append Tail...
+template <typename Space, typename... Tail, std::size_t... Is>
+auto time_rule_params_impl(std::index_sequence<Is...>) -> Parameters<always_t<Is, Space>..., Tail...>;
+
+/// @brief Implementation for TimeRuleParams2: repeat Space1 N1 times, Space2 N2 times, then append Tail...
+template <typename Space1, typename Space2, typename... Tail, std::size_t... Is, std::size_t... Js>
+auto time_rule_params2_impl(std::index_sequence<Is...>, std::index_sequence<Js...>)
+    -> Parameters<always_t<Is, Space1>..., always_t<Js, Space2>..., Tail...>;
+
+}  // namespace detail
+
+/// @brief Generate a Parameters<...> type with Rule::num_states copies of Space followed by additional Tail types.
+/// Used to build weak form parameter lists that adapt to the time integration rule's arity.
+template <typename Rule, typename Space, typename... Tail>
+using TimeRuleParams =
+    decltype(detail::time_rule_params_impl<Space, Tail...>(std::make_index_sequence<Rule::num_states>{}));
+
+/// @brief Generate a Parameters<...> type with Rule1::num_states copies of Space1,
+/// then Rule2::num_states copies of Space2, then additional Tail types.
+/// Used for multi-rule systems (e.g. coupled thermo-mechanical).
+template <typename Rule1, typename Space1, typename Rule2, typename Space2, typename... Tail>
+using TimeRuleParams2 = decltype(detail::time_rule_params2_impl<Space1, Space2, Tail...>(
+    std::make_index_sequence<Rule1::num_states>{}, std::make_index_sequence<Rule2::num_states>{}));
 
 /**
  * @brief Base struct for physics systems containing common members and helper functions.
