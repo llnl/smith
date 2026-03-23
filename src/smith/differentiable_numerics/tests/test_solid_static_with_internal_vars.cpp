@@ -150,8 +150,8 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
   staggered_solver->addSubsystemSolver(CoupledSystemSolver::Stage{{1}, state_solver, {}, 1.0});
 
   auto system = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
-      mesh, staggered_solver, QuasiStaticSecondOrderTimeIntegrationRule{},
-      BackwardEulerFirstOrderTimeIntegrationRule{}, "solid_staggered_relaxation");
+      mesh, staggered_solver, QuasiStaticSecondOrderTimeIntegrationRule{}, BackwardEulerFirstOrderTimeIntegrationRule{},
+      "solid_staggered_relaxation");
 
   system.setMaterial(DamageMaterial{}, mesh->entireBodyName());
   system.addStateEvolution(mesh->entireBodyName(), StrainNormEvolution{});
@@ -187,12 +187,11 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 
   // Apply a gravity-like body force in the -z direction
   double body_force_mag = -0.01;
-  system.addBodyForce(mesh->entireBodyName(),
-                      [=](double, auto, auto, auto, auto, auto) {
-                        tensor<double, dim> f{};
-                        f[2] = body_force_mag;
-                        return f;
-                      });
+  system.addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto) {
+    tensor<double, dim> f{};
+    f[2] = body_force_mag;
+    return f;
+  });
 
   // Apply a traction on the top face in the +z direction
   double traction_mag = 0.005;

@@ -200,8 +200,8 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   auto coupled_solver = std::make_shared<CoupledSystemSolver>(solid_block_solver);
   auto system = buildSolidMechanicsSystem<dim, order>(mesh, coupled_solver, time_rule, physics_name,
-                                                     FieldType<ScalarParameterSpace>("bulk"),
-                                                     FieldType<ScalarParameterSpace>("shear"));
+                                                      FieldType<ScalarParameterSpace>("bulk"),
+                                                      FieldType<ScalarParameterSpace>("shear"));
 
   auto physics = system.createDifferentiablePhysics(physics_name);
   auto bcs = system.disp_bc;

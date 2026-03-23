@@ -57,9 +57,9 @@ struct ThermalStaticFixture : public testing::Test {
     // Material returns {heat_capacity, heat_flux} consistent with heat_transfer.hpp convention.
     // heat_flux is the physical flux (Fourier's law): q = -k * grad(T).
     // The system negates it to form the weak form integral(k * grad(T) . grad(v)).
-    thermal_system.setMaterial([=](auto /*temperature*/, auto grad_temperature) {
-      return smith::tuple{0.0, -k * grad_temperature};
-    }, "entire_body");
+    thermal_system.setMaterial(
+        [=](auto /*temperature*/, auto grad_temperature) { return smith::tuple{0.0, -k * grad_temperature}; },
+        "entire_body");
 
     thermal_system.addHeatSource("entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
       auto x = X[0];
@@ -142,30 +142,31 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
   auto coupled_solver = std::make_shared<CoupledSystemSolver>(nonlinear_block_solver);
 
   FieldType<L2<0>> conductivity_param("conductivity");
-  auto thermal_system = buildThermalSystem<2, 1>(mesh, coupled_solver,
-                                                  QuasiStaticFirstOrderTimeIntegrationRule{}, "", conductivity_param);
+  auto thermal_system = buildThermalSystem<2, 1>(mesh, coupled_solver, QuasiStaticFirstOrderTimeIntegrationRule{}, "",
+                                                 conductivity_param);
 
   // Set the conductivity parameter field to k=1.0
   thermal_system.parameter_fields[0].get()->setFromFieldFunction([](tensor<double, 2>) { return 1.0; });
 
   // Material uses the parameter field for conductivity
-  thermal_system.setMaterial([](auto /*temperature*/, auto grad_temperature, auto k_param) {
-    auto k = get<0>(k_param);
-    return smith::tuple{0.0, -k * grad_temperature};
-  }, "entire_body");
+  thermal_system.setMaterial(
+      [](auto /*temperature*/, auto grad_temperature, auto k_param) {
+        auto k = get<0>(k_param);
+        return smith::tuple{0.0, -k * grad_temperature};
+      },
+      "entire_body");
 
   // Use DependsOn to specify that the heat source depends only on the temperature states (indices 0,1),
   // not on the parameter field
   double pi = 3.14159265358979323846;
-  thermal_system.addHeatSource(DependsOn<0, 1>{}, "entire_body",
-                                [=](auto /*t*/, auto X, auto /*T*/) {
-                                  auto x = X[0];
-                                  auto y = X[1];
-                                  return 2.0 * pi * pi * sin(pi * x) * sin(pi * y);
-                                });
+  thermal_system.addHeatSource(DependsOn<0, 1>{}, "entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
+    auto x = X[0];
+    auto y = X[1];
+    return 2.0 * pi * pi * sin(pi * x) * sin(pi * y);
+  });
 
   thermal_system.temperature_bc->template setScalarBCs<2>(mesh->entireBoundary(),
-                                                           [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
+                                                          [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
   TimeInfo t_info(0.0, 1.0);
   auto [new_states, reactions] = thermal_system.advancer->advanceState(

@@ -108,7 +108,7 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
       return force;
     });
     system.addHeatSource(mesh_->entireBodyName(),
-                                [=](auto, auto, auto, auto, auto, auto, auto, auto) { return thermal_source; });
+                         [=](auto, auto, auto, auto, auto, auto, auto, auto) { return thermal_source; });
 
     SLIC_INFO_ROOT("Starting " << label << " thermo-mechanics solve");
 

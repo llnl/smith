@@ -70,13 +70,13 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
                               Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<disp_order, dim>, StateSpace,
                                          StateSpace, parameter_space...>>;
 
-  std::shared_ptr<SolidWeakFormType> solid_weak_form;                  ///< Solid mechanics weak form.
-  std::shared_ptr<StateWeakFormType> state_weak_form;                  ///< Internal variable weak form.
-  std::shared_ptr<CycleZeroWeakFormType> cycle_zero_weak_form;         ///< Cycle-zero weak form.
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;                ///< Displacement boundary conditions.
-  std::shared_ptr<DirichletBoundaryConditions> state_bc;               ///< Internal variable boundary conditions.
-  std::shared_ptr<DisplacementTimeRule> disp_time_rule;                ///< Time integration for displacement.
-  std::shared_ptr<InternalVarTimeRule> state_time_rule;                ///< Time integration for internal variable.
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;           ///< Solid mechanics weak form.
+  std::shared_ptr<StateWeakFormType> state_weak_form;           ///< Internal variable weak form.
+  std::shared_ptr<CycleZeroWeakFormType> cycle_zero_weak_form;  ///< Cycle-zero weak form.
+  std::shared_ptr<DirichletBoundaryConditions> disp_bc;         ///< Displacement boundary conditions.
+  std::shared_ptr<DirichletBoundaryConditions> state_bc;        ///< Internal variable boundary conditions.
+  std::shared_ptr<DisplacementTimeRule> disp_time_rule;         ///< Time integration for displacement.
+  std::shared_ptr<InternalVarTimeRule> state_time_rule;         ///< Time integration for internal variable.
 
   /**
    * @brief Get the list of all state fields (disp_pred, disp, vel, accel, state_pred, state).
@@ -84,9 +84,12 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
    */
   std::vector<FieldState> getStateFields() const
   {
-    return {field_store->getField(prefix("displacement_predicted")), field_store->getField(prefix("displacement")),
-            field_store->getField(prefix("velocity")),               field_store->getField(prefix("acceleration")),
-            field_store->getField(prefix("state_predicted")),        field_store->getField(prefix("state"))};
+    return {field_store->getField(prefix("displacement_predicted")),
+            field_store->getField(prefix("displacement")),
+            field_store->getField(prefix("velocity")),
+            field_store->getField(prefix("acceleration")),
+            field_store->getField(prefix("state_predicted")),
+            field_store->getField(prefix("state"))};
   }
 
   /**
@@ -118,31 +121,28 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
     auto captured_disp_rule = disp_time_rule;
     auto captured_state_rule = state_time_rule;
 
-    solid_weak_form->addBodyIntegral(
-        domain_name,
-        [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto alpha, auto alpha_old,
-            auto... params) {
-          auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-          auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
+    solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old,
+                                                      auto a_old, auto alpha, auto alpha_old, auto... params) {
+      auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
+      auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
 
-          typename MaterialType::State state;
-          auto pk_stress = material(state, get<DERIVATIVE>(u_current), get<VALUE>(alpha_current), params...);
+      typename MaterialType::State state;
+      auto pk_stress = material(state, get<DERIVATIVE>(u_current), get<VALUE>(alpha_current), params...);
 
-          tensor<double, dim> source{};
-          return smith::tuple{source, pk_stress};
-        });
+      tensor<double, dim> source{};
+      return smith::tuple{source, pk_stress};
+    });
 
     // Cycle-zero: u and v are given, solve for a; alpha at initial condition
-    cycle_zero_weak_form->addBodyIntegral(
-        domain_name,
-        [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto alpha, auto alpha_old, auto... params) {
-          auto alpha_current = alpha_old;  // at cycle 0, use initial alpha
-          (void)alpha;
-          typename MaterialType::State state;
-          auto pk_stress = material(state, get<DERIVATIVE>(u), get<VALUE>(alpha_current), params...);
+    cycle_zero_weak_form->addBodyIntegral(domain_name, [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a,
+                                                           auto alpha, auto alpha_old, auto... params) {
+      auto alpha_current = alpha_old;  // at cycle 0, use initial alpha
+      (void)alpha;
+      typename MaterialType::State state;
+      auto pk_stress = material(state, get<DERIVATIVE>(u), get<VALUE>(alpha_current), params...);
 
-          return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
-        });
+      return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
+    });
   }
 
   /**
@@ -220,20 +220,20 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
                    PressureType pressure_function)
   {
     auto captured_disp_rule = disp_time_rule;
-    solid_weak_form->addBoundaryIntegral(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto /*alpha*/, auto /*alpha_old*/,
-            auto... params) {
-          auto u_current = captured_disp_rule->value(t_info, u, u_old, v_old, a_old);
+    solid_weak_form->addBoundaryIntegral(depends_on, domain_name,
+                                         [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old,
+                                             auto /*alpha*/, auto /*alpha_old*/, auto... params) {
+                                           auto u_current = captured_disp_rule->value(t_info, u, u_old, v_old, a_old);
 
-          auto x_current = X + u_current;
-          auto n_deformed = cross(get<DERIVATIVE>(x_current));
-          auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
+                                           auto x_current = X + u_current;
+                                           auto n_deformed = cross(get<DERIVATIVE>(x_current));
+                                           auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
 
-          auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(params)...);
+                                           auto pressure =
+                                               pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(params)...);
 
-          return pressure * n_deformed * (1.0 / n_shape_norm);
-        });
+                                           return pressure * n_deformed * (1.0 / n_shape_norm);
+                                         });
 
     addCycleZeroBoundaryIntegralImpl(
         domain_name,
@@ -267,19 +267,17 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
     auto captured_disp_rule = disp_time_rule;
     auto captured_state_rule = state_time_rule;
 
-    state_weak_form->addBodyIntegral(
-        domain_name,
-        [=](auto t_info, auto /*X*/, auto alpha, auto alpha_old, auto u, auto u_old, auto v_old, auto a_old,
-            auto... params) {
-          auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-          auto [alpha_current, alpha_dot] = captured_state_rule->interpolate(t_info, alpha, alpha_old);
+    state_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto alpha, auto alpha_old, auto u,
+                                                      auto u_old, auto v_old, auto a_old, auto... params) {
+      auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
+      auto [alpha_current, alpha_dot] = captured_state_rule->interpolate(t_info, alpha, alpha_old);
 
-          auto residual_val = evolution_law(t_info, get<VALUE>(alpha_current), get<VALUE>(alpha_dot),
-                                            get<DERIVATIVE>(u_current), params...);
+      auto residual_val = evolution_law(t_info, get<VALUE>(alpha_current), get<VALUE>(alpha_dot),
+                                        get<DERIVATIVE>(u_current), params...);
 
-          tensor<double, dim> flux{};
-          return smith::tuple{residual_val, flux};
-        });
+      tensor<double, dim> flux{};
+      return smith::tuple{residual_val, flux};
+    });
   }
 
  private:
@@ -330,8 +328,7 @@ SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTi
                                      parameter_space...>
 buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
                                           DisplacementTimeRule disp_rule, InternalVarTimeRule state_rule,
-                                          std::string prepend_name = "",
-                                          FieldType<parameter_space>... parameter_types)
+                                          std::string prepend_name = "", FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
@@ -352,8 +349,7 @@ buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::share
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule_ptr);
   auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
   auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, prefix("velocity"));
-  auto accel_old_type =
-      field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, prefix("acceleration"));
+  auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, prefix("acceleration"));
 
   // 2. Internal variable fields (2-state first-order)
   auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>(state_rule);
@@ -397,8 +393,8 @@ buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::share
 
   // Solver and Advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, state_weak_form};
-  auto advancer =
-      std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver, cycle_zero_weak_form, cycle_zero_solver);
+  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver, cycle_zero_weak_form,
+                                                               cycle_zero_solver);
 
   return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
                     solid_weak_form,
@@ -419,8 +415,8 @@ auto buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::
                                                DisplacementTimeRule disp_rule, InternalVarTimeRule state_rule,
                                                FieldType<parameter_space>... parameter_types)
 {
-  return buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(mesh, solver, disp_rule, state_rule,
-                                                                                "", parameter_types...);
+  return buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(mesh, solver, disp_rule, state_rule, "",
+                                                                                parameter_types...);
 }
 
 }  // namespace smith

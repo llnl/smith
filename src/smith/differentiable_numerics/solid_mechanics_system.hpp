@@ -43,17 +43,19 @@ struct SolidMechanicsSystem : public SystemBase {
 
   /// using
   using SolidWeakFormType =
-      TimeDiscretizedWeakForm<dim, H1<order, dim>, TimeRuleParams<DisplacementTimeRule, H1<order, dim>, parameter_space...>>;
+      TimeDiscretizedWeakForm<dim, H1<order, dim>,
+                              TimeRuleParams<DisplacementTimeRule, H1<order, dim>, parameter_space...>>;
 
   /// using -- 3-state form: u, v, a (no u_old needed; at cycle 0 u and v are given, solve for a)
   using CycleZeroWeakFormType =
-      TimeDiscretizedWeakForm<dim, H1<order, dim>, Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
+      TimeDiscretizedWeakForm<dim, H1<order, dim>,
+                              Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
   std::shared_ptr<CycleZeroWeakFormType>
       cycle_zero_weak_form;                              ///< Cycle-zero weak form for initial acceleration solve.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
-  std::shared_ptr<DisplacementTimeRule> disp_time_rule;                   ///< Time integration rule.
+  std::shared_ptr<DisplacementTimeRule> disp_time_rule;  ///< Time integration rule.
 
   /**
    * @brief Get the list of all state fields (displacement_predicted, displacement, velocity, acceleration).
@@ -121,8 +123,7 @@ struct SolidMechanicsSystem : public SystemBase {
   {
     auto captured_rule = disp_time_rule;
     solid_weak_form->addBodySource(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
           auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
           return force_function(t_info.time(), X, u_current, v_current, a_current, params...);
         });
@@ -201,8 +202,7 @@ struct SolidMechanicsSystem : public SystemBase {
   {
     auto captured_rule = disp_time_rule;
     solid_weak_form->addBoundaryIntegral(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
           auto u_current = captured_rule->value(t_info, u, u_old, v_old, a_old);
 
           auto x_current = X + u_current;
@@ -347,8 +347,8 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
 
   // Build advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form};
-  auto advancer =
-      std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver, cycle_zero_weak_form, cycle_zero_solver);
+  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver, cycle_zero_weak_form,
+                                                               cycle_zero_solver);
 
   return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
                     solid_weak_form,

@@ -26,7 +26,8 @@ namespace smith {
 
 namespace detail {
 
-/// @brief Helper: given an index and a type, always produces the type (used to repeat a type N times via pack expansion)
+/// @brief Helper: given an index and a type, always produces the type (used to repeat a type N times via pack
+/// expansion)
 template <std::size_t, typename T>
 using always_t = T;
 
