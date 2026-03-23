@@ -26,10 +26,22 @@ class ParaviewWriter {
  public:
   using StateVecs = std::vector<std::shared_ptr<FiniteElementState> >;  ///< using
 
+  struct Options {
+    bool write_duals{true};
+  };
+
   /// Construct from ParaViewDataCollection, a vector of shared_ptr to FiniteElementState, and vector of shared_ptr to
   /// FiniteElementState which dual fields will be copied into.
   ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
-      : pv(std::move(pv_)), states(states_), dual_states(duals_)
+      : pv(std::move(pv_)), states(states_), dual_states(duals_), opts({})
+  {
+  }
+
+  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_,
+                 const StateVecs& states_,
+                 const StateVecs& duals_,
+                 Options opts_)
+      : pv(std::move(pv_)), states(states_), dual_states(duals_), opts(opts_)
   {
   }
 
@@ -82,9 +94,12 @@ class ParaviewWriter {
       *state = *current_fields[n].get();
       state->gridFunction();
 
-      auto& dual = dual_states[n];
-      current_fields[n].get_dual()->linearForm().ParallelAssemble(*dual);
-      dual->gridFunction();
+      if (opts.write_duals) {
+        SLIC_ERROR_ROOT_IF(dual_states.size() != states.size(), "wrong number of output dual states to write");
+        auto& dual = dual_states[n];
+        current_fields[n].get_dual()->linearForm().ParallelAssemble(*dual);
+        dual->gridFunction();
+      }
     }
 
     pv->SetCycle(step);
@@ -102,12 +117,15 @@ class ParaviewWriter {
   std::unique_ptr<mfem::ParaViewDataCollection> pv;
   StateVecs states;
   StateVecs dual_states;
+  Options opts;
 };
 
 /// @brief Creates a ParaviewWriter from a mesh, vector of FieldState, and the name of the output paraview file.  File
 /// will be in directory filename/filename.pvd.
-inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<FieldState>& states,
-                                 std::string output_name)
+inline auto createParaviewWriter(const smith::Mesh& mesh,
+                                 const std::vector<FieldState>& states,
+                                 std::string output_name,
+                                 ParaviewWriter::Options opts)
 {
   if (output_name == "") {
     output_name = "default";
@@ -128,10 +146,12 @@ inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<Fiel
     paraview_dc->RegisterField(state->name(), &output_states.back()->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
 
-    const auto& dual = fstate.get_dual();
-    output_duals.push_back(std::make_shared<smith::FiniteElementState>(dual->space(), dual->name()));
-    paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
-    max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
+    if (opts.write_duals) {
+      const auto& dual = fstate.get_dual();
+      output_duals.push_back(std::make_shared<smith::FiniteElementState>(dual->space(), dual->name()));
+      paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
+      max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
+    }
   }
 
   // Set the options for the paraview output files
@@ -140,7 +160,14 @@ inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<Fiel
   paraview_dc->SetDataFormat(mfem::VTKFormat::BINARY);
   paraview_dc->SetCompression(true);
 
-  return ParaviewWriter(std::move(paraview_dc), output_states, output_duals);
+  return ParaviewWriter(std::move(paraview_dc), output_states, output_duals, opts);
+}
+
+/// @overload: default options (write duals).
+inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<FieldState>& states,
+                                 std::string output_name)
+{
+  return createParaviewWriter(mesh, states, std::move(output_name), ParaviewWriter::Options{});
 }
 
 /// @brief Creates a ParaviewWriter from an mfem::ParMesh, vector of FiniteElementState pointers, and the name of the
