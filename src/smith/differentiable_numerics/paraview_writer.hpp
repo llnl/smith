@@ -37,9 +37,7 @@ class ParaviewWriter {
   {
   }
 
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_,
-                 const StateVecs& states_,
-                 const StateVecs& duals_,
+  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_,
                  Options opts_)
       : pv(std::move(pv_)), states(states_), dual_states(duals_), opts(opts_)
   {
@@ -122,10 +120,8 @@ class ParaviewWriter {
 
 /// @brief Creates a ParaviewWriter from a mesh, vector of FieldState, and the name of the output paraview file.  File
 /// will be in directory filename/filename.pvd.
-inline auto createParaviewWriter(const smith::Mesh& mesh,
-                                 const std::vector<FieldState>& states,
-                                 std::string output_name,
-                                 ParaviewWriter::Options opts)
+inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<FieldState>& states,
+                                 std::string output_name, ParaviewWriter::Options opts)
 {
   if (output_name == "") {
     output_name = "default";
