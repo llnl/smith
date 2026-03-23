@@ -94,6 +94,7 @@ if [[ -z "$machine" ]]; then
   machine="$(hostname -s 2>/dev/null || hostname)"
   machine="${machine%%[0-9]*}"
 fi
+machine="${machine,,}"
 
 sys_type="${requested_sys_type:-${SYS_TYPE:-}}"
 
@@ -141,7 +142,7 @@ if [[ -z "$requested_compiler" ]]; then
     requested_compiler=""
   fi
 fi
-requested_compiler="$(echo "$requested_compiler" | tr '[:upper:]' '[:lower:]')"
+requested_compiler="${requested_compiler,,}"
 
 declare -a all_candidates=()
 for prefix in "${machine_candidates[@]}"; do
