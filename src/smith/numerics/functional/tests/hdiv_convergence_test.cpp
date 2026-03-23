@@ -272,8 +272,40 @@ void hdiv_boundary_test()
   check_gradient(residual, t, U);
 }
 
+template <int p>
+void hdiv_boundary_test_3d()
+{
+  constexpr int dim = 3;
+
+  auto mesh = mesh::refineAndDistribute(
+      mfem::Mesh::MakeCartesian3D(2, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0), 1);
+
+  auto [fespace, fec] = smith::generateParFiniteElementSpace<Hdiv<p>>(mesh.get());
+
+  mfem::Vector U(fespace->TrueVSize());
+  U.Randomize(42);
+
+  Functional<Hdiv<p>(Hdiv<p>)> residual(fespace.get(), {fespace.get()});
+
+  Domain bdr = EntireBoundary(*mesh);
+
+  residual.AddBoundaryIntegral(
+      Dimension<dim - 1>{}, DependsOn<0>{},
+      [](double /*t*/, auto /*position*/, auto sigma) {
+        auto [sigma_n, d_sigma_n] = sigma;
+        // sigma_n is the scalar normal flux (sigma dot n) on the boundary
+        return sigma_n * sigma_n + 0.5 * d_sigma_n[0] + 0.5 * d_sigma_n[1];
+      },
+      bdr);
+
+  double t = 0.0;
+  check_gradient(residual, t, U);
+}
+
 TEST(HdivBoundary, RT1_quads) { hdiv_boundary_test<1>(); }
 TEST(HdivBoundary, RT2_quads) { hdiv_boundary_test<2>(); }
+TEST(HdivBoundary, RT1_hexes) { hdiv_boundary_test_3d<1>(); }
+TEST(HdivBoundary, RT2_hexes) { hdiv_boundary_test_3d<2>(); }
 
 int main(int argc, char* argv[])
 {

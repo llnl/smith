@@ -22,7 +22,7 @@
 // for additional information on the finite_element concept requirements, see finite_element.hpp
 /// @cond
 template <int p, int c>
-struct finite_element<mfem::Geometry::SEGMENT, Hdiv<p, c> > {
+struct finite_element<mfem::Geometry::SEGMENT, HdivBoundary<p, c> > {
   static constexpr auto geometry = mfem::Geometry::SEGMENT;
   static constexpr auto family = Family::HDIV;
   static constexpr int components = c;

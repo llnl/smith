@@ -44,6 +44,22 @@ auto trial_elements_tuple(FunctionSignature<test(trials...)>)
   return smith::tuple<smith::finite_element<geom, trials>...>{};
 }
 
+template <typename T>
+struct get_boundary_element {
+  using type = T;
+};
+
+template <int p, int c>
+struct get_boundary_element<smith::Hdiv<p, c>> {
+  using type = smith::HdivBoundary<p, c>;
+};
+
+template <mfem::Geometry::Type geom, typename test, typename... trials>
+auto boundary_trial_elements_tuple(FunctionSignature<test(trials...)>)
+{
+  return smith::tuple<smith::finite_element<geom, typename get_boundary_element<trials>::type>...>{};
+}
+
 /**
  * @brief This helper function template returns a finite element based on the output
  * type of FunctionSignature.
@@ -55,4 +71,10 @@ template <mfem::Geometry::Type geom, typename test, typename... trials>
 auto get_test_element(FunctionSignature<test(trials...)>)
 {
   return smith::finite_element<geom, test>{};
+}
+
+template <mfem::Geometry::Type geom, typename test, typename... trials>
+auto get_boundary_test_element(FunctionSignature<test(trials...)>)
+{
+  return smith::finite_element<geom, typename get_boundary_element<test>::type>{};
 }

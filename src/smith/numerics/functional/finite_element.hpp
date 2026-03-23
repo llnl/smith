@@ -223,6 +223,18 @@ struct Hdiv {
 };
 
 /**
+ * @brief H(div) elements of order @p p defined on a domain boundary
+ * @tparam p The order of the elements
+ * @tparam c The vector dimension
+ */
+template <int p, int c = 1>
+struct HdivBoundary {
+  static constexpr int order = p;                 ///< the polynomial order of the elements
+  static constexpr int components = c;            ///< the number of components at each node
+  static constexpr Family family = Family::HDIV;  ///< the family of the basis functions
+};
+
+/**
  * @brief Discontinuous elements of order @p p
  * @tparam p The order of the elements
  * @tparam c The vector dimension
@@ -407,11 +419,13 @@ struct finite_element;
 
 #include "detail/triangle_H1.inl"
 #include "detail/triangle_Hdiv.inl"
+#include "detail/triangle_HdivBoundary.inl"
 #include "detail/triangle_L2.inl"
 
 #include "detail/quadrilateral_H1.inl"
 #include "detail/quadrilateral_Hcurl.inl"
 #include "detail/quadrilateral_Hdiv.inl"
+#include "detail/quadrilateral_HdivBoundary.inl"
 #include "detail/quadrilateral_L2.inl"
 
 #include "detail/tetrahedron_H1.inl"

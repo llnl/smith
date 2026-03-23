@@ -83,6 +83,15 @@ struct QFunctionArgument<Hdiv<p>, Dimension<1>> {
 };
 
 /// @overload
+/// Hdiv on a face boundary element (boundary of a 3D mesh).
+/// The face trace of Hdiv is the scalar normal flux sigma dot n.
+/// The second component is the tangential derivative of the normal flux.
+template <int p>
+struct QFunctionArgument<Hdiv<p>, Dimension<2>> {
+  using type = smith::tuple<double, tensor<double, 2>>;  ///< (normal_flux, tangential_derivative) passed to the q-function
+};
+
+/// @overload
 SMITH_SUPPRESS_NVCC_HOSTDEVICE_WARNING
 template <typename lambda, typename T, int... i>
 SMITH_HOST_DEVICE auto apply_qf_helper(const lambda& qf, double t, const tensor<double, 2>& x_q, const T& arg_tuple,
@@ -291,7 +300,7 @@ void action_of_gradient_kernel(const double* dU, double* dR, derivatives_type* q
  *
  * @tparam test The type of the test function space
  * @tparam trial The type of the trial function space
- * The above spaces can be any combination of {H1, Hcurl, Hdiv (TODO), L2 (TODO), QOI}
+ * The above spaces can be any combination of {H1, Hcurl, Hdiv, L2 (TODO), QOI}
  *
  * Template parameters other than the test and trial spaces are used for customization + optimization
  * and are erased through the @p std::function members of @p Integral
@@ -338,8 +347,8 @@ template <uint32_t wrt, int Q, mfem::Geometry::Type geom, typename signature, ty
 auto evaluation_kernel(signature s, lambda_type qf, const double* positions, const double* jacobians,
                        std::shared_ptr<derivative_type> qf_derivatives, uint32_t num_elements)
 {
-  auto trial_elements = trial_elements_tuple<geom>(s);
-  auto test_element = get_test_element<geom>(s);
+  auto trial_elements = boundary_trial_elements_tuple<geom>(s);
+  auto test_element = get_boundary_test_element<geom>(s);
   return [=](double time, const std::vector<const double*>& inputs, double* outputs, bool /* update state */) {
     evaluation_kernel_impl<wrt, Q, geom>(trial_elements, test_element, time, inputs, outputs, positions, jacobians, qf,
                                          qf_derivatives.get(), num_elements, s.index_seq);
@@ -351,8 +360,9 @@ std::function<void(const double*, double*)> jacobian_vector_product_kernel(
     signature, std::shared_ptr<derivative_type> qf_derivatives, uint32_t num_elements)
 {
   return [=](const double* du, double* dr) {
-    using test_space = typename signature::return_type;
-    using trial_space = typename std::tuple_element<wrt, typename signature::parameter_types>::type;
+    using test_space = typename get_boundary_element<typename signature::return_type>::type;
+    using original_trial_space = typename std::tuple_element<wrt, typename signature::parameter_types>::type;
+    using trial_space = typename get_boundary_element<original_trial_space>::type;
     action_of_gradient_kernel<Q, geom, test_space, trial_space>(du, dr, qf_derivatives.get(), num_elements);
   };
 }
@@ -362,8 +372,9 @@ std::function<void(ExecArrayView<double, 3, ExecutionSpace::CPU>)> element_gradi
     signature, std::shared_ptr<derivative_type> qf_derivatives, uint32_t num_elements)
 {
   return [=](ExecArrayView<double, 3, ExecutionSpace::CPU> K_elem) {
-    using test_space = typename signature::return_type;
-    using trial_space = typename std::tuple_element<wrt, typename signature::parameter_types>::type;
+    using test_space = typename get_boundary_element<typename signature::return_type>::type;
+    using original_trial_space = typename std::tuple_element<wrt, typename signature::parameter_types>::type;
+    using trial_space = typename get_boundary_element<original_trial_space>::type;
     element_gradient_kernel<geom, test_space, trial_space, Q>(K_elem, qf_derivatives.get(), num_elements);
   };
 }
