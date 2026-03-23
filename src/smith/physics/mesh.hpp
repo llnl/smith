@@ -119,6 +119,14 @@ class Mesh {
   smith::Domain& addDomainOfBodyElements(const std::string& domain_name,
                                          std::function<bool(std::vector<vec2>, int)> func);
 
+  /// @brief create domain of vertices with specified name on a 3D mesh
+  /// The second argument is a function taking the nodal coordinate of the vertex
+  smith::Domain& addDomainOfVertices(const std::string& domain_name, std::function<bool(vec3)> func);
+
+  /// @brief create domain of vertices with specified name on a 2D mesh
+  /// The second argument is a function taking the nodal coordinate of the vertex
+  smith::Domain& addDomainOfVertices(const std::string& domain_name, std::function<bool(vec2)> func);
+
   /// @brief get space associated with shape displacement
   const mfem::ParFiniteElementSpace& shapeDisplacementSpace();
 

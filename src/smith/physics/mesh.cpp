@@ -143,6 +143,20 @@ smith::Domain& Mesh::addDomainOfBodyElements(const std::string& domain_name,
   return domain(domain_name);
 }
 
+smith::Domain& Mesh::addDomainOfVertices(const std::string& domain_name, std::function<bool(vec2)> func)
+{
+  errorIfDomainExists(domain_name);
+  domains_.emplace(domain_name, Domain::ofVertices(*mfem_mesh_, func));
+  return domain(domain_name);
+}
+
+smith::Domain& Mesh::addDomainOfVertices(const std::string& domain_name, std::function<bool(vec3)> func)
+{
+  errorIfDomainExists(domain_name);
+  domains_.emplace(domain_name, Domain::ofVertices(*mfem_mesh_, func));
+  return domain(domain_name);
+}
+
 const mfem::ParFiniteElementSpace& Mesh::shapeDisplacementSpace()
 {
   return smith::StateManager::shapeDisplacement(tag()).space();
