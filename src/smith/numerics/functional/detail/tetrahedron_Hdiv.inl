@@ -68,9 +68,18 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
       for (int j = 0; j + k <= mp; j++) {
         for (int i = 0; i + j + k <= mp; i++) {
           double s = sx[i] * sy[j] * sz[k] * sl[mp - i - j - k];
-          raw[o][0] = s;  raw[o][1] = 0;  raw[o][2] = 0;  o++;
-          raw[o][0] = 0;  raw[o][1] = s;  raw[o][2] = 0;  o++;
-          raw[o][0] = 0;  raw[o][1] = 0;  raw[o][2] = s;  o++;
+          raw[o][0] = s;
+          raw[o][1] = 0;
+          raw[o][2] = 0;
+          o++;
+          raw[o][0] = 0;
+          raw[o][1] = s;
+          raw[o][2] = 0;
+          o++;
+          raw[o][0] = 0;
+          raw[o][1] = 0;
+          raw[o][2] = s;
+          o++;
         }
       }
     }
@@ -117,8 +126,7 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
       for (int i = 0; i + j <= mp; i++) {
         int k = mp - i - j;
         // div((x-c)*s, (y-c)*s, (z-c)*s) = 3*s + (x-c)*ds/dx + (y-c)*ds/dy + (z-c)*ds/dz
-        raw[o++] = (sx[i] + (xi[0] - c) * dsx[i]) * sy[j] * sz[k] +
-                   (sy[j] + (xi[1] - c) * dsy[j]) * sx[i] * sz[k] +
+        raw[o++] = (sx[i] + (xi[0] - c) * dsx[i]) * sy[j] * sz[k] + (sy[j] + (xi[1] - c) * dsy[j]) * sx[i] * sz[k] +
                    (sz[k] + (xi[2] - c) * dsz[k]) * sx[i] * sy[j];
       }
     }
@@ -183,18 +191,18 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
   static constexpr auto directions = [] {
     tensor<double, ndof, dim> d{};
     int o = 0;
-    constexpr int fdofs = p * (p + 1) / 2;  // DOFs per face
-    for (int i = 0; i < fdofs; i++) d[o++] = {1.0, 1.0, 1.0};    // face 0
-    for (int i = 0; i < fdofs; i++) d[o++] = {-1.0, 0.0, 0.0};   // face 1
-    for (int i = 0; i < fdofs; i++) d[o++] = {0.0, -1.0, 0.0};   // face 2
-    for (int i = 0; i < fdofs; i++) d[o++] = {0.0, 0.0, -1.0};   // face 3
+    constexpr int fdofs = p * (p + 1) / 2;                      // DOFs per face
+    for (int i = 0; i < fdofs; i++) d[o++] = {1.0, 1.0, 1.0};   // face 0
+    for (int i = 0; i < fdofs; i++) d[o++] = {-1.0, 0.0, 0.0};  // face 1
+    for (int i = 0; i < fdofs; i++) d[o++] = {0.0, -1.0, 0.0};  // face 2
+    for (int i = 0; i < fdofs; i++) d[o++] = {0.0, 0.0, -1.0};  // face 3
     if constexpr (p > 1) {
       for (int k = 0; k < p - 1; k++) {
         for (int j = 0; j + k < p - 1; j++) {
           for (int i = 0; i + j + k < p - 1; i++) {
-            d[o++] = {-1.0, 0.0, 0.0};   // nk[1]
-            d[o++] = {0.0, -1.0, 0.0};   // nk[2]
-            d[o++] = {0.0, 0.0, -1.0};   // nk[3]
+            d[o++] = {-1.0, 0.0, 0.0};  // nk[1]
+            d[o++] = {0.0, -1.0, 0.0};  // nk[2]
+            d[o++] = {0.0, 0.0, -1.0};  // nk[3]
           }
         }
       }
@@ -208,15 +216,13 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
     for (int k = 0; k < ndof; k++) {
       auto raw = raw_vshape(nodes[k]);
       for (int r = 0; r < ndof; r++) {
-        T[r][k] = raw[r][0] * directions[k][0] + raw[r][1] * directions[k][1] +
-                  raw[r][2] * directions[k][2];
+        T[r][k] = raw[r][0] * directions[k][0] + raw[r][1] * directions[k][1] + raw[r][2] * directions[k][2];
       }
     }
     return inv(T);
   }();
 
-  SMITH_HOST_DEVICE static constexpr tensor<double, ndof, dim> shape_functions(
-      [[maybe_unused]] tensor<double, dim> xi)
+  SMITH_HOST_DEVICE static constexpr tensor<double, ndof, dim> shape_functions([[maybe_unused]] tensor<double, dim> xi)
   {
     auto raw = raw_vshape(xi);
     tensor<double, ndof, dim> N{};
@@ -230,8 +236,7 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
     return N;
   }
 
-  SMITH_HOST_DEVICE static constexpr tensor<double, ndof> shape_function_div(
-      [[maybe_unused]] tensor<double, dim> xi)
+  SMITH_HOST_DEVICE static constexpr tensor<double, ndof> shape_function_div([[maybe_unused]] tensor<double, dim> xi)
   {
     auto raw = raw_divshape(xi);
     tensor<double, ndof> div{};
@@ -244,7 +249,7 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
   }
 
   template <typename in_t, int q>
-  static auto batch_apply_shape_fn(int j, tensor<in_t, q*(q + 1)*(q + 2) / 6> input,
+  static auto batch_apply_shape_fn(int j, tensor<in_t, q*(q + 1) * (q + 2) / 6> input,
                                    const TensorProductQuadratureRule<q>&)
   {
     using source_t = decltype(dot(get<0>(get<0>(in_t{})), tensor<double, dim>{}) + get<1>(get<0>(in_t{})) * double{});
@@ -304,9 +309,8 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, Hdiv<p> > {
 
   template <typename source_type, typename flux_type, int q>
   SMITH_HOST_DEVICE static void integrate(
-      const tensor<tuple<source_type, flux_type>, q*(q + 1)*(q + 2) / 6>& qf_output,
-      const TensorProductQuadratureRule<q>&, dof_type* element_residual,
-      [[maybe_unused]] int step = 1)
+      const tensor<tuple<source_type, flux_type>, q*(q + 1) * (q + 2) / 6>& qf_output,
+      const TensorProductQuadratureRule<q>&, dof_type* element_residual, [[maybe_unused]] int step = 1)
   {
     constexpr auto xi = GaussLegendreNodes<q, mfem::Geometry::TETRAHEDRON>();
     [[maybe_unused]] constexpr auto weights = GaussLegendreWeights<q, mfem::Geometry::TETRAHEDRON>();

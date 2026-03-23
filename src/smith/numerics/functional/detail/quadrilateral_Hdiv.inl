@@ -24,7 +24,7 @@
 // for additional information on the finite_element concept requirements, see finite_element.hpp
 /// @cond
 template <int p>
-struct finite_element<mfem::Geometry::SQUARE, Hdiv<p> > {
+struct finite_element<mfem::Geometry::SQUARE, Hdiv<p>> {
   static constexpr auto geometry = mfem::Geometry::SQUARE;
   static constexpr auto family = Family::HDIV;
   static constexpr int dim = 2;
@@ -36,7 +36,7 @@ struct finite_element<mfem::Geometry::SQUARE, Hdiv<p> > {
   static constexpr int SOURCE = 0, FLUX = 1;
 
   using residual_type =
-      typename std::conditional<components == 1, tensor<double, ndof>, tensor<double, ndof, components> >::type;
+      typename std::conditional<components == 1, tensor<double, ndof>, tensor<double, ndof, components>>::type;
 
   // DOF layout: x-component has closed(p+1) in x, open(p) in y
   //             y-component has open(p) in x, closed(p+1) in y
@@ -91,13 +91,22 @@ struct finite_element<mfem::Geometry::SQUARE, Hdiv<p> > {
   // B1/B2/G2 basis evaluation matrices — delegated to shared free functions
   // in detail/tensor_product_basis.hpp
   template <bool apply_weights, int q>
-  static constexpr auto calculate_B1() { return basis_detail::calculate_B1<p, apply_weights, q>(); }
+  static constexpr auto calculate_B1()
+  {
+    return basis_detail::calculate_B1<p, apply_weights, q>();
+  }
 
   template <bool apply_weights, int q>
-  static constexpr auto calculate_B2() { return basis_detail::calculate_B2<p, apply_weights, q>(); }
+  static constexpr auto calculate_B2()
+  {
+    return basis_detail::calculate_B2<p, apply_weights, q>();
+  }
 
   template <bool apply_weights, int q>
-  static constexpr auto calculate_G2() { return basis_detail::calculate_G2<p, apply_weights, q>(); }
+  static constexpr auto calculate_G2()
+  {
+    return basis_detail::calculate_G2<p, apply_weights, q>();
+  }
 
   /*
 
@@ -287,7 +296,7 @@ struct finite_element<mfem::Geometry::SQUARE, Hdiv<p> > {
     constexpr tensor<double, q, p + 1> G2 = calculate_G2<apply_weights, q>();
 
     using source_buf_t = std::conditional_t<is_zero<source_type>{}, zero, tensor<double, 2, q, q>>;
-    using flux_buf_t   = std::conditional_t<is_zero<flux_type>{},   zero, tensor<double, q, q>>;
+    using flux_buf_t = std::conditional_t<is_zero<flux_type>{}, zero, tensor<double, q, q>>;
 
     source_buf_t source{};
     flux_buf_t flux{};

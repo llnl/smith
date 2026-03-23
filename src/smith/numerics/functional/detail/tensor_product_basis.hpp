@@ -28,7 +28,7 @@ namespace basis_detail {
 template <int p, bool apply_weights, int q>
 constexpr auto calculate_B1()
 {
-  constexpr auto points1D  = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
+  constexpr auto points1D = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
   [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q, mfem::Geometry::SEGMENT>();
   tensor<double, q, p> B1{};
   for (int i = 0; i < q; i++) {
@@ -41,7 +41,7 @@ constexpr auto calculate_B1()
 template <int p, bool apply_weights, int q>
 constexpr auto calculate_B2()
 {
-  constexpr auto points1D  = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
+  constexpr auto points1D = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
   [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q, mfem::Geometry::SEGMENT>();
   tensor<double, q, p + 1> B2{};
   for (int i = 0; i < q; i++) {
@@ -54,7 +54,7 @@ constexpr auto calculate_B2()
 template <int p, bool apply_weights, int q>
 constexpr auto calculate_G2()
 {
-  constexpr auto points1D  = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
+  constexpr auto points1D = GaussLegendreNodes<q, mfem::Geometry::SEGMENT>();
   [[maybe_unused]] constexpr auto weights1D = GaussLegendreWeights<q, mfem::Geometry::SEGMENT>();
   tensor<double, q, p + 1> G2{};
   for (int i = 0; i < q; i++) {

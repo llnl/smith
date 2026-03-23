@@ -63,14 +63,14 @@ double darcy_solve()
   constexpr int dim = 2;
 
   // 1. Mesh: 4×4 Cartesian quad mesh on [0,1]²
-  auto mesh = mesh::refineAndDistribute(
-      mfem::Mesh::MakeCartesian2D(4, 4, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), 0);
+  auto mesh =
+      mesh::refineAndDistribute(mfem::Mesh::MakeCartesian2D(4, 4, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), 0);
 
   // 2. FE spaces
   //    Hdiv<p>  ↔ RT_FECollection(p-1)  — flux space
   //    L2<p-1>  ↔ L2_FECollection(p-1) — pressure space
   auto [fes_sigma, fec_sigma] = generateParFiniteElementSpace<Hdiv<p>>(mesh.get());
-  auto [fes_u, fec_u]         = generateParFiniteElementSpace<L2<p - 1>>(mesh.get());
+  auto [fes_u, fec_u] = generateParFiniteElementSpace<L2<p - 1>>(mesh.get());
 
   // 3. Project exact solution
   mfem::VectorFunctionCoefficient sigma_coeff(dim, sigma_exact_fn);
@@ -105,7 +105,7 @@ double darcy_solve()
       Dimension<dim>{}, DependsOn<0, 1>{},
       [](double, auto, auto sigma_arg, auto u_arg) {
         auto [sigma_val, sigma_div] = sigma_arg;
-        auto [u_val, u_grad]        = u_arg;
+        auto [u_val, u_grad] = u_arg;
         return smith::tuple{sigma_val, -u_val};  // K = I
       },
       whole_domain);
@@ -121,7 +121,7 @@ double darcy_solve()
       Dimension<dim>{}, DependsOn<0, 1>{},
       [=](double, auto, auto sigma_arg, auto u_arg) {
         auto [sigma_val, sigma_div] = sigma_arg;
-        auto [u_val, u_grad]        = u_arg;
+        auto [u_val, u_grad] = u_arg;
         // source = div(σ) + ε u,  flux = 0
         return smith::tuple{sigma_div + eps * u_val, tensor<double, dim>{}};
       },
@@ -131,9 +131,9 @@ double darcy_solve()
   double t = 0.0;
 
   auto [r_sigma_0, dRsigma_dsigma] = res_sigma(t, differentiate_wrt(sigma_zero), u_zero);
-  auto [dummy0, dRsigma_du]        = res_sigma(t, sigma_zero, differentiate_wrt(u_zero));
-  auto [r_u_0, dRu_dsigma]         = res_u(t, differentiate_wrt(sigma_zero), u_zero);
-  auto [dummy1, dRu_du]            = res_u(t, sigma_zero, differentiate_wrt(u_zero));
+  auto [dummy0, dRsigma_du] = res_sigma(t, sigma_zero, differentiate_wrt(u_zero));
+  auto [r_u_0, dRu_dsigma] = res_u(t, differentiate_wrt(sigma_zero), u_zero);
+  auto [dummy1, dRu_du] = res_u(t, sigma_zero, differentiate_wrt(u_zero));
 
   auto J_00 = assemble(dRsigma_dsigma);  //  K⁻¹ mass matrix (Hdiv × Hdiv)
   auto J_01 = assemble(dRsigma_du);      // −B^T               (Hdiv × L2)
@@ -200,7 +200,7 @@ double darcy_solve()
   mfem::BlockVector rhs_block(offsets), sol_block(offsets);
   rhs_block.GetBlock(0) = rhs_sigma;
   rhs_block.GetBlock(1) = rhs_u;
-  sol_block              = 0.0;
+  sol_block = 0.0;
 
   // 9. Solve with SuperLU
   smith::SuperLUSolver superlu(0 /*print_level*/, mesh->GetComm());
@@ -210,7 +210,7 @@ double darcy_solve()
   // 10. Compute relative σ error
   mfem::Vector sigma_err(sol_block.GetBlock(0));
   sigma_err -= sigma_exact;
-  double err      = sigma_err.Norml2();
+  double err = sigma_err.Norml2();
   double norm_ref = sigma_exact.Norml2();
   return err / (norm_ref > 0.0 ? norm_ref : 1.0);
 }
@@ -231,11 +231,11 @@ double darcy_solve_3d()
 {
   constexpr int dim = 3;
 
-  auto mesh = mesh::refineAndDistribute(
-      mfem::Mesh::MakeCartesian3D(2, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0), 0);
+  auto mesh =
+      mesh::refineAndDistribute(mfem::Mesh::MakeCartesian3D(2, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0), 0);
 
   auto [fes_sigma, fec_sigma] = generateParFiniteElementSpace<Hdiv<p>>(mesh.get());
-  auto [fes_u, fec_u]         = generateParFiniteElementSpace<L2<p - 1>>(mesh.get());
+  auto [fes_u, fec_u] = generateParFiniteElementSpace<L2<p - 1>>(mesh.get());
 
   mfem::VectorFunctionCoefficient sigma_coeff(dim, sigma_exact_3d_fn);
   mfem::ParGridFunction sigma_gf(fes_sigma.get());
@@ -263,7 +263,7 @@ double darcy_solve_3d()
       Dimension<dim>{}, DependsOn<0, 1>{},
       [](double, auto, auto sigma_arg, auto u_arg) {
         auto [sigma_val, sigma_div] = sigma_arg;
-        auto [u_val, u_grad]        = u_arg;
+        auto [u_val, u_grad] = u_arg;
         return smith::tuple{sigma_val, -u_val};
       },
       whole_domain);
@@ -275,7 +275,7 @@ double darcy_solve_3d()
       Dimension<dim>{}, DependsOn<0, 1>{},
       [=](double, auto, auto sigma_arg, auto u_arg) {
         auto [sigma_val, sigma_div] = sigma_arg;
-        auto [u_val, u_grad]        = u_arg;
+        auto [u_val, u_grad] = u_arg;
         return smith::tuple{sigma_div + eps * u_val, tensor<double, dim>{}};
       },
       whole_domain);
@@ -283,9 +283,9 @@ double darcy_solve_3d()
   double t = 0.0;
 
   auto [r_sigma_0, dRsigma_dsigma] = res_sigma(t, differentiate_wrt(sigma_zero), u_zero);
-  auto [dummy0, dRsigma_du]        = res_sigma(t, sigma_zero, differentiate_wrt(u_zero));
-  auto [r_u_0, dRu_dsigma]         = res_u(t, differentiate_wrt(sigma_zero), u_zero);
-  auto [dummy1, dRu_du]            = res_u(t, sigma_zero, differentiate_wrt(u_zero));
+  auto [dummy0, dRsigma_du] = res_sigma(t, sigma_zero, differentiate_wrt(u_zero));
+  auto [r_u_0, dRu_dsigma] = res_u(t, differentiate_wrt(sigma_zero), u_zero);
+  auto [dummy1, dRu_du] = res_u(t, sigma_zero, differentiate_wrt(u_zero));
 
   auto J_00 = assemble(dRsigma_dsigma);
   auto J_01 = assemble(dRsigma_du);
@@ -345,7 +345,7 @@ double darcy_solve_3d()
   mfem::BlockVector rhs_block(offsets), sol_block(offsets);
   rhs_block.GetBlock(0) = rhs_sigma;
   rhs_block.GetBlock(1) = rhs_u;
-  sol_block              = 0.0;
+  sol_block = 0.0;
 
   smith::SuperLUSolver superlu(0, mesh->GetComm());
   superlu.SetOperator(block_op);
@@ -353,7 +353,7 @@ double darcy_solve_3d()
 
   mfem::Vector sigma_err(sol_block.GetBlock(0));
   sigma_err -= sigma_exact;
-  double err      = sigma_err.Norml2();
+  double err = sigma_err.Norml2();
   double norm_ref = sigma_exact.Norml2();
   return err / (norm_ref > 0.0 ? norm_ref : 1.0);
 }

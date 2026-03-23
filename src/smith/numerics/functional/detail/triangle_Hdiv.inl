@@ -152,14 +152,14 @@ struct finite_element<mfem::Geometry::TRIANGLE, Hdiv<p> > {
   static constexpr auto directions = [] {
     tensor<double, ndof, dim> d{};
     int o = 0;
-    for (int i = 0; i < p; i++) d[o++] = {0.0, -1.0};   // edge 0
-    for (int i = 0; i < p; i++) d[o++] = {1.0, 1.0};    // edge 1
-    for (int i = 0; i < p; i++) d[o++] = {-1.0, 0.0};   // edge 2
+    for (int i = 0; i < p; i++) d[o++] = {0.0, -1.0};  // edge 0
+    for (int i = 0; i < p; i++) d[o++] = {1.0, 1.0};   // edge 1
+    for (int i = 0; i < p; i++) d[o++] = {-1.0, 0.0};  // edge 2
     if constexpr (p > 1) {
       for (int j = 0; j < p - 1; j++) {
         for (int i = 0; i + j < p - 1; i++) {
-          d[o++] = {0.0, -1.0};   // interior: nk index 0
-          d[o++] = {-1.0, 0.0};   // interior: nk index 2
+          d[o++] = {0.0, -1.0};  // interior: nk index 0
+          d[o++] = {-1.0, 0.0};  // interior: nk index 2
         }
       }
     }
@@ -180,8 +180,7 @@ struct finite_element<mfem::Geometry::TRIANGLE, Hdiv<p> > {
   }();
 
   // Evaluate all ndof shape functions (vector-valued) at point xi
-  SMITH_HOST_DEVICE static constexpr tensor<double, ndof, dim> shape_functions(
-      [[maybe_unused]] tensor<double, dim> xi)
+  SMITH_HOST_DEVICE static constexpr tensor<double, ndof, dim> shape_functions([[maybe_unused]] tensor<double, dim> xi)
   {
     auto raw = raw_vshape(xi);
     tensor<double, ndof, dim> N{};
@@ -195,8 +194,7 @@ struct finite_element<mfem::Geometry::TRIANGLE, Hdiv<p> > {
   }
 
   // Evaluate divergence of all ndof shape functions at point xi
-  SMITH_HOST_DEVICE static constexpr tensor<double, ndof> shape_function_div(
-      [[maybe_unused]] tensor<double, dim> xi)
+  SMITH_HOST_DEVICE static constexpr tensor<double, ndof> shape_function_div([[maybe_unused]] tensor<double, dim> xi)
   {
     auto raw = raw_divshape(xi);
     tensor<double, ndof> d{};

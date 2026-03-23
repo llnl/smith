@@ -52,7 +52,7 @@ double darcy_convergence_solve(int n_elem)
       mfem::Mesh::MakeCartesian2D(n_elem, n_elem, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), 0);
 
   auto [fes_sigma, fec_sigma] = generateParFiniteElementSpace<Hdiv<p>>(mesh.get());
-  auto [fes_u, fec_u]         = generateParFiniteElementSpace<L2<p - 1>>(mesh.get());
+  auto [fes_u, fec_u] = generateParFiniteElementSpace<L2<p - 1>>(mesh.get());
 
   // Project exact solution for BCs and error measurement
   mfem::VectorFunctionCoefficient sigma_coeff(dim, sigma_exact_fn);
@@ -76,7 +76,7 @@ double darcy_convergence_solve(int n_elem)
       Dimension<dim>{}, DependsOn<0, 1>{},
       [](double, auto, auto sigma_arg, auto u_arg) {
         auto [sigma_val, sigma_div] = sigma_arg;
-        auto [u_val, u_grad]        = u_arg;
+        auto [u_val, u_grad] = u_arg;
         return smith::tuple{sigma_val, -u_val};
       },
       whole_domain);
@@ -90,7 +90,7 @@ double darcy_convergence_solve(int n_elem)
       [=](double, auto position, auto sigma_arg, auto u_arg) {
         auto [X, J] = position;
         auto [sigma_val, sigma_div] = sigma_arg;
-        auto [u_val, u_grad]        = u_arg;
+        auto [u_val, u_grad] = u_arg;
         double f = 2.0 * PI * PI * sin(PI * X[0]) * sin(PI * X[1]);
         return smith::tuple{sigma_div + eps * u_val - f, tensor<double, dim>{}};
       },
@@ -99,9 +99,9 @@ double darcy_convergence_solve(int n_elem)
   double t = 0.0;
 
   auto [r_sigma_0, dRsigma_dsigma] = res_sigma(t, differentiate_wrt(sigma_zero), u_zero);
-  auto [dummy0, dRsigma_du]        = res_sigma(t, sigma_zero, differentiate_wrt(u_zero));
-  auto [r_u_0, dRu_dsigma]         = res_u(t, differentiate_wrt(sigma_zero), u_zero);
-  auto [dummy1, dRu_du]            = res_u(t, sigma_zero, differentiate_wrt(u_zero));
+  auto [dummy0, dRsigma_du] = res_sigma(t, sigma_zero, differentiate_wrt(u_zero));
+  auto [r_u_0, dRu_dsigma] = res_u(t, differentiate_wrt(sigma_zero), u_zero);
+  auto [dummy1, dRu_du] = res_u(t, sigma_zero, differentiate_wrt(u_zero));
 
   auto J_00 = assemble(dRsigma_dsigma);
   auto J_01 = assemble(dRsigma_du);
@@ -165,7 +165,7 @@ double darcy_convergence_solve(int n_elem)
   mfem::BlockVector rhs_block(offsets), sol_block(offsets);
   rhs_block.GetBlock(0) = rhs_sigma;
   rhs_block.GetBlock(1) = rhs_u;
-  sol_block              = 0.0;
+  sol_block = 0.0;
 
   smith::SuperLUSolver superlu(0, mesh->GetComm());
   superlu.SetOperator(block_op);
@@ -186,7 +186,7 @@ void check_convergence_rate()
 {
   // Solve on two mesh sizes, compute convergence rate
   double err_coarse = darcy_convergence_solve<p>(4);
-  double err_fine   = darcy_convergence_solve<p>(8);
+  double err_fine = darcy_convergence_solve<p>(8);
 
   // rate = log(err_coarse/err_fine) / log(h_coarse/h_fine) = log(err_coarse/err_fine) / log(2)
   double rate = log(err_coarse / err_fine) / log(2.0);
@@ -210,8 +210,8 @@ void check_normal_continuity()
 {
   constexpr int dim = 2;
 
-  auto mesh = mesh::refineAndDistribute(
-      mfem::Mesh::MakeCartesian2D(4, 4, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), 0);
+  auto mesh =
+      mesh::refineAndDistribute(mfem::Mesh::MakeCartesian2D(4, 4, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), 0);
 
   auto [fes_sigma, fec_sigma] = generateParFiniteElementSpace<Hdiv<p>>(mesh.get());
 
@@ -247,8 +247,8 @@ void hdiv_boundary_test()
 {
   constexpr int dim = 2;
 
-  auto mesh = mesh::refineAndDistribute(
-      mfem::Mesh::MakeCartesian2D(4, 4, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), 1);
+  auto mesh =
+      mesh::refineAndDistribute(mfem::Mesh::MakeCartesian2D(4, 4, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), 1);
 
   auto [fespace, fec] = smith::generateParFiniteElementSpace<Hdiv<p>>(mesh.get());
 
@@ -277,8 +277,8 @@ void hdiv_boundary_test_3d()
 {
   constexpr int dim = 3;
 
-  auto mesh = mesh::refineAndDistribute(
-      mfem::Mesh::MakeCartesian3D(2, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0), 1);
+  auto mesh =
+      mesh::refineAndDistribute(mfem::Mesh::MakeCartesian3D(2, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0), 1);
 
   auto [fespace, fec] = smith::generateParFiniteElementSpace<Hdiv<p>>(mesh.get());
 

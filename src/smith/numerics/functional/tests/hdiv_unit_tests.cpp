@@ -159,7 +159,10 @@ TEST(HdivKroneckerDelta, TetrahedronCubic)
 
 TEST(HdivDiv, TetrahedronLinear) { verify_div_calculation<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<1>>>(); }
 
-TEST(HdivDiv, TetrahedronQuadratic) { verify_div_calculation<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<2>>>(); }
+TEST(HdivDiv, TetrahedronQuadratic)
+{
+  verify_div_calculation<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<2>>>();
+}
 
 TEST(HdivDiv, TetrahedronCubic) { verify_div_calculation<finite_element<::mfem::Geometry::TETRAHEDRON, Hdiv<3>>>(); }
 

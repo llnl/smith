@@ -26,8 +26,8 @@ struct finite_element<mfem::Geometry::SQUARE, HdivBoundary<p, c> > {
   static constexpr auto geometry = mfem::Geometry::SQUARE;
   static constexpr auto family = Family::HDIV;
   static constexpr int components = c;
-  static constexpr int dim = 2; // dimension of the face
-  static constexpr int n = p;   // number of 1D nodes
+  static constexpr int dim = 2;  // dimension of the face
+  static constexpr int n = p;    // number of 1D nodes
   static constexpr int ndof = p * p;
 
   static constexpr int VALUE = 0, DIV = 1;
@@ -84,7 +84,9 @@ struct finite_element<mfem::Geometry::SQUARE, HdivBoundary<p, c> > {
     tensor<double, q, n> B{};
     for (int i = 0; i < q; i++) {
       B[i] = GaussLegendreInterpolation<n>(points1D[i]);
-      if constexpr (apply_weights) { B[i] = B[i] * weights1D[i]; }
+      if constexpr (apply_weights) {
+        B[i] = B[i] * weights1D[i];
+      }
     }
     return B;
   }
@@ -97,7 +99,9 @@ struct finite_element<mfem::Geometry::SQUARE, HdivBoundary<p, c> > {
     tensor<double, q, n> G{};
     for (int i = 0; i < q; i++) {
       G[i] = GaussLegendreInterpolationDerivative<n>(points1D[i]);
-      if constexpr (apply_weights) { G[i] = G[i] * weights1D[i]; }
+      if constexpr (apply_weights) {
+        G[i] = G[i] * weights1D[i];
+      }
     }
     return G;
   }

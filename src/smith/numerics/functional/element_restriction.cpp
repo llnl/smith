@@ -333,13 +333,13 @@ axom::Array<DoF, 2, smith::detail::host_memory_space> GetElementDofs(const smith
       if (vtfe != nullptr) {
         const mfem::Array<int>& dof_perm = vtfe->GetDofMap();
         for (int k = 0; k < dofs.Size(); k++) {
-          int dp           = dof_perm[k];
-          int elem_sign    = (dp < 0) ? 1 : 0;       // reference-element orientation sign bit
-          int local_idx    = (dp >= 0) ? dp : -1 - dp;
-          int gd           = dofs[local_idx];
-          int mesh_sign    = (gd < 0) ? 1 : 0;       // mesh orientation sign bit
-          int global_idx   = (gd >= 0) ? gd : -1 - gd;
-          int combined     = (elem_sign + mesh_sign) % 2;
+          int dp = dof_perm[k];
+          int elem_sign = (dp < 0) ? 1 : 0;  // reference-element orientation sign bit
+          int local_idx = (dp >= 0) ? dp : -1 - dp;
+          int gd = dofs[local_idx];
+          int mesh_sign = (gd < 0) ? 1 : 0;  // mesh orientation sign bit
+          int global_idx = (gd >= 0) ? gd : -1 - gd;
+          int combined = (elem_sign + mesh_sign) % 2;
           elem_dofs.push_back(DoF{uint64_t(global_idx), uint64_t(combined)});
         }
       } else {
@@ -716,7 +716,7 @@ void ElementRestriction::Gather(const mfem::Vector& L_vector, mfem::Vector& E_ve
     for (uint64_t c = 0; c < components; c++) {
       for (uint64_t j = 0; j < nodes_per_elem; j++) {
         uint64_t E_id = (i * components + c) * nodes_per_elem + j;
-        auto     vdof = GetVDof(dof_info(i, j), c);
+        auto vdof = GetVDof(dof_info(i, j), c);
         E_vector[int(E_id)] = double(vdof.sign()) * L_vector[int(vdof.index())];
       }
     }
@@ -729,7 +729,7 @@ void ElementRestriction::ScatterAdd(const mfem::Vector& E_vector, mfem::Vector& 
     for (uint64_t c = 0; c < components; c++) {
       for (uint64_t j = 0; j < nodes_per_elem; j++) {
         uint64_t E_id = (i * components + c) * nodes_per_elem + j;
-        auto     vdof = GetVDof(dof_info(i, j), c);
+        auto vdof = GetVDof(dof_info(i, j), c);
         L_vector[int(vdof.index())] += double(vdof.sign()) * E_vector[int(E_id)];
       }
     }

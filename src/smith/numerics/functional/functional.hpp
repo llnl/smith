@@ -910,11 +910,11 @@ class Functional<test(trials...), exec> {
               trial_restriction.GetElementVDofs(int(e), trial_vdofs);
 
               for (uint32_t i = 0; i < cols_per_elem; i++) {
-                int    col        = int(trial_vdofs[i].index());
+                int col = int(trial_vdofs[i].index());
                 double trial_sign = double(trial_vdofs[i].sign());
 
                 for (uint32_t j = 0; j < rows_per_elem; j++) {
-                  int    row      = int(test_vdofs[j].index());
+                  int row = int(test_vdofs[j].index());
                   double test_sign = double(test_vdofs[j].sign());
                   A_local.SearchRow(row, col) += test_sign * K_e(e, i, j) * trial_sign;
                 }
