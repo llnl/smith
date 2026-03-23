@@ -26,17 +26,26 @@ class ParaviewWriter {
  public:
   using StateVecs = std::vector<std::shared_ptr<FiniteElementState> >;  ///< using
 
+  /// @brief Options that control which fields are written to ParaView output.
   struct Options {
+    /// @brief When true, write dual/reaction fields alongside the primary states.
     bool write_duals{true};
   };
 
-  /// Construct from ParaViewDataCollection, a vector of shared_ptr to FiniteElementState, and vector of shared_ptr to
-  /// FiniteElementState which dual fields will be copied into.
+  /// @brief Construct a writer backed by an existing ParaView data collection.
+  /// @param[in] pv_ ParaView data collection that owns the output database.
+  /// @param[in] states_ Output state fields that will be updated before each write.
+  /// @param[in] duals_ Output dual fields that will be updated before each write.
   ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
       : pv(std::move(pv_)), states(states_), dual_states(duals_), opts({})
   {
   }
 
+  /// @brief Construct a writer backed by an existing ParaView data collection with explicit output options.
+  /// @param[in] pv_ ParaView data collection that owns the output database.
+  /// @param[in] states_ Output state fields that will be updated before each write.
+  /// @param[in] duals_ Output dual fields that will be updated before each write.
+  /// @param[in] opts_ Options that control which fields are emitted.
   ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_,
                  Options opts_)
       : pv(std::move(pv_)), states(states_), dual_states(duals_), opts(opts_)
@@ -159,7 +168,10 @@ inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<Fiel
   return ParaviewWriter(std::move(paraview_dc), output_states, output_duals, opts);
 }
 
-/// @overload: default options (write duals).
+/// @brief Create a ParaView writer using the default output options.
+/// @param[in] mesh Mesh used to define the ParaView data collection.
+/// @param[in] states Field states whose values and duals will be registered for output.
+/// @param[in] output_name Base name for the ParaView output directory and `.pvd` file.
 inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<FieldState>& states,
                                  std::string output_name)
 {
