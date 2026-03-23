@@ -15,7 +15,7 @@
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
-#include "smith/differentiable_numerics/solid_mechanics_time_integrator.hpp"
+#include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
@@ -45,15 +45,15 @@ struct SolidMechanicsSystem : public SystemBase {
   using SolidWeakFormType =
       TimeDiscretizedWeakForm<dim, H1<order, dim>, TimeRuleParams<DisplacementTimeRule, H1<order, dim>, parameter_space...>>;
 
-  /// using
+  /// using -- 3-state form: u, v, a (no u_old needed; at cycle 0 u and v are given, solve for a)
   using CycleZeroWeakFormType =
-      TimeDiscretizedWeakForm<dim, H1<order, dim>, TimeRuleParams<DisplacementTimeRule, H1<order, dim>, parameter_space...>>;
+      TimeDiscretizedWeakForm<dim, H1<order, dim>, Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
   std::shared_ptr<CycleZeroWeakFormType>
       cycle_zero_weak_form;                              ///< Cycle-zero weak form for initial acceleration solve.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
-  std::shared_ptr<DisplacementTimeRule> time_rule;                   ///< Time integration rule.
+  std::shared_ptr<DisplacementTimeRule> disp_time_rule;                   ///< Time integration rule.
 
   /**
    * @brief Get the list of all state fields (displacement_predicted, displacement, velocity, acceleration).
@@ -86,7 +86,7 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename MaterialType>
   void setMaterial(const MaterialType& material, const std::string& domain_name)
   {
-    auto captured_rule = time_rule;
+    auto captured_rule = disp_time_rule;
     solid_weak_form->addBodyIntegral(
         domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
           auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
@@ -99,7 +99,7 @@ struct SolidMechanicsSystem : public SystemBase {
 
     // Add to cycle-zero weak form (at cycle 0, u and v are given, solve for a)
     cycle_zero_weak_form->addBodyIntegral(
-        domain_name, [=](auto /*t_info*/, auto /*X*/, auto u, auto /*u_old*/, auto /*v_old*/, auto a, auto... params) {
+        domain_name, [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v_old*/, auto a, auto... params) {
           typename MaterialType::State state;
           auto pk_stress = material(state, get<DERIVATIVE>(u), params...);
 
@@ -119,7 +119,7 @@ struct SolidMechanicsSystem : public SystemBase {
   void addBodyForce(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
                     BodyForceType force_function)
   {
-    auto captured_rule = time_rule;
+    auto captured_rule = disp_time_rule;
     solid_weak_form->addBodySource(
         depends_on, domain_name,
         [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
@@ -127,11 +127,12 @@ struct SolidMechanicsSystem : public SystemBase {
           return force_function(t_info.time(), X, u_current, v_current, a_current, params...);
         });
 
-    cycle_zero_weak_form->addBodySource(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto u, auto /*u_old*/, auto v_old, auto a, auto... params) {
+    addCycleZeroBodySourceImpl(
+        domain_name,
+        [=](auto t_info, auto X, auto u, auto v_old, auto a, auto... params) {
           return force_function(t_info.time(), X, u, v_old, a, params...);
-        });
+        },
+        std::make_index_sequence<3 + sizeof...(parameter_space)>{});
   }
 
   /**
@@ -158,7 +159,7 @@ struct SolidMechanicsSystem : public SystemBase {
   void addTraction(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
                    TractionType traction_function)
   {
-    auto captured_rule = time_rule;
+    auto captured_rule = disp_time_rule;
     solid_weak_form->addBoundaryFlux(
         depends_on, domain_name,
         [=](auto t_info, auto X, auto n, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
@@ -166,11 +167,12 @@ struct SolidMechanicsSystem : public SystemBase {
           return traction_function(t_info.time(), X, n, u_current, v_current, a_current, params...);
         });
 
-    cycle_zero_weak_form->addBoundaryFlux(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto n, auto u, auto /*u_old*/, auto v_old, auto a, auto... params) {
+    addCycleZeroBoundaryFluxImpl(
+        domain_name,
+        [=](auto t_info, auto X, auto n, auto u, auto v_old, auto a, auto... params) {
           return traction_function(t_info.time(), X, n, u, v_old, a, params...);
-        });
+        },
+        std::make_index_sequence<3 + sizeof...(parameter_space)>{});
   }
 
   /**
@@ -197,7 +199,7 @@ struct SolidMechanicsSystem : public SystemBase {
   void addPressure(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
                    PressureType pressure_function)
   {
-    auto captured_rule = time_rule;
+    auto captured_rule = disp_time_rule;
     solid_weak_form->addBoundaryIntegral(
         depends_on, domain_name,
         [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
@@ -212,9 +214,9 @@ struct SolidMechanicsSystem : public SystemBase {
           return pressure * n_deformed * (1.0 / n_shape_norm);
         });
 
-    cycle_zero_weak_form->addBoundaryIntegral(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto u, auto /*u_old*/, auto /*v_old*/, auto /*a*/, auto... params) {
+    addCycleZeroBoundaryIntegralImpl(
+        domain_name,
+        [=](auto t_info, auto X, auto u, auto /*v_old*/, auto /*a*/, auto... params) {
           auto u_current = u;
 
           auto x_current = X + u_current;
@@ -224,7 +226,8 @@ struct SolidMechanicsSystem : public SystemBase {
           auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(params)...);
 
           return pressure * n_deformed * (1.0 / n_shape_norm);
-        });
+        },
+        std::make_index_sequence<3 + sizeof...(parameter_space)>{});
   }
 
   /**
@@ -257,6 +260,25 @@ struct SolidMechanicsSystem : public SystemBase {
   {
     addPressure(DependsOn<static_cast<int>(Is)...>{}, domain_name, pressure_function);
   }
+
+  // Cycle-zero helpers: always use all-params DependsOn with the 3-state cycle-zero form count
+  template <typename IntegrandType, std::size_t... Is>
+  void addCycleZeroBodySourceImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
+  {
+    cycle_zero_weak_form->addBodySource(DependsOn<static_cast<int>(Is)...>{}, name, f);
+  }
+
+  template <typename IntegrandType, std::size_t... Is>
+  void addCycleZeroBoundaryFluxImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
+  {
+    cycle_zero_weak_form->addBoundaryFlux(DependsOn<static_cast<int>(Is)...>{}, name, f);
+  }
+
+  template <typename IntegrandType, std::size_t... Is>
+  void addCycleZeroBoundaryIntegralImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
+  {
+    cycle_zero_weak_form->addBoundaryIntegral(DependsOn<static_cast<int>(Is)...>{}, name, f);
+  }
 };
 
 /**
@@ -267,14 +289,14 @@ struct SolidMechanicsSystem : public SystemBase {
  * @tparam parameter_space Parameter spaces for material properties.
  * @param mesh The mesh.
  * @param solver The coupled system solver.
- * @param time_rule The time integration rule.
+ * @param disp_time_rule The time integration rule.
  * @param prepend_name The name of the physics (used as field prefix).
  * @param parameter_types Parameter field types.
  * @return SolidMechanicsSystem with all components initialized.
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
 SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> buildSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule time_rule,
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule disp_time_rule,
     std::string prepend_name = "", FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
@@ -291,9 +313,9 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
   field_store->addShapeDisp(shape_disp_type);
 
   // Add displacement as independent (unknown) with time integration rule
-  auto time_rule_ptr = std::make_shared<DisplacementTimeRule>(time_rule);
+  auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>(disp_time_rule);
   FieldType<H1<order, dim>> disp_type(prefix("displacement_predicted"));
-  auto disp_bc = field_store->addIndependent(disp_type, time_rule_ptr);
+  auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule_ptr);
 
   // Add dependent fields for time integration history
   auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
@@ -314,23 +336,25 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
       field_store->createSpaces(force_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
-  // Create cycle-zero weak form (u, u_old, v_old, a) for initial acceleration solve
+  // Create cycle-zero weak form (u, v, a) for initial acceleration solve — 3 states, no u_old
   std::string cycle_zero_name = prefix("solid_reaction");
   auto cycle_zero_weak_form = std::make_shared<typename SystemType::CycleZeroWeakFormType>(
       cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
-      field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, disp_old_type, velo_old_type,
-                                accel_old_type,
+      field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
+  auto cycle_zero_solver = buildCycleZeroSolver(*mesh);
+
   // Build advancer
+  std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form};
   auto advancer =
-      std::make_shared<SolidMechanicsTimeIntegrator>(field_store, solid_weak_form, cycle_zero_weak_form, solver);
+      std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver, cycle_zero_weak_form, cycle_zero_solver);
 
   return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
                     solid_weak_form,
                     cycle_zero_weak_form,
                     disp_bc,
-                    time_rule_ptr};
+                    disp_time_rule_ptr};
 }
 
 /**
@@ -338,10 +362,10 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
 SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> buildSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule time_rule,
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule disp_time_rule,
     FieldType<parameter_space>... parameter_types)
 {
-  return buildSolidMechanicsSystem<dim, order>(mesh, solver, time_rule, "", parameter_types...);
+  return buildSolidMechanicsSystem<dim, order>(mesh, solver, disp_time_rule, "", parameter_types...);
 }
 
 }  // namespace smith
