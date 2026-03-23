@@ -45,6 +45,7 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
    * @param weak_forms List of weak forms to coordinate.
    * @param solver The block solver to use.
    * @param cycle_zero_weak_form Optional weak form for initial acceleration solve at cycle 0.
+   * @param cycle_zero_solver Optional solver paired with `cycle_zero_weak_form` for the cycle-0 solve.
    */
   MultiphysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
                              const std::vector<std::shared_ptr<WeakForm>>& weak_forms,

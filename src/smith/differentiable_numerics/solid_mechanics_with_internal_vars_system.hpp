@@ -147,6 +147,8 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
   /**
    * @brief Add a body force to the solid mechanics part (with DependsOn).
+   * @param depends_on Selects which primal and parameter fields the contribution depends on.
+   * @param domain_name The name of the domain where the body force is applied.
    * @param force_function (t, X, u, v, a, alpha, params...) -> force vector.
    */
   template <int... active_parameters, typename BodyForceType>
@@ -172,6 +174,11 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
         std::make_index_sequence<5 + sizeof...(parameter_space)>{});
   }
 
+  /**
+   * @brief Add a body force that depends on all state and parameter fields.
+   * @param domain_name The name of the domain where the body force is applied.
+   * @param force_function (t, X, u, v, a, alpha, params...) -> force vector.
+   */
   template <typename BodyForceType>
   void addBodyForce(const std::string& domain_name, BodyForceType force_function)
   {
@@ -180,6 +187,8 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
   /**
    * @brief Add a surface traction to the solid mechanics part (with DependsOn).
+   * @param depends_on Selects which primal and parameter fields the contribution depends on.
+   * @param domain_name The name of the boundary where the traction is applied.
    * @param traction_function (t, X, n, u, v, a, alpha, params...) -> traction vector.
    */
   template <int... active_parameters, typename TractionType>
@@ -205,6 +214,11 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
         std::make_index_sequence<5 + sizeof...(parameter_space)>{});
   }
 
+  /**
+   * @brief Add a surface traction that depends on all state and parameter fields.
+   * @param domain_name The name of the boundary where the traction is applied.
+   * @param traction_function (t, X, n, u, v, a, alpha, params...) -> traction vector.
+   */
   template <typename TractionType>
   void addTraction(const std::string& domain_name, TractionType traction_function)
   {
@@ -213,6 +227,8 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
   /**
    * @brief Add a pressure boundary condition (follower force) (with DependsOn).
+   * @param depends_on Selects which primal and parameter fields the contribution depends on.
+   * @param domain_name The name of the boundary where the pressure is applied.
    * @param pressure_function (t, X, params...) -> pressure scalar.
    */
   template <int... active_parameters, typename PressureType>
@@ -249,6 +265,11 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
         std::make_index_sequence<5 + sizeof...(parameter_space)>{});
   }
 
+  /**
+   * @brief Add a pressure boundary condition that depends on all state and parameter fields.
+   * @param domain_name The name of the boundary where the pressure is applied.
+   * @param pressure_function (t, X, params...) -> pressure scalar.
+   */
   template <typename PressureType>
   void addPressure(const std::string& domain_name, PressureType pressure_function)
   {

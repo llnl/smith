@@ -98,6 +98,8 @@ struct ThermalSystem : public SystemBase {
 
   /**
    * @brief Add a body heat source to the thermal system (with DependsOn).
+   * @param depends_on Selects which primal and parameter fields the contribution depends on.
+   * @param domain_name The name of the domain where the heat source is applied.
    * @param source_function (t, X, T, params...) -> heat_source.
    */
   template <int... active_parameters, typename HeatSourceType>
@@ -113,6 +115,11 @@ struct ThermalSystem : public SystemBase {
                                      });
   }
 
+  /**
+   * @brief Add a body heat source that depends on all state and parameter fields.
+   * @param domain_name The name of the domain where the heat source is applied.
+   * @param source_function (t, X, T, params...) -> heat_source.
+   */
   template <typename HeatSourceType>
   void addHeatSource(const std::string& domain_name, HeatSourceType source_function)
   {
@@ -121,6 +128,8 @@ struct ThermalSystem : public SystemBase {
 
   /**
    * @brief Add a boundary heat flux to the thermal system (with DependsOn).
+   * @param depends_on Selects which primal and parameter fields the contribution depends on.
+   * @param boundary_name The name of the boundary where the heat flux is applied.
    * @param flux_function (t, X, n, T, params...) -> heat_flux.
    */
   template <int... active_parameters, typename HeatFluxType>
@@ -137,6 +146,11 @@ struct ThermalSystem : public SystemBase {
         });
   }
 
+  /**
+   * @brief Add a boundary heat flux that depends on all state and parameter fields.
+   * @param boundary_name The name of the boundary where the heat flux is applied.
+   * @param flux_function (t, X, n, T, params...) -> heat_flux.
+   */
   template <typename HeatFluxType>
   void addHeatFlux(const std::string& boundary_name, HeatFluxType flux_function)
   {
