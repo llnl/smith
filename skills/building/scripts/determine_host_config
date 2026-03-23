@@ -94,7 +94,6 @@ if [[ -z "$machine" ]]; then
   machine="$(hostname -s 2>/dev/null || hostname)"
   machine="${machine%%[0-9]*}"
 fi
-machine="$(echo "$machine" | tr '[:upper:]' '[:lower:]')"
 
 sys_type="${requested_sys_type:-${SYS_TYPE:-}}"
 
