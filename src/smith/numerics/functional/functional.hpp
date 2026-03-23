@@ -132,7 +132,10 @@ generateParFiniteElementSpace(mfem::ParMesh* mesh)
       fec = std::make_unique<mfem::ND_FECollection>(function_space::order, dim);
       break;
     case Family::HDIV:
-      fec = std::make_unique<mfem::RT_FECollection>(function_space::order, dim);
+      // Hdiv<p> corresponds to RT_FECollection(p-1): our shape functions use
+      // the same tensor-product node counts as Hcurl<p>/ND(p), so order p in
+      // smith maps to RT order p-1 in mfem.  The minimum usable order is p=1.
+      fec = std::make_unique<mfem::RT_FECollection>(function_space::order - 1, dim);
       break;
     case Family::L2:
       // We use GaussLobatto basis functions as this is what is used for the smith::Functional FE kernels
@@ -908,10 +911,12 @@ class Functional<test(trials...), exec> {
 
               for (uint32_t i = 0; i < cols_per_elem; i++) {
                 int col = int(trial_vdofs[i].index());
+                double trial_sign = double(trial_vdofs[i].sign());
 
                 for (uint32_t j = 0; j < rows_per_elem; j++) {
                   int row = int(test_vdofs[j].index());
-                  A_local.SearchRow(row, col) += K_e(e, i, j);
+                  double test_sign = double(test_vdofs[j].sign());
+                  A_local.SearchRow(row, col) += test_sign * K_e(e, i, j) * trial_sign;
                 }
               }
             }

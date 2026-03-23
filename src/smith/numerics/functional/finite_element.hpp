@@ -211,6 +211,30 @@ struct Hcurl {
 };
 
 /**
+ * @brief H(div) elements of order @p p
+ * @tparam p The order of the elements
+ * @tparam c The vector dimension
+ */
+template <int p, int c = 1>
+struct Hdiv {
+  static constexpr int order = p;                 ///< the polynomial order of the elements
+  static constexpr int components = c;            ///< the number of components at each node
+  static constexpr Family family = Family::HDIV;  ///< the family of the basis functions
+};
+
+/**
+ * @brief H(div) elements of order @p p defined on a domain boundary
+ * @tparam p The order of the elements
+ * @tparam c The vector dimension
+ */
+template <int p, int c = 1>
+struct HdivBoundary {
+  static constexpr int order = p;                 ///< the polynomial order of the elements
+  static constexpr int components = c;            ///< the number of components at each node
+  static constexpr Family family = Family::HDIV;  ///< the family of the basis functions
+};
+
+/**
  * @brief Discontinuous elements of order @p p
  * @tparam p The order of the elements
  * @tparam c The vector dimension
@@ -235,7 +259,7 @@ struct QOI {
  * @brief a small POD class for tracking function space metadata
  */
 struct FunctionSpace {
-  Family family;   ///< either H1, Hcurl, L2
+  Family family;   ///< either H1, Hcurl, Hdiv, L2
   int order;       ///< polynomial order
   int components;  ///< how many values are stored at each node
 
@@ -289,6 +313,13 @@ SMITH_HOST_DEVICE void parent_to_physical(tensor<T, q>& qf_input, const tensor<d
         get<DERIVATIVE>(qf_input[k]) = dot(get<DERIVATIVE>(qf_input[k]), transpose(J));
       }
     }
+
+    if constexpr (f == Family::HDIV) {
+      // contravariant Piola: phi = J * hat_phi / det(J)
+      get<VALUE>(qf_input[k]) = dot(J, get<VALUE>(qf_input[k])) / det(J);
+      // divergence: div(phi) = hat_div(hat_phi) / det(J)
+      get<DERIVATIVE>(qf_input[k]) = get<DERIVATIVE>(qf_input[k]) / det(J);
+    }
   }
 }
 
@@ -335,6 +366,15 @@ SMITH_HOST_DEVICE void physical_to_parent(tensor<T, q>& qf_output, const tensor<
       }
     }
 
+    // Hdiv (contravariant Piola) dual pullback:
+    //   source dual: ∫ s·φ_phys dx = ∫ (J^T s)·φ_ref dξ  (det(J) cancels Piola 1/det(J))
+    //   flux   dual: ∫ g·div_phys dx = ∫ g·div_ref dξ    (det(J) cancels div 1/det(J))
+    // dot(v, transpose(J_T)) computes J^T * v  (matches Hcurl 3D flux convention)
+    if constexpr (f == Family::HDIV) {
+      get<SOURCE>(qf_output[k]) = dot(get<SOURCE>(qf_output[k]), transpose(J_T));
+      get<FLUX>(qf_output[k]) = get<FLUX>(qf_output[k]);
+    }
+
     if constexpr (f == Family::QOI) {
       qf_output[k] = qf_output[k] * dv;
     }
@@ -369,22 +409,32 @@ SMITH_HOST_DEVICE void physical_to_parent(tensor<T, q>& qf_output, const tensor<
 template <mfem::Geometry::Type g, typename family>
 struct finite_element;
 
+#include "detail/chebyshev_utils.hpp"
+#include "detail/tensor_product_basis.hpp"
+
 #include "detail/segment_H1.inl"
 #include "detail/segment_Hcurl.inl"
+#include "detail/segment_Hdiv.inl"
 #include "detail/segment_L2.inl"
 
 #include "detail/triangle_H1.inl"
+#include "detail/triangle_Hdiv.inl"
+#include "detail/triangle_HdivBoundary.inl"
 #include "detail/triangle_L2.inl"
 
 #include "detail/quadrilateral_H1.inl"
 #include "detail/quadrilateral_Hcurl.inl"
+#include "detail/quadrilateral_Hdiv.inl"
+#include "detail/quadrilateral_HdivBoundary.inl"
 #include "detail/quadrilateral_L2.inl"
 
 #include "detail/tetrahedron_H1.inl"
+#include "detail/tetrahedron_Hdiv.inl"
 #include "detail/tetrahedron_L2.inl"
 
 #include "detail/hexahedron_H1.inl"
 #include "detail/hexahedron_Hcurl.inl"
+#include "detail/hexahedron_Hdiv.inl"
 #include "detail/hexahedron_L2.inl"
 
 #include "detail/qoi.inl"

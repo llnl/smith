@@ -24,6 +24,7 @@ set(functional_serial_test_sources
     domain_tests.cpp
     geometric_factors_tests.cpp
     hcurl_unit_tests.cpp
+    hdiv_unit_tests.cpp
     functional_tet_quality.cpp
     test_tensor_ad.cpp
     tuple_arithmetic_unit_tests.cpp
@@ -35,6 +36,9 @@ smith_add_tests(SOURCES    ${functional_serial_test_sources}
 # Then add the examples/tests
 set(functional_parallel_test_sources
     #functional_basic_hcurl.cpp
+    functional_basic_hdiv.cpp
+    darcy_patch_test.cpp
+    hdiv_convergence_test.cpp
     functional_with_domain.cpp
     functional_basic_h1_scalar.cpp
     functional_basic_h1_vector.cpp
@@ -53,6 +57,8 @@ smith_add_tests(SOURCES       ${functional_parallel_test_sources}
                 NUM_MPI_TASKS 4 )
 
 target_link_libraries(bug_boundary_qoi PUBLIC smith_physics)
+target_link_libraries(darcy_patch_test PUBLIC smith_numerics)
+target_link_libraries(hdiv_convergence_test PUBLIC smith_numerics)
 
 if(SMITH_ENABLE_CUDA)
 
