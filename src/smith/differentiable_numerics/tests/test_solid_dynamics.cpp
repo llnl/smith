@@ -24,7 +24,7 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
-#include "smith/differentiable_numerics/solid_dynamics_system.hpp"
+#include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 
 namespace smith {
 
@@ -100,7 +100,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto solid_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   auto coupled_solver = std::make_shared<CoupledSystemSolver>(solid_block_solver);
-  auto system = buildSolidDynamicsSystem<dim, order>(
+  auto system = buildSolidMechanicsSystem<dim, order>(
       mesh, coupled_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, FieldType<ScalarParameterSpace>("bulk"),
       FieldType<ScalarParameterSpace>("shear"));
 
@@ -199,9 +199,9 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 
   auto coupled_solver = std::make_shared<CoupledSystemSolver>(solid_block_solver);
-  auto system = buildSolidDynamicsSystem<dim, order>(mesh, coupled_solver, time_rule, physics_name,
-                                                     FieldType<ScalarParameterSpace>("bulk"),
-                                                     FieldType<ScalarParameterSpace>("shear"));
+  auto system = buildSolidMechanicsSystem<dim, order>(mesh, coupled_solver, time_rule, physics_name,
+                                                      FieldType<ScalarParameterSpace>("bulk"),
+                                                      FieldType<ScalarParameterSpace>("shear"));
 
   auto physics = system.createDifferentiablePhysics(physics_name);
   auto bcs = system.disp_bc;

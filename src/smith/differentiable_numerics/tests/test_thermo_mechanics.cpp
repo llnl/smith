@@ -89,25 +89,26 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   auto run_problem = [&](const std::string& label, std::shared_ptr<CoupledSystemSolver> coupled_solver) {
     GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
     FieldType<L2<0>> youngs_modulus("youngs_modulus");
-    auto system =
-        buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(mesh_, coupled_solver, youngs_modulus);
+    auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
+        mesh_, coupled_solver, QuasiStaticSecondOrderTimeIntegrationRule{},
+        BackwardEulerFirstOrderTimeIntegrationRule{}, youngs_modulus);
     system.setMaterial(material, mesh_->entireBodyName());
     system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 100.0; });
     system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
     system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
     system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
-    system.addSolidTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto) {
+    system.addSolidTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto, auto) {
       auto traction = 0.0 * X;
       traction[0] = -compressive_traction;
       return traction;
     });
-    system.addSolidBodyForce(mesh_->entireBodyName(), [=](double, auto X, auto, auto, auto, auto, auto) {
+    system.addSolidBodyForce(mesh_->entireBodyName(), [=](double, auto X, auto, auto, auto, auto, auto, auto) {
       auto force = 0.0 * X;
       force[1] = lateral_body_force;
       return force;
     });
-    system.addThermalHeatSource(mesh_->entireBodyName(),
-                                [=](auto, auto, auto, auto, auto, auto, auto) { return thermal_source; });
+    system.addHeatSource(mesh_->entireBodyName(),
+                         [=](auto, auto, auto, auto, auto, auto, auto, auto) { return thermal_source; });
 
     SLIC_INFO_ROOT("Starting " << label << " thermo-mechanics solve");
 
@@ -157,7 +158,6 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   this->SetUp();
 
   auto staggered_coupled_solver = std::make_shared<CoupledSystemSolver>(10);
-  staggered_coupled_solver->setRelaxationFactor(1.0);
 
   smith::LinearSolverOptions mech_lin_opts{.linear_solver = smith::LinearSolver::CG,
                                            .preconditioner = smith::Preconditioner::HypreAMG,

@@ -27,6 +27,9 @@ class CoupledSystemSolver {
     std::vector<size_t> block_indices;                 ///< Which blocks (residuals) to solve in this stage.
     std::shared_ptr<NonlinearBlockSolverBase> solver;  ///< Solver to use for this stage.
     BlockConvergenceTolerances block_tolerances = {};  ///< Optional stage-local convergence overrides.
+    double relaxation_factor = 1.0;                    ///< Per-stage relaxation factor. Values in (0, 1) under-relax
+                                                       ///< the update: x_new = omega * x_solved + (1 - omega) * x_old.
+                                                       ///< A value of 1.0 (default) means no relaxation (full update).
   };
 
   /// @brief Construct a monolithic CoupledSystemSolver from a single block solver.
@@ -41,10 +44,6 @@ class CoupledSystemSolver {
   ///        sweeps with no early-exit convergence check.  Useful when a fixed number of
   ///        partitioned-stagger steps is required regardless of residual level.
   CoupledSystemSolver(int max_staggered_iterations, bool exact_staggered_steps = false);
-
-  /// @brief Sets the relaxation factor for staggered iterations.
-  /// @param relaxation_factor The relaxation factor (default is 1.0).
-  void setRelaxationFactor(double relaxation_factor) { relaxation_factor_ = relaxation_factor; }
 
   /// @brief Adds a solver stage defined by a Stage struct.
   /// @param stage Stage configuration.
@@ -73,10 +72,9 @@ class CoupledSystemSolver {
                                 const std::vector<const BoundaryConditionManager*>& bc_managers) const;
 
  private:
-  int max_staggered_iterations_;    ///< Maximum number of staggered iterations.
-  bool exact_staggered_steps_;      ///< If true, no early-exit convergence check.
-  double relaxation_factor_ = 1.0;  ///< Relaxation factor for staggered updates.
-  std::vector<Stage> stages_;       ///< Solver stages for the staggered iterations.
+  int max_staggered_iterations_;  ///< Maximum number of staggered iterations.
+  bool exact_staggered_steps_;    ///< If true, no early-exit convergence check.
+  std::vector<Stage> stages_;     ///< Solver stages for the staggered iterations.
 };
 
 }  // namespace smith

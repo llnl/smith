@@ -179,14 +179,15 @@ std::vector<FieldState> CoupledSystemSolver::solve(
           block_solve(stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info,
                       stage.solver.get(), stage_bc_managers);
 
-      // Propagate updated fields to all residuals that reference them
+      // Propagate updated fields to all residuals that reference them.
+      // Apply relaxation: x_new = omega * x_solved + (1 - omega) * x_k.
       for (size_t i = 0; i < num_stage_blocks; ++i) {
         size_t global_col = stage.block_indices[i];
         FieldState new_state = stage_solutions[i];
 
-        if (relaxation_factor_ != 1.0) {
+        if (stage.relaxation_factor != 1.0) {
           FieldState old_state = current_states[global_col][block_indices[global_col][global_col]];
-          new_state = weighted_average(new_state, old_state, relaxation_factor_);
+          new_state = weighted_average(new_state, old_state, stage.relaxation_factor);
         }
 
         for (size_t r = 0; r < num_residuals; ++r) {
