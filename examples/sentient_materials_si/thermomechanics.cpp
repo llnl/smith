@@ -57,6 +57,18 @@ auto greenStrain(const smith::tensor<T, d, d>& grad_u)
   return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
 }
 
+template <typename T1, typename T2, int d>
+auto greenStrainRate(const smith::tensor<T1, d, d>& grad_u, const smith::tensor<T2, d, d>& grad_v)
+{
+  return 0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
+}
+
+template <typename T, int d>
+auto greenStrainRate(const smith::tensor<T, d, d>& grad_u, const smith::zero&)
+{
+  return 0.0 * grad_u;
+}
+
 /// @brief Green-Saint Venant isotropic thermoelastic model (copied from tests).
 struct GreenSaintVenantThermoelasticMaterial {
   double density;
@@ -70,7 +82,7 @@ struct GreenSaintVenantThermoelasticMaterial {
   using State = smith::Empty;
 
   template <typename T1, typename T2, typename T3, typename T4, typename T5, int d>
-  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const smith::tensor<T2, d, d>& grad_v,
+  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const T2& grad_v,
                   T3 theta, const smith::tensor<T4, d>& grad_theta, const T5& E_param) const
   {
     auto E = E0 + get<0>(E_param);
@@ -84,9 +96,8 @@ struct GreenSaintVenantThermoelasticMaterial {
     auto F = grad_u + I;
     const auto Piola = dot(F, S);
 
-    auto greenStrainRate =
-        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
-    const auto s0 = -d * K * alpha * (theta + 273.1) * tr(greenStrainRate) + 0.0 * E;
+    const auto strain_rate = greenStrainRate(grad_u, grad_v);
+    const auto s0 = -d * K * alpha * (theta + 273.1) * tr(strain_rate) + 0.0 * E;
 
     const auto q0 = -kappa * grad_theta;
 
@@ -169,7 +180,7 @@ struct ExampleThermoMechanicsSystem : public smith::SystemBase {
       auto [pk, C_v, s0, q0] =
           material(t_info.dt(), state, get<smith::DERIVATIVE>(u_current), get<smith::DERIVATIVE>(v_current),
                    get<smith::VALUE>(T), get<smith::DERIVATIVE>(T), params...);
-      return smith::tuple{smith::zero{}, pk};
+      return smith::tuple{0.0 * get<smith::VALUE>(u_current), pk};
     });
 
     thermal_weak_form->addBodyIntegral(

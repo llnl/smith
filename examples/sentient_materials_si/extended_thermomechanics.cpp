@@ -47,6 +47,18 @@ auto greenStrain(const smith::tensor<T, d, d>& grad_u)
   return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
 }
 
+template <typename T1, typename T2, int d>
+auto greenStrainRate(const smith::tensor<T1, d, d>& grad_u, const smith::tensor<T2, d, d>& grad_v)
+{
+  return 0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
+}
+
+template <typename T, int d>
+auto greenStrainRate(const smith::tensor<T, d, d>& grad_u, const smith::zero&)
+{
+  return 0.0 * grad_u;
+}
+
 template <typename T, int d>
 void setIdentity(smith::tensor<T, d, d>& F)
 {
@@ -107,7 +119,7 @@ struct GreenSaintVenantThermoelasticWithExtendedStateMaterial {
   };
 
   template <typename T1, typename T2, typename T3, typename T4, typename T5, int d, int sd>
-  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const smith::tensor<T2, d, d>& grad_v,
+  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const T2& grad_v,
                   T3 theta, const smith::tensor<T4, d>& grad_theta, const smith::tensor<T5, sd>& alpha_old) const
   {
     // Calculate Alpha new using the old variables to be used
@@ -131,9 +143,8 @@ struct GreenSaintVenantThermoelasticWithExtendedStateMaterial {
     auto F = grad_u + I;
     const auto Piola = dot(F, S);
 
-    auto greenStrainRate =
-        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
-    const auto s0 = -d * K * alpha_T * (theta + 273.1) * tr(greenStrainRate);
+    const auto strain_rate = greenStrainRate(grad_u, grad_v);
+    const auto s0 = -d * K * alpha_T * (theta + 273.1) * tr(strain_rate);
     const auto q0 = -kappa * grad_theta;
 
     auto alpha_new = SymmetricStatePacking<d>::template pack<T5, sd>(w_new, F_new);

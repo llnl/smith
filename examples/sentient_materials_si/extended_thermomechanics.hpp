@@ -129,7 +129,7 @@ struct ExtendedThermoMechanicsSystem : public SystemBase {
 
           // auto delta_alpha = alpha - alpha_old;
 
-          return smith::tuple{zero{}, pk};
+          return smith::tuple{0.0 * get<VALUE>(u_current), pk};
         });
 
     thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp,
@@ -161,9 +161,7 @@ struct ExtendedThermoMechanicsSystem : public SystemBase {
           material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T_current),
                    get<DERIVATIVE>(T_current), get<VALUE>(alpha_old), params...);
 
-      using FluxType = std::decay_t<decltype(get<DERIVATIVE>(alpha))>;
-      FluxType flux{};
-      return smith::tuple{get<VALUE>(alpha) - alpha_new, flux};
+      return smith::tuple{get<VALUE>(alpha) - alpha_new, smith::zero{}};
     });
   }
 

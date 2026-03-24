@@ -22,7 +22,7 @@
 
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
-#include "smith/differentiable_numerics/solid_dynamics_system.hpp"
+#include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 // clang-format off
 //clang-format on
 namespace example_m {
@@ -69,7 +69,7 @@ struct GreenSaintVenantElasticMaterial {
 
 
   template <typename T1, typename T2, int d>
-  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const smith::tensor<T2, d, d>& /*grad_v*/) const
+  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const T2& /*grad_v*/) const
   {
 
       // Concatenating results
