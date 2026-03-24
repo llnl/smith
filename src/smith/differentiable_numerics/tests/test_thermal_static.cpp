@@ -64,8 +64,7 @@ struct ThermalStaticFixture : public testing::Test {
     thermal_system.addHeatSource("entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
       auto x = X[0];
       auto y = X[1];
-      double pi = 3.14159265358979323846;
-      return 2.0 * k * pi * pi * sin(pi * x) * sin(pi * y);
+      return 2.0 * k * M_PI * M_PI * sin(M_PI * x) * sin(M_PI * y);
     });
 
     thermal_system.temperature_bc->template setScalarBCs<2>(mesh->entireBoundary(),
@@ -85,8 +84,7 @@ struct ThermalStaticFixture : public testing::Test {
     auto exact_sol_func = [](const mfem::Vector& X, mfem::Vector& T) {
       double x = X(0);
       double y = X(1);
-      double pi = 3.14159265358979323846;
-      T(0) = std::sin(pi * x) * std::sin(pi * y);
+      T(0) = std::sin(M_PI * x) * std::sin(M_PI * y);
     };
     mfem::VectorFunctionCoefficient exact_sol_coeff(1, exact_sol_func);
 
@@ -158,11 +156,10 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
 
   // Use DependsOn to specify that the heat source depends only on the temperature states (indices 0,1),
   // not on the parameter field
-  double pi = 3.14159265358979323846;
   thermal_system.addHeatSource(DependsOn<0, 1>{}, "entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
     auto x = X[0];
     auto y = X[1];
-    return 2.0 * pi * pi * sin(pi * x) * sin(pi * y);
+    return 2.0 * M_PI * M_PI * sin(M_PI * x) * sin(M_PI * y);
   });
 
   thermal_system.temperature_bc->template setScalarBCs<2>(mesh->entireBoundary(),
@@ -182,8 +179,7 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
   auto exact_sol_func = [](const mfem::Vector& X, mfem::Vector& T) {
     double x = X(0);
     double y = X(1);
-    double pi = 3.14159265358979323846;
-    T(0) = std::sin(pi * x) * std::sin(pi * y);
+    T(0) = std::sin(M_PI * x) * std::sin(M_PI * y);
   };
   mfem::VectorFunctionCoefficient exact_sol_coeff(1, exact_sol_func);
 
