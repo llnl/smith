@@ -368,7 +368,7 @@ struct ExtendedThermoMechanicsSystem : public SystemBase {
  */
 template <int dim, int disp_order, int temp_order, typename StateSpace, typename... parameter_space>
 ExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter_space...>
-buildExtendedThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<NonlinearBlockSolverBase> solver,
+buildExtendedThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> coupled_solver,
                                    std::string prepend_name = "", FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
@@ -437,7 +437,6 @@ buildExtendedThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<N
                                     FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form, state_weak_form};
-  auto coupled_solver = std::make_shared<CoupledSystemSolver>(solver);
   auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, coupled_solver);
 
   return ExtendedThermoMechanicsSystem<dim, disp_order, temp_order, StateSpace, parameter_space...>{

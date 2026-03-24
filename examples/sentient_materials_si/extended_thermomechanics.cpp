@@ -21,16 +21,11 @@
 
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
-// clang-format off
-//clang-format on
 namespace example_etm {
 
 static constexpr int dim = 3;
 static constexpr int vdim = dim;
-static constexpr int StateMatrixDim =
-        (dim == 2) ? 3 :
-        (dim == 3) ? 6 :
-        -1;
+static constexpr int StateMatrixDim = (dim == 2) ? 3 : (dim == 3) ? 6 : -1;
 static constexpr int Statedim = StateMatrixDim + 1;
 static constexpr int displacement_order = 1;
 static constexpr int temperature_order = 1;
@@ -52,10 +47,11 @@ auto greenStrain(const smith::tensor<T, d, d>& grad_u)
   return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
 }
 
-template<typename T, int d>
-void setIdentity(smith::tensor<T, d, d> & F){
-  for (size_t i = 0; i < d; i++){
-    for (size_t j = 0; j < d; j++){
+template <typename T, int d>
+void setIdentity(smith::tensor<T, d, d>& F)
+{
+  for (size_t i = 0; i < d; i++) {
+    for (size_t j = 0; j < d; j++) {
       F(i, j) = static_cast<T>(i == j);
     }
   }
@@ -111,19 +107,18 @@ struct GreenSaintVenantThermoelasticWithExtendedStateMaterial {
   };
 
   template <typename T1, typename T2, typename T3, typename T4, typename T5, int d, int sd>
-  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const smith::tensor<T2, d, d>& grad_v, T3 theta,
-                  const smith::tensor<T4, d>& grad_theta, const smith::tensor<T5, sd>& alpha_old) const
+  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const smith::tensor<T2, d, d>& grad_v,
+                  T3 theta, const smith::tensor<T4, d>& grad_theta, const smith::tensor<T5, sd>& alpha_old) const
   {
     // Calculate Alpha new using the old variables to be used
 
     auto [w_old, F_old] = SymmetricStatePacking<d>::template unpack<T5, sd>(alpha_old);
 
-      // Extracting 0 index scalar value and calculating rate of change
-auto w_new = w_old;
-auto F_new = F_old;
+    // Extracting 0 index scalar value and calculating rate of change
+    auto w_new = w_old;
+    auto F_new = F_old;
 
-      // Concatenating results
-
+    // Concatenating results
 
     auto E = E0;
     const auto K = E / (3.0 * (1.0 - 2.0 * nu));
@@ -148,15 +143,6 @@ auto F_new = F_old;
   static constexpr int numParameters() { return 1; }
 };
 
-smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::Strumpack,
-                                          .preconditioner = smith::Preconditioner::HypreJacobi,
-                                          // For this coupled, non-symmetric block system, very tight Krylov tolerances
-                                          // can be prohibitively expensive; rely on the nonlinear iterations instead.
-                                          .relative_tol = 1e-4,
-                                          .absolute_tol = 0.0,
-                                          .max_iterations = 300,
-                                          .print_level = 0};
-
 smith::NonlinearSolverOptions nonlinear_opts{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
                                              .relative_tol = 1.0e-8,
                                              .absolute_tol = 1.0e-8,
@@ -164,7 +150,71 @@ smith::NonlinearSolverOptions nonlinear_opts{.nonlin_solver = smith::NonlinearSo
                                              .max_line_search_iterations = 30,
                                              .print_level = 1};
 
-int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, double T, double alpha_T)
+enum class CoupledLinearSolver
+{
+  Strumpack,
+  GmresBlockAmg
+};
+
+std::string solverName(CoupledLinearSolver solver)
+{
+  switch (solver) {
+    case CoupledLinearSolver::Strumpack:
+      return "strumpack";
+    case CoupledLinearSolver::GmresBlockAmg:
+      return "gmres-block-amg";
+  }
+  return "unknown";
+}
+
+bool parseSolverArgument(const std::string& value, CoupledLinearSolver& solver)
+{
+  if (value == "strumpack") {
+    solver = CoupledLinearSolver::Strumpack;
+    return true;
+  }
+  if (value == "gmres-block-amg") {
+    solver = CoupledLinearSolver::GmresBlockAmg;
+    return true;
+  }
+  return false;
+}
+
+smith::LinearSolverOptions makeLinearSolverOptions(CoupledLinearSolver solver)
+{
+  smith::LinearSolverOptions options{.linear_solver = smith::LinearSolver::Strumpack,
+                                     .preconditioner = smith::Preconditioner::HypreJacobi,
+                                     .relative_tol = 1e-4,
+                                     .absolute_tol = 0.0,
+                                     .max_iterations = 300,
+                                     .print_level = 0};
+
+  if (solver == CoupledLinearSolver::GmresBlockAmg) {
+    options.linear_solver = smith::LinearSolver::GMRES;
+    options.preconditioner = smith::Preconditioner::BlockDiagonal;
+
+    smith::LinearSolverOptions block_options{.linear_solver = smith::LinearSolver::GMRES,
+                                             .preconditioner = smith::Preconditioner::HypreAMG,
+                                             .relative_tol = 1e-2,
+                                             .absolute_tol = 0.0,
+                                             .max_iterations = 1,
+                                             .print_level = 0,
+                                             .preconditioner_print_level = 0};
+    options.sub_block_linear_solver_options = {block_options, block_options, block_options};
+  }
+
+  return options;
+}
+
+std::shared_ptr<smith::CoupledSystemSolver> makeCoupledSolver(const std::shared_ptr<smith::Mesh>& mesh,
+                                                              CoupledLinearSolver linear_solver)
+{
+  auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, makeLinearSolverOptions(linear_solver), *mesh);
+  return std::make_shared<smith::CoupledSystemSolver>(solver);
+}
+
+int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, double T, double alpha_T,
+                        CoupledLinearSolver linear_solver)
 {
   double rho = 1.0;
   double E0 = 100.0;
@@ -176,10 +226,11 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
   using MaterialModel = GreenSaintVenantThermoelasticWithExtendedStateMaterial;
   MaterialModel material{rho, E0, nu, specific_heat, alpha_T, 1.0, kappa};
 
-  auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh);
+  auto coupled_solver = makeCoupledSolver(mesh, linear_solver);
 
-  auto system = smith::buildExtendedThermoMechanicsSystem<dim, displacement_order, temperature_order, ExtendedStateSpace>(
-      mesh, solver, "");
+  auto system =
+      smith::buildExtendedThermoMechanicsSystem<dim, displacement_order, temperature_order, ExtendedStateSpace>(
+          mesh, coupled_solver, "");
 
   system.setMaterial(material, mesh->entireBodyName());
 
@@ -198,7 +249,8 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
                               [](double, auto, auto, auto, auto, auto, auto, auto, auto...) { return 0.0; });
 
   // Initialize displacement fields (avoid solver starting from uninitialized/NaN values).
-  auto& disp_pred = const_cast<smith::FiniteElementState&>(*system.field_store->getField("displacement_predicted").get());
+  auto& disp_pred =
+      const_cast<smith::FiniteElementState&>(*system.field_store->getField("displacement_predicted").get());
   disp_pred.setFromFieldFunction([](smith::tensor<double, dim>) { return smith::tensor<double, dim>{}; });
   const_cast<smith::FiniteElementState&>(*system.field_store->getField("displacement").get()) = disp_pred;
 
@@ -240,7 +292,8 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
     states = std::move(new_states);
 
     // std::cout << "step " << step << " max reaction (disp)=" << reactions[0].get()->Normlinf()
-    //           << " (temp)=" << reactions[1].get()->Normlinf() << " (state)=" << reactions[2].get()->Normlinf() << "\n";
+    //           << " (temp)=" << reactions[1].get()->Normlinf() << " (state)=" << reactions[2].get()->Normlinf() <<
+    //           "\n";
 
     time += dt;
     cycle++;
@@ -248,15 +301,16 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
 
     step++;
   }
+  std::cout << "Solver: " << solverName(linear_solver) << "\n";
   std::cout << "Wrote ParaView output to '" << pv_dir << "'\n";
   return 0;
 }
 
-int test_example(){
-
+int test_example()
+{
   using namespace mfem::future;
-  using mfem::future::tensor;
   using mfem::future::make_tensor;
+  using mfem::future::tensor;
 
   std::shared_ptr<DifferentiableOperator> a;
   return 0;
@@ -271,10 +325,9 @@ int main(int argc, char** argv)
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg == "--help" || arg == "-h") {
-      std::cout
-          << "Usage: extended_thermomechanics [--nx=<int>] [--ny=<int>] [--nz=<int>] [--dt=<real>] [--T=<real>] "
-             "[--alpha=<real>]\n";
-      std::cout << "Defaults: nx=12 ny=2 nz=2 dt=0.01 T=0.1 alpha=0.0\n";
+      std::cout << "Usage: extended_thermomechanics [--nx=<int>] [--ny=<int>] [--nz=<int>] [--dt=<real>] [--T=<real>] "
+                   "[--alpha=<real>] [--solver=strumpack|gmres-block-amg]\n";
+      std::cout << "Defaults: nx=60 ny=10 nz=10 dt=0.01 T=1.0 alpha=0.0 solver=strumpack\n";
       return 0;
     }
   }
@@ -290,6 +343,7 @@ int main(int argc, char** argv)
   double dt = 0.01;
   double T = 1.0;
   double alpha_T = 0.0;
+  auto solver_type = example_etm::CoupledLinearSolver::Strumpack;
 
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
@@ -307,6 +361,14 @@ int main(int argc, char** argv)
     parse_double("--dt=", dt);
     parse_double("--T=", T);
     parse_double("--alpha=", alpha_T);
+    const std::string solver_prefix = "--solver=";
+    if (arg.rfind(solver_prefix, 0) == 0) {
+      const auto solver_name = arg.substr(solver_prefix.size());
+      if (!example_etm::parseSolverArgument(solver_name, solver_type)) {
+        std::cerr << "Unknown solver option '" << solver_name << "'. Expected strumpack or gmres-block-amg.\n";
+        return 1;
+      }
+    }
   }
 
   auto mfem_shape = mfem::Element::QUADRILATERAL;
@@ -316,5 +378,5 @@ int main(int argc, char** argv)
   mesh->addDomainOfBoundaryElements("left", smith::by_attr<example_etm::dim>(3));
   mesh->addDomainOfBoundaryElements("right", smith::by_attr<example_etm::dim>(5));
 
-  return example_etm::runCoupledWithState(mesh, dt, T, alpha_T);
+  return example_etm::runCoupledWithState(mesh, dt, T, alpha_T, solver_type);
 }
