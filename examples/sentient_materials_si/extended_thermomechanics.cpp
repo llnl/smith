@@ -154,13 +154,6 @@ struct GreenSaintVenantThermoelasticWithExtendedStateMaterial {
   static constexpr int numParameters() { return 1; }
 };
 
-smith::NonlinearSolverOptions nonlinear_opts{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
-                                             .relative_tol = 1.0e-8,
-                                             .absolute_tol = 1.0e-8,
-                                             .max_iterations = 200,
-                                             .max_line_search_iterations = 30,
-                                             .print_level = 1};
-
 enum class CoupledLinearSolver
 {
   Strumpack,
@@ -170,8 +163,27 @@ enum class CoupledLinearSolver
 enum class GmresBlockPreconditioner
 {
   Diagonal,
-  LowerTriangular
+  LowerTriangular,
+  SchurDiagonal,
+  SchurLower,
+  SchurUpper,
+  SchurFull
 };
+
+bool usesSchurPreconditioner(GmresBlockPreconditioner preconditioner)
+{
+  switch (preconditioner) {
+    case GmresBlockPreconditioner::SchurDiagonal:
+    case GmresBlockPreconditioner::SchurLower:
+    case GmresBlockPreconditioner::SchurUpper:
+    case GmresBlockPreconditioner::SchurFull:
+      return true;
+    case GmresBlockPreconditioner::Diagonal:
+    case GmresBlockPreconditioner::LowerTriangular:
+      return false;
+  }
+  return false;
+}
 
 std::string solverName(CoupledLinearSolver solver)
 {
@@ -204,6 +216,14 @@ std::string gmresBlockPreconditionerName(GmresBlockPreconditioner preconditioner
       return "diagonal";
     case GmresBlockPreconditioner::LowerTriangular:
       return "lower-triangular";
+    case GmresBlockPreconditioner::SchurDiagonal:
+      return "schur-diagonal";
+    case GmresBlockPreconditioner::SchurLower:
+      return "schur-lower";
+    case GmresBlockPreconditioner::SchurUpper:
+      return "schur-upper";
+    case GmresBlockPreconditioner::SchurFull:
+      return "schur-full";
   }
   return "unknown";
 }
@@ -218,33 +238,79 @@ bool parseGmresBlockPreconditionerArgument(const std::string& value, GmresBlockP
     preconditioner = GmresBlockPreconditioner::LowerTriangular;
     return true;
   }
+  if (value == "schur-diagonal") {
+    preconditioner = GmresBlockPreconditioner::SchurDiagonal;
+    return true;
+  }
+  if (value == "schur-lower") {
+    preconditioner = GmresBlockPreconditioner::SchurLower;
+    return true;
+  }
+  if (value == "schur-upper") {
+    preconditioner = GmresBlockPreconditioner::SchurUpper;
+    return true;
+  }
+  if (value == "schur-full") {
+    preconditioner = GmresBlockPreconditioner::SchurFull;
+    return true;
+  }
   return false;
 }
 
-smith::LinearSolverOptions makeLinearSolverOptions(CoupledLinearSolver solver,
-                                                   GmresBlockPreconditioner gmres_block_preconditioner)
+smith::LinearSolverOptions makeMechanicsStageLinearSolverOptions()
+{
+  return smith::LinearSolverOptions{.linear_solver = smith::LinearSolver::CG,
+                                    .preconditioner = smith::Preconditioner::HypreAMG,
+                                    .relative_tol = 1.0e-8,
+                                    .absolute_tol = 1.0e-10,
+                                    .max_iterations = 300,
+                                    .print_level = 0,
+                                    .preconditioner_print_level = 0};
+}
+
+smith::LinearSolverOptions makeThermalStateStageLinearSolverOptions(CoupledLinearSolver solver,
+                                                                    GmresBlockPreconditioner gmres_block_preconditioner)
 {
   smith::LinearSolverOptions options{.linear_solver = smith::LinearSolver::Strumpack,
                                      .preconditioner = smith::Preconditioner::HypreJacobi,
-                                     .relative_tol = 1e-4,
-                                     .absolute_tol = 1e-5,
+                                     .relative_tol = 1e-8,
+                                     .absolute_tol = 1e-10,
                                      .max_iterations = 300,
-                                     .print_level = 1};
+                                     .print_level = 0};
 
   if (solver == CoupledLinearSolver::GmresBlockAmg) {
     options.linear_solver = smith::LinearSolver::GMRES;
-    options.preconditioner = (gmres_block_preconditioner == GmresBlockPreconditioner::LowerTriangular)
-                                 ? smith::Preconditioner::BlockTriangularLower
-                                 : smith::Preconditioner::BlockDiagonal;
+    switch (gmres_block_preconditioner) {
+      case GmresBlockPreconditioner::Diagonal:
+        options.preconditioner = smith::Preconditioner::BlockDiagonal;
+        break;
+      case GmresBlockPreconditioner::LowerTriangular:
+        options.preconditioner = smith::Preconditioner::BlockTriangularLower;
+        break;
+      case GmresBlockPreconditioner::SchurDiagonal:
+        options.preconditioner = smith::Preconditioner::BlockSchurDiagonal;
+        break;
+      case GmresBlockPreconditioner::SchurLower:
+        options.preconditioner = smith::Preconditioner::BlockSchurLower;
+        break;
+      case GmresBlockPreconditioner::SchurUpper:
+        options.preconditioner = smith::Preconditioner::BlockSchurUpper;
+        break;
+      case GmresBlockPreconditioner::SchurFull:
+        options.preconditioner = smith::Preconditioner::BlockSchurFull;
+        break;
+    }
 
-    smith::LinearSolverOptions block_options{.linear_solver = smith::LinearSolver::GMRES,
-                                             .preconditioner = smith::Preconditioner::HypreAMG,
-                                             .relative_tol = 0.0,
-                                             .absolute_tol = 0.0,
-                                             .max_iterations = 10,
-                                             .print_level = 0,
-                                             .preconditioner_print_level = 0};
-    options.sub_block_linear_solver_options = {block_options, block_options, block_options};
+    smith::LinearSolverOptions thermal_block_options{.linear_solver = smith::LinearSolver::GMRES,
+                                                     .preconditioner = smith::Preconditioner::HypreAMG,
+                                                     .relative_tol = 1.0e-3,
+                                                     .absolute_tol = 1.0e-8,
+                                                     .max_iterations = 100,
+                                                     .print_level = 0,
+                                                     .preconditioner_print_level = 0};
+
+    smith::LinearSolverOptions state_block_options{.linear_solver = smith::LinearSolver::SuperLU};
+    options.sub_block_linear_solver_options = {thermal_block_options, state_block_options};
   }
 
   return options;
@@ -254,10 +320,28 @@ std::shared_ptr<smith::CoupledSystemSolver> makeCoupledSolver(const std::shared_
                                                               CoupledLinearSolver linear_solver,
                                                               GmresBlockPreconditioner gmres_block_preconditioner)
 {
-  auto solver = smith::buildNonlinearBlockSolver(nonlinear_opts,
-                                                 makeLinearSolverOptions(linear_solver, gmres_block_preconditioner),
-                                                 *mesh);
-  return std::make_shared<smith::CoupledSystemSolver>(solver);
+  smith::NonlinearSolverOptions mechanics_nonlinear_opts{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
+                                                         .relative_tol = 1.0e-8,
+                                                         .absolute_tol = 1.0e-8,
+                                                         .max_iterations = 100,
+                                                         .print_level = 1};
+
+  smith::NonlinearSolverOptions thermal_nonlinear_opts{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
+                                                       .relative_tol = 1.0e-8,
+                                                       .absolute_tol = 1.0e-8,
+                                                       .max_iterations = 200,
+                                                       .max_line_search_iterations = 30,
+                                                       .print_level = 1};
+
+  auto mechanics_solver =
+      smith::buildNonlinearBlockSolver(mechanics_nonlinear_opts, makeMechanicsStageLinearSolverOptions(), *mesh);
+  auto thermal_state_solver = smith::buildNonlinearBlockSolver(
+      thermal_nonlinear_opts, makeThermalStateStageLinearSolverOptions(linear_solver, gmres_block_preconditioner), *mesh);
+
+  auto coupled_solver = std::make_shared<smith::CoupledSystemSolver>(20);
+  coupled_solver->addSubsystemSolver({0}, mechanics_solver);
+  coupled_solver->addSubsystemSolver({1, 2}, thermal_state_solver);
+  return coupled_solver;
 }
 
 int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, double T, double alpha_T,
@@ -284,7 +368,7 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
   system.disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
     // Keep the loading modest so the first Newton solves are well-conditioned.
-    bc[0] = 0.01 * t;
+    bc[0] = 1.0 * t;
     return bc;
   });
   system.disp_bc->template setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
@@ -349,8 +433,12 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
     step++;
   }
   std::cout << "Solver: " << solverName(linear_solver) << "\n";
+  std::cout << "Mechanics stage: trust-region / cg / hypre-amg\n";
+  std::cout << "Thermal+state stage: "
+            << ((linear_solver == CoupledLinearSolver::Strumpack) ? "strumpack" : "gmres-block-amg") << "\n";
   if (linear_solver == CoupledLinearSolver::GmresBlockAmg) {
-    std::cout << "GMRES block preconditioner: " << gmresBlockPreconditionerName(gmres_block_preconditioner) << "\n";
+    std::cout << "Thermal+state block preconditioner: " << gmresBlockPreconditionerName(gmres_block_preconditioner)
+              << "\n";
   }
   std::cout << "Wrote ParaView output to '" << pv_dir << "'\n";
   return 0;
@@ -377,7 +465,8 @@ int main(int argc, char** argv)
     if (arg == "--help" || arg == "-h") {
       std::cout << "Usage: extended_thermomechanics [--nx=<int>] [--ny=<int>] [--nz=<int>] [--dt=<real>] [--T=<real>] "
                    "[--alpha=<real>] [--solver=strumpack|gmres-block-amg] "
-                   "[--gmres-block-preconditioner=diagonal|lower-triangular]\n";
+                   "[--gmres-block-preconditioner=diagonal|lower-triangular|schur-diagonal|schur-lower|schur-upper|"
+                   "schur-full]\n";
       std::cout << "Defaults: nx=60 ny=10 nz=10 dt=0.01 T=1.0 alpha=0.0 solver=strumpack "
                    "gmres-block-preconditioner=diagonal\n";
       return 0;
@@ -427,7 +516,8 @@ int main(int argc, char** argv)
       const auto preconditioner_name = arg.substr(gmres_block_preconditioner_prefix.size());
       if (!example_etm::parseGmresBlockPreconditionerArgument(preconditioner_name, gmres_block_preconditioner)) {
         std::cerr << "Unknown GMRES block preconditioner option '" << preconditioner_name
-                  << "'. Expected diagonal or lower-triangular.\n";
+                  << "'. Expected diagonal, lower-triangular, schur-diagonal, schur-lower, schur-upper, or "
+                     "schur-full.\n";
         return 1;
       }
     }
