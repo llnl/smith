@@ -14,6 +14,26 @@ endif()
 # Need to add symbols to dynamic symtab in order to be visible from stacktraces
 string(APPEND CMAKE_EXE_LINKER_FLAGS " -rdynamic")
 
+# ROCm's amdclang++ can drop its implicit C++ standard library on HIP links
+# once Fortran runtime libraries are introduced. On this platform the shared
+# libstdc++ linker script still points at the old system runtime, so use the
+# compiler's GCC 13 static archives instead.
+if(ENABLE_HIP AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER MATCHES "amdclang\\+\\+")
+    execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=libstdc++.a
+        OUTPUT_VARIABLE _smith_libstdcxx_static
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=libstdc++_nonshared.a
+        OUTPUT_VARIABLE _smith_libstdcxx_nonshared
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+    if(EXISTS "${_smith_libstdcxx_static}" AND EXISTS "${_smith_libstdcxx_nonshared}")
+        string(APPEND CMAKE_CXX_STANDARD_LIBRARIES
+            " ${_smith_libstdcxx_static} ${_smith_libstdcxx_nonshared}")
+    endif()
+endif()
+
 # Apple ld warns about duplicate -l flags when the same library is reachable
 # via multiple dependency paths (common with Spack-built CMake targets that use
 # raw -l strings instead of imported targets). Suppress the spurious warning.
