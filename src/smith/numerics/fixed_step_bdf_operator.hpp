@@ -149,7 +149,7 @@ struct FixedStepBDFOperator {
     result *= beta[1]; // Apply first beta coefficient (skip beta[0], which is for u_{k+1}).
 
     // Add remaining β_j φ^{k-j}.
-    for (size_t j = 1; j < available_order; ++j) {
+    for (size_t j = 1; j < static_cast<size_t>(available_order); ++j) {
       result.Add(beta[j + 1], *history[static_cast<std::size_t>(j)].get());
     }
 
@@ -182,7 +182,7 @@ struct FixedStepBDFOperator {
     auto const betas = this->compute_beta(available_order);
 
     SLIC_ERROR_ROOT_IF(
-      j < 0 || j >= betas.size(),
+      j < 0 || j >= static_cast<int>(betas.size()),
       axom::fmt::format(
         "Index {} out of range for BDF coefficients (available: {}).",
         j,
