@@ -74,18 +74,58 @@ void ContactData::reset()
   }
 }
 
-void ContactData::update(int cycle, double time, double& dt)
+void ContactData::updateGaps(int cycle, double time, double& dt,
+                             std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                             std::optional<std::reference_wrapper<const mfem::Vector>> u, bool eval_jacobian)
 {
   cycle_ = cycle;
   time_ = time;
   dt_ = dt;
+
+  if (u_shape && u) {
+    setDisplacements(u_shape->get(), u->get());
+  }
+
+  for (auto& interaction : interactions_) {
+    interaction.evalJacobian(eval_jacobian);
+  }
   // This updates the redecomposed surface mesh based on the current displacement, then transfers field quantities to
   // the updated mesh.
-  tribol::updateMfemParallelDecomposition();
-  // This function computes forces, gaps, and Jacobian contributions based on the current field quantities. Note the
-  // fields (with the exception of pressure) are stored on the redecomposed surface mesh until transferred by calling
-  // forces(), mergedGaps(), etc.
+  if (u_shape && u) {
+    tribol::updateMfemParallelDecomposition();
+  }
+  // This function computes gaps (and optionally geometric Jacobian blocks) based on the current mesh.
   tribol::update(cycle, time, dt);
+}
+
+void ContactData::update(int cycle, double time, double& dt,
+                         std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                         std::optional<std::reference_wrapper<const mfem::Vector>> u,
+                         std::optional<std::reference_wrapper<const mfem::Vector>> p)
+{
+  // First pass: update gaps if coordinates are provided
+  if (u_shape && u) {
+    updateGaps(cycle, time, dt, u_shape, u, false);
+  } else {
+    // Ensure internal timing is updated even if coordinates are not
+    cycle_ = cycle;
+    time_ = time;
+    dt_ = dt;
+  }
+
+  // second pass: update pressures and compute forces/Jacobians if p is provided
+  if (p) {
+    // with updated gaps, we can update pressure for contact interactions (active set detection and penalty)
+    setPressures(p->get());
+
+    for (auto& interaction : interactions_) {
+      interaction.evalJacobian(true);
+    }
+    // This second call is required to synchronize the updated pressures to Tribol's internal redecomposed surface mesh
+    // and to ensure Tribol's internal state is correctly reset for the second pass.
+    tribol::updateMfemParallelDecomposition();
+    tribol::update(cycle, time, dt);
+  }
 }
 
 FiniteElementDual ContactData::forces() const
@@ -278,20 +318,7 @@ void ContactData::residualFunction(const mfem::Vector& u_shape, const mfem::Vect
   mfem::Vector r_blk(r, 0, disp_size);
   mfem::Vector g_blk(r, disp_size, numPressureDofs());
 
-  setDisplacements(u_shape, u_blk);
-
-  // we need to call update first to update gaps
-  for (auto& interaction : interactions_) {
-    interaction.evalJacobian(false);
-  }
-  update(cycle_, time_, dt_);
-  // with updated gaps, we can update pressure for contact interactions with penalty enforcement
-  setPressures(p_blk);
-  // call update again with the right pressures
-  for (auto& interaction : interactions_) {
-    interaction.evalJacobian(true);
-  }
-  update(cycle_, time_, dt_);
+  update(cycle_, time_, dt_, u_shape, u_blk, p_blk);
 
   r_blk += forces();
   // calling mergedGaps() with true will zero out gap on inactive dofs (so the residual converges and the linearized
@@ -456,7 +483,19 @@ void ContactData::addContactInteraction([[maybe_unused]] int interaction_id,
   SLIC_WARNING_ROOT("Smith built without Tribol support. No contact interaction will be added.");
 }
 
-void ContactData::update([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt) {}
+void ContactData::updateGaps([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
+                             [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                             [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u,
+                             [[maybe_unused]] bool eval_jacobian)
+{
+}
+
+void ContactData::update([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
+                         [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                         [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u,
+                         [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> p)
+{
+}
 
 FiniteElementDual ContactData::forces() const
 {
