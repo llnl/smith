@@ -273,7 +273,7 @@ NonlinearDifferentiableBlockSolver::NonlinearDifferentiableBlockSolver(std::uniq
 
 void NonlinearDifferentiableBlockSolver::completeSetup(const std::vector<FieldT>&)
 {
-  // initializeSolver(&nonlinear_solver_->preconditioner(), u);
+  // TODO: eventually may need something like: initializeSolver(&nonlinear_solver_->preconditioner(), u);
 }
 
 std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSolver::solve(
@@ -305,13 +305,11 @@ std::vector<DifferentiableBlockSolver::FieldPtr> NonlinearDifferentiableBlockSol
       block_u->Size(),
       [&residual_funcs, num_rows, &u_guesses, &block_r](const mfem::Vector& u_, mfem::Vector& r_) {
         const mfem::BlockVector* u = dynamic_cast<const mfem::BlockVector*>(&u_);
-        SLIC_ERROR_IF(!u, "Invalid u cast in block differentiable solver to a blocl vector");
+        SLIC_ERROR_IF(!u, "Invalid u cast in block differentiable solver to a block vector");
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
         }
         auto residuals = residual_funcs(u_guesses);
-        // auto block_r = std::make_unique<mfem::BlockVector>(block_offsets);
-        // auto block_r = dynamic_cast<mfem::BlockVector*>(&r_);
         SLIC_ERROR_IF(!block_r, "Invalid r cast in block differentiable solver to a block vector");
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           auto r = residuals[static_cast<size_t>(row_i)];

@@ -1,19 +1,8 @@
 spack:
-  config:
-    install_tree:
-      root: $spack/..
-      projections:
-        all: '{compiler.name}-{compiler.version}/{name}-{version}-{hash}'
-    misc_cache: $spack/../misc_cache
-    test_stage: $spack/../test_stage
-    build_stage::
-    - $spack/../build_stage
-
-  view: false
-
   include:
     - ../defaults.yaml
     - ../versions.yaml
+
 
   toolchains:
     clang_19:
@@ -25,6 +14,7 @@ spack:
       when: '%fortran'
     - spec: '%openmpi@5.0.8.clang_19'
       when: '%mpi'
+
 
   packages:
     all:
@@ -94,12 +84,12 @@ spack:
       - spec: bzip2@1.0.8
         prefix: /opt/homebrew/opt/bzip2
     # NOTE: CMake v4.0 causes metis and other package to fail. Brew doesn't allow older versions
-    # of CMake to be installed, so I installed CMake manually https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg
+    # of CMake to be installed, so I installed CMake manually https://cmake.org/files/v3.30/cmake-3.30.9-macos-universal.dmg
     cmake:
-      version: [3.23.5]
+      version: [3.30.9]
       buildable: false
       externals:
-      - spec: cmake@3.23.5
+      - spec: cmake@3.30.9
         prefix: /Applications/CMake.app/Contents
     diffutils:
       buildable: false
@@ -191,8 +181,8 @@ spack:
     python:
       buildable: false
       externals:
-      - spec: python@3.9.6
-        prefix: /usr
+      - spec: python@3.12.0
+        prefix: /Users/chapman39/dev/smith/venv
     tar:
       buildable: false
       externals:
@@ -220,5 +210,5 @@ spack:
     py-sphinx:
       buildable: false
       externals:
-      - spec: py-sphinx@7.4.7
+      - spec: py-sphinx@7.4.7 ^python@3.12.0
         prefix: /Users/chapman39/dev/smith/venv

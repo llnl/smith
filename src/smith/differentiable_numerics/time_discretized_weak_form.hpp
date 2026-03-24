@@ -56,11 +56,18 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
   }
 
   /// @overload
-  template <typename BodyForceType> // int... all_active_parameters>
+  template <typename BodyForceType, int... all_active_parameters>
+  void addBodyIntegralImpl(std::string body_name, BodyForceType body_integral,
+                           std::integer_sequence<int, all_active_parameters...>)
+  {
+    addBodyIntegral(DependsOn<all_active_parameters...>{}, body_name, body_integral);
+  }
+
+  /// @overload
+  template <typename BodyForceType>
   void addBodyIntegral(std::string body_name, BodyForceType body_integral)
   {
-    auto input_indices = std::make_integer_sequence<int, sizeof...(InputSpaces)>{};
-    addBodyIntegral(DependsOn<>{}, body_name, body_integral);
+    addBodyIntegralImpl(body_name, body_integral, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 };
 
@@ -68,10 +75,10 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
 /// systems of equations
 class SecondOrderTimeDiscretizedWeakForms {
  public:
-  std::shared_ptr<WeakForm> time_discretized_weak_form;  ///< this publicaly available abstract weak form is a
+  std::shared_ptr<WeakForm> time_discretized_weak_form;  ///< this publicly available abstract weak form is a
                                                          ///< functions of the current u, u_old, v_old, and a_old,
   std::shared_ptr<WeakForm>
-      final_reaction_weak_form;  ///< this publicaly available abstract weak form is structly a
+      final_reaction_weak_form;  ///< this publicly available abstract weak form is structly a
                                  ///< function of the current u, v, and a (no time discretization)
                                  ///< its main purpose is to compute reaction forces after the solve is completed
 };
@@ -81,8 +88,8 @@ class SecondOrderTimeDiscretizedWeakForm;
 
 /// @brief Useful for time-discretized PDEs of second order (involves for first and second derivatives of time).  Users
 /// write q-functions in terns of u, u_dot, u_dot_dot, and the weak form is transformed by the
-/// SecondOrderTimeIntegrationRule so that is it globally a function of u, u_old, u_dot_old, u_dot_dot_old, with u as
-/// the distinct unknown for the time discretized system.
+/// ImplicitNewmarkSecondOrderTimeIntegrationRule so that is it globally a function of u, u_old, u_dot_old,
+/// u_dot_dot_old, with u as the distinct unknown for the time discretized system.
 /// @tparam spatial_dim Spatial dimension, 2 or 3.
 /// @tparam OutputSpace The space corresponding to the output residual for the weak form (test-space).
 /// @tparam TrialInputSpace The space corresponding to the predicted solution u, i.e., the trial solution, the unique
@@ -101,7 +108,7 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
 
   /// @brief Constructor
   SecondOrderTimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
-                                     SecondOrderTimeIntegrationRule time_rule,
+                                     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule,
                                      const mfem::ParFiniteElementSpace& output_mfem_space,
                                      const typename TimeDiscretizedWeakFormT::SpacesT& input_mfem_spaces)
       : time_rule_(time_rule)
@@ -128,8 +135,8 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
         [integrand, time_rule](const TimeInfo& t, auto X, auto U, auto U_old, auto U_dot_old, auto U_dot_dot_old,
                                auto... inputs) {
           return integrand(t, X, time_rule.value(t, U, U_old, U_dot_old, U_dot_dot_old),
-                           time_rule.derivative(t, U, U_old, U_dot_old, U_dot_dot_old),
-                           time_rule.second_derivative(t, U, U_old, U_dot_old, U_dot_dot_old), inputs...);
+                           time_rule.dot(t, U, U_old, U_dot_old, U_dot_dot_old),
+                           time_rule.ddot(t, U, U_old, U_dot_old, U_dot_dot_old), inputs...);
         });
     final_reaction_weak_form_->addBodyIntegral(DependsOn<0, 1, 2, NUM_STATE_VARS - 1 + active_parameters...>{},
                                                body_name, integrand);
@@ -150,7 +157,7 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
       final_reaction_weak_form_;  ///< fully template underlying weak form (no time integration included, a function of
                                   ///< current u, v, and a)
 
-  SecondOrderTimeIntegrationRule time_rule_;  ///< encodes the time integration rule
+  ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule_;  ///< encodes the time integration rule
 };
 
 }  // namespace smith

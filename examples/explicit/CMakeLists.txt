@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if(SMITH_USE_DFEM)
+if(SMITH_USE_ENZYME)
     set(EXPLICIT_DYNAMICS_EXAMPLES_SOURCES
         dfem_gpu.cpp
         dfem_force_gpu.cpp
@@ -21,7 +21,10 @@ if(SMITH_USE_DFEM)
         smith_add_example_test(NAME           explicit_${example_name}
                                COMMAND        explicit_${example_name}
                                NUM_MPI_TASKS  4)
-        
+
+        # error: failed to meet occupancy target given by 'amdgpu-waves-per-eu' in ...
+        # desired occupancy was 4, final occupancy is 3 [-Werror,-Wpass-failed]
+        target_compile_options(explicit_${example_name} PRIVATE -Wno-pass-failed)
     endforeach()
 
     install(

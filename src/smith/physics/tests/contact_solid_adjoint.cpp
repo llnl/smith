@@ -60,6 +60,68 @@ void computeStepAdjointLoad(const FiniteElementState& displacement, FiniteElemen
   d_qoi_d_displacement.Add(1.0, displacement);
 }
 
+FiniteElementState createReactionDirection(const BasePhysics& solid_solver, int direction, std::shared_ptr<Mesh> mesh)
+{
+  const FiniteElementDual& reactions = solid_solver.dual("reactions");
+
+  FiniteElementState reactionDirections(reactions.space(), "reaction_directions");
+  reactionDirections = 0.0;
+
+  mfem::VectorFunctionCoefficient func(dim, [direction](const mfem::Vector& /*x*/, mfem::Vector& u) {
+    u = 0.0;
+    u[direction] = 1.0;
+  });
+
+  reactionDirections.project(func, mesh->domain("two"));
+
+  return reactionDirections;
+}
+
+double computeContactReactionQoi(BasePhysics& solid_solver, std::shared_ptr<Mesh> mesh)
+{
+  solid_solver.resetStates();
+  solid_solver.advanceTimestep(1.0);
+
+  const FiniteElementDual& reactions = solid_solver.dual("reactions");
+  auto reactionDirections = createReactionDirection(solid_solver, 1, mesh);
+
+  return innerProduct(reactions, reactionDirections);
+}
+
+auto computeContactReactionQoiSensitivities(BasePhysics& solid_solver, std::shared_ptr<Mesh> mesh)
+{
+  EXPECT_EQ(0, solid_solver.cycle());
+
+  double qoi = computeContactReactionQoi(solid_solver, mesh);
+
+  // Verify nonzero reaction forces
+  EXPECT_NE(qoi, 0.0);
+
+  FiniteElementDual shape_sensitivity(solid_solver.shapeDisplacement().space(), "shape sensitivity");
+
+  auto reaction_adjoint_load = createReactionDirection(solid_solver, 1, mesh);
+
+  EXPECT_EQ(1, solid_solver.cycle());
+  solid_solver.setDualAdjointBcs({{"reactions", reaction_adjoint_load}});
+  solid_solver.reverseAdjointTimestep();
+  shape_sensitivity = solid_solver.computeTimestepShapeSensitivity();
+  EXPECT_EQ(0, solid_solver.cycle());
+
+  return std::make_tuple(qoi, shape_sensitivity);
+}
+
+double computeContactReactionQoiAdjustingShape(SolidMechanics<p, dim>& solid_solver,
+                                               const FiniteElementState& shape_derivative_direction, double pertubation,
+                                               std::shared_ptr<Mesh> mesh)
+{
+  FiniteElementState shape_disp(shape_derivative_direction.space(), "input_shape_displacement");
+
+  shape_disp.Add(pertubation, shape_derivative_direction);
+  solid_solver.setShapeDisplacement(shape_disp);
+
+  return computeContactReactionQoi(solid_solver, mesh);
+}
+
 using SolidMechT = smith::SolidMechanicsContact<p, dim>;
 // using SolidMechT = smith::SolidMechanics<p, dim>;
 
@@ -214,6 +276,22 @@ TEST_F(ContactSensitivityFixture, QuasiStaticShapeSensitivities)
   fillDirection(*solid_solver, derivative_direction);
 
   double qoi_plus = computeSolidMechanicsQoiAdjustingShape(*solid_solver, tsInfo, derivative_direction, eps);
+
+  double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
+  double directional_deriv_fd = (qoi_plus - qoi_base) / eps;
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, eps);
+}
+
+TEST_F(ContactSensitivityFixture, ReactionShapeSensitivities)
+{
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+  auto [qoi_base, shape_sensitivity] = computeContactReactionQoiSensitivities(*solid_solver, mesh);
+
+  solid_solver->resetStates();
+  FiniteElementState derivative_direction(shape_sensitivity.space(), "derivative_direction");
+  fillDirection(*solid_solver, derivative_direction);
+
+  double qoi_plus = computeContactReactionQoiAdjustingShape(*solid_solver, derivative_direction, eps, mesh);
 
   double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
   double directional_deriv_fd = (qoi_plus - qoi_base) / eps;

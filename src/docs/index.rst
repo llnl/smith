@@ -3,9 +3,9 @@
 .. ##
 .. ## SPDX-License-Identifier: (BSD-3-Clause)
 
-=======
+=====
 Smith
-=======
+=====
 
 Smith is a 3D implicit nonlinear thermal-structural simulation code. Its primary purpose is to
 investigate multiphysics abstraction strategies and implicit finite element-based algorithm development for emerging
@@ -15,13 +15,12 @@ computing architectures. It heavily leverages the `MFEM finite element library <
    This project is under heavy development and is currently a pre-alpha release. Functionality and interfaces may change rapidly
    as development progresses.
 
-*  :ref:`Quickstart/Build Instructions <quickstart-label>`
-*  `Source Documentation <doxygen/html/index.html>`_
+
+We also provide `Source API Documentation <doxygen/html/index.html>`_.
 
 
-======================================================
 Copyright and License Information
-======================================================
+---------------------------------
 
 Please see the `LICENSE <https://github.com/LLNL/smith/blob/develop/LICENSE>`_ file in the repository.
 
@@ -32,9 +31,15 @@ LLNL-CODE-805541
 
 .. toctree::
    :hidden:
+   :titlesonly:
    :maxdepth: 2
 
-   sphinx/quickstart
+   sphinx/build_guide/index
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+
    sphinx/user_guide/index
    sphinx/dev_guide/index
    sphinx/theory_reference/index

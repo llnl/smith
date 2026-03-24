@@ -65,6 +65,10 @@ void finalizer()
 #endif
 #endif
 
+#ifdef SMITH_USE_SUNDIALS
+  mfem::Sundials::Finalize();
+#endif
+
   profiling::finalize();
 
   int mpi_initialized = 0;

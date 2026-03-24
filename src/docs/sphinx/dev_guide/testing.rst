@@ -45,7 +45,7 @@ Requirements:
   used as reference.
 
 #. **Build the code.**
-   Build code with the normal steps. More info in the :ref:`quickstart-label`.
+   Build code with the normal steps. More info in the :ref:`build_smith-label`.
    This generates a script in the build directory called ``ats.sh``.
 
 #. **Run integration tests.**
