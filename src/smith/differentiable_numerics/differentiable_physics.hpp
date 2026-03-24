@@ -138,12 +138,7 @@ class DifferentiablePhysics : public BasePhysics {
   /// @return Copies of the tracked state fields at the current cycle.
   std::vector<FieldState> getFieldStates() const { return field_states_; }
 
-  /// @brief Backward-compatible alias for `getFieldStates()`.
-  /// @return Copies of the tracked state fields at the current cycle.
-  std::vector<FieldState> getFieldStatesOld() const { return field_states_; }
-
-  /// @brief Get the differentiable parameter fields.
-  /// @return Copies of the tracked parameter fields.
+  /// @brief Get all the parameter FieldStates
   std::vector<FieldState> getFieldParams() const { return field_params_; }
 
   /// @brief Get the tracked state fields followed by the tracked parameter fields.
