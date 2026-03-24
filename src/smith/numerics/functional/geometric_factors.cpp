@@ -73,14 +73,39 @@ GeometricFactors::GeometricFactors(const Domain& domain, int q, mfem::Geometry::
 {
   const mfem::ParGridFunction* nodes = static_cast<const mfem::ParGridFunction*>(domain.mesh_.GetNodes());
   mfem::ParFiniteElementSpace* fes = nodes->ParFESpace();
-  // const mfem::GridFunction* nodes = domain.mesh_.GetNodes();
-  // const mfem::FiniteElementSpace* fes = nodes->FESpace();
 
   const std::vector<int>& element_ids = domain.get_mfem_ids(geom);
 
   auto restriction = smith::ElementRestriction(fes, geom, element_ids);
   mfem::Vector X_e(int(restriction.ESize()));
   restriction.Gather(*nodes, X_e);
+
+  // For periodic meshes, the mesh nodes are in DG space, which will double the nodes_per_elem for interior faces.
+  // Therefore, we must discard half of the entries to recover H1 coordinates and correctly compute geometric factor.
+  // Note that faces on periodic boundaries in mfem mesh are considered interior faces with boundary attributes.
+  if (domain.type_ == Domain::Type::InteriorFaces && fes->IsDGSpace()) {
+    const uint64_t new_nodes_per_elem = restriction.nodes_per_elem / 2;
+    mfem::Vector X_h1(X_e.Size() / 2);
+
+    int H1_id = 0;
+    for (uint64_t i = 0; i < restriction.num_elements; i++) {
+      for (uint64_t c = 0; c < restriction.components; c++) {
+        for (uint64_t j = 0; j < restriction.nodes_per_elem; j++) {
+          // ignore the coordinate dofs on the other side of the face
+          // coordinate on both side of the face should have the same values
+          if (j >= new_nodes_per_elem) {
+            continue;
+          }
+
+          uint64_t E_id = (i * restriction.components + c) * restriction.nodes_per_elem + j;
+          X_h1[H1_id++] = X_e[int(E_id)];
+        }
+      }
+    }
+
+    X_e.SetSize(X_h1.Size());
+    X_e = X_h1;
+  }
 
   // assumes all elements are the same order
   int p = fes->GetElementOrder(0);
