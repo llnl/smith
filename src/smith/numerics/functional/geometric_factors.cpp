@@ -78,7 +78,20 @@ GeometricFactors::GeometricFactors(const Domain& domain, int q, mfem::Geometry::
 
   auto restriction = smith::ElementRestriction(fes, geom, element_ids);
   mfem::Vector X_e(int(restriction.ESize()));
-  restriction.Gather(*nodes, X_e);
+
+  // Since nodes are in DG space for periodic meshes, we need a correctly sized local data vector for element
+  // restriction operator. Unlike the preparation operation in functional (appendFaceNbrData), we don't need
+  // to fill the entries in [ nodes->Size(), nodes->Size() + nodes->FaceNbrData().Size() ) range. This is because
+  // we only need one set of coordinates to compute geometric factor in H1 interpolation and we will only use
+  // the set local to the processor.
+  if (domain.type_ == Domain::Type::InteriorFaces && fes->IsDGSpace()) {
+    mfem::Vector nodes_L(nodes->Size() + nodes->FaceNbrData().Size());
+    nodes_L.SetVector(*nodes, 0);
+
+    restriction.Gather(nodes_L, X_e);
+  } else {
+    restriction.Gather(*nodes, X_e);
+  }
 
   // For periodic meshes, the mesh nodes are in DG space, which will double the nodes_per_elem for interior faces.
   // Therefore, we must discard half of the entries to recover H1 coordinates and correctly compute geometric factor.
