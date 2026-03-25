@@ -18,7 +18,7 @@ string(APPEND CMAKE_EXE_LINKER_FLAGS " -rdynamic")
 # once Fortran runtime libraries are introduced. On this platform the shared
 # libstdc++ linker script still points at the old system runtime, so use the
 # compiler's GCC 13 static archives instead.
-if(ENABLE_CODEVELOP AND 
+if(SMITH_ENABLE_CODEVELOP AND 
    ENABLE_HIP AND 
    CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
    CMAKE_CXX_COMPILER MATCHES "amdclang\\+\\+")
