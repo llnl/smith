@@ -20,24 +20,20 @@ void testAbortHandler()
    Helper utilities
    ============================================================ */
 
-namespace
-{
+namespace {
 
 // Own both the local CSR (used to build the hypre matrix) and the HypreParMatrix.
 // This avoids dangling pointers because some HypreParMatrix constructors wrap
 // CSR arrays without taking ownership.
-struct OwnedHypreParMatrix
-{
+struct OwnedHypreParMatrix {
   std::unique_ptr<SparseMatrix> diag;
   std::unique_ptr<HypreParMatrix> A;
 };
 
 // Build a HypreParMatrix from a local CSR matrix, assuming serial execution.
 // Uses a block-diagonal ParCSR matrix whose local diagonal block is 'diag'.
-OwnedHypreParMatrix makeHypreFromLocalDiag(std::unique_ptr<SparseMatrix> diag,
-                                          HYPRE_BigInt global_num_rows,
-                                          HYPRE_BigInt global_num_cols,
-                                          MPI_Comm comm)
+OwnedHypreParMatrix makeHypreFromLocalDiag(std::unique_ptr<SparseMatrix> diag, HYPRE_BigInt global_num_rows,
+                                           HYPRE_BigInt global_num_cols, MPI_Comm comm)
 {
   MFEM_VERIFY(diag, "diag must be non-null");
   diag->Finalize();
@@ -45,12 +41,8 @@ OwnedHypreParMatrix makeHypreFromLocalDiag(std::unique_ptr<SparseMatrix> diag,
   auto row_starts = std::array<HYPRE_BigInt, 2>{static_cast<HYPRE_BigInt>(0), global_num_rows};
   auto col_starts = std::array<HYPRE_BigInt, 2>{static_cast<HYPRE_BigInt>(0), global_num_cols};
 
-  auto A = std::make_unique<HypreParMatrix>(comm,
-                                            global_num_rows,
-                                            global_num_cols,
-                                            row_starts.data(),
-                                            col_starts.data(),
-                                            diag.get());
+  auto A = std::make_unique<HypreParMatrix>(comm, global_num_rows, global_num_cols, row_starts.data(),
+                                            col_starts.data(), diag.get());
 
   // Ensure partition arrays are owned by HypreParMatrix (so std::array can die)
   A->CopyRowStarts();
@@ -66,7 +58,9 @@ OwnedHypreParMatrix makeHypreFromLocalDiag(std::unique_ptr<SparseMatrix> diag,
 OwnedHypreParMatrix makeHypreScaledIdentity(int n, double c, MPI_Comm comm = MPI_COMM_WORLD)
 {
   auto diag = std::make_unique<SparseMatrix>(n);
-  for (int i = 0; i < n; i++) { diag->Add(i, i, c); }
+  for (int i = 0; i < n; i++) {
+    diag->Add(i, i, c);
+  }
 
   const auto N = static_cast<HYPRE_BigInt>(n);
   return makeHypreFromLocalDiag(std::move(diag), N, N, comm);
@@ -76,11 +70,14 @@ OwnedHypreParMatrix makeHypreScaledIdentity(int n, double c, MPI_Comm comm = MPI
 OwnedHypreParMatrix makeHypreSPDMatrix(int n, MPI_Comm comm = MPI_COMM_WORLD)
 {
   auto diag = std::make_unique<SparseMatrix>(n);
-  for (int i = 0; i < n; i++)
-  {
+  for (int i = 0; i < n; i++) {
     diag->Add(i, i, 2.0);
-    if (i > 0) { diag->Add(i, i - 1, -1.0); }
-    if (i < n - 1) { diag->Add(i, i + 1, -1.0); }
+    if (i > 0) {
+      diag->Add(i, i - 1, -1.0);
+    }
+    if (i < n - 1) {
+      diag->Add(i, i + 1, -1.0);
+    }
   }
 
   const auto N = static_cast<HYPRE_BigInt>(n);
@@ -92,11 +89,16 @@ OwnedHypreParMatrix makeHypreRectTridiagonal(int rows, int cols, MPI_Comm comm =
 {
   auto diag = std::make_unique<SparseMatrix>(rows, cols);
 
-  for (int i = 0; i < rows; i++)
-  {
-    if (i < cols) { diag->Add(i, i, 2.0); }                    // main diagonal
-    if (i > 0 && i - 1 < cols) { diag->Add(i, i - 1, -1.0); }  // lower diagonal
-    if (i + 1 < cols) { diag->Add(i, i + 1, -1.0); }           // upper diagonal
+  for (int i = 0; i < rows; i++) {
+    if (i < cols) {
+      diag->Add(i, i, 2.0);
+    }  // main diagonal
+    if (i > 0 && i - 1 < cols) {
+      diag->Add(i, i - 1, -1.0);
+    }  // lower diagonal
+    if (i + 1 < cols) {
+      diag->Add(i, i + 1, -1.0);
+    }  // upper diagonal
   }
 
   const auto R = static_cast<HYPRE_BigInt>(rows);
@@ -104,9 +106,8 @@ OwnedHypreParMatrix makeHypreRectTridiagonal(int rows, int cols, MPI_Comm comm =
   return makeHypreFromLocalDiag(std::move(diag), R, C, comm);
 }
 
-class IdentitySolver : public mfem::Solver
-{
-public:
+class IdentitySolver : public mfem::Solver {
+ public:
   void SetOperator(const mfem::Operator& op) override
   {
     height = op.Height();
@@ -117,9 +118,8 @@ public:
 };
 
 // Exact diagonal inverse solver for HypreParMatrix
-class HypreExactDiagonalSolver : public mfem::Solver
-{
-public:
+class HypreExactDiagonalSolver : public mfem::Solver {
+ public:
   void SetOperator(const mfem::Operator& op) override
   {
     const auto* A = dynamic_cast<const mfem::HypreParMatrix*>(&op);
@@ -137,10 +137,12 @@ public:
   {
     MFEM_ASSERT(A_, "Operator not set");
     y.SetSize(x.Size());
-    for (int i = 0; i < x.Size(); i++) { y[i] = x[i] / diag_[i]; }
+    for (int i = 0; i < x.Size(); i++) {
+      y[i] = x[i] / diag_[i];
+    }
   }
 
-private:
+ private:
   const mfem::HypreParMatrix* A_ = nullptr;
   mfem::Vector diag_;
 };
@@ -190,8 +192,7 @@ TEST(BlockTriangular, IdentityActsAsIdentity)
   solvers.push_back(std::make_unique<IdentitySolver>());
   solvers.push_back(std::make_unique<IdentitySolver>());
 
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers),
-                                         smith::BlockTriangularType::Symmetric);
+  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Symmetric);
   P.SetOperator(A);
 
   Vector x(5), y(5);
@@ -251,8 +252,7 @@ TEST(BlockTriangular, LowerTriangularExactSolve)
   A.SetBlock(1, 1, A22o.A.get());
 
   auto solvers = makeExactDiagonalSolvers();
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers),
-                                         smith::BlockTriangularType::Lower);
+  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Lower);
   P.SetOperator(A);
 
   Vector b(4), x(4), Ax(4);
@@ -283,8 +283,7 @@ TEST(BlockTriangular, SymmetricGSIsSelfAdjoint)
   A.SetBlock(1, 1, A22o.A.get());
 
   auto solvers = makeExactDiagonalSolvers();
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers),
-                                         smith::BlockTriangularType::Symmetric);
+  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Symmetric);
   P.SetOperator(A);
 
   Vector x(4), y(4), Px(4), Py(4);
@@ -332,8 +331,7 @@ TEST(BlockTriangular, LowerTriangularExactSolve_3Blocks)
   solvers.push_back(std::make_unique<HypreExactDiagonalSolver>());
   solvers.push_back(std::make_unique<HypreExactDiagonalSolver>());
 
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers),
-                                         smith::BlockTriangularType::Lower);
+  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Lower);
   P.SetOperator(A);
 
   const int n = sz(0) + sz(1) + sz(2);
@@ -364,8 +362,7 @@ TEST(BlockTriangular, UpperTriangularExactSolve)
   A.SetBlock(1, 1, A22o.A.get());
 
   auto solvers = makeExactDiagonalSolvers();
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers),
-                                         smith::BlockTriangularType::Upper);
+  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Upper);
   P.SetOperator(A);
 
   Vector b(4), x(4), Ax(4);
@@ -395,8 +392,7 @@ TEST(BlockTriangular, ZeroInputGivesZeroOutput)
   solvers.push_back(std::make_unique<IdentitySolver>());
   solvers.push_back(std::make_unique<IdentitySolver>());
 
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers),
-                                         smith::BlockTriangularType::Symmetric);
+  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Symmetric);
   P.SetOperator(A);
 
   Vector x(5), y(5);
@@ -419,8 +415,7 @@ TEST(BlockTriangular, HandlesMissingOffDiagonalBlocks)
   A.SetBlock(1, 1, A22o.A.get());
 
   auto solvers = makeExactDiagonalSolvers();
-  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers),
-                                         smith::BlockTriangularType::Symmetric);
+  smith::BlockTriangularPreconditioner P(offsets, std::move(solvers), smith::BlockTriangularType::Symmetric);
 
   EXPECT_NO_THROW(P.SetOperator(A));
 }
@@ -458,10 +453,8 @@ TEST(BlockTriangular, WorksForSingleBlockAllTypes)
   BlockOperator A(offsets);
   A.SetBlock(0, 0, A0o.A.get());
 
-  for (auto type : {smith::BlockTriangularType::Lower,
-                    smith::BlockTriangularType::Upper,
-                    smith::BlockTriangularType::Symmetric})
-  {
+  for (auto type :
+       {smith::BlockTriangularType::Lower, smith::BlockTriangularType::Upper, smith::BlockTriangularType::Symmetric}) {
     std::vector<std::unique_ptr<Solver>> solvers;
     solvers.push_back(std::make_unique<HypreExactDiagonalSolver>());
 
@@ -501,9 +494,7 @@ TEST(BlockSchur, ExactSolveforDiagonals)
   solvers.push_back(std::make_unique<HypreExactDiagonalSolver>());
   solvers.push_back(std::make_unique<HypreExactDiagonalSolver>());
 
-  smith::BlockSchurPreconditioner P(offsets,
-                                    std::move(solvers),
-                                    smith::BlockSchurType::Full,
+  smith::BlockSchurPreconditioner P(offsets, std::move(solvers), smith::BlockSchurType::Full,
                                     smith::SchurApproxType::DiagInv);
   P.SetOperator(A);
 
