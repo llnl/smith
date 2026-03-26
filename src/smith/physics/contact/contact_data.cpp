@@ -276,7 +276,6 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
         inactive_tdofs_ct += inactive_tdofs_vector[i]->Size();
       }
     }
-    inactive_tdofs.GetMemory().SetHostPtrOwner(false);
     mfem::Array<int> rows(numPressureDofs() + 1);
     rows = 0;
     inactive_tdofs_ct = 0;
@@ -286,19 +285,21 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
       }
       rows[i + 1] = inactive_tdofs_ct;
     }
-    rows.GetMemory().SetHostPtrOwner(false);
     mfem::Vector ones(inactive_tdofs_ct);
     ones = 1.0;
-    ones.GetMemory().SetHostPtrOwner(false);
     mfem::SparseMatrix inactive_diag(rows.GetData(), inactive_tdofs.GetData(), ones.GetData(), numPressureDofs(),
                                      numPressureDofs(), false, false, true);
-    // if the size of ones is zero, SparseMatrix creates its own memory which it
-    // owns.  explicitly prevent this...
-    inactive_diag.SetDataOwner(false);
+    rows.GetMemory().ClearOwnerFlags();
+    inactive_tdofs.GetMemory().ClearOwnerFlags();
+    ones.GetMemory().ClearOwnerFlags();
+    inactive_diag.GetMemoryI().ClearOwnerFlags();
+    inactive_diag.GetMemoryJ().ClearOwnerFlags();
+    inactive_diag.GetMemoryData().ClearOwnerFlags();
     auto block_1_1 =
         new mfem::HypreParMatrix(mesh_.GetComm(), global_pressure_dof_offsets_[global_pressure_dof_offsets_.Size() - 1],
                                  global_pressure_dof_offsets_, &inactive_diag);
-    block_1_1->SetOwnerFlags(3, 3, 1);
+    constexpr int mfem_owned_host_flag = 3;
+    block_1_1->SetOwnerFlags(mfem_owned_host_flag, block_1_1->OwnsOffd(), block_1_1->OwnsColMap());
     block_J->SetBlock(1, 1, block_1_1);
     // end building I_(inactive)
   }
