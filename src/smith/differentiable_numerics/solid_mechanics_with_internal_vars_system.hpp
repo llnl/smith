@@ -152,8 +152,8 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
     // Cycle-zero: u and v are given, solve for a; alpha at initial condition
     cycle_zero_solid_weak_form->addBodyIntegral(domain_name, [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a,
-                                                           auto /*alpha*/, auto alpha_old, auto... params) {
-      auto alpha_current = alpha_old;  // at cycle 0, use initial alpha
+                                                           auto alpha, auto... params) {
+      auto alpha_current = alpha;  // at cycle 0, use initial alpha
       typename MaterialType::State state;
       auto pk_stress = material(state, get<DERIVATIVE>(u), get<VALUE>(alpha_current), params...);
 
@@ -184,11 +184,11 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
     addCycleZeroBodySourceImpl(
         domain_name,
-        [=](auto t_info, auto X, auto u, auto v, auto a, auto alpha, auto /*alpha_old*/, auto... params) {
+        [=](auto t_info, auto X, auto u, auto v, auto a, auto alpha, auto... params) {
           auto alpha_dot = 0.0 * alpha;
           return force_function(t_info.time(), X, u, v, a, alpha, alpha_dot, params...);
         },
-        std::make_index_sequence<5 + sizeof...(parameter_space)>{});
+        std::make_index_sequence<4 + sizeof...(parameter_space)>{});
   }
 
   /**
@@ -226,11 +226,11 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
     addCycleZeroBoundaryFluxImpl(
         domain_name,
-        [=](auto t_info, auto X, auto n, auto u, auto v, auto a, auto alpha, auto /*alpha_old*/, auto... params) {
+        [=](auto t_info, auto X, auto n, auto u, auto v, auto a, auto alpha, auto... params) {
           auto alpha_dot = 0.0 * alpha;
           return traction_function(t_info.time(), X, n, u, v, a, alpha, alpha_dot, params...);
         },
-        std::make_index_sequence<5 + sizeof...(parameter_space)>{});
+        std::make_index_sequence<4 + sizeof...(parameter_space)>{});
   }
 
   /**
@@ -275,7 +275,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
     addCycleZeroBoundaryIntegralImpl(
         domain_name,
-        [=](auto t_info, auto X, auto u, auto v, auto a, auto alpha, auto /*alpha_old*/, auto... params) {
+        [=](auto t_info, auto X, auto u, auto v, auto a, auto alpha, auto... params) {
           auto alpha_val = get<VALUE>(alpha);
           auto alpha_dot = 0.0 * alpha_val;
 
@@ -288,7 +288,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
           return pressure * n_deformed * (1.0 / n_shape_norm);
         },
-        std::make_index_sequence<5 + sizeof...(parameter_space)>{});
+        std::make_index_sequence<4 + sizeof...(parameter_space)>{});
   }
 
   /**
