@@ -256,7 +256,7 @@ This section is for MacOS machines only.
 
 If you get the following warning(s) when building Smith...
 
-``ld: warning: object file (/Users/chapman39/dev/lido-2.0/lido_tpls/darwin/upstreams/2026_03_18_15_16_50/darwin-tahoe-aarch64/llvm-19.1.7/petsc-3.21.6-gg26icdjjmc5le6de6f5nviiqnhlanvj/lib/libpetsc.a[1377](slregis.o)) was built for newer 'macOS' version (26.0) than being linked (16.0)``
+``ld: warning: object file (/spack_install_path/darwin-tahoe-aarch64/llvm-19.1.7/petsc-3.21.6-gg26icdjjmc5le6de6f5nviiqnhlanvj/lib/libpetsc.a[1377](slregis.o)) was built for newer 'macOS' version (26.0) than being linked (16.0)``
 
 ...run the following command to add `MACOSX_DEPLOYMENT_TARGET` to your environment (the target version may be different
 for you):
