@@ -328,7 +328,7 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
   system.disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
     // Keep the loading modest so the first Newton solves are well-conditioned.
-    bc[0] = -1.0 * t;
+    bc[0] = .10 * t;
     return bc;
   });
   system.disp_bc->template setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
