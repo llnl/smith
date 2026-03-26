@@ -46,6 +46,7 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
     const auto& s = states[i];
     field_states_.push_back(s);
     initial_field_states_.push_back(s);
+SLIC_ERROR_IF(!s.get(), "Null state FieldState handle");
     state_name_to_field_index_[s.get()->name()] = i;
     state_names_.push_back(s.get()->name());
   }
@@ -53,6 +54,7 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
   for (size_t i = 0; i < params.size(); ++i) {
     const auto& p = params[i];
     field_params_.push_back(p);
+SLIC_ERROR_IF(!p.get(), "Null param FieldState handle");
     param_name_to_field_index_[p.get()->name()] = i;
     param_names_.push_back(p.get()->name());
   }
@@ -62,6 +64,9 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
   }
 
   completeSetup();
+for (const auto& s : field_states_) {
+SLIC_ERROR_IF(!s.get(), "Null FieldState in field_states_");
+}
 }
 
 void DifferentiablePhysics::completeSetup()
@@ -78,6 +83,9 @@ void DifferentiablePhysics::resetStates(int cycle, double time)
   checkpointer_->reset_graph();
   time_ = time;
   cycle_ = cycle;
+for (const auto& s : field_states_) {
+  SLIC_ERROR_IF(!s.get(), "Null FieldState in field_states_");
+}
 }
 
 void DifferentiablePhysics::resetAdjointStates()
