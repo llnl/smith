@@ -39,11 +39,11 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
                                              const FieldState& shape_disp, const std::vector<FieldState>& states,
                                              const std::vector<FieldState>& params,
                                              std::shared_ptr<StateAdvancer> advancer, std::string mech_name,
-                                             const std::vector<DualInfo>& dual_infos)
+                                             const std::vector<ReactionInfo>& reaction_infos)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
       advancer_(advancer),
-      dual_infos_(dual_infos)
+      reaction_infos_(reaction_infos)
 {
   SLIC_ERROR_IF(states.size() == 0, "Must have a least 1 state for a mechanics.");
   field_shape_displacement_ = std::make_unique<FieldState>(shape_disp);
@@ -62,12 +62,13 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
     param_names_.push_back(p.get()->name());
   }
 
-  reaction_names_.reserve(dual_infos_.size());
-  for (size_t i = 0; i < dual_infos_.size(); ++i) {
-    SLIC_ERROR_IF(dual_infos_[i].space == nullptr,
-                  axom::fmt::format("Dual '{}' in physics module '{}' has null FE space.", dual_infos_[i].name, name_));
-    reaction_names_.push_back(dual_infos_[i].name);
-    reaction_name_to_reaction_index_[dual_infos_[i].name] = i;
+  reaction_names_.reserve(reaction_infos_.size());
+  for (size_t i = 0; i < reaction_infos_.size(); ++i) {
+    SLIC_ERROR_IF(
+        reaction_infos_[i].space == nullptr,
+        axom::fmt::format("Reaction '{}' in physics module '{}' has null FE space.", reaction_infos_[i].name, name_));
+    reaction_names_.push_back(reaction_infos_[i].name);
+    reaction_name_to_reaction_index_[reaction_infos_[i].name] = i;
   }
 
   completeSetup();
@@ -113,31 +114,31 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
   return *field_states_[state_index].get();
 }
 
-const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_name) const
+const FiniteElementDual& DifferentiablePhysics::dual(const std::string& reaction_name) const
 {
-  SLIC_ERROR_IF(
-      reaction_name_to_reaction_index_.find(dual_name) == reaction_name_to_reaction_index_.end(),
-      axom::fmt::format("Could not find dual named {0} in mesh with tag \"{1}\" to get", dual_name, mesh_->tag()));
-  size_t reaction_index = reaction_name_to_reaction_index_.at(dual_name);
+  SLIC_ERROR_IF(reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
+                axom::fmt::format("Could not find reaction named {0} in mesh with tag \"{1}\" to get", reaction_name,
+                                  mesh_->tag()));
+  size_t reaction_index = reaction_name_to_reaction_index_.at(reaction_name);
 
   SLIC_ERROR_IF(reaction_states_.empty() && !reaction_names_.empty(),
                 "Reactions were not computed during advanceState, but were requested.");
 
   SLIC_ERROR_IF(
       reaction_index >= reaction_states_.size(),
-      "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
+      "Reaction reactions not correctly allocated yet, cannot get reaction until after initializationStep is called.");
 
   return *reaction_states_[reaction_index].get();
 }
 
-FiniteElementDual DifferentiablePhysics::loadCheckpointedDual(const std::string& dual_name, int cycle)
+FiniteElementDual DifferentiablePhysics::loadCheckpointedDual(const std::string& reaction_name, int cycle)
 {
   SLIC_ERROR_IF(
       cycle != cycle_,
       axom::fmt::format("Due to checkpointing restrictions in smith::DifferentiablePhysics, cannot ask for "
-                        "an arbitrary checkpointed dual cycle, asking for cycle {}, but physics is at cycle {}",
+                        "an arbitrary checkpointed reaction cycle, asking for cycle {}, but physics is at cycle {}",
                         cycle, cycle_));
-  return dual(dual_name);
+  return dual(reaction_name);
 }
 
 FiniteElementState DifferentiablePhysics::loadCheckpointedState(const std::string& state_name, int cycle)
@@ -193,15 +194,16 @@ void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_n
 }
 
 void DifferentiablePhysics::setAdjointLoad(
-    std::unordered_map<std::string, const smith::FiniteElementDual&> string_to_dual)
+    std::unordered_map<std::string, const smith::FiniteElementDual&> string_to_reaction)
 {
-  for (auto string_dual_pair : string_to_dual) {
-    std::string field_name = string_dual_pair.first;
-    const smith::FiniteElementDual& dual = string_dual_pair.second;
-    SLIC_ERROR_IF(state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
-                  axom::fmt::format("Could not find dual named {0} in mesh with tag {1}", field_name, mesh_->tag()));
+  for (auto string_reaction_pair : string_to_reaction) {
+    std::string field_name = string_reaction_pair.first;
+    const smith::FiniteElementDual& reaction = string_reaction_pair.second;
+    SLIC_ERROR_IF(
+        state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
+        axom::fmt::format("Could not find reaction named {0} in mesh with tag {1}", field_name, mesh_->tag()));
     size_t state_index = state_name_to_field_index_.at(field_name);
-    *field_states_[state_index].get_dual() += dual;
+    *field_states_[state_index].get_dual() += reaction;
   }
 }
 
@@ -210,13 +212,13 @@ void DifferentiablePhysics::setDualAdjointBcs(
 {
   for (auto string_bc_pair : string_to_bc) {
     std::string reaction_name = string_bc_pair.first;
-    const smith::FiniteElementState& reaction_dual = string_bc_pair.second;
+    const smith::FiniteElementState& reaction_adjoint_load = string_bc_pair.second;
     SLIC_ERROR_IF(
         reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
         axom::fmt::format("When calling setDualAdjointBcs, could not find reaction named {0} in mesh with tag {1}",
                           reaction_name, mesh_->tag()));
     size_t reaction_index = reaction_name_to_reaction_index_.at(reaction_name);
-    *reaction_states_[reaction_index].get_dual() += reaction_dual;
+    *reaction_states_[reaction_index].get_dual() += reaction_adjoint_load;
   }
 }
 
@@ -310,10 +312,11 @@ FieldState DifferentiablePhysics::getShapeDispFieldState() const { return *field
 void DifferentiablePhysics::initializeReactionStates()
 {
   reaction_states_.clear();
-  reaction_states_.reserve(dual_infos_.size());
-  for (const auto& dual_info : dual_infos_) {
-    auto dual = std::make_shared<FiniteElementDual>(StateManager::newDual(*dual_info.space, dual_info.name));
-    reaction_states_.push_back(createReactionState(*checkpointer_, dual));
+  reaction_states_.reserve(reaction_infos_.size());
+  for (const auto& reaction_info : reaction_infos_) {
+    auto reaction =
+        std::make_shared<FiniteElementDual>(StateManager::newDual(*reaction_info.space, reaction_info.name));
+    reaction_states_.push_back(createReactionState(*checkpointer_, reaction));
   }
 }
 

@@ -53,7 +53,7 @@ struct SolidMechanicsSystem : public SystemBase {
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
   std::shared_ptr<CycleZeroSolidWeakFormType>
-      cycle_zero_solid_weak_form;                              ///< Cycle-zero weak form for initial acceleration solve.
+      cycle_zero_solid_weak_form;                        ///< Cycle-zero weak form for initial acceleration solve.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;  ///< Time integration rule.
 
@@ -77,7 +77,11 @@ struct SolidMechanicsSystem : public SystemBase {
             field_store->getField(prefix("acceleration"))};
   }
 
-  std::vector<DualInfo> getDualInfos() const
+  /**
+   * @brief Get information about reaction fields for this system.
+   * @return List of ReactionInfo structures.
+   */
+  std::vector<ReactionInfo> getReactionInfos() const
   {
     return {{prefix("reactions"), &field_store->getField(prefix("displacement")).get()->space()}};
   }
@@ -91,7 +95,7 @@ struct SolidMechanicsSystem : public SystemBase {
   {
     return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
                                                    field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-                                                   advancer, physics_name, getDualInfos());
+                                                   advancer, physics_name, getReactionInfos());
   }
 
   /**
@@ -362,8 +366,8 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
 
   // Build advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form};
-  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver, cycle_zero_solid_weak_form,
-                                                               cycle_zero_solver);
+  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver,
+                                                               cycle_zero_solid_weak_form, cycle_zero_solver);
 
   return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
                     solid_weak_form,

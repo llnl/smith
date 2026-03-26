@@ -138,21 +138,21 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
     traction[0] = -0.015;
     return traction;
   });
-  
+
   auto physics = system.createDifferentiablePhysics("thermo_physics");
-  
+
   // Run forward
   double dt = 1.0;
   for (int step = 0; step < 2; ++step) {
     physics->advanceTimestep(dt);
   }
-  
+
   auto reactions = physics->getReactionStates();
   auto obj = 0.5 * (innerProduct(reactions[0], reactions[0]) + innerProduct(reactions[1], reactions[1]));
-  
+
   gretl::set_as_objective(obj);
   obj.data_store().back_prop();
-  
+
   auto param_sens = system.getParameterFields()[0].get_dual();
   EXPECT_TRUE(param_sens->Norml2() > 0.0);
 }
@@ -201,8 +201,8 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
       time += dt;
     }
 
-    return std::make_pair(mfem::Vector(*states[system.field_store->getFieldIndex("displacement_predicted")].get()),
-                          mfem::Vector(*states[system.field_store->getFieldIndex("temperature_predicted")].get()));
+    return std::make_pair(mfem::Vector(*states[system.field_store->getFieldIndex("displacement_solve_state")].get()),
+                          mfem::Vector(*states[system.field_store->getFieldIndex("temperature_solve_state")].get()));
   };
 
   smith::LinearSolverOptions monolithic_lin_opts{.linear_solver = smith::LinearSolver::GMRES,

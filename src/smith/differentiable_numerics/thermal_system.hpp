@@ -62,12 +62,13 @@ struct ThermalSystem : public SystemBase {
    * @brief Get the list of physical, non-solve state fields.
    * @return std::vector<FieldState> List of physical fields suitable for output.
    */
-  std::vector<FieldState> getOutputFieldStates() const
-  {
-    return {field_store->getField(prefix("temperature"))};
-  }
+  std::vector<FieldState> getOutputFieldStates() const { return {field_store->getField(prefix("temperature"))}; }
 
-  std::vector<DualInfo> getDualInfos() const
+  /**
+   * @brief Get information about reaction fields for this system.
+   * @return List of ReactionInfo structures.
+   */
+  std::vector<ReactionInfo> getReactionInfos() const
   {
     return {{prefix("thermal_flux"), &field_store->getField(prefix("temperature")).get()->space()}};
   }
@@ -81,7 +82,7 @@ struct ThermalSystem : public SystemBase {
   {
     return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
                                                    field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-                                                   advancer, physics_name, getDualInfos());
+                                                   advancer, physics_name, getReactionInfos());
   }
 
   /**

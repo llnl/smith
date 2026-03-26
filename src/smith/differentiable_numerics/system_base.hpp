@@ -25,9 +25,15 @@
 
 namespace smith {
 
-struct DualInfo {
-  std::string name;
-  const mfem::ParFiniteElementSpace* space;
+template <typename... Args>
+struct Parameters;
+
+/**
+ * @brief Information about a dual field.
+ */
+struct ReactionInfo {
+  std::string name;                                    ///< The name of the dual field.
+  const mfem::ParFiniteElementSpace* space = nullptr;  ///< The finite element space of the dual field.
 };
 
 namespace detail {
@@ -94,7 +100,7 @@ struct SystemBase {
   }
 
   /// @brief Metadata for dual outputs exported by this system.
-  std::vector<DualInfo> getDualInfos() const { return {}; }
+  std::vector<ReactionInfo> getReactionInfos() const { return {}; }
 };
 
 }  // namespace smith

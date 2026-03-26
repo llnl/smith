@@ -123,6 +123,9 @@ class NonlinearBlockSolverBase {
   /// @brief Interface option to clear memory between solves to avoid high-water mark memory usage.
   virtual void clearMemory() const {}
 
+  /// @brief Set an inner-solve tolerance multiplier, e.g. for staggered solves.
+  virtual void setInnerToleranceMultiplier(double multiplier) = 0;
+
  protected:
   mutable NonlinearConvergenceContext convergence_context_ = {};  ///< Solver-owned convergence state for one solve.
 };
@@ -169,6 +172,9 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
                                      std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const override;
 
+  /// @brief Set the inner tolerance multiplier.
+  void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }
+
   mutable std::unique_ptr<mfem::BlockOperator>
       block_jac_;  ///< Need to hold an instance of a block operator to work with the mfem solver interface
   mutable std::vector<std::vector<MatrixPtr>>
@@ -182,6 +188,7 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   double abs_tol_;                               ///< absolute residual tolerance for convergence check
   double rel_tol_;                               ///< relative residual tolerance for convergence check
   BlockConvergenceTolerances block_tolerances_;  ///< optional per-block convergence tolerances
+  double inner_tol_multiplier_ = 1.0;            ///< multiplier for tolerances during inner solves
 };
 
 /// @brief Create an equation-backed nonlinear block solver.

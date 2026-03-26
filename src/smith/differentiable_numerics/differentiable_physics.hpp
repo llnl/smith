@@ -40,12 +40,12 @@ class DifferentiablePhysics : public BasePhysics {
    * @param params The parameter fields treated as differentiable inputs.
    * @param advancer The algorithm that advances the tracked state fields by one timestep.
    * @param physics_name The `BasePhysics` name for this module.
-   * @param dual_infos Metadata for differentiable dual outputs produced during `advanceTimestep`.
+   * @param reaction_infos Metadata for differentiable dual outputs produced during `advanceTimestep`.
    */
   DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                         const FieldState& shape_disp, const std::vector<FieldState>& states,
                         const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer,
-                        std::string physics_name, const std::vector<DualInfo>& dual_infos = {});
+                        std::string physics_name, const std::vector<ReactionInfo>& reaction_infos = {});
   /// @brief Destructor.
   ~DifferentiablePhysics() {}
 
@@ -93,8 +93,8 @@ class DifferentiablePhysics : public BasePhysics {
    */
   FiniteElementState loadCheckpointedState(const std::string& state_name, int cycle) override;
 
-  /// @copydoc smith::BasePhysics::loadCheckpointedDual(const std::string&, int)
-  FiniteElementDual loadCheckpointedDual(const std::string& dual_name, int cycle) override;
+  /// @copydoc smith::BasePhysics::loadCheckpointedDual
+  FiniteElementDual loadCheckpointedDual(const std::string& state_name, int cycle) override;
 
   /// @copydoc smith::BasePhysics::setState(const std::string&, const FiniteElementState&)
   void setState(const std::string& state_name, const FiniteElementState& s) override;
@@ -179,7 +179,7 @@ class DifferentiablePhysics : public BasePhysics {
   std::vector<std::string> state_names_;                     ///< names of all the states in order
   std::vector<std::string> param_names_;                     ///< names of all the states in order
 
-  std::vector<DualInfo> dual_infos_;                           ///< exported dual names and spaces
+  std::vector<ReactionInfo> reaction_infos_;                       ///< exported dual names and spaces
   mutable std::vector<ReactionState> reaction_states_;             ///< all the reactions registered for the physics
   std::map<std::string, size_t> reaction_name_to_reaction_index_;  ///< map from reaction names to reaction index
   std::vector<std::string> reaction_names_;                        ///< names for all the relevant reactions/reactions
