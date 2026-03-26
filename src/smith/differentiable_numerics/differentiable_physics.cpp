@@ -39,11 +39,11 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
                                              const FieldState& shape_disp, const std::vector<FieldState>& states,
                                              const std::vector<FieldState>& params,
                                              std::shared_ptr<StateAdvancer> advancer, std::string mech_name,
-                                             const std::vector<std::string>& reaction_names)
+                                             const std::vector<ExportedDual>& dual_infos)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
       advancer_(advancer),
-      reaction_names_(reaction_names)
+      dual_infos_(dual_infos)
 {
   SLIC_ERROR_IF(states.size() == 0, "Must have a least 1 state for a mechanics.");
   field_shape_displacement_ = std::make_unique<FieldState>(shape_disp);
@@ -62,8 +62,12 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
     param_names_.push_back(p.get()->name());
   }
 
-  for (size_t i = 0; i < reaction_names_.size(); ++i) {
-    reaction_name_to_reaction_index_[reaction_names_[i]] = i;
+  reaction_names_.reserve(dual_infos_.size());
+  for (size_t i = 0; i < dual_infos_.size(); ++i) {
+    SLIC_ERROR_IF(dual_infos_[i].space == nullptr,
+                  axom::fmt::format("Dual '{}' in physics module '{}' has null FE space.", dual_infos_[i].name, name_));
+    reaction_names_.push_back(dual_infos_[i].name);
+    reaction_name_to_reaction_index_[dual_infos_[i].name] = i;
   }
 
   completeSetup();
@@ -72,6 +76,7 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
 void DifferentiablePhysics::completeSetup()
 {
   SLIC_ERROR_IF(field_states_.empty(), "Empty field state during completeSetup()");
+  initializeReactionStates();
 }
 
 void DifferentiablePhysics::resetStates(int cycle, double time)
@@ -81,6 +86,7 @@ void DifferentiablePhysics::resetStates(int cycle, double time)
   }
   milestones_.clear();
   checkpointer_->reset_graph();
+  initializeReactionStates();
   time_ = time;
   cycle_ = cycle;
 }
@@ -122,6 +128,15 @@ const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_nam
       "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
 
   return *reaction_states_[reaction_index].get();
+}
+
+FiniteElementDual DifferentiablePhysics::loadCheckpointedDual(const std::string& dual_name, int cycle)
+{
+  SLIC_ERROR_IF(cycle != cycle_,
+                axom::fmt::format("Due to checkpointing restrictions in smith::DifferentiablePhysics, cannot ask for "
+                                  "an arbitrary checkpointed dual cycle, asking for cycle {}, but physics is at cycle {}",
+                                  cycle, cycle_));
+  return dual(dual_name);
 }
 
 FiniteElementState DifferentiablePhysics::loadCheckpointedState(const std::string& state_name, int cycle)
@@ -290,5 +305,15 @@ std::vector<FieldState> DifferentiablePhysics::getFieldStatesAndParamStates() co
 }
 
 FieldState DifferentiablePhysics::getShapeDispFieldState() const { return *field_shape_displacement_; }
+
+void DifferentiablePhysics::initializeReactionStates()
+{
+  reaction_states_.clear();
+  reaction_states_.reserve(dual_infos_.size());
+  for (const auto& dual_info : dual_infos_) {
+    auto dual = std::make_shared<FiniteElementDual>(StateManager::newDual(*dual_info.space, dual_info.name));
+    reaction_states_.push_back(createReactionState(*checkpointer_, dual));
+  }
+}
 
 }  // namespace smith

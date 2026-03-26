@@ -24,6 +24,11 @@
 
 namespace smith {
 
+struct ExportedDual {
+  std::string name;
+  const mfem::ParFiniteElementSpace* space;
+};
+
 namespace detail {
 
 /// @brief Helper: given an index and a type, always produces the type (used to repeat a type N times via pack
@@ -78,7 +83,7 @@ struct SystemBase {
   std::shared_ptr<CoupledSystemSolver> solver;  ///< The solver for the system.
   std::shared_ptr<StateAdvancer> advancer;      ///< The state advancer.
   std::vector<FieldState> parameter_fields;     ///< Optional parameter fields.
-  std::string prepend_name_;                    ///< Optional prepended name for all fields.
+  std::string prepend_name;                     ///< Optional prepended name for all fields.
 
   /**
    * @brief Get the list of all parameter fields.
@@ -93,11 +98,14 @@ struct SystemBase {
    */
   std::string prefix(const std::string& name) const
   {
-    if (prepend_name_.empty()) {
+    if (prepend_name.empty()) {
       return name;
     }
-    return prepend_name_ + "_" + name;
+    return prepend_name + "_" + name;
   }
+
+  /// @brief Metadata for dual outputs exported by this system.
+  std::vector<ExportedDual> getDualInfos() const { return {}; }
 };
 
 }  // namespace smith
