@@ -132,10 +132,11 @@ const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_nam
 
 FiniteElementDual DifferentiablePhysics::loadCheckpointedDual(const std::string& dual_name, int cycle)
 {
-  SLIC_ERROR_IF(cycle != cycle_,
-                axom::fmt::format("Due to checkpointing restrictions in smith::DifferentiablePhysics, cannot ask for "
-                                  "an arbitrary checkpointed dual cycle, asking for cycle {}, but physics is at cycle {}",
-                                  cycle, cycle_));
+  SLIC_ERROR_IF(
+      cycle != cycle_,
+      axom::fmt::format("Due to checkpointing restrictions in smith::DifferentiablePhysics, cannot ask for "
+                        "an arbitrary checkpointed dual cycle, asking for cycle {}, but physics is at cycle {}",
+                        cycle, cycle_));
   return dual(dual_name);
 }
 

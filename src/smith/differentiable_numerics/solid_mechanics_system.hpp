@@ -79,9 +79,9 @@ struct SolidMechanicsSystem : public SystemBase {
    */
   std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_shared<DifferentiablePhysics>(
-        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
-        getParameterFields(), advancer, physics_name, getDualInfos());
+    return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
+                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
+                                                   advancer, physics_name, getDualInfos());
   }
 
   /**

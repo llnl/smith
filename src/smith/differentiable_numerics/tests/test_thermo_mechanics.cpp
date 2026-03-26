@@ -83,8 +83,10 @@ struct ThermoMechanicsMeshFixture : public testing::Test {
 TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesExportedDuals)
 {
   smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU};
-  smith::NonlinearSolverOptions nonlin_opts{
-      .nonlin_solver = smith::NonlinearSolver::Newton, .relative_tol = 1e-10, .absolute_tol = 1e-10, .max_iterations = 4};
+  smith::NonlinearSolverOptions nonlin_opts{.nonlin_solver = smith::NonlinearSolver::Newton,
+                                            .relative_tol = 1e-10,
+                                            .absolute_tol = 1e-10,
+                                            .max_iterations = 4};
 
   auto block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
