@@ -80,6 +80,37 @@ struct ThermoMechanicsMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh_;
 };
 
+TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesExportedDuals)
+{
+  smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU};
+  smith::NonlinearSolverOptions nonlin_opts{
+      .nonlin_solver = smith::NonlinearSolver::Newton, .relative_tol = 1e-10, .absolute_tol = 1e-10, .max_iterations = 4};
+
+  auto block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
+  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
+      mesh_, std::make_shared<CoupledSystemSolver>(block_solver), QuasiStaticSecondOrderTimeIntegrationRule{},
+      BackwardEulerFirstOrderTimeIntegrationRule{}, "thermo", youngs_modulus);
+
+  auto physics = system.createDifferentiablePhysics("thermo_physics");
+  const auto& solid_dual_space = physics->dual(system.prefix("solid_force")).space();
+  const auto& solid_state_space = physics->state(system.prefix("displacement")).space();
+  const auto& thermal_dual_space = physics->dual(system.prefix("thermal_flux")).space();
+  const auto& thermal_state_space = physics->state(system.prefix("temperature")).space();
+
+  EXPECT_EQ(physics->dualNames().size(), 2);
+  EXPECT_EQ(physics->dualNames()[0], system.prefix("solid_force"));
+  EXPECT_EQ(physics->dualNames()[1], system.prefix("thermal_flux"));
+  EXPECT_EQ(solid_dual_space.GetMesh(), solid_state_space.GetMesh());
+  EXPECT_STREQ(solid_dual_space.FEColl()->Name(), solid_state_space.FEColl()->Name());
+  EXPECT_EQ(solid_dual_space.GetVDim(), solid_state_space.GetVDim());
+  EXPECT_EQ(solid_dual_space.TrueVSize(), solid_state_space.TrueVSize());
+  EXPECT_EQ(thermal_dual_space.GetMesh(), thermal_state_space.GetMesh());
+  EXPECT_STREQ(thermal_dual_space.FEColl()->Name(), thermal_state_space.FEColl()->Name());
+  EXPECT_EQ(thermal_dual_space.GetVDim(), thermal_state_space.GetVDim());
+  EXPECT_EQ(thermal_dual_space.TrueVSize(), thermal_state_space.TrueVSize());
+}
+
 TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
 {
   constexpr double compressive_traction = 0.015;

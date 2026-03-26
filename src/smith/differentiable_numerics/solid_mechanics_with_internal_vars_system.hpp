@@ -92,6 +92,12 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
             field_store->getField(prefix("state"))};
   }
 
+  std::vector<ExportedDual> getDualInfos() const
+  {
+    return {{prefix("solid_residual"), &field_store->getField(prefix("displacement")).get()->space()},
+            {prefix("state_residual"), &field_store->getField(prefix("state")).get()->space()}};
+  }
+
   /**
    * @brief Create a DifferentiablePhysics object for this system.
    * @param physics_name The name of the physics.
@@ -101,8 +107,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
   {
     return std::make_shared<DifferentiablePhysics>(
         field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
-        getParameterFields(), advancer, physics_name,
-        std::vector<std::string>{prefix("solid_residual"), prefix("state_residual")});
+        getParameterFields(), advancer, physics_name, getDualInfos());
   }
 
   /**

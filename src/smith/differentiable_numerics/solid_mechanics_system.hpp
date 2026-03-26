@@ -67,6 +67,11 @@ struct SolidMechanicsSystem : public SystemBase {
             field_store->getField(prefix("velocity")), field_store->getField(prefix("acceleration"))};
   }
 
+  std::vector<ExportedDual> getDualInfos() const
+  {
+    return {{prefix("reactions"), &field_store->getField(prefix("displacement")).get()->space()}};
+  }
+
   /**
    * @brief Create a DifferentiablePhysics object for this system.
    * @param physics_name The name of the physics.
@@ -76,7 +81,7 @@ struct SolidMechanicsSystem : public SystemBase {
   {
     return std::make_shared<DifferentiablePhysics>(
         field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
-        getParameterFields(), advancer, physics_name, std::vector<std::string>{prefix("reactions")});
+        getParameterFields(), advancer, physics_name, getDualInfos());
   }
 
   /**

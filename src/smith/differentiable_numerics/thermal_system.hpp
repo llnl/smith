@@ -58,6 +58,11 @@ struct ThermalSystem : public SystemBase {
     return {field_store->getField(prefix("temperature_predicted")), field_store->getField(prefix("temperature"))};
   }
 
+  std::vector<ExportedDual> getDualInfos() const
+  {
+    return {{prefix("thermal_flux"), &field_store->getField(prefix("temperature")).get()->space()}};
+  }
+
   /**
    * @brief Create a DifferentiablePhysics object for this system.
    * @param physics_name The name of the physics.
@@ -67,7 +72,7 @@ struct ThermalSystem : public SystemBase {
   {
     return std::make_shared<DifferentiablePhysics>(
         field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
-        getParameterFields(), advancer, physics_name, std::vector<std::string>{prefix("thermal_flux")});
+        getParameterFields(), advancer, physics_name, getDualInfos());
   }
 
   /**
