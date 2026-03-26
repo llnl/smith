@@ -128,12 +128,12 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
   auto physics = system.createDifferentiablePhysics("physics");
 
   // Create ParaView writer
-  auto writer = createParaviewWriter(*mesh, physics->getFieldStates(), "solid_state_output");
-  writer.write(0, 0.0, physics->getFieldStates());
+  auto writer = createParaviewWriter(*mesh, system.getOutputFieldStates(), "solid_state_output");
+  writer.write(0, 0.0, system.getOutputFieldStates());
   // Advance multiple steps
   for (int step = 1; step <= 5; ++step) {
     physics->advanceTimestep(1.0);
-    writer.write(step, step * 1.0, physics->getFieldStates());
+    writer.write(step, step * 1.0, system.getOutputFieldStates());
     SLIC_INFO("Completed step " << step);
   }
 }
@@ -187,7 +187,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 
   // Apply a gravity-like body force in the -z direction
   double body_force_mag = -0.01;
-  system.addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto) {
+  system.addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto, auto) {
     tensor<double, dim> f{};
     f[2] = body_force_mag;
     return f;
@@ -195,7 +195,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 
   // Apply a traction on the top face in the +z direction
   double traction_mag = 0.005;
-  system.addTraction("top", [=](double, auto, auto /*n*/, auto, auto, auto, auto) {
+  system.addTraction("top", [=](double, auto, auto /*n*/, auto, auto, auto, auto, auto) {
     tensor<double, dim> t{};
     t[2] = traction_mag;
     return t;

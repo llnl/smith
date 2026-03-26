@@ -48,14 +48,14 @@ struct ThermoMechanicsSystem : public SystemBase {
   /// @brief using for SolidWeakFormType
   using SolidWeakFormType =
       TimeDiscretizedWeakForm<dim, H1<disp_order, dim>,
-                              TimeRuleParams2<DisplacementTimeRule, H1<disp_order, dim>, TemperatureTimeRule,
-                                              H1<temp_order>, parameter_space...>>;
+                              Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<disp_order, dim>, H1<disp_order, dim>, H1<temp_order>,
+                                         H1<temp_order>, parameter_space...>>;
 
   /// @brief using for ThermalWeakFormType
   using ThermalWeakFormType =
       TimeDiscretizedWeakForm<dim, H1<temp_order>,
-                              TimeRuleParams2<TemperatureTimeRule, H1<temp_order>, DisplacementTimeRule,
-                                              H1<disp_order, dim>, parameter_space...>>;
+                              Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>,
+                                         H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
 
   // Cycle-zero weak form: test field = acceleration, inputs: u, v, a, temp, temp_old, params...
   /// @brief using for CycleZeroWeakFormType
@@ -78,15 +78,15 @@ struct ThermoMechanicsSystem : public SystemBase {
    */
   std::vector<FieldState> getStateFields() const
   {
-    return {field_store->getField(prefix("displacement_predicted")),
+    return {field_store->getField(prefix("displacement_solve_state")),
             field_store->getField(prefix("displacement")),
             field_store->getField(prefix("velocity")),
             field_store->getField(prefix("acceleration")),
-            field_store->getField(prefix("temperature_predicted")),
+            field_store->getField(prefix("temperature_solve_state")),
             field_store->getField(prefix("temperature"))};
   }
 
-  std::vector<ExportedDual> getDualInfos() const
+  std::vector<DualInfo> getDualInfos() const
   {
     return {{prefix("solid_force"), &field_store->getField(prefix("displacement")).get()->space()},
             {prefix("thermal_flux"), &field_store->getField(prefix("temperature")).get()->space()}};

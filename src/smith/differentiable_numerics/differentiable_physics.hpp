@@ -45,7 +45,7 @@ class DifferentiablePhysics : public BasePhysics {
   DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::shared_ptr<gretl::DataStore> graph,
                         const FieldState& shape_disp, const std::vector<FieldState>& states,
                         const std::vector<FieldState>& params, std::shared_ptr<StateAdvancer> advancer,
-                        std::string physics_name, const std::vector<ExportedDual>& dual_infos = {});
+                        std::string physics_name, const std::vector<DualInfo>& dual_infos = {});
   /// @brief Destructor.
   ~DifferentiablePhysics() {}
 
@@ -179,7 +179,7 @@ class DifferentiablePhysics : public BasePhysics {
   std::vector<std::string> state_names_;                     ///< names of all the states in order
   std::vector<std::string> param_names_;                     ///< names of all the states in order
 
-  std::vector<ExportedDual> dual_infos_;                           ///< exported dual names and spaces
+  std::vector<DualInfo> dual_infos_;                           ///< exported dual names and spaces
   mutable std::vector<ReactionState> reaction_states_;             ///< all the reactions registered for the physics
   std::map<std::string, size_t> reaction_name_to_reaction_index_;  ///< map from reaction names to reaction index
   std::vector<std::string> reaction_names_;                        ///< names for all the relevant reactions/reactions

@@ -39,7 +39,7 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
                                              const FieldState& shape_disp, const std::vector<FieldState>& states,
                                              const std::vector<FieldState>& params,
                                              std::shared_ptr<StateAdvancer> advancer, std::string mech_name,
-                                             const std::vector<ExportedDual>& dual_infos)
+                                             const std::vector<DualInfo>& dual_infos)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
       advancer_(advancer),

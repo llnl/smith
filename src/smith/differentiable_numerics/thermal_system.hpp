@@ -26,7 +26,7 @@ namespace smith {
 /**
  * @brief Container for a thermal system with configurable time integration.
  *
- * Always uses a 2-state field layout (temperature_predicted, temperature).
+ * Always uses a 2-state field layout (temperature_solve_state, temperature).
  * Use QuasiStaticFirstOrderTimeIntegrationRule for steady-state problems,
  * or BackwardEulerFirstOrderTimeIntegrationRule for transient problems.
  *
@@ -50,15 +50,24 @@ struct ThermalSystem : public SystemBase {
   std::shared_ptr<TemperatureTimeRule> temperature_time_rule;   ///< Time integration for temperature.
 
   /**
-   * @brief Get the list of all state fields (temperature_predicted, temperature).
+   * @brief Get the list of all state fields (temperature_solve_state, temperature).
    * @return std::vector<FieldState> List of state fields.
    */
   std::vector<FieldState> getStateFields() const
   {
-    return {field_store->getField(prefix("temperature_predicted")), field_store->getField(prefix("temperature"))};
+    return {field_store->getField(prefix("temperature_solve_state")), field_store->getField(prefix("temperature"))};
   }
 
-  std::vector<ExportedDual> getDualInfos() const
+  /**
+   * @brief Get the list of physical, non-solve state fields.
+   * @return std::vector<FieldState> List of physical fields suitable for output.
+   */
+  std::vector<FieldState> getOutputFieldStates() const
+  {
+    return {field_store->getField(prefix("temperature"))};
+  }
+
+  std::vector<DualInfo> getDualInfos() const
   {
     return {{prefix("thermal_flux"), &field_store->getField(prefix("temperature")).get()->space()}};
   }
@@ -207,7 +216,7 @@ ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...> buildThe
   field_store->addShapeDisp(shape_disp_type);
 
   auto temperature_time_rule = std::make_shared<TemperatureTimeRule>(temp_rule);
-  FieldType<H1<temp_order>> temperature_type(prefix("temperature_predicted"));
+  FieldType<H1<temp_order>> temperature_type(prefix("temperature_solve_state"));
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
   auto temperature_old_type =
       field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, prefix("temperature"));

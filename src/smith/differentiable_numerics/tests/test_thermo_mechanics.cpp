@@ -113,6 +113,50 @@ TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesExportedD
   EXPECT_EQ(thermal_dual_space.TrueVSize(), thermal_state_space.TrueVSize());
 }
 
+TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
+{
+  smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU};
+  smith::NonlinearSolverOptions nonlin_opts{.nonlin_solver = smith::NonlinearSolver::Newton,
+                                            .relative_tol = 1e-10,
+                                            .absolute_tol = 1e-10,
+                                            .max_iterations = 4};
+
+  auto block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
+  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
+      mesh_, std::make_shared<CoupledSystemSolver>(block_solver), QuasiStaticSecondOrderTimeIntegrationRule{},
+      BackwardEulerFirstOrderTimeIntegrationRule{}, "thermo", youngs_modulus);
+
+  GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
+  system.setMaterial(material, mesh_->entireBodyName());
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 100.0; });
+  system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
+  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+
+  system.addSolidTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto, auto) {
+    auto traction = 0.0 * X;
+    traction[0] = -0.015;
+    return traction;
+  });
+  
+  auto physics = system.createDifferentiablePhysics("thermo_physics");
+  
+  // Run forward
+  double dt = 1.0;
+  for (int step = 0; step < 2; ++step) {
+    physics->advanceTimestep(dt);
+  }
+  
+  auto reactions = physics->getReactionStates();
+  auto obj = 0.5 * (innerProduct(reactions[0], reactions[0]) + innerProduct(reactions[1], reactions[1]));
+  
+  gretl::set_as_objective(obj);
+  obj.data_store().back_prop();
+  
+  auto param_sens = system.getParameterFields()[0].get_dual();
+  EXPECT_TRUE(param_sens->Norml2() > 0.0);
+}
+
 TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
 {
   constexpr double compressive_traction = 0.015;
@@ -130,12 +174,12 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
     system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
     system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
     system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
-    system.addSolidTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto, auto) {
+    system.addSolidTraction("right", [=](auto, auto X, auto... /*args*/) {
       auto traction = 0.0 * X;
       traction[0] = -compressive_traction;
       return traction;
     });
-    system.addSolidBodyForce(mesh_->entireBodyName(), [=](double, auto X, auto, auto, auto, auto, auto, auto) {
+    system.addSolidBodyForce(mesh_->entireBodyName(), [=](auto, auto X, auto... /*args*/) {
       auto force = 0.0 * X;
       force[1] = lateral_body_force;
       return force;
