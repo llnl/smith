@@ -6,6 +6,15 @@
 
 namespace smith {
 
+/**
+ * @brief Optional override for a diagonal block operator.
+ *
+ * The integer is the block index i and the operator replaces the Jacobian block
+ * A_ii (or, for 2x2 Schur systems, the block used to build/approximate the
+ * (1,1) Schur operator).
+ *
+ * Ownership of the operator is transferred to the preconditioner.
+ */
 using BlockOverride = std::pair<int, std::unique_ptr<const mfem::Operator>>;
 
 /**
@@ -25,6 +34,8 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
    *
    * @param offsets Offsets describing the block layout.
    * @param solvers One solver per block (size must match number of blocks).
+   * @param overrides Optional list of (block index, operator) pairs used in place
+   *        of the corresponding Jacobian diagonal block.
    */
   BlockDiagonalPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
                               std::vector<BlockOverride> overrides = {});
@@ -95,6 +106,8 @@ class BlockTriangularPreconditioner : public mfem::Solver {
    * @param offsets Offsets describing the block layout.
    * @param solvers One solver per diagonal block (size must match number of blocks).
    * @param type Sweep type (lower, upper, or symmetric).
+   * @param overrides Optional list of (block index, operator) pairs used in place
+   *        of the corresponding Jacobian diagonal block.
    */
   BlockTriangularPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                 BlockTriangularType type = BlockTriangularType::Lower,
@@ -165,11 +178,15 @@ enum class BlockSchurType
   Full      /**< Full factor form (lower, diagonal, upper). */
 };
 
+/**
+ * @enum SchurApproxType
+ * @brief Selects how the (1,1) Schur operator is approximated.
+ */
 enum class SchurApproxType
 {
-  DiagInv,
-  A22Only,
-  Custom,
+  DiagInv, /**< Use assembled $S \approx A_{22} - A_{21} \mathrm{diag}(A_{11})^{-1} A_{12}$. */
+  A22Only, /**< Use $S \approx A_{22}$. */
+  Custom,  /**< Use a custom operator provided via the overrides list for block index 1. */
 };
 
 /**
@@ -188,6 +205,11 @@ class BlockSchurPreconditioner : public mfem::Solver {
    * @param offsets Offsets describing the 2-block layout.
    * @param solvers Two solvers, for $ A_{11} $ and the Schur complement approximation.
    * @param type Preconditioner variant (diagonal, lower, upper, or full).
+   * @param approxType Schur complement approximation strategy for the (1,1) block.
+   * @param overrides Optional list of (block index, operator) pairs used in place
+   *        of the corresponding Jacobian diagonal block. For Schur systems, index
+   *        0 overrides $A_{11}$ and index 1 provides a custom Schur operator when
+   *        approxType is SchurApproxType::Custom.
    */
   BlockSchurPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
                            BlockSchurType type = BlockSchurType::Diagonal,
