@@ -108,10 +108,10 @@ OwnedHypreParMatrix makeHypreFromLocalDiag(std::unique_ptr<SparseMatrix> diag, H
   A->CopyRowStarts();
   A->CopyColStarts();
 
-  OwnedHypreParMatrix out;
-  out.diag = std::move(diag);
-  out.A = std::move(A);
-  return out;
+  OwnedHypreParMatrix Aout;
+  Aout.diag = std::move(diag);
+  Aout.A = std::move(A);
+  return Aout;
 }
 
 // Build c * I (square)
@@ -508,12 +508,12 @@ TEST(BlockSchurPreconditionerCustom, FullWithExactSchurOverrideIsExactInverse)
   const mfem::DenseMatrix A11inv = invert2x2HypreParMatrixDense(*A11o.A);
 
   auto mul2x2 = [](const mfem::DenseMatrix& L, const mfem::DenseMatrix& R) {
-    mfem::DenseMatrix out(2, 2);
-    out(0, 0) = L(0, 0) * R(0, 0) + L(0, 1) * R(1, 0);
-    out(0, 1) = L(0, 0) * R(0, 1) + L(0, 1) * R(1, 1);
-    out(1, 0) = L(1, 0) * R(0, 0) + L(1, 1) * R(1, 0);
-    out(1, 1) = L(1, 0) * R(0, 1) + L(1, 1) * R(1, 1);
-    return out;
+    mfem::DenseMatrix out_mat(2, 2);
+    out_mat(0, 0) = L(0, 0) * R(0, 0) + L(0, 1) * R(1, 0);
+    out_mat(0, 1) = L(0, 0) * R(0, 1) + L(0, 1) * R(1, 1);
+    out_mat(1, 0) = L(1, 0) * R(0, 0) + L(1, 1) * R(1, 0);
+    out_mat(1, 1) = L(1, 0) * R(0, 1) + L(1, 1) * R(1, 1);
+    return out_mat;
   };
 
   const mfem::DenseMatrix tmp = mul2x2(A11inv, A12d);

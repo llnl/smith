@@ -184,8 +184,8 @@ enum class BlockSchurType
  */
 enum class SchurApproxType
 {
-  DiagInv, /**< Use assembled $S \approx A_{22} - A_{21} \mathrm{diag}(A_{11})^{-1} A_{12}$. */
-  A22Only, /**< Use $S \approx A_{22}$. */
+  DiagInv, /**< Use assembled \f$ S \approx A_{22} - A_{21} \\mathrm{diag}(A_{11})^{-1} A_{12} \f$. */
+  A22Only, /**< Use \f$ S \approx A_{22} \f$. */
   Custom,  /**< Use a custom operator provided via the overrides list for block index 1. */
 };
 
