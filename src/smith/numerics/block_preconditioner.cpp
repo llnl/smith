@@ -49,17 +49,18 @@ void BlockDiagonalPreconditioner::SetOperator(const mfem::Operator& jacobian)
   for (int i = 0; i < num_blocks_; i++) {
     // Attach operator to solver
     const mfem::Operator* op = nullptr;
+    const size_t si = static_cast<size_t>(i);
 
-    if (block_op_overrides_[i]) {
-      op = block_op_overrides_[i].get();  // use override
+    if (block_op_overrides_[si]) {
+      op = block_op_overrides_[si].get();  // use override
     } else {
       op = &block_jacobian_->GetBlock(i, i);  // use Jacobian diagonal block
     }
 
-    mfem_solvers_[static_cast<size_t>(i)]->SetOperator(*op);
+    mfem_solvers_[si]->SetOperator(*op);
 
     // Place the solver into the diagonal block of solver_diag_
-    solver_diag_.SetBlock(i, i, mfem_solvers_[static_cast<size_t>(i)].get());
+    solver_diag_.SetBlock(i, i, mfem_solvers_[si].get());
   }
 }
 
@@ -215,14 +216,15 @@ void BlockTriangularPreconditioner::SetOperator(const mfem::Operator& jacobian)
   for (int i = 0; i < num_blocks_; i++) {
     // Attach operator to solver
     const mfem::Operator* op = nullptr;
+    const size_t si = static_cast<size_t>(i);
 
-    if (block_op_overrides_[i]) {
-      op = block_op_overrides_[i].get();  // use override
+    if (block_op_overrides_[si]) {
+      op = block_op_overrides_[si].get();  // use override
     } else {
       op = &block_jacobian_->GetBlock(i, i);  // use Jacobian diagonal block
     }
 
-    mfem_solvers_[static_cast<size_t>(i)]->SetOperator(*op);
+    mfem_solvers_[si]->SetOperator(*op);
   }
 }
 
