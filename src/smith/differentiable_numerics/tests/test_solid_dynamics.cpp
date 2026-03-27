@@ -134,10 +134,11 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   auto shape_disp = system.field_store->getShapeDisp();
   auto states = system.getStateFields();
+  auto output_states = system.getOutputFieldStates();
 
   std::string pv_dir = "paraview_solid";
-  auto pv_writer = createParaviewWriter(*mesh, {states[0], params[0], params[1]}, pv_dir);
-  pv_writer.write(0, 0.0, {states[0], params[0], params[1]});
+  auto pv_writer = createParaviewWriter(*mesh, {output_states[0], params[0], params[1]}, pv_dir);
+  pv_writer.write(0, 0.0, {output_states[0], params[0], params[1]});
 
   double time = 0.0;
   size_t cycle = 0;
@@ -146,9 +147,10 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   for (size_t m = 0; m < num_steps_; ++m) {
     TimeInfo t_info(time, dt_, cycle);
     std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
+    output_states = system.getOutputFieldStates();
     time += dt_;
     cycle++;
-    pv_writer.write(m + 1, time, {states[0], params[0], params[1]});
+    pv_writer.write(m + 1, time, {output_states[0], params[0], params[1]});
   }
 
   double a_exact = gravity;
@@ -423,7 +425,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
   }
 
   // Compare initial condition sensitivities
-  std::vector<std::string> state_suffixes = {"displacement_predicted", "displacement", "velocity", "acceleration"};
+  std::vector<std::string> state_suffixes = {"displacement_solve_state", "displacement", "velocity", "acceleration"};
   for (const auto& suffix : state_suffixes) {
     std::string nameG = physics_name + "_gretl_" + suffix;
     std::string nameB = physics_name + "_base_" + suffix;

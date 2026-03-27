@@ -35,20 +35,21 @@ class ParaviewWriter {
   /// @brief Construct a writer backed by an existing ParaView data collection.
   /// @param[in] pv_ ParaView data collection that owns the output database.
   /// @param[in] states_ Output state fields that will be updated before each write.
-  /// @param[in] duals_ Output dual fields that will be updated before each write.
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
-      : pv(std::move(pv_)), states(states_), dual_states(duals_), opts({})
+  /// @param[in] tracked_reactions_ Output dual fields that will be updated before each write.
+  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_,
+                 const StateVecs& tracked_reactions_)
+      : pv(std::move(pv_)), states(states_), dual_states(tracked_reactions_), opts({})
   {
   }
 
   /// @brief Construct a writer backed by an existing ParaView data collection with explicit output options.
   /// @param[in] pv_ ParaView data collection that owns the output database.
   /// @param[in] states_ Output state fields that will be updated before each write.
-  /// @param[in] duals_ Output dual fields that will be updated before each write.
+  /// @param[in] tracked_reactions_ Output dual fields that will be updated before each write.
   /// @param[in] opts_ Options that control which fields are emitted.
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_,
-                 Options opts_)
-      : pv(std::move(pv_)), states(states_), dual_states(duals_), opts(opts_)
+  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_,
+                 const StateVecs& tracked_reactions_, Options opts_)
+      : pv(std::move(pv_)), states(states_), dual_states(tracked_reactions_), opts(opts_)
   {
   }
 

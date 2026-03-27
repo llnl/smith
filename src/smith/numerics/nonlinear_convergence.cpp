@@ -154,6 +154,12 @@ EquationSolverConvergenceManager::EquationSolverConvergenceManager(MPI_Comm comm
 
 void EquationSolverConvergenceManager::reset() const { context_.reset(); }
 
+void EquationSolverConvergenceManager::setTolerances(double abs_tol, double rel_tol) const
+{
+  abs_tol_ = abs_tol;
+  rel_tol_ = rel_tol;
+}
+
 void EquationSolverConvergenceManager::setBlockData(const std::vector<int>& block_offsets,
                                                     BlockConvergenceTolerances block_tolerances) const
 {

@@ -111,6 +111,15 @@ std::vector<FieldState> CoupledSystemSolver::solve(
     validateStageToleranceLooseness(active_stages[s], s);
   }
 
+  // Set the inner tolerance factor based on the number of stages.  For single-stage
+  // solves, we don't want to reduce the tolerances as that's pointless and
+  // unintuitive.  For multi-stage solves, we want a tighter inner solve to
+  // ensure outer staggered convergence.
+  const double inner_tol_factor = (active_stages.size() == 1) ? 1.0 : 0.6;
+  for (auto& stage : active_stages) {
+    stage.solver->setInnerToleranceMultiplier(inner_tol_factor);
+  }
+
   // Reset each stage solver's convergence tracking (e.g. initial residual norm for rel-tol)
   for (const auto& stage : active_stages) {
     stage.solver->resetConvergenceState();

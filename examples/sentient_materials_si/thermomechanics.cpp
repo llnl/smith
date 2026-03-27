@@ -82,8 +82,8 @@ struct GreenSaintVenantThermoelasticMaterial {
   using State = smith::Empty;
 
   template <typename T1, typename T2, typename T3, typename T4, typename T5, int d>
-  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const T2& grad_v,
-                  T3 theta, const smith::tensor<T4, d>& grad_theta, const T5& E_param) const
+  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const T2& grad_v, T3 theta,
+                  const smith::tensor<T4, d>& grad_theta, const T5& E_param) const
   {
     auto E = E0 + get<0>(E_param);
     const auto K = E / (3.0 * (1.0 - 2.0 * nu));

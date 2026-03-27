@@ -27,7 +27,7 @@ namespace smith {
 /**
  * @brief System struct for solid dynamics with configurable time integration.
  *
- * Always uses a 4-state field layout (displacement_predicted, displacement, velocity, acceleration).
+ * Always uses a 4-state field layout (displacement_solve_state, displacement, velocity, acceleration).
  * Use ImplicitNewmarkSecondOrderTimeIntegrationRule for transient dynamics,
  * or QuasiStaticSecondOrderTimeIntegrationRule for quasi-static problems.
  *
@@ -47,27 +47,41 @@ struct SolidMechanicsSystem : public SystemBase {
                               TimeRuleParams<DisplacementTimeRule, H1<order, dim>, parameter_space...>>;
 
   /// using -- 3-state form: u, v, a (no u_old needed; at cycle 0 u and v are given, solve for a)
-  using CycleZeroWeakFormType =
+  using CycleZeroSolidWeakFormType =
       TimeDiscretizedWeakForm<dim, H1<order, dim>,
                               Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
-  std::shared_ptr<CycleZeroWeakFormType>
-      cycle_zero_weak_form;                              ///< Cycle-zero weak form for initial acceleration solve.
+  std::shared_ptr<CycleZeroSolidWeakFormType>
+      cycle_zero_solid_weak_form;                        ///< Cycle-zero weak form for initial acceleration solve.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;  ///< Time integration rule.
 
   /**
-   * @brief Get the list of all state fields (displacement_predicted, displacement, velocity, acceleration).
+   * @brief Get the list of all state fields (displacement_solve_state, displacement, velocity, acceleration).
    * @return std::vector<FieldState> List of state fields.
    */
   std::vector<FieldState> getStateFields() const
   {
-    return {field_store->getField(prefix("displacement_predicted")), field_store->getField(prefix("displacement")),
+    return {field_store->getField(prefix("displacement_solve_state")), field_store->getField(prefix("displacement")),
             field_store->getField(prefix("velocity")), field_store->getField(prefix("acceleration"))};
   }
 
-  std::vector<ExportedDual> getDualInfos() const
+  /**
+   * @brief Get the list of physical, non-solve state fields.
+   * @return std::vector<FieldState> List of physical fields suitable for output.
+   */
+  std::vector<FieldState> getOutputFieldStates() const
+  {
+    return {field_store->getField(prefix("displacement")), field_store->getField(prefix("velocity")),
+            field_store->getField(prefix("acceleration"))};
+  }
+
+  /**
+   * @brief Get information about reaction fields for this system.
+   * @return List of ReactionInfo structures.
+   */
+  std::vector<ReactionInfo> getReactionInfos() const
   {
     return {{prefix("reactions"), &field_store->getField(prefix("displacement")).get()->space()}};
   }
@@ -79,9 +93,9 @@ struct SolidMechanicsSystem : public SystemBase {
    */
   std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_shared<DifferentiablePhysics>(
-        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
-        getParameterFields(), advancer, physics_name, getDualInfos());
+    return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
+                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
+                                                   advancer, physics_name, getReactionInfos());
   }
 
   /**
@@ -105,7 +119,7 @@ struct SolidMechanicsSystem : public SystemBase {
         });
 
     // Add to cycle-zero weak form (at cycle 0, u and v are given, solve for a)
-    cycle_zero_weak_form->addBodyIntegral(
+    cycle_zero_solid_weak_form->addBodyIntegral(
         domain_name, [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v_old*/, auto a, auto... params) {
           typename MaterialType::State state;
           auto pk_stress = material(state, get<DERIVATIVE>(u), params...);
@@ -270,19 +284,19 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename IntegrandType, std::size_t... Is>
   void addCycleZeroBodySourceImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
   {
-    cycle_zero_weak_form->addBodySource(DependsOn<static_cast<int>(Is)...>{}, name, f);
+    cycle_zero_solid_weak_form->addBodySource(DependsOn<static_cast<int>(Is)...>{}, name, f);
   }
 
   template <typename IntegrandType, std::size_t... Is>
   void addCycleZeroBoundaryFluxImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
   {
-    cycle_zero_weak_form->addBoundaryFlux(DependsOn<static_cast<int>(Is)...>{}, name, f);
+    cycle_zero_solid_weak_form->addBoundaryFlux(DependsOn<static_cast<int>(Is)...>{}, name, f);
   }
 
   template <typename IntegrandType, std::size_t... Is>
   void addCycleZeroBoundaryIntegralImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
   {
-    cycle_zero_weak_form->addBoundaryIntegral(DependsOn<static_cast<int>(Is)...>{}, name, f);
+    cycle_zero_solid_weak_form->addBoundaryIntegral(DependsOn<static_cast<int>(Is)...>{}, name, f);
   }
 };
 
@@ -319,7 +333,7 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
 
   // Add displacement as independent (unknown) with time integration rule
   auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>(disp_time_rule);
-  FieldType<H1<order, dim>> disp_type(prefix("displacement_predicted"));
+  FieldType<H1<order, dim>> disp_type(prefix("displacement_solve_state"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule_ptr);
 
   // Add dependent fields for time integration history
@@ -343,7 +357,7 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
 
   // Create cycle-zero weak form (u, v, a) for initial acceleration solve — 3 states, no u_old
   std::string cycle_zero_name = prefix("solid_reaction");
-  auto cycle_zero_weak_form = std::make_shared<typename SystemType::CycleZeroWeakFormType>(
+  auto cycle_zero_solid_weak_form = std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
       cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
       field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
@@ -352,12 +366,12 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
 
   // Build advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form};
-  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver, cycle_zero_weak_form,
-                                                               cycle_zero_solver);
+  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver,
+                                                               cycle_zero_solid_weak_form, cycle_zero_solver);
 
   return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
                     solid_weak_form,
-                    cycle_zero_weak_form,
+                    cycle_zero_solid_weak_form,
                     disp_bc,
                     disp_time_rule_ptr};
 }

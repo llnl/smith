@@ -26,8 +26,8 @@ namespace smith {
 /**
  * @brief Container for a coupled thermo-mechanical system with configurable time integration.
  *
- * Displacement uses a 4-state second-order layout (displacement_predicted, displacement, velocity, acceleration).
- * Temperature uses a 2-state first-order layout (temperature_predicted, temperature).
+ * Displacement uses a 4-state second-order layout (displacement_solve_state, displacement, velocity, acceleration).
+ * Temperature uses a 2-state first-order layout (temperature_solve_state, temperature).
  * Total: 6 state fields.
  *
  * @tparam dim Spatial dimension.
@@ -48,14 +48,14 @@ struct ThermoMechanicsSystem : public SystemBase {
   /// @brief using for SolidWeakFormType
   using SolidWeakFormType =
       TimeDiscretizedWeakForm<dim, H1<disp_order, dim>,
-                              TimeRuleParams2<DisplacementTimeRule, H1<disp_order, dim>, TemperatureTimeRule,
-                                              H1<temp_order>, parameter_space...>>;
+                              Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<disp_order, dim>,
+                                         H1<disp_order, dim>, H1<temp_order>, H1<temp_order>, parameter_space...>>;
 
   /// @brief using for ThermalWeakFormType
   using ThermalWeakFormType =
       TimeDiscretizedWeakForm<dim, H1<temp_order>,
-                              TimeRuleParams2<TemperatureTimeRule, H1<temp_order>, DisplacementTimeRule,
-                                              H1<disp_order, dim>, parameter_space...>>;
+                              Parameters<H1<temp_order>, H1<temp_order>, H1<disp_order, dim>, H1<disp_order, dim>,
+                                         H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
 
   // Cycle-zero weak form: test field = acceleration, inputs: u, v, a, temp, temp_old, params...
   /// @brief using for CycleZeroWeakFormType
@@ -78,15 +78,19 @@ struct ThermoMechanicsSystem : public SystemBase {
    */
   std::vector<FieldState> getStateFields() const
   {
-    return {field_store->getField(prefix("displacement_predicted")),
+    return {field_store->getField(prefix("displacement_solve_state")),
             field_store->getField(prefix("displacement")),
             field_store->getField(prefix("velocity")),
             field_store->getField(prefix("acceleration")),
-            field_store->getField(prefix("temperature_predicted")),
+            field_store->getField(prefix("temperature_solve_state")),
             field_store->getField(prefix("temperature"))};
   }
 
-  std::vector<ExportedDual> getDualInfos() const
+  /**
+   * @brief Get information about reaction fields for this system.
+   * @return List of ReactionInfo structures.
+   */
+  std::vector<ReactionInfo> getReactionInfos() const
   {
     return {{prefix("solid_force"), &field_store->getField(prefix("displacement")).get()->space()},
             {prefix("thermal_flux"), &field_store->getField(prefix("temperature")).get()->space()}};
@@ -99,9 +103,9 @@ struct ThermoMechanicsSystem : public SystemBase {
    */
   std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_shared<DifferentiablePhysics>(
-        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
-        getParameterFields(), advancer, physics_name, getDualInfos());
+    return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
+                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
+                                                   advancer, physics_name, getReactionInfos());
   }
 
   /**
@@ -369,7 +373,7 @@ buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSy
 
   // Displacement fields (4-state second-order)
   auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>(disp_rule);
-  FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_predicted"));
+  FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_solve_state"));
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule_ptr);
   auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
   auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, prefix("velocity"));
@@ -377,7 +381,7 @@ buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSy
 
   // Temperature fields (2-state first-order)
   auto temperature_time_rule_ptr = std::make_shared<TemperatureTimeRule>(temp_rule);
-  FieldType<H1<temp_order>> temperature_type(prefix("temperature_predicted"));
+  FieldType<H1<temp_order>> temperature_type(prefix("temperature_solve_state"));
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule_ptr);
   auto temperature_old_type =
       field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, prefix("temperature"));

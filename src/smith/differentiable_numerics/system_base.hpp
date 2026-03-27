@@ -15,18 +15,25 @@
 #include <vector>
 #include <memory>
 #include <utility>
-#include "smith/differentiable_numerics/field_state.hpp"
-#include "smith/differentiable_numerics/field_store.hpp"
-#include "smith/differentiable_numerics/coupled_system_solver.hpp"
-#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
-#include "smith/differentiable_numerics/state_advancer.hpp"
+#include "field_state.hpp"
+#include "field_store.hpp"
+#include "coupled_system_solver.hpp"
+#include "nonlinear_block_solver.hpp"
+#include "state_advancer.hpp"
 #include "smith/physics/common.hpp"
+#include "mfem.hpp"
 
 namespace smith {
 
-struct ExportedDual {
-  std::string name;
-  const mfem::ParFiniteElementSpace* space;
+template <typename... Args>
+struct Parameters;
+
+/**
+ * @brief Information about a dual field.
+ */
+struct ReactionInfo {
+  std::string name;                                    ///< The name of the dual field.
+  const mfem::ParFiniteElementSpace* space = nullptr;  ///< The finite element space of the dual field.
 };
 
 namespace detail {
@@ -40,11 +47,6 @@ using always_t = T;
 template <typename Space, typename... Tail, std::size_t... Is>
 auto time_rule_params_impl(std::index_sequence<Is...>) -> Parameters<always_t<Is, Space>..., Tail...>;
 
-/// @brief Implementation for TimeRuleParams2: repeat Space1 N1 times, Space2 N2 times, then append Tail...
-template <typename Space1, typename Space2, typename... Tail, std::size_t... Is, std::size_t... Js>
-auto time_rule_params2_impl(std::index_sequence<Is...>, std::index_sequence<Js...>)
-    -> Parameters<always_t<Is, Space1>..., always_t<Js, Space2>..., Tail...>;
-
 }  // namespace detail
 
 /// @brief Generate a Parameters<...> type with Rule::num_states copies of Space followed by additional Tail types.
@@ -52,13 +54,6 @@ auto time_rule_params2_impl(std::index_sequence<Is...>, std::index_sequence<Js..
 template <typename Rule, typename Space, typename... Tail>
 using TimeRuleParams =
     decltype(detail::time_rule_params_impl<Space, Tail...>(std::make_index_sequence<Rule::num_states>{}));
-
-/// @brief Generate a Parameters<...> type with Rule1::num_states copies of Space1,
-/// then Rule2::num_states copies of Space2, then additional Tail types.
-/// Used for multi-rule systems (e.g. coupled thermo-mechanical).
-template <typename Rule1, typename Space1, typename Rule2, typename Space2, typename... Tail>
-using TimeRuleParams2 = decltype(detail::time_rule_params2_impl<Space1, Space2, Tail...>(
-    std::make_index_sequence<Rule1::num_states>{}, std::make_index_sequence<Rule2::num_states>{}));
 
 /**
  * @brief Create a dedicated monolithic solver for cycle-zero acceleration solves.
@@ -105,7 +100,7 @@ struct SystemBase {
   }
 
   /// @brief Metadata for dual outputs exported by this system.
-  std::vector<ExportedDual> getDualInfos() const { return {}; }
+  std::vector<ReactionInfo> getReactionInfos() const { return {}; }
 };
 
 }  // namespace smith

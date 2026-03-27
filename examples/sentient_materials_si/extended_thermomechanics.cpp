@@ -35,7 +35,6 @@ static constexpr int temperature_order = 1;
 // using StateSpace = smith::L2<1>;
 using ExtendedStateSpace = smith::L2<1, Statedim>;
 
-
 enum class CoupledLinearSolver
 {
   Strumpack,
@@ -248,7 +247,8 @@ std::shared_ptr<smith::CoupledSystemSolver> makeCoupledSolver(const std::shared_
   auto mechanics_solver =
       smith::buildNonlinearBlockSolver(mechanics_nonlinear_opts, makeMechanicsStageLinearSolverOptions(), *mesh);
   auto thermal_state_solver = smith::buildNonlinearBlockSolver(
-      thermal_nonlinear_opts, makeThermalStateStageLinearSolverOptions(linear_solver, gmres_block_preconditioner), *mesh);
+      thermal_nonlinear_opts, makeThermalStateStageLinearSolverOptions(linear_solver, gmres_block_preconditioner),
+      *mesh);
 
   auto coupled_solver = std::make_shared<smith::CoupledSystemSolver>(20);
   coupled_solver->addSubsystemSolver({0}, mechanics_solver);
@@ -294,8 +294,8 @@ ThermalStiffeningMaterial makeThermalStiffeningMaterial()
   double gw = 0.2;
   double wm = 0.5;
 
-  return ThermalStiffeningMaterial{Km, Gm, betam, rhom0, etam, Ke, Ge, betae, rhoe0, etae,
-                                   C_v, kappa, Af, E_af, Ar, E_ar, R, Tr, gw, wm};
+  return ThermalStiffeningMaterial{Km,  Gm,    betam, rhom0, etam, Ke,   Ge, betae, rhoe0, etae,
+                                   C_v, kappa, Af,    E_af,  Ar,   E_ar, R,  Tr,    gw,    wm};
 }
 
 MaterialModel makeMaterialModel(MaterialModelKind material_model_kind, double alpha_T)
@@ -376,7 +376,7 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
   pv_writer.write(cycle, time, states);
 
   [[maybe_unused]] auto print_primal_field_magnitudes = [](size_t step_index, double current_time,
-                                          const std::vector<smith::FieldState>& field_states) {
+                                                           const std::vector<smith::FieldState>& field_states) {
     std::cout << "step " << step_index << " time=" << current_time;
     for (const auto& field_state : field_states) {
       std::cout << " | " << field_state.get()->name() << " l2=" << field_state.get()->Norml2();
