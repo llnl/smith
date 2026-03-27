@@ -389,8 +389,8 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
     std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule disp_time_rule,
     std::string prepend_name, FieldType<parameter_space>... parameter_types)
 {
-  return buildSolidMechanicsSystem<dim, order>(
-      mesh, solver, disp_time_rule, std::move(prepend_name), nullptr, parameter_types...);
+  return buildSolidMechanicsSystem<dim, order>(mesh, solver, disp_time_rule, std::move(prepend_name), nullptr,
+                                               parameter_types...);
 }
 
 /**
@@ -398,12 +398,10 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
 SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> buildSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-    DisplacementTimeRule disp_time_rule, std::shared_ptr<CoupledSystemSolver> cycle_zero_solver,
-    FieldType<parameter_space>... parameter_types)
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule disp_time_rule,
+    std::shared_ptr<CoupledSystemSolver> cycle_zero_solver, FieldType<parameter_space>... parameter_types)
 {
-  return buildSolidMechanicsSystem<dim, order>(
-      mesh, solver, disp_time_rule, "", cycle_zero_solver, parameter_types...);
+  return buildSolidMechanicsSystem<dim, order>(mesh, solver, disp_time_rule, "", cycle_zero_solver, parameter_types...);
 }
 
 /**

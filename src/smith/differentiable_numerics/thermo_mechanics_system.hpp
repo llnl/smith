@@ -207,7 +207,6 @@ struct ThermoMechanicsSystem : public SystemBase {
           auto [current_T, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
           return flux_function(t_info.time(), X, n, u_current, v_current, a_current, current_T, T_dot, params...);
         });
-
   }
 
   /**
@@ -332,8 +331,9 @@ struct ThermoMechanicsSystem : public SystemBase {
 
     auto captured_temp_rule = temperature_time_rule;
     cycle_zero_weak_form->addBoundaryFlux(
-        DependsOn<static_cast<int>(CycleZeroIs)...> {}, domain_name,
-        [=](auto t_info, auto X, auto n, auto u, auto v, auto a, auto temperature, auto temperature_old, auto... params) {
+        DependsOn<static_cast<int>(CycleZeroIs)...>{}, domain_name,
+        [=](auto t_info, auto X, auto n, auto u, auto v, auto a, auto temperature, auto temperature_old,
+            auto... params) {
           auto [current_T, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
           return flux_function(t_info.time(), X, n, u, v, a, current_T, T_dot, params...);
         });
@@ -357,7 +357,6 @@ struct ThermoMechanicsSystem : public SystemBase {
   {
     addHeatFlux(DependsOn<static_cast<int>(Is)...>{}, domain_name, flux_function);
   }
-
 };
 
 /**
@@ -456,11 +455,11 @@ buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSy
 template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
           typename... parameter_space>
 auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-                                DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule,
-                                std::string prepend_name, FieldType<parameter_space>... parameter_types)
+                                DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule, std::string prepend_name,
+                                FieldType<parameter_space>... parameter_types)
 {
-  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(
-      mesh, solver, disp_rule, temp_rule, std::move(prepend_name), nullptr, parameter_types...);
+  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(mesh, solver, disp_rule, temp_rule,
+                                                                 std::move(prepend_name), nullptr, parameter_types...);
 }
 
 /**
@@ -473,8 +472,8 @@ auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<Coup
                                 std::shared_ptr<CoupledSystemSolver> cycle_zero_solver,
                                 FieldType<parameter_space>... parameter_types)
 {
-  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(
-      mesh, solver, disp_rule, temp_rule, "", cycle_zero_solver, parameter_types...);
+  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(mesh, solver, disp_rule, temp_rule, "",
+                                                                 cycle_zero_solver, parameter_types...);
 }
 
 /**
@@ -486,8 +485,8 @@ auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<Coup
                                 DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule,
                                 FieldType<parameter_space>... parameter_types)
 {
-  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(
-      mesh, solver, disp_rule, temp_rule, "", nullptr, parameter_types...);
+  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(mesh, solver, disp_rule, temp_rule, "", nullptr,
+                                                                 parameter_types...);
 }
 
 }  // namespace smith
