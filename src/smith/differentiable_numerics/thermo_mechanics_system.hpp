@@ -99,11 +99,11 @@ struct ThermoMechanicsSystem : public SystemBase {
   /**
    * @brief Create a DifferentiablePhysics object for this system.
    * @param physics_name The name of the physics.
-   * @return std::shared_ptr<DifferentiablePhysics> The differentiable physics object.
+   * @return std::unique_ptr<DifferentiablePhysics> The differentiable physics object.
    */
-  std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
+  std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
+    return std::make_unique<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
                                                    field_store->getShapeDisp(), getStateFields(), getParameterFields(),
                                                    advancer, physics_name, getReactionInfos());
   }

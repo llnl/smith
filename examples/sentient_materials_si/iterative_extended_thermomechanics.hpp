@@ -290,9 +290,9 @@ struct IterativeExtendedThermoMechanicsSystem : public SystemBase {
             field_store->getField(prefix("state_predicted")),        field_store->getField(prefix("state"))};
   }
 
-  std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
+  std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_shared<DifferentiablePhysics>(
+    return std::make_unique<DifferentiablePhysics>(
         field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
         getParameterFields(), advancer, std::move(physics_name),
         std::vector<std::string>{prefix("solid_force"), prefix("thermal_flux"), prefix("state_residual")});
