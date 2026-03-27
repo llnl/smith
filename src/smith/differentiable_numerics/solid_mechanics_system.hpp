@@ -382,6 +382,18 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
 }
 
 /**
+ * @brief Factory function to build a solid dynamics system with a physics name and parameter fields.
+ */
+template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
+SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> buildSolidMechanicsSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule disp_time_rule,
+    std::string prepend_name, FieldType<parameter_space>... parameter_types)
+{
+  return buildSolidMechanicsSystem<dim, order>(
+      mesh, solver, disp_time_rule, std::move(prepend_name), nullptr, parameter_types...);
+}
+
+/**
  * @brief Factory function to build a solid dynamics system (without physics name).
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>

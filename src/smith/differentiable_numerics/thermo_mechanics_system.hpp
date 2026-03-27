@@ -451,6 +451,19 @@ buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSy
 }
 
 /**
+ * @brief Factory function to build a thermo-mechanical system with a physics name and parameter fields.
+ */
+template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
+          typename... parameter_space>
+auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
+                                DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule,
+                                std::string prepend_name, FieldType<parameter_space>... parameter_types)
+{
+  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(
+      mesh, solver, disp_rule, temp_rule, std::move(prepend_name), nullptr, parameter_types...);
+}
+
+/**
  * @brief Factory function to build a thermo-mechanical system (without physics name).
  */
 template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
