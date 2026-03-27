@@ -17,14 +17,18 @@ namespace smith {
 /// @brief gretl-function to create a dummy-state which records all states and params of interest to the mechanics. This
 /// is used to inject additional adjoint loads and evaluate individual timestep sensitivities for the BasePhysics
 /// interface.
-gretl::State<int> make_milestone(const std::vector<FieldState>& states)
+gretl::State<int> make_milestone(const FieldState& anchor, const std::vector<FieldState>& states,
+                                 const std::vector<ReactionState>& reactions)
 {
   std::vector<gretl::StateBase> base_states;
   for (const auto& s : states) {
     base_states.push_back(s);
   }
+  for (const auto& r : reactions) {
+    base_states.push_back(r);
+  }
 
-  auto milestone = states[0].create_state<int, int>(base_states);
+  auto milestone = anchor.create_state<int, int>(base_states);
 
   milestone.set_eval(
       []([[maybe_unused]] const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) { output.set<int>(0); });
@@ -233,7 +237,7 @@ void DifferentiablePhysics::advanceTimestep(double dt)
 {
   if (cycle_ == 0) {
     field_states_ = initial_field_states_;
-    milestones_.push_back(make_milestone(field_states_).step());
+    milestones_.push_back(make_milestone(field_states_[0], field_states_, reaction_states_).step());
   }
 
   cycle_prev_ = cycle_;
@@ -248,7 +252,7 @@ void DifferentiablePhysics::advanceTimestep(double dt)
 
   cycle_++;
   time_ += dt;
-  milestones_.push_back(make_milestone(field_states_).step());
+  milestones_.push_back(make_milestone(field_states_[0], field_states_, reaction_states_).step());
 }
 
 void DifferentiablePhysics::reverseAdjointTimestep()
@@ -269,12 +273,19 @@ void DifferentiablePhysics::reverseAdjointTimestep()
 
   gretl::UpstreamStates upstreams(*checkpointer_, checkpointer_->upstreamSteps_[milestone]);
 
-  SLIC_ERROR_IF(field_states_.size() != upstreams.size(), "field states and upstream sizes do not match.");
+  const size_t expected_upstreams = field_states_.size() + reaction_states_.size();
+  SLIC_ERROR_IF(expected_upstreams != upstreams.size(), "field/reaction states and upstream sizes do not match.");
   // recreate the upstream field states with upstream step, field, and dual values.
-  for (size_t s = 0; s < upstreams.size(); ++s) {
+  for (size_t s = 0; s < field_states_.size(); ++s) {
     field_states_[s].reset_step(upstreams[s].step_);
     field_states_[s].set(upstreams[s].get<FEFieldPtr>());
     field_states_[s].set_dual(upstreams[s].get_dual<FEDualPtr, FEFieldPtr>());
+  }
+  for (size_t r = 0; r < reaction_states_.size(); ++r) {
+    const size_t upstream_index = field_states_.size() + r;
+    reaction_states_[r].reset_step(upstreams[upstream_index].step_);
+    reaction_states_[r].set(upstreams[upstream_index].get<FEDualPtr>());
+    reaction_states_[r].set_dual(upstreams[upstream_index].get_dual<FEFieldPtr, FEDualPtr>());
   }
 }
 
@@ -314,8 +325,7 @@ void DifferentiablePhysics::initializeReactionStates()
   reaction_states_.clear();
   reaction_states_.reserve(reaction_infos_.size());
   for (const auto& reaction_info : reaction_infos_) {
-    auto reaction =
-        std::make_shared<FiniteElementDual>(StateManager::newDual(*reaction_info.space, reaction_info.name));
+    auto reaction = std::make_shared<FiniteElementDual>(*reaction_info.space, reaction_info.name);
     reaction_states_.push_back(createReactionState(*checkpointer_, reaction));
   }
 }
