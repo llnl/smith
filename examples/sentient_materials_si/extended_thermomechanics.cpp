@@ -10,6 +10,7 @@
 #include <memory>
 #include "mfem.hpp"
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "extended_thermomechanics.hpp"
@@ -21,143 +22,30 @@
 
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
+
+#include "extended_thermomechanics_materials.hpp"
 namespace example_etm {
 
 static constexpr int dim = 3;
-static constexpr int vdim = dim;
+[[maybe_unused]] static constexpr int vdim = dim;
 static constexpr int StateMatrixDim = (dim == 2) ? 3 : (dim == 3) ? 6 : -1;
 static constexpr int Statedim = StateMatrixDim + 1;
 static constexpr int displacement_order = 1;
 static constexpr int temperature_order = 1;
-using StateSpace = smith::L2<0>;
-using ExtendedStateSpace = smith::L2<0, Statedim>;
+// using StateSpace = smith::L2<1>;
+using ExtendedStateSpace = smith::L2<1, Statedim>;
 
-using smith::cross;
-using smith::dev;
-using smith::dot;
-using smith::get;
-using smith::inner;
-using smith::norm;
-using smith::tr;
-using smith::transpose;
-
-template <typename T, int d>
-auto greenStrain(const smith::tensor<T, d, d>& grad_u)
-{
-  return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
-}
-
-template <typename T1, typename T2, int d>
-auto greenStrainRate(const smith::tensor<T1, d, d>& grad_u, const smith::tensor<T2, d, d>& grad_v)
-{
-  return 0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
-}
-
-template <typename T, int d>
-auto greenStrainRate(const smith::tensor<T, d, d>& grad_u, const smith::zero&)
-{
-  return 0.0 * grad_u;
-}
-
-template <typename T, int d>
-void setIdentity(smith::tensor<T, d, d>& F)
-{
-  for (size_t i = 0; i < d; i++) {
-    for (size_t j = 0; j < d; j++) {
-      F(i, j) = static_cast<T>(i == j);
-    }
-  }
-}
-
-struct GreenSaintVenantThermoelasticWithExtendedStateMaterial {
-  double density;
-  double E0;
-  double nu;
-  double C_v;
-  double alpha_T;
-  double theta_ref;
-  double kappa;
-
-  using State = smith::Empty;
-
-  template <int d>
-  struct SymmetricStatePacking {
-    static_assert(d >= 1, "Invalid matrix dimension.");
-    static constexpr int sym_size = d * (d + 1) / 2;
-
-    template <typename T, int sd>
-    static smith::tensor<T, sd> pack(const T& scalar, const smith::tensor<T, d, d>& symm)
-    {
-      static_assert(sd == 1 + sym_size, "Packed state size mismatch.");
-      smith::tensor<T, sd> out{};
-      out[0] = scalar;
-      int k = 1;
-      for (int i = 0; i < d; ++i) {
-        for (int j = i; j < d; ++j) {
-          out[k++] = symm(i, j);
-        }
-      }
-      return out;
-    }
-
-    template <typename T, int sd>
-    static auto unpack(const smith::tensor<T, sd>& in)
-    {
-      static_assert(sd == 1 + sym_size, "Packed state size mismatch.");
-      T scalar = in[0];
-      smith::tensor<T, d, d> symm{};
-      int k = 1;
-      for (int i = 0; i < d; ++i) {
-        for (int j = i; j < d; ++j) {
-          symm(i, j) = in[k];
-          symm(j, i) = in[k];
-          ++k;
-        }
-      }
-      return smith::tuple{scalar, symm};
-    }
-  };
-
-  template <typename T1, typename T2, typename T3, typename T4, typename T5, int d, int sd>
-  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const T2& grad_v,
-                  T3 theta, const smith::tensor<T4, d>& grad_theta, const smith::tensor<T5, sd>& alpha_old) const
-  {
-    // Calculate Alpha new using the old variables to be used
-
-    auto [w_old, F_old] = SymmetricStatePacking<d>::template unpack<T5, sd>(alpha_old);
-
-    // Extracting 0 index scalar value and calculating rate of change
-    auto w_new = w_old;
-    auto F_new = F_old;
-
-    // Concatenating results
-
-    auto E = E0;
-    const auto K = E / (3.0 * (1.0 - 2.0 * nu));
-    const auto G = 0.5 * E / (1.0 + nu);
-    const auto Eg = greenStrain<T1, d>(grad_u);
-    const auto trEg = tr(Eg);
-
-    static constexpr auto I = smith::Identity<d>();
-    const auto S = 2.0 * G * dev(Eg) + K * (trEg - d * alpha_T * (theta - theta_ref)) * I;
-    auto F = grad_u + I;
-    const auto Piola = dot(F, S);
-
-    const auto strain_rate = greenStrainRate(grad_u, grad_v);
-    const auto s0 = -d * K * alpha_T * (theta + 273.1) * tr(strain_rate);
-    const auto q0 = -kappa * grad_theta;
-
-    auto alpha_new = SymmetricStatePacking<d>::template pack<T5, sd>(w_new, F_new);
-    return smith::tuple{Piola, C_v, s0, q0, alpha_new};
-  }
-
-  static constexpr int numParameters() { return 1; }
-};
 
 enum class CoupledLinearSolver
 {
   Strumpack,
   GmresBlockAmg
+};
+
+enum class MaterialModelKind
+{
+  GreenSaintVenant,
+  ThermalStiffening
 };
 
 enum class GmresBlockPreconditioner
@@ -204,6 +92,30 @@ bool parseSolverArgument(const std::string& value, CoupledLinearSolver& solver)
   }
   if (value == "gmres-block-amg") {
     solver = CoupledLinearSolver::GmresBlockAmg;
+    return true;
+  }
+  return false;
+}
+
+std::string materialModelName(MaterialModelKind material_model)
+{
+  switch (material_model) {
+    case MaterialModelKind::GreenSaintVenant:
+      return "green-saint-venant";
+    case MaterialModelKind::ThermalStiffening:
+      return "thermal-stiffening";
+  }
+  return "unknown";
+}
+
+bool parseMaterialModelArgument(const std::string& value, MaterialModelKind& material_model)
+{
+  if (value == "green-saint-venant") {
+    material_model = MaterialModelKind::GreenSaintVenant;
+    return true;
+  }
+  if (value == "thermal-stiffening") {
+    material_model = MaterialModelKind::ThermalStiffening;
     return true;
   }
   return false;
@@ -303,8 +215,8 @@ smith::LinearSolverOptions makeThermalStateStageLinearSolverOptions(CoupledLinea
 
     smith::LinearSolverOptions thermal_block_options{.linear_solver = smith::LinearSolver::GMRES,
                                                      .preconditioner = smith::Preconditioner::HypreAMG,
-                                                     .relative_tol = 1.0e-3,
-                                                     .absolute_tol = 1.0e-8,
+                                                     .relative_tol = 1.0e-9,
+                                                     .absolute_tol = 1.0e-12,
                                                      .max_iterations = 100,
                                                      .print_level = 0,
                                                      .preconditioner_print_level = 0};
@@ -323,15 +235,15 @@ std::shared_ptr<smith::CoupledSystemSolver> makeCoupledSolver(const std::shared_
   smith::NonlinearSolverOptions mechanics_nonlinear_opts{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
                                                          .relative_tol = 1.0e-8,
                                                          .absolute_tol = 1.0e-8,
-                                                         .max_iterations = 100,
-                                                         .print_level = 1};
+                                                         .max_iterations = 500,
+                                                         .print_level = 2};
 
   smith::NonlinearSolverOptions thermal_nonlinear_opts{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
                                                        .relative_tol = 1.0e-8,
-                                                       .absolute_tol = 1.0e-8,
+                                                       .absolute_tol = 1.0e-10,
                                                        .max_iterations = 200,
                                                        .max_line_search_iterations = 30,
-                                                       .print_level = 1};
+                                                       .print_level = 2};
 
   auto mechanics_solver =
       smith::buildNonlinearBlockSolver(mechanics_nonlinear_opts, makeMechanicsStageLinearSolverOptions(), *mesh);
@@ -344,18 +256,65 @@ std::shared_ptr<smith::CoupledSystemSolver> makeCoupledSolver(const std::shared_
   return coupled_solver;
 }
 
-int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, double T, double alpha_T,
-                        CoupledLinearSolver linear_solver, GmresBlockPreconditioner gmres_block_preconditioner)
+using GreenSaintVenantMaterial =
+    extended_thermomechanics_materials::GreenSaintVenantThermoelasticWithExtendedStateMaterial;
+using ThermalStiffeningMaterial = extended_thermomechanics_materials::ThermalStiffeningMaterial;
+using MaterialModel = std::variant<GreenSaintVenantMaterial, ThermalStiffeningMaterial>;
+
+GreenSaintVenantMaterial makeGreenSaintVenantMaterial(double alpha_T)
 {
   double rho = 1.0;
   double E0 = 100.0;
   double nu = 0.25;
   double specific_heat = 1.0;
   double kappa = 0.1;
-  double initial_temperature = 0.0;
+  return GreenSaintVenantMaterial{rho, E0, nu, specific_heat, alpha_T, 1.0, kappa};
+}
 
-  using MaterialModel = GreenSaintVenantThermoelasticWithExtendedStateMaterial;
-  MaterialModel material{rho, E0, nu, specific_heat, alpha_T, 1.0, kappa};
+ThermalStiffeningMaterial makeThermalStiffeningMaterial()
+{
+  double Km = 0.5;
+  double Gm = 0.0073976;
+  double betam = 0.0;
+  double rhom0 = 1.0;
+  double etam = 0.0;
+  double Ke = 0.5;
+  double Ge = 0.225075;
+  double betae = 0.0;
+  double rhoe0 = 1.0;
+  double etae = 0.0;
+  double C_v = 1.5;
+  double kappa = 30.0;
+  double Af = 2.5e15;
+  double E_af = 1.5e5;
+  double Ar = 1.0e-21;
+  double E_ar = -1.55e5;
+  double R = 8.314;
+  double Tr = 353.0;
+  double gw = 0.2;
+  double wm = 0.5;
+
+  return ThermalStiffeningMaterial{Km, Gm, betam, rhom0, etam, Ke, Ge, betae, rhoe0, etae,
+                                   C_v, kappa, Af, E_af, Ar, E_ar, R, Tr, gw, wm};
+}
+
+MaterialModel makeMaterialModel(MaterialModelKind material_model_kind, double alpha_T)
+{
+  switch (material_model_kind) {
+    case MaterialModelKind::GreenSaintVenant:
+      return makeGreenSaintVenantMaterial(alpha_T);
+    case MaterialModelKind::ThermalStiffening:
+      return makeThermalStiffeningMaterial();
+  }
+  return makeGreenSaintVenantMaterial(alpha_T);
+}
+
+int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double dt, double T, double alpha_T,
+                               MaterialModelKind material_model_kind, CoupledLinearSolver linear_solver,
+                               GmresBlockPreconditioner gmres_block_preconditioner)
+{
+  double initial_temperature = 0.0;
+  auto material = makeMaterialModel(material_model_kind, alpha_T);
 
   auto coupled_solver = makeCoupledSolver(mesh, linear_solver, gmres_block_preconditioner);
 
@@ -363,17 +322,18 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
       smith::buildExtendedThermoMechanicsSystem<dim, displacement_order, temperature_order, ExtendedStateSpace>(
           mesh, coupled_solver, "");
 
-  system.setMaterial(material, mesh->entireBodyName());
+  std::visit([&](const auto& selected_material) { system.setMaterial(selected_material, mesh->entireBodyName()); },
+             material);
 
   system.disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
     // Keep the loading modest so the first Newton solves are well-conditioned.
-    bc[0] = 1.0 * t;
+    bc[0] = .10 * t;
     return bc;
   });
   system.disp_bc->template setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
 
-  system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("left"));
+  // system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("left"));
   // system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("right"));
 
   system.addThermalHeatSource(mesh->entireBodyName(),
@@ -395,10 +355,10 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
   auto& state_pred = const_cast<smith::FiniteElementState&>(*system.field_store->getField("state_predicted").get());
   state_pred.setFromFieldFunction([](smith::tensor<double, dim>) {
     smith::tensor<double, Statedim> alpha{};
-    auto [w_0, F_0] = MaterialModel::SymmetricStatePacking<dim>::unpack(alpha);
+    auto [w_0, F_0] = GreenSaintVenantMaterial::SymmetricStatePacking<dim>::unpack(alpha);
     w_0 = 0.0;
-    setIdentity(F_0);
-    alpha = MaterialModel::SymmetricStatePacking<dim>::pack<double, Statedim>(w_0, F_0);
+    extended_thermomechanics_materials::setIdentity(F_0);
+    alpha = GreenSaintVenantMaterial::SymmetricStatePacking<dim>::pack<Statedim>(w_0, F_0);
     return alpha;
   });
   const_cast<smith::FiniteElementState&>(*system.field_store->getField("state").get()) = state_pred;
@@ -415,6 +375,15 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
 
   pv_writer.write(cycle, time, states);
 
+  [[maybe_unused]] auto print_primal_field_magnitudes = [](size_t step_index, double current_time,
+                                          const std::vector<smith::FieldState>& field_states) {
+    std::cout << "step " << step_index << " time=" << current_time;
+    for (const auto& field_state : field_states) {
+      std::cout << " | " << field_state.get()->name() << " l2=" << field_state.get()->Norml2();
+    }
+    std::cout << "\n";
+  };
+
   size_t step = 0;
 
   while (time < T) {
@@ -428,10 +397,12 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
 
     time += dt;
     cycle++;
+    // print_primal_field_magnitudes(step, time, states);
     pv_writer.write(cycle, time, states);
 
     step++;
   }
+  std::cout << "Material model: " << materialModelName(material_model_kind) << "\n";
   std::cout << "Solver: " << solverName(linear_solver) << "\n";
   std::cout << "Mechanics stage: trust-region / cg / hypre-amg\n";
   std::cout << "Thermal+state stage: "
@@ -441,16 +412,6 @@ int runCoupledWithState(const std::shared_ptr<smith::Mesh>& mesh, double dt, dou
               << "\n";
   }
   std::cout << "Wrote ParaView output to '" << pv_dir << "'\n";
-  return 0;
-}
-
-int test_example()
-{
-  using namespace mfem::future;
-  using mfem::future::make_tensor;
-  using mfem::future::tensor;
-
-  std::shared_ptr<DifferentiableOperator> a;
   return 0;
 }
 
@@ -464,10 +425,11 @@ int main(int argc, char** argv)
     const std::string arg = argv[i];
     if (arg == "--help" || arg == "-h") {
       std::cout << "Usage: extended_thermomechanics [--nx=<int>] [--ny=<int>] [--nz=<int>] [--dt=<real>] [--T=<real>] "
-                   "[--alpha=<real>] [--solver=strumpack|gmres-block-amg] "
+                   "[--alpha=<real>] [--material=green-saint-venant|thermal-stiffening] "
+                   "[--solver=strumpack|gmres-block-amg] "
                    "[--gmres-block-preconditioner=diagonal|lower-triangular|schur-diagonal|schur-lower|schur-upper|"
                    "schur-full]\n";
-      std::cout << "Defaults: nx=60 ny=10 nz=10 dt=0.01 T=1.0 alpha=0.0 solver=strumpack "
+      std::cout << "Defaults: nx=60 ny=10 nz=10 dt=0.01 T=1.0 alpha=0.0 material=green-saint-venant solver=strumpack "
                    "gmres-block-preconditioner=diagonal\n";
       return 0;
     }
@@ -483,7 +445,8 @@ int main(int argc, char** argv)
   int num_elements_z = 10;
   double dt = 0.01;
   double T = 1.0;
-  double alpha_T = 0.0;
+  double alpha_T = 1.0e-3;
+  auto material_model = example_etm::MaterialModelKind::GreenSaintVenant;
   auto solver_type = example_etm::CoupledLinearSolver::Strumpack;
   auto gmres_block_preconditioner = example_etm::GmresBlockPreconditioner::Diagonal;
 
@@ -503,6 +466,15 @@ int main(int argc, char** argv)
     parse_double("--dt=", dt);
     parse_double("--T=", T);
     parse_double("--alpha=", alpha_T);
+    const std::string material_prefix = "--material=";
+    if (arg.rfind(material_prefix, 0) == 0) {
+      const auto material_name = arg.substr(material_prefix.size());
+      if (!example_etm::parseMaterialModelArgument(material_name, material_model)) {
+        std::cerr << "Unknown material option '" << material_name
+                  << "'. Expected green-saint-venant or thermal-stiffening.\n";
+        return 1;
+      }
+    }
     const std::string solver_prefix = "--solver=";
     if (arg.rfind(solver_prefix, 0) == 0) {
       const auto solver_name = arg.substr(solver_prefix.size());
@@ -530,5 +502,6 @@ int main(int argc, char** argv)
   mesh->addDomainOfBoundaryElements("left", smith::by_attr<example_etm::dim>(3));
   mesh->addDomainOfBoundaryElements("right", smith::by_attr<example_etm::dim>(5));
 
-  return example_etm::runCoupledWithState(mesh, dt, T, alpha_T, solver_type, gmres_block_preconditioner);
+  return example_etm::runExtendedThermomechanics(mesh, dt, T, alpha_T, material_model, solver_type,
+                                                 gmres_block_preconditioner);
 }
