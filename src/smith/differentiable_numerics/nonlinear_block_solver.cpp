@@ -195,7 +195,10 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
         }
         return *block_jac_;
       });
-  nonlinear_solver_->setConvergenceBlockData(local_block_offsets, block_tolerances_, abs_tol_, rel_tol_, comm_);
+  BlockConvergenceTolerances scaled_block_tols = block_tolerances_;
+  scaled_block_tols.scale(inner_tol_multiplier_);
+  nonlinear_solver_->setConvergenceBlockData(local_block_offsets, scaled_block_tols, inner_tol_multiplier_ * abs_tol_,
+                                             inner_tol_multiplier_ * rel_tol_, comm_);
   nonlinear_solver_->setOperator(*residual_op_);
   nonlinear_solver_->solve(*block_u);
 
@@ -266,23 +269,9 @@ std::shared_ptr<NonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverO
                                                                 LinearSolverOptions linear_opts,
                                                                 const smith::Mesh& mesh)
 {
-  // The inner solver is configured to a stricter tolerance (0.6x) so that after each sub-system solve
-  // in a staggered iteration, residuals have sufficient margin below the stage's target tolerance.
-  constexpr double inner_tol_factor = 0.6;
-  double outer_abs_tol = nonlinear_opts.absolute_tol;
-  double outer_rel_tol = nonlinear_opts.relative_tol;
-  NonlinearSolverOptions inner_opts = nonlinear_opts;
-  inner_opts.absolute_tol = inner_tol_factor * outer_abs_tol;
-  inner_opts.relative_tol = inner_tol_factor * outer_rel_tol;
-  for (auto& tol : inner_opts.block_tolerances.absolute_tols) {
-    tol *= inner_tol_factor;
-  }
-  for (auto& tol : inner_opts.block_tolerances.relative_tols) {
-    tol *= inner_tol_factor;
-  }
-  auto solid_solver = std::make_unique<EquationSolver>(inner_opts, linear_opts, mesh.getComm());
-  return std::make_shared<NonlinearBlockSolver>(std::move(solid_solver), mesh.getComm(), outer_abs_tol, outer_rel_tol,
-                                                nonlinear_opts.block_tolerances);
+  auto solid_solver = std::make_unique<EquationSolver>(nonlinear_opts, linear_opts, mesh.getComm());
+  return std::make_shared<NonlinearBlockSolver>(std::move(solid_solver), mesh.getComm(), nonlinear_opts.absolute_tol,
+                                                nonlinear_opts.relative_tol, nonlinear_opts.block_tolerances);
 }
 
 }  // namespace smith

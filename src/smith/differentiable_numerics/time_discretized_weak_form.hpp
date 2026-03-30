@@ -251,4 +251,99 @@ class TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces..
   }
 };
 
+/// @brief A container holding the weak forms useful for second-order time-discretized systems.
+class SecondOrderTimeDiscretizedWeakForms {
+ public:
+  std::shared_ptr<WeakForm> time_discretized_weak_form;  ///< Weak form in terms of predicted/current unknown.
+  std::shared_ptr<WeakForm> final_reaction_weak_form;    ///< Weak form in terms of converged kinematic states.
+};
+
+template <int spatial_dim, typename OutputSpace, typename inputs = Parameters<>>
+class SecondOrderTimeDiscretizedWeakForm;
+
+/// @brief Convenience wrapper for second-order-in-time systems using an implicit Newmark rule.
+template <int spatial_dim, typename OutputSpace, typename TrialInputSpace, typename... InputSpaces>
+class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<TrialInputSpace, InputSpaces...>>
+    : public SecondOrderTimeDiscretizedWeakForms {
+ public:
+  static constexpr int NUM_STATE_VARS = 4;  ///< u, u_old, v_old, a_old
+
+  using TimeDiscretizedWeakFormT =
+      TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<TrialInputSpace, InputSpaces...>>;
+  using FinalReactionFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>;
+
+  SecondOrderTimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
+                                     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule,
+                                     const mfem::ParFiniteElementSpace& output_mfem_space,
+                                     const typename TimeDiscretizedWeakFormT::SpacesT& input_mfem_spaces)
+      : time_rule_(time_rule)
+  {
+    time_discretized_weak_form_ =
+        std::make_shared<TimeDiscretizedWeakFormT>(physics_name, mesh, output_mfem_space, input_mfem_spaces);
+    time_discretized_weak_form = time_discretized_weak_form_;
+
+    typename TimeDiscretizedWeakFormT::SpacesT trial_removed_spaces(std::next(input_mfem_spaces.begin()),
+                                                                    input_mfem_spaces.end());
+    final_reaction_weak_form_ =
+        std::make_shared<FinalReactionFormT>(physics_name, mesh, output_mfem_space, trial_removed_spaces);
+    final_reaction_weak_form = final_reaction_weak_form_;
+  }
+
+  template <int... active_parameters, typename BodyIntegralType>
+  void addBodyIntegral(DependsOn<active_parameters...> /*depends_on*/, std::string body_name,
+                       BodyIntegralType integrand)
+  {
+    auto time_rule = time_rule_;
+    time_discretized_weak_form_->addBodyIntegral(
+        DependsOn<0, 1, 2, 3, NUM_STATE_VARS + active_parameters...>{}, body_name,
+        [integrand, time_rule](const TimeInfo& t, auto X, auto U, auto U_old, auto U_dot_old, auto U_dot_dot_old,
+                               auto... inputs) {
+          return integrand(t, X, time_rule.value(t, U, U_old, U_dot_old, U_dot_dot_old),
+                           time_rule.dot(t, U, U_old, U_dot_old, U_dot_dot_old),
+                           time_rule.ddot(t, U, U_old, U_dot_old, U_dot_dot_old), inputs...);
+        });
+    final_reaction_weak_form_->addBodyIntegral(DependsOn<0, 1, 2, NUM_STATE_VARS - 1 + active_parameters...>{},
+                                               body_name, integrand);
+  }
+
+  template <typename BodyIntegralType>
+  void addBodyIntegral(std::string body_name, BodyIntegralType integrand)
+  {
+    addBodyIntegral(DependsOn<>{}, body_name, integrand);
+  }
+
+  template <int... active_parameters, typename BodyLoadType>
+  void addBodySource(DependsOn<active_parameters...> /*depends_on*/, std::string body_name, BodyLoadType load_function)
+  {
+    auto time_rule = time_rule_;
+    time_discretized_weak_form_->addBodyIntegral(
+        DependsOn<0, 1, 2, 3, NUM_STATE_VARS + active_parameters...>{}, body_name,
+        [load_function, time_rule](const TimeInfo& t, auto X, auto U, auto U_old, auto U_dot_old, auto U_dot_dot_old,
+                                   auto... inputs) {
+          return smith::tuple{
+              -load_function(t.time(), get<VALUE>(X),
+                             get<VALUE>(time_rule.value(t, U, U_old, U_dot_old, U_dot_dot_old)),
+                             get<VALUE>(time_rule.dot(t, U, U_old, U_dot_old, U_dot_dot_old)),
+                             get<VALUE>(time_rule.ddot(t, U, U_old, U_dot_old, U_dot_dot_old)), get<VALUE>(inputs)...),
+              smith::zero{}};
+        });
+    final_reaction_weak_form_->addBodyIntegral(
+        DependsOn<0, 1, 2, NUM_STATE_VARS - 1 + active_parameters...>{}, body_name,
+        [load_function](const TimeInfo& t, auto X, auto... inputs) {
+          return smith::tuple{-load_function(t.time(), get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
+        });
+  }
+
+  template <typename BodyLoadType>
+  void addBodySource(std::string body_name, BodyLoadType load_function)
+  {
+    addBodySource(DependsOn<>{}, body_name, load_function);
+  }
+
+ private:
+  std::shared_ptr<TimeDiscretizedWeakFormT> time_discretized_weak_form_;
+  std::shared_ptr<FinalReactionFormT> final_reaction_weak_form_;
+  ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule_;
+};
+
 }  // namespace smith

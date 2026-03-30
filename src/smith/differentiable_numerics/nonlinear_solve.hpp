@@ -15,6 +15,7 @@
 
 #include <vector>
 #include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/physics/common.hpp"
 
 namespace smith {
@@ -49,5 +50,35 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const NonlinearBlockSolverBase* solver,
                                     const std::vector<const BoundaryConditionManager*>& bc_managers);
+
+/// @brief Solve a single nonlinear system of equations as defined by one weak form.
+/// @param residual_eval The weak form that defines the residual.
+/// @param shape_disp The mesh-morphed shape displacement.
+/// @param states The weak-form state inputs, including the primary unknown at @p unknown_state_index.
+/// @param params The fixed field parameters passed to the weak form.
+/// @param time_info Timestep information (time, dt, cycle).
+/// @param solver The nonlinear block solver used to solve the system.
+/// @param bcs Boundary conditions applied to the primary unknown field.
+/// @param unknown_state_index Index of the primary unknown within @p states.
+/// @return The solved primary field.
+inline FieldState solve(const WeakForm& residual_eval, const FieldState& shape_disp,
+                        const std::vector<FieldState>& states, const std::vector<FieldState>& params,
+                        const TimeInfo& time_info, const NonlinearBlockSolverBase& solver,
+                        const DirichletBoundaryConditions& bcs, size_t unknown_state_index = 0)
+{
+  std::vector<const BoundaryConditionManager*> bc_managers{&bcs.getBoundaryConditionManager()};
+  auto solutions = block_solve({const_cast<WeakForm*>(&residual_eval)}, {{unknown_state_index}}, shape_disp, {states},
+                               {params}, time_info, &solver, bc_managers);
+  return solutions[0];
+}
+
+/// @brief Backward-compatible overload that accepts but ignores an explicit initial guess.
+inline FieldState solve([[maybe_unused]] const FieldState& initial_guess, const FieldState& shape_disp,
+                        const std::vector<FieldState>& weak_form_inputs, const TimeInfo& time_info,
+                        const WeakForm& residual_eval, const NonlinearBlockSolverBase& solver,
+                        const DirichletBoundaryConditions& bcs, size_t unknown_state_index = 0)
+{
+  return solve(residual_eval, shape_disp, weak_form_inputs, {}, time_info, solver, bcs, unknown_state_index);
+}
 
 }  // namespace smith

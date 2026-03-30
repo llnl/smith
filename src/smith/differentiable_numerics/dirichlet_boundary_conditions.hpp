@@ -124,12 +124,24 @@ class DirichletBoundaryConditions {
     setVectorBCs<spatial_dim>(domain, components, [](auto, auto) { return smith::tensor<double, field_dim>{}; });
   }
 
+  template <int spatial_dim>
+  void setFixedVectorBCs(const Domain& domain, std::vector<int> components)
+  {
+    setFixedVectorBCs<spatial_dim, spatial_dim>(domain, components);
+  }
+
   /// @brief Constrain the dofs of a scalar field over a domain
   template <int spatial_dim, int field_dim>
   void setFixedVectorBCs(const Domain& domain, int component)
   {
     std::vector<int> components{component};
-    setVectorBCs<spatial_dim, field_dim>(domain, components);
+    setFixedVectorBCs<spatial_dim, field_dim>(domain, components);
+  }
+
+  template <int spatial_dim>
+  void setFixedVectorBCs(const Domain& domain, int component)
+  {
+    setFixedVectorBCs<spatial_dim, spatial_dim>(domain, component);
   }
 
   /// @brief Constrain all the vector dofs over a domain

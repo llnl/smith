@@ -480,6 +480,17 @@ struct BlockConvergenceTolerances {
 
   /// @brief Return true if no per-block overrides are present.
   bool empty() const { return relative_tols.empty() && absolute_tols.empty(); }
+
+  /// @brief Scale all tolerances by a factor.
+  void scale(double factor)
+  {
+    for (auto& tol : relative_tols) {
+      tol *= factor;
+    }
+    for (auto& tol : absolute_tols) {
+      tol *= factor;
+    }
+  }
 };
 
 // _nonlinear_options_start
