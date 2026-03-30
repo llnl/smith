@@ -79,13 +79,41 @@ std::vector<double> NonlinearBlockSolver::effectiveAbsoluteTolerances(
 }
 
 NonlinearBlockSolver::NonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol,
-                                           double rel_tol, BlockConvergenceTolerances block_tolerances)
+                                           double rel_tol, BlockConvergenceTolerances block_tolerances,
+                                           std::optional<NonlinearSolverOptions> retained_nonlinear_options,
+                                           std::optional<LinearSolverOptions> retained_linear_options)
     : nonlinear_solver_(std::move(s)),
       comm_(comm),
       abs_tol_(abs_tol),
       rel_tol_(rel_tol),
-      block_tolerances_(std::move(block_tolerances))
+      block_tolerances_(std::move(block_tolerances)),
+      retained_nonlinear_options_(std::move(retained_nonlinear_options)),
+      retained_linear_options_(std::move(retained_linear_options))
 {
+}
+
+std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh(std::optional<size_t> local_block_index) const
+{
+  if (!retained_nonlinear_options_ || !retained_linear_options_) {
+    return nullptr;
+  }
+
+  auto nonlinear_opts = *retained_nonlinear_options_;
+  const auto linear_opts = *retained_linear_options_;
+
+  if (local_block_index.has_value()) {
+    if (!nonlinear_opts.block_tolerances.relative_tols.empty()) {
+      nonlinear_opts.block_tolerances.relative_tols = {nonlinear_opts.block_tolerances.relative_tols.at(*local_block_index)};
+    }
+    if (!nonlinear_opts.block_tolerances.absolute_tols.empty()) {
+      nonlinear_opts.block_tolerances.absolute_tols = {nonlinear_opts.block_tolerances.absolute_tols.at(*local_block_index)};
+    }
+  }
+
+  auto solver = std::make_unique<EquationSolver>(nonlinear_opts, linear_opts, comm_);
+  return std::make_shared<NonlinearBlockSolver>(std::move(solver), comm_, nonlinear_opts.absolute_tol,
+                                                nonlinear_opts.relative_tol, nonlinear_opts.block_tolerances,
+                                                nonlinear_opts, linear_opts);
 }
 
 void NonlinearBlockSolver::completeSetup(const std::vector<FieldT>&)
@@ -271,7 +299,8 @@ std::shared_ptr<NonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverO
 {
   auto solid_solver = std::make_unique<EquationSolver>(nonlinear_opts, linear_opts, mesh.getComm());
   return std::make_shared<NonlinearBlockSolver>(std::move(solid_solver), mesh.getComm(), nonlinear_opts.absolute_tol,
-                                                nonlinear_opts.relative_tol, nonlinear_opts.block_tolerances);
+                                                nonlinear_opts.relative_tol, nonlinear_opts.block_tolerances,
+                                                nonlinear_opts, linear_opts);
 }
 
 }  // namespace smith

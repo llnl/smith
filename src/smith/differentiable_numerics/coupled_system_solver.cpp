@@ -89,13 +89,15 @@ CoupledSystemSolver::CoupledSystemSolver(int max_staggered_iterations, bool exac
   SLIC_ERROR_IF(max_staggered_iterations <= 0, "max_staggered_iterations must be > 0");
 }
 
-void CoupledSystemSolver::addSubsystemSolver(const Stage& stage) { stages_.push_back(stage); }
-
 void CoupledSystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
                                              std::shared_ptr<NonlinearBlockSolverBase> solver,
-                                             BlockConvergenceTolerances block_tolerances)
+                                             BlockConvergenceTolerances block_tolerances, double relaxation_factor)
 {
-  Stage stage{block_indices, std::move(solver), std::move(block_tolerances)};
+  SLIC_ERROR_IF(!solver, "CoupledSystemSolver stage solver must be non-null");
+  SLIC_ERROR_IF(relaxation_factor <= 0.0 || relaxation_factor > 1.0,
+                axom::fmt::format("Stage relaxation_factor {} must be in (0, 1]", relaxation_factor));
+
+  Stage stage{block_indices, std::move(solver), std::move(block_tolerances), relaxation_factor};
   if (!stage.block_indices.empty()) {
     validateStageToleranceSizes(stage, stage.block_indices.size(), stages_.size());
     validateStageToleranceLooseness(stage, stages_.size());
@@ -262,7 +264,13 @@ std::shared_ptr<CoupledSystemSolver> CoupledSystemSolver::singleBlockSolver(size
 {
   for (const auto& stage : stages_) {
     if (stage.block_indices.empty()) {
-      auto result = std::make_shared<CoupledSystemSolver>(stage.solver);
+      std::shared_ptr<NonlinearBlockSolverBase> stage_solver = stage.solver;
+      if (const auto* equation_solver = dynamic_cast<const NonlinearBlockSolver*>(stage.solver.get())) {
+        if (auto cloned_solver = equation_solver->cloneFresh(block_index)) {
+          stage_solver = cloned_solver;
+        }
+      }
+      auto result = std::make_shared<CoupledSystemSolver>(stage_solver);
       return result;
     }
 
@@ -270,8 +278,15 @@ std::shared_ptr<CoupledSystemSolver> CoupledSystemSolver::singleBlockSolver(size
     if (found != stage.block_indices.end()) {
       auto result = std::make_shared<CoupledSystemSolver>(1, exact_staggered_steps_);
       const size_t local_index = static_cast<size_t>(std::distance(stage.block_indices.begin(), found));
-      Stage single_stage{{0}, stage.solver, extractSingleBlockTolerances(stage, local_index), stage.relaxation_factor};
-      result->addSubsystemSolver(single_stage);
+      std::shared_ptr<NonlinearBlockSolverBase> stage_solver = stage.solver;
+      if (const auto* equation_solver = dynamic_cast<const NonlinearBlockSolver*>(stage.solver.get())) {
+        if (auto cloned_solver = equation_solver->cloneFresh(local_index)) {
+          stage_solver = cloned_solver;
+        }
+      }
+      Stage single_stage{{0}, stage_solver, extractSingleBlockTolerances(stage, local_index), stage.relaxation_factor};
+      result->addSubsystemSolver(single_stage.block_indices, single_stage.solver, single_stage.block_tolerances,
+                                 single_stage.relaxation_factor);
       return result;
     }
   }
