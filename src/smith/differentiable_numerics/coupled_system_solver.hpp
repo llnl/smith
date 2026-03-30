@@ -45,16 +45,13 @@ class CoupledSystemSolver {
   ///        partitioned-stagger steps is required regardless of residual level.
   CoupledSystemSolver(int max_staggered_iterations, bool exact_staggered_steps = false);
 
-  /// @brief Adds a solver stage defined by a Stage struct.
-  /// @param stage Stage configuration.
-  void addSubsystemSolver(const Stage& stage);
-
   /// @brief Convenience method to add a solver stage.
   /// @param block_indices Indices of the blocks to solve.
   /// @param solver Nonlinear block solver for this stage.
   /// @param block_tolerances Optional stage-local convergence overrides.
+  /// @param relaxation_factor Per-stage relaxation factor in `(0, 1]`.
   void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<NonlinearBlockSolverBase> solver,
-                          BlockConvergenceTolerances block_tolerances = {});
+                          BlockConvergenceTolerances block_tolerances = {}, double relaxation_factor = 1.0);
 
   /// @brief Solves the multiphysics system using staggered iterations.
   /// @param residual_evals Vector of WeakForm evaluations for each block.
@@ -72,6 +69,7 @@ class CoupledSystemSolver {
                                 const std::vector<const BoundaryConditionManager*>& bc_managers) const;
 
   /// @brief Build a single-block solver from the stage responsible for @p block_index.
+  /// Prefers constructing a fresh solver instance when the underlying stage solver retains rebuildable config.
   std::shared_ptr<CoupledSystemSolver> singleBlockSolver(size_t block_index) const;
 
  private:

@@ -361,6 +361,8 @@ struct ThermoMechanicsSystem : public SystemBase {
 
 /**
  * @brief Factory function to build a thermo-mechanical system.
+ * @param cycle_zero_solver Optional override for the cycle-zero solve. Defaults to
+ *        `solver->singleBlockSolver(0)`.
  */
 template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
           typename... parameter_space>

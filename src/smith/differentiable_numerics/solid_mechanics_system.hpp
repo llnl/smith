@@ -310,6 +310,8 @@ struct SolidMechanicsSystem : public SystemBase {
  * @param solver The coupled system solver.
  * @param disp_time_rule The time integration rule.
  * @param prepend_name The name of the physics (used as field prefix).
+ * @param cycle_zero_solver Optional override for the cycle-zero solve. Defaults to
+ *        `solver->singleBlockSolver(0)`.
  * @param parameter_types Parameter field types.
  * @return SolidMechanicsSystem with all components initialized.
  */

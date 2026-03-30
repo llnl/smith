@@ -1,0 +1,164 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+#include <algorithm>
+#include <cmath>
+#include <memory>
+
+#include "gtest/gtest.h"
+
+#include "gretl/data_store.hpp"
+
+#include "smith/infrastructure/application_manager.hpp"
+#include "smith/physics/mesh.hpp"
+#include "smith/physics/state/state_manager.hpp"
+
+#include "smith/differentiable_numerics/coupled_system_solver.hpp"
+#include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
+#include "smith/differentiable_numerics/field_store.hpp"
+#include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
+#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+
+namespace smith {
+
+namespace {
+
+class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
+ public:
+  void completeSetup(const std::vector<FieldT>&) override {}
+
+  std::vector<FieldPtr> solve(
+      const std::vector<FieldPtr>& u_guesses,
+      std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)>,
+      std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)>) const override
+  {
+    return u_guesses;
+  }
+
+  std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>&,
+                                     std::vector<std::vector<MatrixPtr>>&) const override
+  {
+    return {};
+  }
+
+  ConvergenceStatus convergenceStatus(double, const std::vector<mfem::Vector>& residuals,
+                                      const BlockConvergenceTolerances&,
+                                      NonlinearConvergenceContext&) const override
+  {
+    ConvergenceStatus status;
+    status.global_converged = true;
+    status.converged = true;
+    status.block_norms.resize(residuals.size(), 0.0);
+    status.block_goals.resize(residuals.size(), 0.0);
+    return status;
+  }
+
+  void primeConvergenceContext(const std::vector<mfem::Vector>&, const BlockConvergenceTolerances&,
+                               NonlinearConvergenceContext&) const override
+  {
+  }
+
+  std::vector<double> effectiveRelativeTolerances(size_t num_blocks,
+                                                  const BlockConvergenceTolerances&) const override
+  {
+    return std::vector<double>(num_blocks, 0.0);
+  }
+
+  std::vector<double> effectiveAbsoluteTolerances(size_t num_blocks,
+                                                  const BlockConvergenceTolerances&) const override
+  {
+    return std::vector<double>(num_blocks, 0.0);
+  }
+
+  void setInnerToleranceMultiplier(double) override {}
+};
+
+template <typename FieldTypeT>
+auto buildScalarDiffusionWeakForm(const std::string& name, std::shared_ptr<Mesh> mesh, std::shared_ptr<FieldStore> fs,
+                                  FieldTypeT field_type)
+{
+  using WeakFormType = TimeDiscretizedWeakForm<2, H1<1>, Parameters<H1<1>>>;
+  auto weak_form = std::make_shared<WeakFormType>(
+      name, mesh, fs->getField(field_type.name).get()->space(), fs->createSpaces(name, field_type.name, field_type));
+  weak_form->addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [](auto, auto, auto u) {
+    return smith::tuple{0.0 * get<VALUE>(u), get<DERIVATIVE>(u)};
+  });
+  return weak_form;
+}
+
+bool allNodesOnBoundary(const std::vector<vec2>& nodes, double x_target)
+{
+  constexpr double tol = 1.0e-12;
+  return std::all_of(nodes.begin(), nodes.end(), [x_target](const vec2& x) { return std::abs(x[0] - x_target) < tol; });
+}
+
+}  // namespace
+
+TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "multiphysics_time_integrator");
+
+  auto mesh = std::make_shared<Mesh>(
+      mfem::Mesh::MakeCartesian2D(8, 8, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), "integrator_mesh");
+  mesh->addDomainOfBoundaryElements("left",
+                                    [](std::vector<vec2> nodes, int) { return allNodesOnBoundary(nodes, 0.0); });
+  mesh->addDomainOfBoundaryElements("right",
+                                    [](std::vector<vec2> nodes, int) { return allNodesOnBoundary(nodes, 1.0); });
+
+  auto field_store = std::make_shared<FieldStore>(mesh, 20);
+  field_store->addShapeDisp(FieldType<H1<1, 2>>("shape_displacement"));
+
+  auto quasi_static = std::make_shared<QuasiStaticRule>();
+  FieldType<H1<1>> temperature_type("temperature");
+  auto temperature_bc = field_store->addIndependent(temperature_type, quasi_static);
+  FieldType<H1<1>> displacement_type("displacement");
+  auto displacement_bc = field_store->addIndependent(displacement_type, quasi_static);
+
+  ASSERT_EQ(field_store->getUnknownIndex("temperature"), 0);
+  ASSERT_EQ(field_store->getUnknownIndex("displacement"), 1);
+
+  temperature_bc->setScalarBCs<2>(mesh->domain("left"), [](double, tensor<double, 2>) { return 0.0; });
+  displacement_bc->setScalarBCs<2>(mesh->domain("right"), [](double, tensor<double, 2>) { return 1.0; });
+
+  auto temperature_wf = buildScalarDiffusionWeakForm("temperature_main", mesh, field_store, temperature_type);
+  auto displacement_wf = buildScalarDiffusionWeakForm("displacement_main", mesh, field_store, displacement_type);
+  auto cycle_zero_wf = buildScalarDiffusionWeakForm("cycle_zero_displacement", mesh, field_store, displacement_type);
+
+  auto main_solver = std::make_shared<CoupledSystemSolver>(std::make_shared<NoOpNonlinearBlockSolver>());
+
+  LinearSolverOptions lin_opts{.linear_solver = LinearSolver::SuperLU};
+  NonlinearSolverOptions nonlin_opts{
+      .nonlin_solver = NonlinearSolver::Newton, .relative_tol = 1.0e-12, .absolute_tol = 1.0e-12, .max_iterations = 8};
+  auto cycle_zero_block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh);
+  auto cycle_zero_solver = std::make_shared<CoupledSystemSolver>(cycle_zero_block_solver);
+
+  MultiphysicsTimeIntegrator advancer(field_store, {temperature_wf, displacement_wf}, main_solver, cycle_zero_wf,
+                                      cycle_zero_solver);
+
+  auto [new_states, reactions] =
+      advancer.advanceState(TimeInfo(0.0, 1.0, 0), field_store->getShapeDisp(), field_store->getAllFields(), {});
+  static_cast<void>(reactions);
+
+  const auto& displacement = *new_states[field_store->getFieldIndex("displacement")].get();
+  auto essential_dofs = displacement_bc->getBoundaryConditionManager().allEssentialTrueDofs();
+  ASSERT_GT(essential_dofs.Size(), 0);
+  for (int i = 0; i < essential_dofs.Size(); ++i) {
+    EXPECT_NEAR(displacement(essential_dofs[i]), 1.0, 1.0e-10);
+  }
+
+  StateManager::reset();
+}
+
+}  // namespace smith
+
+int main(int argc, char* argv[])
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  smith::ApplicationManager app(argc, argv);
+  return RUN_ALL_TESTS();
+}
