@@ -474,8 +474,8 @@ auto buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::
                                                std::shared_ptr<CoupledSystemSolver> cycle_zero_solver = nullptr,
                                                FieldType<parameter_space>... parameter_types)
 {
-  return buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
-      mesh, solver, disp_rule, state_rule, "", cycle_zero_solver, parameter_types...);
+  return buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(mesh, solver, disp_rule, state_rule, "",
+                                                                                cycle_zero_solver, parameter_types...);
 }
 
 }  // namespace smith
