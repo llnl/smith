@@ -80,7 +80,7 @@ struct ThermoMechanicsMeshFixture : public testing::Test {
   std::shared_ptr<smith::Mesh> mesh_;
 };
 
-TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesExportedDuals)
+TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionInfo)
 {
   smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU};
   smith::NonlinearSolverOptions nonlin_opts{.nonlin_solver = smith::NonlinearSolver::Newton,

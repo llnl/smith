@@ -71,6 +71,9 @@ class CoupledSystemSolver {
                                 const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                 const std::vector<const BoundaryConditionManager*>& bc_managers) const;
 
+  /// @brief Build a single-block solver from the stage responsible for @p block_index.
+  std::shared_ptr<CoupledSystemSolver> singleBlockSolver(size_t block_index) const;
+
  private:
   int max_staggered_iterations_;  ///< Maximum number of staggered iterations.
   bool exact_staggered_steps_;    ///< If true, no early-exit convergence check.

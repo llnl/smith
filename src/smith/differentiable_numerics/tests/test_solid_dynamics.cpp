@@ -241,7 +241,7 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   physics->resetStates();
 
-  return std::make_tuple(physics, shape_disp, states, params, bcs);
+  return std::make_tuple(std::move(physics), shape_disp, states, params, bcs);
 }
 
 TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
@@ -290,35 +290,35 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
 
 // these functions mimic the BasePhysics style of running smith
 
-void resetAndApplyInitialConditions(std::shared_ptr<BasePhysics> physics) { physics->resetStates(); }
+void resetAndApplyInitialConditions(BasePhysics& physics) { physics.resetStates(); }
 
-double integrateForward(std::shared_ptr<BasePhysics> physics, size_t num_steps, double dt, std::string reaction_name)
+double integrateForward(BasePhysics& physics, size_t num_steps, double dt, std::string reaction_name)
 {
   resetAndApplyInitialConditions(physics);
   for (size_t m = 0; m < num_steps; ++m) {
-    physics->advanceTimestep(dt);
+    physics.advanceTimestep(dt);
   }
-  FiniteElementDual reaction = physics->dual(reaction_name);
+  FiniteElementDual reaction = physics.dual(reaction_name);
 
   return 0.5 * innerProduct(reaction, reaction);
 }
 
-void adjointBackward(std::shared_ptr<BasePhysics> physics, smith::FiniteElementDual& shape_sensitivity,
+void adjointBackward(BasePhysics& physics, smith::FiniteElementDual& shape_sensitivity,
                      std::vector<smith::FiniteElementDual>& parameter_sensitivities, std::string reaction_name)
 {
-  smith::FiniteElementDual reaction = physics->dual(reaction_name);
+  smith::FiniteElementDual reaction = physics.dual(reaction_name);
   smith::FiniteElementState reaction_dual(reaction.space(), reaction_name + "_dual");
   reaction_dual = reaction;
 
-  physics->resetAdjointStates();
+  physics.resetAdjointStates();
 
-  physics->setDualAdjointBcs({{reaction_name, reaction_dual}});
+  physics.setDualAdjointBcs({{reaction_name, reaction_dual}});
 
-  while (physics->cycle() > 0) {
-    physics->reverseAdjointTimestep();
-    shape_sensitivity += physics->computeTimestepShapeSensitivity();
+  while (physics.cycle() > 0) {
+    physics.reverseAdjointTimestep();
+    shape_sensitivity += physics.computeTimestepShapeSensitivity();
     for (size_t param_index = 0; param_index < parameter_sensitivities.size(); ++param_index) {
-      parameter_sensitivities[param_index] += physics->computeTimestepSensitivity(param_index);
+      parameter_sensitivities[param_index] += physics.computeTimestepSensitivity(param_index);
     }
   }
 }
@@ -329,7 +329,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
   std::string physics_name = "solid";
   auto [physics, shape_disp, initial_states, params, bcs] = createSolidMechanicsBasePhysics(physics_name, mesh);
 
-  double qoi = integrateForward(physics, num_steps_, dt_, physics_name + "_reactions");
+  double qoi = integrateForward(*physics, num_steps_, dt_, physics_name + "_reactions");
   SLIC_INFO_ROOT(axom::fmt::format("{}", qoi));
 
   // Check that reaction forces are zero away from Dirichlet DOFs
@@ -344,7 +344,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
     parameter_sensitivities.emplace_back(*params[p].get_dual());
   }
 
-  adjointBackward(physics, shape_sensitivity, parameter_sensitivities, physics_name + "_reactions");
+  adjointBackward(*physics, shape_sensitivity, parameter_sensitivities, physics_name + "_reactions");
 
   auto state_sensitivities = physics->computeInitialConditionSensitivity();
   for (auto name_and_state_sensitivity : state_sensitivities) {
@@ -385,7 +385,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
       createSolidMechanicsBasePhysics(physics_name + "_base", mesh);
 
   // Forward pass
-  double qoiB = integrateForward(physicsBase, num_steps_, dt_, physics_name + "_base_reactions");
+  double qoiB = integrateForward(*physicsBase, num_steps_, dt_, physics_name + "_base_reactions");
 
   // Adjoint pass
   size_t num_params = physicsBase->parameterNames().size();
@@ -397,7 +397,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
     parameter_sensitivitiesB.back() = 0.0;
   }
 
-  adjointBackward(physicsBase, shape_sensitivityB, parameter_sensitivitiesB, physics_name + "_base_reactions");
+  adjointBackward(*physicsBase, shape_sensitivityB, parameter_sensitivitiesB, physics_name + "_base_reactions");
   auto initial_condition_sensitivitiesB = physicsBase->computeInitialConditionSensitivity();
 
   // 3. Compare sensitivities

@@ -50,6 +50,11 @@ inline FieldState createFieldState(gretl::DataStore& dataStore, const smith::FEF
   return dataStore.create_state<smith::FEFieldPtr, smith::FEDualPtr>(s, zero_dual_from_state());
 }
 
+inline FieldState create_field_state(gretl::DataStore& dataStore, const smith::FEFieldPtr& s)
+{
+  return createFieldState(dataStore, s);
+}
+
 /// @brief initialize on the gretl::DataStore a FieldState from a FiniteElementState of given space, name and mesh.
 template <typename function_space>
 FieldState createFieldState(gretl::DataStore& dataStore, function_space space, const std::string& name,
@@ -57,6 +62,13 @@ FieldState createFieldState(gretl::DataStore& dataStore, function_space space, c
 {
   auto f = std::make_shared<FiniteElementState>(StateManager::newState(space, name, mesh_tag));
   return createFieldState(dataStore, f);
+}
+
+template <typename function_space>
+FieldState create_field_state(gretl::DataStore& dataStore, function_space space, const std::string& name,
+                              const std::string& mesh_tag)
+{
+  return createFieldState(dataStore, space, name, mesh_tag);
 }
 
 /// @brief initialize on the gretl::DataStore a ReactionState with values from s

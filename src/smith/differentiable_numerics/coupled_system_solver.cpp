@@ -11,6 +11,7 @@
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "mfem.hpp"
 
+#include <algorithm>
 #include <numeric>
 #include <axom/slic.hpp>
 #include <axom/fmt.hpp>
@@ -18,6 +19,18 @@
 namespace smith {
 
 namespace {
+
+BlockConvergenceTolerances extractSingleBlockTolerances(const CoupledSystemSolver::Stage& stage, size_t local_index)
+{
+  BlockConvergenceTolerances result;
+  if (!stage.block_tolerances.relative_tols.empty()) {
+    result.relative_tols = {stage.block_tolerances.relative_tols.at(local_index)};
+  }
+  if (!stage.block_tolerances.absolute_tols.empty()) {
+    result.absolute_tols = {stage.block_tolerances.absolute_tols.at(local_index)};
+  }
+  return result;
+}
 
 void validateStageToleranceSizes(const CoupledSystemSolver::Stage& stage, size_t expected_blocks, size_t stage_index)
 {
@@ -243,6 +256,27 @@ std::vector<FieldState> CoupledSystemSolver::solve(
   }
 
   return final_solutions;
+}
+
+std::shared_ptr<CoupledSystemSolver> CoupledSystemSolver::singleBlockSolver(size_t block_index) const
+{
+  for (const auto& stage : stages_) {
+    if (stage.block_indices.empty()) {
+      auto result = std::make_shared<CoupledSystemSolver>(stage.solver);
+      return result;
+    }
+
+    auto found = std::find(stage.block_indices.begin(), stage.block_indices.end(), block_index);
+    if (found != stage.block_indices.end()) {
+      auto result = std::make_shared<CoupledSystemSolver>(1, exact_staggered_steps_);
+      const size_t local_index = static_cast<size_t>(std::distance(stage.block_indices.begin(), found));
+      Stage single_stage{{0}, stage.solver, extractSingleBlockTolerances(stage, local_index), stage.relaxation_factor};
+      result->addSubsystemSolver(single_stage);
+      return result;
+    }
+  }
+
+  return nullptr;
 }
 
 }  // namespace smith
