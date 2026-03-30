@@ -103,10 +103,12 @@ std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh(std::opti
 
   if (local_block_index.has_value()) {
     if (!nonlinear_opts.block_tolerances.relative_tols.empty()) {
-      nonlinear_opts.block_tolerances.relative_tols = {nonlinear_opts.block_tolerances.relative_tols.at(*local_block_index)};
+      nonlinear_opts.block_tolerances.relative_tols = {
+          nonlinear_opts.block_tolerances.relative_tols.at(*local_block_index)};
     }
     if (!nonlinear_opts.block_tolerances.absolute_tols.empty()) {
-      nonlinear_opts.block_tolerances.absolute_tols = {nonlinear_opts.block_tolerances.absolute_tols.at(*local_block_index)};
+      nonlinear_opts.block_tolerances.absolute_tols = {
+          nonlinear_opts.block_tolerances.absolute_tols.at(*local_block_index)};
     }
   }
 

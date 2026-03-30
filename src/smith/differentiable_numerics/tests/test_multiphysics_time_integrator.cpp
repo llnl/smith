@@ -32,22 +32,19 @@ class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
   void completeSetup(const std::vector<FieldT>&) override {}
 
   std::vector<FieldPtr> solve(
-      const std::vector<FieldPtr>& u_guesses,
-      std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)>,
+      const std::vector<FieldPtr>& u_guesses, std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)>,
       std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)>) const override
   {
     return u_guesses;
   }
 
-  std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>&,
-                                     std::vector<std::vector<MatrixPtr>>&) const override
+  std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>&, std::vector<std::vector<MatrixPtr>>&) const override
   {
     return {};
   }
 
   ConvergenceStatus convergenceStatus(double, const std::vector<mfem::Vector>& residuals,
-                                      const BlockConvergenceTolerances&,
-                                      NonlinearConvergenceContext&) const override
+                                      const BlockConvergenceTolerances&, NonlinearConvergenceContext&) const override
   {
     ConvergenceStatus status;
     status.global_converged = true;
@@ -62,14 +59,12 @@ class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
   {
   }
 
-  std::vector<double> effectiveRelativeTolerances(size_t num_blocks,
-                                                  const BlockConvergenceTolerances&) const override
+  std::vector<double> effectiveRelativeTolerances(size_t num_blocks, const BlockConvergenceTolerances&) const override
   {
     return std::vector<double>(num_blocks, 0.0);
   }
 
-  std::vector<double> effectiveAbsoluteTolerances(size_t num_blocks,
-                                                  const BlockConvergenceTolerances&) const override
+  std::vector<double> effectiveAbsoluteTolerances(size_t num_blocks, const BlockConvergenceTolerances&) const override
   {
     return std::vector<double>(num_blocks, 0.0);
   }
@@ -82,11 +77,10 @@ auto buildScalarDiffusionWeakForm(const std::string& name, std::shared_ptr<Mesh>
                                   FieldTypeT field_type)
 {
   using WeakFormType = TimeDiscretizedWeakForm<2, H1<1>, Parameters<H1<1>>>;
-  auto weak_form = std::make_shared<WeakFormType>(
-      name, mesh, fs->getField(field_type.name).get()->space(), fs->createSpaces(name, field_type.name, field_type));
-  weak_form->addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [](auto, auto, auto u) {
-    return smith::tuple{0.0 * get<VALUE>(u), get<DERIVATIVE>(u)};
-  });
+  auto weak_form = std::make_shared<WeakFormType>(name, mesh, fs->getField(field_type.name).get()->space(),
+                                                  fs->createSpaces(name, field_type.name, field_type));
+  weak_form->addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(),
+                             [](auto, auto, auto u) { return smith::tuple{0.0 * get<VALUE>(u), get<DERIVATIVE>(u)}; });
   return weak_form;
 }
 
@@ -103,8 +97,8 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "multiphysics_time_integrator");
 
-  auto mesh = std::make_shared<Mesh>(
-      mfem::Mesh::MakeCartesian2D(8, 8, mfem::Element::QUADRILATERAL, true, 1.0, 1.0), "integrator_mesh");
+  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(8, 8, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
+                                     "integrator_mesh");
   mesh->addDomainOfBoundaryElements("left",
                                     [](std::vector<vec2> nodes, int) { return allNodesOnBoundary(nodes, 0.0); });
   mesh->addDomainOfBoundaryElements("right",
