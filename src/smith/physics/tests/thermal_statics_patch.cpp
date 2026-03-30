@@ -67,14 +67,22 @@ class AffineSolution {
    *
    * @param material Material model used in the problem
    * @param physics The HeatTransfer module for the problem
-   * @param essential_boundaries Boundary attributes on which essential boundary conditions are desired
+   * @param essential_domain Domain on which essential boundary conditions are desired
    */
   template <int p, typename Material>
-  void applyLoads(const Material& material, HeatTransfer<p, dim>& physics, std::set<int> essential_boundaries, Domain & boundary) const
+  void applyLoads(const Material& material, HeatTransfer<p, dim>& physics, Domain &essential_domain, Domain & boundary) const
   {
     // essential BCs
-    auto ebc_func = [*this](const auto& X, auto){ return this->operator()(X); };
-    physics.setTemperatureBCs(essential_boundaries, ebc_func);
+    auto ebc_func = [*this](const auto &X, auto) {
+      mfem::Vector X_mfem(dim);
+      X_mfem(0) = X[0];
+      X_mfem(1) = X[1];
+      if constexpr (dim==3) {
+        X_mfem(2) = X[2];
+      }
+      return this->operator()(X_mfem);
+    };
+    physics.setTemperatureBCs(ebc_func, essential_domain);
 
     // natural BCs
     auto temp_grad = make_tensor<dim>([&](int i) { return A(i); });
@@ -178,7 +186,8 @@ double solution_error(const ExactSolution& exact_temperature, PatchBoundaryCondi
   heat_transfer::LinearIsotropicConductor mat(1.0,1.0,1.0);
   thermal.setMaterial(mat, mesh->entireBody());
 
-  exact_temperature.applyLoads(mat, thermal, essentialBoundaryAttributes<dim>(bc), mesh->entireBoundary());
+  mesh->addDomainOfBoundaryElements("essBdr", by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
+  exact_temperature.applyLoads(mat, thermal, mesh->domain("essBdr"), mesh->entireBoundary());
 
   // Finalize the data structures
   thermal.completeSetup();
