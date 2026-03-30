@@ -127,6 +127,22 @@ smith::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name,
   return domain(domain_name);
 }
 
+smith::Domain& Mesh::addDomainOfInternalBoundaryElements(const std::string& domain_name,
+                                                 std::function<bool(std::vector<vec2>, int)> func)
+{
+  errorIfDomainExists(domain_name);
+  domains_.emplace(domain_name, Domain::ofInteriorFaces(*mfem_mesh_, func));
+  return domain(domain_name);
+}
+
+smith::Domain& Mesh::addDomainOfInternalBoundaryElements(const std::string& domain_name,
+                                                 std::function<bool(std::vector<vec3>, int)> func)
+{
+  errorIfDomainExists(domain_name);
+  domains_.emplace(domain_name, Domain::ofInteriorFaces(*mfem_mesh_, func));
+  return domain(domain_name);
+}
+
 smith::Domain& Mesh::addDomainOfBodyElements(const std::string& domain_name,
                                              std::function<bool(std::vector<vec2>, int)> func)
 {
