@@ -194,8 +194,8 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   double rel_tol_;                               ///< relative residual tolerance for convergence check
   BlockConvergenceTolerances block_tolerances_;  ///< optional per-block convergence tolerances
   double inner_tol_multiplier_ = 1.0;            ///< multiplier for tolerances during inner solves
-  std::optional<NonlinearSolverOptions> retained_nonlinear_options_ = std::nullopt;
-  std::optional<LinearSolverOptions> retained_linear_options_ = std::nullopt;
+  std::optional<NonlinearSolverOptions> retained_nonlinear_options_ = std::nullopt;  ///< retained nonlinear config
+  std::optional<LinearSolverOptions> retained_linear_options_ = std::nullopt;        ///< retained linear config
 };
 
 /// @brief Create an equation-backed nonlinear block solver.

@@ -50,6 +50,7 @@ inline FieldState createFieldState(gretl::DataStore& dataStore, const smith::FEF
   return dataStore.create_state<smith::FEFieldPtr, smith::FEDualPtr>(s, zero_dual_from_state());
 }
 
+/// @brief Backward-compatible snake_case wrapper for `createFieldState(dataStore, s)`.
 inline FieldState create_field_state(gretl::DataStore& dataStore, const smith::FEFieldPtr& s)
 {
   return createFieldState(dataStore, s);
@@ -64,6 +65,7 @@ FieldState createFieldState(gretl::DataStore& dataStore, function_space space, c
   return createFieldState(dataStore, f);
 }
 
+/// @brief Backward-compatible snake_case wrapper for `createFieldState(dataStore, space, name, mesh_tag)`.
 template <typename function_space>
 FieldState create_field_state(gretl::DataStore& dataStore, function_space space, const std::string& name,
                               const std::string& mesh_tag)
