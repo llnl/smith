@@ -361,8 +361,14 @@ struct ThermoMechanicsSystem : public SystemBase {
 
 /**
  * @brief Factory function to build a thermo-mechanical system.
+ * @param mesh The mesh.
+ * @param solver The coupled system solver.
+ * @param disp_rule The displacement time integration rule.
+ * @param temp_rule The temperature time integration rule.
+ * @param prepend_name Optional field-name prefix.
  * @param cycle_zero_solver Optional override for the cycle-zero solve. Defaults to
  *        `solver->singleBlockSolver(0)`.
+ * @param parameter_types Optional parameter field descriptors.
  */
 template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
           typename... parameter_space>

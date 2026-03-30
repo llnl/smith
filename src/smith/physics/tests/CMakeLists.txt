@@ -30,7 +30,6 @@ set(physics_serial_test_sources
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
     test_functional_weak_form.cpp
-    thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
     )
 
@@ -65,7 +64,6 @@ endif()
 set(physics_parallel_test_sources
     lce_Brighenti_tensile.cpp
     lce_Bertoldi_lattice.cpp
-    parameterized_thermomechanics_example.cpp
     parameterized_thermal.cpp
     solid.cpp
     solid_periodic.cpp

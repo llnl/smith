@@ -268,10 +268,13 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
  public:
   static constexpr int NUM_STATE_VARS = 4;  ///< u, u_old, v_old, a_old
 
+  /// @brief Predicted-state weak form type.
   using TimeDiscretizedWeakFormT =
       TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<TrialInputSpace, InputSpaces...>>;
+  /// @brief Final corrected-state reaction weak form type.
   using FinalReactionFormT = TimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>>;
 
+  /// @brief Construct paired weak forms for second-order systems.
   SecondOrderTimeDiscretizedWeakForm(std::string physics_name, std::shared_ptr<Mesh> mesh,
                                      ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule,
                                      const mfem::ParFiniteElementSpace& output_mfem_space,
@@ -289,6 +292,7 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
     final_reaction_weak_form = final_reaction_weak_form_;
   }
 
+  /// @brief Add a body integral using corrected second-order kinematics.
   template <int... active_parameters, typename BodyIntegralType>
   void addBodyIntegral(DependsOn<active_parameters...> /*depends_on*/, std::string body_name,
                        BodyIntegralType integrand)
@@ -306,12 +310,14 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
                                                body_name, integrand);
   }
 
+  /// @brief Add a body integral using all trailing inputs.
   template <typename BodyIntegralType>
   void addBodyIntegral(std::string body_name, BodyIntegralType integrand)
   {
     addBodyIntegral(DependsOn<>{}, body_name, integrand);
   }
 
+  /// @brief Add a body source using corrected second-order kinematics.
   template <int... active_parameters, typename BodyLoadType>
   void addBodySource(DependsOn<active_parameters...> /*depends_on*/, std::string body_name, BodyLoadType load_function)
   {
@@ -334,6 +340,7 @@ class SecondOrderTimeDiscretizedWeakForm<spatial_dim, OutputSpace, Parameters<Tr
         });
   }
 
+  /// @brief Add a body source using all trailing inputs.
   template <typename BodyLoadType>
   void addBodySource(std::string body_name, BodyLoadType load_function)
   {

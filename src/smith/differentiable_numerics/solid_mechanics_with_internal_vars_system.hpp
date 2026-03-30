@@ -371,8 +371,14 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
 /**
  * @brief Factory function to build a solid mechanics system with internal variable.
+ * @param mesh The mesh.
+ * @param solver The coupled system solver.
+ * @param disp_rule The displacement time integration rule.
+ * @param state_rule The internal-variable time integration rule.
+ * @param prepend_name Optional field-name prefix.
  * @param cycle_zero_solver Optional override for the cycle-zero solve. Defaults to
  *        `solver->singleBlockSolver(0)`.
+ * @param parameter_types Optional parameter field descriptors.
  */
 template <int dim, int disp_order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
           typename... parameter_space>

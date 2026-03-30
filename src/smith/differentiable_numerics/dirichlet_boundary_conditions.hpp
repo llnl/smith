@@ -125,12 +125,13 @@ class DirichletBoundaryConditions {
   }
 
   template <int spatial_dim>
+  /// @brief Constrain selected vector components over a domain to zero.
   void setFixedVectorBCs(const Domain& domain, std::vector<int> components)
   {
     setFixedVectorBCs<spatial_dim, spatial_dim>(domain, components);
   }
 
-  /// @brief Constrain the dofs of a scalar field over a domain
+  /// @brief Constrain one vector component over a domain to zero.
   template <int spatial_dim, int field_dim>
   void setFixedVectorBCs(const Domain& domain, int component)
   {
@@ -138,6 +139,7 @@ class DirichletBoundaryConditions {
     setFixedVectorBCs<spatial_dim, field_dim>(domain, components);
   }
 
+  /// @brief Constrain one vector component over a domain to zero.
   template <int spatial_dim>
   void setFixedVectorBCs(const Domain& domain, int component)
   {

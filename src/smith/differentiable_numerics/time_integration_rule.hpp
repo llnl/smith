@@ -295,10 +295,14 @@ struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule {
   }
 };
 
-// Backward-compat wrapper for older examples/tests.
+/// @brief Backward-compatible wrapper around `ImplicitNewmarkSecondOrderTimeIntegrationRule`.
+///
+/// Preserved for older examples/tests that still refer to the legacy name.
 struct SecondOrderTimeIntegrationRule : ImplicitNewmarkSecondOrderTimeIntegrationRule {
+  /// @brief Construct the legacy wrapper.
   explicit SecondOrderTimeIntegrationRule([[maybe_unused]] double gamma = 1.0) {}
 
+  /// @brief Legacy alias for the first derivative helper.
   template <typename T1, typename T2, typename T3, typename T4>
   SMITH_HOST_DEVICE auto derivative(const TimeInfo& t, const T1& field_new, const T2& field_old, const T3& velo_old,
                                     const T4& accel_old) const
@@ -306,6 +310,7 @@ struct SecondOrderTimeIntegrationRule : ImplicitNewmarkSecondOrderTimeIntegratio
     return dot(t, field_new, field_old, velo_old, accel_old);
   }
 
+  /// @brief Legacy alias for the second derivative helper.
   template <typename T1, typename T2, typename T3, typename T4>
   SMITH_HOST_DEVICE auto second_derivative(const TimeInfo& t, const T1& field_new, const T2& field_old,
                                            const T3& velo_old, const T4& accel_old) const
