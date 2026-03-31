@@ -133,7 +133,7 @@ struct ThermoMechanicsSystem : public SystemBase {
           typename MaterialType::State state;
           auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current),
                                             get<VALUE>(T), get<DERIVATIVE>(T), params...);
-          return smith::tuple{zero{}, pk};
+          return smith::tuple{get<VALUE>(a_current) * material.density, pk};
         });
 
     thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp,
