@@ -85,74 +85,6 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   virtual ~TiedContactProblem();
 };
 
-class ParaviewWriter {
- public:
-  using StateVecs = std::vector<std::shared_ptr<smith::FiniteElementState>>;
-  using DualVecs = std::vector<std::shared_ptr<smith::FiniteElementDual>>;
-
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_)
-      : pv(std::move(pv_)), states(states_)
-  {
-  }
-
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
-      : pv(std::move(pv_)), states(states_), dual_states(duals_)
-  {
-  }
-
-  void write(int step, double time, const std::vector<smith::FiniteElementState const*>& current_states)
-  {
-    SMITH_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
-
-    for (size_t n = 0; n < states.size(); ++n) {
-      auto& state = states[n];
-      *state = *current_states[n];
-      state->gridFunction();
-    }
-
-    pv->SetCycle(step);
-    pv->SetTime(time);
-    pv->Save();
-  }
-
- private:
-  std::unique_ptr<mfem::ParaViewDataCollection> pv;
-  StateVecs states;
-  StateVecs dual_states;
-};
-
-auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const smith::FiniteElementState*>& states,
-                          std::string output_name)
-{
-  if (output_name == "") {
-    output_name = "default";
-  }
-
-  ParaviewWriter::StateVecs output_states;
-  for (const auto& s : states) {
-    output_states.push_back(std::make_shared<smith::FiniteElementState>(s->space(), s->name()));
-  }
-
-  auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
-  auto paraview_dc = std::make_unique<mfem::ParaViewDataCollection>(output_name, non_const_mesh);
-  int max_order_in_fields = 0;
-
-  // Find the maximum polynomial order in the physics module's states
-  for (const auto& state : output_states) {
-    paraview_dc->RegisterField(state->name(), &state->gridFunction());
-    max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
-  }
-
-  // Set the options for the paraview output files
-  paraview_dc->SetLevelsOfDetail(max_order_in_fields);
-  paraview_dc->SetHighOrderOutput(true);
-  paraview_dc->SetDataFormat(mfem::VTKFormat::BINARY);
-  paraview_dc->SetCompression(true);
-
-  return ParaviewWriter(std::move(paraview_dc), output_states, {});
-}
-
 int main(int argc, char* argv[])
 {
   // Initialize and automatically finalize MPI and other libraries
@@ -300,8 +232,8 @@ int main(int argc, char* argv[])
   SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
 
   // visualize
-  auto writer =
-      createParaviewOutput(mesh->mfemParMesh(), smith::getConstFieldPointers(states), "two_block_tiedcontact_plot");
+  auto writer = smith::createParaviewWriter(mesh->mfemParMesh(), smith::getConstFieldPointers(states),
+                                            "two_block_tiedcontact_plot");
   if (visualize) {
     mfem::Vector u(states[FIELD::DISP].space().GetTrueVSize());
     u = problem.GetDisplacement(X0);
@@ -316,7 +248,7 @@ int main(int argc, char* argv[])
       for (int i = 0; i < iterates.Size(); i++) {
         u = problem.GetDisplacement(*iterates[i]);
         states[FIELD::DISP].Set(1.0, u);
-        writer.write((i + 1), static_cast<double>(i + 1), smith::getConstFieldPointers(states));
+        writer.write(static_cast<size_t>(i + 1), static_cast<double>(i + 1), smith::getConstFieldPointers(states));
       }
     }
   }
