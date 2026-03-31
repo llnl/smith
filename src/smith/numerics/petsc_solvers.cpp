@@ -667,6 +667,23 @@ PetscKSPSolver::PetscKSPSolver(const mfem::HypreParMatrix& A, KSPType ksp_type, 
   Customize();
 }
 
+PetscKSPSolver::~PetscKSPSolver()
+{
+  if (pA_) {
+    delete pA_;
+  }
+  if (X) {
+    delete X;
+  }
+  if (B) {
+    delete B;
+  }
+
+  pA_ = nullptr;
+  X = nullptr;
+  B = nullptr;
+}
+
 void PetscKSPSolver::SetTolerances()
 {
   PetscCallAbort(GetComm(), KSPSetTolerances(*this, rel_tol, abs_tol, PETSC_DEFAULT, max_iter));
