@@ -1077,6 +1077,8 @@ void EquationSolver::initializeConvergenceManager(double abs_tol, double rel_tol
 {
   if (!convergence_manager_) {
     convergence_manager_ = std::make_shared<EquationSolverConvergenceManager>(comm, abs_tol, rel_tol);
+  } else {
+    convergence_manager_->setTolerances(abs_tol, rel_tol);
   }
   attachConvergenceManager();
 }

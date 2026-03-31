@@ -148,8 +148,8 @@ struct GreenSaintVenantThermoelasticWithExtendedStateMaterial {
   }
 
   template <typename T1, typename T2, typename T3, typename T4, typename T5, int d, int sd>
-  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const T2& grad_v,
-                  T3 theta, const smith::tensor<T4, d>& grad_theta, const smith::tensor<T5, sd>& alpha_old) const
+  auto operator()(double, State&, const smith::tensor<T1, d, d>& grad_u, const T2& grad_v, T3 theta,
+                  const smith::tensor<T4, d>& grad_theta, const smith::tensor<T5, sd>& alpha_old) const
   {
     auto [w_old, F_old] = StateDemuxer<T5, d, sd>(alpha_old);
 

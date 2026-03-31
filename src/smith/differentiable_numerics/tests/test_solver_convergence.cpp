@@ -64,6 +64,8 @@ class FakeNonlinearBlockSolver : public NonlinearBlockSolverBase {
     static_cast<void>(convergenceStatus(1.0, residuals, tolerance_overrides, context));
   }
 
+  void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }
+
   std::vector<double> effectiveRelativeTolerances(size_t num_blocks,
                                                   const BlockConvergenceTolerances& tolerance_overrides) const override
   {
@@ -84,6 +86,7 @@ class FakeNonlinearBlockSolver : public NonlinearBlockSolverBase {
   double abs_tol_;
   double rel_tol_;
   BlockConvergenceTolerances block_tolerances_;
+  double inner_tol_multiplier_ = 1.0;
 };
 
 std::vector<mfem::Vector> makeResiduals(std::initializer_list<double> values)

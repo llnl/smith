@@ -139,9 +139,10 @@ const std::vector<FieldState>& FieldStore::getAllFields() const { return states_
 std::vector<FieldState> FieldStore::getStates(const std::string& weak_form_name) const
 {
   // Validate that weak form is registered
-  SLIC_ERROR_ROOT_IF(weak_form_name_to_field_names_.count(weak_form_name) == 0,
-                     axom::fmt::format("Weak form '{}' not found in FieldStore. Did you forget to call addResidual()?",
-                                       weak_form_name));
+  SLIC_ERROR_ROOT_IF(
+      weak_form_name_to_field_names_.count(weak_form_name) == 0,
+      axom::fmt::format("Weak form '{}' not found in FieldStore. Did you forget to call addResireaction()?",
+                        weak_form_name));
 
   auto field_names = weak_form_name_to_field_names_.at(weak_form_name);
   std::vector<FieldState> fields_for_residual;
@@ -165,9 +166,10 @@ std::vector<FieldState> FieldStore::getStatesFromVectors(const std::string& weak
                                                          const std::vector<FieldState>& param_fields) const
 {
   // Validate that weak form is registered
-  SLIC_ERROR_ROOT_IF(weak_form_name_to_field_names_.count(weak_form_name) == 0,
-                     axom::fmt::format("Weak form '{}' not found in FieldStore. Did you forget to call addResidual()?",
-                                       weak_form_name));
+  SLIC_ERROR_ROOT_IF(
+      weak_form_name_to_field_names_.count(weak_form_name) == 0,
+      axom::fmt::format("Weak form '{}' not found in FieldStore. Did you forget to call addResireaction()?",
+                        weak_form_name));
 
   auto field_names = weak_form_name_to_field_names_.at(weak_form_name);
   std::vector<FieldState> fields_for_residual;

@@ -150,64 +150,9 @@ class QuasiStaticRule : public TimeIntegrationRule {
   }
 };
 
-/// @brief Quasi-static rule for first-order systems (2 states, dot returns zero).
-/// Solves f(u, 0, t) = 0 while maintaining a history field for compatibility with 2-state system layouts.
-/// Use this instead of BackwardEulerFirstOrderTimeIntegrationRule when time derivatives should be zero.
-class QuasiStaticFirstOrderTimeIntegrationRule : public TimeIntegrationRule {
- public:
-  static constexpr int num_states = 2;  ///< number of states required by this rule (compile-time)
-
-  /// @brief Constructor
-  QuasiStaticFirstOrderTimeIntegrationRule() {}
-
-  /// @brief get the number of states required by the rule
-  int num_args() const override { return num_states; }
-
-  /// @brief evaluate value of the ode state as used by the integration rule
-  template <typename T1, typename T2>
-  SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new, const T2& /*field_old*/) const
-  {
-    return field_new;
-  }
-
-  /// @brief evaluate time derivative — returns zero for quasi-static
-  template <typename T1, typename T2>
-  SMITH_HOST_DEVICE auto dot(const TimeInfo& /*t*/, const T1& /*field_new*/, const T2& /*field_old*/) const
-  {
-    return zero{};
-  }
-
-  /// @brief interpolate all derived quantities in one call
-  template <typename T1, typename T2>
-  SMITH_HOST_DEVICE auto interpolate(const TimeInfo& t, const T1& field_new, const T2& field_old) const
-  {
-    return std::make_tuple(value(t, field_new, field_old), dot(t, field_new, field_old));
-  }
-
-  /// @overload
-  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override
-  {
-    return value(t, states[0], states[1]);
-  }
-
-  /// @overload
-  FieldState corrected_dot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
-  {
-    return zeroCopy(states[0]);
-  }
-
-  /// @overload
-  FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
-  {
-    SLIC_ERROR("QuasiStaticFirstOrderTimeIntegrationRule does not support second derivatives.");
-    return states[0];
-  }
-};
-
-/// Alternative name for Backward Euler which makes sense when restricting what are typically second order odes,
-/// for example transient solid mechanics, to the quasi-static approximation with velocity.
-/// Unlike QuasiStaticFirstOrderTimeIntegrationRule, this computes dot = (u - u_old)/dt.
-using BackwardEulerQuasiStaticRule = BackwardEulerFirstOrderTimeIntegrationRule;
+/// @brief Alias for BackwardEulerFirstOrderTimeIntegrationRule for convenience.  Quasi-static still should compute
+/// velocities (viscosities) using backward Euler.
+using QuasiStaticFirstOrderTimeIntegrationRule = BackwardEulerFirstOrderTimeIntegrationRule;
 
 /// @brief encodes rules for time discretizing second order odes (involving first and second time derivatives).
 /// When solving f(u, u_dot, u_dot_dot, t) = 0
@@ -314,11 +259,11 @@ struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule {
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
-  SMITH_HOST_DEVICE auto ddot([[maybe_unused]] const TimeInfo& t, const T1& field_new,
+  SMITH_HOST_DEVICE auto ddot([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
                               [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                               [[maybe_unused]] const T4& accel_old) const
   {
-    return 0.0 * field_new;
+    return zero{};
   }
 
   /// @brief interpolate all derived quantities in one call

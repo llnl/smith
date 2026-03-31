@@ -60,9 +60,9 @@ struct QuasiStaticSolidMechanics : public SystemBase {
     return {field_store->getField(prefix("displacement_predicted")), field_store->getField(prefix("displacement"))};
   }
 
-  std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
+  std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_shared<DifferentiablePhysics>(
+    return std::make_unique<DifferentiablePhysics>(
         field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
         getParameterFields(), advancer, std::move(physics_name), std::vector<std::string>{prefix("solid_force")});
   }

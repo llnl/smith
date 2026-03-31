@@ -26,7 +26,7 @@ namespace smith {
 /**
  * @brief Container for a thermal system with configurable time integration.
  *
- * Always uses a 2-state field layout (temperature_predicted, temperature).
+ * Always uses a 2-state field layout (temperature_solve_state, temperature).
  * Use QuasiStaticFirstOrderTimeIntegrationRule for steady-state problems,
  * or BackwardEulerFirstOrderTimeIntegrationRule for transient problems.
  *
@@ -50,24 +50,39 @@ struct ThermalSystem : public SystemBase {
   std::shared_ptr<TemperatureTimeRule> temperature_time_rule;   ///< Time integration for temperature.
 
   /**
-   * @brief Get the list of all state fields (temperature_predicted, temperature).
+   * @brief Get the list of all state fields (temperature_solve_state, temperature).
    * @return std::vector<FieldState> List of state fields.
    */
   std::vector<FieldState> getStateFields() const
   {
-    return {field_store->getField(prefix("temperature_predicted")), field_store->getField(prefix("temperature"))};
+    return {field_store->getField(prefix("temperature_solve_state")), field_store->getField(prefix("temperature"))};
+  }
+
+  /**
+   * @brief Get the list of physical, non-solve state fields.
+   * @return std::vector<FieldState> List of physical fields suitable for output.
+   */
+  std::vector<FieldState> getOutputFieldStates() const { return {field_store->getField(prefix("temperature"))}; }
+
+  /**
+   * @brief Get information about reaction fields for this system.
+   * @return List of ReactionInfo structures.
+   */
+  std::vector<ReactionInfo> getReactionInfos() const
+  {
+    return {{prefix("thermal_flux"), &field_store->getField(prefix("temperature")).get()->space()}};
   }
 
   /**
    * @brief Create a DifferentiablePhysics object for this system.
    * @param physics_name The name of the physics.
-   * @return std::shared_ptr<DifferentiablePhysics> The differentiable physics object.
+   * @return std::unique_ptr<DifferentiablePhysics> The differentiable physics object.
    */
-  std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
+  std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_shared<DifferentiablePhysics>(
-        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
-        getParameterFields(), advancer, physics_name, std::vector<std::string>{prefix("thermal_flux")});
+    return std::make_unique<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
+                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
+                                                   advancer, physics_name, getReactionInfos());
   }
 
   /**
@@ -202,7 +217,7 @@ ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...> buildThe
   field_store->addShapeDisp(shape_disp_type);
 
   auto temperature_time_rule = std::make_shared<TemperatureTimeRule>(temp_rule);
-  FieldType<H1<temp_order>> temperature_type(prefix("temperature_predicted"));
+  FieldType<H1<temp_order>> temperature_type(prefix("temperature_solve_state"));
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
   auto temperature_old_type =
       field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, prefix("temperature"));

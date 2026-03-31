@@ -88,6 +88,9 @@ class EquationSolverConvergenceManager {
   /// @brief Reset stored initial residual norms.
   void reset() const;
 
+  /// @brief Set scalar tolerances.
+  void setTolerances(double abs_tol, double rel_tol) const;
+
   /// @brief Configure block offsets and per-block tolerances for a monolithic residual.
   void setBlockData(const std::vector<int>& block_offsets, BlockConvergenceTolerances block_tolerances) const;
 
@@ -99,8 +102,8 @@ class EquationSolverConvergenceManager {
 
  private:
   MPI_Comm comm_;
-  double abs_tol_;
-  double rel_tol_;
+  mutable double abs_tol_;
+  mutable double rel_tol_;
   mutable std::vector<int> block_offsets_ = {};
   mutable BlockConvergenceTolerances block_tolerances_ = {};
   mutable NonlinearConvergenceContext context_ = {};
