@@ -11,6 +11,7 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace smith {
@@ -35,7 +36,12 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
   std::vector<FieldState> current_states = states;
 
   // Handle initial acceleration solve at cycle 0
-  if (time_info.cycle() == 0 && cycle_zero_weak_form_) {
+  const bool requires_cycle_zero_solve =
+      std::any_of(field_store_->getTimeIntegrationRules().begin(), field_store_->getTimeIntegrationRules().end(),
+                  [](const auto& rule_and_mapping) {
+                    return rule_and_mapping.first && rule_and_mapping.first->requiresInitialAccelerationSolve();
+                  });
+  if (time_info.cycle() == 0 && cycle_zero_weak_form_ && requires_cycle_zero_solve) {
     for (size_t i = 0; i < current_states.size(); ++i) {
       field_store_->setField(i, current_states[i]);
     }

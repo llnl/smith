@@ -149,8 +149,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
       typename MaterialType::State state;
       auto pk_stress = material(state, get<DERIVATIVE>(u_current), get<VALUE>(alpha_current), params...);
 
-      tensor<double, dim> source{};
-      return smith::tuple{source, pk_stress};
+      return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
     });
 
     // Cycle-zero: u and v are given, solve for a; alpha at initial condition

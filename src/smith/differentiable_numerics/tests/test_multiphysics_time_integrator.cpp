@@ -72,6 +72,27 @@ class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
   void setInnerToleranceMultiplier(double) override {}
 };
 
+class CountingNoOpNonlinearBlockSolver : public NoOpNonlinearBlockSolver {
+ public:
+  std::vector<FieldPtr> solve(
+      const std::vector<FieldPtr>& u_guesses, std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> f,
+      std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> j) const override
+  {
+    ++solve_calls_;
+    return NoOpNonlinearBlockSolver::solve(u_guesses, std::move(f), std::move(j));
+  }
+
+  int solveCalls() const { return solve_calls_; }
+
+ private:
+  mutable int solve_calls_ = 0;
+};
+
+class NeedsInitialSolveRule : public QuasiStaticRule {
+ public:
+  bool requiresInitialAccelerationSolve() const override { return true; }
+};
+
 template <typename FieldTypeT>
 auto buildScalarDiffusionWeakForm(const std::string& name, std::shared_ptr<Mesh> mesh, std::shared_ptr<FieldStore> fs,
                                   FieldTypeT field_type)
@@ -81,6 +102,33 @@ auto buildScalarDiffusionWeakForm(const std::string& name, std::shared_ptr<Mesh>
                                                   fs->createSpaces(name, field_type.name, field_type));
   weak_form->addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(),
                              [](auto, auto, auto u) { return smith::tuple{0.0 * get<VALUE>(u), get<DERIVATIVE>(u)}; });
+  return weak_form;
+}
+
+template <typename DispFieldType, typename DispOldFieldType, typename VelocityFieldType, typename AccelerationFieldType>
+auto buildSecondOrderMainWeakForm(const std::string& name, std::shared_ptr<Mesh> mesh, std::shared_ptr<FieldStore> fs,
+                                  DispFieldType displacement_type, DispOldFieldType displacement_old_type,
+                                  VelocityFieldType velocity_type, AccelerationFieldType acceleration_type)
+{
+  using WeakFormType = TimeDiscretizedWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>, H1<1>>>;
+  auto weak_form =
+      std::make_shared<WeakFormType>(name, mesh, fs->getField(displacement_type.name).get()->space(),
+                                     fs->createSpaces(name, displacement_type.name, displacement_type,
+                                                      displacement_old_type, velocity_type, acceleration_type));
+  weak_form->addBodySource(mesh->entireBodyName(), [](auto, auto, auto...) { return 0.0; });
+  return weak_form;
+}
+
+template <typename DispFieldType, typename VelocityFieldType, typename AccelerationFieldType>
+auto buildSecondOrderCycleZeroWeakForm(const std::string& name, std::shared_ptr<Mesh> mesh,
+                                       std::shared_ptr<FieldStore> fs, DispFieldType displacement_type,
+                                       VelocityFieldType velocity_type, AccelerationFieldType acceleration_type)
+{
+  using WeakFormType = TimeDiscretizedWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>>>;
+  auto weak_form = std::make_shared<WeakFormType>(
+      name, mesh, fs->getField(acceleration_type.name).get()->space(),
+      fs->createSpaces(name, acceleration_type.name, displacement_type, velocity_type, acceleration_type));
+  weak_form->addBodySource(mesh->entireBodyName(), [](auto, auto, auto...) { return 0.0; });
   return weak_form;
 }
 
@@ -107,7 +155,7 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
   auto field_store = std::make_shared<FieldStore>(mesh, 20);
   field_store->addShapeDisp(FieldType<H1<1, 2>>("shape_displacement"));
 
-  auto quasi_static = std::make_shared<QuasiStaticRule>();
+  auto quasi_static = std::make_shared<NeedsInitialSolveRule>();
   FieldType<H1<1>> temperature_type("temperature");
   auto temperature_bc = field_store->addIndependent(temperature_type, quasi_static);
   FieldType<H1<1>> displacement_type("displacement");
@@ -144,6 +192,47 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
   for (int i = 0; i < essential_dofs.Size(); ++i) {
     EXPECT_NEAR(displacement(essential_dofs[i]), 1.0, 1.0e-10);
   }
+
+  StateManager::reset();
+}
+
+TEST(MultiphysicsTimeIntegrator, CycleZeroSkippedForQuasiStaticSecondOrderRule)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "multiphysics_time_integrator_quasistatic_second_order");
+
+  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(4, 4, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
+                                     "integrator_mesh");
+
+  auto field_store = std::make_shared<FieldStore>(mesh, 20);
+  field_store->addShapeDisp(FieldType<H1<1, 2>>("shape_displacement"));
+
+  auto quasi_static = std::make_shared<QuasiStaticSecondOrderTimeIntegrationRule>();
+  FieldType<H1<1>> displacement_type("displacement_solve_state");
+  field_store->addIndependent(displacement_type, quasi_static);
+  auto displacement_old_type =
+      field_store->addDependent(displacement_type, FieldStore::TimeDerivative::VAL, "displacement");
+  auto velocity_type = field_store->addDependent(displacement_type, FieldStore::TimeDerivative::DOT, "velocity");
+  auto acceleration_type =
+      field_store->addDependent(displacement_type, FieldStore::TimeDerivative::DDOT, "acceleration");
+
+  auto main_wf = buildSecondOrderMainWeakForm("displacement_main", mesh, field_store, displacement_type,
+                                              displacement_old_type, velocity_type, acceleration_type);
+  auto cycle_zero_wf = buildSecondOrderCycleZeroWeakForm("cycle_zero_acceleration", mesh, field_store,
+                                                         displacement_type, velocity_type, acceleration_type);
+
+  auto main_solver = std::make_shared<CoupledSystemSolver>(std::make_shared<NoOpNonlinearBlockSolver>());
+  auto cycle_zero_block_solver = std::make_shared<CountingNoOpNonlinearBlockSolver>();
+  auto cycle_zero_solver = std::make_shared<CoupledSystemSolver>(cycle_zero_block_solver);
+
+  MultiphysicsTimeIntegrator advancer(field_store, {main_wf}, main_solver, cycle_zero_wf, cycle_zero_solver);
+
+  auto [new_states, reactions] =
+      advancer.advanceState(TimeInfo(0.0, 1.0, 0), field_store->getShapeDisp(), field_store->getAllFields(), {});
+  static_cast<void>(new_states);
+  static_cast<void>(reactions);
+
+  EXPECT_EQ(cycle_zero_block_solver->solveCalls(), 0);
 
   StateManager::reset();
 }
