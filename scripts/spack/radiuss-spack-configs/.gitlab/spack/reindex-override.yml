@@ -1,0 +1,14 @@
+##############################################################################
+# Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+# RADIUSS project contributors. See the COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (MIT)
+##############################################################################
+
+rebuild-index:
+  stage: .post
+  tags: [oslic, shell]
+  rules:
+    - when: never
+  script:
+    - echo "Override the job set by Spack"

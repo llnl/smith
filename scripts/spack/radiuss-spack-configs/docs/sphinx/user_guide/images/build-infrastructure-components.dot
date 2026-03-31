@@ -1,0 +1,16 @@
+digraph BuildInfrastructure {
+
+  subgraph Deps {
+
+  a [ label="project", shape="rectangle", fillcolor="#0E4F98", style=filled, fontcolor=white]
+  b [ label="radiuss-spack-configs", shape="rectangle", fillcolor="#0E4F98", style=filled, fontcolor=white]
+  c [ label="spack", shape="rectangle", fillcolor="#0E4F98", style=filled, fontcolor=white]
+  d [ label="uberenv", shape="rectangle", fillcolor="#0E4F98", style=filled, fontcolor=white]
+
+  a -> { b c d } [ color="grey" ]
+  b -> c [ color="grey" ]
+  d -> c [ color="grey" ]
+
+  }
+
+}

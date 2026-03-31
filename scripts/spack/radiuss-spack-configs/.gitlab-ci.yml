@@ -1,0 +1,46 @@
+##############################################################################
+# Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+# RADIUSS project contributors. See the COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (MIT)
+##############################################################################
+
+variables:
+# Use the umdev LLNL service user to run CI. This prevents from running
+# pipelines as an actual user.
+  LLNL_SERVICE_USER: bradiuss
+# Use the service user workspace. Solves permission issues, stores everything
+# at the same location whoever triggers a pipeline.
+  CUSTOM_CI_BUILDS_DIR: /usr/workspace/bradiuss/gitlab-runner
+
+stages:
+  - setup
+  - generate
+  - build
+  - clean
+
+include:
+  - project: 'lc-templates/id_tokens'
+    file: 'id_tokens.yml'
+  - local: .gitlab/variables.yml
+    rules:
+      - if: $MY_ENV_NAME != null
+  - local: .gitlab/spack/envs/${MY_ENV_NAME}/pipeline.yml
+    rules:
+      - if: $MY_ENV_NAME != null
+
+# Run a simple job to display instructions when no env name was specified.
+no-env-name:
+  tags: [shell, oslic]
+  rules:
+    - if: $MY_ENV_NAME == null
+      when: always
+    - when: never
+  stage: setup
+  script:
+      echo -e "\e[31mVariable \"MY_ENV_NAME\" was not set.\e[0m"
+      echo -e "\e[31m\"MY_ENV_NAME\" is required and should point to an existing directory in .gitlab/spack/envs.\e[0m"
+      echo -e "\e[31m\"MY_ENV_NAME\" can only be defined in GitLab UI (see documentation).\e[0m"
+      echo -e "\e[31mAvailable environments \e[0m"
+      echo -e "\e[31$(ls --ignore empty .gitlab/spack/envs)\e[0m"
+

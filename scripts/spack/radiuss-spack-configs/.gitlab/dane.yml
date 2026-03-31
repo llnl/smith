@@ -1,0 +1,99 @@
+##############################################################################
+# Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+# RADIUSS project contributors. See the COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (MIT)
+##############################################################################
+
+variables:
+  DANE_ALLOC_NAME: ${CI_PROJECT_NAME}_ci_${CI_PIPELINE_ID}
+  DANE_SHARED_ALLOC: "--exclusive --reservation=ci --time=60 --nodes=1"
+  DANE_JOB_ALLOC: "--reservation=ci --overlap --nodes=1"
+
+.on-dane:
+  tags:
+    - shell
+    - dane
+  rules:
+    # Runs except if we explicitly deactivate dane by variable.
+    - if: '$ON_DANE == "OFF"'
+      when: never
+    # We should always release resources allocated in the pipeline.
+    - if: '$CI_JOB_NAME =~ /release-dane/'
+      when: always
+    # A true statement is expected to allow jobs to run. Here is the default.
+    - when: on_success
+
+allocate-dane:
+  variables:
+    GIT_STRATEGY: none
+  extends: [.on-dane, .dane-variables]
+  stage: .pre
+  script:
+    - salloc ${DANE_SHARED_ALLOC} --no-shell --job-name=${DANE_ALLOC_NAME}
+
+.prepare-dane-jobid:
+  script:
+    - |
+      export JOBID=$(squeue -h --name=${DANE_ALLOC_NAME} --format=%A)
+      echo -e "[Information] Shared allocation ID = ${JOBID}"
+      export JOBID_OPT=$([[ -n "${JOBID}" ]] && echo "--jobid=${JOBID}")
+
+#[get-spack--]
+get-spack-dane:
+  extends: [.on-dane, .dane-variables]
+  stage: setup
+  script:
+    - !reference [.prepare-dane-jobid, script]
+    - srun ${JOBID_OPT} --nodes=1 .gitlab/scripts/get-spack
+  needs: [allocate-dane]
+#[--get-spack]
+
+generate-on-dane:
+  extends: [.on-dane, .dane-variables]
+  stage: generate
+  script:
+    - .gitlab/scripts/print-variables
+    - !reference [.prepare-dane-jobid, script]
+    - srun ${JOBID_OPT} --reservation=ci --nodes=1 .gitlab/spack/generate-script.sh
+  artifacts:
+    paths:
+      - "${CI_PROJECT_DIR}/jobs_scratch_dir"
+  needs: [get-spack-dane]
+
+#[send-variable-child--]
+build-on-dane:
+  extends: [.dane-variables]
+  stage: build
+  trigger:
+    include:
+      - artifact: "jobs_scratch_dir/pipeline.yml"
+        job: generate-on-dane
+      - project: "lc-templates/id_tokens"
+        file: "id_tokens.yml"
+      - local: ".gitlab/spack/reindex-dane.yml"
+    strategy: depend
+    forward:
+      pipeline_variables: true
+  needs: [generate-on-dane]
+#[--send-variable-child]
+
+#[rm-spack--]
+rm-spack-dane:
+  extends: [.on-dane, .dane-variables]
+  stage: clean
+  script:
+    - !reference [.prepare-dane-jobid, script]
+    - srun ${JOBID_OPT} --reservation=ci --nodes=1 .gitlab/scripts/remove-spack
+  needs: [build-on-dane]
+#[--rm-spack]
+
+release-dane:
+  variables:
+    GIT_STRATEGY: none
+  extends: [.on-dane, .dane-variables]
+  stage: .post
+  script:
+    - !reference [.prepare-dane-jobid, script]
+    - ([[ -n "${JOBID}" ]] && scancel ${JOBID} || exit 0)
+  needs: [rm-spack-dane]

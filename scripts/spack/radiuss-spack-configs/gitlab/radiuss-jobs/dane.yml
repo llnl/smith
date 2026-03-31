@@ -1,0 +1,22 @@
+##############################################################################
+# Copyright (c) 2025, Lawrence Livermore National Security, LLC and RADIUSS
+# project contributors. See the COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (MIT)
+##############################################################################
+
+oneapi_2023_2_1:
+  variables:
+    SPEC: "${PROJECT_DANE_VARIANTS} %oneapi-2023-gcc-10 ${PROJECT_DANE_DEPS}"
+  extends: .job_on_dane
+
+clang_14_0_6:
+  variables:
+    SPEC: "${PROJECT_DANE_VARIANTS} %clang-14-gcc-11 ${PROJECT_DANE_DEPS}"
+  extends: .job_on_dane
+
+gcc_11_2_1:
+  variables:
+    SPEC: "${PROJECT_DANE_VARIANTS} %gcc@=11.2.1 ${PROJECT_DANE_DEPS}"
+  extends: .job_on_dane
+

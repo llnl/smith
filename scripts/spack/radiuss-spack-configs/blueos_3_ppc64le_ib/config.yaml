@@ -1,0 +1,24 @@
+config:
+  install_tree:
+    root: $spack/..
+    padded_length: 128
+    projections:
+      all: "{compiler.name}-{compiler.version}/{name}-{version}-{hash}"
+  # Note: unlike projects using RADIUSS Spack
+  # Configs, Serac is using "$spack/.." as the root
+  # of Spack cache directories. We share the goal of
+  # making sure that Spack instances do not collide,
+  # our choice supposes that $user_cache_path is
+  # defined to that purpose, but Serac is enforcing
+  # it for the cache directories.
+  # The reason for not adopting the same strategy as
+  # Serac is because there are other directories
+  # created by Spack that need to be porperly
+  # isolated. Therefore, setting the
+  # "user_cache_path" properly isstill mandatory.
+  build_stage::
+    - $user_cache_path/stage
+  test_stage: $user_cache_path/test
+  misc_cache: $user_cache_path/misc
+  flags:
+    keep_werror: 'all'

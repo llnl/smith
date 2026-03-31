@@ -1,0 +1,92 @@
+##############################################################################
+# Copyright (c) 2021-2025, Lawrence Livermore National Security, LLC and
+# RADIUSS Stack Testing project contributors.
+# See the LICENSE file for details.
+#
+# SPDX-License-Identifier: MIT
+##############################################################################
+
+spack:
+  #[general--]
+  repos:
+    llnl_radiuss: ./spack_repo/llnl_radiuss/
+    builtin:
+      branch: v1.0.0
+      git: https://github.com/spack/spack-packages.git
+  include:
+    - $LCSCHEDCLUSTER/config.yaml
+    - $LCSCHEDCLUSTER/packages.yaml
+  concretizer:
+    reuse: false
+    unify: false
+  view: false
+  #[--general]
+
+  #[config-override--]
+  config:
+    install_tree:
+      root: /usr/workspace/radiuss/install/bradiuss-spack-install-dbv8
+      padded_length: 128
+      projections:
+        all: '{architecture}/{compiler.name}-{compiler.version}/{name}-{version}-{hash}'
+    'build_stage:':
+    - $user_cache_path/stage
+    test_stage: $user_cache_path/test
+    misc_cache: $user_cache_path/misc
+    flags:
+      keep_werror: all
+  #[--config-override]
+
+  #[definitions--]
+  definitions:
+  - compilers:
+    - +rocm amdgpu_target=gfx906 %llvm-amdgpu@=5.7.1 ^hip@5.7.1
+    when: env.get("LCSCHEDCLUSTER", "") == "corona"
+  - compilers:
+    - '%oneapi-2023-gcc-10'
+    - '%clang-14-gcc-11'
+    - '%gcc@=11.2.1'
+    when: env.get("LCSCHEDCLUSTER", "") == "dane"
+  - compilers:
+    #- +cuda %clang-16 ^cuda@11.8.0+allow-unsupported-compilers
+    #- +cuda %clang-16-ibm ^cuda@11.8.0+allow-unsupported-compilers
+    - +cuda %gcc@=11.2.1 ^cuda@11.8.0+allow-unsupported-compilers
+    when: env.get("LCSCHEDCLUSTER", "") == "lassen"
+  - compilers:
+    - +rocm amdgpu_target=gfx90a %llvm-amdgpu@=6.4.1 ^hip@6.4.1
+    - '%cce@=19.0.0'
+    when: env.get("LCSCHEDCLUSTER", "") == "tioga"
+  - compilers:
+    - +rocm amdgpu_target=gfx942 %llvm-amdgpu@=6.4.1 ^hip@6.4.1
+    - '%cce@=19.0.0'
+    when: env.get("LCSCHEDCLUSTER", "") == "tuolumne"
+
+  - cached-cmake-projects:
+    - umpire
+    - raja
+    - raja-perf
+    - chai
+    - care
+    - caliper
+    - aluminum
+    - axom
+    - dihydrogen
+    - hydrogen
+    - lbann
+    - sina
+  - dependencies: []
+  #[--definitions]
+
+  specs:
+  - matrix:
+    - [$cached-cmake-projects]
+    - [$compilers]
+    exclude:
+    - 'sina +rocm amdgpu_target=gfx90a %rocmcc@=6.3.1 ^hip@6.3.1'
+    - 'sina +cuda %clang@=12.0.1.ibm.gcc.8.3.1 ^cuda@11.2.0+allow-unsupported-compilers'
+    - 'sina +cuda %clang@=12.0.1.gcc.8.3.1 ^cuda@11.2.0+allow-unsupported-compilers'
+    - 'sina +cuda %clang@=14.0.5.gcc.8.3.1 ^cuda@11.7.0+allow-unsupported-compilers'
+    - 'sina +cuda %clang@=16.0.6.ibm.cuda.11.8.0.gcc.11.2.1 ^cuda@11.8.0+allow-unsupported-compilers'
+    - 'sina +cuda %clang@=16.0.6.cuda.11.8.0.gcc.11.2.1 ^cuda@11.8.0+allow-unsupported-compilers'
+    - 'sina +cuda %gcc@=11.2.1 ^cuda@11.8.0+allow-unsupported-compilers'
+    - 'sina +rocm amdgpu_target=gfx906 %rocmcc@=5.7.1 ^hip@5.7.1'

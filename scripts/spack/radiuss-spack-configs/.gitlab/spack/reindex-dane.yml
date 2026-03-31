@@ -1,0 +1,18 @@
+##############################################################################
+# Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+# RADIUSS project contributors. See the COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (MIT)
+##############################################################################
+
+include:
+  - local: ".gitlab/spack/reindex-override.yml"
+
+rebuild-index-dane:
+  stage: .post
+  tags: [dane, shell]
+  when: always
+  script:
+    - export JOBID=$(squeue -h --name=${DANE_ALLOC_NAME} --format=%A)
+    - srun $( [[ -n "${JOBID}" ]] && echo "--jobid=${JOBID}" ) ${DANE_JOB_ALLOC} .gitlab/spack/reindex-script.sh
+  dependencies: []
