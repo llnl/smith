@@ -173,8 +173,8 @@ smith::LinearSolverOptions makeMechanicsStageLinearSolverOptions()
 {
   return smith::LinearSolverOptions{.linear_solver = smith::LinearSolver::CG,
                                     .preconditioner = smith::Preconditioner::HypreAMG,
-                                    .relative_tol = 1.0e-8,
-                                    .absolute_tol = 1.0e-10,
+                                    .relative_tol = 1.0e-6,
+                                    .absolute_tol = 1.0e-7,
                                     .max_iterations = 300,
                                     .print_level = 0,
                                     .preconditioner_print_level = 0};
@@ -325,19 +325,47 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
   std::visit([&](const auto& selected_material) { system.setMaterial(selected_material, mesh->entireBodyName()); },
              material);
 
-  system.disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
-    auto bc = 0.0 * X;
-    // Keep the loading modest so the first Newton solves are well-conditioned.
-    bc[0] = .10 * t;
-    return bc;
+  constexpr double left_face_traction_magnitude = 1.0e0;
+  constexpr double min_traction_scale = 1.0e-2;
+  constexpr double heat_source_magnitude = 20000.0;
+  constexpr double dt1 = 0.05;
+  constexpr double dt2 = 0.2;
+  // system.disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
+  //   auto bc = 0.0 * X;
+  //   // Keep the loading modest so the first Newton solves are well-conditioned.
+  //   bc[0] = .01 * t;
+  //   return bc;
+  // });
+  // system.addSolidTraction("left", [=](double t, auto X, auto, auto, auto, auto, auto, auto, auto) {
+  //   auto traction = 0.0 * X;
+  //   auto ramp_scale = (dt1 > 0.0) ? std::min(t / dt1, 1.0) : 1.0;
+  //   auto traction_scale = min_traction_scale + (1.0 - min_traction_scale) * ramp_scale;
+  //   traction[1] = -left_face_traction_magnitude * traction_scale;
+  //   return traction;
+  // });
+  system.addSolidBodyForce(mesh->entireBodyName(), [=](double t, auto X, auto, auto, auto, auto, auto, auto) {
+    auto force = 0.0 * X;
+    auto ramp_scale = (dt1 > 0.0) ? std::min(t / dt1, 1.0) : 1.0;
+    auto force_scale = min_traction_scale + (1.0 - min_traction_scale) * ramp_scale;
+    force[1] = -left_face_traction_magnitude * force_scale;
+    return force;
   });
-  system.disp_bc->template setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
+  // system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
+  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("left"));
 
-  // system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("left"));
+  system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("left"));
   // system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("right"));
 
-  system.addThermalHeatSource(mesh->entireBodyName(),
-                              [](double, auto, auto, auto, auto, auto, auto, auto, auto...) { return 0.0; });
+  system.addThermalHeatSource(mesh->entireBodyName(), [=](double t, auto, auto, auto, auto, auto, auto, auto, auto...) {
+    if (t <= dt1) {
+      return 0.0;
+    }
+    if (t >= dt2) {
+      return heat_source_magnitude;
+    }
+    auto heat_scale = (dt2 > dt1) ? (t - dt1) / (dt2 - dt1) : 1.0;
+    return heat_source_magnitude * heat_scale;
+  });
 
   // Initialize displacement fields (avoid solver starting from uninitialized/NaN values).
   auto& disp_pred =
@@ -443,7 +471,7 @@ int main(int argc, char** argv)
   int num_elements_x = 60;
   int num_elements_y = 10;
   int num_elements_z = 10;
-  double dt = 0.01;
+  double dt = 0.001;
   double T = 1.0;
   double alpha_T = 1.0e-3;
   auto material_model = example_etm::MaterialModelKind::GreenSaintVenant;
