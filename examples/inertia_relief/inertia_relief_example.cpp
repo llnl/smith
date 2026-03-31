@@ -15,6 +15,7 @@
  */
 
 #include "smith/smith.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 
 #include "mfem.hpp"
 
@@ -45,43 +46,6 @@ enum FIELD
   VELO = 1,
   ACCEL = 2,
   DENSITY = 3
-};
-
-class ParaviewWriter {
- public:
-  using StateVecs = std::vector<std::shared_ptr<smith::FiniteElementState>>;
-  using DualVecs = std::vector<std::shared_ptr<smith::FiniteElementDual>>;
-
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_)
-      : pv(std::move(pv_)), states(states_)
-  {
-  }
-
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
-      : pv(std::move(pv_)), states(states_), dual_states(duals_)
-  {
-  }
-
-  void write(int step, double time, const std::vector<smith::FiniteElementState const*>& current_states)
-  {
-    SMITH_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
-
-    for (size_t n = 0; n < states.size(); ++n) {
-      auto& state = states[n];
-      *state = *current_states[n];
-      state->gridFunction();
-    }
-
-    pv->SetCycle(step);
-    pv->SetTime(time);
-    pv->Save();
-  }
-
- private:
-  std::unique_ptr<mfem::ParaViewDataCollection> pv;
-  StateVecs states;
-  StateVecs dual_states;
 };
 
 /* Nonlinear problem of the form
@@ -285,7 +249,7 @@ int main(int argc, char* argv[])
     return u;
   });
 
-  auto writer = createParaviewWriter(mesh->mfemParMesh(), objective_states, "inertia_relief");
+  auto writer = smith::createParaviewWriter(mesh->mfemParMesh(), objective_states, "inertia_relief");
   if (visualize) {
     writer.write(0, 0.0, objective_states);
   }
