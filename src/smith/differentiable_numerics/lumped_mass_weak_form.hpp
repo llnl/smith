@@ -32,7 +32,7 @@ auto createSolidMassWeakForm(const std::string& physics_name, std::shared_ptr<sm
       return smith::tuple{get<VALUE>(Rho), tensor<double, spatial_dim>{}};
     } else {
       auto ones = make_tensor<lumped_dim>([](int) { return 1.0; });
-      return smith::tuple{-get<VALUE>(Rho) * ones, tensor<double, lumped_dim, spatial_dim>{}};
+      return smith::tuple{get<VALUE>(Rho) * ones, tensor<double, lumped_dim, spatial_dim>{}};
     }
   });
 

@@ -1,25 +1,34 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
 #include "gretl/data_store.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/mesh.hpp"
-#include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
-#include "gretl/data_store.hpp"
+#include "gretl/upstream_state.hpp"
 
 namespace smith {
 
 /// @brief gretl-function to create a dummy-state which records all states and params of interest to the mechanics. This
 /// is used to inject additional adjoint loads and evaluate individual timestep sensitivities for the BasePhysics
 /// interface.
-gretl::State<int> make_milestone(const std::vector<FieldState>& states)
+gretl::State<int> make_milestone(const FieldState& anchor, const std::vector<FieldState>& states,
+                                 const std::vector<ReactionState>& reactions)
 {
   std::vector<gretl::StateBase> base_states;
   for (const auto& s : states) {
     base_states.push_back(s);
   }
+  for (const auto& r : reactions) {
+    base_states.push_back(r);
+  }
 
-  auto milestone = states[0].create_state<int, int>(base_states);
+  auto milestone = anchor.create_state<int, int>(base_states);
 
   milestone.set_eval(
       []([[maybe_unused]] const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) { output.set<int>(0); });
@@ -34,11 +43,11 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
                                              const FieldState& shape_disp, const std::vector<FieldState>& states,
                                              const std::vector<FieldState>& params,
                                              std::shared_ptr<StateAdvancer> advancer, std::string mech_name,
-                                             const std::vector<std::string>& resultant_names)
+                                             const std::vector<ReactionInfo>& reaction_infos)
     : BasePhysics(mech_name, mesh, 0, 0.0, false),  // the false is checkpoint_to_disk
       checkpointer_(graph),
       advancer_(advancer),
-      resultant_names_(resultant_names)
+      reaction_infos_(reaction_infos)
 {
   SLIC_ERROR_IF(states.size() == 0, "Must have a least 1 state for a mechanics.");
   field_shape_displacement_ = std::make_unique<FieldState>(shape_disp);
@@ -59,8 +68,13 @@ SLIC_ERROR_IF(!p.get(), "Null param FieldState handle");
     param_names_.push_back(p.get()->name());
   }
 
-  for (size_t i = 0; i < resultant_names_.size(); ++i) {
-    resultant_name_to_resultant_index_[resultant_names_[i]] = i;
+  reaction_names_.reserve(reaction_infos_.size());
+  for (size_t i = 0; i < reaction_infos_.size(); ++i) {
+    SLIC_ERROR_IF(
+        reaction_infos_[i].space == nullptr,
+        axom::fmt::format("Dual '{}' in physics module '{}' has null FE space.", reaction_infos_[i].name, name_));
+    reaction_names_.push_back(reaction_infos_[i].name);
+    reaction_name_to_reaction_index_[reaction_infos_[i].name] = i;
   }
 
   completeSetup();
@@ -72,6 +86,7 @@ SLIC_ERROR_IF(!s.get(), "Null FieldState in field_states_");
 void DifferentiablePhysics::completeSetup()
 {
   SLIC_ERROR_IF(field_states_.empty(), "Empty field state during completeSetup()");
+  initializeReactionStates();
 }
 
 void DifferentiablePhysics::resetStates(int cycle, double time)
@@ -81,6 +96,7 @@ void DifferentiablePhysics::resetStates(int cycle, double time)
   }
   milestones_.clear();
   checkpointer_->reset_graph();
+  initializeReactionStates();
   time_ = time;
   cycle_ = cycle;
 for (const auto& s : field_states_) {
@@ -99,7 +115,7 @@ std::vector<std::string> DifferentiablePhysics::stateNames() const { return stat
 
 std::vector<std::string> DifferentiablePhysics::parameterNames() const { return param_names_; }
 
-std::vector<std::string> DifferentiablePhysics::dualNames() const { return resultant_names_; }
+std::vector<std::string> DifferentiablePhysics::dualNames() const { return reaction_names_; }
 
 const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const std::string& field_name) const
 {
@@ -107,25 +123,34 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
       state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
       axom::fmt::format("Could not find field named {0} in mesh with tag \"{1}\" to get", field_name, mesh_->tag()));
   size_t state_index = state_name_to_field_index_.at(field_name);
-  SLIC_ERROR_IF(state_index >= field_states_.size(),
-                "Field states not correctly allocated yet, cannot get state until after initializationStep is called.");
   return *field_states_[state_index].get();
 }
 
-const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_name) const
+const FiniteElementDual& DifferentiablePhysics::dual(const std::string& reaction_name) const
+{
+  SLIC_ERROR_IF(reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
+                axom::fmt::format("Could not find reaction named {0} in mesh with tag \"{1}\" to get", reaction_name,
+                                  mesh_->tag()));
+  size_t reaction_index = reaction_name_to_reaction_index_.at(reaction_name);
+
+  SLIC_ERROR_IF(reaction_states_.empty() && !reaction_names_.empty(),
+                "Reactions were not computed during advanceState, but were requested.");
+
+  SLIC_ERROR_IF(
+      reaction_index >= reaction_states_.size(),
+      "Reaction reactions not correctly allocated yet, cannot get reaction until after initializationStep is called.");
+
+  return *reaction_states_[reaction_index].get();
+}
+
+FiniteElementDual DifferentiablePhysics::loadCheckpointedDual(const std::string& reaction_name, int cycle)
 {
   SLIC_ERROR_IF(
-      resultant_name_to_resultant_index_.find(dual_name) == resultant_name_to_resultant_index_.end(),
-      axom::fmt::format("Could not find dual named {0} in mesh with tag \"{1}\" to get", dual_name, mesh_->tag()));
-  size_t reaction_index = resultant_name_to_resultant_index_.at(dual_name);
-  SLIC_ERROR_IF(
-      reaction_index >= resultant_names_.size(),
-      "Dual reactions not correctly allocated yet, cannot get dual until after initializationStep is called.");
-
-  TimeInfo time_info(time_old_, dt_old_, static_cast<size_t>(cycle_old_));
-  resultant_states_ = advancer_->computeResultants(*field_shape_displacement_, field_states_, field_states_old_,
-                                                   field_params_, time_info);
-  return *resultant_states_[reaction_index].get();
+      cycle != cycle_,
+      axom::fmt::format("Due to checkpointing restrictions in smith::DifferentiablePhysics, cannot ask for "
+                        "an arbitrary checkpointed reaction cycle, asking for cycle {}, but physics is at cycle {}",
+                        cycle, cycle_));
+  return dual(reaction_name);
 }
 
 FiniteElementState DifferentiablePhysics::loadCheckpointedState(const std::string& state_name, int cycle)
@@ -164,7 +189,10 @@ void DifferentiablePhysics::setParameter(const size_t parameter_index, const Fin
   *field_params_[parameter_index].get() = parameter_state;
 }
 
-void DifferentiablePhysics::setShapeDisplacement(const FiniteElementState& s) { *field_shape_displacement_->get() = s; }
+void DifferentiablePhysics::setShapeDisplacement(const FiniteElementState& shape_displacement)
+{
+  *field_shape_displacement_->get() = shape_displacement;
+}
 
 void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_name,
                                      [[maybe_unused]] const FiniteElementState& s)
@@ -178,15 +206,16 @@ void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_n
 }
 
 void DifferentiablePhysics::setAdjointLoad(
-    std::unordered_map<std::string, const smith::FiniteElementDual&> string_to_dual)
+    std::unordered_map<std::string, const smith::FiniteElementDual&> string_to_reaction)
 {
-  for (auto string_dual_pair : string_to_dual) {
-    std::string field_name = string_dual_pair.first;
-    const smith::FiniteElementDual& dual = string_dual_pair.second;
-    SLIC_ERROR_IF(state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
-                  axom::fmt::format("Could not find dual named {0} in mesh with tag {1}", field_name, mesh_->tag()));
+  for (auto string_reaction_pair : string_to_reaction) {
+    std::string field_name = string_reaction_pair.first;
+    const smith::FiniteElementDual& reaction = string_reaction_pair.second;
+    SLIC_ERROR_IF(
+        state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
+        axom::fmt::format("Could not find reaction named {0} in mesh with tag {1}", field_name, mesh_->tag()));
     size_t state_index = state_name_to_field_index_.at(field_name);
-    *field_states_[state_index].get_dual() += dual;
+    *field_states_[state_index].get_dual() += reaction;
   }
 }
 
@@ -195,13 +224,13 @@ void DifferentiablePhysics::setDualAdjointBcs(
 {
   for (auto string_bc_pair : string_to_bc) {
     std::string reaction_name = string_bc_pair.first;
-    const smith::FiniteElementState& reaction_dual = string_bc_pair.second;
+    const smith::FiniteElementState& reaction_adjoint_load = string_bc_pair.second;
     SLIC_ERROR_IF(
-        resultant_name_to_resultant_index_.find(reaction_name) == resultant_name_to_resultant_index_.end(),
+        reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
         axom::fmt::format("When calling setDualAdjointBcs, could not find reaction named {0} in mesh with tag {1}",
                           reaction_name, mesh_->tag()));
-    size_t reaction_index = resultant_name_to_resultant_index_.at(reaction_name);
-    *resultant_states_[reaction_index].get_dual() += reaction_dual;
+    size_t reaction_index = reaction_name_to_reaction_index_.at(reaction_name);
+    *reaction_states_[reaction_index].get_dual() += reaction_adjoint_load;
   }
 }
 
@@ -216,20 +245,22 @@ void DifferentiablePhysics::advanceTimestep(double dt)
 {
   if (cycle_ == 0) {
     field_states_ = initial_field_states_;
-    milestones_.push_back(make_milestone(field_states_).step());
+    milestones_.push_back(make_milestone(field_states_[0], field_states_, reaction_states_).step());
   }
 
-  field_states_old_ = field_states_;
-  cycle_old_ = cycle_;
-  time_old_ = time_;
-  dt_old_ = dt;
+  cycle_prev_ = cycle_;
+  time_prev_ = time_;
+  dt_prev_ = dt;
 
   TimeInfo time_info(time_, dt, static_cast<size_t>(cycle_));
-  field_states_ = advancer_->advanceState(*field_shape_displacement_, field_states_, field_params_, time_info);
+  auto [states, reactions] =
+      advancer_->advanceState(time_info, *field_shape_displacement_, field_states_, field_params_);
+  field_states_ = states;
+  reaction_states_ = reactions;
 
   cycle_++;
   time_ += dt;
-  milestones_.push_back(make_milestone(field_states_).step());
+  milestones_.push_back(make_milestone(field_states_[0], field_states_, reaction_states_).step());
 }
 
 void DifferentiablePhysics::reverseAdjointTimestep()
@@ -248,14 +279,21 @@ void DifferentiablePhysics::reverseAdjointTimestep()
     current_step = checkpointer_->currentStep_;
   }
 
-  auto& upstreams = checkpointer_->upstreams_[milestone];
+  gretl::UpstreamStates upstreams(*checkpointer_, checkpointer_->upstreamSteps_[milestone]);
 
-  SLIC_ERROR_IF(field_states_.size() != upstreams.size(), "field states and upstream sizes do not match.");
+  const size_t expected_upstreams = field_states_.size() + reaction_states_.size();
+  SLIC_ERROR_IF(expected_upstreams != upstreams.size(), "field/reaction states and upstream sizes do not match.");
   // recreate the upstream field states with upstream step, field, and dual values.
-  for (size_t s = 0; s < upstreams.size(); ++s) {
+  for (size_t s = 0; s < field_states_.size(); ++s) {
     field_states_[s].reset_step(upstreams[s].step_);
     field_states_[s].set(upstreams[s].get<FEFieldPtr>());
     field_states_[s].set_dual(upstreams[s].get_dual<FEDualPtr, FEFieldPtr>());
+  }
+  for (size_t r = 0; r < reaction_states_.size(); ++r) {
+    const size_t upstream_index = field_states_.size() + r;
+    reaction_states_[r].reset_step(upstreams[upstream_index].step_);
+    reaction_states_[r].set(upstreams[upstream_index].get<FEDualPtr>());
+    reaction_states_[r].set_dual(upstreams[upstream_index].get_dual<FEFieldPtr, FEDualPtr>());
   }
 }
 
@@ -289,5 +327,15 @@ std::vector<FieldState> DifferentiablePhysics::getFieldStatesAndParamStates() co
 }
 
 FieldState DifferentiablePhysics::getShapeDispFieldState() const { return *field_shape_displacement_; }
+
+void DifferentiablePhysics::initializeReactionStates()
+{
+  reaction_states_.clear();
+  reaction_states_.reserve(reaction_infos_.size());
+  for (const auto& reaction_info : reaction_infos_) {
+    auto reaction = std::make_shared<FiniteElementDual>(*reaction_info.space, reaction_info.name);
+    reaction_states_.push_back(createReactionState(*checkpointer_, reaction));
+  }
+}
 
 }  // namespace smith

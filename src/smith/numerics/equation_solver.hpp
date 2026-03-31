@@ -21,6 +21,7 @@
 #include "mfem.hpp"
 
 #include "smith/infrastructure/input.hpp"
+#include "smith/numerics/nonlinear_convergence.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/numerics/petsc_solvers.hpp"
 
@@ -83,6 +84,18 @@ class EquationSolver {
    */
   void solve(mfem::Vector& x) const;
 
+  /// @brief Configure optional block convergence metadata for the nonlinear solver.
+  void setConvergenceBlockData(const std::vector<int>& block_offsets,
+                               const BlockConvergenceTolerances& block_tolerances) const;
+
+  /// @brief Configure block convergence metadata, lazily creating convergence state if needed.
+  void setConvergenceBlockData(const std::vector<int>& block_offsets,
+                               const BlockConvergenceTolerances& block_tolerances, double abs_tol, double rel_tol,
+                               MPI_Comm comm) const;
+
+  /// @brief Reset nonlinear convergence state stored across iterations of a single solve.
+  void resetConvergenceState() const;
+
   /**
    * Returns the underlying solver object
    * @return A non-owning reference to the underlying nonlinear solver
@@ -123,6 +136,9 @@ class EquationSolver {
   static void defineInputFileSchema(axom::inlet::Container& container);
 
  private:
+  void attachConvergenceManager() const;
+  void initializeConvergenceManager(double abs_tol, double rel_tol, MPI_Comm comm) const;
+
   /**
    * @brief The optional preconditioner (used for an iterative solver only)
    */
@@ -144,6 +160,8 @@ class EquationSolver {
    * before SetSolver
    */
   bool nonlin_solver_set_solver_called_ = false;
+
+  mutable std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
 };
 
 /**
@@ -188,6 +206,12 @@ class SuperLUSolver : public mfem::Solver {
    * as a member variable for lifetime purposes
    */
   mutable std::unique_ptr<mfem::SuperLURowLocMatrix> superlu_mat_;
+
+  /**
+   * @brief The owner of the monolithic matrix for the gradient, stored
+   * as a member variable for lifetime purposes
+   */
+  mutable std::unique_ptr<mfem::HypreParMatrix> monolithic_mat_;
 
   /**
    * @brief The underlying MFEM-based SuperLU solver. It requires a special
@@ -243,6 +267,12 @@ class StrumpackSolver : public mfem::Solver {
   mutable std::unique_ptr<mfem::STRUMPACKRowLocMatrix> strumpack_mat_;
 
   /**
+   * @brief The owner of the monolithic matrix for the gradient, stored
+   * as a member variable for lifetime purposes
+   */
+  mutable std::unique_ptr<mfem::HypreParMatrix> monolithic_mat_;
+
+  /**
    * @brief The underlying MFEM-based Strumpack solver. It requires a special
    * Strumpack matrix type which we store in this object. This enables compatibility
    * with HypreParMatrix when used as an input.
@@ -254,13 +284,9 @@ class StrumpackSolver : public mfem::Solver {
 
 /**
  * @brief Function for building a monolithic parallel Hypre matrix from a block system of smaller Hypre matrices
- *
- * @param block_operator The block system of HypreParMatrices
  * @return The assembled monolithic HypreParMatrix
- *
- * @pre @a block_operator must have assembled HypreParMatrices for its sub-blocks
  */
-std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOperator& block_operator);
+std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOperator&);
 
 /**
  * @brief Build a nonlinear solver using the nonlinear option struct
@@ -271,7 +297,7 @@ std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOpe
  * @param comm The MPI communicator for the supplied nonlinear operators and HypreParVectors
  * @return The constructed nonlinear solver
  */
-std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(const NonlinearSolverOptions& nonlinear_opts,
+std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions nonlinear_opts,
                                                          const LinearSolverOptions& linear_opts,
                                                          mfem::Solver& preconditioner, MPI_Comm comm = MPI_COMM_WORLD);
 
@@ -284,6 +310,12 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(const NonlinearSolverOp
  */
 std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLinearSolverAndPreconditioner(
     LinearSolverOptions linear_opts = {}, MPI_Comm comm = MPI_COMM_WORLD);
+
+/**
+ * @brief Return true if the configured linear solve stack requires block operators to be merged.
+ * @param linear_opts Linear solver and preconditioner options.
+ */
+bool requiresMonolithicOperator(const LinearSolverOptions& linear_opts);
 
 /**
  * @brief Build a preconditioner from the available options

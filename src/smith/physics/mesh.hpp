@@ -129,8 +129,9 @@ class Mesh {
   smith::FiniteElementDual newShapeDisplacementDual();
 
  private:
-  /// @brief Helper function used to throw exception if the size of the mesh on the local rank is 0
-  void errorIfRankHasNoElements() const;
+  /// @brief Helper function used to notify user if the size of the mesh on any local rank is 0.
+  /// This function is MPI collective and the notice is issued only on rank 0.
+  void notifyIfRankHasNoElements() const;
 
   /// @brief Sets up some initial domains: entire domain, entire boundary, and interior faces. Eventually we can read
   /// off names/blocks/attributes from the mesh and create default domains.

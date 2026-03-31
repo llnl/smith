@@ -37,11 +37,11 @@ struct MeshFixture : public testing::Test {
     double width = 2.0;
     auto meshtmp =
         smith::mesh::refineAndDistribute(mfem::Mesh::MakeCartesian2D(2, 1, mfem_shape, true, length, width), 0, 0);
-    mesh = &smith::StateManager::setMesh(std::move(meshtmp), MESHTAG);
+    mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), MESHTAG);
   }
 
   axom::sidre::DataStore datastore_;
-  mfem::ParMesh* mesh;
+  mfem::ParMesh* mesh_;
 };
 
 std::vector<mfem::Vector> applyLinearOperator(const Mat& A, const std::vector<const mfem::Vector*>& states)

@@ -4,6 +4,22 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+find_package(Doxygen COMPONENTS dot)
+
+if(DOXYGEN_DOT_FOUND)
+    set(DOXYGEN_HAVE_DOT "YES")
+else()
+    set(DOXYGEN_HAVE_DOT "NO")
+endif()
+
+# Check for pdflatex for latex generation
+find_program(PDFLATEX_EXECUTABLE pdflatex)
+if(PDFLATEX_EXECUTABLE)
+    set(DOXYGEN_GENERATE_LATEX "YES")
+else()
+    set(DOXYGEN_GENERATE_LATEX "NO")
+endif()
+
 blt_add_doxygen_target( smith_doxygen )
 
 # Required directory for doxygen to generate output to 

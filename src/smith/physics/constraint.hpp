@@ -41,9 +41,11 @@ class Constraint {
    * @param time time
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
    * @return mfem::Vector which is the constraint evaluation
    */
-  virtual mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields) const = 0;
+  virtual mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                bool update_fields = true) const = 0;
 
   /** @brief Virtual interface for computing constraint Jacobian from a vector of smith::FiniteElementState*
    *
@@ -51,11 +53,15 @@ class Constraint {
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
+   * evaluation
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt,
-                                                         const std::vector<ConstFieldPtr>& fields,
-                                                         int direction) const = 0;
+                                                         const std::vector<ConstFieldPtr>& fields, int direction,
+                                                         bool update_fields = true,
+                                                         bool fresh_derivative = true) const = 0;
 
   /** @brief Virtual interface for computing constraint Jacobian_tilde from a vector of smith::FiniteElementState*
    *         Jacobian_tilde is an optional approximation of the true Jacobian
@@ -64,16 +70,20 @@ class Constraint {
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
+   * evaluation
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   virtual std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt,
-                                                               const std::vector<ConstFieldPtr>& fields,
-                                                               int direction) const
+                                                               const std::vector<ConstFieldPtr>& fields, int direction,
+                                                               bool update_fields = true,
+                                                               bool fresh_derivative = true) const
   {
-    return jacobian(time, dt, fields, direction);
+    return jacobian(time, dt, fields, direction, update_fields, fresh_derivative);
   };
 
-  /** @brief Virtual interface for computing residual contribution Jacobian_tilde^T multiplier from a vector of
+  /** @brief Virtual interface for computing residual contribution Jacobian_tilde^(Transpose) * (Lagrange multiplier)
    * smith::FiniteElementState*
    *
    * @param time time
@@ -81,12 +91,17 @@ class Constraint {
    * @param fields vector of smith::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
+   * evaluation
    * @return std::Vector
    */
   virtual mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
-                                             const mfem::Vector& multipliers, int direction) const
+                                             const mfem::Vector& multipliers, int direction, bool update_fields = true,
+                                             bool fresh_derivative = true) const
   {
-    std::unique_ptr<mfem::HypreParMatrix> jac = jacobian_tilde(time, dt, fields, direction);
+    std::unique_ptr<mfem::HypreParMatrix> jac =
+        jacobian_tilde(time, dt, fields, direction, update_fields, fresh_derivative);
     mfem::Vector y(jac->Width());
     y = 0.0;
     SLIC_ERROR_ROOT_IF(jac->Height() != multipliers.Size(), "Incompatible matrix and vector sizes.");
@@ -94,20 +109,24 @@ class Constraint {
     return y;
   };
 
-  /** @brief Virtual interface for computing Jacobians of the residual contribution from a vector of
-   * smith::FiniteElementState*
+  /** @brief Virtual interface for computing residual contribution Jacobian_tilde^(Transpose) * (Lagrange multiplier)
+   * from a vector of smith::FiniteElementState*
    *
    * @param time time
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param multipliers mfem::Vector of Lagrange multipliers
    * @param direction index for which field to take the gradient with respect to
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
+   * evaluation
    * @return std::unique_ptr<mfem::HypreParMatrix>
    */
   virtual std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(
       [[maybe_unused]] double time, [[maybe_unused]] double dt,
       [[maybe_unused]] const std::vector<ConstFieldPtr>& fields, [[maybe_unused]] const mfem::Vector& multipliers,
-      [[maybe_unused]] int direction) const
+      [[maybe_unused]] int direction, [[maybe_unused]] bool update_fields = true,
+      [[maybe_unused]] bool fresh_derivative = true) const
   {
     SLIC_ERROR_ROOT(axom::fmt::format("Base class must override residual_contribution_jacobian before usage"));
     std::unique_ptr<mfem::HypreParMatrix> res_contr_jacobian = nullptr;

@@ -16,7 +16,6 @@
 
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
 
 using namespace smith;
 

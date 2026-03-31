@@ -8,19 +8,23 @@ add_subdirectory(functional)
 
 set(numerics_headers
     equation_solver.hpp
+    nonlinear_convergence.hpp
     odes.hpp
     solver_config.hpp
     stdfunction_operator.hpp
     petsc_solvers.hpp
     trust_region_solver.hpp
     dense_petsc.hpp
+    block_preconditioner.hpp
     )
 
 set(numerics_sources
     equation_solver.cpp
+    nonlinear_convergence.cpp
     trust_region_solver.cpp
     odes.cpp
     petsc_solvers.cpp
+    block_preconditioner.cpp
     )
 
 set(numerics_depends smith_infrastructure smith_functional smith_boundary_conditions)

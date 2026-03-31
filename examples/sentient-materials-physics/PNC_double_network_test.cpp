@@ -15,11 +15,10 @@
 #include "axom/slic/core/SimpleLogger.hpp"
 #include "mfem.hpp"
 
-
 #include "smith/smith_config.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 // #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
@@ -34,8 +33,11 @@
 #include "../../korner_examples/quasistatic_thermomechanics.hpp"
 #include "../../korner_examples/calculate_reactions.hpp"
 
-
-#define SLIC_INFO_ROOT_FLUSH(...) do { SLIC_INFO_ROOT(__VA_ARGS__); smith::logger::flush(); } while (0)
+#define SLIC_INFO_ROOT_FLUSH(...) \
+  do {                            \
+    SLIC_INFO_ROOT(__VA_ARGS__);  \
+    smith::logger::flush();       \
+  } while (0)
 
 using namespace smith;
 
@@ -59,8 +61,8 @@ int main(int argc, char* argv[])
   double Total_Time = 50.0;
   int serial_refinement = 0;
   int parallel_refinement = 0;
-  std::string mesh_name = "2d_plate.g"; //50x50x1 unit plate
-  //Km,Gm,betam,rhom0,etam,Ke,Ge,betae,rhoe0,etae,C_v,kappa,Af,E_af,Ar,E_ar,R,Tr,gw,wm
+  std::string mesh_name = "2d_plate.g";  // 50x50x1 unit plate
+  // Km,Gm,betam,rhom0,etam,Ke,Ge,betae,rhoe0,etae,C_v,kappa,Af,E_af,Ar,E_ar,R,Tr,gw,wm
   /*
   double Km = 0.5;         ///< matrix bulk modulus, MPa
    double Gm = 0.0073976;//0.001759;    ///< matrix shear modulus, MPa
@@ -68,12 +70,12 @@ int main(int argc, char* argv[])
    double cvm = 1.0;
    double rhom0 = 1.0;
    double eta = 0.;//0.002;//0.005;     ///< viscosity, MPa-s
- 
+
    double Ke = 0.5;       ///< entanglement bulk modulus, MPa
    double Ge = 0.225075;//0.0006408;     ///< entanglement shear modulus, MPa
    double cvc = 4.0;
    double rhoc0 = 1.0;
- 
+
    // E_a and R can be SI units since they cancel out in the exponent
    double Af = 2.5e15;      ///< forward (low-high) exponential prefactor, 1/s
    double E_af = 1.5e5;     ///< forward (low-high) activation energy, J/mol
@@ -86,24 +88,25 @@ int main(int argc, char* argv[])
 
    double wm = 0.5;         ///< matrix mass fraction
   */
-  std::vector<double> material_params = {0.5,0.0073976,0.,1.0,0.,0.5,0.225075,0.,1.0,0.,1.5,30.,2.5e15,1.5e5,1.0e-21,-1.55e5,8.314,353.,0.2,0.5};
+  std::vector<double> material_params = {0.5, 0.0073976, 0.,     1.0,   0.,      0.5,     0.225075, 0.,   1.0, 0.,
+                                         1.5, 30.,       2.5e15, 1.5e5, 1.0e-21, -1.55e5, 8.314,    353., 0.2, 0.5};
   // size_t num_coupling_iters = 1;
   int heat_linear_print_level = 0;
   int solid_linear_print_level = 0;
   int solid_nonlinear_print_level = 0;
   double external_heat_source = 0.0;
-  auto applied_displacement_func2 = [](const double t, const smith::tensor<double, dim> & x){
+  auto applied_displacement_func2 = [](const double t, const smith::tensor<double, dim>& x) {
     auto output = 0.0 * x;
     output[1] = -5.0 * sin(M_PI * t / 2.0);
     return output;
   };
-  auto fixed_displacement = [](const double t, const smith::tensor<double, dim> & x){
+  auto fixed_displacement = [](const double t, const smith::tensor<double, dim>& x) {
     auto output = 0.0 * x;
-    output[0] = 0.0*t;
+    output[0] = 0.0 * t;
     return output;
   };
-  auto applied_temp = [](const double t, const smith::tensor<double, dim>){
-    return 120.0+0.0*t; //only the temperature differential here
+  auto applied_temp = [](const double t, const smith::tensor<double, dim>) {
+    return 120.0 + 0.0 * t;  // only the temperature differential here
   };
 
   /// ==================================================================
@@ -134,7 +137,7 @@ int main(int argc, char* argv[])
   mesh->addDomainOfBoundaryElements("fix_top", smith::by_attr<dim>(2));
   mesh->addDomainOfBoundaryElements("fix_front", smith::by_attr<dim>(3));
   mesh->addDomainOfBoundaryElements("fix_back", smith::by_attr<dim>(4));
-                                                     
+
   SLIC_INFO_ROOT_FLUSH("Building solvers");
   /// -------------------------------------
 
@@ -156,12 +159,14 @@ int main(int argc, char* argv[])
                                                      .absolute_tol = 1.0e-11,
                                                      .max_iterations = 500,
                                                      .print_level = solid_nonlinear_print_level};
-                                                     
-  std::shared_ptr<DifferentiableSolver> d_heat_linear_solver =
-      buildDifferentiableLinearSolve(heat_linear_options, *mesh);
+  smith::NonlinearSolverOptions heat_nonlinear_opts{.nonlin_solver = NonlinearSolver::Newton,
+                                                    .relative_tol = 1.0e-8,
+                                                    .absolute_tol = 1.0e-11,
+                                                    .max_iterations = 50,
+                                                    .print_level = heat_linear_print_level};
 
-  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto d_heat_linear_solver = buildNonlinearBlockSolver(heat_nonlinear_opts, heat_linear_options, *mesh);
+  auto d_solid_nonlinear_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   SLIC_INFO_ROOT_FLUSH("Setting up time integration rules");
   /// -----------------------------------------------------
@@ -172,34 +177,35 @@ int main(int argc, char* argv[])
   SLIC_INFO_ROOT_FLUSH("Defining material properties");
   /// ------------------------------------------------
 
-  double Km = material_params[0];       ///< matrix bulk modulus, MPa
-  double Gm = material_params[1];       ///< matrix shear modulus, MPa
-  double betam = material_params[2];    ///< matrix volumetric thermal expansion coefficient
-  double rhom0 = material_params[3];    ///< matrix initial density
-  double etam = material_params[4];     ///< matrix viscosity, MPa-s
+  double Km = material_params[0];     ///< matrix bulk modulus, MPa
+  double Gm = material_params[1];     ///< matrix shear modulus, MPa
+  double betam = material_params[2];  ///< matrix volumetric thermal expansion coefficient
+  double rhom0 = material_params[3];  ///< matrix initial density
+  double etam = material_params[4];   ///< matrix viscosity, MPa-s
 
-  double Ke = material_params[5];       ///< entanglement bulk modulus, MPa
-  double Ge = material_params[6];       ///< entanglement shear modulus, MPa
-  double betae = material_params[7];    ///< entanglement volumetric thermal expansion coefficient
-  double rhoe0 = material_params[8];    ///< entanglement (chain) initial density
-  double etae = material_params[9];     ///< entanglement viscosity, MPa-s
+  double Ke = material_params[5];     ///< entanglement bulk modulus, MPa
+  double Ge = material_params[6];     ///< entanglement shear modulus, MPa
+  double betae = material_params[7];  ///< entanglement volumetric thermal expansion coefficient
+  double rhoe0 = material_params[8];  ///< entanglement (chain) initial density
+  double etae = material_params[9];   ///< entanglement viscosity, MPa-s
 
-  double Cv = material_params[10];      ///< net volumetric heat capacity (must account for matrix+chain+particle)
-  double kappa = material_params[11];    ///< net thermal conductivity (must account for matrix+chain+particle)
+  double Cv = material_params[10];     ///< net volumetric heat capacity (must account for matrix+chain+particle)
+  double kappa = material_params[11];  ///< net thermal conductivity (must account for matrix+chain+particle)
 
   // E_a and R can be SI units since they cancel out in the exponent
-  double Af = material_params[12];       ///< forward (low-high) exponential prefactor, 1/s
-  double E_af = material_params[13];     ///< forward (low-high) activation energy, J/mol
-  double Ar = material_params[14];       ///< reverse exponential prefactor, 1/s
-  double E_ar = material_params[15];     ///< reverse activation energy, J/mol
-  double R = material_params[16];        ///< universal gas constant, J/mol/K
-  double Tr = material_params[17];       ///< reference temperature, K
+  double Af = material_params[12];    ///< forward (low-high) exponential prefactor, 1/s
+  double E_af = material_params[13];  ///< forward (low-high) activation energy, J/mol
+  double Ar = material_params[14];    ///< reverse exponential prefactor, 1/s
+  double E_ar = material_params[15];  ///< reverse activation energy, J/mol
+  double R = material_params[16];     ///< universal gas constant, J/mol/K
+  double Tr = material_params[17];    ///< reference temperature, K
 
-  double gw = material_params[18];       ///< particle weight fraction
-  double wm = material_params[19];       ///< matrix mass fraction (set to 0.5, not real for now)
+  double gw = material_params[18];  ///< particle weight fraction
+  double wm = material_params[19];  ///< matrix mass fraction (set to 0.5, not real for now)
 
   using Material = thermomechanics::ThermalStiffeningMaterial;
-  Material material = Material{Km,Gm,betam,rhom0,etam,Ke,Ge,betae,rhoe0,etae,Cv,kappa,Af,E_af,Ar,E_ar,R,Tr,gw,wm};
+  Material material =
+      Material{Km, Gm, betam, rhom0, etam, Ke, Ge, betae, rhoe0, etae, Cv, kappa, Af, E_af, Ar, E_ar, R, Tr, gw, wm};
 
   // warm-start.
   // implicit Newmark.
@@ -209,7 +215,8 @@ int main(int argc, char* argv[])
   std::string physics_name = "thermomech";
   auto [physics, solid_mechanics_weak_form, heat_transfer_weak_form, vector_bcs, scalar_bcs] =
       custom_physics::buildThermoMechanics<dim, ShapeDispSpace, VectorSpace, ScalarSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, d_heat_linear_solver, backward_euler_solid, backward_euler_heat, physics_name, {"bulk"});
+          mesh, d_solid_nonlinear_solver, d_heat_linear_solver, backward_euler_solid, backward_euler_heat, physics_name,
+          {"bulk"});
 
   SLIC_INFO_ROOT_FLUSH("Setting up boundary conditions");
   /// ---------------------------------------------------
@@ -224,35 +231,31 @@ int main(int argc, char* argv[])
   /// ---------------------------------------------------------------------------------
 
   solid_mechanics_weak_form->addBodyIntegral(
-    smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-    [material](const TimeInfo& time_info, auto /*X*/, auto u, auto v, auto /*a*/, auto theta, auto /*theta_dot*/,
-                 auto /*theta_dot_dot*/, auto /*bulk*/){
-      Material::State state;
-      auto [pk, C_v, s0, q0] =
-          material(time_info.dt(), state, get<DERIVATIVE>(u),
-                  get<DERIVATIVE>(v), get<VALUE>(theta), get<DERIVATIVE>(theta));
-      return smith::tuple{smith::zero{}, pk};
-    });
+      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
+      [material](const TimeInfo& time_info, auto /*X*/, auto u, auto v, auto /*a*/, auto theta, auto /*theta_dot*/,
+                 auto /*theta_dot_dot*/, auto /*bulk*/) {
+        Material::State state;
+        auto [pk, C_v, s0, q0] = material(time_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
+                                          get<VALUE>(theta), get<DERIVATIVE>(theta));
+        return smith::tuple{smith::zero{}, pk};
+      });
 
   heat_transfer_weak_form->addBodyIntegral(
-    smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-    [material](const TimeInfo& t_info, auto /*X*/, auto theta, auto theta_dot, auto /*theta_dot_dot*/, auto u, auto v,
-                 auto /*a*/, auto /*bulk*/)  {
-      Material::State state;
-      auto [pk, C_v, s0, q0] =
-          material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(theta), get<DERIVATIVE>(theta));
-      auto dT_dt = get<VALUE>(theta_dot);
-      return smith::tuple{C_v * dT_dt - s0, -q0};
-    });
+      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
+      [material](const TimeInfo& t_info, auto /*X*/, auto theta, auto theta_dot, auto /*theta_dot_dot*/, auto u, auto v,
+                 auto /*a*/, auto /*bulk*/) {
+        Material::State state;
+        auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(theta),
+                                          get<DERIVATIVE>(theta));
+        auto dT_dt = get<VALUE>(theta_dot);
+        return smith::tuple{C_v * dT_dt - s0, -q0};
+      });
 
-  heat_transfer_weak_form->addBodySource(
-      smith::DependsOn<>(), mesh->entireBodyName(),
-      [external_heat_source](auto /*t*/, auto /* x */) { return external_heat_source; });
-  // heat_transfer_weak_form->addBodySource(smith::DependsOn<>(), mesh->entireBodyName(), external_heat_source);
-  
-  auto shape_disp = physics->getShapeDispFieldState();
-  auto params = physics->getFieldParams();
-  auto states = physics->getInitialFieldStates();
+  heat_transfer_weak_form->addBodyIntegral(
+      smith::DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
+      [external_heat_source](const TimeInfo&, auto /*X*/, auto /*theta*/, auto /*theta_dot*/, auto /*theta_dot_dot*/,
+                             auto /*u*/, auto /*v*/,
+                             auto /*a*/) { return smith::tuple{-external_heat_source, smith::zero{}}; });
 
   physics->resetStates();
 
@@ -271,13 +274,10 @@ int main(int argc, char* argv[])
 
   double time_increment = Total_Time / (static_cast<double>(N_Steps));
   for (size_t m = 0; m < N_Steps; ++m) {
-
     SLIC_INFO_ROOT_FLUSH(axom::fmt::format("\n... Solving Step = {}", m));
     physics->advanceTimestep(time_increment);
 
-    TimeInfo time_info(physics->time() - time_increment, time_increment);
-    auto reactions = physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(),
-                                                                    physics->getFieldStatesOld(), params, time_info);
+    auto reactions = physics->getReactionStates();
     double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
     SLIC_INFO_ROOT_FLUSH(axom::fmt::format("    Reaction = {}", reaction));
 
@@ -290,8 +290,9 @@ int main(int argc, char* argv[])
   /// ================== Quantities of Interest ========================
   /// ==================================================================
 
-  // // smith::FunctionalObjective<dim, Parameters<ScalarSpace>> reaction_force("reaction_force", mesh, spaces({states[ThermoMechAdvancer::TEMPERATURE]}));
-  // SLIC_INFO_ROOT_FLUSH("Setting up and evaluating objective function");
+  // // smith::FunctionalObjective<dim, Parameters<ScalarSpace>> reaction_force("reaction_force", mesh,
+  // spaces({states[ThermoMechAdvancer::TEMPERATURE]})); SLIC_INFO_ROOT_FLUSH("Setting up and evaluating objective
+  // function");
   // /// -----------------------------------------------------------------
   // smith::FunctionalObjective<dim, Parameters<ScalarSpace>> objective("integrated_squared_temperature", mesh,
   //                                                                    spaces({states[ThermoMechAdvancer::TEMPERATURE]}));

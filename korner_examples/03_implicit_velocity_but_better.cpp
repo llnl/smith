@@ -15,15 +15,15 @@
 
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
 // #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_solve.hpp"
+#include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
 #include "smith/differentiable_numerics/tests/paraview_helper.hpp"
-#include "smith/differentiable_numerics/reaction.hpp"
-#include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
 namespace smith {
 
@@ -87,9 +87,10 @@ struct ParameterizedNeoHookeanWithViscosity {
 
 class SolidMechanicsStateAdvancer2 : public StateAdvancer {
  public:
-  SolidMechanicsStateAdvancer2(std::shared_ptr<DifferentiableSolver> solid_solver,
+  SolidMechanicsStateAdvancer2(std::shared_ptr<NonlinearBlockSolverBase> solid_solver,
                                std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
-                               std::shared_ptr<WeakForm> weak_form, SecondOrderTimeIntegrationRule time_rule)
+                               std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> weak_form,
+                               SecondOrderTimeIntegrationRule time_rule)
       : solver_(solid_solver), vector_bcs_(vector_bcs), weak_form_(weak_form), time_rule_(time_rule)
   {
   }
@@ -142,8 +143,9 @@ class SolidMechanicsStateAdvancer2 : public StateAdvancer {
     return std::make_tuple(shape_disp, states, params, time, solid_mechanics_weak_form);
   }
 
-  std::vector<FieldState> advanceState(const FieldState& shape_disp, const std::vector<FieldState>& states_old,
-                                       const std::vector<FieldState>& params, const TimeInfo& time_info) const override
+  std::pair<std::vector<FieldState>, std::vector<ReactionState>> advanceState(
+      const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states_old,
+      const std::vector<FieldState>& params) const override
   {
     double dt = time_info.dt();
     size_t cycle = time_info.cycle();
@@ -159,7 +161,8 @@ class SolidMechanicsStateAdvancer2 : public StateAdvancer {
     solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
 
     auto displacement =
-        solve(displacement_guess, shape_disp, solid_inputs, final_time_info, *weak_form_, *solver_, *vector_bcs_);
+        solve(displacement_guess, shape_disp, solid_inputs, final_time_info, *weak_form_->time_discretized_weak_form,
+              *solver_, *vector_bcs_);
 
     std::vector<FieldState> states = states_old;
 
@@ -170,30 +173,25 @@ class SolidMechanicsStateAdvancer2 : public StateAdvancer {
     states[ACCELERATION] = time_rule_.second_derivative(final_time_info, displacement, states_old[DISPLACEMENT],
                                                         states_old[VELOCITY], states_old[ACCELERATION]);
 
-    return states;
-  }
-
-  std::vector<ResultantState> computeResultants(const FieldState& shape_disp, const std::vector<FieldState>& states,
-                                                const std::vector<FieldState>& states_old,
-                                                const std::vector<FieldState>& params,
-                                                const TimeInfo& time_info) const override
-  {
-    std::vector<FieldState> solid_inputs{states[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
-                                         states_old[ACCELERATION]};
-    solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-    return {evaluateWeakForm(weak_form_, time_info, shape_disp, solid_inputs, states[DISPLACEMENT])};
+    std::vector<FieldState> reaction_inputs{states[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
+                                            states_old[ACCELERATION]};
+    reaction_inputs.insert(reaction_inputs.end(), params.begin(), params.end());
+    auto reaction =
+        evaluateWeakForm(weak_form_->final_reaction_weak_form, time_info, shape_disp, reaction_inputs,
+                         states[DISPLACEMENT]);
+    return {states, {reaction}};
   }
 
  private:
-  std::shared_ptr<DifferentiableSolver> solver_;
+  std::shared_ptr<NonlinearBlockSolverBase> solver_;
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;
-  std::shared_ptr<WeakForm> weak_form_;
+  std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> weak_form_;
   SecondOrderTimeIntegrationRule time_rule_;
 };
 
 template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
 auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
-                         std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver,
+                         std::shared_ptr<NonlinearBlockSolverBase> d_solid_nonlinear_solver,
                          smith::SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
                          const std::vector<std::string>& param_names = {})
 {
@@ -240,8 +238,7 @@ int main(int argc, char* argv[])
 
   std::string physics_name = "solid";
 
-  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto d_solid_nonlinear_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   smith::SecondOrderTimeIntegrationRule time_rule(1.0);
 
@@ -278,9 +275,7 @@ int main(int argc, char* argv[])
         return smith::tuple{smith::zero{}, pk_stress};
       });
 
-  auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();
-  auto states = physics->getInitialFieldStates();
 
   params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
     double scaling = 1.0;
@@ -305,14 +300,7 @@ int main(int argc, char* argv[])
     pv_writer.write(m + 1, physics->time(), physics->getFieldStatesAndParamStates());
   }
 
-  TimeInfo time_info(physics->time() - time_increment, time_increment);
-
-  auto final_states = physics->getFieldStates();
-  auto previous_to_final_states = physics->getFieldStatesOld();
-
-  auto state_advancer = physics->getStateAdvancer();
-  auto reactions =
-      state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
+  auto reactions = physics->getReactionStates();
 
   auto disp_squared = innerProduct(reactions[0], reactions[0]);
 
