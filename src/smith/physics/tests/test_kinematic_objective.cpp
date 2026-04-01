@@ -59,7 +59,7 @@ struct ConstrainedWeakFormFixture : public testing::Test {
     mat.K = 1.0;
     mat.G = 0.5;
     solid_mechanics_weak_form->addBodyIntegral(
-        smith::DependsOn<0>{}, mesh->entireBodyName(),
+        smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
         [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
           typename SolidMaterial::State state;
           auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), density);

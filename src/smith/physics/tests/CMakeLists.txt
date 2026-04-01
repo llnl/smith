@@ -13,7 +13,7 @@ smith_add_library(
     HEADERS     ${physics_test_headers}
     )
       
-set(physics_test_depends smith_physics smith_physics_test_utils gtest)
+set(physics_test_depends smith_physics smith_physics_test_utils smith_differentiable_numerics gtest)
 
 set(physics_serial_test_sources
     beam_bending.cpp
@@ -30,7 +30,9 @@ set(physics_serial_test_sources
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
     test_functional_weak_form.cpp
+    thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
+    test_kinematic_objective.cpp
     )
 
 if (TRIBOL_FOUND)
@@ -75,6 +77,7 @@ set(physics_parallel_test_sources
     dynamic_thermal_adjoint.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
+    parameterized_thermomechanics_example.cpp 
     )
 set(physics_parallel_tribol_test_sources
     contact_patch.cpp
