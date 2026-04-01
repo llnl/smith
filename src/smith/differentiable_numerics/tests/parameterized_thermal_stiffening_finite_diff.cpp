@@ -39,7 +39,7 @@
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/tests/paraview_helper.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
@@ -111,8 +111,8 @@ void FiniteDifferenceParameter()
       buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   // Construct and initialize the time discretized weak form
-  smith::SecondOrderTimeIntegrationRule backward_euler_heat(1.0);
-  smith::SecondOrderTimeIntegrationRule backward_euler_solid(1.0);
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule backward_euler_heat;
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule backward_euler_solid;
 
   double theta_ref = 1.0;
   double external_heat_source = 1.0;
@@ -204,7 +204,7 @@ void FiniteDifferenceParameter()
   SLIC_INFO_ROOT("... Parameterized thermomechanics test setup complete");
 
   auto pv_writer =
-      smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), "sol_param_thermal_stiff_test");
+      smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), "sol_param_thermal_stiff_test");
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
 
   SLIC_INFO_ROOT("... Created paraview output writer");

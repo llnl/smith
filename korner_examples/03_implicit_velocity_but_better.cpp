@@ -23,7 +23,7 @@
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/tests/paraview_helper.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 
 namespace smith {
 
@@ -90,7 +90,7 @@ class SolidMechanicsStateAdvancer2 : public StateAdvancer {
   SolidMechanicsStateAdvancer2(std::shared_ptr<NonlinearBlockSolverBase> solid_solver,
                                std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
                                std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> weak_form,
-                               SecondOrderTimeIntegrationRule time_rule)
+                               ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule)
       : solver_(solid_solver), vector_bcs_(vector_bcs), weak_form_(weak_form), time_rule_(time_rule)
   {
   }
@@ -118,7 +118,7 @@ class SolidMechanicsStateAdvancer2 : public StateAdvancer {
 
   template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
   static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<gretl::DataStore>& graph,
-                                     SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+                                     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string physics_name,
                                      const std::vector<std::string>& param_names, double initial_time = 0.0)
   {
     auto shape_disp = create_field_state(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
@@ -167,11 +167,13 @@ class SolidMechanicsStateAdvancer2 : public StateAdvancer {
     std::vector<FieldState> states = states_old;
 
     states[DISPLACEMENT] = displacement;
-    states[VELOCITY] = time_rule_.derivative(final_time_info, displacement, states_old[DISPLACEMENT],
-                                             states_old[VELOCITY], states_old[ACCELERATION]);
+    states[VELOCITY] =
+        time_rule_.dot(final_time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY],
+                       states_old[ACCELERATION]);
     // states[VELOCITY] = (1.0 / final_time_info.dt()) * (displacement - states_old[DISPLACEMENT]);
-    states[ACCELERATION] = time_rule_.second_derivative(final_time_info, displacement, states_old[DISPLACEMENT],
-                                                        states_old[VELOCITY], states_old[ACCELERATION]);
+    states[ACCELERATION] =
+        time_rule_.ddot(final_time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY],
+                        states_old[ACCELERATION]);
 
     std::vector<FieldState> reaction_inputs{states[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
                                             states_old[ACCELERATION]};
@@ -186,13 +188,13 @@ class SolidMechanicsStateAdvancer2 : public StateAdvancer {
   std::shared_ptr<NonlinearBlockSolverBase> solver_;
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;
   std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> weak_form_;
-  SecondOrderTimeIntegrationRule time_rule_;
+  ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule_;
 };
 
 template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
 auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
                          std::shared_ptr<NonlinearBlockSolverBase> d_solid_nonlinear_solver,
-                         smith::SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+                         smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string physics_name,
                          const std::vector<std::string>& param_names = {})
 {
   auto graph = std::make_shared<gretl::DataStore>(100);
@@ -240,7 +242,7 @@ int main(int argc, char* argv[])
 
   auto d_solid_nonlinear_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule;
 
   // warm-start.
   // implicit Newmark.
@@ -290,7 +292,7 @@ int main(int argc, char* argv[])
   physics->resetStates();
 
   double time_increment = 1.0e-2;
-  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
+  auto pv_writer = smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
   for (size_t m = 0; m < 50; ++m) {
     if (mfem::Mpi::Root()) {

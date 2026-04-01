@@ -21,7 +21,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   SolidMechanicsStateAdvancer(std::shared_ptr<NonlinearBlockSolverBase> solid_solver,
                               std::shared_ptr<DirichletBoundaryConditions> vector_bcs,
                               std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> weak_form,
-                              SecondOrderTimeIntegrationRule time_rule)
+                              ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule)
       : solver_(solid_solver), vector_bcs_(vector_bcs), weak_form_(weak_form), time_rule_(time_rule)
   {
   }
@@ -49,7 +49,7 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
 
   template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
   static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<gretl::DataStore>& graph,
-                                     SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+                                     ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string physics_name,
                                      const std::vector<std::string>& param_names, double initial_time = 0.0)
   {
     auto shape_disp = create_field_state(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
@@ -98,11 +98,13 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
     std::vector<FieldState> states = states_old;
 
     states[DISPLACEMENT] = displacement;
-    states[VELOCITY] = time_rule_.derivative(final_time_info, displacement, states_old[DISPLACEMENT],
-                                             states_old[VELOCITY], states_old[ACCELERATION]);
+    states[VELOCITY] =
+        time_rule_.dot(final_time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY],
+                       states_old[ACCELERATION]);
     // states[VELOCITY] = (1.0 / final_time_info.dt()) * (displacement - states_old[DISPLACEMENT]);
-    states[ACCELERATION] = time_rule_.second_derivative(final_time_info, displacement, states_old[DISPLACEMENT],
-                                                        states_old[VELOCITY], states_old[ACCELERATION]);
+    states[ACCELERATION] =
+        time_rule_.ddot(final_time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY],
+                        states_old[ACCELERATION]);
     std::vector<FieldState> reaction_inputs{states[DISPLACEMENT], states_old[DISPLACEMENT], states_old[VELOCITY],
                                             states_old[ACCELERATION]};
     reaction_inputs.insert(reaction_inputs.end(), params.begin(), params.end());
@@ -117,13 +119,13 @@ class SolidMechanicsStateAdvancer : public StateAdvancer {
   std::shared_ptr<NonlinearBlockSolverBase> solver_;
   std::shared_ptr<DirichletBoundaryConditions> vector_bcs_;
   std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> weak_form_;
-  SecondOrderTimeIntegrationRule time_rule_;
+  ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule_;
 };
 
 template <int dim, typename ShapeDispSpace, typename VectorSpace, typename... ParamSpaces>
 auto buildSolidMechanics(std::shared_ptr<smith::Mesh> mesh,
                          std::shared_ptr<NonlinearBlockSolverBase> d_solid_nonlinear_solver,
-                         smith::SecondOrderTimeIntegrationRule time_rule, std::string physics_name,
+                         smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule, std::string physics_name,
                          const std::vector<std::string>& param_names = {})
 {
   auto graph = std::make_shared<gretl::DataStore>(100);

@@ -24,11 +24,11 @@
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/tests/paraview_helper.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
-#include "smith/physics/materials/thermoelastic_material.hpp"
+#include "smith/physics/materials/parameterized_thermoelastic_material.hpp"
 
 #include "../../korner_examples/quasistatic_thermomechanics.hpp"
 #include "../../korner_examples/calculate_reactions.hpp"
@@ -171,23 +171,23 @@ int main(int argc, char* argv[])
   SLIC_INFO_ROOT_FLUSH("Setting up time integration rules");
   /// -----------------------------------------------------
 
-  smith::SecondOrderTimeIntegrationRule backward_euler_heat(1.0);
-  smith::SecondOrderTimeIntegrationRule backward_euler_solid(1.0);
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule backward_euler_heat;
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule backward_euler_solid;
 
   SLIC_INFO_ROOT_FLUSH("Defining material properties");
   /// ------------------------------------------------
 
-  double Km = material_params[0];     ///< matrix bulk modulus, MPa
-  double Gm = material_params[1];     ///< matrix shear modulus, MPa
-  double betam = material_params[2];  ///< matrix volumetric thermal expansion coefficient
-  double rhom0 = material_params[3];  ///< matrix initial density
-  double etam = material_params[4];   ///< matrix viscosity, MPa-s
+  double Km = material_params[0];                      ///< matrix bulk modulus, MPa
+  double Gm = material_params[1];                      ///< matrix shear modulus, MPa
+  double betam = material_params[2];                   ///< matrix volumetric thermal expansion coefficient
+  [[maybe_unused]] double rhom0 = material_params[3];  ///< matrix initial density
+  [[maybe_unused]] double etam = material_params[4];   ///< matrix viscosity, MPa-s
 
-  double Ke = material_params[5];     ///< entanglement bulk modulus, MPa
-  double Ge = material_params[6];     ///< entanglement shear modulus, MPa
-  double betae = material_params[7];  ///< entanglement volumetric thermal expansion coefficient
-  double rhoe0 = material_params[8];  ///< entanglement (chain) initial density
-  double etae = material_params[9];   ///< entanglement viscosity, MPa-s
+  double Ke = material_params[5];                      ///< entanglement bulk modulus, MPa
+  double Ge = material_params[6];                      ///< entanglement shear modulus, MPa
+  [[maybe_unused]] double betae = material_params[7];  ///< entanglement volumetric thermal expansion coefficient
+  [[maybe_unused]] double rhoe0 = material_params[8];  ///< entanglement (chain) initial density
+  [[maybe_unused]] double etae = material_params[9];   ///< entanglement viscosity, MPa-s
 
   double Cv = material_params[10];     ///< net volumetric heat capacity (must account for matrix+chain+particle)
   double kappa = material_params[11];  ///< net thermal conductivity (must account for matrix+chain+particle)
@@ -203,9 +203,8 @@ int main(int argc, char* argv[])
   double gw = material_params[18];  ///< particle weight fraction
   double wm = material_params[19];  ///< matrix mass fraction (set to 0.5, not real for now)
 
-  using Material = thermomechanics::ThermalStiffeningMaterial;
-  Material material =
-      Material{Km, Gm, betam, rhom0, etam, Ke, Ge, betae, rhoe0, etae, Cv, kappa, Af, E_af, Ar, E_ar, R, Tr, gw, wm};
+  using Material = smith::thermomechanics::ParameterizedThermalStiffeningMaterial;
+  Material material{Km, Gm, betam, Ke, Ge, Cv, kappa, Af, E_af, Ar, E_ar, R, Tr, gw, wm};
 
   // warm-start.
   // implicit Newmark.
@@ -233,23 +232,23 @@ int main(int argc, char* argv[])
   solid_mechanics_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
       [material](const TimeInfo& time_info, auto /*X*/, auto u, auto v, auto /*a*/, auto theta, auto /*theta_dot*/,
-                 auto /*theta_dot_dot*/, auto /*bulk*/) {
-        Material::State state;
+                 auto /*theta_dot_dot*/, auto bulk) {
+        typename Material::template State<dim> state;
         auto [pk, C_v, s0, q0] = material(time_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
-                                          get<VALUE>(theta), get<DERIVATIVE>(theta));
+                                          get<VALUE>(theta), get<DERIVATIVE>(theta), bulk);
         return smith::tuple{smith::zero{}, pk};
       });
 
-  heat_transfer_weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-      [material](const TimeInfo& t_info, auto /*X*/, auto theta, auto theta_dot, auto /*theta_dot_dot*/, auto u, auto v,
-                 auto /*a*/, auto /*bulk*/) {
-        Material::State state;
-        auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(theta),
-                                          get<DERIVATIVE>(theta));
-        auto dT_dt = get<VALUE>(theta_dot);
-        return smith::tuple{C_v * dT_dt - s0, -q0};
-      });
+  heat_transfer_weak_form->addBodyIntegral(smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
+                                           [material](const TimeInfo& t_info, auto /*X*/, auto theta, auto theta_dot,
+                                                      auto /*theta_dot_dot*/, auto u, auto v, auto /*a*/, auto bulk) {
+                                             typename Material::template State<dim> state;
+                                             auto [pk, C_v, s0, q0] =
+                                                 material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
+                                                          get<VALUE>(theta), get<DERIVATIVE>(theta), bulk);
+                                             auto dT_dt = get<VALUE>(theta_dot);
+                                             return smith::tuple{C_v * dT_dt - s0, -q0};
+                                           });
 
   heat_transfer_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
@@ -266,7 +265,7 @@ int main(int argc, char* argv[])
   SLIC_INFO_ROOT_FLUSH("Creating Paraview writer and writing initial state");
   /// -----------------------------------------------------------------------
 
-  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), "paraview_heat_v2");
+  auto pv_writer = smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), "paraview_heat_v2");
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
 
   SLIC_INFO_ROOT_FLUSH("Starting time-stepping loop");
