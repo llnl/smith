@@ -347,7 +347,7 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
     auto force = 0.0 * X;
     auto ramp_scale = (dt1 > 0.0) ? std::min(t / dt1, 1.0) : 1.0;
     auto force_scale = min_traction_scale + (1.0 - min_traction_scale) * ramp_scale;
-    force[1] = -left_face_traction_magnitude * force_scale;
+    force[1] = -0.01*left_face_traction_magnitude * force_scale;
     return force;
   });
   // system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
