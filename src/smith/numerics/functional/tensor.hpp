@@ -956,7 +956,7 @@ SMITH_HOST_DEVICE constexpr auto dot(const tensor<S, m, n, p, q>& A, const tenso
 
 /// compute the cross product of the columns of A: A(:,1) x A(:,2)
 template <typename T>
-auto cross(const tensor<T, 3, 2>& A)
+SMITH_HOST_DEVICE auto cross(const tensor<T, 3, 2>& A)
 {
   return tensor<T, 3>{A(1, 0) * A(2, 1) - A(2, 0) * A(1, 1), A(2, 0) * A(0, 1) - A(0, 0) * A(2, 1),
                       A(0, 0) * A(1, 1) - A(1, 0) * A(0, 1)};
@@ -964,21 +964,21 @@ auto cross(const tensor<T, 3, 2>& A)
 
 /// return the in-plane components of the cross product of {v[0], v[1], 0} x {0, 0, 1}
 template <typename T>
-auto cross(const tensor<T, 2, 1>& v)
+SMITH_HOST_DEVICE auto cross(const tensor<T, 2, 1>& v)
 {
   return tensor<T, 2>{v(1, 0), -v(0, 0)};
 }
 
 /// return the in-plane components of the cross product of {v[0], v[1], 0} x {0, 0, 1}
 template <typename T>
-auto cross(const tensor<T, 2>& v)
+SMITH_HOST_DEVICE auto cross(const tensor<T, 2>& v)
 {
   return tensor<T, 2>{v[1], -v[0]};
 }
 
 /// compute the (right handed) cross product of two 3-vectors
 template <typename S, typename T>
-auto cross(const tensor<S, 3>& u, const tensor<T, 3>& v)
+SMITH_HOST_DEVICE auto cross(const tensor<S, 3>& u, const tensor<T, 3>& v)
 {
   return tensor<decltype(S{} * T{}), 3>{u(1) * v(2) - u(2) * v(1), u(2) * v(0) - u(0) * v(2),
                                         u(0) * v(1) - u(1) * v(0)};
@@ -1110,12 +1110,11 @@ SMITH_HOST_DEVICE constexpr auto norm(zero) { return zero{}; }
  * @brief Normalizes the tensor
  * Each element is divided by the Frobenius norm of the tensor, @see norm
  * @param[in] A The tensor to normalize
- * @param[in] epsilon A small perturbation to avoid dividing by zero and to smooth the normalize function
  */
 template <typename T, int... n>
-SMITH_HOST_DEVICE auto normalize(const tensor<T, n...>& A, double const& epsilon = 0.0)
+SMITH_HOST_DEVICE auto normalize(const tensor<T, n...>& A)
 {
-  return A / (norm(A) + epsilon);
+  return A / norm(A);
 }
 
 /**

@@ -95,13 +95,11 @@ struct ParameterizedThermoelasticMaterial {
 
 // Non-isotropic identity tensor
 template <typename T, int dim>
-SMITH_HOST_DEVICE
-constexpr tensor<T, dim, dim> make_identity_tensor()
+SMITH_HOST_DEVICE constexpr tensor<T, dim, dim> make_identity_tensor()
 {
   tensor<T, dim, dim> I{};
   for (int i = 0; i < dim; ++i)
-    for (int j = 0; j < dim; ++j)
-      I(i, j) = (i == j) ? T(1) : T(0);
+    for (int j = 0; j < dim; ++j) I(i, j) = (i == j) ? T(1) : T(0);
   return I;
 }
 
@@ -110,35 +108,35 @@ constexpr tensor<T, dim, dim> make_identity_tensor()
  *
  */
 struct ParameterizedThermalStiffeningMaterial {
-  double Km;       ///< matrix bulk modulus, MPa
-  double Gm;       ///< matrix shear modulus, MPa
-  double betam;    ///< matrix volumetric thermal expansion coefficient
+  double Km;     ///< matrix bulk modulus, MPa
+  double Gm;     ///< matrix shear modulus, MPa
+  double betam;  ///< matrix volumetric thermal expansion coefficient
 
-  double Ke;       ///< entanglement bulk modulus, MPa
-  double Ge;       ///< entanglement shear modulus, MPa
+  double Ke;  ///< entanglement bulk modulus, MPa
+  double Ge;  ///< entanglement shear modulus, MPa
 
-  double C_v;      ///< net volumetric heat capacity (must account for matrix+chain+particle)
-  double kappa_;    ///< net thermal conductivity (must account for matrix+chain+particle)
+  double C_v;     ///< net volumetric heat capacity (must account for matrix+chain+particle)
+  double kappa_;  ///< net thermal conductivity (must account for matrix+chain+particle)
 
   // E_a and R can be SI units since they cancel out in the exponent
-  double Af;       ///< forward (low-high) exponential prefactor, 1/s
-  double E_af;     ///< forward (low-high) activation energy, J/mol
-  double Ar;       ///< reverse exponential prefactor, 1/s
-  double E_ar;     ///< reverse activation energy, J/mol
-  double R;        ///< universal gas constant, J/mol/K
-  double Tr;       ///< reference temperature, K
+  double Af;    ///< forward (low-high) exponential prefactor, 1/s
+  double E_af;  ///< forward (low-high) activation energy, J/mol
+  double Ar;    ///< reverse exponential prefactor, 1/s
+  double E_ar;  ///< reverse activation energy, J/mol
+  double R;     ///< universal gas constant, J/mol/K
+  double Tr;    ///< reference temperature, K
 
-  double gw;       ///< particle weight fraction
-  double wm_;       ///< matrix mass fraction (set to 0.5, not real for now)
+  double gw;   ///< particle weight fraction
+  double wm_;  ///< matrix mass fraction (set to 0.5, not real for now)
 
   /// internal variables for the material model
   template <int dim>
   struct State {
-    double w_e = 0.0;   // entangled mass fraction
-    
+    double w_e = 0.0;  // entangled mass fraction
+
     // SLIC_ERROR_IF(dim==3 || dim==2, "Unsupported dimensionality. Must be 2 or 3.");
-    tensor<double,dim,dim> Cp   = make_identity_tensor<double, dim>();
-    tensor<double,dim,dim> Fesi = make_identity_tensor<double, dim>();
+    tensor<double, dim, dim> Cp = make_identity_tensor<double, dim>();
+    tensor<double, dim, dim> Fesi = make_identity_tensor<double, dim>();
   };
 
   /**
@@ -159,14 +157,14 @@ struct ParameterizedThermalStiffeningMaterial {
    * @return tuple: First Piola stress, volumetric heat capacity, heat generation rate, referential heat flux
    */
 #if 1
-// Linear model
-  template <typename DispGradType, typename VelocGradType, typename TempType, typename TempGradType, 
+  // Linear model
+  template <typename DispGradType, typename VelocGradType, typename TempType, typename TempGradType,
             typename volFracParamType, int dim>
   auto operator()(double /*dt*/, State<dim>& state, const tensor<DispGradType, dim, dim>& grad_u,
-                  const tensor<VelocGradType, dim, dim>& /*grad_v*/, TempType theta,
+                  const tensor<VelocGradType, dim, dim>& grad_v, TempType theta,
                   const tensor<TempGradType, dim>& grad_theta, volFracParamType volFracParam) const
   {
-  using std::pow, std::exp;
+    using std::pow, std::exp;
     auto tempref = Tr;
     theta = theta + tempref;
 
@@ -174,9 +172,12 @@ struct ParameterizedThermalStiffeningMaterial {
     // Small-strain tensor
     auto eps = 0.5 * (grad_u + transpose(grad_u));
 
+    // Parametrize bulk and shear modulus (equivalent to Young's modulus?)
+    auto Km_p = Km * get<0>(volFracParam);
+    auto Gm_p = Gm * get<0>(volFracParam);
     // Lame parameters
-    auto lambda = Km - 2.0 * Gm / 3.0;
-    auto mu     = Gm;
+    auto lambda = Km_p - 2.0 * Gm_p / 3.0;
+    auto mu = Gm_p;
 
     auto tr_eps = tr(eps);
 
@@ -187,26 +188,23 @@ struct ParameterizedThermalStiffeningMaterial {
     // auto theta_minus_Tr = theta - Tr;
     // auto sigma_thermal  = -(3.0 * Km * betam)
     //                       * theta_minus_Tr * I;
-    // Minimum density value to prevent zero density
-    const double epsilon = 1e-4; 
-    auto scale = epsilon + get<0>(volFracParam) * (1 - epsilon);
-    auto sigma = scale * sigma_mech; //+ sigma_thermal;
+
+    auto sigma = sigma_mech;  //+ sigma_thermal;
 
     // Small strain
     auto Piola = sigma;
 
     // Heat flux
-    auto kappa = kappa_ * scale;
-    auto q0    = -kappa * grad_theta;
+    auto kappa = kappa_ * get<0>(volFracParam);
+    auto q0 = -kappa * grad_theta;
 
     // Internal heat power: sigma : D where D is sym(grad_v)
-    // auto D  = 0.5 * (grad_v + transpose(grad_v));
-    // auto s0 = tr(dot(sigma, D));
-    auto s0 = smith::zero{};
+    auto D = 0.5 * (grad_v + transpose(grad_v));
+    auto s0 = tr(dot(sigma, D));
 
     // State variables: same semantics as nonlinear case, but trivial
-    state.Cp   = get_value(make_identity_tensor<double, dim>());
-    state.w_e  = 0.0;
+    state.Cp = get_value(make_identity_tensor<double, dim>());
+    state.w_e = 0.0;
     state.Fesi = get_value(make_identity_tensor<double, dim>());
 
     // C_v is double (as in the nonlinear model)
@@ -214,14 +212,14 @@ struct ParameterizedThermalStiffeningMaterial {
   }
 
 #else
-// Original nonlinear model
-  template <typename DispGradType, typename VelocGradType, typename TempType, typename TempGradType, 
+  // Original nonlinear model
+  template <typename DispGradType, typename VelocGradType, typename TempType, typename TempGradType,
             typename volFracParamType, int dim>
   auto operator()(double dt, State<dim>& state, const tensor<DispGradType, dim, dim>& grad_u,
                   const tensor<VelocGradType, dim, dim>& grad_v, TempType theta,
                   const tensor<TempGradType, dim>& grad_theta, volFracParamType volFracParam) const
   {
-  using std::pow, std::exp;
+    using std::pow, std::exp;
     auto tempref = Tr;
     theta = theta + tempref;
 
@@ -235,7 +233,7 @@ struct ParameterizedThermalStiffeningMaterial {
     auto Fesip = state.Fesi;  // previous mapping
 
     // Equilibrium entangled fraction
-    auto xi = exp(-(pow(theta/Tt,k)));
+    auto xi = exp(-(pow(theta / Tt, k)));
 
     // Kinematics
     auto F = grad_u + I;
@@ -267,11 +265,11 @@ struct ParameterizedThermalStiffeningMaterial {
 
     auto aux1 = 0.0, aux2 = 0.0, aux3 = 0.0;
     if (dwe > 0 && wep == 0) {
-        aux1 = 1.0; // initialize Fhsi
+      aux1 = 1.0;  // initialize Fhsi
     } else if (dwe > 0) {
-        aux2 = 1.0; // update Fhsi
+      aux2 = 1.0;  // update Fhsi
     } else {
-        aux3 = 1.0;
+      aux3 = 1.0;
     }
 
     auto Fesi = aux1 * inv(F) + aux2 * (wep / (wep + dwe)) * Fesip + aux3 * Fesip;
@@ -304,11 +302,11 @@ struct ParameterizedThermalStiffeningMaterial {
     state.Cp = get_value(dot(transpose(F), F));
 
     // Internal heat power
-    auto greenStrainRate = 0.5 * (grad_v + transpose(grad_v) +
-        dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
+    auto greenStrainRate =
+        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
 
     // Thermal contribution to stress
-    auto df1 = -N*exp(-N * (theta - Tr));
+    auto df1 = -N * exp(-N * (theta - Tr));
     auto dtmdT = gw * df1 * pow(J, -2.0 / 3.0) * B_bar - Km * J * betam * I;
     auto dSedT = dot(inv(F), dot(wm * dtmdT, transpose(inv(F))));
     const auto s0 = tr(dot(theta * dSedT, greenStrainRate));
@@ -323,37 +321,37 @@ struct ParameterizedThermalStiffeningMaterial {
  *
  */
 struct ParameterizedThermalStiffeningMaterialConstant {
-  double Km;       ///< matrix bulk modulus, MPa
-  double Gm;       ///< matrix shear modulus, MPa
-  double betam;    ///< matrix volumetric thermal expansion coefficient
+  double Km;     ///< matrix bulk modulus, MPa
+  double Gm;     ///< matrix shear modulus, MPa
+  double betam;  ///< matrix volumetric thermal expansion coefficient
 
-  double Ke;       ///< entanglement bulk modulus, MPa
-  double Ge;       ///< entanglement shear modulus, MPa
+  double Ke;  ///< entanglement bulk modulus, MPa
+  double Ge;  ///< entanglement shear modulus, MPa
 
-  double C_v;      ///< net volumetric heat capacity (must account for matrix+chain+particle)
-  double kappa_;    ///< net thermal conductivity (must account for matrix+chain+particle)
+  double C_v;     ///< net volumetric heat capacity (must account for matrix+chain+particle)
+  double kappa_;  ///< net thermal conductivity (must account for matrix+chain+particle)
 
   // E_a and R can be SI units since they cancel out in the exponent
-  double Af;       ///< forward (low-high) exponential prefactor, 1/s
-  double E_af;     ///< forward (low-high) activation energy, J/mol
-  double Ar;       ///< reverse exponential prefactor, 1/s
-  double E_ar;     ///< reverse activation energy, J/mol
-  double R;        ///< universal gas constant, J/mol/K
-  double Tr;       ///< reference temperature, K
+  double Af;    ///< forward (low-high) exponential prefactor, 1/s
+  double E_af;  ///< forward (low-high) activation energy, J/mol
+  double Ar;    ///< reverse exponential prefactor, 1/s
+  double E_ar;  ///< reverse activation energy, J/mol
+  double R;     ///< universal gas constant, J/mol/K
+  double Tr;    ///< reference temperature, K
 
-  double gw;       ///< particle weight fraction
-  double wm_;       ///< matrix mass fraction (set to 0.5, not real for now)
+  double gw;   ///< particle weight fraction
+  double wm_;  ///< matrix mass fraction (set to 0.5, not real for now)
 
   bool use_linear_thermoelastic = false;
 
   /// internal variables for the material model
   template <int dim>
   struct State {
-    double w_e = 0.0;   // entangled mass fraction
-    
+    double w_e = 0.0;  // entangled mass fraction
+
     // SLIC_ERROR_IF(dim==3 || dim==2, "Unsupported dimensionality. Must be 2 or 3.");
-    tensor<double,dim,dim> Cp   = make_identity_tensor<double, dim>();
-    tensor<double,dim,dim> Fesi = make_identity_tensor<double, dim>();
+    tensor<double, dim, dim> Cp = make_identity_tensor<double, dim>();
+    tensor<double, dim, dim> Fesi = make_identity_tensor<double, dim>();
   };
 
   /**
@@ -373,13 +371,13 @@ struct ParameterizedThermalStiffeningMaterialConstant {
    * @param state State variables for this material
    * @return tuple: First Piola stress, volumetric heat capacity, heat generation rate, referential heat flux
    */
-  template <typename DispGradType, typename VelocGradType, typename TempType, typename TempGradType, 
+  template <typename DispGradType, typename VelocGradType, typename TempType, typename TempGradType,
             typename volFracParamType, int dim>
   auto operator()(double dt, State<dim>& state, const tensor<DispGradType, dim, dim>& grad_u,
                   const tensor<VelocGradType, dim, dim>& grad_v, TempType theta,
                   const tensor<TempGradType, dim>& grad_theta, volFracParamType volFracParam) const
   {
-  using std::pow, std::exp;
+    using std::pow, std::exp;
     auto tempref = Tr;
     theta = theta + tempref;
 
@@ -394,7 +392,7 @@ struct ParameterizedThermalStiffeningMaterialConstant {
     auto Fesip = state.Fesi;  // previous mapping
 
     // Equilibrium entangled fraction
-    auto xi = exp(-(pow(theta/Tt,k)));
+    auto xi = exp(-(pow(theta / Tt, k)));
 
     // Kinematics
     auto F = grad_u + I;
@@ -426,11 +424,11 @@ struct ParameterizedThermalStiffeningMaterialConstant {
 
     auto aux1 = 0.0, aux2 = 0.0, aux3 = 0.0;
     if (dwe > 0 && wep == 0) {
-        aux1 = 1.0; // initialize Fhsi
+      aux1 = 1.0;  // initialize Fhsi
     } else if (dwe > 0) {
-        aux2 = 1.0; // update Fhsi
+      aux2 = 1.0;  // update Fhsi
     } else {
-        aux3 = 1.0;
+      aux3 = 1.0;
     }
 
     auto Fesi = aux1 * inv(F) + aux2 * (wep / (wep + dwe)) * Fesip + aux3 * Fesip;
@@ -463,11 +461,11 @@ struct ParameterizedThermalStiffeningMaterialConstant {
     state.Cp = get_value(dot(transpose(F), F));
 
     // Internal heat power
-    auto greenStrainRate = 0.5 * (grad_v + transpose(grad_v) +
-        dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
+    auto greenStrainRate =
+        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
 
     // Thermal contribution to stress
-    auto df1 = -N*exp(-N * (theta - Tr));
+    auto df1 = -N * exp(-N * (theta - Tr));
     auto dtmdT = gw * df1 * pow(J, -2.0 / 3.0) * B_bar - Km * J * betam * I;
     auto dSedT = dot(inv(F), dot(wm * dtmdT, transpose(inv(F))));
     const auto s0 = tr(dot(theta * dSedT, greenStrainRate));

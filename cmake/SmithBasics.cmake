@@ -22,20 +22,21 @@ if (NOT SMITH_BASICS_SETUP)
         "Enable Smith's codevelop build (MFEM and Axom included as CMake subdirectories)"
         OFF)
 
-    # Only enable Smith's code checks by default if it is the top-level project
-    # or a user overrides it
-    if("${CMAKE_PROJECT_NAME}" STREQUAL "smith")
-        set(_enable_smith_code_checks ON)
-    else()
-        set(_enable_smith_code_checks OFF)
-    endif()
-    option(SMITH_ENABLE_CODE_CHECKS "Enable Smith's code checks" ${_enable_smith_code_checks})
+    option(SMITH_ENABLE_CODE_CHECKS "Enable Smith's code checks" ON)
 
     cmake_dependent_option(SMITH_ENABLE_TESTS "Enables Smith Tests" ON "ENABLE_TESTS" OFF)
     cmake_dependent_option(SMITH_ENABLE_CUDA "Enables Smith with CUDA support" ON "ENABLE_CUDA" OFF)
     cmake_dependent_option(SMITH_ENABLE_HIP "Enables Smith with HIP support" ON "ENABLE_HIP" OFF)
-    cmake_dependent_option(SMITH_ENABLE_MPI "Enables Smith with MPI support" ON "ENABLE_MPI" OFF)
     cmake_dependent_option(SMITH_ENABLE_OPENMP "Enables Smith with OPENMP support" ON "ENABLE_OPENMP" OFF)
+
+    # Options for builtin TPLs
+    option(SMITH_ENABLE_GRETL "Enables Smith with Gretl Support" ON)
+    option(SMITH_ENABLE_CONTINUATION "Enables Smith with Continuation Solver support" ON)
+
+    if (SMITH_ENABLE_HIP OR SMITH_ENABLE_CUDA)
+        message(STATUS "Disabling Smith's Continuation Solver support due to currently non-supported GPU build")
+        set(SMITH_ENABLE_CONTINUATION FALSE CACHE BOOL "" FORCE)
+    endif()
 
     #------------------------------------------------------------------------------
     # Profiling options

@@ -39,7 +39,7 @@
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/tests/paraview_helper.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
@@ -65,9 +65,10 @@ void FiniteDifferenceParameter()
   smith::StateManager::initialize(datastore, "thermomech_functional_parameterized_sensitivities");
 
   // Construct the appropriate dimension mesh and give it to the data store
-  std::string filename = SMITH_REPO_DIR "/data/meshes/2d_plate.g"; //50x50x1 unit plate
+  std::string filename = SMITH_REPO_DIR "/data/meshes/2d_plate.g";  // 50x50x1 unit plate
   std::string mesh_tag("mesh");
-  auto mesh = std::make_shared<smith::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
+  auto mesh =
+      std::make_shared<smith::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
   // Define boundary conditions
   std::set<int> temp_flux_bcs = {1, 2};
@@ -101,7 +102,7 @@ void FiniteDifferenceParameter()
                                                      .absolute_tol = 1.0e-11,
                                                      .max_iterations = 500,
                                                      .print_level = 0};
-  
+
   // Construct and initialize the linear and nonlinear solvers
   std::shared_ptr<DifferentiableSolver> d_heat_linear_solver =
       buildDifferentiableLinearSolve(heat_linear_options, *mesh);
@@ -110,27 +111,27 @@ void FiniteDifferenceParameter()
       buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   // Construct and initialize the time discretized weak form
-  smith::SecondOrderTimeIntegrationRule backward_euler_heat(1.0);
-  smith::SecondOrderTimeIntegrationRule backward_euler_solid(1.0);
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule backward_euler_heat;
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule backward_euler_solid;
 
   double theta_ref = 1.0;
   double external_heat_source = 1.0;
 
-  double Km   = 0.5;         ///< matrix bulk modulus, MPa
-  double Gm   = 0.0073976;   ///< matrix shear modulus, MPa
-  double betam = 0.0;        ///< matrix volumetric thermal expansion coefficient
-  double Ke    = 0.5;        ///< entanglement bulk modulus, MPa
-  double Ge    = 0.225075;   ///< entanglement shear modulus, MPa
-  double Cv    = 1.5;        ///< net volumetric heat capacity
-  double kappa = 30.0;       ///< net thermal conductivity
-  double Af   = 2.5e15;      ///< forward (low-high) exponential prefactor, 1/s
-  double E_af = 1.5e5;       ///< forward (low-high) activation energy, J/mol
-  double Ar   = 1.0e-21;     ///< reverse exponential prefactor, 1/s
-  double E_ar = -1.55e5;     ///< reverse activation energy, J/mol
-  double R    = 8.314;       ///< universal gas constant, J/mol/K
-  double Tr   = 353.0;       ///< reference temperature, K
-  double gw   = 0.2;         ///< particle weight fraction
-  double wm   = 0.5;         ///< matrix mass fraction (set to 0.5, not real for now)
+  double Km = 0.5;        ///< matrix bulk modulus, MPa
+  double Gm = 0.0073976;  ///< matrix shear modulus, MPa
+  double betam = 0.0;     ///< matrix volumetric thermal expansion coefficient
+  double Ke = 0.5;        ///< entanglement bulk modulus, MPa
+  double Ge = 0.225075;   ///< entanglement shear modulus, MPa
+  double Cv = 1.5;        ///< net volumetric heat capacity
+  double kappa = 30.0;    ///< net thermal conductivity
+  double Af = 2.5e15;     ///< forward (low-high) exponential prefactor, 1/s
+  double E_af = 1.5e5;    ///< forward (low-high) activation energy, J/mol
+  double Ar = 1.0e-21;    ///< reverse exponential prefactor, 1/s
+  double E_ar = -1.55e5;  ///< reverse activation energy, J/mol
+  double R = 8.314;       ///< universal gas constant, J/mol/K
+  double Tr = 353.0;      ///< reference temperature, K
+  double gw = 0.2;        ///< particle weight fraction
+  double wm = 0.5;        ///< matrix mass fraction (set to 0.5, not real for now)
 
   using thermalStiffMaterial = thermomechanics::ParameterizedThermalStiffeningMaterial;
   thermalStiffMaterial material{Km, Gm, betam, Ke, Ge, Cv, kappa, Af, E_af, Ar, E_ar, R, Tr, gw, wm};
@@ -143,16 +144,17 @@ void FiniteDifferenceParameter()
   std::string physics_name = "thermomech";
   auto [physics, solid_mechanics_weak_form, heat_transfer_weak_form, vector_bcs, scalar_bcs] =
       custom_physics::buildThermoMechanics<dim, ShapeDispSpace, VectorSpace, ScalarSpace, ScalarParameterSpace>(
-          mesh, d_solid_nonlinear_solver, d_heat_linear_solver, backward_euler_solid, backward_euler_heat, physics_name, {"fictitious_density"});
+          mesh, d_solid_nonlinear_solver, d_heat_linear_solver, backward_euler_solid, backward_euler_heat, physics_name,
+          {"fictitious_density"});
 
   // Set the boundary conditions
-  auto fixed_displacement = [](const double t, const smith::tensor<double, dim> & x){
+  auto fixed_displacement = [](const double t, const smith::tensor<double, dim>& x) {
     auto output = 0.0 * x;
-    output[0] = 0.0*t;
+    output[0] = 0.0 * t;
     return output;
   };
-  auto applied_temp = [&theta_ref](const double t, const smith::tensor<double, dim>){
-    return theta_ref+0.0*t; //only the temperature differential here
+  auto applied_temp = [&theta_ref](const double t, const smith::tensor<double, dim>) {
+    return theta_ref + 0.0 * t;  // only the temperature differential here
   };
 
   vector_bcs->setVectorBCs<dim>(mesh->domain("ess_y_bdr"), {1}, fixed_displacement);
@@ -161,32 +163,30 @@ void FiniteDifferenceParameter()
 
   // Add body integrals to the weak forms
   solid_mechanics_weak_form->addBodyIntegral(
-    smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-    [material, dim](const TimeInfo& time_info, auto /*X*/, auto u, auto v, auto /*a*/, auto theta, auto /*theta_dot*/,
-                 auto /*theta_dot_dot*/, auto fictDens){
-      thermalStiffMaterial::State<dim> state;
-      auto [pk, C_v, s0, q0] = material(time_info.dt(), state, get<DERIVATIVE>(u),
-         get<DERIVATIVE>(v), get<VALUE>(theta), get<DERIVATIVE>(theta), fictDens);
-      return smith::tuple{smith::zero{}, pk};
-    });
+      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
+      [material, dim](const TimeInfo& time_info, auto /*X*/, auto u, auto v, auto /*a*/, auto theta, auto /*theta_dot*/,
+                      auto /*theta_dot_dot*/, auto fictDens) {
+        thermalStiffMaterial::State<dim> state;
+        auto [pk, C_v, s0, q0] = material(time_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
+                                          get<VALUE>(theta), get<DERIVATIVE>(theta), fictDens);
+        return smith::tuple{smith::zero{}, pk};
+      });
 
   heat_transfer_weak_form->addBodyIntegral(
-    smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-    [material, dim](const TimeInfo& time_info, auto /*X*/, auto theta, auto theta_dot, auto /*theta_dot_dot*/, auto u, auto v,
-                 auto /*a*/, auto fictDens)  {
-      thermalStiffMaterial::State<dim> state;
-      auto [pk, C_v, s0, q0] = material(time_info.dt(), state, get<DERIVATIVE>(u), 
-        get<DERIVATIVE>(v), get<VALUE>(theta), get<DERIVATIVE>(theta), fictDens);
-      auto dT_dt = get<VALUE>(theta_dot);
-      return smith::tuple{C_v * dT_dt - s0, -q0};
-    });
+      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
+      [material, dim](const TimeInfo& time_info, auto /*X*/, auto theta, auto theta_dot, auto /*theta_dot_dot*/, auto u,
+                      auto v, auto /*a*/, auto fictDens) {
+        thermalStiffMaterial::State<dim> state;
+        auto [pk, C_v, s0, q0] = material(time_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
+                                          get<VALUE>(theta), get<DERIVATIVE>(theta), fictDens);
+        auto dT_dt = get<VALUE>(theta_dot);
+        return smith::tuple{C_v * dT_dt - s0, -q0};
+      });
 
   heat_transfer_weak_form->addBodySource(
       smith::DependsOn<0>(), mesh->entireBodyName(),
-      [external_heat_source](auto /*t*/, auto /* x */, auto fictDens) { 
-        return external_heat_source * fictDens; 
-      });
-  
+      [external_heat_source](auto /*t*/, auto /* x */, auto fictDens) { return external_heat_source * fictDens; });
+
   // Extract fields from the physics object
   auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();
@@ -203,11 +203,12 @@ void FiniteDifferenceParameter()
 
   SLIC_INFO_ROOT("... Parameterized thermomechanics test setup complete");
 
-  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), "sol_param_thermal_stiff_test");
+  auto pv_writer =
+      smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), "sol_param_thermal_stiff_test");
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
 
   SLIC_INFO_ROOT("... Created paraview output writer");
-  
+
   // Solve the forward problem
   size_t NumSteps = 10;
   double Total_Time = 50.0;
@@ -233,7 +234,7 @@ void FiniteDifferenceParameter()
 
   // smith::FieldState disp = states[0];
   // auto reaction_squared = smith::innerProduct(disp, disp);
-  
+
   EXPECT_GT(checkGradWrt(reaction_squared, params[0], 1.0e-2, 1, true), 0.7);
 }
 

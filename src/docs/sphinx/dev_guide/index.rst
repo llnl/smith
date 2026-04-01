@@ -11,7 +11,6 @@ Developer Guide
    :hidden:
    :maxdepth: 2
 
-   tpl_build.rst
    style_guide
    docker_env
    modern_cpp

@@ -45,10 +45,8 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # Can be removed once this BLT PR is merged https://github.com/LLNL/blt/pull/585 (?)
         find_package(CUDAToolkit REQUIRED)
         set(smith_device_depends blt::cuda CUDA::cublasLt CACHE STRING "" FORCE)
-        set(SMITH_ENABLE_CONTINUATION FALSE)
     elseif(SMITH_ENABLE_HIP)
         set(smith_device_depends blt::hip CACHE STRING "" FORCE)
-        set(SMITH_ENABLE_CONTINUATION FALSE)
     else()
         set(smith_device_depends "" CACHE STRING "" FORCE)
     endif()
@@ -269,19 +267,19 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(MFEM_USE_HIP ${SMITH_ENABLE_HIP} CACHE BOOL "")
         set(MFEM_USE_LAPACK ON CACHE BOOL "")
         # mfem+mpi requires metis
-        set(MFEM_USE_METIS ${SMITH_ENABLE_MPI} CACHE BOOL "")
-        set(MFEM_USE_METIS_5 ${SMITH_ENABLE_MPI} CACHE BOOL "")
-        set(MFEM_USE_MPI ${SMITH_ENABLE_MPI} CACHE BOOL "")
+        set(MFEM_USE_METIS ON CACHE BOOL "")
+        set(MFEM_USE_METIS_5 ON CACHE BOOL "")
+        set(MFEM_USE_MPI ON CACHE BOOL "")
         if(NETCDF_DIR)
             smith_assert_is_directory(DIR_VARIABLE NETCDF_DIR)
             set(MFEM_USE_NETCDF ON CACHE BOOL "")
         endif()
+
         # mfem+mpi also needs parmetis
-        if(SMITH_ENABLE_MPI)
-            smith_assert_is_directory(DIR_VARIABLE PARMETIS_DIR)
-            # Slightly different naming convention
-            set(ParMETIS_DIR ${PARMETIS_DIR} CACHE PATH "")
-        endif()
+        smith_assert_is_directory(DIR_VARIABLE PARMETIS_DIR)
+        # Slightly different naming convention
+        set(ParMETIS_DIR ${PARMETIS_DIR} CACHE PATH "")
+
         set(MFEM_USE_OPENMP ${SMITH_ENABLE_OPENMP} CACHE BOOL "")
         if(PETSC_DIR)
             set(MFEM_USE_PETSC ON CACHE BOOL "")
@@ -301,7 +299,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             smith_assert_is_directory(DIR_VARIABLE SUPERLUDIST_DIR)
             # MFEM uses a slightly different naming convention
             set(SuperLUDist_DIR ${SUPERLUDIST_DIR} CACHE PATH "")
-            set(MFEM_USE_SUPERLU ${SMITH_ENABLE_MPI} CACHE BOOL "")
+            set(MFEM_USE_SUPERLU ON CACHE BOOL "")
         endif()
         if(STRUMPACK_DIR)
             smith_assert_is_directory(DIR_VARIABLE STRUMPACK_DIR)
@@ -417,9 +415,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # ContinuationSolvers
     #------------------------------------------------------------------------------
-    if (NOT DEFINED SMITH_ENABLE_CONTINUATION)
-        set(SMITH_ENABLE_CONTINUATION ON)
-    endif()
     message(STATUS "Smith Enable Continuation: ${SMITH_ENABLE_CONTINUATION}")
     
     if(SMITH_ENABLE_CONTINUATION)
@@ -558,9 +553,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # Gretl
     #------------------------------------------------------------------------------
-    if (NOT DEFINED SMITH_ENABLE_GRETL)
-        set(SMITH_ENABLE_GRETL ON)
-    endif()
     message(STATUS "Smith Enable Gretl: ${SMITH_ENABLE_GRETL}")
     
     if(SMITH_ENABLE_GRETL)
@@ -609,8 +601,8 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(ENABLE_FORTRAN OFF CACHE BOOL "" FORCE)
         # Otherwise we use the submodule
         message(STATUS "Using Tribol submodule")
-        set(BUILD_REDECOMP ${SMITH_ENABLE_MPI} CACHE BOOL "")
-        set(TRIBOL_USE_MPI ${SMITH_ENABLE_MPI} CACHE BOOL "")
+        set(BUILD_REDECOMP ON CACHE BOOL "")
+        set(TRIBOL_USE_MPI ON CACHE BOOL "")
         set(TRIBOL_ENABLE_TESTS OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_EXAMPLES OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_DOCS OFF CACHE BOOL "")
@@ -621,8 +613,17 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/tribol")
         endif()
 
+        # User enabled tribol profiling, briefly restore CALIPER_DIR
+        if(TRIBOL_ENABLE_PROFILING)
+            set(CALIPER_DIR ${_caliper_dir} CACHE STRING "" FORCE)
+        endif()
+
         add_subdirectory(${tribol_repo_dir}  ${CMAKE_BINARY_DIR}/tribol)
         
+        if(TRIBOL_ENABLE_PROFILING)
+            unset(CALIPER_DIR CACHE)
+        endif()
+
         target_include_directories(redecomp PUBLIC
             $<BUILD_INTERFACE:${tribol_repo_dir}/src>
         )
@@ -706,6 +707,22 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             endif()
         endforeach()
     endif()
+
+    # On Apple, Spack-built cmake configs embed literal -Wl,-rpath,... entries in
+    # INTERFACE_LINK_LIBRARIES. These duplicate CMake's own rpath management
+    # (CMAKE_INSTALL_RPATH_USE_LINK_PATH) and cause ld "duplicate -rpath" warnings.
+    if(APPLE)
+        foreach(_target ${_mfem_targets})
+            if(TARGET ${_target})
+                get_target_property(_link_libs ${_target} INTERFACE_LINK_LIBRARIES)
+                if(_link_libs)
+                    list(FILTER _link_libs EXCLUDE REGEX "^-Wl,-rpath,")
+                    set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_libs}")
+                endif()
+            endif()
+        endforeach()
+        unset(_link_libs)
+    endif()
     unset(_mfem_targets)
 
     # Restore cleared Adiak/Caliper directories, reason at top of file.
@@ -717,7 +734,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     if(SMITH_ENABLE_PROFILING AND NOT ADIAK_DIR)
         message(FATAL_ERROR "SMITH_ENABLE_PROFILING cannot be ON without ADIAK_DIR defined. Either specify a host \
-                             config with ADIAK_DIR, or rebuild Smith TPLs with +profiling variant.")
+                             config with ADIAK_DIR, or rebuild Smith TPLs with +adiak variant.")
     endif()
 
     if(ADIAK_DIR AND SMITH_ENABLE_PROFILING)
@@ -739,7 +756,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     if(SMITH_ENABLE_PROFILING AND NOT CALIPER_DIR)
         message(FATAL_ERROR "SMITH_ENABLE_PROFILING cannot be ON without CALIPER_DIR defined. Either specify a host \
-                             config with CALIPER_DIR, or rebuild Smith TPLs with +profiling variant.")
+                             config with CALIPER_DIR, or rebuild Smith TPLs with +caliper variant.")
     endif()
 
     if(CALIPER_DIR AND SMITH_ENABLE_PROFILING)

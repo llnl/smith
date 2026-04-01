@@ -42,12 +42,33 @@ enum ContactFields
   DISP,
 };
 
+/** @brief Interface for extracting the iblock, jblock block from a std::unique_ptr<mfem::BlockOperator>
+ *         said block is returned as a std::unique_ptr<mfem::HypreParMatrix> if possible
+ *
+ * @param block_operator the block operator
+ * @param iblock row block index
+ * @param jblock column block index
+ * @return std::unique_ptr<mfem::HypreParMatrix> The requested block of block_operator
+ */
+static std::unique_ptr<mfem::HypreParMatrix> obtainBlock(mfem::BlockOperator* block_operator, int iblock, int jblock)
+{
+  SLIC_ERROR_IF(iblock < 0 || jblock < 0, "block indicies must be non-negative");
+  SLIC_ERROR_IF(iblock > block_operator->NumRowBlocks() || jblock > block_operator->NumColBlocks(),
+                "one or more block indicies are too large and the requested block does not exist");
+  SLIC_ERROR_IF(block_operator->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
+  auto Ablk = dynamic_cast<mfem::HypreParMatrix*>(&block_operator->GetBlock(iblock, jblock));
+  SLIC_ERROR_IF(!Ablk, "failed cast block to mfem::HypreParMatrix");
+  // deep copy --> unique_ptr
+  auto Ablk_unique = std::make_unique<mfem::HypreParMatrix>(*Ablk);
+  return Ablk_unique;
+};
+
 class FiniteElementState;
 
 /**
  * @brief A ContactConstraint defines a gap constraint associated to contact problem
  *
- * This class stores the details of a single contact interaction between two surfaces. It also interfaces provides a
+ * This class stores the details of a single contact interaction between two surfaces. It also provides a
  * description of a contact constraint given by a single contact interaction. A ContactConstraint can have a single
  * ContactInteraction and will default to LagrangeMultiplier as it will be up to the solver that takes this
  * ContactConstraint to determine how it will enforce the constraint.
@@ -83,22 +104,23 @@ class ContactConstraint : public Constraint {
    * @param time time
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
    * @return mfem::Vector which is the constraint evaluation
    */
-  mfem::Vector evaluate([[maybe_unused]] double time, [[maybe_unused]] double dt,
-                        [[maybe_unused]] const std::vector<ConstFieldPtr>& fields) const
+  mfem::Vector evaluate(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                        bool update_fields = true) const override
   {
-    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_GAP);
-
-    // note: Tribol does not use cycle.
-    int cycle = 0;
-    contact_.update(cycle, time, dt);
-    auto gaps_hpv = contact_.mergedGaps(false);
-    // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
-    // https://github.com/mfem/mfem/issues/5029
-    mfem::Vector gaps = gaps_hpv;
-    return gaps;
+    if (update_fields) {
+      // note: Tribol does not use cycle.
+      int cycle = 0;
+      contact_.updateGaps(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
+      auto gaps_hpv = contact_.mergedGaps(false);
+      // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
+      // https://github.com/mfem/mfem/issues/5029
+      cached_gap_.SetSize(gaps_hpv.Size());
+      cached_gap_.Set(1.0, gaps_hpv);
+    }
+    return cached_gap_;
   };
 
   /** @brief Interface for computing contact gap constraint Jacobian from a vector of smith::FiniteElementState*
@@ -107,38 +129,129 @@ class ContactConstraint : public Constraint {
    * @param dt time step
    * @param fields vector of smith::FiniteElementState*
    * @param direction index for which field to take the gradient with respect to
-   * @return std::unique_ptr<mfem::HypreParMatrix>
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
+   * evaluation
+   * @return std::unique_ptr<mfem::HypreParMatrix> The true Jacobian
    */
-  std::unique_ptr<mfem::HypreParMatrix> jacobian([[maybe_unused]] double time, [[maybe_unused]] double dt,
-                                                 [[maybe_unused]] const std::vector<ConstFieldPtr>& fields,
-                                                 [[maybe_unused]] int direction) const
+  std::unique_ptr<mfem::HypreParMatrix> jacobian(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                                 int direction, bool update_fields = true,
+                                                 [[maybe_unused]] bool fresh_derivative = true) const override
   {
-    contact_.setDisplacements(*fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
-    tribol::setLagrangeMultiplierOptions(interaction_id_, tribol::ImplicitEvalMode::MORTAR_JACOBIAN);
+    SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
+    // if the field has been updated or we are requesting a fresh derivative
+    // then re-compute the gap Jacobian
+    // otherwise use previously cached Jacobian
+    if (update_fields || fresh_derivative) {
+      int cycle = 0;
+      if (update_fields) {
+        contact_.updateGaps(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], true);
+      } else {
+        contact_.updateGaps(cycle, time, dt, std::nullopt, std::nullopt, true);
+      }
+      J_contact_ = contact_.mergedJacobian();
+    }
+    // obtain (1, 0) block entry from the 2 x 2 block contact linear system
+    auto dgdu = obtainBlock(J_contact_.get(), 1, 0);
+    return dgdu;
+  };
 
+  /** @brief Interface for computing residual contribution Jacobian_tilde^(Transpose) * (Lagrange multiplier)
+   * from a vector of smith::FiniteElementState*
+   *
+   * @param time time
+   * @param dt time step
+   * @param fields vector of smith::FiniteElementState*
+   * @param multipliers mfem::Vector of Lagrange multipliers
+   * @param direction index for which field to take the gradient with respect to
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
+   * evaluation
+   * @return std::Vector
+   */
+  mfem::Vector residual_contribution(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                     const mfem::Vector& multipliers, int direction, bool update_fields = true,
+                                     bool fresh_derivative = true) const override
+  {
+    SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
     int cycle = 0;
-    contact_.update(cycle, time, dt);
-    auto J_contact = contact_.mergedJacobian();
-    J_contact->owns_blocks = false;
-
-    int iblock = 1;
-    int jblock = 0;
-    for (int i = 0; i < 2; i++) {
-      for (int j = 0; j < 2; j++) {
-        if (i == iblock && j == jblock) {
-          continue;
-        }
-        if (!J_contact->IsZeroBlock(i, j)) {
-          delete &J_contact->GetBlock(i, j);
-        }
+    if (update_fields || fresh_derivative) {
+      if (update_fields) {
+        contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], multipliers);
+      } else {
+        contact_.update(cycle, time, dt, std::nullopt, std::nullopt, multipliers);
       }
     }
-
-    SLIC_ERROR_IF(J_contact->IsZeroBlock(iblock, jblock), "attempting to extract a null block");
-    auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&J_contact->GetBlock(iblock, jblock));
-    std::unique_ptr<mfem::HypreParMatrix> dgdu_unique(dgdu);
-    return dgdu_unique;
+    return contact_.forces();
   };
+
+  /** @brief Interface for computing Jacobians of the residual contribution from a vector of
+   * smith::FiniteElementState*
+   *
+   * @param time time
+   * @param dt time step
+   * @param fields vector of smith::FiniteElementState*
+   * @param multipliers mfem::Vector of Lagrange multipliers
+   * @param direction index for which field to take the gradient with respect to
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
+   * @return std::unique_ptr<mfem::HypreParMatrix>
+   */
+  std::unique_ptr<mfem::HypreParMatrix> residual_contribution_jacobian(double time, double dt,
+                                                                       const std::vector<ConstFieldPtr>& fields,
+                                                                       const mfem::Vector& multipliers, int direction,
+                                                                       bool update_fields = true,
+                                                                       bool fresh_derivative = true) const override
+  {
+    SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
+
+    int cycle = 0;
+    if (update_fields || fresh_derivative) {
+      if (update_fields) {
+        contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], multipliers);
+      } else {
+        contact_.update(cycle, time, dt, std::nullopt, std::nullopt, multipliers);
+      }
+      J_contact_ = contact_.mergedJacobian();
+    }
+    // obtain (0, 0) block entry from the 2 x 2 block contact linear system
+    auto Hessian = obtainBlock(J_contact_.get(), 0, 0);
+    return Hessian;
+  };
+
+  /** @brief Interface for computing contact constraint Jacobian_tilde from a vector of smith::FiniteElementState*
+   *
+   * @param time time
+   * @param dt time step
+   * @param fields vector of smith::FiniteElementState*
+   * @param direction index for which field to take the gradient with respect to
+   * @param update_fields boolean indicating if we re-evaluate or use previously cached evaluation
+   * @param fresh_derivative boolean indicating with update_fields if we re-evaluate or use previously cached
+   * @return std::unique_ptr<mfem::HypreParMatrix>
+   */
+  std::unique_ptr<mfem::HypreParMatrix> jacobian_tilde(double time, double dt, const std::vector<ConstFieldPtr>& fields,
+                                                       int direction, bool update_fields = true,
+                                                       [[maybe_unused]] bool fresh_derivative = true) const override
+  {
+    SLIC_ERROR_IF(direction != ContactFields::DISP, "requesting a non displacement-field derivative");
+
+    int cycle = 0;
+    if (update_fields || fresh_derivative) {
+      mfem::Vector p = contact_.mergedPressures();
+      if (update_fields) {
+        contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], p);
+      } else {
+        contact_.update(cycle, time, dt, std::nullopt, std::nullopt, p);
+      }
+      J_contact_ = contact_.mergedJacobian();
+    }
+    // obtain (0, 1) block entry from the 2 x 2 block contact linear system
+    auto dgduT = obtainBlock(J_contact_.get(), 0, 1);
+    std::unique_ptr<mfem::HypreParMatrix> dgdu(dgduT->Transpose());
+    return dgdu;
+  };
+
+  int numPressureDofs() const { return contact_.numPressureDofs(); }
 
  protected:
   /**
@@ -155,6 +268,16 @@ class ContactConstraint : public Constraint {
    * @brief interaction_id Unique identifier for the ContactInteraction (used in Tribol)
    */
   int interaction_id_;
+
+  /**
+   * @brief J_contact_ to hold contact derivatives
+   */
+  mutable std::unique_ptr<mfem::BlockOperator> J_contact_;
+
+  /**
+   * @brief cached_gap_ gap function cached in order to not redo any unnecessary computations
+   */
+  mutable mfem::Vector cached_gap_;
 };
 
 }  // namespace smith

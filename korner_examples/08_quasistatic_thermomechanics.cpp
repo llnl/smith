@@ -15,13 +15,13 @@
 
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 // #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/tests/paraview_helper.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "quasistatic_thermomechanics.hpp"
@@ -145,14 +145,12 @@ int main(int argc, char* argv[])
 
   std::string physics_name = "solid_" + mesh_tag;
 
-  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto d_solid_nonlinear_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  std::shared_ptr<DifferentiableSolver> d_thermal_nonlinear_solver =
-      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto d_thermal_nonlinear_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  smith::SecondOrderTimeIntegrationRule solid_time_rule(1.0);
-  smith::SecondOrderTimeIntegrationRule thermal_time_rule(1.0);
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule solid_time_rule;
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule thermal_time_rule;
 
   // warm-start.
   // implicit Newmark.
@@ -215,9 +213,7 @@ int main(int argc, char* argv[])
         return smith::tuple{C_v * dtheta_dt - s0, -q0};
       });
 
-  auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();
-  auto states = physics->getInitialFieldStates();
 
   params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
     double scaling = 1.0;
@@ -227,7 +223,7 @@ int main(int argc, char* argv[])
   physics->resetStates();
 
   double time_increment = 1.0e-2;
-  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
+  auto pv_writer = smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
   double T = 1.0;
   int cnt = 0;
@@ -239,9 +235,7 @@ int main(int argc, char* argv[])
     }
     physics->advanceTimestep(time_increment);
 
-    TimeInfo time_info(physics->time() - time_increment, time_increment);
-    auto reactions = physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(),
-                                                                    physics->getFieldStatesOld(), params, time_info);
+    auto reactions = physics->getReactionStates();
     double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
     if (mfem::Mpi::Root()) {
       std::cout << "Reaction: " << reaction << std::endl;
@@ -249,14 +243,7 @@ int main(int argc, char* argv[])
     pv_writer.write(cnt, physics->time(), physics->getFieldStatesAndParamStates());
   }
 
-  TimeInfo time_info(physics->time() - time_increment, time_increment);
-
-  auto final_states = physics->getFieldStates();
-  auto previous_to_final_states = physics->getFieldStatesOld();
-
-  auto state_advancer = physics->getStateAdvancer();
-  auto reactions =
-      state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
+  auto reactions = physics->getReactionStates();
 
   auto disp_squared = innerProduct(reactions[0], reactions[0]);
 

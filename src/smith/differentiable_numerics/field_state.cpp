@@ -38,7 +38,7 @@ gretl::State<double> innerProduct(const FieldState& a, const FieldState& b)
       a, b);
 }
 
-gretl::State<double> innerProduct(const ResultantState& a, const ResultantState& b)
+gretl::State<double> innerProduct(const ReactionState& a, const ReactionState& b)
 {
   return gretl::create_state<double, double>(
       gretl::defaultInitializeZeroDual<double, double>(),
@@ -73,7 +73,7 @@ FieldState axpby(double a, const FieldState& x, double b, const FieldState& y)
   return z.finalize();
 }
 
-FieldState zero_copy(const FieldState& x)
+FieldState zeroCopy(const FieldState& x)
 {
   return gretl::clone_state(
       [](const FEFieldPtr& X) { return std::make_shared<FiniteElementState>(X->space(), "zero"); },

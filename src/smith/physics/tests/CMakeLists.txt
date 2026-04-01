@@ -13,7 +13,7 @@ smith_add_library(
     HEADERS     ${physics_test_headers}
     )
       
-set(physics_test_depends smith_physics smith_physics_test_utils gtest)
+set(physics_test_depends smith_physics smith_physics_test_utils smith_differentiable_numerics gtest)
 
 set(physics_serial_test_sources
     beam_bending.cpp
@@ -29,8 +29,6 @@ set(physics_serial_test_sources
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
-    test_solid_weak_form.cpp
-    test_heat_weak_form.cpp
     test_functional_weak_form.cpp
     thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
@@ -50,7 +48,7 @@ if (TRIBOL_FOUND)
         ${physics_serial_tribol_test_sources})
 endif()
 
-if (SMITH_USE_DFEM)
+if (SMITH_USE_ENZYME)
     list(APPEND physics_serial_test_sources
                 test_dfem_explicit_dynamics.cpp)
 endif()
@@ -59,18 +57,15 @@ smith_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 1)
 
-if(SMITH_ENABLE_HIP AND TRIBOL_FOUND)
-    foreach(filename ${physics_serial_tribol_test_sources})
-        get_filename_component(test_name ${filename} NAME_WE)
-        blt_add_target_compile_flags(TO ${test_name} FLAGS "-fgpu-rdc")
-        blt_add_target_link_flags(TO ${test_name} FLAGS "-fgpu-rdc")
-    endforeach()
+if (SMITH_USE_ENZYME)
+    # error: failed to meet occupancy target given by 'amdgpu-waves-per-eu' in ...
+    # desired occupancy was 4, final occupancy is 3 [-Werror,-Wpass-failed]
+    target_compile_options(test_dfem_explicit_dynamics PRIVATE -Wno-pass-failed)
 endif()
 
 set(physics_parallel_test_sources
     lce_Brighenti_tensile.cpp
     lce_Bertoldi_lattice.cpp
-    parameterized_thermomechanics_example.cpp
     parameterized_thermal.cpp
     solid.cpp
     solid_periodic.cpp
@@ -82,6 +77,7 @@ set(physics_parallel_test_sources
     dynamic_thermal_adjoint.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
+    parameterized_thermomechanics_example.cpp 
     )
 set(physics_parallel_tribol_test_sources
     contact_patch.cpp
@@ -91,15 +87,13 @@ set(physics_parallel_tribol_test_sources
 blt_list_append(TO       physics_parallel_test_sources
                 ELEMENTS ${physics_parallel_tribol_test_sources}
                 IF       TRIBOL_FOUND)
+set(physics_parallel_tribol_amgf_test_sources
+    contact_beam_amgf.cpp
+    )
+blt_list_append(TO       physics_parallel_test_sources
+                ELEMENTS ${physics_parallel_tribol_amgf_test_sources}
+                IF       TRIBOL_FOUND AND SMITH_USE_STRUMPACK)
 
 smith_add_tests(SOURCES       ${physics_parallel_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 2)
-
-if(SMITH_ENABLE_HIP AND TRIBOL_FOUND)
-    foreach(filename ${physics_parallel_tribol_test_sources})
-        get_filename_component(test_name ${filename} NAME_WE)
-        blt_add_target_compile_flags(TO ${test_name} FLAGS "-fgpu-rdc")
-        blt_add_target_link_flags(TO ${test_name} FLAGS "-fgpu-rdc")
-    endforeach()
-endif()
