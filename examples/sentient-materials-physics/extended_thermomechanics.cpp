@@ -13,7 +13,7 @@
 #include <variant>
 #include <vector>
 
-#include "extended_thermomechanics.hpp"
+#include "helpers/extended_thermomechanics.hpp"
 
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/numerics/solver_config.hpp"
@@ -23,7 +23,7 @@
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 
-#include "extended_thermomechanics_materials.hpp"
+#include "helpers/extended_thermomechanics_materials.hpp"
 namespace example_etm {
 
 static constexpr int dim = 3;
@@ -327,7 +327,7 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
 
   constexpr double left_face_traction_magnitude = 1.0e0;
   constexpr double min_traction_scale = 1.0e-2;
-  constexpr double heat_source_magnitude = 20000.0;
+  constexpr double heat_source_magnitude = 200.0;
   constexpr double dt1 = 0.05;
   constexpr double dt2 = 0.2;
   // system.disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {

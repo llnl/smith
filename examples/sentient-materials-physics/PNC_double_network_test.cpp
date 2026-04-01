@@ -30,8 +30,8 @@
 
 #include "smith/physics/materials/parameterized_thermoelastic_material.hpp"
 
-#include "../../korner_examples/quasistatic_thermomechanics.hpp"
-#include "../../korner_examples/calculate_reactions.hpp"
+#include "helpers/quasistatic_thermomechanics.hpp"
+#include "helpers/calculate_reactions.hpp"
 
 #define SLIC_INFO_ROOT_FLUSH(...) \
   do {                            \

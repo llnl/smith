@@ -10,6 +10,13 @@ smith_add_executable( NAME        PNC_double_network_test
                       DEPENDS_ON  smith
                       )
 
+
+smith_add_executable(NAME       extended_thermomechanics
+                     SOURCES    extended_thermomechanics.cpp
+                                helpers/extended_thermomechanics.hpp
+                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                     DEPENDS_ON smith
+                     )
 install(
     FILES
         PNC_double_network_test.cpp
