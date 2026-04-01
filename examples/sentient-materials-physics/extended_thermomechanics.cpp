@@ -12,10 +12,12 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include "axom/slic.hpp"
 
 #include "helpers/extended_thermomechanics.hpp"
 
 #include "smith/infrastructure/application_manager.hpp"
+#include "smith/infrastructure/logger.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/state/state_manager.hpp"
@@ -25,6 +27,12 @@
 
 #include "helpers/extended_thermomechanics_materials.hpp"
 namespace example_etm {
+
+#define SLIC_INFO_ROOT_FLUSH(...) \
+  do {                            \
+    SLIC_INFO_ROOT(__VA_ARGS__);  \
+    smith::logger::flush();       \
+  } while (0)
 
 static constexpr int dim = 3;
 [[maybe_unused]] static constexpr int vdim = dim;
@@ -212,7 +220,7 @@ smith::LinearSolverOptions makeThermalStateStageLinearSolverOptions(CoupledLinea
         break;
     }
 
-    smith::LinearSolverOptions thermal_block_options{.linear_solver = smith::LinearSolver::GMRES,
+    smith::LinearSolverOptions thermal_block_options{.linear_solver = smith::LinearSolver::Strumpack,
                                                      .preconditioner = smith::Preconditioner::HypreAMG,
                                                      .relative_tol = 1.0e-9,
                                                      .absolute_tol = 1.0e-12,
@@ -220,7 +228,7 @@ smith::LinearSolverOptions makeThermalStateStageLinearSolverOptions(CoupledLinea
                                                      .print_level = 0,
                                                      .preconditioner_print_level = 0};
 
-    smith::LinearSolverOptions state_block_options{.linear_solver = smith::LinearSolver::SuperLU};
+    smith::LinearSolverOptions state_block_options{.linear_solver = smith::LinearSolver::Strumpack};
     options.sub_block_linear_solver_options = {thermal_block_options, state_block_options};
   }
 
@@ -237,7 +245,7 @@ std::shared_ptr<smith::CoupledSystemSolver> makeCoupledSolver(const std::shared_
                                                          .max_iterations = 500,
                                                          .print_level = 2};
 
-  smith::NonlinearSolverOptions thermal_nonlinear_opts{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
+  smith::NonlinearSolverOptions thermal_nonlinear_opts{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
                                                        .relative_tol = 1.0e-8,
                                                        .absolute_tol = 1.0e-10,
                                                        .max_iterations = 200,
@@ -266,7 +274,7 @@ GreenSaintVenantMaterial makeGreenSaintVenantMaterial(double alpha_T)
   double rho = 1.0;
   double E0 = 100.0;
   double nu = 0.25;
-  double specific_heat = 1.0;
+  double specific_heat = 1.00e3;
   double kappa = 0.1;
   return GreenSaintVenantMaterial{rho, E0, nu, specific_heat, alpha_T, 1.0, kappa};
 }
@@ -325,17 +333,17 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
   std::visit([&](const auto& selected_material) { system.setMaterial(selected_material, mesh->entireBodyName()); },
              material);
 
-  constexpr double left_face_traction_magnitude = 1.0e0;
-  constexpr double min_traction_scale = 1.0e-2;
-  constexpr double heat_source_magnitude = 200.0;
+  // constexpr double left_face_traction_magnitude = 1.0e-3;
+  // constexpr double min_traction_scale = 1.0e-2;
+  constexpr double heat_source_magnitude = 0.0;
   constexpr double dt1 = 0.05;
   constexpr double dt2 = 0.2;
-  // system.disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
-  //   auto bc = 0.0 * X;
-  //   // Keep the loading modest so the first Newton solves are well-conditioned.
-  //   bc[0] = .01 * t;
-  //   return bc;
-  // });
+  system.disp_bc->setVectorBCs<dim>(mesh->domain("left"), [](double t, smith::tensor<double, dim> X) {
+    auto bc = 0.0 * X;
+    // Keep the loading modest so the first Newton solves are well-conditioned.
+    bc[0] = .01 * t;
+    return bc;
+  });
   // system.addSolidTraction("left", [=](double t, auto X, auto, auto, auto, auto, auto, auto, auto) {
   //   auto traction = 0.0 * X;
   //   auto ramp_scale = (dt1 > 0.0) ? std::min(t / dt1, 1.0) : 1.0;
@@ -343,15 +351,15 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
   //   traction[1] = -left_face_traction_magnitude * traction_scale;
   //   return traction;
   // });
-  system.addSolidBodyForce(mesh->entireBodyName(), [=](double t, auto X, auto, auto, auto, auto, auto, auto) {
-    auto force = 0.0 * X;
-    auto ramp_scale = (dt1 > 0.0) ? std::min(t / dt1, 1.0) : 1.0;
-    auto force_scale = min_traction_scale + (1.0 - min_traction_scale) * ramp_scale;
-    force[1] = -0.01*left_face_traction_magnitude * force_scale;
-    return force;
-  });
-  // system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
-  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("left"));
+  // system.addSolidBodyForce(mesh->entireBodyName(), [=](double t, auto X, auto, auto, auto, auto, auto, auto) {
+  //   auto force = 0.0 * X;
+  //   auto ramp_scale = (dt1 > 0.0) ? std::min(t / dt1, 1.0) : 1.0;
+  //   auto force_scale = min_traction_scale + (1.0 - min_traction_scale) * ramp_scale;
+  //   force[1] = -left_face_traction_magnitude * force_scale;
+  //   return force;
+  // });
+  system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
+  // system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("left"));
 
   system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("left"));
   // system.temperature_bc->setFixedScalarBCs<dim>(mesh->domain("right"));
@@ -416,6 +424,9 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
 
   while (time < T) {
     smith::TimeInfo t_info(time, dt, step);
+    SLIC_INFO_ROOT_FLUSH(
+        axom::fmt::format("Extended thermomechanics timestep {}: time = {} -> {} (dt = {})", step, time, time + dt,
+                          dt));
     auto [new_states, reactions] = system.advancer->advanceState(t_info, shape_disp, states, params);
     states = std::move(new_states);
 
@@ -427,6 +438,7 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
     cycle++;
     // print_primal_field_magnitudes(step, time, states);
     pv_writer.write(cycle, time, states);
+    // SLIC_INFO_ROOT_FLUSH(axom::fmt::format("Completed timestep {} at time = {}", step, time));
 
     step++;
   }
@@ -473,7 +485,7 @@ int main(int argc, char** argv)
   int num_elements_z = 10;
   double dt = 0.001;
   double T = 1.0;
-  double alpha_T = 1.0e-3;
+  double alpha_T = 0.0*1.0e-3;
   auto material_model = example_etm::MaterialModelKind::GreenSaintVenant;
   auto solver_type = example_etm::CoupledLinearSolver::Strumpack;
   auto gmres_block_preconditioner = example_etm::GmresBlockPreconditioner::Diagonal;

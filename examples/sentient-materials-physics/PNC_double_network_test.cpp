@@ -256,6 +256,9 @@ int main(int argc, char* argv[])
                              auto /*u*/, auto /*v*/,
                              auto /*a*/) { return smith::tuple{-external_heat_source, smith::zero{}}; });
 
+  auto params = physics->getFieldParams();
+  params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 1.0; });
+
   physics->resetStates();
 
   /// ==================================================================
