@@ -15,6 +15,8 @@
 #include <memory>
 #include <set>
 #include <vector>
+#include <optional>
+#include <functional>
 
 #include "mfem.hpp"
 
@@ -70,13 +72,34 @@ class ContactData {
                              const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts);
 
   /**
+   * @brief Updates only the gap contributions associated with contact
+   *
+   * @param cycle The current simulation cycle
+   * @param time The current time
+   * @param dt The timestep size to attempt
+   * @param u_shape Optional shape displacement vector
+   * @param u Optional current displacement dof values
+   * @param eval_jacobian Whether to also evaluate the Jacobian contributions (default false)
+   */
+  void updateGaps(int cycle, double time, double& dt,
+                  std::optional<std::reference_wrapper<const mfem::Vector>> u_shape = std::nullopt,
+                  std::optional<std::reference_wrapper<const mfem::Vector>> u = std::nullopt,
+                  bool eval_jacobian = false);
+
+  /**
    * @brief Updates the positions, forces, and Jacobian contributions associated with contact
    *
    * @param cycle The current simulation cycle
    * @param time The current time
    * @param dt The timestep size to attempt
+   * @param u_shape Optional shape displacement vector
+   * @param u Optional current displacement dof values
+   * @param p Optional current pressure true dof values
    */
-  void update(int cycle, double time, double& dt);
+  void update(int cycle, double time, double& dt,
+              std::optional<std::reference_wrapper<const mfem::Vector>> u_shape = std::nullopt,
+              std::optional<std::reference_wrapper<const mfem::Vector>> u = std::nullopt,
+              std::optional<std::reference_wrapper<const mfem::Vector>> p = std::nullopt);
 
   /**
    * @brief Resets the contact pressures to zero
@@ -164,27 +187,6 @@ class ContactData {
   std::unique_ptr<mfem::HypreParMatrix> contactSubspaceTransferOperator();
 
   /**
-   * @brief Set the pressure field
-   *
-   * This sets Tribol's pressure degrees of freedom based on
-   *  1) the values in merged_pressure for Lagrange multiplier enforcement
-   *  2) the nodal gaps and penalty for penalty enforcement
-   *
-   * @note The nodal gaps must be up-to-date for penalty enforcement
-   *
-   * @param merged_pressures Current pressure true dof values in a merged mfem::Vector
-   */
-  void setPressures(const mfem::Vector& merged_pressures) const;
-
-  /**
-   * @brief Update the current coordinates based on the new displacement field
-   *
-   * @param u_shape Shape displacement vector
-   * @param u Current displacement dof values
-   */
-  void setDisplacements(const mfem::Vector& u_shape, const mfem::Vector& u);
-
-  /**
    * @brief Have there been contact interactions added?
    *
    * @return true if contact interactions have been added
@@ -222,6 +224,28 @@ class ContactData {
    * @return Number of Lagrange multiplier true degrees of freedom
    */
   int numPressureDofs() const { return num_pressure_dofs_; };
+
+ protected:
+  /**
+   * @brief Set the pressure field
+   *
+   * This sets Tribol's pressure degrees of freedom based on
+   *  1) the values in merged_pressure for Lagrange multiplier enforcement
+   *  2) the nodal gaps and penalty for penalty enforcement
+   *
+   * @note The nodal gaps must be up-to-date for penalty enforcement
+   *
+   * @param merged_pressures Current pressure true dof values in a merged mfem::Vector
+   */
+  void setPressures(const mfem::Vector& merged_pressures) const;
+
+  /**
+   * @brief Update the current coordinates based on the new displacement field
+   *
+   * @param u_shape Shape displacement vector
+   * @param u Current displacement dof values
+   */
+  void setDisplacements(const mfem::Vector& u_shape, const mfem::Vector& u);
 
  private:
 #ifdef SMITH_USE_TRIBOL
