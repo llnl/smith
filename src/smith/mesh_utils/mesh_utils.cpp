@@ -240,7 +240,8 @@ mfem::Mesh buildCylinderMesh(int radial_refinement, int elements_lengthwise, dou
     mesh.SetVertices(new_vertices);
   }
 
-  return mfem::Mesh(*mfem::Extrude2D(&mesh, elements_lengthwise, height));
+  auto extruded = std::unique_ptr<mfem::Mesh>(mfem::Extrude2D(&mesh, elements_lengthwise, height));
+  return std::move(*extruded);
 }
 
 /// @brief Constructs a 2D MFEM mesh of a ring
@@ -357,7 +358,8 @@ mfem::Mesh buildHollowCylinderMesh(int radial_refinement, int elements_lengthwis
                                    double outer_radius, double height, double total_angle, int sectors)
 {
   auto mesh = buildRing(radial_refinement, inner_radius, outer_radius, total_angle, sectors);
-  return mfem::Mesh(*mfem::Extrude2D(&mesh, elements_lengthwise, height));
+  auto extruded = std::unique_ptr<mfem::Mesh>(mfem::Extrude2D(&mesh, elements_lengthwise, height));
+  return std::move(*extruded);
 }
 
 /// @brief Constructs an MFEM mesh of a hollow cylinder restricted to the first orthant
