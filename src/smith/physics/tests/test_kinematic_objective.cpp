@@ -52,8 +52,10 @@ struct ConstrainedWeakFormFixture : public testing::Test {
 
   auto constructWeakForm(const std::string& physics_name)
   {
+    std::vector<const mfem::ParFiniteElementSpace*> trial_spaces = {&states[DISP].space(), &states[VELO].space(),
+                                                                    &states[ACCEL].space(), &params[0].space()};
     auto solid_mechanics_weak_form =
-        std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
+        std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), trial_spaces);
     // setup material model
     SolidMaterial mat;
     mat.K = 1.0;
