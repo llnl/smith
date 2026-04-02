@@ -11,6 +11,7 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
         sphere.cpp
         twist.cpp
         ironing_2D.cpp
+        ironing_2D_circle.cpp
         twisted_ironing_2D.cpp
         ironing_energy_mortar.cpp
     )
