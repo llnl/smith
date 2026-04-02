@@ -311,6 +311,7 @@ int main(int argc, char* argv[])
     SLIC_INFO_ROOT_FLUSH(axom::fmt::format("\n... Solving Step = {}", m));
     physics->advanceTimestep(time_increment);
 
+    TimeInfo time_info(physics->time() - time_increment, time_increment);
     auto reactions = physics->getReactionStates();
     double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
     if (mfem::Mpi::Root()) {
