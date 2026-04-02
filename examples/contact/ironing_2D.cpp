@@ -42,151 +42,148 @@
 #include "smith/infrastructure/application_manager.hpp"
 #include <fenv.h>
 
-
 int main(int argc, char* argv[])
- {
+{
+  // Initialize and automatically finalize MPI and other libraries
+  smith::ApplicationManager applicationManager(argc, argv);
 
-    //Initialize and automatically finalize MPI and other libraries
-    smith::ApplicationManager applicationManager(argc, argv);
+  // NOTE: p must be equal to 1 to work with Tribol's mortar method
+  constexpr int p = 1;
 
-    // NOTE: p must be equal to 1 to work with Tribol's mortar method   
-    constexpr int p = 1;
+  // NOTE: dim must be equal to 2
+  constexpr int dim = 2;
 
-    //NOTE: dim must be equal to 2
-    constexpr int dim = 2;
+  // COARSE
+  constexpr auto mesh_factor = 1;
+  std::string name_postfix = "coarse";
 
-    //Create DataStore
-    std::string name = "contact_ironing_2D_example";
-    axom::sidre::DataStore datastore; 
-    smith::StateManager::initialize(datastore, name + "_data");
+  // REFINED
+  // constexpr auto mesh_factor = 2;
+  // std::string name_postfix = "refined";
 
-    //Construct the appropiate dimension mesh and give it to the data store
-    // std::string filename = smith_REPO_DIR "data/meshes/ironing_2D.mesh";
-    // std::shared_ptr<smith::Mesh> mesh = std::make_shared<smith::Mesh>(filename, "ironing_2D_mesh", 2, 0);
+  // Create DataStore
+  std::string name = "contact_square_ironing_example";
+  axom::sidre::DataStore datastore;
+  smith::StateManager::initialize(datastore, name + "_data");
 
-    auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
-        shared::MeshBuilder::SquareMesh(32, 32).updateBdrAttrib(1, 6).updateBdrAttrib(3, 9).bdrAttribInfo().scale({1.0, 0.5}), 
-        shared::MeshBuilder::SquareMesh(21, 21).scale({0.25, 0.25}).translate({0.0, 0.5}).updateBdrAttrib(3, 5).updateBdrAttrib(1,8).updateAttrib(1, 2)}), "iroing_2D_mesh", 0, 0);
+  // Construct the appropiate dimension mesh and give it to the data store
+  //  std::string filename = smith_REPO_DIR "data/meshes/ironing_2D.mesh";
+  //  std::shared_ptr<smith::Mesh> mesh = std::make_shared<smith::Mesh>(filename, "ironing_2D_mesh", 2, 0);
 
-    smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG, .preconditioner = smith::Preconditioner::HypreAMG, .print_level=0};
+  auto mesh = std::make_shared<smith::Mesh>(
+      shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(64 * mesh_factor, 16 * mesh_factor)
+                                      .updateBdrAttrib(1, 6)
+                                      .updateBdrAttrib(3, 9)
+                                      .updateBdrAttrib(2, 1)
+                                      .scale({1.0, 0.25}),
+                                  shared::MeshBuilder::SquareMesh(16 * mesh_factor, 8 * mesh_factor)
+                                      .scale({0.25, 0.125})
+                                      .translate({0.0, 0.25})
+                                      .updateBdrAttrib(3, 5)
+                                      .updateBdrAttrib(1, 8)
+                                      .updateBdrAttrib(4, 2)
+                                      .updateAttrib(1, 2)}),
+      "square_ironing_mesh_" + name_postfix, 0, 0);
 
-    mfem::VisItDataCollection visit_dc("contact_ironing_visit", &mesh->mfemParMesh());
+  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,  // Strumpack,  // CG,
+                                            .preconditioner = smith::Preconditioner::HypreAMG,
+                                            .print_level = 0};
 
-    visit_dc.SetPrefixPath("visit_out");
+  mfem::VisItDataCollection visit_dc("contact_ironing_visit", &mesh->mfemParMesh());
+
+  visit_dc.SetPrefixPath("visit_out");
+  visit_dc.Save();
+
+#ifndef MFEM_USE_STRUMPACK
+  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
+  return 1;
+#endif
+
+  smith::NonlinearSolverOptions nonlinear_options{
+      .nonlin_solver = smith::NonlinearSolver::TrustRegion,  // NewtonLineSearch,  // TrustRegion,
+      .relative_tol = 1.0e-8,
+      .absolute_tol = 1.0e-10,
+      .max_iterations = 500,
+      .max_line_search_iterations = 10,
+      .print_level = 1};
+
+  smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
+                                        .enforcement = smith::ContactEnforcement::Penalty,
+                                        .type = smith::ContactType::Frictionless,
+                                        .penalty = 30000.0,
+                                        .penalty2 = 0,
+                                        .jacobian = smith::ContactJacobian::Exact};
+
+  smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
+      nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh,
+      {"bulk_mod", "shear_mod"}, 0, 0.0, false, false);
+
+  smith::FiniteElementState K_field(smith::StateManager::newState(smith::L2<0>{}, "bulk_mod", mesh->tag()));
+
+  mfem::Vector K_values({1.0, 100.0});
+  mfem::PWConstCoefficient K_coeff(K_values);
+  K_field.project(K_coeff);
+  solid_solver.setParameter(0, K_field);
+
+  smith::FiniteElementState G_field(smith::StateManager::newState(smith::L2<0>{}, "shear_mod", mesh->tag()));
+
+  mfem::Vector G_values({0.25, 25.0});
+  mfem::PWConstCoefficient G_coeff(G_values);
+  G_field.project(G_coeff);
+  solid_solver.setParameter(1, G_field);
+
+  smith::solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 100.0, 1.0};
+  solid_solver.setMaterial(smith::DependsOn<0, 1>{}, mat, mesh->entireBody());
+
+  // Pass the BC information to the solver object
+  mesh->addDomainOfBoundaryElements("bottom_of_subtrate", smith::by_attr<dim>(6));
+  solid_solver.setFixedBCs((mesh->domain("bottom_of_subtrate")));
+
+  mesh->addDomainOfBoundaryElements("top of indenter", smith::by_attr<dim>(5));
+  auto applied_displacement = [](smith::tensor<double, dim>, double t) {
+    constexpr double init_steps = 20.0;
+    smith::tensor<double, dim> u{};
+    // std::cout << "T ========= " << t << std::endl;
+    if (t <= init_steps + 1.0e-12) {
+      u[1] = -t * 0.1 / init_steps;
+    } else {
+      u[0] = (t - init_steps) * 0.005;
+      u[1] = -0.1;
+    }
+    return u;
+  };
+
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("top of indenter"));
+  // std::cout << "top of indenter size: " << mesh->domain("top of indenter").size() << std::endl;
+
+  // Add the contact interaction
+  auto contact_interaction_id = 0;
+  auto contact_interaction_id2 = 1;
+  std::set<int> surface_1_boundary_attributes({9});
+  std::set<int> surface_2_boundary_attributes({8});
+  std::set<int> surface_3_boundary_attributes({2});
+  solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,
+                                     surface_2_boundary_attributes, contact_options);
+  solid_solver.addContactInteraction(contact_interaction_id2, surface_1_boundary_attributes,
+                                     surface_3_boundary_attributes, contact_options);
+
+  std::string visit_name = name + "_visit";
+  solid_solver.outputStateToDisk(visit_name);
+
+  solid_solver.completeSetup();
+
+  // Perform the quasi-static solve
+  double dt = 1.0;
+
+  for (int i{0}; i < 175; ++i) {
+    solid_solver.advanceTimestep(dt);
+    visit_dc.SetCycle(i);
+    visit_dc.SetTime((i + 1) * dt);
     visit_dc.Save();
 
-    #ifndef MFEM_USE_STRUMPACK
-        SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-        return 1;
-    #endif
+    // Output the sidre-based plot files
+    solid_solver.outputStateToDisk(visit_name);
+  }
 
-        smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
-                                                        .relative_tol = 1.0e-8, 
-                                                        .absolute_tol = 1.0e-10,
-                                                        .max_iterations = 500,
-                                                        .print_level = 1};
-
-        smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
-                                              .enforcement = smith::ContactEnforcement::Penalty,
-                                              .type = smith::ContactType::Frictionless,
-                                              .penalty = 10000,
-                                              .penalty2 = 0, 
-                                              .jacobian = smith::ContactJacobian::Approximate};
-
-        std::cout << "Executed line 96" << std::endl;
-
-        smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
-            nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh, 
-            {"bulk_mod", "shear_mod"});
-
-        std::cout << "Executed line 102" << std::endl;
-
-        
-
-
-        smith::FiniteElementState K_field(smith::StateManager::newState(smith::L2<0>{}, "bulk_mod", mesh->tag()));
-
-        mfem::Vector K_values({10.0, 100.0});
-        mfem::PWConstCoefficient K_coeff(K_values);
-        K_field.project(K_coeff);
-        solid_solver.setParameter(0, K_field);
-
-        smith::FiniteElementState G_field(smith::StateManager::newState(smith::L2<0>{}, "shear_mod", mesh->tag()));
-
-        mfem::Vector G_values({1.0, 2.5});
-        mfem::PWConstCoefficient G_coeff(G_values);
-        G_field.project(G_coeff);
-        solid_solver.setParameter(1, G_field);
-
-        smith::solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 100.0, 1.0};
-        solid_solver.setMaterial(smith::DependsOn<0, 1>{}, mat, mesh->entireBody());
-
-        //Pass the BC information to the solver object
-        mesh->addDomainOfBoundaryElements("bottom_of_subtrate", smith::by_attr<dim>(6));
-        solid_solver.setFixedBCs((mesh->domain("bottom_of_subtrate")));
-
-        mesh->addDomainOfBoundaryElements("top of indenter", smith::by_attr<dim>(5));
-        auto applied_displacement = [](smith::tensor<double, dim>, double t) {
-            constexpr double init_steps = 200.0;
-            smith::tensor<double, dim> u{};
-            // std::cout << "T ========= " << t << std::endl;
-            if (t <= init_steps + 1.0e-12) {
-                u[1] = -t * 0.2 / init_steps;
-                // std::cout << "In IF statement. u[1] = " << u[1] << " and t = " << t << std::endl;
-            }
-            else {
-                u[0] = (t - init_steps) * 0.001;
-                u[1] = -0.2;
-                // std::cout << "in ELSE statement. u[1] = " << u[1] << " and u[0] = " << u[0] << " and t = " << t << std::endl;
-            }
-            return u;
-        };
-
-        solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("top of indenter"));
-        // std::cout << "top of indenter size: " << mesh->domain("top of indenter").size() << std::endl;
-
-
-        //Add the contact interaction
-        auto contact_interaction_id = 0;
-        auto contact_interaction_id2 = 1;
-        std::set<int> surface_1_boundary_attributes({9});
-        std::set<int> surface_2_boundary_attributes({8});
-        std::set<int> surface_3_boundary_attributes({2});
-        solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes, surface_2_boundary_attributes, contact_options);
-        solid_solver.addContactInteraction(contact_interaction_id2, surface_1_boundary_attributes, surface_3_boundary_attributes, contact_options);
-        //Finalize the data structures
-        // solid_solver.completeSetup();
-
-        std::string visit_name = name + "_visit";
-        solid_solver.outputStateToDisk(visit_name);
-
-         std::cout << "Executed line 163" << std::endl;
-
-        solid_solver.completeSetup();
-        
-            std::cout << "Executed line 166" << std::endl;
-
-        //Perform the quasi-static solve
-        double dt = 1.0;
-
-        for (int i{0}; i < 1000; ++i) {
-            std::cout << "Executed line 165" << std::endl;
-            solid_solver.advanceTimestep(dt);
-            std::cout << "Executed line 167" << std::endl;
-            visit_dc.SetCycle(i);
-            visit_dc.SetTime((i+1)*dt);
-            visit_dc.Save();
-
-            //Output the sidre-based plot files
-            solid_solver.outputStateToDisk(visit_name);
-        }
-
-        return 0;
-    }
-    
-
-        
-
-    
-
-
+  return 0;
+}
