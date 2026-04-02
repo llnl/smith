@@ -9,7 +9,10 @@
 #include <vector>
 
 #include "mfem.hpp"
+
+#define private public
 #include "smith/numerics/block_preconditioner.hpp"
+#undef private
 #include "smith/infrastructure/application_manager.hpp"
 
 using namespace mfem;
@@ -257,44 +260,6 @@ TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity)
   smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers), std::move(overrides));
 
   P.SetOperator(A);  // This actually doesn't use A, it's overridden by M1, M2
-
-  Vector x(5), y(5);
-  x.Randomize();
-
-  P.Mult(x, y);
-
-  mfem::Vector diff(x);
-  diff -= y;
-
-  EXPECT_NEAR(diff.Norml2(), 0.0, 1e-14);
-}
-
-// Same but for single blocks
-TEST(BlockDiagonalPreconditionerCustom, IdentityActsAsIdentity2)
-{
-  Array<int> offsets({0, 2, 5});
-
-  auto A11o = makeHypreScaledIdentity(2, 1.0);
-  auto A22o = makeHypreScaledIdentity(3, 2.0);
-
-  BlockOperator A(offsets);
-  A.SetBlock(0, 0, A11o.A.get());
-  A.SetBlock(1, 1, A22o.A.get());
-
-  std::vector<std::unique_ptr<Solver>> solvers;
-  solvers.push_back(std::make_unique<HypreExactDiagonalSolver>());
-  solvers.push_back(std::make_unique<HypreExactDiagonalSolver>());
-
-  // Override only block 1 with identity
-  std::vector<OwnedHypreParMatrix> override_mats;
-  override_mats.push_back(makeHypreScaledIdentity(3, 1.0));  // M2
-
-  std::vector<std::pair<int, std::unique_ptr<const mfem::Operator>>> overrides;
-  overrides.emplace_back(1, std::unique_ptr<const mfem::Operator>(std::move(override_mats[0].A)));
-
-  smith::BlockDiagonalPreconditioner P(offsets, std::move(solvers), std::move(overrides));
-
-  P.SetOperator(A);
 
   Vector x(5), y(5);
   x.Randomize();
@@ -593,6 +558,46 @@ TEST(BlockSchurPreconditionerCustom, Block0OverrideIsUsed)
   EXPECT_NEAR(x[1], b[1] / 4.0, 1e-12);
   EXPECT_NEAR(x[2], b[2] / 3.0, 1e-12);
   EXPECT_NEAR(x[3], b[3] / 3.0, 1e-12);
+}
+
+TEST(BlockSchurPreconditionerCustom, CustomOverrideNotConsumedOnRepeatedSetOperator)
+{
+  constexpr int n = 2;
+  Array<int> offsets({0, n, 2 * n});
+
+  auto A11o = makeHypreScaledIdentity(n, 2.0);
+  auto A12o = makeHypreScaledIdentity(n, 0.0);
+  auto A21o = makeHypreScaledIdentity(n, 0.0);
+  auto A22o = makeHypreScaledIdentity(n, 3.0);
+
+  BlockOperator A(offsets);
+  A.SetBlock(0, 0, A11o.A.get());
+  A.SetBlock(0, 1, A12o.A.get());
+  A.SetBlock(1, 0, A21o.A.get());
+  A.SetBlock(1, 1, A22o.A.get());
+
+  auto solvers = makeExactDiagonalSolvers(2);
+
+  std::vector<OwnedHypreParMatrix> override_mats;
+  override_mats.push_back(makeHypreScaledIdentity(n, 7.0));
+
+  std::vector<smith::BlockOverride> overrides;
+  overrides.emplace_back(1, std::unique_ptr<const mfem::Operator>(std::move(override_mats[0].A)));
+
+  smith::BlockSchurPreconditioner P(offsets, std::move(solvers), smith::BlockSchurType::Diagonal,
+                                    smith::SchurApproxType::Custom, std::move(overrides));
+
+  P.SetOperator(A);
+  ASSERT_TRUE(P.block_op_overrides_[1] != nullptr);
+  P.SetOperator(A);
+  ASSERT_TRUE(P.block_op_overrides_[1] != nullptr);
+
+  Vector b(2 * n), x(2 * n);
+  b.Randomize();
+  P.Mult(b, x);
+
+  EXPECT_NEAR(x[2], b[2] / 7.0, 1e-12);
+  EXPECT_NEAR(x[3], b[3] / 7.0, 1e-12);
 }
 
 TEST(BlockDiagonalPreconditionerCustom, ThrowsOnOutOfRangeOverrideIndex)

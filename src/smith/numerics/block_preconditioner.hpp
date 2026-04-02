@@ -249,9 +249,16 @@ class BlockSchurPreconditioner : public mfem::Solver {
   mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 
   // Views of the linearized Jacobian blocks
-  const mfem::Operator *A_12_, *A_21_;
+  const mfem::Operator* A_12_ = nullptr;
+  const mfem::Operator* A_21_ = nullptr;
 
-  mutable std::unique_ptr<const mfem::Operator> S_approx_;
+  // Schur complement approximation operator used by solver for block (1,1).
+  //
+  // For DiagInv and A22Only, the approximation is rebuilt on each SetOperator call and stored in
+  // S_approx_owned_. For Custom, the approximation is provided via block_op_overrides_[1] and referenced
+  // non-owningly via S_approx_view_.
+  mutable std::unique_ptr<const mfem::Operator> S_approx_owned_;
+  const mfem::Operator* S_approx_view_ = nullptr;
 
   BlockSchurType type_;
 

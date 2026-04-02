@@ -1,8 +1,39 @@
 #include "smith/numerics/block_preconditioner.hpp"
+
+#include <memory>
+#include <utility>
+#include <vector>
+#include <stdexcept>
+
 #include "mfem.hpp"
 #include "axom/slic/core/SimpleLogger.hpp"
 
 namespace smith {
+
+namespace {
+
+void applyOverrides(int num_blocks, std::vector<std::unique_ptr<const mfem::Operator>>& block_op_overrides,
+                    std::vector<BlockOverride> overrides)
+{
+  for (auto& ov : overrides) {
+    const int i = ov.first;
+    auto& op = ov.second;
+
+    if (i < 0 || i >= num_blocks) {
+      throw std::out_of_range("Override block index out of range");
+    }
+    if (!op) {
+      throw std::invalid_argument("Override operator must be non-null");
+    }
+    if (block_op_overrides[static_cast<size_t>(i)]) {
+      throw std::invalid_argument("Duplicate override for same block index");
+    }
+
+    block_op_overrides[static_cast<size_t>(i)] = std::move(op);
+  }
+}
+
+}  // namespace
 
 BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offsets,
                                                          std::vector<std::unique_ptr<mfem::Solver>> solvers,
@@ -17,23 +48,7 @@ BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offse
   SLIC_ERROR_IF(mfem_solvers_.size() != static_cast<size_t>(num_blocks_),
                 "Number of solvers must match number of blocks");
 
-  // Apply overrides if any
-  for (auto& ov : overrides) {
-    const int i = ov.first;
-    auto& op = ov.second;
-
-    if (i < 0 || i >= num_blocks_) {
-      throw std::out_of_range("Override block index out of range");
-    }
-    if (!op) {
-      throw std::invalid_argument("Override operator must be non-null");
-    }
-    if (block_op_overrides_[static_cast<size_t>(i)]) {
-      throw std::invalid_argument("Duplicate override for same block index");
-    }
-
-    block_op_overrides_[static_cast<size_t>(i)] = std::move(op);
-  }
+  applyOverrides(num_blocks_, block_op_overrides_, std::move(overrides));
 }
 
 void BlockDiagonalPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) const { solver_diag_.Mult(in, out); }
@@ -79,23 +94,8 @@ BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& o
 {
   SLIC_ERROR_IF(mfem_solvers_.size() != static_cast<size_t>(num_blocks_),
                 "Number of solvers must match number of blocks");
-  // Apply overrides if any
-  for (auto& ov : overrides) {
-    const int i = ov.first;
-    auto& op = ov.second;
 
-    if (i < 0 || i >= num_blocks_) {
-      throw std::out_of_range("Override block index out of range");
-    }
-    if (!op) {
-      throw std::invalid_argument("Override operator must be non-null");
-    }
-    if (block_op_overrides_[static_cast<size_t>(i)]) {
-      throw std::invalid_argument("Duplicate override for same block index");
-    }
-
-    block_op_overrides_[static_cast<size_t>(i)] = std::move(op);
-  }
+  applyOverrides(num_blocks_, block_op_overrides_, std::move(overrides));
 }
 
 void BlockTriangularPreconditioner::LowerSweep(const mfem::Vector& in, mfem::Vector& out) const
@@ -243,22 +243,12 @@ BlockSchurPreconditioner::BlockSchurPreconditioner(mfem::Array<int>& offsets,
       block_op_overrides_(static_cast<size_t>(2))
 {
   SLIC_ERROR_IF(block_offsets_.Size() - 1 != 2, "This precondition is specifically for 2X2 block systems");
-  // Apply overrides if any
-  for (auto& ov : overrides) {
-    const int i = ov.first;
-    auto& op = ov.second;
 
-    if (i < 0 || i >= 2) {
-      throw std::out_of_range("Override block index out of range");
-    }
-    if (!op) {
-      throw std::invalid_argument("Override operator must be non-null");
-    }
-    if (block_op_overrides_[static_cast<size_t>(i)]) {
-      throw std::invalid_argument("Duplicate override for same block index");
-    }
+  applyOverrides(2, block_op_overrides_, std::move(overrides));
 
-    block_op_overrides_[static_cast<size_t>(i)] = std::move(op);
+  if (approxType_ == SchurApproxType::Custom && !block_op_overrides_[1]) {
+    throw std::invalid_argument(
+        "SchurApproxType::Custom requires an override operator for block index 1 (custom Schur operator)");
   }
 }
 
@@ -367,7 +357,7 @@ mfem::HypreParMatrix* BlockSchurPreconditioner::BuildSchurDiagApprox_(const mfem
                                                                       const mfem::HypreParMatrix& A22) const
 {
   // Extract diagonal of A11
-  auto* Md = new mfem::HypreParVector(MPI_COMM_WORLD, A11.GetGlobalNumRows(), A11.GetRowStarts());
+  auto* Md = new mfem::HypreParVector(A11.GetComm(), A11.GetGlobalNumRows(), A11.GetRowStarts());
   A11.GetDiag(*Md);
 
   // Scale rows of A12 by diag(A11)^{-1}
@@ -402,6 +392,7 @@ double matrixNorm(const mfem::HypreParMatrix& K)
 
 void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
 {
+  S_approx_view_ = nullptr;
   height = jacobian.Height();
   width = jacobian.Width();
   block_jacobian_ = dynamic_cast<const mfem::BlockOperator*>(&jacobian);
@@ -431,14 +422,20 @@ void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
   mfem_solvers_[0]->SetOperator(*op);
   // Build Schur complement approximation
   if (approxType_ == SchurApproxType::DiagInv) {
-    S_approx_.reset(BuildSchurDiagApprox_(*A11, *A12, *A21, *A22));
+    S_approx_owned_.reset(BuildSchurDiagApprox_(*A11, *A12, *A21, *A22));
+    S_approx_view_ = S_approx_owned_.get();
   } else if (approxType_ == SchurApproxType::A22Only) {
-    S_approx_.reset(new mfem::HypreParMatrix(*A22));
-  } else if (block_op_overrides_[1]) {
-    S_approx_ = std::move(block_op_overrides_[1]);  // use override
+    S_approx_owned_.reset(new mfem::HypreParMatrix(*A22));
+    S_approx_view_ = S_approx_owned_.get();
+  } else {
+    S_approx_owned_.reset();
+    S_approx_view_ = block_op_overrides_[1].get();
   }
+
+  MFEM_VERIFY(S_approx_view_, "Schur complement approximation operator must be set");
+
   // Set the Schur complement preconditioner for block (1,1)
-  mfem_solvers_[1]->SetOperator(*S_approx_);
+  mfem_solvers_[1]->SetOperator(*S_approx_view_);
 
   // Set up block diagonal operator
   solver_diag_.SetBlock(0, 0, mfem_solvers_[0].get());
