@@ -38,9 +38,11 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
 {
   int mesh1_id = 2 * interaction_id;      // unique id for the first Tribol mesh
   int mesh2_id = 2 * interaction_id + 1;  // unique id for the second Tribol mesh
+  auto tribol_method =
+      getContactOptions().method == ContactMethod::EnergyMortar ? tribol::PENALTY : tribol::LAGRANGE_MULTIPLIER;
   tribol::registerMfemCouplingScheme(interaction_id, mesh1_id, mesh2_id, mesh, current_coords, bdry_attr_surf1,
                                      bdry_attr_surf2, tribol::SURFACE_TO_SURFACE, tribol::NO_CASE, getMethod(),
-                                     tribol::FRICTIONLESS, tribol::LAGRANGE_MULTIPLIER);
+                                     tribol::FRICTIONLESS, tribol_method);
   tribol::setLagrangeMultiplierOptions(interaction_id, tribol::ImplicitEvalMode::MORTAR_RESIDUAL_JACOBIAN);
 
   // get true DOFs only associated with surface 1 (i.e. surface 1 \ surface 2)
@@ -67,8 +69,7 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
     mfem::FiniteElementSpace::MarkerToList(tdof_markers, inactive_tdofs_);
   }
 
-  if(getContactOptions().method == ContactMethod::EnergyMortar) 
-  {
+  if (getContactOptions().method == ContactMethod::EnergyMortar) {
     contact_opts_.enforcement = ContactEnforcement::NotRequired;
     tribol::setMfemKinematicConstantPenalty(interaction_id, contact_opts_.penalty, contact_opts_.penalty2);
     // contact_opts_.type = ContactType::TiedNormal;
@@ -86,10 +87,9 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
 FiniteElementDual ContactInteraction::forces() const
 {
   FiniteElementDual f(*current_coords_.ParFESpace());
-  if ( getContactOptions().method == ContactMethod::EnergyMortar ) {
+  if (getContactOptions().method == ContactMethod::EnergyMortar) {
     f = tribol::getMfemTDofForce(getInteractionId());
-  }
-  else{
+  } else {
     auto& f_loc = f.linearForm();
     tribol::getMfemResponse(getInteractionId(), f_loc);
     f.setFromLinearForm(f_loc);
@@ -99,13 +99,10 @@ FiniteElementDual ContactInteraction::forces() const
 
 FiniteElementState ContactInteraction::pressure() const
 {
-  
   FiniteElementState p(pressureSpace());
-  if( getContactOptions().method == ContactMethod::EnergyMortar ) {
-    
+  if (getContactOptions().method == ContactMethod::EnergyMortar) {
     p = tribol::getMfemTDofPressure(getInteractionId());
-  }
-  else{
+  } else {
     auto& p_tribol = tribol::getMfemPressure(getInteractionId());
     p.setFromGridFunction(p_tribol);
   }
@@ -115,10 +112,9 @@ FiniteElementState ContactInteraction::pressure() const
 FiniteElementDual ContactInteraction::gaps() const
 {
   FiniteElementDual g(pressureSpace());
-  if ( getContactOptions().method == ContactMethod::EnergyMortar ) {
+  if (getContactOptions().method == ContactMethod::EnergyMortar) {
     g = tribol::getMfemTDofGap(getInteractionId());
-  }
-  else {
+  } else {
     auto& g_loc = g.linearForm();
     tribol::getMfemGap(getInteractionId(), g_loc);
     g.setFromLinearForm(g_loc);
@@ -145,10 +141,9 @@ mfem::ParFiniteElementSpace& ContactInteraction::pressureSpace() const
 
 void ContactInteraction::setPressure(const FiniteElementState& pressure) const
 {
-  if ( getContactOptions().method == ContactMethod::EnergyMortar ) {
+  if (getContactOptions().method == ContactMethod::EnergyMortar) {
     tribol::getMfemTDofPressure(getInteractionId()) = pressure;
-  }
-  else{
+  } else {
     tribol::getMfemPressure(getInteractionId()) = pressure.gridFunction();
   }
 }
