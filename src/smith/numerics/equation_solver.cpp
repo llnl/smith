@@ -84,7 +84,6 @@ class NewtonSolver : public mfem::NewtonSolver {
   {
     SMITH_MARK_FUNCTION;
     prec->Mult(r_, c_);  // c = [DF(x_i)]^{-1} [F(x_i)-b]
-    std::cout << "[DEBUG] norm c: " << c_.Norml2() << " [DEBUG] norm r: " << r_.Norml2() << std::endl;
   }
 
   /// @overload
@@ -99,7 +98,7 @@ class NewtonSolver : public mfem::NewtonSolver {
     using real_t = mfem::real_t;
 
     real_t norm, norm_goal = 0;
-    
+
     norm = initial_norm = evaluateNorm(x, r);
 
     if (print_level == 1) {
@@ -682,7 +681,6 @@ class TrustRegion : public mfem::NewtonSolver {
 
     int it = 0;
     for (; true; it++) {
-      std::cout << "NORM: " << norm << std::endl;
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
       if (print_level >= 2) {
         mfem::out << "TrustRegion iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;

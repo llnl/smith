@@ -62,15 +62,12 @@ void ContactData::update(int cycle, double time, double& dt)
   // This updates the redecomposed surface mesh based on the current displacement, then transfers field quantities to
   // the updated mesh.
 
-  std::cout << "Line 65 in cd" << std::endl;
   tribol::updateMfemParallelDecomposition();
 
-  std::cout << "Line 68 in cd" << std::endl;
   // This function computes forces, gaps, and Jacobian contributions based on the current field quantities. Note the
   // fields (with the exception of pressure) are stored on the redecomposed surface mesh until transferred by calling
   // forces(), mergedGaps(), etc.
   tribol::update(cycle, time, dt);
-  std::cout << "Line 73 in cd" << std::endl;
 }
 
 FiniteElementDual ContactData::forces() const
