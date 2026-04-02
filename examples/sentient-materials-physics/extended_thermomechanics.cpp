@@ -333,8 +333,8 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
   std::visit([&](const auto& selected_material) { system.setMaterial(selected_material, mesh->entireBodyName()); },
              material);
 
-  // constexpr double left_face_traction_magnitude = 1.0e-3;
-  // constexpr double min_traction_scale = 1.0e-2;
+  constexpr double left_face_traction_magnitude = 1.0e-3;
+  constexpr double min_traction_scale = 1.0e-2;
   constexpr double heat_source_magnitude = 0.0;
   constexpr double dt1 = 0.05;
   constexpr double dt2 = 0.2;
@@ -351,13 +351,13 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
   //   traction[1] = -left_face_traction_magnitude * traction_scale;
   //   return traction;
   // });
-  // system.addSolidBodyForce(mesh->entireBodyName(), [=](double t, auto X, auto, auto, auto, auto, auto, auto) {
-  //   auto force = 0.0 * X;
-  //   auto ramp_scale = (dt1 > 0.0) ? std::min(t / dt1, 1.0) : 1.0;
-  //   auto force_scale = min_traction_scale + (1.0 - min_traction_scale) * ramp_scale;
-  //   force[1] = -left_face_traction_magnitude * force_scale;
-  //   return force;
-  // });
+  system.addSolidBodyForce(mesh->entireBodyName(), [=](double t, auto X, auto, auto, auto, auto, auto, auto) {
+    auto force = 0.0 * X;
+    auto ramp_scale = (dt1 > 0.0) ? std::min(t / dt1, 1.0) : 1.0;
+    auto force_scale = min_traction_scale + (1.0 - min_traction_scale) * ramp_scale;
+    force[1] = -left_face_traction_magnitude * force_scale;
+    return force;
+  });
   system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("right"));
   // system.disp_bc->setFixedVectorBCs<dim, vdim>(mesh->domain("left"));
 
