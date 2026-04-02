@@ -24,7 +24,7 @@ Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_s
 {
   auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel, comm);
   mfem_mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
-  errorIfRankHasNoElements();
+  notifyIfRankHasNoElements();
   createDomains();
 }
 
@@ -33,7 +33,7 @@ Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int
 {
   auto meshtmp = smith::mesh::refineAndDistribute(std::move(mesh), refine_serial, refine_parallel, comm);
   mfem_mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
-  errorIfRankHasNoElements();
+  notifyIfRankHasNoElements();
   createDomains();
 }
 
@@ -43,13 +43,37 @@ Mesh::Mesh(mfem::ParMesh&& mesh, const std::string& meshtag) : mesh_tag_(meshtag
   meshtmp->EnsureNodes();
   meshtmp->ExchangeFaceNbrData();
   mfem_mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
-  errorIfRankHasNoElements();
+  notifyIfRankHasNoElements();
   createDomains();
 }
 
-void Mesh::errorIfRankHasNoElements() const
+void Mesh::notifyIfRankHasNoElements() const
 {
-  SLIC_ERROR_IF(mfem_mesh_->GetNE() == 0, "After refining and distributing mesh, local size of mesh is 0");
+  int myRank, numRanks;
+  MPI_Comm_rank(getComm(), &myRank);
+  MPI_Comm_size(getComm(), &numRanks);
+  int rankHasNoElements = (0 == mfem_mesh_->GetNE()) ? 1 : 0;
+  ::std::vector<int> gatheredRankData((0 == myRank) ? static_cast<::std::size_t>(numRanks) : 0);
+  MPI_Gather(&rankHasNoElements, 1, MPI_INT, gatheredRankData.data(), 1, MPI_INT, 0, getComm());
+  if (0 == myRank) {
+    ::std::vector<::std::size_t> ranksWithNoElements;
+    for (::std::size_t i = 0; i < static_cast<::std::size_t>(numRanks); ++i) {
+      if (1 == gatheredRankData[i]) {
+        ranksWithNoElements.push_back(i);
+      }
+    }
+    if (0 < ranksWithNoElements.size()) {
+      ::std::ostringstream msg;
+      msg << "\nAfter refining and distributing mesh, the following " << ranksWithNoElements.size()
+          << " ranks own zero elements:\n[";
+      for (const ::std::size_t& rank : ranksWithNoElements) {
+        msg << "  " << rank;
+      }
+      msg << "]\n";
+      SLIC_INFO(msg.str());
+    }
+  }
+  ::axom::slic::flushStreams();
 }
 
 MPI_Comm Mesh::getComm() const { return mfem_mesh_->GetComm(); }

@@ -28,7 +28,7 @@ class DirichletBoundaryConditions {
   DirichletBoundaryConditions(const Mesh& mesh, mfem::ParFiniteElementSpace& space);
 
   /// @brief Specify time and space varying Dirichlet boundary conditions over a domain.
-  /// @param domain domain All dofs in this domain have boundary conditions applied to it.
+  /// @param domain All dofs in this domain have boundary conditions applied to it.
   /// @param components vectors of computents.  The applied_displacement function returns the full vector, this
   /// specifies which subset of those should have dirichlet boundary conditions applied.  direction to apply boundary
   /// condition to if the underlying field is a vector-field.
@@ -41,7 +41,7 @@ class DirichletBoundaryConditions {
   {
     int field_dim = space_.GetVDim();
     for (auto component : components) {
-      SLIC_ERROR_IF(component >= field_dim,
+      SLIC_ERROR_IF(component >= field_dim || component < 0,
                     axom::fmt::format("Trying to set boundary conditions on a field with dim {}, using component {}",
                                       field_dim, component));
       auto mfem_coefficient_function = [applied_displacement, component](const mfem::Vector& X_mfem, double t) {
@@ -71,64 +71,91 @@ class DirichletBoundaryConditions {
   }
 
   /// @brief Specify time and space varying Dirichlet boundary conditions over a domain.
-  /// @param domain domain All dofs in this domain have boundary conditions applied to it.
-  /// @param component component direction to apply boundary condition to if the underlying field is a vector-field.
+  /// @param domain All dofs in this domain have boundary conditions applied to it.
   /// @param applied_displacement applied_displacement is a functor which takes time, and a
   /// smith::tensor<double,spatial_dim> corresponding to the spatial coordinate.  The functor must return a double.  For
   /// example: [](double t, smith::tensor<double, dim> X) { return 1.0; }
   template <int spatial_dim, typename AppliedDisplacementFunction>
-  void setScalarBCs(const Domain& domain, int component, AppliedDisplacementFunction applied_displacement)
+  void setScalarBCs(const Domain& domain, AppliedDisplacementFunction applied_displacement)
   {
-    const int field_dim = space_.GetVDim();
-    SLIC_ERROR_IF(component >= field_dim,
-                  axom::fmt::format("Trying to set boundary conditions on a field with dim {}, using component {}",
-                                    field_dim, component));
     auto mfem_coefficient_function = [applied_displacement](const mfem::Vector& X_mfem, double t) {
       auto X = make_tensor<spatial_dim>([&X_mfem](int k) { return X_mfem[k]; });
       return applied_displacement(t, X);
     };
 
     auto dof_list = domain.dof_list(&space_);
-    // scalar ldofs -> vector ldofs
-    space_.DofsToVDofs(component, dof_list);
+    space_.DofsToVDofs(static_cast<int>(0), dof_list);
 
     auto component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
-    bcs_.addEssential(dof_list, component_disp_bdr_coef_, space_, component);
+    bcs_.addEssential(dof_list, component_disp_bdr_coef_, space_, 0);
   }
 
-  /// @overload
+  /// @brief Specify time and space varying Dirichlet boundary conditions over an explicit list of local scalar dofs.
   template <int spatial_dim, typename AppliedDisplacementFunction>
-  void setScalarBCs(const Domain& domain, AppliedDisplacementFunction applied_displacement)
+  void setScalarBCsOnLocalDofs(const mfem::Array<int>& local_dofs, AppliedDisplacementFunction applied_displacement)
   {
-    setScalarBCs<spatial_dim>(domain, 0, applied_displacement);
+    auto mfem_coefficient_function = [applied_displacement](const mfem::Vector& X_mfem, double t) {
+      auto X = make_tensor<spatial_dim>([&X_mfem](int k) { return X_mfem[k]; });
+      return applied_displacement(t, X);
+    };
+
+    auto component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
+    bcs_.addEssential(local_dofs, component_disp_bdr_coef_, space_, 0);
   }
 
   /// @brief Constrain the dofs of a scalar field over a domain
   template <int spatial_dim>
-  void setFixedScalarBCs(const Domain& domain, int component = 0)
+  void setFixedScalarBCs(const Domain& domain)
   {
-    setScalarBCs<spatial_dim>(domain, component, [](auto, auto) { return 0.0; });
+    setScalarBCs<spatial_dim>(domain, [](auto, auto) { return 0.0; });
+  }
+
+  /// @brief Constrain an explicit list of local scalar dofs.
+  template <int spatial_dim>
+  void setFixedScalarBCsOnLocalDofs(const mfem::Array<int>& local_dofs)
+  {
+    setScalarBCsOnLocalDofs<spatial_dim>(local_dofs, [](auto, auto) { return 0.0; });
   }
 
   /// @brief Constrain the vector dofs over a domain corresponding to a subset of the vector components
-  template <int spatial_dim>
+  template <int spatial_dim, int field_dim>
   void setFixedVectorBCs(const Domain& domain, std::vector<int> components)
   {
-    setVectorBCs<spatial_dim>(domain, components, [](auto, auto) { return smith::tensor<double, spatial_dim>{}; });
+    setVectorBCs<spatial_dim>(domain, components, [](auto, auto) { return smith::tensor<double, field_dim>{}; });
+  }
+
+  template <int spatial_dim>
+  /// @brief Constrain selected vector components over a domain to zero.
+  void setFixedVectorBCs(const Domain& domain, std::vector<int> components)
+  {
+    setFixedVectorBCs<spatial_dim, spatial_dim>(domain, components);
+  }
+
+  /// @brief Constrain one vector component over a domain to zero.
+  template <int spatial_dim, int field_dim>
+  void setFixedVectorBCs(const Domain& domain, int component)
+  {
+    std::vector<int> components{component};
+    setFixedVectorBCs<spatial_dim, field_dim>(domain, components);
+  }
+
+  /// @brief Constrain one vector component over a domain to zero.
+  template <int spatial_dim>
+  void setFixedVectorBCs(const Domain& domain, int component)
+  {
+    setFixedVectorBCs<spatial_dim, spatial_dim>(domain, component);
   }
 
   /// @brief Constrain all the vector dofs over a domain
-  template <int spatial_dim>
+  template <int spatial_dim, int field_dim = spatial_dim>
   void setFixedVectorBCs(const Domain& domain)
   {
-    const int field_dim = space_.GetVDim();
-    SLIC_ERROR_IF(field_dim != spatial_dim,
-                  "Vector boundary conditions current only work if they match the spatial dimension");
+    SLIC_ERROR_IF(field_dim != space_.GetVDim(), "Vector boundary condition field_dim does not match the fields vdim");
     std::vector<int> components(static_cast<size_t>(field_dim));
     for (int component = 0; component < field_dim; ++component) {
       components[static_cast<size_t>(component)] = component;
     }
-    setFixedVectorBCs<spatial_dim>(domain, components);
+    setFixedVectorBCs<spatial_dim, field_dim>(domain, components);
   }
 
   /// @brief Return the smith BoundaryConditionManager

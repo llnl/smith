@@ -61,7 +61,14 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         axom::fmt::format("{} parameter spaces given in the template argument but {} input mfem spaces were supplied.",
                           sizeof...(InputSpaces), input_mfem_spaces.size()));
 
+    // Validate output space
+    validateSpace<OutputSpace>(output_mfem_space, "output");
+
+    // Validate input spaces
     if constexpr (sizeof...(InputSpaces) > 0) {
+      // Validate each input space using a helper
+      validateInputSpaces<0>(input_mfem_spaces);
+
       for_constexpr<sizeof...(InputSpaces)>([&](auto i) { trial_spaces[i] = input_mfem_spaces[i]; });
       for_constexpr<sizeof...(InputSpaces)>(
           [&](auto i) { vector_residual_trial_spaces[i + 1] = input_mfem_spaces[i]; });
@@ -288,6 +295,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   mfem::Vector residual(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
                         [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
+    validateFields(fields, "residual");
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
     auto ret = (*weak_form_)(time_info.time(), *shape_disp, *fields[input_indices]...);
@@ -300,6 +308,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       const std::vector<double>& jacobian_weights,
       [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
+    validateFields(fields, "jacobian");
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
 
@@ -338,6 +347,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& v_quad_fields,
            DualFieldPtr jvp_reaction) const override
   {
+    validateFields(fields, "jvp");
     SLIC_ERROR_IF(v_fields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
 
@@ -363,11 +373,13 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
            DualFieldPtr vjp_shape_disp_sensitivity, const std::vector<DualFieldPtr>& vjp_sensitivities,
            [[maybe_unused]] const std::vector<QuadratureFieldPtr>& vjp_quad_field_sensitivities) const override
   {
+    validateFields(fields, "vjp");
     SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
 
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
+
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{},
                                            time_info.time(), shape_disp, v_field, fields);
     {
@@ -399,6 +411,77 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
  protected:
+  /// @brief Helper to validate input spaces recursively (for constructor)
+  template <size_t I>
+  void validateInputSpaces(const SpacesT& input_mfem_spaces) const
+  {
+    if constexpr (I < sizeof...(InputSpaces)) {
+      using Space = typename std::tuple_element<I, std::tuple<InputSpaces...>>::type;
+      validateSpace<Space>(*input_mfem_spaces[I], axom::fmt::format("input[{}]", I));
+      validateInputSpaces<I + 1>(input_mfem_spaces);
+    }
+  }
+
+  /// @brief Helper to validate fields passed to residual/jacobian/vjp/jvp
+  template <size_t I>
+  void validateFieldsRecursive(const std::vector<ConstFieldPtr>& fields, const std::string& method_name) const
+  {
+    if constexpr (I < sizeof...(InputSpaces)) {
+      using Space = typename std::tuple_element<I, std::tuple<InputSpaces...>>::type;
+      validateSpace<Space>(fields[I]->space(),
+                           axom::fmt::format("{}(): field[{}] ('{}')", method_name, I, fields[I]->name()));
+      validateFieldsRecursive<I + 1>(fields, method_name);
+    }
+  }
+
+  /// @brief Validate that fields vector matches the templated input spaces
+  void validateFields(const std::vector<ConstFieldPtr>& fields, const std::string& method_name) const
+  {
+    SLIC_ERROR_ROOT_IF(fields.size() != sizeof...(InputSpaces),
+                       axom::fmt::format("{}(): fields.size()={} but weak form expects {} InputSpaces", method_name,
+                                         fields.size(), sizeof...(InputSpaces)));
+
+    if constexpr (sizeof...(InputSpaces) > 0) {
+      validateFieldsRecursive<0>(fields, method_name);
+    }
+  }
+
+  /// @brief Validate that an mfem space matches the template space parameters
+  template <typename Space>
+  static void validateSpace(const mfem::ParFiniteElementSpace& mfem_space, const std::string& space_name)
+  {
+    const auto* fec = mfem_space.FEColl();
+
+    // Note: We check using the name string rather than dynamic_cast because MFEM
+    // has multiple FECollection types that represent H1 and L2 spaces
+    if constexpr (Space::family == Family::H1) {
+      std::string fec_name = fec->Name();
+      bool is_h1 =
+          (fec_name.find("H1") != std::string::npos || fec_name.find("ND_") != std::string::npos ||  // Nedelec elements
+           fec_name.find("Linear") != std::string::npos);
+      SLIC_ERROR_ROOT_IF(!is_h1, axom::fmt::format("Space '{}': Template specifies H1 family but mfem space uses '{}'",
+                                                   space_name, fec_name));
+    } else if constexpr (Space::family == Family::L2) {
+      std::string fec_name = fec->Name();
+      bool is_l2 = (fec_name.find("L2") != std::string::npos || fec_name.find("DG") != std::string::npos ||
+                    fec_name.find("Const") != std::string::npos);
+      SLIC_ERROR_ROOT_IF(
+          !is_l2, axom::fmt::format("Space '{}': Template specifies L2/DG family but mfem space uses '{}'", space_name,
+                                    fec_name));
+    }
+
+    // Validate order
+    SLIC_ERROR_ROOT_IF(fec->GetOrder() != Space::order,
+                       axom::fmt::format("Space '{}': Template specifies order {} but mfem space has order {}",
+                                         space_name, Space::order, fec->GetOrder()));
+
+    // Validate vector dimension
+    SLIC_ERROR_ROOT_IF(
+        mfem_space.GetVDim() != Space::components,
+        axom::fmt::format("Space '{}': Template specifies {} components but mfem space has {} components (VDim)",
+                          space_name, Space::components, mfem_space.GetVDim()));
+  }
+
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
   template <int... i>
   auto jacobianFunctions(std::integer_sequence<int, i...>, double time, ConstFieldPtr shape_disp,
@@ -407,10 +490,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     using JacFuncType = std::function<decltype((*weak_form_)(DifferentiateWRT<1>{}, time, *shape_disp, *fs[i]...))(
         double, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
     return std::array<JacFuncType, sizeof...(i)>{
-        [=](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
+        [this](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
           return (*weak_form_)(DifferentiateWRT<i + 1>{}, _time, *_shape_disp, *_fs[i]...);
         }...};
-  };
+  }
 
   /// @brief Utility to get array of jvp functions, one for each input field in fs
   template <int... i>
@@ -421,10 +504,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         std::function<decltype((*v_dot_weak_form_residual_)(DifferentiateWRT<1>{}, time, *shape_disp, *v, *fs[i]...))(
             double, ConstFieldPtr, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
     return std::array<GradFuncType, sizeof...(i)>{
-        [=](double _time, ConstFieldPtr _shape_disp, ConstFieldPtr _v, const std::vector<ConstFieldPtr>& _fs) {
+        [this](double _time, ConstFieldPtr _shape_disp, ConstFieldPtr _v, const std::vector<ConstFieldPtr>& _fs) {
           return (*v_dot_weak_form_residual_)(DifferentiateWRT<i + 2>{}, _time, *_shape_disp, *_v, *_fs[i]...);
         }...};
-  };
+  }
 
   /// @brief timestep, this needs to be held here and modified for rate dependent applications
   mutable double dt_ = std::numeric_limits<double>::max();

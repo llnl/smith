@@ -526,13 +526,13 @@ TEST_F(BucklingSensitivityFixture, QuasiStaticShapeSensitivities)
   solid_solver->setFixedBCs(applied_displacement_surface);
 
   auto K = smith::StateManager::newState(DensitySpace{}, kname, mesh_tag);
-  K.setFromFieldFunction([=](smith::tensor<double, dim> x) {
+  K.setFromFieldFunction([this](smith::tensor<double, dim> x) {
     double scaling = ((x[0] < 3) && (x[0] > 2)) ? 0.99 : 0.001;
     return scaling * mat.K0;
   });
 
   auto G = smith::StateManager::newState(DensitySpace{}, gname, mesh_tag);
-  G.setFromFieldFunction([=](smith::tensor<double, dim> x) {
+  G.setFromFieldFunction([this](smith::tensor<double, dim> x) {
     double scaling = ((x[0] <= 3) && (x[0] >= 2)) ? 0.99 : 0.001;
     return scaling * mat.G0;
   });

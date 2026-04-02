@@ -11,22 +11,23 @@
 #include "gtest/gtest.h"
 #include "mpi.h"
 #include "mfem.hpp"
+#include "shared/mesh/MeshBuilder.hpp"
 
 #include "smith/physics/solid_mechanics_contact.hpp"
 #include "smith/physics/boundary_conditions/components.hpp"
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/materials/solid_material.hpp"
-#include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
-#include "smith/mesh_utils/mesh_utils.hpp"
 #include "smith/numerics/functional/tensor.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/physics/contact/contact_config.hpp"
 
 namespace smith {
 
-class ContactTest : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactJacobian, std::string>> {};
+class ContactTest
+    : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactJacobian, std::string, mfem::Element::Type>> {
+};
 
 TEST_P(ContactTest, patch)
 {
@@ -41,10 +42,23 @@ TEST_P(ContactTest, patch)
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
-  // Construct the appropriate dimension mesh and give it to the data store
-  std::string filename = SMITH_REPO_DIR "/data/meshes/twohex_for_contact.mesh";
-
-  auto mesh = std::make_shared<smith::Mesh>(buildMeshFromFile(filename), "patch_mesh", 2, 0);
+  // clang-format off
+  auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
+    shared::MeshBuilder::CubeMesh(1, 1, 1, std::get<3>(GetParam()))
+      .updateBdrAttrib(3, 7)
+      .updateBdrAttrib(1, 3)
+      .updateBdrAttrib(4, 7)
+      .updateBdrAttrib(5, 1)
+      .updateBdrAttrib(6, 4),
+    shared::MeshBuilder::CubeMesh(1, 1, 1, std::get<3>(GetParam()))
+      .translate({0.0, 0.0, 1.0})
+      .updateBdrAttrib(1, 8)
+      .updateBdrAttrib(3, 7)
+      .updateBdrAttrib(4, 7)
+      .updateBdrAttrib(5, 1)
+      .updateBdrAttrib(8, 5)
+  }), "patch_mesh", 2, 0);
+  // clang-format on
 
   mesh->addDomainOfBoundaryElements("x0_faces", smith::by_attr<dim>(1));
   mesh->addDomainOfBoundaryElements("y0_faces", smith::by_attr<dim>(2));
@@ -69,10 +83,11 @@ TEST_P(ContactTest, patch)
   return;
 #endif
 
-  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
                                            .relative_tol = 1.0e-13,
                                            .absolute_tol = 1.0e-13,
                                            .max_iterations = 20,
+                                           .max_line_search_iterations = 10,
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::SingleMortar,
@@ -132,12 +147,22 @@ TEST_P(ContactTest, patch)
 
 INSTANTIATE_TEST_SUITE_P(
     tribol, ContactTest,
-    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ"),
+    testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ_hex",
+                                    mfem::Element::HEXAHEDRON),
                     std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Approximate,
-                                    "lagrange_multiplier_approxJ"),
-                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ"),
+                                    "lagrange_multiplier_approxJ_hex", mfem::Element::HEXAHEDRON),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ_hex",
+                                    mfem::Element::HEXAHEDRON),
                     std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Exact,
-                                    "lagrange_multiplier_exactJ")));
+                                    "lagrange_multiplier_exactJ_hex", mfem::Element::HEXAHEDRON),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ_tet",
+                                    mfem::Element::TETRAHEDRON),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Approximate,
+                                    "lagrange_multiplier_approxJ_tet", mfem::Element::TETRAHEDRON),
+                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ_tet",
+                                    mfem::Element::TETRAHEDRON),
+                    std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Exact,
+                                    "lagrange_multiplier_exactJ_tet", mfem::Element::TETRAHEDRON)));
 
 }  // namespace smith
 

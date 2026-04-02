@@ -14,7 +14,7 @@
 
 #include "smith/smith_config.hpp"
 
-#ifdef SMITH_USE_DFEM
+#ifdef SMITH_USE_ENZYME
 
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/mesh.hpp"

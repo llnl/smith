@@ -26,6 +26,9 @@ add_subdirectory(conduction)
 # Add the contact examples
 add_subdirectory(contact)
 
+# Add the contact-homotopy examples
+add_subdirectory(contact/homotopy)
+
 # Add the buckling examples
 add_subdirectory(buckling)
 
@@ -38,5 +41,5 @@ add_subdirectory(uniaxial)
 # Add the inertia relief example
 add_subdirectory(inertia_relief)
 
-# Add the sentient materials examples
 add_subdirectory(sentient-materials-physics)
+

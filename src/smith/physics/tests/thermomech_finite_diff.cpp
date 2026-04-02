@@ -44,8 +44,6 @@ enum class LoadingType
   Traction
 };
 
-const std::string MESHTAG = "mesh";
-
 /**
  * @brief A driver for a parameter sensitivity test
  *

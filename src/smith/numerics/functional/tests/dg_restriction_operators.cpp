@@ -349,7 +349,7 @@ void parametrized_test(int permutation)
   auto L2_dofs = GetFaceDofs(L2_fes.get(), face_geom, face_ids);
 
   // verify that the dofs for the L2 faces are aligned properly
-  int dofs_per_side = L2_dofs.shape()[1] / 2;
+  auto dofs_per_side = L2_dofs.shape()[1] / 2;
   for (int i = 0; i < dofs_per_side; i++) {
     int id1 = int(L2_dofs(0, i).index());
     int id2 = int(L2_dofs(0, i + dofs_per_side).index());

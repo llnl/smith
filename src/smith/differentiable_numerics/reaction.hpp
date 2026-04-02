@@ -1,4 +1,4 @@
-// Copyright (c), Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawrence Livermore National Security, LLC and
 // other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //
@@ -21,8 +21,8 @@ namespace smith {
 
 /// @brief gretl-function implementation which evaluates the residual force (which is minus the mechanical force)
 /// given
-/// shape displacement, states and params.  The field_for_residual_space Field is only used to set the approriate size
-/// (mfem::ParFiniteElementSpace) for the residual field so it can be returned as a ResultantState
+/// shape displacement, states and params.  The field_for_residual_space Field is only used to set the appropriate size
+/// (mfem::ParFiniteElementSpace) for the residual field so it can be returned as a ReactionState
 inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const TimeInfo& time_info,
                              FieldState shape_disp, const std::vector<FieldState>& field_states,
                              FieldState field_for_residual_space)
@@ -47,12 +47,6 @@ inline auto evaluateWeakForm(const std::shared_ptr<WeakForm>& weak_form, const T
     FEDualPtr R = std::make_shared<FiniteElementDual>(field_for_residual_space_->space(),
                                                       "residual");  // set up output pointer
     // evaluate the residual with zero acceleration contribution
-    // std::cout << "time info = " << time_info.time() << std::endl;
-    // std::cout << "num fields = " << fields.size() << std::endl;
-    // std::cout << "shape disp name = " << inputs[0].get<FEFieldPtr>().get()->name() << std::endl;
-    // for (auto& f : fields) {
-    //   std::cout << "name = " << f->name() << std::endl;
-    // }
     *R = weak_form->residual(time_info, shape_disp_, fields);
     output.set<FEDualPtr, FEFieldPtr>(R);
   });
