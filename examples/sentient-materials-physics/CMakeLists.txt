@@ -10,6 +10,24 @@ smith_add_executable( NAME        PNC_double_network_test
                       DEPENDS_ON  smith
                       )
 
+smith_add_executable( NAME        PNC_double_network_test_visco
+                      SOURCES     PNC_double_network_test_visco.cpp
+                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                      DEPENDS_ON  smith
+                      )
+
+smith_add_executable( NAME        square_lattice_test
+                      SOURCES     square_lattice_test.cpp
+                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                      DEPENDS_ON  smith
+                      )
+
+smith_add_executable( NAME        PNC_double_network_simple
+                      SOURCES     PNC_double_network_simple.cpp
+                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                      DEPENDS_ON  smith
+                      )
+
 install(
     FILES
         PNC_double_network_test.cpp
@@ -17,8 +35,38 @@ install(
         examples/smith/PNC_double_network_test
 )
 
+install(
+    FILES
+        PNC_double_network_test_visco.cpp
+    DESTINATION
+        examples/smith/PNC_double_network_test_visco
+)
+
+install(
+    FILES
+        PNC_double_network_simple.cpp
+    DESTINATION
+        examples/smith/PNC_double_network_simple
+)
+
+install(
+    FILES
+        square_lattice_test.cpp
+    DESTINATION
+        examples/smith/square_lattice_test
+)
+
 if(SMITH_ENABLE_TESTS)
     blt_add_test(NAME          PNC_double_network_test
                  COMMAND       PNC_double_network_test
+                 NUM_MPI_TASKS 1 )
+    blt_add_test(NAME          PNC_double_network_test_visco
+                 COMMAND       PNC_double_network_test_visco
+                 NUM_MPI_TASKS 1 )
+    blt_add_test(NAME          square_lattice_test
+                 COMMAND       square_lattice_test
+                 NUM_MPI_TASKS 1 )
+    blt_add_test(NAME          PNC_double_network_simple
+                 COMMAND       PNC_double_network_simple
                  NUM_MPI_TASKS 1 )
 endif()

@@ -8,6 +8,8 @@ set (korner_examples
   07_snap_array_optimal
   08_quasistatic_thermomechanics
   09_viscoelastic_cyclic_tests
+  10_snap_array_optimal_bkz
+  11_snap_array_optimal_bkz_visco
 )
 set (korner_example_depends
   smith_differentiable_numerics

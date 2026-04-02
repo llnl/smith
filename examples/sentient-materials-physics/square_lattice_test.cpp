@@ -55,11 +55,11 @@ int main(int argc, char* argv[])
   using ScalarSpace = H1<order, 1>;
   using ScalarParameterSpace = L2<0>;
   // hardcoded values that were in Kevin's lua files
-  size_t N_Steps = 500;
+  size_t N_Steps = 1000;
   double Total_Time = 500.0;
   int serial_refinement = 0;
   int parallel_refinement = 0;
-  std::string mesh_name = "2d_plate_4elem.g"; //50x50x1 unit plate
+  std::string mesh_name = "5x5lattice.g"; //50x50x1 unit plate
   //Km,Gm,betam,rhom0,etam,Ke,Ge,betae,rhoe0,etae,C_v,kappa,Af,E_af,Ar,E_ar,R,Tr,gw,wm
   /*
   double Km = 0.5;         ///< matrix bulk modulus, MPa
@@ -86,7 +86,7 @@ int main(int argc, char* argv[])
 
    double wm = 0.5;         ///< matrix mass fraction
   */
-  std::vector<double> material_params = {0.1,0.0073976,0.,1.0,0.,0.1,0.225075,0.,1.0,0.,1.5,200.,2.5e15,1.5e5,1.0e-21,-1.55e5,8.314,353.,0.2,0.5};
+  std::vector<double> material_params = {0.5,0.0073976,0.,1.0,0.,0.5,0.225075,0.,1.0,0.,1.5,30.,2.5e15,1.5e5,1.0e-21,-1.55e5,8.314,353.,0.2,0.5};
   // size_t num_coupling_iters = 1;
   int heat_linear_print_level = 0;
   int solid_linear_print_level = 0;
@@ -94,27 +94,15 @@ int main(int argc, char* argv[])
   double external_heat_source = 0.0;
   auto applied_displacement_func2 = [](const double t, const smith::tensor<double, dim> & x){
     auto output = 0.0 * x;
-    output[1] = -5.0 * sin(M_PI * t / 2.0);
-    return output;
-  };
-  auto fixed_displacement = [](const double t, const smith::tensor<double, dim> & x){
-    auto output = 0.0 * x;
-    output[0] = 0.0*t;
+    //compress halfway in 500s
+    output[1] = -0.028 * t;//* sin(M_PI * t / 2.0);
     return output;
   };
   auto applied_temp = [](const double t, const smith::tensor<double, dim>){
-    if (t < 360) {
-      return 120.0*(t/360.); //only the temperature differential here
-    }
-    else {
-      return 120.0;
-    }
+    return 120.0+0.0*t; //only the temperature differential here
   };
-
-  // function for the BC
-  std::function<double(double, tensor<double, dim>)> boundary_condition;
-  boundary_condition = [](double t, tensor<double, dim> /*X*/) -> double {
-    return -5.0 * sin(M_PI * t / 2.0);
+  auto applied_temp2 = [](const double t, const smith::tensor<double, dim>){
+    return 0.0*t; //only the temperature differential here
   };
 
   /// ==================================================================
@@ -143,8 +131,8 @@ int main(int argc, char* argv[])
   // Extracting boundary domains for boundary conditions
   mesh->addDomainOfBoundaryElements("fix_bottom", smith::by_attr<dim>(1));
   mesh->addDomainOfBoundaryElements("fix_top", smith::by_attr<dim>(2));
-  mesh->addDomainOfBoundaryElements("fix_front", smith::by_attr<dim>(3));
-  mesh->addDomainOfBoundaryElements("fix_back", smith::by_attr<dim>(4));
+  mesh->addDomainOfBoundaryElements("fix_right", smith::by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("fix_left", smith::by_attr<dim>(4));
                                                      
   SLIC_INFO_ROOT_FLUSH("Building solvers");
   /// -------------------------------------
@@ -227,14 +215,12 @@ int main(int argc, char* argv[])
 
   vector_bcs->setFixedVectorBCs<dim>(mesh->domain("fix_bottom"));
   vector_bcs->setVectorBCs<dim>(mesh->domain("fix_top"), applied_displacement_func2);
-  //scalar_bcs->setScalarBCs<dim>(mesh->domain("fix_bottom"), applied_temp);
-  scalar_bcs->setScalarBCs<dim>(mesh->domain("fix_front"), applied_temp);
-  vector_bcs->setVectorBCs<dim>(mesh->domain("fix_front"), {2}, fixed_displacement);
-  vector_bcs->setVectorBCs<dim>(mesh->domain("fix_back"), {2}, fixed_displacement);
+  scalar_bcs->setScalarBCs<dim>(mesh->domain("fix_bottom"), applied_temp);
+  scalar_bcs->setScalarBCs<dim>(mesh->domain("fix_top"), applied_temp2);
 
-  // global constrant
-  //std::vector<int> zdir = {2};
-  //vector_bcs->setFixedVectorBCs<dim>(mesh->entireBody(),zdir);
+  // global constraint
+  std::vector<int> zdir = {2};
+  vector_bcs->setFixedVectorBCs<dim>(mesh->entireBody(),zdir);
 
   SLIC_INFO_ROOT_FLUSH("Setting up weak forms for solid mechanics and heat transfer");
   /// ---------------------------------------------------------------------------------
@@ -279,28 +265,11 @@ int main(int argc, char* argv[])
   SLIC_INFO_ROOT_FLUSH("Creating Paraview writer and writing initial state");
   /// -----------------------------------------------------------------------
 
-  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), "paraview_heat_v2");
+  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), "paraview_square_lattice");
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
 
   SLIC_INFO_ROOT_FLUSH("Starting time-stepping loop");
   /// ------------------------------------------------
-
-  // added from kevin
-  std::ofstream file;
-
-  std::string stress_strain_output = "paraview_heat_v2/_strain_curve2.csv";
-
-  if (mfem::Mpi::Root()) {
-    file = std::ofstream(stress_strain_output);
-
-    if (!file.is_open()) {
-      MFEM_ABORT("Could Not Open File");
-    }
-    file << std::setprecision(16) << std::scientific;
-
-    file << "time,strain,force\n";
-  }
-  // end added from kevin
 
   double time_increment = Total_Time / (static_cast<double>(N_Steps));
   for (size_t m = 0; m < N_Steps; ++m) {
@@ -312,15 +281,6 @@ int main(int argc, char* argv[])
     auto reactions = physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(),
                                                                     physics->getFieldStatesOld(), params, time_info);
     double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
-    if (mfem::Mpi::Root()) {
-      std::cout << "Reaction: " << reaction << std::endl;
-      file << time_info.time() << ","
-           << boundary_condition(time_info.time(), {0, 0, 0})/50. << ","
-           << reaction / (50*1) << "\n";
-      file.flush();
-      // 50 is sample height, dividing boundary_condition line by this was getting strain
-      // 50*1 is surface area, getting stress instead of rxn force
-    }
     SLIC_INFO_ROOT_FLUSH(axom::fmt::format("    Reaction = {}", reaction));
 
     // Compute reactions

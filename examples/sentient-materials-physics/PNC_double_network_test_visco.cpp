@@ -8,6 +8,7 @@
 #include <fstream>
 #include <functional>
 #include <ostream>
+#include <iostream>
 #include <set>
 #include <string>
 #include <utility>
@@ -39,6 +40,13 @@
 
 using namespace smith;
 
+inline std::string to_string_prec16(double value)
+{
+  std::ostringstream oss;
+  oss << std::setprecision(16) << value;
+  return oss.str();
+}
+
 int main(int argc, char* argv[])
 {
   SMITH_MARK_FUNCTION;
@@ -56,37 +64,42 @@ int main(int argc, char* argv[])
   using ScalarParameterSpace = L2<0>;
   // hardcoded values that were in Kevin's lua files
   size_t N_Steps = 500;
-  double Total_Time = 500.0;
+  double Total_Time = 50.0;
   int serial_refinement = 0;
   int parallel_refinement = 0;
-  std::string mesh_name = "2d_plate_4elem.g"; //50x50x1 unit plate
+  std::string mesh_name = "2d_plate.g"; //50x50x1 unit plate
   //Km,Gm,betam,rhom0,etam,Ke,Ge,betae,rhoe0,etae,C_v,kappa,Af,E_af,Ar,E_ar,R,Tr,gw,wm
   /*
-  double Km = 0.5;         ///< matrix bulk modulus, MPa
-   double Gm = 0.0073976;//0.001759;    ///< matrix shear modulus, MPa
-   double betam = 0;
-   double cvm = 1.0;
-   double rhom0 = 1.0;
-   double eta = 0.;//0.002;//0.005;     ///< viscosity, MPa-s
- 
-   double Ke = 0.5;       ///< entanglement bulk modulus, MPa
-   double Ge = 0.225075;//0.0006408;     ///< entanglement shear modulus, MPa
-   double cvc = 4.0;
-   double rhoc0 = 1.0;
- 
-   // E_a and R can be SI units since they cancel out in the exponent
-   double Af = 2.5e15;      ///< forward (low-high) exponential prefactor, 1/s
-   double E_af = 1.5e5;     ///< forward (low-high) activation energy, J/mol
-   double Ar = 1.0e-21;//4.2e-24;      ///< reverse exponential prefactor, 1/s
-   double E_ar = -1.55e5;//-1.5e5;    ///< reverse activation energy, J/mol
-   double R = 8.314;        ///< universal gas constant, J/mol/K
-   double Tr = 353;         ///< reference temperature, K
+  double Km;       ///< matrix bulk modulus, MPa
+  double Gm;       ///< matrix shear modulus, MPa
+  double betam;    ///< matrix volumetric thermal expansion coefficient
+  double rhom0;    ///< matrix initial density
+  double taum;     ///< matrix time constant, s
+  double binfm;    ///< matrix visco scaling factor beta^infty
 
-   double gw = 0.2;         ///< particle weight fraction
+  double Ke;       ///< entanglement bulk modulus, MPa
+  double Ge;       ///< entanglement shear modulus, MPa
+  double rhoe0;    ///< entanglement (chain) initial density
+  double taue;     ///< entanglement time constant, s
+  double binfe;    ///< entanglement visco scaling factor beta^infty
 
-   double wm = 0.5;         ///< matrix mass fraction
+  double C_v;      ///< net volumetric heat capacity (must account for matrix+chain+particle)
+  double kappa;    ///< net thermal conductivity (must account for matrix+chain+particle)
+
+  // E_a and R can be SI units since they cancel out in the exponent
+  double Af;       ///< forward (low-high) exponential prefactor, 1/s
+  double E_af;     ///< forward (low-high) activation energy, J/mol
+  double Ar;       ///< reverse exponential prefactor, 1/s
+  double E_ar;     ///< reverse activation energy, J/mol
+  double R;        ///< universal gas constant, J/mol/K
+  double Tr;       ///< reference temperature, K
+
+  double gw;       ///< particle weight fraction
   */
-  std::vector<double> material_params = {0.1,0.0073976,0.,1.0,0.,0.1,0.225075,0.,1.0,0.,1.5,200.,2.5e15,1.5e5,1.0e-21,-1.55e5,8.314,353.,0.2,0.5};
+  //0.5, 0.0073976,1e-3,1.2,10,1.,0.5,0.225075,1.2,1000,1.,1.5,30.,2.5e15,1.5e5,1.0e-21,-1.55e5,8.314,353.,0.2
+
+  // the new visco material doesnt have wm
+  std::vector<double> material_params = {0.5, 0.0073976,1e-3,1.2,10,0.,0.5,0.225075,1.2,1000,0.,1.5,30.,2.5e15,1.5e5,1.0e-21,-1.55e5,8.314,353.,0.2};
   // size_t num_coupling_iters = 1;
   int heat_linear_print_level = 0;
   int solid_linear_print_level = 0;
@@ -103,12 +116,7 @@ int main(int argc, char* argv[])
     return output;
   };
   auto applied_temp = [](const double t, const smith::tensor<double, dim>){
-    if (t < 360) {
-      return 120.0*(t/360.); //only the temperature differential here
-    }
-    else {
-      return 120.0;
-    }
+    return 120.0+0.0*t; //only the temperature differential here
   };
 
   // function for the BC
@@ -182,35 +190,61 @@ int main(int argc, char* argv[])
 
   SLIC_INFO_ROOT_FLUSH("Defining material properties");
   /// ------------------------------------------------
+/*
+  double Km;       ///< matrix bulk modulus, MPa
+  double Gm;       ///< matrix shear modulus, MPa
+  double betam;    ///< matrix volumetric thermal expansion coefficient
+  double rhom0;    ///< matrix initial density
+  double taum;     ///< matrix time constant, s
+  double binfm;    ///< matrix visco scaling factor beta^infty
 
+  double Ke;       ///< entanglement bulk modulus, MPa
+  double Ge;       ///< entanglement shear modulus, MPa
+  double rhoe0;    ///< entanglement (chain) initial density
+  double taue;     ///< entanglement time constant, s
+  double binfe;    ///< entanglement visco scaling factor beta^infty
+
+  double C_v;      ///< net volumetric heat capacity (must account for matrix+chain+particle)
+  double kappa;    ///< net thermal conductivity (must account for matrix+chain+particle)
+
+  // E_a and R can be SI units since they cancel out in the exponent
+  double Af;       ///< forward (low-high) exponential prefactor, 1/s
+  double E_af;     ///< forward (low-high) activation energy, J/mol
+  double Ar;       ///< reverse exponential prefactor, 1/s
+  double E_ar;     ///< reverse activation energy, J/mol
+  double R;        ///< universal gas constant, J/mol/K
+  double Tr;       ///< reference temperature, K
+
+  double gw;       ///< particle weight fraction
+*/
   double Km = material_params[0];       ///< matrix bulk modulus, MPa
   double Gm = material_params[1];       ///< matrix shear modulus, MPa
   double betam = material_params[2];    ///< matrix volumetric thermal expansion coefficient
   double rhom0 = material_params[3];    ///< matrix initial density
-  double etam = material_params[4];     ///< matrix viscosity, MPa-s
+  double taum = material_params[4];     ///< matrix time constant, s
+  double binfm = material_params[5];    ///< matrix visco scaling factor beta^infty
 
-  double Ke = material_params[5];       ///< entanglement bulk modulus, MPa
-  double Ge = material_params[6];       ///< entanglement shear modulus, MPa
-  double betae = material_params[7];    ///< entanglement volumetric thermal expansion coefficient
+  double Ke = material_params[6];       ///< entanglement bulk modulus, MPa
+  double Ge = material_params[7];       ///< entanglement shear modulus, MPa
   double rhoe0 = material_params[8];    ///< entanglement (chain) initial density
-  double etae = material_params[9];     ///< entanglement viscosity, MPa-s
+  double taue = material_params[9];     ///< entanglement time constant, s
+  double binfe = material_params[10];   ///< entanglement visco scaling factor beta^infty
 
-  double Cv = material_params[10];      ///< net volumetric heat capacity (must account for matrix+chain+particle)
-  double kappa = material_params[11];    ///< net thermal conductivity (must account for matrix+chain+particle)
+  double Cv = material_params[11];      ///< net volumetric heat capacity (must account for matrix+chain+particle)
+  double kappa = material_params[12];   ///< net thermal conductivity (must account for matrix+chain+particle)
 
   // E_a and R can be SI units since they cancel out in the exponent
-  double Af = material_params[12];       ///< forward (low-high) exponential prefactor, 1/s
-  double E_af = material_params[13];     ///< forward (low-high) activation energy, J/mol
-  double Ar = material_params[14];       ///< reverse exponential prefactor, 1/s
-  double E_ar = material_params[15];     ///< reverse activation energy, J/mol
-  double R = material_params[16];        ///< universal gas constant, J/mol/K
-  double Tr = material_params[17];       ///< reference temperature, K
+  double Af = material_params[13];       ///< forward (low-high) exponential prefactor, 1/s
+  double E_af = material_params[14];     ///< forward (low-high) activation energy, J/mol
+  double Ar = material_params[15];       ///< reverse exponential prefactor, 1/s
+  double E_ar = material_params[16];     ///< reverse activation energy, J/mol
+  double R = material_params[17];        ///< universal gas constant, J/mol/K
+  double Tr = material_params[18];       ///< reference temperature, K
 
-  double gw = material_params[18];       ///< particle weight fraction
-  double wm = material_params[19];       ///< matrix mass fraction (set to 0.5, not real for now)
+  double gw = material_params[19];       ///< particle weight fraction
 
-  using Material = thermomechanics::ThermalStiffeningMaterial;
-  Material material = Material{Km,Gm,betam,rhom0,etam,Ke,Ge,betae,rhoe0,etae,Cv,kappa,Af,E_af,Ar,E_ar,R,Tr,gw,wm};
+  using Material = thermomechanics::ViscoThermalStiffeningMaterial;
+  Material material = Material{Km,Gm,betam,rhom0,taum,binfm,Ke,Ge,rhoe0,taue,binfe,Cv,kappa,Af,E_af,Ar,E_ar,R,Tr,gw};
 
   // warm-start.
   // implicit Newmark.
@@ -227,14 +261,9 @@ int main(int argc, char* argv[])
 
   vector_bcs->setFixedVectorBCs<dim>(mesh->domain("fix_bottom"));
   vector_bcs->setVectorBCs<dim>(mesh->domain("fix_top"), applied_displacement_func2);
-  //scalar_bcs->setScalarBCs<dim>(mesh->domain("fix_bottom"), applied_temp);
-  scalar_bcs->setScalarBCs<dim>(mesh->domain("fix_front"), applied_temp);
+  scalar_bcs->setScalarBCs<dim>(mesh->domain("fix_bottom"), applied_temp);
   vector_bcs->setVectorBCs<dim>(mesh->domain("fix_front"), {2}, fixed_displacement);
   vector_bcs->setVectorBCs<dim>(mesh->domain("fix_back"), {2}, fixed_displacement);
-
-  // global constrant
-  //std::vector<int> zdir = {2};
-  //vector_bcs->setFixedVectorBCs<dim>(mesh->entireBody(),zdir);
 
   SLIC_INFO_ROOT_FLUSH("Setting up weak forms for solid mechanics and heat transfer");
   /// ---------------------------------------------------------------------------------
@@ -279,7 +308,7 @@ int main(int argc, char* argv[])
   SLIC_INFO_ROOT_FLUSH("Creating Paraview writer and writing initial state");
   /// -----------------------------------------------------------------------
 
-  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), "paraview_heat_v2");
+  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), "pnc_double_visco");
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
 
   SLIC_INFO_ROOT_FLUSH("Starting time-stepping loop");
@@ -288,7 +317,7 @@ int main(int argc, char* argv[])
   // added from kevin
   std::ofstream file;
 
-  std::string stress_strain_output = "paraview_heat_v2/_strain_curve2.csv";
+  std::string stress_strain_output = "pnc_double_visco/_strain_curve.csv";
 
   if (mfem::Mpi::Root()) {
     file = std::ofstream(stress_strain_output);
@@ -309,20 +338,21 @@ int main(int argc, char* argv[])
     physics->advanceTimestep(time_increment);
 
     TimeInfo time_info(physics->time() - time_increment, time_increment);
+    /*
     auto reactions = physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(),
                                                                     physics->getFieldStatesOld(), params, time_info);
     double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
     if (mfem::Mpi::Root()) {
       std::cout << "Reaction: " << reaction << std::endl;
       file << time_info.time() << ","
-           << boundary_condition(time_info.time(), {0, 0, 0})/50. << ","
-           << reaction / (50*1) << "\n";
+           << boundary_condition(time_info.time(), {0, 0, 0}) << ","
+           << reaction / (819.0 * 276.66) << "\n";
       file.flush();
-      // 50 is sample height, dividing boundary_condition line by this was getting strain
-      // 50*1 is surface area, getting stress instead of rxn force
+      // 830 is sample height, dividing boundary_condition line by this was getting strain
+      // 819*276.66 is surface area, getting stress instead of rxn force
     }
     SLIC_INFO_ROOT_FLUSH(axom::fmt::format("    Reaction = {}", reaction));
-
+*/
     // Compute reactions
 
     pv_writer.write(m + 1, physics->time(), physics->getFieldStatesAndParamStates());

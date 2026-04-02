@@ -59,34 +59,22 @@ int main(int argc, char* argv[])
   double Total_Time = 500.0;
   int serial_refinement = 0;
   int parallel_refinement = 0;
-  std::string mesh_name = "2d_plate_4elem.g"; //50x50x1 unit plate
-  //Km,Gm,betam,rhom0,etam,Ke,Ge,betae,rhoe0,etae,C_v,kappa,Af,E_af,Ar,E_ar,R,Tr,gw,wm
+  std::string mesh_name = "2d_plate.g";//"2d_plate_4elem.g"; //50x50x1 unit plate
   /*
-  double Km = 0.5;         ///< matrix bulk modulus, MPa
-   double Gm = 0.0073976;//0.001759;    ///< matrix shear modulus, MPa
-   double betam = 0;
-   double cvm = 1.0;
-   double rhom0 = 1.0;
-   double eta = 0.;//0.002;//0.005;     ///< viscosity, MPa-s
- 
-   double Ke = 0.5;       ///< entanglement bulk modulus, MPa
-   double Ge = 0.225075;//0.0006408;     ///< entanglement shear modulus, MPa
-   double cvc = 4.0;
-   double rhoc0 = 1.0;
- 
-   // E_a and R can be SI units since they cancel out in the exponent
-   double Af = 2.5e15;      ///< forward (low-high) exponential prefactor, 1/s
-   double E_af = 1.5e5;     ///< forward (low-high) activation energy, J/mol
-   double Ar = 1.0e-21;//4.2e-24;      ///< reverse exponential prefactor, 1/s
-   double E_ar = -1.55e5;//-1.5e5;    ///< reverse activation energy, J/mol
-   double R = 8.314;        ///< universal gas constant, J/mol/K
-   double Tr = 353;         ///< reference temperature, K
+  double Km;       ///< matrix bulk modulus, MPa
+  double betam;    ///< matrix volumetric thermal expansion coefficient
 
-   double gw = 0.2;         ///< particle weight fraction
+  double Ke;       ///< entanglement bulk modulus, MPa
 
-   double wm = 0.5;         ///< matrix mass fraction
+  double C_v;      ///< net volumetric heat capacity (must account for matrix+chain+particle)
+  double kappa;    ///< net thermal conductivity (must account for matrix+chain+particle)
+
+  double Tr;       ///< reference temperature, K, set to 353
+
+  double gw;       ///< particle weight fraction
   */
-  std::vector<double> material_params = {0.1,0.0073976,0.,1.0,0.,0.1,0.225075,0.,1.0,0.,1.5,200.,2.5e15,1.5e5,1.0e-21,-1.55e5,8.314,353.,0.2,0.5};
+  //Km, betam, Ke, Cv, kappa, Tr, gw
+  std::vector<double> material_params = {0.1,0.,0.1,1.5,200.,353.,0.30};
   // size_t num_coupling_iters = 1;
   int heat_linear_print_level = 0;
   int solid_linear_print_level = 0;
@@ -184,33 +172,19 @@ int main(int argc, char* argv[])
   /// ------------------------------------------------
 
   double Km = material_params[0];       ///< matrix bulk modulus, MPa
-  double Gm = material_params[1];       ///< matrix shear modulus, MPa
-  double betam = material_params[2];    ///< matrix volumetric thermal expansion coefficient
-  double rhom0 = material_params[3];    ///< matrix initial density
-  double etam = material_params[4];     ///< matrix viscosity, MPa-s
+  double betam = material_params[1];    ///< matrix volumetric thermal expansion coefficient
 
-  double Ke = material_params[5];       ///< entanglement bulk modulus, MPa
-  double Ge = material_params[6];       ///< entanglement shear modulus, MPa
-  double betae = material_params[7];    ///< entanglement volumetric thermal expansion coefficient
-  double rhoe0 = material_params[8];    ///< entanglement (chain) initial density
-  double etae = material_params[9];     ///< entanglement viscosity, MPa-s
+  double Ke = material_params[2];       ///< entanglement bulk modulus, MPa
 
-  double Cv = material_params[10];      ///< net volumetric heat capacity (must account for matrix+chain+particle)
-  double kappa = material_params[11];    ///< net thermal conductivity (must account for matrix+chain+particle)
+  double Cv = material_params[3];      ///< net volumetric heat capacity (must account for matrix+chain+particle)
+  double kappa = material_params[4];    ///< net thermal conductivity (must account for matrix+chain+particle)
 
-  // E_a and R can be SI units since they cancel out in the exponent
-  double Af = material_params[12];       ///< forward (low-high) exponential prefactor, 1/s
-  double E_af = material_params[13];     ///< forward (low-high) activation energy, J/mol
-  double Ar = material_params[14];       ///< reverse exponential prefactor, 1/s
-  double E_ar = material_params[15];     ///< reverse activation energy, J/mol
-  double R = material_params[16];        ///< universal gas constant, J/mol/K
-  double Tr = material_params[17];       ///< reference temperature, K
+  double Tr = material_params[5];       ///< reference temperature, K
 
-  double gw = material_params[18];       ///< particle weight fraction
-  double wm = material_params[19];       ///< matrix mass fraction (set to 0.5, not real for now)
+  double gw = material_params[6];       ///< particle weight fraction
 
-  using Material = thermomechanics::ThermalStiffeningMaterial;
-  Material material = Material{Km,Gm,betam,rhom0,etam,Ke,Ge,betae,rhoe0,etae,Cv,kappa,Af,E_af,Ar,E_ar,R,Tr,gw,wm};
+  using Material = thermomechanics::SimpleThermalStiffeningMaterial;
+  Material material = Material{Km,betam,Ke,Cv,kappa,Tr,gw};
 
   // warm-start.
   // implicit Newmark.
@@ -279,7 +253,7 @@ int main(int argc, char* argv[])
   SLIC_INFO_ROOT_FLUSH("Creating Paraview writer and writing initial state");
   /// -----------------------------------------------------------------------
 
-  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), "paraview_heat_v2");
+  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), "PNC_simple");
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
 
   SLIC_INFO_ROOT_FLUSH("Starting time-stepping loop");
@@ -288,7 +262,7 @@ int main(int argc, char* argv[])
   // added from kevin
   std::ofstream file;
 
-  std::string stress_strain_output = "paraview_heat_v2/_strain_curve2.csv";
+  std::string stress_strain_output = "PNC_simple/_stress_strain_curve.csv";
 
   if (mfem::Mpi::Root()) {
     file = std::ofstream(stress_strain_output);
