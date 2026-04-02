@@ -61,3 +61,60 @@ struct ParameterizedNeoHookeanWithViscosity {
   double G0;
   double eta;
 };
+
+
+struct ParameterizedHolzapfelViscoelastic {
+  struct State {
+     tensor<double,3,3> H1n{{{1.0, 0.0, 0.0},
+                            {0.0, 1.0, 0.0},
+                            {0.0, 0.0, 1.0}}}; // previous value of Hn tensor
+   };
+
+  template <int d, typename DispGradType, typename BulkType, typename ShearType>
+  SMITH_HOST_DEVICE auto operator()(State& state, const smith::tensor<DispGradType, d, d>& du_dX,
+                                    const BulkType& DeltaK, const ShearType& DeltaG) const
+  {
+    using std::pow;
+    using std::exp;
+
+    auto H1n = state.H1n; // previous value of the H^\alpha_n tensor, for alpha=1
+  
+    auto kappa = kappa0 + get<0>(DeltaK);
+    auto mu = mu0 + get<0>(DeltaG);
+
+    // get kinematics
+    constexpr auto I = Identity<d>();
+    auto F = du_dX + I;
+    auto J = det(F);
+
+    auto C = dot(transpose(F), F);
+    auto trC = tr(C);
+    auto Ci = inv(C);
+    auto Ch = I - Ci*trC/3.;
+
+    // calculate 2nd PK stress
+    auto Svol = kappa*J*(J-1.)*Ci;
+    auto Siso = Ch*mu*pow(J, -2./3.);
+    auto Q1 = Siso*beta1*exp(-dt/(2.*tau1)) + H1n;
+    auto S = Svol + Siso + Q1;
+
+    // create the current H1
+    auto H1 = exp(-dt/(2.*tau1))*(Q1*exp(-dt/(2.*tau1)) - beta1*Siso);
+
+    // get kirchhoff stress
+    auto TK = dot(F,dot(S,transpose(F)));
+   
+    // Pull back to Piola and store the current H1 as the state H1n
+    state.H1n = get_value(H1);
+    return dot(TK, inv(transpose(F)));
+  }
+
+  static constexpr int numParameters() { return 2; }
+
+  double density;
+  double kappa0;     ///< bulk modulus
+  double mu0;        ///< shear modulus
+  double beta1;      ///< strain energy factor - assuming only 1 term
+  double tau1;       ///< viscoelastic time constant - assuming only 1 term
+  double dt;         ///< fixed dt
+};

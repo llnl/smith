@@ -1,3 +1,22 @@
+<<<<<<< HEAD
+set (korner_examples
+  01_test
+  02_implicit_velocity
+  03_implicit_velocity_but_better
+  04_nominal_lattice
+  05_optimal_lattice
+  06_snap_array_nominal
+  07_snap_array_optimal
+  08_quasistatic_thermomechanics
+  09_viscoelastic_cyclic_tests
+  10_snap_array_optimal_bkz
+  11_snap_array_optimal_bkz_visco
+)
+set (korner_example_depends
+  smith_differentiable_numerics
+  smith_physics 
+)
+=======
 # set (korner_examples
 #   01_test
 #   02_implicit_velocity
@@ -13,6 +32,7 @@
 #   smith_differentiable_numerics
 #   smith_physics 
 # )
+>>>>>>> abef0c8bc771d2dfc85f8bd836cab4137e582a83
 
 # set(KORNER_EXAMPLES_DIR $CMAKE_BINARY_DIR)
 
