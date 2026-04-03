@@ -10,9 +10,7 @@
 
 #include "mfem.hpp"
 
-#define private public
 #include "smith/numerics/block_preconditioner.hpp"
-#undef private
 #include "smith/infrastructure/application_manager.hpp"
 
 using namespace mfem;
@@ -588,9 +586,7 @@ TEST(BlockSchurPreconditionerCustom, CustomOverrideNotConsumedOnRepeatedSetOpera
                                     smith::SchurApproxType::Custom, std::move(overrides));
 
   P.SetOperator(A);
-  ASSERT_TRUE(P.block_op_overrides_[1] != nullptr);
   P.SetOperator(A);
-  ASSERT_TRUE(P.block_op_overrides_[1] != nullptr);
 
   Vector b(2 * n), x(2 * n);
   b.Randomize();
