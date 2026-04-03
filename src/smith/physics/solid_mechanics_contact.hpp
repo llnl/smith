@@ -124,10 +124,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     SolidMechanicsBase::resetStates(cycle, time);
     forces_ = 0.0;
-    contact_.setDisplacements(BasePhysics::shapeDisplacement(), displacement_);
     contact_.reset();
     double dt = 0.0;
-    contact_.update(cycle, time, dt);
+    mfem::Vector p(contact_.numPressureDofs());
+    p = 0.0;
+    contact_.update(cycle, time, dt, BasePhysics::shapeDisplacement(), displacement_, p);
   }
 
   /// @brief Build the quasi-static operator corresponding to the total Lagrangian formulation
@@ -341,7 +342,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   void completeSetup() override
   {
     double dt = 0.0;
-    contact_.update(cycle_, time_, dt);
+    mfem::Vector p = pressure();
+    contact_.update(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
 
     SolidMechanicsBase::completeSetup();
   }
@@ -444,8 +446,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     // solve the non-linear system resid = 0 and pressure * gap = 0
     nonlin_solver_->solve(augmented_solution);
     displacement_.Set(1.0, mfem::Vector(augmented_solution, 0, displacement_.Size()));
-    contact_.setPressures(mfem::Vector(augmented_solution, displacement_.Size(), contact_.numPressureDofs()));
-    contact_.update(cycle_, time_, dt);
     forces_.SetVector(contact_.forces(), 0);
 
 #ifdef SMITH_USE_TRIBOL
@@ -533,24 +533,29 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       const mfem::Vector res = (*residual_)(time_ + dt, BasePhysics::shapeDisplacement(), displacement_, acceleration_,
                                             *parameters_[parameter_indices].state...);
 
-      contact_.setPressures(mfem::Vector(augmented_residual, displacement_.Size(), contact_.numPressureDofs()));
-      contact_.update(cycle_, time_, dt);
-      mfem::Vector r_blk(augmented_residual, 0, displacement_.space().TrueVSize());
-      r_blk = res;
-
       mfem::Vector augmented_solution(displacement_.space().TrueVSize() + contact_.numPressureDofs());
       augmented_solution = 0.0;
       mfem::Vector du(augmented_solution, 0, displacement_.space().TrueVSize());
       du = displacement_;
+      mfem::Vector p_blk(augmented_solution, displacement_.Size(), contact_.numPressureDofs());
 
-      contact_.residualFunction(BasePhysics::shapeDisplacement(), augmented_solution, augmented_residual);
+      // Perform a single update for the warm start evaluation.
+      // Note: we use time_ to match the previous Jacobian evaluation point.
+      contact_.update(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p_blk);
+
+      mfem::Vector r_blk(augmented_residual, 0, displacement_.space().TrueVSize());
+      r_blk = res;
+      r_blk += contact_.forces();
+
+      mfem::Vector g_blk(augmented_residual, displacement_.Size(), contact_.numPressureDofs());
+      g_blk.Set(1.0, contact_.mergedGaps(true));
+
       r_blk.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
 
       // use the most recently evaluated Jacobian
       auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
                                     acceleration_, *parameters_[parameter_indices].previous_state...);
 
-      contact_.update(cycle_, time_, dt);
       if (contact_.haveLagrangeMultipliers()) {
         J_offsets_ = mfem::Array<int>({0, displacement_.Size(), displacement_.Size() + contact_.numPressureDofs()});
         J_constraint_ = contact_.jacobianFunction(assemble(drdu));
