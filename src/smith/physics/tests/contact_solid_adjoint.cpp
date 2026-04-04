@@ -402,11 +402,6 @@ TEST_F(ContactSensitivityFixture, ContactForceDualAdjointBcsMatchesEquivalentAdj
   equivalent_load = 0.0;
   J00->MultTranspose(dJ_df, equivalent_load);
 
-  // Clear the contact-force dual-adjoint seed so the quasiStaticAdjointSolve() path doesn't add it again.
-  FiniteElementState zero_seed(solver->state("displacement").space(), "zero_seed");
-  zero_seed = 0.0;
-  solver->setDualAdjointBcs({{axom::fmt::format("contact_force_{}", contact_interaction_id), zero_seed}});
-
   solver->setAdjointLoad({{"displacement", equivalent_load}});
   solver->reverseAdjointTimestep();
 

@@ -7,7 +7,9 @@
 #include "smith/physics/contact/contact_data.hpp"
 
 #include <cstddef>
+#include <memory>
 
+#include "axom/fmt.hpp"
 #include "axom/slic.hpp"
 #include "mpi.h"
 
@@ -16,6 +18,7 @@
 #ifdef SMITH_USE_TRIBOL
 #include "tribol/interface/tribol.hpp"
 #include "tribol/interface/mfem_tribol.hpp"
+#include "tribol/mesh/CouplingScheme.hpp"
 #endif
 
 namespace smith {
@@ -37,6 +40,11 @@ ContactData::~ContactData() { tribol::finalize(); }
 void ContactData::addContactInteraction(int interaction_id, const std::set<int>& bdry_attr_surf1,
                                         const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts)
 {
+  // Disallow duplicate ids globally: Tribol coupling schemes are keyed by cs_id (interaction_id) globally.
+  auto* cs = tribol::CouplingSchemeManager::getInstance().findData(static_cast<tribol::IndexT>(interaction_id));
+  SLIC_ERROR_ROOT_IF(cs != nullptr,
+                     axom::fmt::format("Contact interaction id {} is already registered with Tribol.", interaction_id));
+
   interactions_.emplace_back(interaction_id, mesh_, bdry_attr_surf1, bdry_attr_surf2, current_coords_, contact_opts);
   if (contact_opts.enforcement == ContactEnforcement::LagrangeMultiplier) {
     have_lagrange_multipliers_ = true;
@@ -56,10 +64,10 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
     contact_bdry_attribs[bdry_attr - 1] = 1;
   }
   // dofs for the current contact interaction
-  mfem::Array<int> contact_interaction_dofs_;
-  reference_nodes_->ParFESpace()->GetEssentialTrueDofs(contact_bdry_attribs, contact_interaction_dofs_);
+  mfem::Array<int> contact_interaction_dofs;
+  reference_nodes_->ParFESpace()->GetEssentialTrueDofs(contact_bdry_attribs, contact_interaction_dofs);
   // add dofs for current contact interaction call to all contact_dofs_
-  contact_dofs_.Append(contact_interaction_dofs_.GetData(), contact_interaction_dofs_.Size());
+  contact_dofs_.Append(contact_interaction_dofs);
   // sort and delete duplicates
   contact_dofs_.Sort();
   contact_dofs_.Unique();

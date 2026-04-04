@@ -12,7 +12,6 @@
 
 #pragma once
 
-#include <algorithm>
 #include <charconv>
 #include <memory>
 #include <optional>
@@ -124,6 +123,16 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     SolidMechanicsBase::resetStates(cycle, time);
     forces_ = 0.0;
+    for (auto& [_, force] : contact_interaction_forces_) {
+      if (force) {
+        *force = 0.0;
+      }
+    }
+    for (auto& [_, seed] : contact_interaction_force_adjoint_bcs_) {
+      if (seed) {
+        *seed = 0.0;
+      }
+    }
     contact_.reset();
     double dt = 0.0;
     mfem::Vector p(contact_.numPressureDofs());
@@ -224,59 +233,28 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     SLIC_ERROR_ROOT_IF(!is_quasistatic_, "Contact can only be applied to quasistatic problems.");
     SLIC_ERROR_ROOT_IF(order > 1, "Contact can only be applied to linear (order = 1) meshes.");
 
-    const auto interaction_force_name = detail::addPrefix(name_, axom::fmt::format("contact_force_{}", interaction_id));
+    // Disallow duplicates for this physics module. Tribol ids are global, so reusing the same interaction_id is an
+    // error even if ContactData rejects it later.
+    SLIC_ERROR_ROOT_IF(
+        contact_interaction_forces_.find(interaction_id) != contact_interaction_forces_.end(),
+        axom::fmt::format("Contact interaction id {} already exists for physics module '{}'.", interaction_id, name_));
 
-    // Allow multiple calls with the same interaction_id; the new interaction overwrites the old one.
-    // Reuse previously-allocated objects so we don't invalidate pointers stored in BasePhysics vectors.
-    {
-      auto it = contact_interaction_forces_.find(interaction_id);
-      if (it == contact_interaction_forces_.end()) {
-        auto interaction_force_dual =
-            std::make_unique<FiniteElementDual>(StateManager::newDual(displacement_.space(), interaction_force_name));
-        *interaction_force_dual = 0.0;
-        duals_.push_back(interaction_force_dual.get());
-        contact_interaction_forces_.emplace(interaction_id, std::move(interaction_force_dual));
-      } else {
-        *it->second = 0.0;
-      }
-    }
-
-    {
-      const auto force_adjoint_bcs_name =
-          detail::addPrefix(name_, axom::fmt::format("contact_force_adjoint_bcs_{}", interaction_id));
-      auto it = contact_interaction_force_adjoint_bcs_.find(interaction_id);
-      if (it == contact_interaction_force_adjoint_bcs_.end()) {
-        auto force_adjoint_bcs = std::make_unique<FiniteElementState>(displacement_.space(), force_adjoint_bcs_name);
-        *force_adjoint_bcs = 0.0;
-        this->dual_adjoints_.push_back(force_adjoint_bcs.get());
-        contact_interaction_force_adjoint_bcs_.emplace(interaction_id, std::move(force_adjoint_bcs));
-      } else {
-        *it->second = 0.0;
-      }
-    }
-
-    {
-      const auto sens_name =
-          detail::addPrefix(name_, axom::fmt::format("contact_shape_sensitivity_{}", interaction_id));
-      auto it = contact_interaction_shape_sensitivities_.find(interaction_id);
-      if (it == contact_interaction_shape_sensitivities_.end()) {
-        auto sens = std::make_unique<FiniteElementDual>(BasePhysics::shapeDisplacementSensitivity().space(), sens_name);
-        *sens = 0.0;
-        contact_interaction_shape_sensitivities_.emplace(interaction_id, std::move(sens));
-      } else {
-        *it->second = 0.0;
-      }
-    }
-
-    {
-      auto insert_pos = std::lower_bound(contact_interaction_ids_sorted_.begin(), contact_interaction_ids_sorted_.end(),
-                                         interaction_id);
-      if (insert_pos == contact_interaction_ids_sorted_.end() || *insert_pos != interaction_id) {
-        contact_interaction_ids_sorted_.insert(insert_pos, interaction_id);
-      }
-    }
-
+    // Register with Tribol via ContactData (includes global uniqueness check).
     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts);
+
+    const auto interaction_force_name = detail::addPrefix(name_, axom::fmt::format("contact_force_{}", interaction_id));
+    auto interaction_force_dual =
+        std::make_unique<FiniteElementDual>(StateManager::newDual(displacement_.space(), interaction_force_name));
+    *interaction_force_dual = 0.0;
+    duals_.push_back(interaction_force_dual.get());
+    contact_interaction_forces_.emplace(interaction_id, std::move(interaction_force_dual));
+
+    const auto force_adjoint_bcs_name =
+        detail::addPrefix(name_, axom::fmt::format("contact_force_adjoint_bcs_{}", interaction_id));
+    auto force_adjoint_bcs = std::make_unique<FiniteElementState>(displacement_.space(), force_adjoint_bcs_name);
+    *force_adjoint_bcs = 0.0;
+    this->dual_adjoints_.push_back(force_adjoint_bcs.get());
+    contact_interaction_force_adjoint_bcs_.emplace(interaction_id, std::move(force_adjoint_bcs));
   }
 
   /// @overload
@@ -284,9 +262,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     auto dual_names = SolidMechanicsBase::dualNames();
     dual_names.push_back("contact_forces");
-    for (int interaction_id : contact_interaction_ids_sorted_) {
-      dual_names.push_back(axom::fmt::format("contact_force_{}", interaction_id));
+#ifdef SMITH_USE_TRIBOL
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      dual_names.push_back(axom::fmt::format("contact_force_{}", interaction.getInteractionId()));
     }
+#endif
     return dual_names;
   }
 
@@ -745,14 +725,9 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   /// per-interaction contact forces for output
   std::unordered_map<int, std::unique_ptr<FiniteElementDual>> contact_interaction_forces_;
 
-  /// sorted list of all contact interaction ids
-  std::vector<int> contact_interaction_ids_sorted_;
-
   /// per-interaction dual-adjoint (BC) fields for contact force duals
   std::unordered_map<int, std::unique_ptr<FiniteElementState>> contact_interaction_force_adjoint_bcs_;
 
-  /// contact-only shape sensitivities (not stored in StateManager)
-  std::unordered_map<int, std::unique_ptr<FiniteElementDual>> contact_interaction_shape_sensitivities_;
   /// contactDOFProlongationOperator
   std::unique_ptr<mfem::HypreParMatrix> contact_dof_prolongation_;
 
