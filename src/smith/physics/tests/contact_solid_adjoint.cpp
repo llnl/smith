@@ -327,8 +327,14 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionForceMagnitudeQoiShape
   displacement_adjoint_load = 0.0;
   J00->MultTranspose(f_base, displacement_adjoint_load);
 
-  // Our shape sensitivity has an explicit term (dJ/d(shape) with u=const) which is only dependent on the contact
-  // interaction force ( = f_contact,i^T * d(f_contact,i)/d(shape) )
+  // Our shape sensitivity has an explicit term (dJ/d(shape) with u=const) which depends only on the contact
+  // interaction force:
+  //   dJ/d(shape) = (df_contact,i/d(shape))^T * f_contact,i
+  //
+  // In this contact implementation, the shape displacement DOFs enter the current coordinates additively in the same
+  // way as the displacement DOFs (see ContactData::setDisplacements), so:
+  //   df_contact,i/d(shape) = df_contact,i/du
+  // and we can reuse the (0,0) Jacobian block J00 = df_contact,i/du.
   FiniteElementDual explicit_shape_term(solid_solver->shapeDisplacement().space(), "contact_force_qoi_explicit_shape");
   explicit_shape_term = 0.0;
   J00->MultTranspose(f_base, explicit_shape_term);
