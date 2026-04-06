@@ -470,29 +470,6 @@ enum SubSpaceOptions
   ALWAYS
 };
 
-/// Per-block nonlinear convergence tolerances.
-struct BlockConvergenceTolerances {
-  /// Relative residual tolerances, one per residual block.
-  std::vector<double> relative_tols = {};
-
-  /// Absolute residual tolerances, one per residual block.
-  std::vector<double> absolute_tols = {};
-
-  /// @brief Return true if no per-block overrides are present.
-  bool empty() const { return relative_tols.empty() && absolute_tols.empty(); }
-
-  /// @brief Scale all tolerances by a factor.
-  void scale(double factor)
-  {
-    for (auto& tol : relative_tols) {
-      tol *= factor;
-    }
-    for (auto& tol : absolute_tols) {
-      tol *= factor;
-    }
-  }
-};
-
 // _nonlinear_options_start
 /// Nonlinear solution scheme parameters
 struct NonlinearSolverOptions {
@@ -516,9 +493,6 @@ struct NonlinearSolverOptions {
 
   /// Debug print level
   int print_level = 0;
-
-  /// Optional per-block convergence tolerances used by NonlinearBlockSolver convergence checks.
-  BlockConvergenceTolerances block_tolerances = {};
 
   /// Scaling for the initial trust region size
   double trust_region_scaling = 0.1;

@@ -18,65 +18,6 @@
 
 namespace smith {
 
-namespace {
-
-BlockConvergenceTolerances extractSingleBlockTolerances(const CoupledSystemSolver::Stage& stage, size_t local_index)
-{
-  BlockConvergenceTolerances result;
-  if (!stage.block_tolerances.relative_tols.empty()) {
-    result.relative_tols = {stage.block_tolerances.relative_tols.at(local_index)};
-  }
-  if (!stage.block_tolerances.absolute_tols.empty()) {
-    result.absolute_tols = {stage.block_tolerances.absolute_tols.at(local_index)};
-  }
-  return result;
-}
-
-void validateStageToleranceSizes(const CoupledSystemSolver::Stage& stage, size_t expected_blocks, size_t stage_index)
-{
-  if (!stage.block_tolerances.relative_tols.empty()) {
-    SLIC_ERROR_IF(stage.block_tolerances.relative_tols.size() != expected_blocks,
-                  axom::fmt::format("Stage {} relative_tols size {} does not match number of stage blocks {}",
-                                    stage_index, stage.block_tolerances.relative_tols.size(), expected_blocks));
-  }
-  if (!stage.block_tolerances.absolute_tols.empty()) {
-    SLIC_ERROR_IF(stage.block_tolerances.absolute_tols.size() != expected_blocks,
-                  axom::fmt::format("Stage {} absolute_tols size {} does not match number of stage blocks {}",
-                                    stage_index, stage.block_tolerances.absolute_tols.size(), expected_blocks));
-  }
-}
-
-void validateStageToleranceLooseness(const CoupledSystemSolver::Stage& stage, size_t stage_index)
-{
-  if (stage.block_tolerances.empty()) {
-    return;
-  }
-
-  auto* equation_block_solver = dynamic_cast<const NonlinearBlockSolver*>(stage.solver.get());
-  SLIC_ERROR_IF(!equation_block_solver,
-                axom::fmt::format("Stage {} uses stage-local tolerances, but the solver does not support tolerance "
-                                  "introspection",
-                                  stage_index));
-
-  size_t num_blocks = stage.block_indices.size();
-  BlockConvergenceTolerances no_overrides{};
-  auto solver_relative_tols = equation_block_solver->effectiveRelativeTolerances(num_blocks, no_overrides);
-  auto solver_absolute_tols = equation_block_solver->effectiveAbsoluteTolerances(num_blocks, no_overrides);
-  auto stage_relative_tols = equation_block_solver->effectiveRelativeTolerances(num_blocks, stage.block_tolerances);
-  auto stage_absolute_tols = equation_block_solver->effectiveAbsoluteTolerances(num_blocks, stage.block_tolerances);
-
-  for (size_t i = 0; i < num_blocks; ++i) {
-    SLIC_ERROR_IF(stage_relative_tols[i] < solver_relative_tols[i],
-                  axom::fmt::format("Stage {} block {} relative tolerance {} is tighter than solver tolerance {}",
-                                    stage_index, i, stage_relative_tols[i], solver_relative_tols[i]));
-    SLIC_ERROR_IF(stage_absolute_tols[i] < solver_absolute_tols[i],
-                  axom::fmt::format("Stage {} block {} absolute tolerance {} is tighter than solver tolerance {}",
-                                    stage_index, i, stage_absolute_tols[i], solver_absolute_tols[i]));
-  }
-}
-
-}  // namespace
-
 CoupledSystemSolver::CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolverBase> single_solver)
     : max_staggered_iterations_(1), exact_staggered_steps_(false)
 {
@@ -90,19 +31,13 @@ CoupledSystemSolver::CoupledSystemSolver(int max_staggered_iterations, bool exac
 }
 
 void CoupledSystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
-                                             std::shared_ptr<NonlinearBlockSolverBase> solver,
-                                             BlockConvergenceTolerances block_tolerances, double relaxation_factor)
+                                             std::shared_ptr<NonlinearBlockSolverBase> solver, double relaxation_factor)
 {
   SLIC_ERROR_IF(!solver, "CoupledSystemSolver stage solver must be non-null");
   SLIC_ERROR_IF(relaxation_factor <= 0.0 || relaxation_factor > 1.0,
                 axom::fmt::format("Stage relaxation_factor {} must be in (0, 1]", relaxation_factor));
 
-  Stage stage{block_indices, std::move(solver), std::move(block_tolerances), relaxation_factor};
-  if (!stage.block_indices.empty()) {
-    validateStageToleranceSizes(stage, stage.block_indices.size(), stages_.size());
-    validateStageToleranceLooseness(stage, stages_.size());
-  }
-  stages_.push_back(std::move(stage));
+  stages_.push_back(Stage{block_indices, std::move(solver), relaxation_factor});
 }
 
 std::vector<FieldState> CoupledSystemSolver::solve(
@@ -121,11 +56,6 @@ std::vector<FieldState> CoupledSystemSolver::solve(
       std::iota(stage.block_indices.begin(), stage.block_indices.end(), 0);
     }
   }
-  for (size_t s = 0; s < active_stages.size(); ++s) {
-    validateStageToleranceSizes(active_stages[s], active_stages[s].block_indices.size(), s);
-    validateStageToleranceLooseness(active_stages[s], s);
-  }
-
   // Set the inner tolerance factor based on the number of stages.  For single-stage
   // solves, we don't want to reduce the tolerances as that's pointless and
   // unintuitive.  For multi-stage solves, we want a tighter inner solve to
@@ -168,8 +98,7 @@ std::vector<FieldState> CoupledSystemSolver::solve(
     for (size_t i = 0; i < num_stage_blocks; ++i) {
       stage_init_residuals.push_back(eval_residual_and_zero_bcs(stage.block_indices[i]));
     }
-    stage.solver->primeConvergenceContext(stage_init_residuals, stage.block_tolerances,
-                                          stage_convergence_contexts[stage_idx]);
+    stage.solver->primeConvergenceContext(stage_init_residuals, stage_convergence_contexts[stage_idx]);
   }
 
   for (int iter = 0; iter < max_staggered_iterations_; ++iter) {
@@ -234,8 +163,7 @@ std::vector<FieldState> CoupledSystemSolver::solve(
         for (size_t i = 0; i < num_stage_blocks; ++i) {
           stage_residuals.push_back(eval_residual_and_zero_bcs(stage.block_indices[i]));
         }
-        auto stage_status = stage.solver->convergenceStatus(1.0, stage_residuals, stage.block_tolerances,
-                                                            stage_convergence_contexts[s]);
+        auto stage_status = stage.solver->convergenceStatus(1.0, stage_residuals, stage_convergence_contexts[s]);
 
         if (!stage_status.converged) {
           all_converged = false;
@@ -268,29 +196,26 @@ std::shared_ptr<CoupledSystemSolver> CoupledSystemSolver::singleBlockSolver(size
       auto result = std::make_shared<CoupledSystemSolver>(1, exact_staggered_steps);
       std::shared_ptr<NonlinearBlockSolverBase> stage_solver = stage.solver;
       if (const auto* equation_solver = dynamic_cast<const NonlinearBlockSolver*>(stage.solver.get())) {
-        if (auto cloned_solver = equation_solver->cloneFresh(block_index)) {
+        if (auto cloned_solver = equation_solver->cloneFresh()) {
           stage_solver = cloned_solver;
         }
       }
-      Stage single_stage{{0}, stage_solver, extractSingleBlockTolerances(stage, block_index), stage.relaxation_factor};
-      result->addSubsystemSolver(single_stage.block_indices, single_stage.solver, single_stage.block_tolerances,
-                                 single_stage.relaxation_factor);
+      Stage single_stage{{0}, stage_solver, stage.relaxation_factor};
+      result->addSubsystemSolver(single_stage.block_indices, single_stage.solver, single_stage.relaxation_factor);
       return result;
     }
 
     auto found = std::find(stage.block_indices.begin(), stage.block_indices.end(), block_index);
     if (found != stage.block_indices.end()) {
       auto result = std::make_shared<CoupledSystemSolver>(1, exact_staggered_steps);
-      const size_t local_index = static_cast<size_t>(std::distance(stage.block_indices.begin(), found));
       std::shared_ptr<NonlinearBlockSolverBase> stage_solver = stage.solver;
       if (const auto* equation_solver = dynamic_cast<const NonlinearBlockSolver*>(stage.solver.get())) {
-        if (auto cloned_solver = equation_solver->cloneFresh(local_index)) {
+        if (auto cloned_solver = equation_solver->cloneFresh()) {
           stage_solver = cloned_solver;
         }
       }
-      Stage single_stage{{0}, stage_solver, extractSingleBlockTolerances(stage, local_index), stage.relaxation_factor};
-      result->addSubsystemSolver(single_stage.block_indices, single_stage.solver, single_stage.block_tolerances,
-                                 single_stage.relaxation_factor);
+      Stage single_stage{{0}, stage_solver, stage.relaxation_factor};
+      result->addSubsystemSolver(single_stage.block_indices, single_stage.solver, single_stage.relaxation_factor);
       return result;
     }
   }

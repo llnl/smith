@@ -110,18 +110,6 @@ class ManagedHalvingSolver : public mfem::NewtonSolver, public smith::Convergenc
   std::shared_ptr<smith::EquationSolverConvergenceManager> convergence_manager_ = nullptr;
 };
 
-void expectBlockOnlyConvergence(const smith::EquationSolver& eq_solver, const TwoBlockQuadraticOperator& op,
-                                const mfem::Vector& solution, double global_rel_tol)
-{
-  mfem::Vector residual(2);
-  op.Mult(solution, residual);
-
-  EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
-  EXPECT_LT(std::abs(residual(0)), 0.2);
-  EXPECT_LT(std::abs(residual(1)), 20.0);
-  EXPECT_GT(eq_solver.nonlinearSolver().GetFinalNorm(), global_rel_tol * eq_solver.nonlinearSolver().GetInitialNorm());
-}
-
 }  // namespace
 
 class EquationSolverSuite : public testing::TestWithParam<param_t> {
@@ -218,38 +206,7 @@ TEST_P(EquationSolverSuite, All)
   }
 }
 
-class BlockConvergenceEquationSolverSuite : public testing::TestWithParam<NonlinearSolver> {};
-
-TEST_P(BlockConvergenceEquationSolverSuite, StopsOnPerBlockInnerConvergence)
-{
-  TwoBlockQuadraticOperator residual_opr;
-
-  const LinearSolverOptions lin_opts = {.linear_solver = LinearSolver::CG,
-                                        .preconditioner = Preconditioner::HypreJacobi,
-                                        .relative_tol = 1.0e-14,
-                                        .absolute_tol = 1.0e-14,
-                                        .max_iterations = 20,
-                                        .print_level = 0};
-
-  const double global_rel_tol = 1.0e-2;
-  const NonlinearSolverOptions nonlin_opts = {.nonlin_solver = GetParam(),
-                                              .relative_tol = global_rel_tol,
-                                              .absolute_tol = 0.0,
-                                              .max_iterations = 10,
-                                              .print_level = 0};
-
-  EquationSolver eq_solver(nonlin_opts, lin_opts);
-  eq_solver.setConvergenceBlockData({0, 1, 2}, {.relative_tols = {0.2, 0.2}});
-  eq_solver.setOperator(residual_opr);
-
-  mfem::Vector x(2);
-  x = 1.0;
-  eq_solver.solve(x);
-
-  expectBlockOnlyConvergence(eq_solver, residual_opr, x, global_rel_tol);
-}
-
-TEST(EquationSolverManualConvergence, InjectedManagedSolverSupportsPerBlockConvergence)
+TEST(EquationSolverManualConvergence, InjectedManagedSolverSupportsScalarConvergence)
 {
   auto nonlinear_solver = std::make_unique<ManagedHalvingSolver>();
   nonlinear_solver->SetRelTol(1.0e-2);
@@ -261,14 +218,18 @@ TEST(EquationSolverManualConvergence, InjectedManagedSolverSupportsPerBlockConve
   EquationSolver eq_solver(std::move(nonlinear_solver), std::move(linear_solver));
 
   TwoBlockQuadraticOperator residual_opr;
-  eq_solver.setConvergenceBlockData({0, 1, 2}, {.relative_tols = {0.2, 0.2}}, 0.0, 1.0e-2, MPI_COMM_WORLD);
+  eq_solver.setConvergenceTolerances(0.0, 1.0e-2, MPI_COMM_WORLD);
   eq_solver.setOperator(residual_opr);
 
   mfem::Vector x(2);
   x = 1.0;
   eq_solver.solve(x);
 
-  expectBlockOnlyConvergence(eq_solver, residual_opr, x, 1.0e-2);
+  mfem::Vector residual(2);
+  residual_opr.Mult(x, residual);
+
+  EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
+  EXPECT_LE(residual.Norml2(), 1.0e-2 * eq_solver.nonlinearSolver().GetInitialNorm());
 }
 
 /**
@@ -318,10 +279,6 @@ INSTANTIATE_TEST_SUITE_P(AllEquationSolverTests, EquationSolverSuite,
                                                  std::get<2>(test_info.param));
                            return name;
                          });
-
-INSTANTIATE_TEST_SUITE_P(BlockConvergenceBackends, BlockConvergenceEquationSolverSuite,
-                         testing::Values(NonlinearSolver::Newton, NonlinearSolver::NewtonLineSearch,
-                                         NonlinearSolver::TrustRegion));
 
 int main(int argc, char* argv[])
 {

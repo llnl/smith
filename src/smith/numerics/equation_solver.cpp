@@ -147,7 +147,6 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
         status = convergence_manager_->evaluate(1.0, rOut);
       } else {
         status.block_norms = {Norm(rOut)};
-        status.block_goals = {0.0};
         status.global_norm = status.block_norms.front();
         status.global_goal = std::max(rel_tol * initial_norm, abs_tol);
         status.global_converged = status.global_norm <= status.global_goal;
@@ -749,7 +748,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         status = convergence_manager_->evaluate(1.0, r_);
       } else {
         status.block_norms = {status.global_norm};
-        status.block_goals = {0.0};
         status.global_goal = std::max(rel_tol * initial_norm, abs_tol);
         status.global_converged = status.global_norm <= status.global_goal;
         status.converged = status.global_converged;
@@ -1095,24 +1093,9 @@ void EquationSolver::setOperator(const mfem::Operator& op)
   }
 }
 
-void EquationSolver::setConvergenceBlockData(const std::vector<int>& block_offsets,
-                                             const BlockConvergenceTolerances& block_tolerances) const
-{
-  if (!convergence_manager_) {
-    return;
-  }
-
-  convergence_manager_->setBlockData(block_offsets, block_tolerances);
-
-  attachConvergenceManager();
-}
-
-void EquationSolver::setConvergenceBlockData(const std::vector<int>& block_offsets,
-                                             const BlockConvergenceTolerances& block_tolerances, double abs_tol,
-                                             double rel_tol, MPI_Comm comm) const
+void EquationSolver::setConvergenceTolerances(double abs_tol, double rel_tol, MPI_Comm comm) const
 {
   initializeConvergenceManager(abs_tol, rel_tol, comm);
-  setConvergenceBlockData(block_offsets, block_tolerances);
 }
 
 void EquationSolver::resetConvergenceState() const

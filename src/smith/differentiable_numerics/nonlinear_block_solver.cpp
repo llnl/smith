@@ -62,37 +62,20 @@ void initializeSolver(mfem::Solver* mfem_solver, const smith::FiniteElementState
 #endif
 }
 
-std::vector<double> NonlinearBlockSolver::effectiveRelativeTolerances(
-    size_t num_blocks, const BlockConvergenceTolerances& tolerance_overrides) const
-{
-  const auto& relative_tols =
-      tolerance_overrides.relative_tols.empty() ? block_tolerances_.relative_tols : tolerance_overrides.relative_tols;
-  return expandPerBlockTolerances(relative_tols, num_blocks, 0.0, "relative block tolerances");
-}
-
-std::vector<double> NonlinearBlockSolver::effectiveAbsoluteTolerances(
-    size_t num_blocks, const BlockConvergenceTolerances& tolerance_overrides) const
-{
-  const auto& absolute_tols =
-      tolerance_overrides.absolute_tols.empty() ? block_tolerances_.absolute_tols : tolerance_overrides.absolute_tols;
-  return expandPerBlockTolerances(absolute_tols, num_blocks, 0.0, "absolute block tolerances");
-}
-
 NonlinearBlockSolver::NonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol,
-                                           double rel_tol, BlockConvergenceTolerances block_tolerances,
+                                           double rel_tol,
                                            std::optional<NonlinearSolverOptions> retained_nonlinear_options,
                                            std::optional<LinearSolverOptions> retained_linear_options)
     : nonlinear_solver_(std::move(s)),
       comm_(comm),
       abs_tol_(abs_tol),
       rel_tol_(rel_tol),
-      block_tolerances_(std::move(block_tolerances)),
       retained_nonlinear_options_(std::move(retained_nonlinear_options)),
       retained_linear_options_(std::move(retained_linear_options))
 {
 }
 
-std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh(std::optional<size_t> local_block_index) const
+std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh() const
 {
   if (!retained_nonlinear_options_ || !retained_linear_options_) {
     return nullptr;
@@ -101,21 +84,9 @@ std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh(std::opti
   auto nonlinear_opts = *retained_nonlinear_options_;
   const auto linear_opts = *retained_linear_options_;
 
-  if (local_block_index.has_value()) {
-    if (!nonlinear_opts.block_tolerances.relative_tols.empty()) {
-      nonlinear_opts.block_tolerances.relative_tols = {
-          nonlinear_opts.block_tolerances.relative_tols.at(*local_block_index)};
-    }
-    if (!nonlinear_opts.block_tolerances.absolute_tols.empty()) {
-      nonlinear_opts.block_tolerances.absolute_tols = {
-          nonlinear_opts.block_tolerances.absolute_tols.at(*local_block_index)};
-    }
-  }
-
   auto solver = std::make_unique<EquationSolver>(nonlinear_opts, linear_opts, comm_);
   return std::make_shared<NonlinearBlockSolver>(std::move(solver), comm_, nonlinear_opts.absolute_tol,
-                                                nonlinear_opts.relative_tol, nonlinear_opts.block_tolerances,
-                                                nonlinear_opts, linear_opts);
+                                                nonlinear_opts.relative_tol, nonlinear_opts, linear_opts);
 }
 
 void NonlinearBlockSolver::completeSetup(const std::vector<FieldT>&)
@@ -125,25 +96,16 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldT>&)
 
 ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
                                                           const std::vector<mfem::Vector>& residuals,
-                                                          const BlockConvergenceTolerances& tolerance_overrides,
                                                           NonlinearConvergenceContext& context) const
 {
-  size_t num_blocks = residuals.size();
-  auto relative_tols = effectiveRelativeTolerances(num_blocks, tolerance_overrides);
-  auto absolute_tols = effectiveAbsoluteTolerances(num_blocks, tolerance_overrides);
-  bool block_path_enabled = !tolerance_overrides.relative_tols.empty() || !tolerance_overrides.absolute_tols.empty() ||
-                            !block_tolerances_.relative_tols.empty() || !block_tolerances_.absolute_tols.empty();
   auto block_norms = computeResidualBlockNorms(residuals, comm_);
-
-  return evaluateResidualConvergence(tolerance_multiplier, abs_tol_, rel_tol_, absolute_tols, relative_tols,
-                                     block_path_enabled, block_norms, context);
+  return evaluateResidualConvergence(tolerance_multiplier, abs_tol_, rel_tol_, block_norms, context);
 }
 
 void NonlinearBlockSolver::primeConvergenceContext(const std::vector<mfem::Vector>& residuals,
-                                                   const BlockConvergenceTolerances& tolerance_overrides,
                                                    NonlinearConvergenceContext& context) const
 {
-  static_cast<void>(convergenceStatus(1.0, residuals, tolerance_overrides, context));
+  static_cast<void>(convergenceStatus(1.0, residuals, context));
 }
 
 std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
@@ -166,11 +128,6 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
     block_offsets[row_i + 1] = u_guesses[static_cast<size_t>(row_i)]->space().TrueVSize();
   }
   block_offsets.PartialSum();
-  std::vector<int> local_block_offsets(static_cast<size_t>(block_offsets.Size()));
-  for (int i = 0; i < block_offsets.Size(); ++i) {
-    local_block_offsets[static_cast<size_t>(i)] = block_offsets[i];
-  }
-
   auto block_u = std::make_unique<mfem::BlockVector>(block_offsets);
   for (int row_i = 0; row_i < num_rows; ++row_i) {
     block_u->GetBlock(row_i) = *u_guesses[static_cast<size_t>(row_i)];
@@ -225,10 +182,8 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
         }
         return *block_jac_;
       });
-  BlockConvergenceTolerances scaled_block_tols = block_tolerances_;
-  scaled_block_tols.scale(inner_tol_multiplier_);
-  nonlinear_solver_->setConvergenceBlockData(local_block_offsets, scaled_block_tols, inner_tol_multiplier_ * abs_tol_,
-                                             inner_tol_multiplier_ * rel_tol_, comm_);
+  nonlinear_solver_->setConvergenceTolerances(inner_tol_multiplier_ * abs_tol_, inner_tol_multiplier_ * rel_tol_,
+                                              comm_);
   nonlinear_solver_->setOperator(*residual_op_);
   nonlinear_solver_->solve(*block_u);
 
@@ -301,8 +256,7 @@ std::shared_ptr<NonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverO
 {
   auto solid_solver = std::make_unique<EquationSolver>(nonlinear_opts, linear_opts, mesh.getComm());
   return std::make_shared<NonlinearBlockSolver>(std::move(solid_solver), mesh.getComm(), nonlinear_opts.absolute_tol,
-                                                nonlinear_opts.relative_tol, nonlinear_opts.block_tolerances,
-                                                nonlinear_opts, linear_opts);
+                                                nonlinear_opts.relative_tol, nonlinear_opts, linear_opts);
 }
 
 }  // namespace smith

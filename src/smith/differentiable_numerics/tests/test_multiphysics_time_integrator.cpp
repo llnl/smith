@@ -46,30 +46,16 @@ class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
   }
 
   ConvergenceStatus convergenceStatus(double, const std::vector<mfem::Vector>& residuals,
-                                      const BlockConvergenceTolerances&, NonlinearConvergenceContext&) const override
+                                      NonlinearConvergenceContext&) const override
   {
     ConvergenceStatus status;
     status.global_converged = true;
     status.converged = true;
     status.block_norms.resize(residuals.size(), 0.0);
-    status.block_goals.resize(residuals.size(), 0.0);
     return status;
   }
 
-  void primeConvergenceContext(const std::vector<mfem::Vector>&, const BlockConvergenceTolerances&,
-                               NonlinearConvergenceContext&) const override
-  {
-  }
-
-  std::vector<double> effectiveRelativeTolerances(size_t num_blocks, const BlockConvergenceTolerances&) const override
-  {
-    return std::vector<double>(num_blocks, 0.0);
-  }
-
-  std::vector<double> effectiveAbsoluteTolerances(size_t num_blocks, const BlockConvergenceTolerances&) const override
-  {
-    return std::vector<double>(num_blocks, 0.0);
-  }
+  void primeConvergenceContext(const std::vector<mfem::Vector>&, NonlinearConvergenceContext&) const override {}
 
   int solveCalls() const { return solve_calls_; }
 
@@ -275,9 +261,8 @@ TEST(CoupledSystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequested
   const std::vector<std::vector<FieldState>> params(residuals.size());
   const auto bc_managers = field_store->getBoundaryConditionManagers();
 
-  auto solved_states =
-      derived_single_block_solver->solve(residuals, block_indices, field_store->getShapeDisp(), states, params,
-                                         TimeInfo(0.0, 1.0, 0), bc_managers);
+  auto solved_states = derived_single_block_solver->solve(residuals, block_indices, field_store->getShapeDisp(), states,
+                                                          params, TimeInfo(0.0, 1.0, 0), bc_managers);
 
   EXPECT_EQ(solved_states.size(), 2);
   EXPECT_EQ(recording_solver->solveCalls(), 1);

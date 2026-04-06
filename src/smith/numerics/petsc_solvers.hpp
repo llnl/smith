@@ -391,9 +391,6 @@ class PetscNewtonSolver : public mfem::NewtonSolver,
                           public mfem::PetscNonlinearSolver,
                           public smith::ConvergenceManagedNonlinearSolver {
  protected:
-  friend PetscErrorCode snesConvergenceGlobalOrBlock(SNES, PetscInt, PetscReal, PetscReal, PetscReal,
-                                                     SNESConvergedReason*, void*);
-
   /// @brief Convergence tolerance for norm of solution update
   mfem::real_t step_tol_ = PETSC_DEFAULT;
   /// @brief Type of PETSc nonlinear solver
