@@ -619,6 +619,9 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endif()
 
         add_subdirectory(${tribol_repo_dir}  ${CMAKE_BINARY_DIR}/tribol)
+
+        # Suppresses Tribol compiler warnings during build
+        blt_convert_to_system_includes(TARGET tribol)
         
         if(TRIBOL_ENABLE_PROFILING)
             unset(CALIPER_DIR CACHE)
