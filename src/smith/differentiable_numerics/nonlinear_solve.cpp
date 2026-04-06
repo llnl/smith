@@ -150,7 +150,9 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         residuals[row_i] = residual_evals[row_i]->residual(time_info, shape_disp_ptr.get(),
                                                            getConstFieldPointers(input_fields[row_i]));
-        residuals[row_i].SetSubVector(bc_managers[row_i]->allEssentialTrueDofs(), 0.0);
+        if (bc_managers[row_i]) {
+          residuals[row_i].SetSubVector(bc_managers[row_i]->allEssentialTrueDofs(), 0.0);
+        }
       }
       return residuals;
     };
@@ -185,6 +187,9 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
       // Apply BCs to the block system
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+        if (!bc_managers[row_i]) {
+          continue;
+        }
         if (jacobians[row_i][row_i]) {
           jacobians[row_i][row_i]->EliminateBC(bc_managers[row_i]->allEssentialTrueDofs(),
                                                mfem::Operator::DiagonalPolicy::DIAG_ONE);
@@ -280,6 +285,9 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     // Apply BCs to the block system
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
+      if (!bc_managers[row_i]) {
+        continue;
+      }
       s_dual[row_i]->SetSubVector(bc_managers[row_i]->allEssentialTrueDofs(), 0.0);
 
       mfem::HypreParMatrix* Jii =
@@ -287,10 +295,14 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       delete Jii;
       for (size_t col_j = 0; col_j < num_rows; ++col_j) {
         if (col_j != row_i) {
-          jacobians[row_i][col_j]->EliminateRows(bc_managers[row_i]->allEssentialTrueDofs());
-          mfem::HypreParMatrix* Jji =
-              jacobians[col_j][row_i]->EliminateCols(bc_managers[row_i]->allEssentialTrueDofs());
-          delete Jji;
+          if (jacobians[row_i][col_j]) {
+            jacobians[row_i][col_j]->EliminateRows(bc_managers[row_i]->allEssentialTrueDofs());
+          }
+          if (jacobians[col_j][row_i]) {
+            mfem::HypreParMatrix* Jji =
+                jacobians[col_j][row_i]->EliminateCols(bc_managers[row_i]->allEssentialTrueDofs());
+            delete Jji;
+          }
         }
       }
     }

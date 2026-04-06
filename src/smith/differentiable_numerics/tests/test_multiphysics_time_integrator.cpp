@@ -35,6 +35,8 @@ class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
       const std::vector<FieldPtr>& u_guesses, std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)>,
       std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)>) const override
   {
+    ++solve_calls_;
+    last_num_unknowns_ = static_cast<int>(u_guesses.size());
     return u_guesses;
   }
 
@@ -69,7 +71,15 @@ class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
     return std::vector<double>(num_blocks, 0.0);
   }
 
+  int solveCalls() const { return solve_calls_; }
+
+  int lastNumUnknowns() const { return last_num_unknowns_; }
+
   void setInnerToleranceMultiplier(double) override {}
+
+ private:
+  mutable int solve_calls_ = 0;
+  mutable int last_num_unknowns_ = -1;
 };
 
 class CountingNoOpNonlinearBlockSolver : public NoOpNonlinearBlockSolver {
@@ -78,14 +88,8 @@ class CountingNoOpNonlinearBlockSolver : public NoOpNonlinearBlockSolver {
       const std::vector<FieldPtr>& u_guesses, std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> f,
       std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> j) const override
   {
-    ++solve_calls_;
     return NoOpNonlinearBlockSolver::solve(u_guesses, std::move(f), std::move(j));
   }
-
-  int solveCalls() const { return solve_calls_; }
-
- private:
-  mutable int solve_calls_ = 0;
 };
 
 class NeedsInitialSolveRule : public QuasiStaticRule {
@@ -233,6 +237,51 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSkippedForQuasiStaticSecondOrderRule)
   static_cast<void>(reactions);
 
   EXPECT_EQ(cycle_zero_block_solver->solveCalls(), 0);
+
+  StateManager::reset();
+}
+
+TEST(CoupledSystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequestedBlock)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "coupled_system_solver_single_block_characterization");
+
+  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(4, 4, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
+                                     "single_block_characterization_mesh");
+
+  auto field_store = std::make_shared<FieldStore>(mesh, 20);
+  field_store->addShapeDisp(FieldType<H1<1, 2>>("shape_displacement"));
+
+  auto quasi_static = std::make_shared<QuasiStaticRule>();
+  FieldType<H1<1>> temperature_type("temperature");
+  field_store->addIndependent(temperature_type, quasi_static);
+  FieldType<H1<1>> displacement_type("displacement");
+  field_store->addIndependent(displacement_type, quasi_static);
+
+  auto temperature_wf = buildScalarDiffusionWeakForm("temperature_main", mesh, field_store, temperature_type);
+  auto displacement_wf = buildScalarDiffusionWeakForm("displacement_main", mesh, field_store, displacement_type);
+
+  auto recording_solver = std::make_shared<NoOpNonlinearBlockSolver>();
+  auto monolithic_solver = std::make_shared<CoupledSystemSolver>(recording_solver);
+  auto derived_single_block_solver = monolithic_solver->singleBlockSolver(0);
+
+  ASSERT_NE(derived_single_block_solver, nullptr);
+
+  const std::vector<WeakForm*> residuals = {temperature_wf.get(), displacement_wf.get()};
+  const std::vector<std::string> residual_names = {"temperature_main", "displacement_main"};
+  const auto block_indices = field_store->indexMap(residual_names);
+  const std::vector<std::vector<FieldState>> states = {field_store->getStates("temperature_main"),
+                                                       field_store->getStates("displacement_main")};
+  const std::vector<std::vector<FieldState>> params(residuals.size());
+  const auto bc_managers = field_store->getBoundaryConditionManagers();
+
+  auto solved_states =
+      derived_single_block_solver->solve(residuals, block_indices, field_store->getShapeDisp(), states, params,
+                                         TimeInfo(0.0, 1.0, 0), bc_managers);
+
+  EXPECT_EQ(solved_states.size(), 2);
+  EXPECT_EQ(recording_solver->solveCalls(), 1);
+  EXPECT_EQ(recording_solver->lastNumUnknowns(), 1);
 
   StateManager::reset();
 }
