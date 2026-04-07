@@ -1,0 +1,158 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+
+#include <set>
+#include <string>
+#include <cmath>
+#include <memory>
+#include <utility>
+
+#include "axom/slic.hpp"
+#include "axom/inlet.hpp"
+#include "axom/CLI11.hpp"
+#include "mfem.hpp"
+#include "smith/smith.hpp"
+
+using namespace smith;
+
+/**
+ * @brief Run buckling cylinder example
+ *
+ * @note Based on doi:10.1016/j.cma.2014.08.012
+ */
+int main(int argc, char* argv[])
+{
+  constexpr int dim = 3;
+  constexpr int p = 1;
+
+  // Command line arguments
+  // Mesh options
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
+  double dt = 0.1;
+
+  // Solver options
+  NonlinearSolverOptions nonlinear_options = solid_mechanics::default_nonlinear_options;
+  nonlinear_options.nonlin_solver = smith::NonlinearSolver::TrustRegion;
+  nonlinear_options.relative_tol = 1e-6;
+  nonlinear_options.absolute_tol = 1e-10;
+  nonlinear_options.min_iterations = 1;
+  nonlinear_options.max_iterations = 500;
+  nonlinear_options.max_line_search_iterations = 20;
+  nonlinear_options.print_level = 1;
+
+  LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
+  linear_options.linear_solver = smith::LinearSolver::CG;
+  linear_options.preconditioner = smith::Preconditioner::HypreAMG;
+  linear_options.relative_tol = 1e-8;
+  linear_options.absolute_tol = 1e-16;
+  linear_options.max_iterations = 2000;
+
+  // Initialize and automatically finalize MPI and other libraries
+  smith::ApplicationManager applicationManager(argc, argv);
+
+  // Handle command line arguments
+  axom::CLI::App app{"Viscoelastic buckling of a curved shell"};
+  // Mesh options
+  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")->check(axom::CLI::PositiveNumber);
+  app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps")
+      ->check(axom::CLI::PositiveNumber);
+  // Solver options
+  app.add_option("--nonlinear-solver", nonlinear_options.nonlin_solver,
+                 "Nonlinear solver (Index of enum smith::NonlinearSolver)")
+      ->expected(0, 10);
+  app.add_option("--linear-solver", linear_options.linear_solver, "Linear solver (Index of enum smith::LinearSolver)")
+      ->expected(0, 5);
+  app.add_option("--preconditioner", linear_options.preconditioner,
+                 "Preconditioner (Index of enum smith::NonlinearSolver)")
+      ->expected(0, 7);
+  app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
+                 "Petsc preconditioner (Index of enum smith::PetscPCType)")
+      ->expected(0, 14);
+  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")->check(axom::CLI::PositiveNumber);
+  // Contact options
+  auto opt_contact =
+      app.add_flag("--contact,!--no-contact", use_contact, "Use contact for the inner faces of the cylinder");
+  app.add_option("--penalty", penalty, "Penalty for contact")->needs(opt_contact)->check(axom::CLI::PositiveNumber);
+  // Misc options
+  app.add_flag("--fast", use_fast_options, "Reduce max iterations and delta-time for testing purposes.");
+  app.set_help_flag("--help");
+
+  // Need to allow extra arguments for PETSc support
+  app.allow_extras();
+  CLI11_PARSE(app, argc, argv);
+
+    // Create DataStore
+  std::string name = "viscoelastic_buckling";
+  std::string mesh_tag = "mesh";
+  axom::sidre::DataStore datastore;
+  smith::StateManager::initialize(datastore, name + "_data");
+
+  // Create and refine mesh
+  std::string filename = SMITH_REPO_DIR "/data/meshes/hemispherical_cap.g";
+  auto mesh = std::make_shared<smith::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
+
+  // Surfaces for boundary conditions
+  mesh->addDomainOfBoundaryElements("xsymm", smith::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("zsymm", smith::by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("bottom", smith::by_attr<dim>(3));
+  mesh->addDomainOfBoundaryElements("top", smith::by_attr<dim>(4));
+
+  // Create solver, either with or without contact
+  std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
+  solid_solver = std::make_unique<smith::SolidMechanics<p, dim>>(
+      nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh);
+
+  solid_solver->setTraction([&](auto&, double t) { return std::sin(2*M_PI*t); }, mesh->domain("top"));
+
+  // Define a Neo-Hookean material
+  auto lambda = 1.0;
+  auto G = 0.1;
+  solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
+  solid_solver->setMaterial(mat, mesh->entireBody());
+
+  // Set up essential boundary conditions
+  // Bottom of cylinder is fixed
+  solid_solver->setFixedBCs(mesh->domain("bottom"));
+
+#if 0
+  // displacement control, for comparison
+  auto compress = [&](const smith::tensor<double, dim>, double t) {
+    smith::tensor<double, dim> u{};
+    u[0] = u[2] = -1.35 / std::sqrt(2.0) * t;
+    return u;
+  };
+  solid_solver->setDisplacementBCs(compress, mesh->domain("top"), Component::Y);
+  solid_solver->setDisplacementBCs(compress, mesh->domain("top"));
+#endif
+
+  // Finalize the data structures
+  solid_solver->completeSetup();
+
+  // Save initial state
+  std::string paraview_name = name + "_paraview";
+  solid_solver->outputStateToDisk(paraview_name);
+
+  // Perform the quasi-static solve
+  SLIC_INFO_ROOT(axom::fmt::format("Snap-through of viscoelastic shell\n{} displacement dofs",
+                                   solid_solver->displacement().GlobalSize()));
+  SLIC_INFO_ROOT("Starting pseudo-timestepping.");
+  smith::logger::flush();
+  while (solid_solver->time() < 1.0 && std::abs(solid_solver->time() - 1) > DBL_EPSILON) {
+    SLIC_INFO_ROOT("---------------------------------------------");
+    SLIC_INFO_ROOT(axom::fmt::format("start time = {}, dt = {}", solid_solver->time(), dt));
+    smith::logger::flush();
+
+    solid_solver->advanceTimestep(dt);
+
+    // Output the sidre-based plot files
+    solid_solver->outputStateToDisk(paraview_name);
+  }
+  SLIC_INFO_ROOT(axom::fmt::format("final time = {}", solid_solver->time()));
+
+  return 0;
+}
