@@ -3,6 +3,13 @@
 # details.
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
+add_custom_target(compile_commands
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "${CMAKE_BINARY_DIR}/compile_commands.json"
+            "${CMAKE_SOURCE_DIR}/compile_commands.json"
+    BYPRODUCTS "${CMAKE_SOURCE_DIR}/compile_commands.json"
+    COMMENT "Symlink compile_commands.json into project root"
+)
 
 smith_add_executable( NAME        PNC_double_network_test
                       SOURCES     PNC_double_network_test.cpp
@@ -31,6 +38,12 @@ smith_add_executable( NAME        PNC_double_network_simple
 smith_add_executable(NAME       extended_thermomechanics
                      SOURCES    extended_thermomechanics.cpp
                                 helpers/extended_thermomechanics.hpp
+                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                     DEPENDS_ON smith
+                     )
+
+smith_add_executable(NAME       bz_staggered_thermomechanics
+                     SOURCES   BZ_staggered_thermomechanics.cpp
                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                      DEPENDS_ON smith
                      )
