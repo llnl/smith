@@ -17,8 +17,7 @@ namespace smith {
 /// @brief gretl-function to create a dummy-state which records all states and params of interest to the mechanics. This
 /// is used to inject additional adjoint loads and evaluate individual timestep sensitivities for the BasePhysics
 /// interface.
-gretl::State<int> make_milestone(const FieldState& anchor, const std::vector<FieldState>& states,
-                                 const std::vector<ReactionState>& reactions)
+gretl::State<int> make_milestone(const std::vector<FieldState>& states, const std::vector<ReactionState>& reactions)
 {
   std::vector<gretl::StateBase> base_states;
   for (const auto& s : states) {
@@ -28,7 +27,7 @@ gretl::State<int> make_milestone(const FieldState& anchor, const std::vector<Fie
     base_states.push_back(r);
   }
 
-  auto milestone = anchor.create_state<int, int>(base_states);
+  auto milestone = states[0].create_state<int, int>(base_states);
 
   milestone.set_eval(
       []([[maybe_unused]] const gretl::UpstreamStates& inputs, gretl::DownstreamState& output) { output.set<int>(0); });
@@ -245,7 +244,7 @@ void DifferentiablePhysics::advanceTimestep(double dt)
 {
   if (cycle_ == 0) {
     field_states_ = initial_field_states_;
-    milestones_.push_back(make_milestone(field_states_[0], field_states_, reaction_states_).step());
+    milestones_.push_back(make_milestone(field_states_, reaction_states_).step());
   }
 
   cycle_prev_ = cycle_;
@@ -260,7 +259,7 @@ void DifferentiablePhysics::advanceTimestep(double dt)
 
   cycle_++;
   time_ += dt;
-  milestones_.push_back(make_milestone(field_states_[0], field_states_, reaction_states_).step());
+  milestones_.push_back(make_milestone(field_states_, reaction_states_).step());
 }
 
 void DifferentiablePhysics::reverseAdjointTimestep()

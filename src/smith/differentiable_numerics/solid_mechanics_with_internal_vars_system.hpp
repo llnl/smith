@@ -149,8 +149,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
       typename MaterialType::State state;
       auto pk_stress = material(state, get<DERIVATIVE>(u_current), get<VALUE>(alpha_current), params...);
 
-      tensor<double, dim> source{};
-      return smith::tuple{source, pk_stress};
+      return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
     });
 
     // Cycle-zero: u and v are given, solve for a; alpha at initial condition
@@ -371,6 +370,14 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
 /**
  * @brief Factory function to build a solid mechanics system with internal variable.
+ * @param mesh The mesh.
+ * @param solver The coupled system solver.
+ * @param disp_rule The displacement time integration rule.
+ * @param state_rule The internal-variable time integration rule.
+ * @param prepend_name Optional field-name prefix.
+ * @param cycle_zero_solver Optional override for the cycle-zero solve. Defaults to
+ *        `solver->singleBlockSolver(0)`.
+ * @param parameter_types Optional parameter field descriptors.
  */
 template <int dim, int disp_order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
           typename... parameter_space>
@@ -378,7 +385,9 @@ SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTi
                                      parameter_space...>
 buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
                                           DisplacementTimeRule disp_rule, InternalVarTimeRule state_rule,
-                                          std::string prepend_name = "", FieldType<parameter_space>... parameter_types)
+                                          std::string prepend_name = "",
+                                          std::shared_ptr<CoupledSystemSolver> cycle_zero_solver = nullptr,
+                                          FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
@@ -438,7 +447,12 @@ buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::share
       field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
                                 state_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
-  auto cycle_zero_solver = buildCycleZeroSolver(*mesh);
+  if (cycle_zero_solver == nullptr) {
+    cycle_zero_solver = solver->singleBlockSolver(0);
+  }
+  SLIC_ERROR_IF(cycle_zero_solver == nullptr,
+                "Could not derive a cycle-zero solver for block 0 from the provided internal-vars solid mechanics "
+                "solver.");
 
   // Solver and Advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, state_weak_form};
@@ -462,10 +476,11 @@ template <int dim, int disp_order, typename StateSpace, typename DisplacementTim
           typename... parameter_space>
 auto buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
                                                DisplacementTimeRule disp_rule, InternalVarTimeRule state_rule,
+                                               std::shared_ptr<CoupledSystemSolver> cycle_zero_solver = nullptr,
                                                FieldType<parameter_space>... parameter_types)
 {
   return buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(mesh, solver, disp_rule, state_rule, "",
-                                                                                parameter_types...);
+                                                                                cycle_zero_solver, parameter_types...);
 }
 
 }  // namespace smith

@@ -25,6 +25,9 @@ class TimeIntegrationRule {
   /// @brief destructor
   virtual ~TimeIntegrationRule() {}
 
+  /// @brief whether this rule needs a cycle-zero initial acceleration solve
+  virtual bool requiresInitialAccelerationSolve() const { return false; }
+
   /// @brief update the current value of the independent variable, given the predicted value of the current independent
   /// variable, followed by
   virtual FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const = 0;
@@ -168,6 +171,9 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRul
   /// @brief get the number of states required by the rule
   int num_args() const override { return num_states; }
 
+  /// @brief implicit second-order dynamics needs the cycle-zero acceleration solve
+  bool requiresInitialAccelerationSolve() const override { return true; }
+
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
   SMITH_HOST_DEVICE auto value([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
@@ -239,6 +245,9 @@ struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule {
   /// @brief get the number of states required by the rule
   int num_args() const override { return num_states; }
 
+  /// @brief quasi-static second-order rules do not need the cycle-zero acceleration solve
+  bool requiresInitialAccelerationSolve() const override { return false; }
+
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1, typename T2, typename T3, typename T4>
   SMITH_HOST_DEVICE auto value([[maybe_unused]] const TimeInfo& t, [[maybe_unused]] const T1& field_new,
@@ -292,25 +301,6 @@ struct QuasiStaticSecondOrderTimeIntegrationRule : public TimeIntegrationRule {
   FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
   {
     return zeroCopy(states[0]);
-  }
-};
-
-// Backward-compat wrapper for older examples/tests.
-struct SecondOrderTimeIntegrationRule : ImplicitNewmarkSecondOrderTimeIntegrationRule {
-  explicit SecondOrderTimeIntegrationRule([[maybe_unused]] double gamma = 1.0) {}
-
-  template <typename T1, typename T2, typename T3, typename T4>
-  SMITH_HOST_DEVICE auto derivative(const TimeInfo& t, const T1& field_new, const T2& field_old, const T3& velo_old,
-                                    const T4& accel_old) const
-  {
-    return dot(t, field_new, field_old, velo_old, accel_old);
-  }
-
-  template <typename T1, typename T2, typename T3, typename T4>
-  SMITH_HOST_DEVICE auto second_derivative(const TimeInfo& t, const T1& field_new, const T2& field_old,
-                                           const T3& velo_old, const T4& accel_old) const
-  {
-    return ddot(t, field_new, field_old, velo_old, accel_old);
   }
 };
 

@@ -186,7 +186,6 @@ add_subdirectory(src)
 
 add_subdirectory(examples)
 
-add_subdirectory(korner_examples)
 
 #------------------------------------------------------------------------------
 # Generate helper script for running ATS

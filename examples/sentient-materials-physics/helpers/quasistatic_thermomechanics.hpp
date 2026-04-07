@@ -22,7 +22,8 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
       std::shared_ptr<DirichletBoundaryConditions> vector_bcs, std::shared_ptr<DirichletBoundaryConditions> scalar_bcs,
       std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_weak_form,
       std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> thermal_weak_form,
-      SecondOrderTimeIntegrationRule solid_time_rule, SecondOrderTimeIntegrationRule thermal_time_rule)
+      ImplicitNewmarkSecondOrderTimeIntegrationRule solid_time_rule,
+      ImplicitNewmarkSecondOrderTimeIntegrationRule thermal_time_rule)
       : solid_solver_(solid_solver),
         thermal_solver_(thermal_solver),
         vector_bcs_(vector_bcs),
@@ -60,8 +61,9 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
   template <int spatial_dim, typename ShapeDispSpace, typename VectorSpace, typename ScalarSpace,
             typename... ParamSpaces>
   static auto buildWeakFormAndStates(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<gretl::DataStore>& graph,
-                                     SecondOrderTimeIntegrationRule solid_time_rule,
-                                     SecondOrderTimeIntegrationRule thermal_time_rule, std::string physics_name,
+                                     ImplicitNewmarkSecondOrderTimeIntegrationRule solid_time_rule,
+                                     ImplicitNewmarkSecondOrderTimeIntegrationRule thermal_time_rule,
+                                     std::string physics_name,
                                      const std::vector<std::string>& param_names, double initial_time = 0.0)
   {
     auto shape_disp = create_field_state(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
@@ -126,46 +128,49 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
     // evaluate initial guess
     // SLIC_INFO("Thermal Solve");
     FieldState temperature_guess = states_old[TEMPERATURE] + dt * states_old[TEMPERATURE_DOT];
-    std::vector<FieldState> thermal_inputs{states_old[TEMPERATURE],      states_old[TEMPERATURE_DOT],
-                                           states_old[TEMPERATURE_DDOT], states_old[DISPLACEMENT],
-                                           states_old[VELOCITY],         states_old[ACCELERATION]};
+    std::vector<FieldState> thermal_inputs{temperature_guess,            states_old[TEMPERATURE],
+                                           states_old[TEMPERATURE_DOT],  states_old[TEMPERATURE_DDOT],
+                                           states_old[DISPLACEMENT],     states_old[VELOCITY],
+                                           states_old[ACCELERATION]};
     thermal_inputs.insert(thermal_inputs.end(), params.begin(), params.end());
 
-    auto temperature =
-        solve(temperature_guess, shape_disp, thermal_inputs, final_time_info,
-              *thermal_weak_form_->time_discretized_weak_form, *thermal_solver_, *scalar_bcs_);
+    auto temperature = solve(*thermal_weak_form_->time_discretized_weak_form, shape_disp, thermal_inputs, {},
+                             final_time_info, *thermal_solver_, *scalar_bcs_);
 
     // Evolve Deformation
     // evaluate initial guess
     //
     // SLIC_INFO("Solids Solve");
     FieldState displacement_guess = states_old[DISPLACEMENT] + dt * states_old[VELOCITY];
-    std::vector<FieldState> solid_inputs{states_old[DISPLACEMENT],    states_old[VELOCITY],
-                                         states_old[ACCELERATION],    temperature,
-                                         states_old[TEMPERATURE_DOT], states_old[TEMPERATURE_DDOT]};
+    std::vector<FieldState> solid_inputs{displacement_guess,           states_old[DISPLACEMENT],
+                                         states_old[VELOCITY],         states_old[ACCELERATION],
+                                         temperature,                  states_old[TEMPERATURE_DOT],
+                                         states_old[TEMPERATURE_DDOT]};
     solid_inputs.insert(solid_inputs.end(), params.begin(), params.end());
-    auto displacement = solve(displacement_guess, shape_disp, solid_inputs, final_time_info,
-                              *solid_weak_form_->time_discretized_weak_form, *solid_solver_, *vector_bcs_);
+    auto displacement = solve(*solid_weak_form_->time_discretized_weak_form, shape_disp, solid_inputs, {},
+                              final_time_info, *solid_solver_, *vector_bcs_);
 
     std::vector<FieldState> states = states_old;
     states[DISPLACEMENT] = displacement;
-    states[VELOCITY] = solid_time_rule_.derivative(final_time_info, displacement, states_old[DISPLACEMENT],
-                                                   states_old[VELOCITY], states_old[ACCELERATION]);
-    states[ACCELERATION] = solid_time_rule_.second_derivative(final_time_info, displacement, states_old[DISPLACEMENT],
-                                                              states_old[VELOCITY], states_old[ACCELERATION]);
+    states[VELOCITY] =
+        solid_time_rule_.dot(final_time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY],
+                             states_old[ACCELERATION]);
+    states[ACCELERATION] =
+        solid_time_rule_.ddot(final_time_info, displacement, states_old[DISPLACEMENT], states_old[VELOCITY],
+                              states_old[ACCELERATION]);
     states[TEMPERATURE] = temperature;
-    states[TEMPERATURE_DOT] = thermal_time_rule_.derivative(final_time_info, temperature, states_old[TEMPERATURE],
-                                                            states_old[TEMPERATURE_DOT], states_old[TEMPERATURE_DDOT]);
+    states[TEMPERATURE_DOT] =
+        thermal_time_rule_.dot(final_time_info, temperature, states_old[TEMPERATURE], states_old[TEMPERATURE_DOT],
+                               states_old[TEMPERATURE_DDOT]);
 
     states[TEMPERATURE_DDOT] =
-        thermal_time_rule_.second_derivative(final_time_info, temperature, states_old[TEMPERATURE],
-                                             states_old[TEMPERATURE_DOT], states_old[TEMPERATURE_DDOT]);
-    std::vector<FieldState> inputs{states[DISPLACEMENT],        states_old[DISPLACEMENT], states_old[VELOCITY],
-                                   states_old[ACCELERATION],    states_old[TEMPERATURE],  states_old[TEMPERATURE_DOT],
-                                   states_old[TEMPERATURE_DDOT]};
+        thermal_time_rule_.ddot(final_time_info, temperature, states_old[TEMPERATURE], states_old[TEMPERATURE_DOT],
+                                states_old[TEMPERATURE_DDOT]);
+    std::vector<FieldState> inputs{states[DISPLACEMENT],     states[VELOCITY],     states[ACCELERATION],
+                                   states[TEMPERATURE],      states[TEMPERATURE_DOT], states[TEMPERATURE_DDOT]};
     inputs.insert(inputs.end(), params.begin(), params.end());
-    auto reaction =
-        evaluateWeakForm(solid_weak_form_->final_reaction_weak_form, time_info, shape_disp, inputs, states[DISPLACEMENT]);
+    auto reaction = evaluateWeakForm(solid_weak_form_->final_reaction_weak_form, final_time_info, shape_disp, inputs,
+                                     states[DISPLACEMENT]);
     return {states, {reaction}};
   }
 
@@ -176,16 +181,17 @@ class QuasistaticSolidThermoMechanicsStateAdvancer : public StateAdvancer {
   std::shared_ptr<DirichletBoundaryConditions> scalar_bcs_;
   std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> solid_weak_form_;
   std::shared_ptr<SecondOrderTimeDiscretizedWeakForms> thermal_weak_form_;
-  SecondOrderTimeIntegrationRule solid_time_rule_;
-  SecondOrderTimeIntegrationRule thermal_time_rule_;
+  ImplicitNewmarkSecondOrderTimeIntegrationRule solid_time_rule_;
+  ImplicitNewmarkSecondOrderTimeIntegrationRule thermal_time_rule_;
 };
 
 template <int dim, typename ShapeDispSpace, typename VectorSpace, typename ScalarSpace, typename... ParamSpaces>
 auto buildThermoMechanics(std::shared_ptr<smith::Mesh> mesh,
                           std::shared_ptr<NonlinearBlockSolverBase> d_solid_nonlinear_solver,
                           std::shared_ptr<NonlinearBlockSolverBase> d_thermal_solver,
-                          smith::SecondOrderTimeIntegrationRule solid_time_rule,
-                          smith::SecondOrderTimeIntegrationRule thermal_time_rule, std::string physics_name,
+                          smith::ImplicitNewmarkSecondOrderTimeIntegrationRule solid_time_rule,
+                          smith::ImplicitNewmarkSecondOrderTimeIntegrationRule thermal_time_rule,
+                          std::string physics_name,
                           const std::vector<std::string>& param_names = {})
 {
   auto graph = std::make_shared<gretl::DataStore>(100);
@@ -212,8 +218,9 @@ template <int dim, typename ShapeDispSpace, typename VectorSpace, typename Scala
 auto buildThermoMechanicsForOptimization(std::shared_ptr<smith::Mesh> mesh,
                           std::shared_ptr<NonlinearBlockSolverBase> d_solid_nonlinear_solver,
                           std::shared_ptr<NonlinearBlockSolverBase> d_thermal_solver,
-                          smith::SecondOrderTimeIntegrationRule solid_time_rule,
-                          smith::SecondOrderTimeIntegrationRule thermal_time_rule, std::string physics_name,
+                          smith::ImplicitNewmarkSecondOrderTimeIntegrationRule solid_time_rule,
+                          smith::ImplicitNewmarkSecondOrderTimeIntegrationRule thermal_time_rule,
+                          std::string physics_name,
                           const std::vector<std::string>& param_names = {})
 {
   auto graph = std::make_shared<gretl::DataStore>(100);

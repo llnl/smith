@@ -132,7 +132,7 @@ struct GreenSaintVenantThermoelasticWithExtendedStateMaterial {
     const auto Piola = dot(F, S);
 
     const auto strain_rate = greenStrainRate(grad_u, grad_v);
-    const auto s0 = -d * K * alpha_T * (theta + 273.1) * tr(strain_rate);
+    const auto s0 = -0.0*d * K * alpha_T * (theta + 273.1) * tr(strain_rate);
     // std::cout << tr(strain_rate) << std::endl;
     const auto q0 = -kappa * grad_theta;
 

@@ -161,7 +161,7 @@ struct ParameterizedThermalStiffeningMaterial {
   template <typename DispGradType, typename VelocGradType, typename TempType, typename TempGradType,
             typename volFracParamType, int dim>
   auto operator()(double /*dt*/, State<dim>& state, const tensor<DispGradType, dim, dim>& grad_u,
-                  const tensor<VelocGradType, dim, dim>& /*grad_v*/, TempType theta,
+                  const tensor<VelocGradType, dim, dim>& grad_v, TempType theta,
                   const tensor<TempGradType, dim>& grad_theta, volFracParamType volFracParam) const
   {
     using std::pow, std::exp;
@@ -172,9 +172,12 @@ struct ParameterizedThermalStiffeningMaterial {
     // Small-strain tensor
     auto eps = 0.5 * (grad_u + transpose(grad_u));
 
+    // Parametrize bulk and shear modulus (equivalent to Young's modulus?)
+    auto Km_p = Km * get<0>(volFracParam);
+    auto Gm_p = Gm * get<0>(volFracParam);
     // Lame parameters
-    auto lambda = Km - 2.0 * Gm / 3.0;
-    auto mu = Gm;
+    auto lambda = Km_p - 2.0 * Gm_p / 3.0;
+    auto mu = Gm_p;
 
     auto tr_eps = tr(eps);
 
@@ -185,22 +188,19 @@ struct ParameterizedThermalStiffeningMaterial {
     // auto theta_minus_Tr = theta - Tr;
     // auto sigma_thermal  = -(3.0 * Km * betam)
     //                       * theta_minus_Tr * I;
-    // Minimum density value to prevent zero density
-    const double epsilon = 1e-4;
-    auto scale = epsilon + get<0>(volFracParam) * (1 - epsilon);
-    auto sigma = scale * sigma_mech;  //+ sigma_thermal;
+
+    auto sigma = sigma_mech;  //+ sigma_thermal;
 
     // Small strain
     auto Piola = sigma;
 
     // Heat flux
-    auto kappa = kappa_ * scale;
+    auto kappa = kappa_ * get<0>(volFracParam);
     auto q0 = -kappa * grad_theta;
 
     // Internal heat power: sigma : D where D is sym(grad_v)
-    // auto D  = 0.5 * (grad_v + transpose(grad_v));
-    // auto s0 = tr(dot(sigma, D));
-    auto s0 = smith::zero{};
+    auto D = 0.5 * (grad_v + transpose(grad_v));
+    auto s0 = tr(dot(sigma, D));
 
     // State variables: same semantics as nonlinear case, but trivial
     state.Cp = get_value(make_identity_tensor<double, dim>());

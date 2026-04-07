@@ -133,7 +133,7 @@ struct ThermoMechanicsSystem : public SystemBase {
           typename MaterialType::State state;
           auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current),
                                             get<VALUE>(T), get<DERIVATIVE>(T), params...);
-          return smith::tuple{zero{}, pk};
+          return smith::tuple{get<VALUE>(a_current) * material.density, pk};
         });
 
     thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp,
@@ -361,6 +361,14 @@ struct ThermoMechanicsSystem : public SystemBase {
 
 /**
  * @brief Factory function to build a thermo-mechanical system.
+ * @param mesh The mesh.
+ * @param solver The coupled system solver.
+ * @param disp_rule The displacement time integration rule.
+ * @param temp_rule The temperature time integration rule.
+ * @param prepend_name Optional field-name prefix.
+ * @param cycle_zero_solver Optional override for the cycle-zero solve. Defaults to
+ *        `solver->singleBlockSolver(0)`.
+ * @param parameter_types Optional parameter field descriptors.
  */
 template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
           typename... parameter_space>

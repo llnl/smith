@@ -16,7 +16,6 @@ set(materials_headers
     material_verification_tools.hpp
     parameterized_solid_material.hpp
     parameterized_thermal_material.hpp
-    parameterized_thermoelastic_material.hpp
     solid_material_input.hpp
     solid_material.hpp
     thermal_material_input.hpp

@@ -18,7 +18,6 @@
 #include "field_state.hpp"
 #include "field_store.hpp"
 #include "coupled_system_solver.hpp"
-#include "nonlinear_block_solver.hpp"
 #include "state_advancer.hpp"
 #include "smith/physics/common.hpp"
 #include "mfem.hpp"
@@ -54,21 +53,6 @@ auto time_rule_params_impl(std::index_sequence<Is...>) -> Parameters<always_t<Is
 template <typename Rule, typename Space, typename... Tail>
 using TimeRuleParams =
     decltype(detail::time_rule_params_impl<Space, Tail...>(std::make_index_sequence<Rule::num_states>{}));
-
-/**
- * @brief Create a dedicated monolithic solver for cycle-zero acceleration solves.
- *
- * This solver is independent of the (possibly staggered/multi-block) main solver,
- * avoiding SuperLU factorization size mismatches between cycle-zero and main solves.
- */
-inline std::shared_ptr<CoupledSystemSolver> buildCycleZeroSolver(const Mesh& mesh)
-{
-  LinearSolverOptions cz_lin_opts{.linear_solver = LinearSolver::SuperLU};
-  NonlinearSolverOptions cz_nonlin_opts{
-      .nonlin_solver = NonlinearSolver::Newton, .relative_tol = 1e-10, .absolute_tol = 1e-10, .max_iterations = 10};
-  auto cz_block_solver = buildNonlinearBlockSolver(cz_nonlin_opts, cz_lin_opts, mesh);
-  return std::make_shared<CoupledSystemSolver>(cz_block_solver);
-}
 
 /**
  * @brief Base struct for physics systems containing common members and helper functions.

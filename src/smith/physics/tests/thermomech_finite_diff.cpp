@@ -44,8 +44,6 @@ enum class LoadingType
   Traction
 };
 
-const std::string MESHTAG = "mesh";
-
 /**
  * @brief A driver for a parameter sensitivity test
  *
@@ -68,7 +66,7 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SMITH_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";
-  std::string mesh_tag = MESHTAG;
+  std::string mesh_tag("mesh");
 
   auto mesh =
       std::make_shared<smith::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
@@ -281,7 +279,7 @@ void FiniteDifferenceShapeTest(LoadingType load)
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SMITH_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";
-  std::string mesh_tag = MESHTAG;
+  std::string mesh_tag("mesh");
   auto mesh =
       std::make_shared<smith::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 

@@ -11,6 +11,9 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 
+#include <algorithm>
+#include <stdexcept>
+
 namespace smith {
 
 MultiphysicsTimeIntegrator::MultiphysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
@@ -33,7 +36,12 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
   std::vector<FieldState> current_states = states;
 
   // Handle initial acceleration solve at cycle 0
-  if (time_info.cycle() == 0 && cycle_zero_weak_form_) {
+  const bool requires_cycle_zero_solve =
+      std::any_of(field_store_->getTimeIntegrationRules().begin(), field_store_->getTimeIntegrationRules().end(),
+                  [](const auto& rule_and_mapping) {
+                    return rule_and_mapping.first && rule_and_mapping.first->requiresInitialAccelerationSolve();
+                  });
+  if (time_info.cycle() == 0 && cycle_zero_weak_form_ && requires_cycle_zero_solve) {
     for (size_t i = 0; i < current_states.size(); ++i) {
       field_store_->setField(i, current_states[i]);
     }
@@ -58,9 +66,25 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
 
     std::vector<const BoundaryConditionManager*> bcs;
     auto all_bcs = field_store_->getBoundaryConditionManagers();
-    if (!all_bcs.empty()) {
-      bcs.push_back(all_bcs[0]);
+    size_t test_field_unknown_idx = invalid_block_index;
+    try {
+      test_field_unknown_idx = field_store_->getUnknownIndex(test_field_name);
+    } catch (const std::out_of_range&) {
+      for (const auto& [rule, mapping] : field_store_->getTimeIntegrationRules()) {
+        static_cast<void>(rule);
+        if (mapping.primary_name == test_field_name || mapping.history_name == test_field_name ||
+            mapping.dot_name == test_field_name || mapping.ddot_name == test_field_name) {
+          test_field_unknown_idx = field_store_->getUnknownIndex(mapping.primary_name);
+          break;
+        }
+      }
     }
+    SLIC_ERROR_IF(test_field_unknown_idx == invalid_block_index,
+                  "Could not map cycle-zero test field '" << test_field_name << "' to an independent unknown.");
+    SLIC_ERROR_IF(test_field_unknown_idx >= all_bcs.size(),
+                  "Cycle-zero test field '" << test_field_name << "' has unknown index " << test_field_unknown_idx
+                                            << ", but only " << all_bcs.size() << " BC managers are registered.");
+    bcs.push_back(all_bcs[test_field_unknown_idx]);
 
     std::vector<std::vector<FieldState>> states_vec = {wf_fields};
     std::vector<std::vector<FieldState>> params_vec = {params};

@@ -34,12 +34,12 @@
 
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
+#include "smith/differentiable_numerics/differentiable_solver.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/tests/paraview_helper.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
@@ -104,22 +104,15 @@ void FiniteDifferenceParameter()
                                                      .print_level = 0};
 
   // Construct and initialize the linear and nonlinear solvers
-  smith::NonlinearSolverOptions heat_nonlinear_opts = {};
-  heat_nonlinear_opts.nonlin_solver = NonlinearSolver::Newton;
-  heat_nonlinear_opts.max_iterations = 1;
-  heat_nonlinear_opts.relative_tol = 0.0;
-  heat_nonlinear_opts.absolute_tol = 0.0;
-  heat_nonlinear_opts.print_level = 0;
+  std::shared_ptr<DifferentiableSolver> d_heat_linear_solver =
+      buildDifferentiableLinearSolve(heat_linear_options, *mesh);
 
-  std::shared_ptr<NonlinearBlockSolverBase> d_heat_linear_solver =
-      buildNonlinearBlockSolver(heat_nonlinear_opts, heat_linear_options, *mesh);
-
-  std::shared_ptr<NonlinearBlockSolverBase> d_solid_nonlinear_solver =
-      buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
+      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   // Construct and initialize the time discretized weak form
-  smith::SecondOrderTimeIntegrationRule backward_euler_heat(1.0);
-  smith::SecondOrderTimeIntegrationRule backward_euler_solid(1.0);
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule backward_euler_heat;
+  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule backward_euler_solid;
 
   double theta_ref = 1.0;
   double external_heat_source = 1.0;
@@ -171,8 +164,8 @@ void FiniteDifferenceParameter()
   // Add body integrals to the weak forms
   solid_mechanics_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-      [material](const TimeInfo& time_info, auto /*X*/, auto u, auto v, auto /*a*/, auto theta, auto /*theta_dot*/,
-                 auto /*theta_dot_dot*/, auto fictDens) {
+      [material, dim](const TimeInfo& time_info, auto /*X*/, auto u, auto v, auto /*a*/, auto theta, auto /*theta_dot*/,
+                      auto /*theta_dot_dot*/, auto fictDens) {
         thermalStiffMaterial::State<dim> state;
         auto [pk, C_v, s0, q0] = material(time_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
                                           get<VALUE>(theta), get<DERIVATIVE>(theta), fictDens);
@@ -181,8 +174,8 @@ void FiniteDifferenceParameter()
 
   heat_transfer_weak_form->addBodyIntegral(
       smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-      [material](const TimeInfo& time_info, auto /*X*/, auto theta, auto theta_dot, auto /*theta_dot_dot*/, auto u,
-                 auto v, auto /*a*/, auto fictDens) {
+      [material, dim](const TimeInfo& time_info, auto /*X*/, auto theta, auto theta_dot, auto /*theta_dot_dot*/, auto u,
+                      auto v, auto /*a*/, auto fictDens) {
         thermalStiffMaterial::State<dim> state;
         auto [pk, C_v, s0, q0] = material(time_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
                                           get<VALUE>(theta), get<DERIVATIVE>(theta), fictDens);
@@ -190,12 +183,9 @@ void FiniteDifferenceParameter()
         return smith::tuple{C_v * dT_dt - s0, -q0};
       });
 
-  heat_transfer_weak_form->addBodyIntegral(
-      smith::DependsOn<0, 1, 2, 3>{}, mesh->entireBodyName(),
-      [external_heat_source](const TimeInfo&, auto /*X*/, auto /*theta*/, auto /*theta_dot*/, auto /*theta_dot_dot*/,
-                             auto /*u*/, auto /*v*/, auto /*a*/, auto fictDens) {
-        return smith::tuple{-external_heat_source * get<VALUE>(fictDens), smith::zero{}};
-      });
+  heat_transfer_weak_form->addBodySource(
+      smith::DependsOn<0>(), mesh->entireBodyName(),
+      [external_heat_source](auto /*t*/, auto /* x */, auto fictDens) { return external_heat_source * fictDens; });
 
   // Extract fields from the physics object
   auto shape_disp = physics->getShapeDispFieldState();
@@ -214,7 +204,7 @@ void FiniteDifferenceParameter()
   SLIC_INFO_ROOT("... Parameterized thermomechanics test setup complete");
 
   auto pv_writer =
-      smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), "sol_param_thermal_stiff_test");
+      smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), "sol_param_thermal_stiff_test");
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
 
   SLIC_INFO_ROOT("... Created paraview output writer");

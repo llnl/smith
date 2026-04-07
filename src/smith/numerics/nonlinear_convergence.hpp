@@ -34,6 +34,7 @@ struct NonlinearConvergenceContext {
   std::vector<double> initial_block_norms = {};  ///< Initial residual norm for each block for the current solve.
 
   /// @brief Clear all stored initial norms for a new solve.
+  /// The next convergence evaluation seeds a fresh relative-tolerance baseline from its current residual norms.
   void reset();
 };
 

@@ -15,19 +15,20 @@
 
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
+#include "smith/differentiable_numerics/differentiable_solver.hpp"
 // #include "smith/differentiable_numerics/solid_mechanics_state_advancer.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/paraview_writer.hpp"
+#include "smith/differentiable_numerics/tests/paraview_helper.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 
 #include "calculate_reactions.hpp"
 #include "viscous_solid_mechanics.hpp"
 #include "custom_materials.hpp"
+
 namespace smith {
 
 smith::LinearSolverOptions solid_linear_options{.linear_solver = smith::LinearSolver::CG,
@@ -61,7 +62,7 @@ int main(int argc, char* argv[])
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<smith::Mesh> mesh;
-  std::string mesh_tag = "nominal";
+  std::string mesh_tag = "snap_array_optimal";
   smith::StateManager::initialize(datastore, mesh_tag);
 
   std::string mesh_location = SMITH_REPO_DIR "/korner_examples/" + mesh_tag + ".g";
@@ -78,9 +79,10 @@ int main(int argc, char* argv[])
 
   std::string physics_name = "solid_" + mesh_tag;
 
-  auto d_solid_nonlinear_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  std::shared_ptr<DifferentiableSolver> d_solid_nonlinear_solver =
+      buildDifferentiableNonlinearSolve(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  smith::ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule;
+  smith::SecondOrderTimeIntegrationRule time_rule(1.0);
 
   // warm-start.
   // implicit Newmark.
@@ -92,9 +94,29 @@ int main(int argc, char* argv[])
   bcs->setFixedVectorBCs<dim>(mesh->domain("fix_bottom"));
   bcs->setVectorBCs<dim>(mesh->domain("fix_top"), [](double t, smith::tensor<double, dim> X) {
     auto bc = 0.0 * X;
-    bc[1] = -10.0 * t;
+    auto def_mag = -200.0;
+    auto tstar = 1.0;
+    auto dmval = 0.0;
+    if (t < 1.0) {
+        dmval = def_mag * t;
+    } else {
+        dmval = def_mag * (2.0 * tstar - t);
+    }
+    bc[1] = dmval; //-200.0 * t;
     return bc;
   });
+
+  // function for the BC
+  std::function<double(double, tensor<double, dim>)> boundary_condition;
+  boundary_condition = [](double t, tensor<double, dim> /*X*/) -> double {
+    double def_mag = -200.0;
+    double tstar = 1.0;
+    if (t < 1.0) {
+        return def_mag * t;
+    } else {
+        return def_mag * (2.0 * tstar - t);
+    }
+};
 
   double E = 100.0;
   double nu = 0.25;
@@ -114,7 +136,9 @@ int main(int argc, char* argv[])
         return smith::tuple{smith::zero{}, pk_stress};
       });
 
+  auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();
+  auto states = physics->getInitialFieldStates();
 
   params[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
     double scaling = 1.0;
@@ -129,9 +153,24 @@ int main(int argc, char* argv[])
   physics->resetStates();
 
   double time_increment = 1.0e-2;
-  auto pv_writer = smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
+  auto pv_writer = smith::createParaviewOutput(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
-  double T = 1.0;
+  double T = 2.0;
+    std::ofstream file;
+
+  std::string stress_strain_output =
+      physics_name + "/" + "_strain_curve.csv";
+
+  if (mfem::Mpi::Root()) {
+    file = std::ofstream(stress_strain_output);
+
+    if (!file.is_open()) {
+      MFEM_ABORT("Could Not Open File");
+    }
+    file << std::setprecision(16) << std::scientific;
+
+    file << "time,strain,force\n";
+  }
   int cnt = 0;
   while (physics->time() < T) {
     cnt++;
@@ -141,20 +180,32 @@ int main(int argc, char* argv[])
     }
     physics->advanceTimestep(time_increment);
 
-    auto reactions = physics->getReactionStates();
+    TimeInfo time_info(physics->time() - time_increment, time_increment);
+    auto reactions = physics->getStateAdvancer()->computeResultants(shape_disp, physics->getFieldStates(),
+                                                                    physics->getFieldStatesOld(), params, time_info);
     double reaction = CalculateReaction(*reactions[0].get(), mesh, "fix_top", 1);
     if (mfem::Mpi::Root()) {
       std::cout << "Reaction: " << reaction << std::endl;
+      file << time_info.time() << ","
+           << boundary_condition(time_info.time(), {0, 0, 0}) / 830.0 << ","
+           << reaction / (819.0 * 276.66) << "\n";
+      file.flush();
     }
     pv_writer.write(cnt, physics->time(), physics->getFieldStatesAndParamStates());
   }
 
-  auto reactions = physics->getReactionStates();
+  TimeInfo time_info(physics->time() - time_increment, time_increment);
+
+  auto final_states = physics->getFieldStates();
+  auto previous_to_final_states = physics->getFieldStatesOld();
+
+  auto state_advancer = physics->getStateAdvancer();
+  auto reactions =
+      state_advancer->computeResultants(shape_disp, final_states, previous_to_final_states, params, time_info);
 
   auto disp_squared = innerProduct(reactions[0], reactions[0]);
 
   gretl::set_as_objective(disp_squared);
-
   if (mfem::Mpi::Root()) {
     std::cout << "final disp norm2 = " << disp_squared.get() << std::endl;
   }

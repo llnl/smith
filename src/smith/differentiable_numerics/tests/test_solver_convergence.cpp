@@ -106,20 +106,24 @@ TEST(SolverConvergence, PerBlockTolerancesRequireAllBlocksToPass)
 {
   FakeNonlinearBlockSolver solver(1.0e-12, 0.1, {.relative_tols = {0.5, 0.01}, .absolute_tols = {0.0, 0.0}});
   EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({1.0, 1.0})));
-  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({0.49, 0.25})));
-  EXPECT_TRUE(solver.checkConvergence(1.0, makeResiduals({0.49, 0.009})));
+  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({0.5001, 0.0099})));
+  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({0.4999, 0.0101})));
+  EXPECT_TRUE(solver.checkConvergence(1.0, makeResiduals({0.4999, 0.0099})));
 }
 
 TEST(SolverConvergence, EmptyBlockTolerancesPreserveScalarOnlyBehavior)
 {
-  FakeNonlinearBlockSolver solver(0.2, 0.1);
-  auto status = solver.convergenceStatus(1.0, makeResiduals({0.15, 0.15}));
+  FakeNonlinearBlockSolver solver(1.0e-12, 0.1);
+  auto status = solver.convergenceStatus(1.0, makeResiduals({1.0, 1.0}));
   EXPECT_FALSE(status.block_path_enabled);
   EXPECT_FALSE(status.block_converged);
   EXPECT_FALSE(status.converged);
 
-  solver.resetConvergenceState();
-  status = solver.convergenceStatus(1.0, makeResiduals({0.05, 0.05}));
+  status = solver.convergenceStatus(1.0, makeResiduals({0.1001, 0.1001}));
+  EXPECT_FALSE(status.global_converged);
+  EXPECT_FALSE(status.converged);
+
+  status = solver.convergenceStatus(1.0, makeResiduals({0.0999, 0.0999}));
   EXPECT_TRUE(status.global_converged);
   EXPECT_TRUE(status.converged);
 }
@@ -131,7 +135,7 @@ TEST(SolverConvergence, OrSemanticsAllowGlobalOrBlockConvergence)
   auto status = solver_global.convergenceStatus(1.0, makeResiduals({1.0, 1.0}));
   EXPECT_FALSE(status.converged);
 
-  status = solver_global.convergenceStatus(1.0, makeResiduals({0.05, 0.25}));
+  status = solver_global.convergenceStatus(1.0, makeResiduals({0.2121, 0.2121}));
   EXPECT_TRUE(status.global_converged);
   EXPECT_FALSE(status.block_converged);
   EXPECT_TRUE(status.converged);
@@ -140,7 +144,7 @@ TEST(SolverConvergence, OrSemanticsAllowGlobalOrBlockConvergence)
   status = solver_block.convergenceStatus(1.0, makeResiduals({1.0, 1.0}));
   EXPECT_FALSE(status.converged);
 
-  status = solver_block.convergenceStatus(1.0, makeResiduals({0.19, 0.19}));
+  status = solver_block.convergenceStatus(1.0, makeResiduals({0.0355, 0.0355}));
   EXPECT_FALSE(status.global_converged);
   EXPECT_TRUE(status.block_converged);
   EXPECT_TRUE(status.converged);
@@ -149,11 +153,17 @@ TEST(SolverConvergence, OrSemanticsAllowGlobalOrBlockConvergence)
 TEST(SolverConvergence, ResetConvergenceStateRefreshesPerBlockInitialNorms)
 {
   FakeNonlinearBlockSolver solver(1.0e-12, 0.01, {.relative_tols = {0.1, 0.1}, .absolute_tols = {0.0, 0.0}});
-  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({10.0, 10.0})));
-  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({2.0, 2.0})));
+  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({10.0, 10.0})));  // sets initial residual to 10.0 for both
+  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({1.0001, 1.0001})));
+  EXPECT_TRUE(
+      solver.checkConvergence(1.0, makeResiduals({0.9999, 0.9999})));  // meets the relative convergence threshold
+
+  // Reset forgets the stored initial norms; the next residual snapshot becomes the new relative baseline.
   solver.resetConvergenceState();
-  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({2.0, 2.0})));
-  EXPECT_TRUE(solver.checkConvergence(1.0, makeResiduals({0.19, 0.19})));
+  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({1.0, 1.0})));  // re-establishes new residual baseline
+  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({0.9999, 0.9999})));
+  EXPECT_FALSE(solver.checkConvergence(1.0, makeResiduals({0.1001, 0.1001})));
+  EXPECT_TRUE(solver.checkConvergence(1.0, makeResiduals({0.0999, 0.0999})));  // reaches new lower relative threshold
 }
 
 TEST(SolverConvergence, StageConstructorAllowsOverridesWhenSolverHasNoBlockTolerances)
