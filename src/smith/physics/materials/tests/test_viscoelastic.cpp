@@ -59,8 +59,8 @@ TEST(ViscoelasticMaterial, Uniaxial) {
     double theta = 350.0;
     auto temperature_cycle = [theta](double) { return theta; };
 
-    auto history = uniaxial_stress_test(t_max, num_steps, material, internal_state,
-                                        applied_strain, temperature_cycle);
+    auto history = uniaxial_stress_test2(t_max, num_steps, material, internal_state,
+                                         applied_strain, temperature_cycle);
     
     std::ofstream file("viscoelastic_uniaxial.csv");
     for (const auto& timestep : history) {
