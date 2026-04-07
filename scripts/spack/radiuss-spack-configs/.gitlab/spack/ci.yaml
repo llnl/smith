@@ -1,0 +1,72 @@
+##############################################################################
+# Copyright (c) 2021-2025, Lawrence Livermore National Security, LLC and
+# RADIUSS Stack Testing project contributors.
+# See the LICENSE file for details.
+#
+# SPDX-License-Identifier: MIT
+##############################################################################
+
+ci:
+  target: gitlab
+  pipeline-gen:
+
+  - any-job:
+      before_script:
+        - echo "This section cannot be empty because of Spack CI implementation."
+
+  - submapping:
+    - match:
+      - 'target=zen'
+      build-job:
+        tags: [corona, shell]
+        script::
+        - export ALLOC_ID=$(flux jobs --name="${CORONA_ALLOC_NAME}" -n -o "{id}")
+        - echo -e "[Information] Shared allocation ID = ${ALLOC_ID}"
+        - export PROXY="$( [[ -n "${ALLOC_ID}" ]] && echo "flux proxy ${ALLOC_ID}" || echo "" )"
+        - ${PROXY} flux watch $( ${PROXY} flux batch -o output.stdout.type=kvs ${CORONA_JOB_ALLOC} .gitlab/spack/ci-script.sh)
+    - match:
+      - 'target=sapphirerapids'
+      build-job:
+        tags: [dane, shell]
+        script::
+        - export JOBID=$(squeue -h --name=${DANE_ALLOC_NAME} --format=%A)
+        - srun $( [[ -n "${JOBID}" ]] && echo "--jobid=${JOBID}" ) ${DANE_JOB_ALLOC} .gitlab/spack/ci-script.sh
+    - match:
+      - 'target=power9le'
+      build-job:
+        tags: [lassen, shell]
+        script::
+        - lalloc ${LASSEN_JOB_ALLOC} .gitlab/spack/ci-script.sh
+    - match:
+      - 'target=zen3'
+      build-job:
+        tags: [tioga, shell]
+        script::
+        - export ALLOC_ID=$(flux jobs --name="${TIOGA_ALLOC_NAME}" -n -o "{id}")
+        - echo -e "[Information] Shared allocation ID = ${ALLOC_ID}"
+        - export PROXY="$( [[ -n "${ALLOC_ID}" ]] && echo "flux proxy ${ALLOC_ID}" || echo "" )"
+        - ${PROXY} flux watch $( ${PROXY} flux batch -o output.stdout.type=kvs ${TIOGA_JOB_ALLOC} .gitlab/spack/ci-script.sh)
+    - match:
+      - 'target=zen4'
+      build-job:
+        tags: [tuolumne, shell]
+        script::
+        - export ALLOC_ID=$(flux jobs --name="${TUOLUMNE_ALLOC_NAME}" -n -o "{id}")
+        - echo -e "[Information] Shared allocation ID = ${ALLOC_ID}"
+        - export PROXY="$( [[ -n "${ALLOC_ID}" ]] && echo "flux proxy ${ALLOC_ID}" || echo "" )"
+        - ${PROXY} flux watch $( ${PROXY} flux batch -o output.stdout.type=kvs ${TUOLUMNE_JOB_ALLOC} .gitlab/spack/ci-script.sh)
+    match_behavior: first
+
+  - reindex-job:
+      tags: [oslic, shell]
+      before_script:
+        - echo -e "[Information] We override reindex-job in .gitlab/spack/reindex-override.yml."
+        - echo -e "[Information] The jobs are then replaced by their machine specific equivalent named rebuild-index-<machine>."
+        - echo -e "[Information] The content of the reindex-job script moved to .gitlab/spack/reindex-script.sh"
+        - echo -e "[Error] This job should never run, please verify you implemented an override."
+
+  - noop-job:
+      tags: [oslic, shell]
+
+  - cleanup-job:
+      tags: [oslic, shell]

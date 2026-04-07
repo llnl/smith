@@ -1,0 +1,64 @@
+##############################################################################
+# Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+# RADIUSS project contributors. See the COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (MIT)
+##############################################################################
+
+variables:
+  ALLOC_NAME: ${CI_PROJECT_NAME}_ci_${CI_PIPELINE_ID}
+  LASSEN_JOB_ALLOC: "1 -W 15 -q pci"
+
+.on-lassen:
+  tags:
+    - shell
+    - lassen
+  rules:
+    # Runs except if we explicitly deactivate lassen by variable.
+    - if: '$ON_LASSEN == "OFF"'
+      when: never
+    # We should always release resources allocated in the pipeline.
+    - if: '$CI_JOB_NAME =~ /release-lassen/'
+      when: always
+    # A true statement is expected to allow jobs to run. Here is the default.
+    - when: on_success
+
+get-spack-lassen:
+  extends: [.on-lassen, .lassen-variables]
+  stage: setup
+  script:
+    - .gitlab/scripts/get-spack
+  needs: []
+
+generate-on-lassen:
+  extends: [.on-lassen, .lassen-variables]
+  stage: generate
+  script:
+    - .gitlab/scripts/print-variables
+    - .gitlab/spack/generate-script.sh
+  artifacts:
+    paths:
+      - "${CI_PROJECT_DIR}/jobs_scratch_dir"
+  needs: [get-spack-lassen]
+
+build-on-lassen:
+  extends: [.lassen-variables]
+  stage: build
+  trigger:
+    include:
+      - artifact: "jobs_scratch_dir/pipeline.yml"
+        job: generate-on-lassen
+      - project: "lc-templates/id_tokens"
+        file: "id_tokens.yml"
+      - local: ".gitlab/spack/reindex-lassen.yml"
+    strategy: depend
+    forward:
+      pipeline_variables: true
+  needs: [generate-on-lassen]
+
+rm-spack-lassen:
+  extends: [.on-lassen, .lassen-variables]
+  stage: clean
+  script:
+    - .gitlab/scripts/remove-spack
+  needs: [build-on-lassen]

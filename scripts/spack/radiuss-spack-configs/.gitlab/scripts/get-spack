@@ -1,0 +1,42 @@
+#!/bin/bash
+
+##############################################################################
+# Copyright (c) 2022, Lawrence Livermore National Security, LLC and
+# RADIUSS project contributors. See the COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (MIT)
+##############################################################################
+
+set -e
+set -x
+
+hostname
+
+#[get-spack--]
+if [[ ! -d ${MY_SPACK_PARENT_DIR}/spack ]]
+then
+  mkdir -p ${MY_SPACK_PARENT_DIR}
+  # A shallow clone is enough, and much faster.
+  git clone ${MY_SPACK_REPO} --depth 1 --branch develop ${MY_SPACK_PARENT_DIR}/spack
+fi
+
+if [[ ${MY_SPACK_COMMIT} ]]
+then
+  # MY_SPACK_COMMIT is defined and should have the commit hash to use.
+  cd ${MY_SPACK_PARENT_DIR}/spack
+  git fetch --depth 1 ${MY_SPACK_REPO} ${MY_SPACK_COMMIT}
+  git checkout ${MY_SPACK_COMMIT}
+  git tag ${CI_PIPELINE_ID}
+  cd -
+else
+  # empty spack commit, MY_SPACK_BRANCH which should have a branch name.
+  cd ${MY_SPACK_PARENT_DIR}/spack
+  git checkout -b temp
+  git branch -D ${MY_SPACK_BRANCH} || true
+  git fetch --depth 1 ${MY_SPACK_REPO} ${MY_SPACK_BRANCH}:${MY_SPACK_BRANCH}
+  git checkout ${MY_SPACK_BRANCH}
+  git tag ${CI_PIPELINE_ID}
+  git branch -D temp
+  cd -
+fi
+#[--get-spack]

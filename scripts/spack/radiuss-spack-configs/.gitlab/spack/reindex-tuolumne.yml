@@ -1,0 +1,21 @@
+##############################################################################
+# Copyright (c) 2019-2025, Lawrence Livermore National Security, LLC and
+# RADIUSS project contributors. See the COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (MIT)
+##############################################################################
+
+include:
+  - local: ".gitlab/spack/reindex-override.yml"
+
+rebuild-index-tuolumne:
+  stage: .post
+  tags: [tuolumne, shell]
+  when: always
+  script:
+    - export ALLOC_ID=$(flux jobs --name="${TUOLUMNE_ALLOC_NAME}" -n -o "{id}")
+    - echo -e "[Information] Shared allocation ID = ${ALLOC_ID}"
+    - export PROXY="$( [[ -n "${ALLOC_ID}" ]] && echo "flux proxy ${ALLOC_ID}" || echo "" )"
+    - ${PROXY} flux watch $( ${PROXY} flux batch -o output.stdout.type=kvs ${TUOLUMNE_JOB_ALLOC} .gitlab/spack/reindex-script.sh)
+  dependencies: []
+  retry: 2
