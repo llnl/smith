@@ -20,6 +20,7 @@
 #include "smith/numerics/solver_config.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/state/state_manager.hpp"
+#include "helpers/cl_parser.hpp"
 
 namespace example_tm {
 
@@ -28,50 +29,22 @@ static constexpr int displacement_order = 1;
 static constexpr int temperature_order = 1;
 
 struct Options {
-  int nx = 24;
-  int ny = 4;
-  int nz = 4;
+  int nx = 2*24;
+  int ny = 2*4;
+  int nz = 2*4;
+
   int steps = 100;
   double dt = 0.01;
   double length = 1.0;
   double width = 0.15;
   double height = 0.15;
   double pull_rate = 0.2;
-  std::string output_name = "paraview_green_saint_venant_staggered_thermomechanics";
+  std::string output_name = "paraview_bz_staggered_thermomechanics";
 };
-
-bool parseIntFlag(const std::string& arg, const std::string& name, int& value)
-{
-  const auto prefix = name + "=";
-  if (arg.rfind(prefix, 0) != 0) {
-    return false;
-  }
-  value = std::stoi(arg.substr(prefix.size()));
-  return true;
-}
-
-bool parseDoubleFlag(const std::string& arg, const std::string& name, double& value)
-{
-  const auto prefix = name + "=";
-  if (arg.rfind(prefix, 0) != 0) {
-    return false;
-  }
-  value = std::stod(arg.substr(prefix.size()));
-  return true;
-}
-
-bool parseStringFlag(const std::string& arg, const std::string& name, std::string& value)
-{
-  const auto prefix = name + "=";
-  if (arg.rfind(prefix, 0) != 0) {
-    return false;
-  }
-  value = arg.substr(prefix.size());
-  return true;
-}
 
 Options parseOptions(int argc, char* argv[])
 {
+  using namespace smith::cl_parser;
   Options options;
 
   for (int i = 1; i < argc; ++i) {
@@ -169,7 +142,7 @@ smith::LinearSolverOptions makeThermalLinearOptions()
 
 smith::NonlinearSolverOptions makeThermalNonlinearOptions()
 {
-  return smith::NonlinearSolverOptions{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
+  return smith::NonlinearSolverOptions{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
                                        .relative_tol = 1.0e-8,
                                        .absolute_tol = 1.0e-8,
                                        .max_iterations = 15,
@@ -232,9 +205,9 @@ int main(int argc, char* argv[])
   staggered_solver->addSubsystemSolver({1}, thermal_solver, {.relative_tols = {1.0e-6}, .absolute_tols = {1.0e-7}});
 
   auto system =
-      smith::buildThermoMechanicsSystem<example_tm::dim, example_tm::displacement_order, example_tm::temperature_order>(
-          mesh, staggered_solver, smith::QuasiStaticSecondOrderTimeIntegrationRule{},
-          smith::QuasiStaticFirstOrderTimeIntegrationRule{}, "green_saint_venant_staggered");
+      ::smith::buildThermoMechanicsSystem<example_tm::dim, example_tm::displacement_order, example_tm::temperature_order>(
+          mesh, staggered_solver, ::smith::QuasiStaticSecondOrderTimeIntegrationRule{},
+          ::smith::QuasiStaticFirstOrderTimeIntegrationRule{}, "bz_staggered");
 
   example_tm::LocalGreenSaintVenantThermoelasticMaterial material;
   system.setMaterial(material, mesh->entireBodyName());
@@ -251,7 +224,7 @@ int main(int argc, char* argv[])
 
   example_tm::initializeStates(system, 0.0);
 
-  auto physics = system.createDifferentiablePhysics("green_saint_venant_staggered_thermomechanics");
+  auto physics = system.createDifferentiablePhysics("bz_staggered_thermomechanics");
   physics->resetStates();
 
   auto pv_writer = smith::createParaviewWriter(*mesh, system.getStateFields(), options.output_name);
