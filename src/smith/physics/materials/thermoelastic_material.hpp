@@ -404,6 +404,7 @@ struct SimpleThermalStiffeningMaterial {
 
   template<typename scalar>
   SMITH_HOST_DEVICE auto Gm0(scalar g) const{
+    /*
     using std::pow;
     // matrix shear modulus at reference temperature as a function of particle wt% g
     auto Gr = 0.017;      //GPa, rigid modulus
@@ -423,7 +424,8 @@ struct SimpleThermalStiffeningMaterial {
     auto Gnum = (1.-2.*psi+psi*X)*Gr*Gs+(1.-X)*psi*Gr*Gr;
     auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
     auto G = Gnum/Gdenom; // this is in GPa
-    return G*1.e9;        // convert to Pa
+    */
+    return 10000.+g;//G*1.e9;        // convert to Pa
   }
   
   template<typename scalar>
@@ -444,6 +446,7 @@ struct SimpleThermalStiffeningMaterial {
 
   template<typename scalar>
   SMITH_HOST_DEVICE auto Ge0(scalar g) const{
+    /*
     using std::pow;
     // entanglement shear modulus at reference temperature as a function of particle wt% g
     auto Gr = 0.12;      //GPa, rigid modulus
@@ -464,6 +467,8 @@ struct SimpleThermalStiffeningMaterial {
     auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
     auto G = Gnum/Gdenom; // this is in GPa
     return G*1.e9;        //this is Pa
+    */
+    return 100000.+g;
   }
 
   template <typename T1, typename T2, typename T3, typename T4, int dim>
@@ -478,7 +483,9 @@ struct SimpleThermalStiffeningMaterial {
     theta=theta+tempref;
 
     // get equilibrium we=1-xi
-    auto we = 0.0;//1. - equilibrium_xi(theta);
+    auto we = 1. - equilibrium_xi(theta);
+
+    //std::cout << "we: " << we << "\n";
 
     // get kinematics
     constexpr auto I = Identity<dim>();
@@ -517,7 +524,7 @@ struct SimpleThermalStiffeningMaterial {
     // derivative of elastic S with respect to T
     auto dtmdT = Gm0(gw)*df1(theta)*pow(J,-2./3)*B_bar-Km*J*betam*I;
     auto dSedT = dot(inv(F),dot(dtmdT,transpose(inv(F))));
-    const auto s0 = tr(dot(theta*dSedT,greenStrainRate));
+    const auto s0 = tr(dot(theta*dSedT,greenStrainRate))*0.0;
 
     return smith::tuple{Piola, C_v, s0, q0};
   }
