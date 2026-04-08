@@ -298,6 +298,127 @@ TEST_F(ContactSensitivityFixture, ReactionShapeSensitivities)
   EXPECT_NEAR(directional_deriv, directional_deriv_fd, eps);
 }
 
+TEST_F(ContactSensitivityFixture, SingleContactInteractionForceMagnitudeQoiShapeSensitivities)
+{
+  // For this test, define a QoI that penalizes the (single-interaction) contact force magnitude:
+  //   J = 0.5 * <f_contact,i, f_contact,i>
+  // and verify the adjoint-based directional derivative matches a finite-difference check.
+  constexpr int contact_interaction_id = 0;
+
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  auto compute_contact_force_qoi = [&](SolidMechT& solver) -> double {
+    solver.resetStates();
+    solver.advanceTimestep(1.0);
+    const auto f = solver.dual(axom::fmt::format("contact_force_{}", contact_interaction_id));
+    return 0.5 * innerProduct(f, f);
+  };
+
+  (void)compute_contact_force_qoi(*solid_solver);
+
+  // Compute adjoint/shape sensitivity for this QoI.
+  const auto f_base = solid_solver->dual(axom::fmt::format("contact_force_{}", contact_interaction_id));
+  const auto interaction_jacobian = solid_solver->contactInteraction(contact_interaction_id).jacobianContribution();
+  auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
+  SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
+
+  FiniteElementDual displacement_adjoint_load(solid_solver->state("displacement").space(),
+                                              "contact_force_qoi_adjoint_load");
+  displacement_adjoint_load = 0.0;
+  J00->MultTranspose(f_base, displacement_adjoint_load);
+
+  // Our shape sensitivity has an explicit term (dJ/d(shape) with u=const) which depends only on the contact
+  // interaction force:
+  //   dJ/d(shape) = (df_contact,i/d(shape))^T * f_contact,i
+  //
+  // In this contact implementation, the shape displacement DOFs enter the current coordinates additively in the same
+  // way as the displacement DOFs (see ContactData::setDisplacements), so:
+  //   df_contact,i/d(shape) = df_contact,i/du
+  // and we can reuse the (0,0) Jacobian block J00 = df_contact,i/du.
+  FiniteElementDual explicit_shape_term(solid_solver->shapeDisplacement().space(), "contact_force_qoi_explicit_shape");
+  explicit_shape_term = 0.0;
+  J00->MultTranspose(f_base, explicit_shape_term);
+
+  solid_solver->setAdjointLoad({{"displacement", displacement_adjoint_load}});
+  solid_solver->reverseAdjointTimestep();
+
+  const FiniteElementDual implicit_shape_term =
+      static_cast<BasePhysics&>(*solid_solver).computeTimestepShapeSensitivity();
+
+  FiniteElementDual total_shape_sensitivity(implicit_shape_term.space(), "contact_force_qoi_total_shape");
+  total_shape_sensitivity = implicit_shape_term;
+  total_shape_sensitivity.Add(1.0, explicit_shape_term);
+
+  FiniteElementState derivative_direction(total_shape_sensitivity.space(), "derivative_direction");
+  fillDirection(*solid_solver, derivative_direction);
+
+  auto compute_qoi_adjusting_shape = [&](SolidMechT& solver, double scale) -> double {
+    FiniteElementState shape_disp(solver.shapeDisplacement().space(), "input_shape_displacement");
+    shape_disp = 0.0;
+    shape_disp.Add(scale, derivative_direction);
+    solver.setShapeDisplacement(shape_disp);
+    return compute_contact_force_qoi(solver);
+  };
+
+  const double qoi_plus = compute_qoi_adjusting_shape(*solid_solver, eps);
+  const double qoi_minus = compute_qoi_adjusting_shape(*solid_solver, -eps);
+
+  const double directional_deriv = innerProduct(derivative_direction, total_shape_sensitivity);
+  const double directional_deriv_fd = (qoi_plus - qoi_minus) / (2.0 * eps);
+
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, 10.0 * eps);
+}
+
+TEST_F(ContactSensitivityFixture, ContactForceDualAdjointBcsMatchesEquivalentAdjointLoad)
+{
+  // Verify that providing a seed for a contact force dual via setDualAdjointBcs({"contact_force_<id>", seed})
+  // produces the same displacement adjoint as providing the equivalent adjoint load
+  //   dJ/du = (df_i/du)^T * dJ/df_i
+  // directly via setAdjointLoad.
+  constexpr int contact_interaction_id = 0;
+
+  auto solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  solver->resetStates();
+  solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver->cycle());
+
+  FiniteElementState dJ_df(solver->state("displacement").space(), "dJ_df");
+  fillDirection(*solver, dJ_df);
+
+  // 1) Solve adjoint with the contact-force seed provided via setDualAdjointBcs.
+  FiniteElementDual zero_load(solver->state("displacement").space(), "zero_load");
+  zero_load = 0.0;
+  solver->setAdjointLoad({{"displacement", zero_load}});
+  solver->setDualAdjointBcs({{axom::fmt::format("contact_force_{}", contact_interaction_id), dJ_df}});
+  solver->reverseAdjointTimestep();
+
+  FiniteElementState lambda_from_seed(solver->adjoint("displacement"));
+
+  // 2) Re-run the forward step and solve the adjoint using the equivalent adjoint load.
+  solver->resetStates();
+  solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver->cycle());
+
+  const auto interaction_jacobian = solver->contactInteraction(contact_interaction_id).jacobianContribution();
+  auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
+  SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
+
+  FiniteElementDual equivalent_load(solver->state("displacement").space(), "equivalent_load");
+  equivalent_load = 0.0;
+  J00->MultTranspose(dJ_df, equivalent_load);
+
+  solver->setAdjointLoad({{"displacement", equivalent_load}});
+  solver->reverseAdjointTimestep();
+
+  const auto& lambda_from_load = solver->adjoint("displacement");
+
+  FiniteElementState diff(lambda_from_seed);
+  diff.Add(-1.0, lambda_from_load);
+
+  EXPECT_NEAR(diff.Norml2(), 0.0, 1.0e-10);
+}
+
 }  // namespace smith
 
 int main(int argc, char* argv[])
