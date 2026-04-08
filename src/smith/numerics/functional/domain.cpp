@@ -545,8 +545,9 @@ const BlockElementRestriction& Domain::get_restriction(FunctionSpace space) { re
 
 void Domain::insert_shared_interior_face_list()
 {
-  // Weights only need to be computed for Domain of InteriorFaces type
-  SLIC_ERROR_ROOT_IF(type_ != Domain::Type::InteriorFaces, "This method is only for interior face domains");
+  // Weights only need to be computed for Domain of InteriorBoundaryElements type
+  SLIC_ERROR_ROOT_IF(type_ != Domain::Type::InteriorBoundaryElements,
+                     "This method is only for interior boundary element domains");
 
   // make a list if we don't already have one
   if (shared_interior_face_ids_.empty()) {
@@ -621,10 +622,10 @@ Domain EntireBoundary(const mesh_t& mesh)
   }
 }
 
-/// @brief constructs a domain from all the interior face elements in a mesh
-Domain EntireInteriorFaces(const mesh_t& mesh)
+/// @brief constructs a domain from all the interior boundary elements in a mesh
+Domain EntireInteriorBoundary(const mesh_t& mesh)
 {
-  Domain output{mesh, mesh.SpaceDimension() - 1, Domain::Type::InteriorFaces};
+  Domain output{mesh, mesh.SpaceDimension() - 1, Domain::Type::InteriorBoundaryElements};
 
   int edge_id = 0;
   int tri_id = 0;
@@ -660,12 +661,13 @@ Domain EntireInteriorFaces(const mesh_t& mesh)
   return output;
 }
 
-/// @brief constructs a domain from some subset of the interior face elements in a mesh
+/// @brief constructs a domain from some subset of the interior boundary elements in a mesh
 template <int d>
-Domain domain_of_interior_faces(const mesh_t& mesh, std::function<bool(std::vector<tensor<double, d>>, int)> predicate)
+Domain domain_of_interior_boundaries(const mesh_t& mesh,
+                                     std::function<bool(std::vector<tensor<double, d>>, int)> predicate)
 {
   assert(mesh.SpaceDimension() == d);
-  Domain output{mesh, d - 1, Domain::Type::InteriorFaces};
+  Domain output{mesh, d - 1, Domain::Type::InteriorBoundaryElements};
 
   mfem::Array<int> face_id_to_bdr_id = mesh.GetFaceToBdrElMap();
   mfem::Vector vertices;
@@ -724,14 +726,14 @@ Domain domain_of_interior_faces(const mesh_t& mesh, std::function<bool(std::vect
   return output;
 }
 
-Domain Domain::ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func)
+Domain Domain::ofInteriorBoundaryElements(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func)
 {
-  return domain_of_interior_faces<2>(mesh, func);
+  return domain_of_interior_boundaries<2>(mesh, func);
 }
 
-Domain Domain::ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func)
+Domain Domain::ofInteriorBoundaryElements(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func)
 {
-  return domain_of_interior_faces<3>(mesh, func);
+  return domain_of_interior_boundaries<3>(mesh, func);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////

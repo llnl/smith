@@ -82,7 +82,7 @@ TEST(patch_test_meshes, triangle_domains)
     EXPECT_EQ(L2_BER.ESize(), 4 * 3);
   }
 
-  Domain interior = EntireInteriorFaces(*mesh);
+  Domain interior = EntireInteriorBoundary(*mesh);
   EXPECT_EQ(interior.mfem_edge_ids_.size(), 4);
   EXPECT_EQ(interior.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_quad_ids_.size(), 0);
@@ -152,7 +152,7 @@ TEST(patch_test_meshes, quadrilateral_domains)
     EXPECT_EQ(L2_BER.ESize(), 4 * 3);
   }
 
-  Domain interior = EntireInteriorFaces(*mesh);
+  Domain interior = EntireInteriorBoundary(*mesh);
   EXPECT_EQ(interior.mfem_edge_ids_.size(), 8);
   EXPECT_EQ(interior.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_quad_ids_.size(), 0);
@@ -222,7 +222,7 @@ TEST(patch_test_meshes, triangle_and_quadrilateral_domains)
     EXPECT_EQ(L2_BER.ESize(), 4 * 3);
   }
 
-  Domain interior = EntireInteriorFaces(*mesh);
+  Domain interior = EntireInteriorBoundary(*mesh);
   EXPECT_EQ(interior.mfem_edge_ids_.size(), 9);
   EXPECT_EQ(interior.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_quad_ids_.size(), 0);
@@ -292,7 +292,7 @@ TEST(patch_test_meshes, tetrahedron_domains)
     EXPECT_EQ(L2_BER.ESize(), 12 * 6);
   }
 
-  Domain interior = EntireInteriorFaces(*mesh);
+  Domain interior = EntireInteriorBoundary(*mesh);
   EXPECT_EQ(interior.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_tri_ids_.size(), 18);
   EXPECT_EQ(interior.mfem_quad_ids_.size(), 0);
@@ -362,7 +362,7 @@ TEST(patch_test_meshes, hexahedron_domains)
     EXPECT_EQ(L2_BER.ESize(), 6 * 9);
   }
 
-  Domain interior = EntireInteriorFaces(*mesh);
+  Domain interior = EntireInteriorBoundary(*mesh);
   EXPECT_EQ(interior.mfem_edge_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_tri_ids_.size(), 0);
   EXPECT_EQ(interior.mfem_quad_ids_.size(), 18);

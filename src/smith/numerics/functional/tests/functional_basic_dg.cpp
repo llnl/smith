@@ -42,7 +42,7 @@ void L2_test(std::string meshfile)
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space)> residual(&fespace, {&fespace});
 
-  Domain interior_faces = EntireInteriorFaces(*mesh);
+  Domain interior_faces = EntireInteriorBoundary(*mesh);
 
   residual.AddInteriorFaceIntegral(
       Dimension<dim - 1>{}, DependsOn<0>{},
@@ -101,7 +101,7 @@ void L2_qoi_test(std::string meshfile)
   // Construct the new functional object using the specified test and trial spaces
   Functional<double(trial_space)> qoi({&fespace});
 
-  Domain interior_faces = EntireInteriorFaces(*mesh);
+  Domain interior_faces = EntireInteriorBoundary(*mesh);
 
   qoi.AddInteriorFaceIntegral(
       Dimension<dim - 1>{}, DependsOn<0>{},
@@ -168,7 +168,7 @@ void L2_scalar_valued_test(std::string meshfile)
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space_0, trial_space_1)> residual(&fespace_0, {&fespace_0, &fespace_1});
 
-  Domain interior_faces = EntireInteriorFaces(*mesh);
+  Domain interior_faces = EntireInteriorBoundary(*mesh);
 
   residual.AddInteriorFaceIntegral(
       Dimension<dim - 1>{}, DependsOn<0, 1>{},

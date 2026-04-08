@@ -513,7 +513,7 @@ TEST(domain, ofInteriorBoundaryElements)
   auto meshInput = buildMeshFromFile(SMITH_REPO_DIR "/data/meshes/SplitCubeTest.g");
   auto mesh = smith::mesh::refineAndDistribute(std::move(meshInput), 0, 0);
 
-  Domain d0 = Domain::ofInteriorFaces(*mesh, by_attr<3>(2));
+  Domain d0 = Domain::ofInteriorBoundaryElements(*mesh, by_attr<3>(2));
 
   auto [trial_fespace, trial_fec] = smith::generateParFiniteElementSpace<trial_space>(mesh.get());
   mfem::Vector U(trial_fespace->TrueVSize());

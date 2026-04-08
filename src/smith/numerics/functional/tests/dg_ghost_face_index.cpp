@@ -61,7 +61,7 @@ void L2_index_test(std::string meshfile)
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space)> residual(test_fespace.get(), {trial_fespace.get()});
 
-  Domain interior_faces = EntireInteriorFaces(*mesh);
+  Domain interior_faces = EntireInteriorBoundary(*mesh);
 
   // Define the integral of jumps over all interior faces
   residual.AddInteriorFaceIntegral(

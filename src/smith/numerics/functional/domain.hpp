@@ -36,7 +36,7 @@ struct Domain {
   {
     Elements,
     BoundaryElements,
-    InteriorFaces
+    InteriorBoundaryElements
   };
 
   static constexpr int num_types = 3;  ///< the number of entries in the Type enum
@@ -168,16 +168,16 @@ struct Domain {
   static Domain ofBoundaryElements(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func);
 
   /**
-   * @brief create a domain from some subset of the interior faces in an a mesh
+   * @brief create a domain from some subset of the interior boundary elements in an a mesh
    * @param mesh the entire mesh
-   * @param func predicate function for determining which interior faces will be
+   * @param func predicate function for determining which interior boundary elements will be
    * included in this domain. The function's arguments are the list of vertex coordinates and
    * an attribute index (if appropriate).
    */
-  static Domain ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func);
+  static Domain ofInteriorBoundaryElements(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func);
 
   /// @overload
-  static Domain ofInteriorFaces(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func);
+  static Domain ofInteriorBoundaryElements(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func);
 
   /// @brief get elements by geometry type
   const std::vector<int>& get(mfem::Geometry::Type geom) const
@@ -279,8 +279,8 @@ Domain EntireDomain(const mesh_t& mesh);
 /// @brief constructs a domain from all the boundary elements in a mesh
 Domain EntireBoundary(const mesh_t& mesh);
 
-/// @brief constructs a domain from all the interior face elements in a mesh
-Domain EntireInteriorFaces(const mesh_t& mesh);
+/// @brief constructs a domain from all the interior boundary elements in a mesh
+Domain EntireInteriorBoundary(const mesh_t& mesh);
 
 /// @brief create a new domain that is the union of `a` and `b`
 Domain operator|(const Domain& a, const Domain& b);
