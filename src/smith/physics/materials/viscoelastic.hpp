@@ -11,12 +11,13 @@
  */
 
 #include "smith/infrastructure/accelerator.hpp"
+#include "smith/numerics/functional/isotropic_tensor.hpp"
 #include "smith/numerics/functional/tensor.hpp"
 
 
 #pragma once
 
-namespace smith {
+namespace smith::solid_mechanics {
 
 /**
  * @brief Finite deformation viscoelastic model
@@ -25,6 +26,11 @@ struct Viscoelastic {
   static constexpr int dim = 3; ///< This model is implemented in 3D only. 
   template <typename T> using InternalState = tensor<T, dim*dim>;  ///< Internal state variable: inelastic distortion tensor (flattened)
   template <typename T> using Tensor = tensor<T, dim, dim>;
+
+  static InternalState<double> initial_internal_state()
+  {
+    return Identity<dim>();
+  }
 
   /** 
    * @brief Stress due to the equilibrium branch
@@ -189,6 +195,7 @@ struct Viscoelastic {
     return psi_inf + psi_0 + Pi;
   }
 
+  double density;
   double K_inf;  ///< equiibrium bulk modulus
   double G_inf;  ///< equilibrium shear modulus
   double alpha_inf; ///< equilibrium thermal expansion coefficient
@@ -204,4 +211,4 @@ struct Viscoelastic {
   double rho_r; ///< density in the reference configuration
 };
 
-} // namespace smith
+} // namespace smith::solid_mechanics
