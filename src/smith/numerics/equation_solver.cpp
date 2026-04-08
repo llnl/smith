@@ -99,6 +99,7 @@ class NewtonSolver : public mfem::NewtonSolver {
 
     real_t norm, norm_goal = 0;
     norm = initial_norm = evaluateNorm(x, r);
+    if (norm == 0.0) return;
 
     if (print_level == 1) {
       mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -648,6 +649,8 @@ class TrustRegion : public mfem::NewtonSolver {
 
     real_t norm, norm_goal = 0.0;
     norm = initial_norm = computeResidual(X, r);
+    if (norm == 0.0) return;
+
     norm_goal = std::max(rel_tol * initial_norm, abs_tol);
 
     if (print_level == 1) {
