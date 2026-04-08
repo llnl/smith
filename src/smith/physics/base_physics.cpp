@@ -75,21 +75,19 @@ void BasePhysics::initializeBasePhysicsStates(int cycle, double time)
 
 void BasePhysics::setParameter(const size_t parameter_index, const FiniteElementState& parameter_state)
 {
-  SLIC_ERROR_ROOT_IF(
-      parameter_index >= parameters_.size(),
-      axom::fmt::format("Parameter '{}' requested when only '{}' parameters exist in physics module '{}'",
-                        parameter_index, parameters_.size(), name_));
+  SLIC_ERROR_ROOT_IF(parameter_index >= parameters_.size(),
+                     std::format("Parameter '{}' requested when only '{}' parameters exist in physics module '{}'",
+                                 parameter_index, parameters_.size(), name_));
 
   SLIC_ERROR_ROOT_IF(&parameter_state.mesh() != &mfemParMesh(),
-                     axom::fmt::format("Mesh of parameter '{}' is not the same as the physics mesh", parameter_index));
+                     std::format("Mesh of parameter '{}' is not the same as the physics mesh", parameter_index));
 
   SLIC_ERROR_ROOT_IF(
       parameter_state.space().GetTrueVSize() != parameters_[parameter_index].state->space().GetTrueVSize(),
-      axom::fmt::format(
-          "Physics module parameter '{}' has size '{}' while given state has size '{}'. The finite element "
-          "spaces are inconsistent.",
-          parameter_index, parameters_[parameter_index].state->space().GetTrueVSize(),
-          parameter_state.space().GetTrueVSize()));
+      std::format("Physics module parameter '{}' has size '{}' while given state has size '{}'. The finite element "
+                  "spaces are inconsistent.",
+                  parameter_index, parameters_[parameter_index].state->space().GetTrueVSize(),
+                  parameter_state.space().GetTrueVSize()));
   *parameters_[parameter_index].state = parameter_state;
 }
 
@@ -104,13 +102,13 @@ const FiniteElementDual& BasePhysics::shapeDisplacementSensitivity() const { ret
 
 FiniteElementDual BasePhysics::computeTimestepSensitivity(size_t parameter_index)
 {
-  SLIC_ERROR_ROOT(axom::fmt::format("Parameter sensitivities not enabled in physics module {}", name_));
+  SLIC_ERROR_ROOT(std::format("Parameter sensitivities not enabled in physics module {}", name_));
   return *parameters_[parameter_index].sensitivity;
 }
 
 const FiniteElementDual& BasePhysics::computeTimestepShapeSensitivity()
 {
-  SLIC_ERROR_ROOT(axom::fmt::format("Shape sensitivities not enabled in physics module {}", name_));
+  SLIC_ERROR_ROOT(std::format("Shape sensitivities not enabled in physics module {}", name_));
   return shapeDisplacementSensitivity();
 }
 
@@ -245,7 +243,7 @@ void BasePhysics::initializeSummary(axom::sidre::DataStore& datastore, double t_
   axom::sidre::Group* sidre_root = datastore.getRoot();
   SLIC_ERROR_ROOT_IF(
       sidre_root->hasGroup(summary_group_name),
-      axom::fmt::format("Sidre Group '{0}' cannot exist when initializeSummary is called", summary_group_name));
+      std::format("Sidre Group '{0}' cannot exist when initializeSummary is called", summary_group_name));
   axom::sidre::Group* summary_group = sidre_root->createGroup(summary_group_name);
 
   // Write run info
@@ -284,7 +282,7 @@ void BasePhysics::saveSummary(axom::sidre::DataStore& datastore, const double t)
     axom::sidre::Group* sidre_root = datastore.getRoot();
     const std::string curves_group_name = "smith_summary/curves";
     SLIC_ERROR_IF(!sidre_root->hasGroup(curves_group_name),
-                  axom::fmt::format("Sidre Group '{0}' did not exist when saveCurves was called", curves_group_name));
+                  std::format("Sidre Group '{0}' did not exist when saveCurves was called", curves_group_name));
     curves_group = sidre_root->getGroup(curves_group_name);
 
     // Save time step
@@ -348,16 +346,14 @@ FiniteElementState BasePhysics::loadCheckpointedState(const std::string& state_n
     }
 
     // Ensure that the state name exists in this physics module
-    SLIC_ERROR_ROOT_IF(
-        cached_checkpoint_states_.find(state_name) == cached_checkpoint_states_.end(),
-        axom::fmt::format("Requested state name {} does not exist in physics module {}.", state_name, name_));
+    SLIC_ERROR_ROOT_IF(cached_checkpoint_states_.find(state_name) == cached_checkpoint_states_.end(),
+                       std::format("Requested state name {} does not exist in physics module {}.", state_name, name_));
     return cached_checkpoint_states_.at(state_name);
   }
 
   // Ensure that the state name exists in this physics module
-  SLIC_ERROR_ROOT_IF(
-      checkpoint_states_.find(state_name) == checkpoint_states_.end(),
-      axom::fmt::format("Requested state name {} does not exist in physics module {}.", state_name, name_));
+  SLIC_ERROR_ROOT_IF(checkpoint_states_.find(state_name) == checkpoint_states_.end(),
+                     std::format("Requested state name {} does not exist in physics module {}.", state_name, name_));
 
   return checkpoint_states_.at(state_name)[static_cast<size_t>(cycle)];
 }
@@ -392,10 +388,10 @@ std::unordered_map<std::string, FiniteElementState> BasePhysics::getCheckpointed
 
 double BasePhysics::getCheckpointedTimestep(int cycle) const
 {
-  SLIC_ERROR_ROOT_IF(cycle < 0, axom::fmt::format("Negative cycle number requested for physics module {}.", name_));
+  SLIC_ERROR_ROOT_IF(cycle < 0, std::format("Negative cycle number requested for physics module {}.", name_));
   SLIC_ERROR_ROOT_IF(cycle > static_cast<int>(timesteps_.size()),
-                     axom::fmt::format("Timestep for cycle {} requested, but physics module has only reached cycle {}.",
-                                       cycle, timesteps_.size()));
+                     std::format("Timestep for cycle {} requested, but physics module has only reached cycle {}.",
+                                 cycle, timesteps_.size()));
   return cycle < static_cast<int>(timesteps_.size()) ? timesteps_[static_cast<size_t>(cycle)] : 0.0;
 }
 

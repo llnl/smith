@@ -5,13 +5,13 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <algorithm>
+#include <format>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "gtest/gtest.h"
 #include "mpi.h"
-#include "axom/fmt.hpp"
 #include "mfem.hpp"
 
 #include "smith/smith_config.hpp"
@@ -148,13 +148,13 @@ TEST(LiquidCrystalElastomer, Bertoldi)
   // Perform remaining quasi-static solve
   for (int i = 0; i < num_steps; i++) {
     SLIC_INFO_ROOT(
-        axom::fmt::format("\n\n............................"
-                          "\n... Entering time step: {} ({})"
-                          "\n............................\n"
-                          "\n... Using order parameter: {}"
-                          "\n... Using gamma = {}, and eta = {}"
-                          "\n... Min Y displacement: {}\n",
-                          i + 1, num_steps, max_order_param * (tmax - t) / tmax, gamma_angle, eta_angle, gblDispYmin));
+        std::format("\n\n............................"
+                    "\n... Entering time step: {} ({})"
+                    "\n............................\n"
+                    "\n... Using order parameter: {}"
+                    "\n... Using gamma = {}, and eta = {}"
+                    "\n... Min Y displacement: {}\n",
+                    i + 1, num_steps, max_order_param * (tmax - t) / tmax, gamma_angle, eta_angle, gblDispYmin));
 
     // solve problem with current parameters
     solid_solver.advanceTimestep(dt);
@@ -172,7 +172,7 @@ TEST(LiquidCrystalElastomer, Bertoldi)
 
     double lclDispYmin = dispVecY.Min();
     MPI_Allreduce(&lclDispYmin, &gblDispYmin, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
-    SLIC_INFO_ROOT(axom::fmt::format("... Min Y displacement: {}\n", gblDispYmin));
+    SLIC_INFO_ROOT(std::format("... Min Y displacement: {}\n", gblDispYmin));
 
     // update pseudotime-dependent information
     t += dt;
