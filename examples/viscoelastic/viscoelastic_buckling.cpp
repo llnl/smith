@@ -15,6 +15,9 @@
 #include "axom/inlet.hpp"
 #include "axom/CLI11.hpp"
 #include "mfem.hpp"
+#include "smith/numerics/functional/functional.hpp"
+#include "smith/physics/common.hpp"
+#include "smith/physics/materials/viscoelastic.hpp"
 #include "smith/smith.hpp"
 
 using namespace smith;
@@ -93,27 +96,38 @@ int main(int argc, char* argv[])
   smith::StateManager::initialize(datastore, name + "_data");
 
   // Create and refine mesh
-  std::string filename = SMITH_REPO_DIR "/data/meshes/hemispherical_cap.g";
+  std::string filename = SMITH_REPO_DIR "/data/meshes/cap.g";
   auto mesh = std::make_shared<smith::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
 
   // Surfaces for boundary conditions
-  mesh->addDomainOfBoundaryElements("xsymm", smith::by_attr<dim>(1));
-  mesh->addDomainOfBoundaryElements("zsymm", smith::by_attr<dim>(2));
+  mesh->addDomainOfBoundaryElements("zsymm", smith::by_attr<dim>(1));
+  mesh->addDomainOfBoundaryElements("xsymm", smith::by_attr<dim>(2));
   mesh->addDomainOfBoundaryElements("bottom", smith::by_attr<dim>(3));
   mesh->addDomainOfBoundaryElements("top", smith::by_attr<dim>(4));
 
-  // Create solver, either with or without contact
+  // temperature parameter field
+  smith::FiniteElementState temperature(mesh->mfemParMesh(), smith::H1<0>{}, "temperature");
+  temperature = 300.0;
+
+  // Create solver
   std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
-  solid_solver = std::make_unique<smith::SolidMechanics<p, dim>>(
+  solid_solver = std::make_unique<smith::SolidMechanics<p, dim, smith::Parameters<smith::H1<0>>>>(
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh);
 
   solid_solver->setTraction([&](auto&, double t) { return std::sin(2*M_PI*t); }, mesh->domain("top"));
 
-  // Define a Neo-Hookean material
-  auto lambda = 1.0;
-  auto G = 0.1;
-  solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
-  solid_solver->setMaterial(mat, mesh->entireBody());
+  double G_inf = 1e3;
+  double G_0 = 3*G_inf;
+  double G_g = G_inf + G_0;
+  double nu_g = 0.45;
+  double K = 2.0/3.0*G_g*(1.0 + nu_g)/(1.0 - 2.0*nu_g);
+  // solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
+  // solid_solver->setMaterial(mat, mesh->entireBody());
+  solid_mechanics::Viscoelastic mat{.density = 1.0, .K_inf = K, .G_inf = G_inf, .alpha_inf = 0.0,
+                                    .theta_sf = 300.0, .G_0 = G_0, .eta_0 = 2.0, .theta_r = 300.0,
+                                    .C1 = 0.0, .C2 = 50.0};
+  auto internal_states = solid_solver->createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::initial_internal_state(), mesh->entireBody());
+  solid_solver->setRateDependentMaterial(smith::DependsOn<0>, mat, mesh->entireBody(), internal_states);
 
   // Set up essential boundary conditions
   // Bottom of cylinder is fixed
