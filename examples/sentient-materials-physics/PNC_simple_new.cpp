@@ -41,7 +41,7 @@ static constexpr int displacement_order = 1;
 static constexpr int temperature_order = 1;
 
 struct Options {
-  int scale = 3;
+  int scale = 1;
   int nx = 4*scale;
   int ny = 4*scale;
   int nz = 1;
@@ -267,7 +267,7 @@ struct LocalSimplePNCMaterial {
   double C_v = 25.;          ///< net volumetric heat capacity (must account for matrix+chain+particle)
   double thermal_conductivity = 0.5;    ///< net thermal conductivity (must account for matrix+chain+particle)
   double ambient_temperature = 353.;    ///< reference temperature, K, set to 353
-  double gw = 0.1;           ///< particle weight fraction
+  double gw = 0.3;           ///< particle weight fraction
   double density = 1.0;      ///< net density, not really needed
   double modscale = 1.;      ///< modulus scale factor. The modulus units will be Pa*modscale, so 1=Pa, 1000=kPa, eta.
 };
