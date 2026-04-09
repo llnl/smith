@@ -21,6 +21,10 @@
 .src_build_on_toss4:
   extends: [.src_build_script, .on_toss4, .src_workflow]
 
+# NOTE: the asan build is just a src build with a different pipeline schedule, so re-use src build script.
+.asan_build_on_toss4:
+  extends: [.src_build_script, .on_toss4, .asan_workflow]
+
 .examples_build_on_toss4:
   extends: [.examples_build_script, .on_toss4, .examples_workflow]
 
@@ -96,7 +100,7 @@ toss4-llvm_19_1_3-src-asan:
     LSAN_OPTIONS: "suppressions=${CI_PROJECT_DIR}/suppressions.asan"
     ALLOC_NODES: "1"
     ALLOC_TIME: "30"
-  extends: .src_build_on_toss4
+  extends: .asan_build_on_toss4
 
 toss4-llvm_19_1_3-tpl:
   variables:
