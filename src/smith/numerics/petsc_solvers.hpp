@@ -329,7 +329,7 @@ class PetscKSPSolver : virtual public mfem::IterativeSolver, public mfem::PetscL
 
   /**
    * @brief Cleanup extra petsc variables (pa_, B, X)
-   * 
+   *
    */
   ~PetscKSPSolver();
 

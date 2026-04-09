@@ -78,8 +78,6 @@ stages:
   script:
     # Build source, run unit tests, and test install examples. Conditionally run
     # integration tests
-    - echo $LSAN_OPTIONS # TODO remove
-    - echo $ASAN_OPTIONS # TODO remove
     - echo -e "section_start:$(date +%s):src_build_and_unit_test\r\e[0K
       Source Build and Unit Tests ${CI_PROJECT_NAME}"
     - ./scripts/gitlab/build_and_test.sh
