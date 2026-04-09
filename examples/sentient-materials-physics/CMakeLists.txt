@@ -47,6 +47,12 @@ smith_add_executable(NAME       bz_staggered_thermomechanics
                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                      DEPENDS_ON smith
                      )
+
+smith_add_executable(NAME       PNC_simple_new
+                     SOURCES   PNC_simple_new.cpp
+                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                     DEPENDS_ON smith
+                     )
 install(
     FILES
         PNC_double_network_test.cpp
@@ -75,6 +81,13 @@ install(
         examples/smith/square_lattice_test
 )
 
+install(
+    FILES
+        PNC_simple_new.cpp
+    DESTINATION
+        examples/smith/PNC_simple_new
+)
+
 if(SMITH_ENABLE_TESTS)
     blt_add_test(NAME          PNC_double_network_test
                  COMMAND       PNC_double_network_test
@@ -87,5 +100,8 @@ if(SMITH_ENABLE_TESTS)
                  NUM_MPI_TASKS 1 )
     blt_add_test(NAME          PNC_double_network_simple
                  COMMAND       PNC_double_network_simple
+                 NUM_MPI_TASKS 1 )
+    blt_add_test(NAME          PNC_simple_new
+                 COMMAND       PNC_simple_new
                  NUM_MPI_TASKS 1 )
 endif()
