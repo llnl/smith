@@ -137,12 +137,12 @@ smith::NonlinearSolverOptions makeMechanicsNonlinearOptions()
 
 smith::LinearSolverOptions makeThermalLinearOptions()
 {
-  return smith::LinearSolverOptions{.linear_solver = smith::LinearSolver::SuperLU};
+  return smith::LinearSolverOptions{.linear_solver = smith::LinearSolver::Strumpack};
 }
 
 smith::NonlinearSolverOptions makeThermalNonlinearOptions()
 {
-  return smith::NonlinearSolverOptions{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
+  return smith::NonlinearSolverOptions{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
                                        .relative_tol = 1.0e-8,
                                        .absolute_tol = 1.0e-8,
                                        .max_iterations = 15,
