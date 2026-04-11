@@ -128,8 +128,19 @@ FieldState FieldStore::getParameter(const std::string& param_name) const
 
 void FieldStore::setField(const std::string& field_name, FieldState updated_field)
 {
-  size_t field_index = getFieldIndex(field_name);
-  states_[field_index] = updated_field;
+  if (to_states_index_.count(field_name)) {
+    states_[to_states_index_.at(field_name)] = updated_field;
+    return;
+  }
+  if (to_params_index_.count(field_name)) {
+    params_[to_params_index_.at(field_name)] = updated_field;
+    return;
+  }
+  if (!shape_disp_.empty() && shape_disp_[0].get()->name() == field_name) {
+    shape_disp_[0] = updated_field;
+    return;
+  }
+  SLIC_ERROR("Field '" << field_name << "' not found in setField");
 }
 
 FieldState FieldStore::getShapeDisp() const { return shape_disp_[0]; }
@@ -213,12 +224,50 @@ void FieldStore::setField(size_t index, FieldState updated_field) { states_[inde
 
 void FieldStore::addWeakFormReaction(std::string weak_form_name, std::string field_name)
 {
-  weak_form_to_test_field_[weak_form_name] = field_name;
+  for (auto& kv : weak_form_to_test_field_) {
+    if (kv.first == weak_form_name) {
+      kv.second = field_name;
+      return;
+    }
+  }
+  weak_form_to_test_field_.push_back({weak_form_name, field_name});
 }
 
 std::string FieldStore::getWeakFormReaction(const std::string& weak_form_name) const
 {
-  return weak_form_to_test_field_.at(weak_form_name);
+  for (const auto& kv : weak_form_to_test_field_) {
+    if (kv.first == weak_form_name) {
+      return kv.second;
+    }
+  }
+  SLIC_ERROR("Reaction field not found for weak form " << weak_form_name);
+  return "";
+}
+
+const std::vector<FieldState>& FieldStore::getParameterFields() const { return params_; }
+
+const std::vector<FieldState>& FieldStore::getStateFields() const { return states_; }
+
+std::vector<FieldState> FieldStore::getOutputFieldStates() const
+{
+  std::vector<FieldState> output;
+  for (size_t i = 0; i < states_.size(); ++i) {
+    if (!is_solve_state_[i]) {
+      output.push_back(states_[i]);
+    }
+  }
+  return output;
+}
+
+std::vector<ReactionInfo> FieldStore::getReactionInfos() const
+{
+  std::vector<ReactionInfo> infos;
+  for (const auto& kv : weak_form_to_test_field_) {
+    const std::string& weak_form_name = kv.first;
+    const std::string& field_name = kv.second;
+    infos.push_back({weak_form_name, &getField(field_name).get()->space()});
+  }
+  return infos;
 }
 
 }  // namespace smith

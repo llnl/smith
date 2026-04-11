@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "smith/differentiable_numerics/coupled_system_solver.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/physics/weak_form.hpp"
@@ -18,35 +18,37 @@
 
 namespace smith {
 
-CoupledSystemSolver::CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolverBase> single_solver)
+SystemSolver::SystemSolver(std::shared_ptr<NonlinearBlockSolverBase> single_solver)
     : max_staggered_iterations_(1), exact_staggered_steps_(false)
 {
   addSubsystemSolver({}, std::move(single_solver));
 }
 
-CoupledSystemSolver::CoupledSystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
+SystemSolver::SystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
     : max_staggered_iterations_(max_staggered_iterations), exact_staggered_steps_(exact_staggered_steps)
 {
   SLIC_ERROR_IF(max_staggered_iterations <= 0, "max_staggered_iterations must be > 0");
 }
 
-void CoupledSystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
-                                             std::shared_ptr<NonlinearBlockSolverBase> solver, double relaxation_factor)
+void SystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
+                                      std::shared_ptr<NonlinearBlockSolverBase> solver, double relaxation_factor)
 {
-  SLIC_ERROR_IF(!solver, "CoupledSystemSolver stage solver must be non-null");
+  SLIC_ERROR_IF(!solver, "SystemSolver stage solver must be non-null");
   SLIC_ERROR_IF(relaxation_factor <= 0.0 || relaxation_factor > 1.0,
                 axom::fmt::format("Stage relaxation_factor {} must be in (0, 1]", relaxation_factor));
 
   stages_.push_back(Stage{block_indices, std::move(solver), relaxation_factor});
 }
 
-std::vector<FieldState> CoupledSystemSolver::solve(
-    const std::vector<WeakForm*>& residual_evals, const std::vector<std::vector<size_t>>& block_indices,
-    const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
-    const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
-    const std::vector<const BoundaryConditionManager*>& bc_managers) const
+std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residual_evals,
+                                            const std::vector<std::vector<size_t>>& block_indices,
+                                            const FieldState& shape_disp,
+                                            const std::vector<std::vector<FieldState>>& states,
+                                            const std::vector<std::vector<FieldState>>& params,
+                                            const TimeInfo& time_info,
+                                            const std::vector<const BoundaryConditionManager*>& bc_managers) const
 {
-  SLIC_ERROR_IF(stages_.empty(), "CoupledSystemSolver has no stages defined.");
+  SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
 
   size_t num_residuals = residual_evals.size();
   std::vector<Stage> active_stages = stages_;
@@ -188,12 +190,12 @@ std::vector<FieldState> CoupledSystemSolver::solve(
   return final_solutions;
 }
 
-std::shared_ptr<CoupledSystemSolver> CoupledSystemSolver::singleBlockSolver(size_t block_index) const
+std::shared_ptr<SystemSolver> SystemSolver::singleBlockSolver(size_t block_index) const
 {
   constexpr bool exact_staggered_steps = true;
   for (const auto& stage : stages_) {
     if (stage.block_indices.empty()) {
-      auto result = std::make_shared<CoupledSystemSolver>(1, exact_staggered_steps);
+      auto result = std::make_shared<SystemSolver>(1, exact_staggered_steps);
       std::shared_ptr<NonlinearBlockSolverBase> stage_solver = stage.solver;
       if (const auto* equation_solver = dynamic_cast<const NonlinearBlockSolver*>(stage.solver.get())) {
         if (auto cloned_solver = equation_solver->cloneFresh()) {
@@ -207,7 +209,7 @@ std::shared_ptr<CoupledSystemSolver> CoupledSystemSolver::singleBlockSolver(size
 
     auto found = std::find(stage.block_indices.begin(), stage.block_indices.end(), block_index);
     if (found != stage.block_indices.end()) {
-      auto result = std::make_shared<CoupledSystemSolver>(1, exact_staggered_steps);
+      auto result = std::make_shared<SystemSolver>(1, exact_staggered_steps);
       std::shared_ptr<NonlinearBlockSolverBase> stage_solver = stage.solver;
       if (const auto* equation_solver = dynamic_cast<const NonlinearBlockSolver*>(stage.solver.get())) {
         if (auto cloned_solver = equation_solver->cloneFresh()) {

@@ -53,38 +53,10 @@ struct SolidMechanicsSystem : public SystemBase {
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
   std::shared_ptr<CycleZeroSolidWeakFormType>
-      cycle_zero_solid_weak_form;                        ///< Cycle-zero weak form for initial acceleration solve.
+      cycle_zero_solid_weak_form;                        ///< Typed cycle zero solid mechanics weak form.
+  std::shared_ptr<SystemBase> cycle_zero_system;         ///< Cycle-zero system for initial acceleration solve.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;  ///< Time integration rule.
-
-  /**
-   * @brief Get the list of all state fields (displacement_solve_state, displacement, velocity, acceleration).
-   * @return std::vector<FieldState> List of state fields.
-   */
-  std::vector<FieldState> getStateFields() const
-  {
-    return {field_store->getField(prefix("displacement_solve_state")), field_store->getField(prefix("displacement")),
-            field_store->getField(prefix("velocity")), field_store->getField(prefix("acceleration"))};
-  }
-
-  /**
-   * @brief Get the list of physical, non-solve state fields.
-   * @return std::vector<FieldState> List of physical fields suitable for output.
-   */
-  std::vector<FieldState> getOutputFieldStates() const
-  {
-    return {field_store->getField(prefix("displacement")), field_store->getField(prefix("velocity")),
-            field_store->getField(prefix("acceleration"))};
-  }
-
-  /**
-   * @brief Get information about reaction fields for this system.
-   * @return List of ReactionInfo structures.
-   */
-  std::vector<ReactionInfo> getReactionInfos() const
-  {
-    return {{prefix("reactions"), &field_store->getField(prefix("displacement")).get()->space()}};
-  }
 
   /**
    * @brief Create a DifferentiablePhysics object for this system.
@@ -93,9 +65,9 @@ struct SolidMechanicsSystem : public SystemBase {
    */
   std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_unique<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
-                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-                                                   advancer, physics_name, getReactionInfos());
+    return std::make_unique<DifferentiablePhysics>(
+        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), field_store->getStateFields(),
+        field_store->getParameterFields(), advancer, physics_name, field_store->getReactionInfos());
   }
 
   /**
@@ -300,6 +272,12 @@ struct SolidMechanicsSystem : public SystemBase {
   }
 };
 
+template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
+struct SolidMechanicsOptions {
+  std::string prepend_name{};
+  std::shared_ptr<SystemSolver> cycle_zero_solver{};
+};
+
 /**
  * @brief Factory function to build a solid dynamics system with configurable time integration.
  * @tparam dim Spatial dimension.
@@ -309,25 +287,23 @@ struct SolidMechanicsSystem : public SystemBase {
  * @param mesh The mesh.
  * @param solver The coupled system solver.
  * @param disp_time_rule The time integration rule.
- * @param prepend_name The name of the physics (used as field prefix).
- * @param cycle_zero_solver Optional override for the cycle-zero solve. Defaults to
- *        `solver->singleBlockSolver(0)`.
+ * @param options Options for system creation.
  * @param parameter_types Parameter field types.
  * @return SolidMechanicsSystem with all components initialized.
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
-SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> buildSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule disp_time_rule,
-    std::string prepend_name = "", std::shared_ptr<CoupledSystemSolver> cycle_zero_solver = nullptr,
+std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>> buildSolidMechanicsSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, DisplacementTimeRule disp_time_rule,
+    SolidMechanicsOptions<dim, order, DisplacementTimeRule, parameter_space...> options,
     FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
   auto prefix = [&](const std::string& name) {
-    if (prepend_name.empty()) {
+    if (options.prepend_name.empty()) {
       return name;
     }
-    return prepend_name + "_" + name;
+    return options.prepend_name + "_" + name;
   };
 
   // Add shape displacement
@@ -345,76 +321,85 @@ SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> build
   auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, prefix("acceleration"));
 
   // Add parameters
-  std::vector<FieldState> parameter_fields;
   (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
-  (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
 
   using SystemType = SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>;
+  auto sys = std::make_shared<SystemType>();
+  sys->field_store = field_store;
+  sys->solver = solver;
+  sys->disp_bc = disp_bc;
+  sys->disp_time_rule = disp_time_rule_ptr;
 
   // Create solid mechanics weak form (u, u_old, v_old, a_old)
   std::string force_name = prefix("solid_force");
-  auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
+  sys->solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
       force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
       field_store->createSpaces(force_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
-  // Create cycle-zero weak form (u, v, a) for initial acceleration solve — 3 states, no u_old
-  std::string cycle_zero_name = prefix("solid_reaction");
-  auto cycle_zero_solid_weak_form = std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
-      cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
-      field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+  sys->weak_forms = {sys->solid_weak_form};
 
-  if (cycle_zero_solver == nullptr) {
-    cycle_zero_solver = solver->singleBlockSolver(0);
+  if (disp_time_rule_ptr->requiresInitialAccelerationSolve()) {
+    std::string cycle_zero_name = prefix("solid_reaction");
+    sys->cycle_zero_solid_weak_form = std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
+        cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
+        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
+                                  FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+
+    auto cz_solver = options.cycle_zero_solver ? options.cycle_zero_solver : solver->singleBlockSolver(0);
+    SLIC_ERROR_IF(cz_solver == nullptr,
+                  "Could not derive a cycle-zero solver for block 0 from the provided solid mechanics solver.");
+
+    sys->cycle_zero_system = std::make_shared<SystemBase>();
+    sys->cycle_zero_system->field_store = field_store;
+    sys->cycle_zero_system->solver = cz_solver;
+    sys->cycle_zero_system->weak_forms = {sys->cycle_zero_solid_weak_form};
   }
-  SLIC_ERROR_IF(cycle_zero_solver == nullptr,
-                "Could not derive a cycle-zero solver for block 0 from the provided solid mechanics solver.");
 
-  // Build advancer
-  std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form};
-  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver,
-                                                               cycle_zero_solid_weak_form, cycle_zero_solver);
+  sys->advancer = std::make_shared<MultiphysicsTimeIntegrator>(sys, sys->cycle_zero_system);
 
-  return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
-                    solid_weak_form,
-                    cycle_zero_solid_weak_form,
-                    disp_bc,
-                    disp_time_rule_ptr};
+  return sys;
 }
 
 /**
- * @brief Factory function to build a solid dynamics system with a physics name and parameter fields.
+ * @brief Factory function to build a solid mechanics system with a physics name and parameter fields.
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
-SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> buildSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule disp_time_rule,
-    std::string prepend_name, FieldType<parameter_space>... parameter_types)
+std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>> buildSolidMechanicsSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, DisplacementTimeRule disp_rule,
+    const std::string& prepend_name, FieldType<parameter_space>... parameter_types)
 {
-  return buildSolidMechanicsSystem<dim, order>(mesh, solver, disp_time_rule, std::move(prepend_name), nullptr,
-                                               parameter_types...);
+  SolidMechanicsOptions<dim, order, DisplacementTimeRule, parameter_space...> opts;
+  opts.prepend_name = prepend_name;
+  return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>(mesh, solver, disp_rule, opts,
+                                                                                         parameter_types...);
 }
 
 /**
- * @brief Factory function to build a solid dynamics system (without physics name).
+ * @brief Factory function to build a solid mechanics system (without physics name).
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
-SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> buildSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule disp_time_rule,
-    std::shared_ptr<CoupledSystemSolver> cycle_zero_solver, FieldType<parameter_space>... parameter_types)
+std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>> buildSolidMechanicsSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, DisplacementTimeRule disp_rule,
+    std::shared_ptr<SystemSolver> cycle_zero_solver, FieldType<parameter_space>... parameter_types)
 {
-  return buildSolidMechanicsSystem<dim, order>(mesh, solver, disp_time_rule, "", cycle_zero_solver, parameter_types...);
+  SolidMechanicsOptions<dim, order, DisplacementTimeRule, parameter_space...> opts;
+  opts.cycle_zero_solver = std::move(cycle_zero_solver);
+  return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>(mesh, solver, disp_rule, opts,
+                                                                                         parameter_types...);
 }
 
 /**
- * @brief Factory function to build a solid dynamics system (without physics name).
+ * @brief Factory function to build a solid mechanics system (without physics name or specific cycle-zero solver).
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
-SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...> buildSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, DisplacementTimeRule disp_time_rule,
+std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>> buildSolidMechanicsSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, DisplacementTimeRule disp_rule,
     FieldType<parameter_space>... parameter_types)
 {
-  return buildSolidMechanicsSystem<dim, order>(mesh, solver, disp_time_rule, "", nullptr, parameter_types...);
+  return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>(
+      mesh, solver, disp_rule, SolidMechanicsOptions<dim, order, DisplacementTimeRule, parameter_space...>{},
+      parameter_types...);
 }
 
 }  // namespace smith

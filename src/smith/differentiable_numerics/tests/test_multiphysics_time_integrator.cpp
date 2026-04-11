@@ -16,7 +16,7 @@
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/state/state_manager.hpp"
 
-#include "smith/differentiable_numerics/coupled_system_solver.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
@@ -161,16 +161,25 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
   auto displacement_wf = buildScalarDiffusionWeakForm("displacement_main", mesh, field_store, displacement_type);
   auto cycle_zero_wf = buildScalarDiffusionWeakForm("cycle_zero_displacement", mesh, field_store, displacement_type);
 
-  auto main_solver = std::make_shared<CoupledSystemSolver>(std::make_shared<NoOpNonlinearBlockSolver>());
+  auto main_solver = std::make_shared<SystemSolver>(std::make_shared<NoOpNonlinearBlockSolver>());
 
   LinearSolverOptions lin_opts{.linear_solver = LinearSolver::SuperLU};
   NonlinearSolverOptions nonlin_opts{
       .nonlin_solver = NonlinearSolver::Newton, .relative_tol = 1.0e-12, .absolute_tol = 1.0e-12, .max_iterations = 8};
   auto cycle_zero_block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh);
-  auto cycle_zero_solver = std::make_shared<CoupledSystemSolver>(cycle_zero_block_solver);
+  auto cycle_zero_solver = std::make_shared<SystemSolver>(cycle_zero_block_solver);
 
-  MultiphysicsTimeIntegrator advancer(field_store, {temperature_wf, displacement_wf}, main_solver, cycle_zero_wf,
-                                      cycle_zero_solver);
+  auto main_system = std::make_shared<SystemBase>();
+  main_system->field_store = field_store;
+  main_system->weak_forms = {temperature_wf, displacement_wf};
+  main_system->solver = main_solver;
+
+  auto cz_system = std::make_shared<SystemBase>();
+  cz_system->field_store = field_store;
+  cz_system->weak_forms = {cycle_zero_wf};
+  cz_system->solver = cycle_zero_solver;
+
+  MultiphysicsTimeIntegrator advancer(main_system, cz_system);
 
   auto [new_states, reactions] =
       advancer.advanceState(TimeInfo(0.0, 1.0, 0), field_store->getShapeDisp(), field_store->getAllFields(), {});
@@ -211,11 +220,21 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSkippedForQuasiStaticSecondOrderRule)
   auto cycle_zero_wf = buildSecondOrderCycleZeroWeakForm("cycle_zero_acceleration", mesh, field_store,
                                                          displacement_type, velocity_type, acceleration_type);
 
-  auto main_solver = std::make_shared<CoupledSystemSolver>(std::make_shared<NoOpNonlinearBlockSolver>());
+  auto main_solver = std::make_shared<SystemSolver>(std::make_shared<NoOpNonlinearBlockSolver>());
   auto cycle_zero_block_solver = std::make_shared<CountingNoOpNonlinearBlockSolver>();
-  auto cycle_zero_solver = std::make_shared<CoupledSystemSolver>(cycle_zero_block_solver);
+  auto cycle_zero_solver = std::make_shared<SystemSolver>(cycle_zero_block_solver);
 
-  MultiphysicsTimeIntegrator advancer(field_store, {main_wf}, main_solver, cycle_zero_wf, cycle_zero_solver);
+  auto main_system = std::make_shared<SystemBase>();
+  main_system->field_store = field_store;
+  main_system->weak_forms = {main_wf};
+  main_system->solver = main_solver;
+
+  auto cz_system = std::make_shared<SystemBase>();
+  cz_system->field_store = field_store;
+  cz_system->weak_forms = {cycle_zero_wf};
+  cz_system->solver = cycle_zero_solver;
+
+  MultiphysicsTimeIntegrator advancer(main_system, cz_system);
 
   auto [new_states, reactions] =
       advancer.advanceState(TimeInfo(0.0, 1.0, 0), field_store->getShapeDisp(), field_store->getAllFields(), {});
@@ -227,7 +246,7 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSkippedForQuasiStaticSecondOrderRule)
   StateManager::reset();
 }
 
-TEST(CoupledSystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequestedBlock)
+TEST(SystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequestedBlock)
 {
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "coupled_system_solver_single_block_characterization");
@@ -248,7 +267,7 @@ TEST(CoupledSystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequested
   auto displacement_wf = buildScalarDiffusionWeakForm("displacement_main", mesh, field_store, displacement_type);
 
   auto recording_solver = std::make_shared<NoOpNonlinearBlockSolver>();
-  auto monolithic_solver = std::make_shared<CoupledSystemSolver>(recording_solver);
+  auto monolithic_solver = std::make_shared<SystemSolver>(recording_solver);
   auto derived_single_block_solver = monolithic_solver->singleBlockSolver(0);
 
   ASSERT_NE(derived_single_block_solver, nullptr);

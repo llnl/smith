@@ -71,47 +71,15 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
       dim, H1<disp_order, dim>,
       Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<disp_order, dim>, StateSpace, parameter_space...>>;
 
-  std::shared_ptr<SolidWeakFormType> solid_weak_form;                      ///< Solid mechanics weak form.
-  std::shared_ptr<StateWeakFormType> state_weak_form;                      ///< Internal variable weak form.
-  std::shared_ptr<CycleZeroSolidWeakFormType> cycle_zero_solid_weak_form;  ///< Cycle-zero weak form.
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;                    ///< Displacement boundary conditions.
-  std::shared_ptr<DirichletBoundaryConditions> state_bc;                   ///< Internal variable boundary conditions.
-  std::shared_ptr<DisplacementTimeRule> disp_time_rule;                    ///< Time integration for displacement.
-  std::shared_ptr<InternalVarTimeRule> state_time_rule;                    ///< Time integration for internal variable.
-
-  /**
-   * @brief Get the list of all state fields (disp_pred, disp, vel, accel, state_pred, state).
-   * @return std::vector<FieldState> List of state fields.
-   */
-  std::vector<FieldState> getStateFields() const
-  {
-    return {field_store->getField(prefix("displacement_solve_state")),
-            field_store->getField(prefix("displacement")),
-            field_store->getField(prefix("velocity")),
-            field_store->getField(prefix("acceleration")),
-            field_store->getField(prefix("state_solve_state")),
-            field_store->getField(prefix("state"))};
-  }
-
-  /**
-   * @brief Get the list of physical, non-solve state fields.
-   * @return std::vector<FieldState> List of physical fields suitable for output.
-   */
-  std::vector<FieldState> getOutputFieldStates() const
-  {
-    return {field_store->getField(prefix("displacement")), field_store->getField(prefix("velocity")),
-            field_store->getField(prefix("acceleration")), field_store->getField(prefix("state"))};
-  }
-
-  /**
-   * @brief Get information about reaction fields for this system.
-   * @return List of ReactionInfo structures.
-   */
-  std::vector<ReactionInfo> getReactionInfos() const
-  {
-    return {{prefix("solid_residual"), &field_store->getField(prefix("displacement")).get()->space()},
-            {prefix("state_residual"), &field_store->getField(prefix("state")).get()->space()}};
-  }
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
+  std::shared_ptr<StateWeakFormType> state_weak_form;  ///< Internal variable weak form.
+  std::shared_ptr<CycleZeroSolidWeakFormType>
+      cycle_zero_solid_weak_form;                         ///< Typed cycle zero solid mechanics weak form.
+  std::shared_ptr<SystemBase> cycle_zero_system;          ///< Cycle-zero system.
+  std::shared_ptr<DirichletBoundaryConditions> disp_bc;   ///< Displacement boundary conditions.
+  std::shared_ptr<DirichletBoundaryConditions> state_bc;  ///< Internal variable boundary conditions.
+  std::shared_ptr<DisplacementTimeRule> disp_time_rule;   ///< Time integration for displacement.
+  std::shared_ptr<InternalVarTimeRule> state_time_rule;   ///< Time integration for internal variable.
 
   /**
    * @brief Create a DifferentiablePhysics object for this system.
@@ -120,9 +88,9 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
    */
   std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_unique<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
-                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-                                                   advancer, physics_name, getReactionInfos());
+    return std::make_unique<DifferentiablePhysics>(
+        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), field_store->getStateFields(),
+        field_store->getParameterFields(), advancer, physics_name, field_store->getReactionInfos());
   }
 
   /**
@@ -368,34 +336,41 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
   }
 };
 
+template <int dim, int disp_order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
+          typename... parameter_space>
+struct SolidMechanicsWithInternalVarsOptions {
+  std::string prepend_name{};
+  std::shared_ptr<SystemSolver> cycle_zero_solver{};
+};
+
 /**
  * @brief Factory function to build a solid mechanics system with internal variable.
  * @param mesh The mesh.
  * @param solver The coupled system solver.
  * @param disp_rule The displacement time integration rule.
  * @param state_rule The internal-variable time integration rule.
- * @param prepend_name Optional field-name prefix.
- * @param cycle_zero_solver Optional override for the cycle-zero solve. Defaults to
- *        `solver->singleBlockSolver(0)`.
+ * @param options System creation options.
  * @param parameter_types Optional parameter field descriptors.
  */
 template <int dim, int disp_order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
           typename... parameter_space>
-SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                     parameter_space...>
-buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-                                          DisplacementTimeRule disp_rule, InternalVarTimeRule state_rule,
-                                          std::string prepend_name = "",
-                                          std::shared_ptr<CoupledSystemSolver> cycle_zero_solver = nullptr,
-                                          FieldType<parameter_space>... parameter_types)
+std::shared_ptr<SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTimeRule,
+                                                     InternalVarTimeRule, parameter_space...>>
+buildSolidMechanicsWithInternalVarsSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, DisplacementTimeRule disp_rule,
+    InternalVarTimeRule state_rule,
+    SolidMechanicsWithInternalVarsOptions<dim, disp_order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
+                                          parameter_space...>
+        options,
+    FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
   auto prefix = [&](const std::string& name) {
-    if (prepend_name.empty()) {
+    if (options.prepend_name.empty()) {
       return name;
     }
-    return prepend_name + "_" + name;
+    return options.prepend_name + "_" + name;
   };
 
   // Add shape displacement
@@ -417,16 +392,21 @@ buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::share
   auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, prefix("state"));
 
   // 3. Parameters
-  std::vector<FieldState> parameter_fields;
   (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
-  (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
 
   using SystemType = SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTimeRule,
                                                           InternalVarTimeRule, parameter_space...>;
+  auto sys = std::make_shared<SystemType>();
+  sys->field_store = field_store;
+  sys->solver = solver;
+  sys->disp_bc = disp_bc;
+  sys->state_bc = state_bc;
+  sys->disp_time_rule = disp_time_rule_ptr;
+  sys->state_time_rule = state_time_rule_ptr;
 
   // 4. Solid weak form: residual for u (inputs: u, u_old, v_old, a_old, alpha, alpha_old, params...)
   std::string solid_res_name = prefix("solid_residual");
-  auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
+  sys->solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
       solid_res_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
       field_store->createSpaces(solid_res_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
                                 state_type, state_old_type,
@@ -434,53 +414,98 @@ buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::share
 
   // 5. State weak form: residual for alpha (inputs: alpha, alpha_old, u, u_old, v_old, a_old, params...)
   std::string state_res_name = prefix("state_residual");
-  auto state_weak_form = std::make_shared<typename SystemType::StateWeakFormType>(
+  sys->state_weak_form = std::make_shared<typename SystemType::StateWeakFormType>(
       state_res_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
       field_store->createSpaces(state_res_name, state_type.name, state_type, state_old_type, disp_type, disp_old_type,
                                 velo_old_type, accel_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
-  // 6. Cycle-zero weak form: solve for acceleration (inputs: u, v, a, alpha, params...)
-  std::string cycle_zero_name = prefix("solid_reaction");
-  auto cycle_zero_solid_weak_form = std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
-      cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
-      field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
-                                state_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+  sys->weak_forms = {sys->solid_weak_form, sys->state_weak_form};
 
-  if (cycle_zero_solver == nullptr) {
-    cycle_zero_solver = solver->singleBlockSolver(0);
+  if (disp_time_rule_ptr->requiresInitialAccelerationSolve()) {
+    // 6. Cycle-zero weak form: solve for acceleration (inputs: u, v, a, alpha, params...)
+    std::string cycle_zero_name = prefix("solid_reaction");
+    sys->cycle_zero_solid_weak_form = std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
+        cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
+        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
+                                  state_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+
+    auto cz_solver = options.cycle_zero_solver ? options.cycle_zero_solver : solver->singleBlockSolver(0);
+    SLIC_ERROR_IF(cz_solver == nullptr,
+                  "Could not derive a cycle-zero solver for block 0 from the provided internal-vars solid mechanics "
+                  "solver.");
+
+    sys->cycle_zero_system = std::make_shared<SystemBase>();
+    sys->cycle_zero_system->field_store = field_store;
+    sys->cycle_zero_system->solver = cz_solver;
+    sys->cycle_zero_system->weak_forms = {sys->cycle_zero_solid_weak_form};
   }
-  SLIC_ERROR_IF(cycle_zero_solver == nullptr,
-                "Could not derive a cycle-zero solver for block 0 from the provided internal-vars solid mechanics "
-                "solver.");
 
-  // Solver and Advancer
-  std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, state_weak_form};
-  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver,
-                                                               cycle_zero_solid_weak_form, cycle_zero_solver);
+  sys->advancer = std::make_shared<MultiphysicsTimeIntegrator>(sys, sys->cycle_zero_system);
 
-  return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
-                    solid_weak_form,
-                    state_weak_form,
-                    cycle_zero_solid_weak_form,
-                    disp_bc,
-                    state_bc,
-                    disp_time_rule_ptr,
-                    state_time_rule_ptr};
+  return sys;
 }
 
 /**
- * @brief Factory function to build a solid mechanics with internal vars system (without physics name).
+ * @brief Factory function to build a solid mechanics system with internal variables, physics name and parameters.
  */
-template <int dim, int disp_order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
+template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
           typename... parameter_space>
-auto buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-                                               DisplacementTimeRule disp_rule, InternalVarTimeRule state_rule,
-                                               std::shared_ptr<CoupledSystemSolver> cycle_zero_solver = nullptr,
-                                               FieldType<parameter_space>... parameter_types)
+std::shared_ptr<SolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
+                                                     parameter_space...>>
+buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
+                                          DisplacementTimeRule disp_rule, InternalVarTimeRule isv_rule,
+                                          const std::string& prepend_name,
+                                          FieldType<parameter_space>... parameter_types)
 {
-  return buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(mesh, solver, disp_rule, state_rule, "",
-                                                                                cycle_zero_solver, parameter_types...);
+  SolidMechanicsWithInternalVarsOptions<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
+                                        parameter_space...>
+      opts;
+  opts.prepend_name = prepend_name;
+  return buildSolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
+                                                   parameter_space...>(mesh, solver, disp_rule, isv_rule, opts,
+                                                                       parameter_types...);
+}
+
+/**
+ * @brief Factory function to build a solid mechanics system with internal variables (without physics name).
+ */
+template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
+          typename... parameter_space>
+std::shared_ptr<SolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
+                                                     parameter_space...>>
+buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
+                                          DisplacementTimeRule disp_rule, InternalVarTimeRule isv_rule,
+                                          std::shared_ptr<SystemSolver> cycle_zero_solver,
+                                          FieldType<parameter_space>... parameter_types)
+{
+  SolidMechanicsWithInternalVarsOptions<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
+                                        parameter_space...>
+      opts;
+  opts.cycle_zero_solver = std::move(cycle_zero_solver);
+  return buildSolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
+                                                   parameter_space...>(mesh, solver, disp_rule, isv_rule, opts,
+                                                                       parameter_types...);
+}
+
+/**
+ * @brief Factory function index to build a solid mechanics system with internal variables (without physics name or
+ * specific cz solver).
+ */
+template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
+          typename... parameter_space>
+std::shared_ptr<SolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
+                                                     parameter_space...>>
+buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
+                                          DisplacementTimeRule disp_rule, InternalVarTimeRule isv_rule,
+                                          FieldType<parameter_space>... parameter_types)
+{
+  return buildSolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
+                                                   parameter_space...>(
+      mesh, solver, disp_rule, isv_rule,
+      SolidMechanicsWithInternalVarsOptions<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
+                                            parameter_space...>{},
+      parameter_types...);
 }
 
 }  // namespace smith

@@ -14,7 +14,7 @@
 #include "smith/physics/mesh.hpp"
 
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
-#include "smith/differentiable_numerics/coupled_system_solver.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/thermo_mechanics_system.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
@@ -91,18 +91,18 @@ TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionI
   auto block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
-      mesh_, std::make_shared<CoupledSystemSolver>(block_solver), QuasiStaticSecondOrderTimeIntegrationRule{},
+      mesh_, std::make_shared<SystemSolver>(block_solver), QuasiStaticSecondOrderTimeIntegrationRule{},
       BackwardEulerFirstOrderTimeIntegrationRule{}, "thermo", youngs_modulus);
 
-  auto physics = system.createDifferentiablePhysics("thermo_physics");
-  const auto& solid_dual_space = physics->dual(system.prefix("solid_force")).space();
-  const auto& solid_state_space = physics->state(system.prefix("displacement")).space();
-  const auto& thermal_dual_space = physics->dual(system.prefix("thermal_flux")).space();
-  const auto& thermal_state_space = physics->state(system.prefix("temperature")).space();
+  auto physics = system->createDifferentiablePhysics("thermo_physics");
+  const auto& solid_dual_space = physics->dual("thermo_solid_force").space();
+  const auto& solid_state_space = physics->state("thermo_displacement").space();
+  const auto& thermal_dual_space = physics->dual("thermo_thermal_flux").space();
+  const auto& thermal_state_space = physics->state("thermo_temperature").space();
 
   EXPECT_EQ(physics->dualNames().size(), 2);
-  EXPECT_EQ(physics->dualNames()[0], system.prefix("solid_force"));
-  EXPECT_EQ(physics->dualNames()[1], system.prefix("thermal_flux"));
+  EXPECT_EQ(physics->dualNames()[0], "thermo_solid_force");
+  EXPECT_EQ(physics->dualNames()[1], "thermo_thermal_flux");
   EXPECT_EQ(solid_dual_space.GetMesh(), solid_state_space.GetMesh());
   EXPECT_STREQ(solid_dual_space.FEColl()->Name(), solid_state_space.FEColl()->Name());
   EXPECT_EQ(solid_dual_space.GetVDim(), solid_state_space.GetVDim());
@@ -124,22 +124,23 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   auto block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
-      mesh_, std::make_shared<CoupledSystemSolver>(block_solver), QuasiStaticSecondOrderTimeIntegrationRule{},
+      mesh_, std::make_shared<SystemSolver>(block_solver), QuasiStaticSecondOrderTimeIntegrationRule{},
       BackwardEulerFirstOrderTimeIntegrationRule{}, "thermo", youngs_modulus);
 
   GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
-  system.setMaterial(material, mesh_->entireBodyName());
-  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 100.0; });
-  system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
-  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+  system->setMaterial(material, mesh_->entireBodyName());
+  system->field_store->getParameterFields()[0].get()->setFromFieldFunction(
+      [=](smith::tensor<double, dim>) { return 100.0; });
+  system->disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
+  system->temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
 
-  system.addSolidTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto, auto) {
+  system->addSolidTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto, auto) {
     auto traction = 0.0 * X;
     traction[0] = -0.015;
     return traction;
   });
 
-  auto physics = system.createDifferentiablePhysics("thermo_physics");
+  auto physics = system->createDifferentiablePhysics("thermo_physics");
 
   // Run forward
   double dt = 1.0;
@@ -153,7 +154,7 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   gretl::set_as_objective(obj);
   obj.data_store().back_prop();
 
-  auto param_sens = system.getParameterFields()[0].get_dual();
+  auto param_sens = system->field_store->getParameterFields()[0].get_dual();
   EXPECT_TRUE(param_sens->Norml2() > 0.0);
 }
 
@@ -163,46 +164,47 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   constexpr double lateral_body_force = 2.5e-5;
   constexpr double thermal_source = 1.0;
 
-  auto run_problem = [&](const std::string& label, std::shared_ptr<CoupledSystemSolver> coupled_solver) {
+  auto run_problem = [&](const std::string& label, std::shared_ptr<SystemSolver> coupled_solver) {
     GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
     FieldType<L2<0>> youngs_modulus("youngs_modulus");
     auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
         mesh_, coupled_solver, QuasiStaticSecondOrderTimeIntegrationRule{},
         BackwardEulerFirstOrderTimeIntegrationRule{}, youngs_modulus);
-    system.setMaterial(material, mesh_->entireBodyName());
-    system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 100.0; });
-    system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
-    system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
-    system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
-    system.addSolidTraction("right", [=](auto, auto X, auto... /*args*/) {
+    system->setMaterial(material, mesh_->entireBodyName());
+    system->field_store->getParameterFields()[0].get()->setFromFieldFunction(
+        [=](smith::tensor<double, dim>) { return 100.0; });
+    system->disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
+    system->temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+    system->temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
+    system->addSolidTraction("right", [=](auto, auto X, auto... /*args*/) {
       auto traction = 0.0 * X;
       traction[0] = -compressive_traction;
       return traction;
     });
-    system.addSolidBodyForce(mesh_->entireBodyName(), [=](auto, auto X, auto... /*args*/) {
+    system->addSolidBodyForce(mesh_->entireBodyName(), [=](auto, auto X, auto... /*args*/) {
       auto force = 0.0 * X;
       force[1] = lateral_body_force;
       return force;
     });
-    system.addHeatSource(mesh_->entireBodyName(),
-                         [=](auto, auto, auto, auto, auto, auto, auto, auto) { return thermal_source; });
+    system->addHeatSource(mesh_->entireBodyName(),
+                          [=](auto, auto, auto, auto, auto, auto, auto, auto) { return thermal_source; });
 
     SLIC_INFO_ROOT("Starting " << label << " thermo-mechanics solve");
 
     double dt = 1.0;
     double time = 0.0;
-    auto shape_disp = system.field_store->getShapeDisp();
-    auto states = system.getStateFields();
-    auto params = system.getParameterFields();
+    auto shape_disp = system->field_store->getShapeDisp();
+    auto states = system->field_store->getStateFields();
+    auto params = system->field_store->getParameterFields();
     std::vector<ReactionState> reactions;
     for (size_t step = 0; step < 1; ++step) {
       std::tie(states, reactions) =
-          system.advancer->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
+          system->advancer->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
       time += dt;
     }
 
-    return std::make_pair(mfem::Vector(*states[system.field_store->getFieldIndex("displacement_solve_state")].get()),
-                          mfem::Vector(*states[system.field_store->getFieldIndex("temperature_solve_state")].get()));
+    return std::make_pair(mfem::Vector(*states[system->field_store->getFieldIndex("displacement_solve_state")].get()),
+                          mfem::Vector(*states[system->field_store->getFieldIndex("temperature_solve_state")].get()));
   };
 
   smith::LinearSolverOptions monolithic_lin_opts{.linear_solver = smith::LinearSolver::GMRES,
@@ -223,7 +225,7 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
                                                        .print_level = 2};
 
   auto monolithic_block_solver = buildNonlinearBlockSolver(monolithic_nonlin_opts, monolithic_lin_opts, *mesh_);
-  auto monolithic_result = run_problem("monolithic", std::make_shared<CoupledSystemSolver>(monolithic_block_solver));
+  auto monolithic_result = run_problem("monolithic", std::make_shared<SystemSolver>(monolithic_block_solver));
   bool monolithic_converged = monolithic_block_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
   int monolithic_iterations = monolithic_block_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
 
@@ -231,7 +233,7 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   smith::StateManager::reset();
   this->SetUp();
 
-  auto staggered_coupled_solver = std::make_shared<CoupledSystemSolver>(10);
+  auto staggered_coupled_solver = std::make_shared<SystemSolver>(10);
 
   smith::LinearSolverOptions mech_lin_opts{.linear_solver = smith::LinearSolver::CG,
                                            .preconditioner = smith::Preconditioner::HypreAMG,

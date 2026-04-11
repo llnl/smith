@@ -50,39 +50,15 @@ struct ThermalSystem : public SystemBase {
   std::shared_ptr<TemperatureTimeRule> temperature_time_rule;   ///< Time integration for temperature.
 
   /**
-   * @brief Get the list of all state fields (temperature_solve_state, temperature).
-   * @return std::vector<FieldState> List of state fields.
-   */
-  std::vector<FieldState> getStateFields() const
-  {
-    return {field_store->getField(prefix("temperature_solve_state")), field_store->getField(prefix("temperature"))};
-  }
-
-  /**
-   * @brief Get the list of physical, non-solve state fields.
-   * @return std::vector<FieldState> List of physical fields suitable for output.
-   */
-  std::vector<FieldState> getOutputFieldStates() const { return {field_store->getField(prefix("temperature"))}; }
-
-  /**
-   * @brief Get information about reaction fields for this system.
-   * @return List of ReactionInfo structures.
-   */
-  std::vector<ReactionInfo> getReactionInfos() const
-  {
-    return {{prefix("thermal_flux"), &field_store->getField(prefix("temperature")).get()->space()}};
-  }
-
-  /**
    * @brief Create a DifferentiablePhysics object for this system.
    * @param physics_name The name of the physics.
    * @return std::unique_ptr<DifferentiablePhysics> The differentiable physics object.
    */
   std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_unique<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
-                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-                                                   advancer, physics_name, getReactionInfos());
+    return std::make_unique<DifferentiablePhysics>(
+        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), field_store->getStateFields(),
+        field_store->getParameterFields(), advancer, physics_name, field_store->getReactionInfos());
   }
 
   /**
@@ -186,6 +162,11 @@ struct ThermalSystem : public SystemBase {
   }
 };
 
+template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
+struct ThermalOptions {
+  std::string prepend_name{};
+};
+
 /**
  * @brief Factory function to build a thermal system.
  * @tparam dim Spatial dimension.
@@ -195,22 +176,23 @@ struct ThermalSystem : public SystemBase {
  * @param mesh The mesh.
  * @param solver The coupled system solver.
  * @param temp_rule The time integration rule for temperature.
- * @param prepend_name The name of the physics (used as field prefix).
+ * @param options System creation options.
  * @param parameter_types Parameter field types.
  * @return ThermalSystem with all components initialized.
  */
 template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
-ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...> buildThermalSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, TemperatureTimeRule temp_rule,
-    std::string prepend_name = "", FieldType<parameter_space>... parameter_types)
+std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>> buildThermalSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, TemperatureTimeRule temp_rule,
+    ThermalOptions<dim, temp_order, TemperatureTimeRule, parameter_space...> options,
+    FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
   auto prefix = [&](const std::string& name) {
-    if (prepend_name.empty()) {
+    if (options.prepend_name.empty()) {
       return name;
     }
-    return prepend_name + "_" + name;
+    return options.prepend_name + "_" + name;
   };
 
   FieldType<H1<1, dim>> shape_disp_type(prefix("shape_displacement"));
@@ -222,36 +204,61 @@ ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...> buildThe
   auto temperature_old_type =
       field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, prefix("temperature"));
 
-  std::vector<FieldState> parameter_fields;
   (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
-  (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
+
+  using SystemType = ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>;
+  auto sys = std::make_shared<SystemType>();
+  sys->field_store = field_store;
+  sys->solver = solver;
+  sys->temperature_bc = temperature_bc;
+  sys->temperature_time_rule = temperature_time_rule;
 
   std::string thermal_flux_name = prefix("thermal_flux");
-  auto thermal_weak_form = std::make_shared<
-      typename ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>::ThermalWeakFormType>(
+  sys->thermal_weak_form = std::make_shared<typename SystemType::ThermalWeakFormType>(
       thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
       field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
-  std::vector<std::shared_ptr<WeakForm>> weak_forms{thermal_weak_form};
-  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
+  sys->weak_forms = {sys->thermal_weak_form};
 
-  return ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>{
-      {field_store, solver, advancer, parameter_fields, prepend_name},
-      thermal_weak_form,
-      temperature_bc,
-      temperature_time_rule};
+  sys->advancer = std::make_shared<MultiphysicsTimeIntegrator>(sys, nullptr);
+
+  return sys;
 }
 
 /**
- * @brief Factory function to build a thermal system with default quasi-static rule (backward compatible).
+ * @brief Factory function to build a thermal system with default quasi-static rule.
  */
 template <int dim, int temp_order, typename... parameter_space>
-auto buildThermalSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-                        std::string prepend_name = "", FieldType<parameter_space>... parameter_types)
+std::shared_ptr<ThermalSystem<dim, temp_order, QuasiStaticFirstOrderTimeIntegrationRule, parameter_space...>>
+buildThermalSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
+    ThermalOptions<dim, temp_order, QuasiStaticFirstOrderTimeIntegrationRule, parameter_space...> options,
+    FieldType<parameter_space>... parameter_types)
 {
-  return buildThermalSystem<dim, temp_order>(mesh, solver, QuasiStaticFirstOrderTimeIntegrationRule{}, prepend_name,
-                                             parameter_types...);
+  return buildThermalSystem<dim, temp_order, QuasiStaticFirstOrderTimeIntegrationRule, parameter_space...>(
+      mesh, solver, QuasiStaticFirstOrderTimeIntegrationRule{}, options, parameter_types...);
+}
+
+template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
+std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>> buildThermalSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, TemperatureTimeRule temp_time_rule,
+    const std::string& prepend_name, FieldType<parameter_space>... parameter_types)
+{
+  ThermalOptions<dim, temp_order, TemperatureTimeRule, parameter_space...> opts;
+  opts.prepend_name = prepend_name;
+  return buildThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>(mesh, solver, temp_time_rule,
+                                                                                      opts, parameter_types...);
+}
+
+template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
+std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>> buildThermalSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, TemperatureTimeRule temp_time_rule,
+    FieldType<parameter_space>... parameter_types)
+{
+  return buildThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>(
+      mesh, solver, temp_time_rule, ThermalOptions<dim, temp_order, TemperatureTimeRule, parameter_space...>{},
+      parameter_types...);
 }
 
 }  // namespace smith

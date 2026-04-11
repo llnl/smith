@@ -7,6 +7,9 @@
 #include "gtest/gtest.h"
 
 #include "gretl/data_store.hpp"
+#include <tuple>
+#include <algorithm>
+#include <memory>
 
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
@@ -20,7 +23,7 @@
 #include "smith/physics/materials/parameterized_solid_material.hpp"
 
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
-#include "smith/differentiable_numerics/coupled_system_solver.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
@@ -99,7 +102,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   auto solid_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  auto coupled_solver = std::make_shared<CoupledSystemSolver>(solid_block_solver);
+  auto coupled_solver = std::make_shared<SystemSolver>(solid_block_solver);
   auto system = buildSolidMechanicsSystem<dim, order>(
       mesh, coupled_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, FieldType<ScalarParameterSpace>("bulk"),
       FieldType<ScalarParameterSpace>("shear"));
@@ -114,27 +117,27 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   MaterialType material{.density = 1.0, .K0 = K, .G0 = G};
 
   // Set parameters
-  auto params = system.getParameterFields();
+  auto params = system->field_store->getParameterFields();
   params[0].get()->setFromFieldFunction([=](tensor<double, dim>) { return material.K0; });
   params[1].get()->setFromFieldFunction([=](tensor<double, dim>) { return material.G0; });
 
-  system.setMaterial(material, mesh->entireBodyName());
+  system->setMaterial(material, mesh->entireBodyName());
 
   // Add gravity body force
-  system.addBodyForce(mesh->entireBodyName(),
-                      [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*a*/, auto... /*params*/) {
-                        tensor<double, dim> b{};
-                        b[1] = gravity;
-                        return b;
-                      });
+  system->addBodyForce(mesh->entireBodyName(),
+                       [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*a*/, auto... /*params*/) {
+                         tensor<double, dim> b{};
+                         b[1] = gravity;
+                         return b;
+                       });
 
   // Add dummy traction to test compilation
-  system.addTraction("right", [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/,
-                                 auto... /*params*/) { return tensor<double, dim>{}; });
+  system->addTraction("right", [](double /*time*/, auto /*X*/, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/,
+                                  auto... /*params*/) { return tensor<double, dim>{}; });
 
-  auto shape_disp = system.field_store->getShapeDisp();
-  auto states = system.getStateFields();
-  auto output_states = system.getOutputFieldStates();
+  auto shape_disp = system->field_store->getShapeDisp();
+  auto states = system->field_store->getStateFields();
+  auto output_states = system->field_store->getOutputFieldStates();
 
   std::string pv_dir = "paraview_solid";
   auto pv_writer = createParaviewWriter(*mesh, {output_states[0], params[0], params[1]}, pv_dir);
@@ -146,8 +149,8 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   for (size_t m = 0; m < num_steps_; ++m) {
     TimeInfo t_info(time, dt_, cycle);
-    std::tie(states, reactions) = system.advancer->advanceState(t_info, shape_disp, states, params);
-    output_states = system.getOutputFieldStates();
+    std::tie(states, reactions) = system->advancer->advanceState(t_info, shape_disp, states, params);
+    output_states = system->field_store->getOutputFieldStates();
     time += dt_;
     cycle++;
     pv_writer.write(m + 1, time, {output_states[0], params[0], params[1]});
@@ -200,13 +203,13 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 
-  auto coupled_solver = std::make_shared<CoupledSystemSolver>(solid_block_solver);
+  auto coupled_solver = std::make_shared<SystemSolver>(solid_block_solver);
   auto system = buildSolidMechanicsSystem<dim, order>(mesh, coupled_solver, time_rule, physics_name,
                                                       FieldType<ScalarParameterSpace>("bulk"),
                                                       FieldType<ScalarParameterSpace>("shear"));
 
-  auto physics = system.createDifferentiablePhysics(physics_name);
-  auto bcs = system.disp_bc;
+  auto physics = system->createDifferentiablePhysics(physics_name);
+  auto bcs = system->disp_bc;
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
   bcs->setVectorBCs<dim>(mesh->domain("left"), [](double t, tensor<double, dim> X) {
@@ -223,7 +226,7 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
   MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
 
-  system.setMaterial(material, mesh->entireBodyName());
+  system->setMaterial(material, mesh->entireBodyName());
 
   auto shape_disp = physics->getShapeDispFieldState();
   auto params = physics->getFieldParams();

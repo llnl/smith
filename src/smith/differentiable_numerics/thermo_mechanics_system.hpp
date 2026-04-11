@@ -66,35 +66,12 @@ struct ThermoMechanicsSystem : public SystemBase {
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;           ///< Solid mechanics weak form.
   std::shared_ptr<ThermalWeakFormType> thermal_weak_form;       ///< Thermal weak form.
-  std::shared_ptr<CycleZeroWeakFormType> cycle_zero_weak_form;  ///< Cycle-zero weak form.
+  std::shared_ptr<CycleZeroWeakFormType> cycle_zero_weak_form;  ///< Typed cycle zero weak form.
+  std::shared_ptr<SystemBase> cycle_zero_system;                ///< Cycle-zero system.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;         ///< Displacement boundary conditions.
   std::shared_ptr<DirichletBoundaryConditions> temperature_bc;  ///< Temperature boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;         ///< Time integration for displacement.
   std::shared_ptr<TemperatureTimeRule> temperature_time_rule;   ///< Time integration for temperature.
-
-  /**
-   * @brief Get the list of all state fields (disp_pred, disp, vel, accel, temp_pred, temp).
-   * @return std::vector<FieldState> List of state fields.
-   */
-  std::vector<FieldState> getStateFields() const
-  {
-    return {field_store->getField(prefix("displacement_solve_state")),
-            field_store->getField(prefix("displacement")),
-            field_store->getField(prefix("velocity")),
-            field_store->getField(prefix("acceleration")),
-            field_store->getField(prefix("temperature_solve_state")),
-            field_store->getField(prefix("temperature"))};
-  }
-
-  /**
-   * @brief Get information about reaction fields for this system.
-   * @return List of ReactionInfo structures.
-   */
-  std::vector<ReactionInfo> getReactionInfos() const
-  {
-    return {{prefix("solid_force"), &field_store->getField(prefix("displacement")).get()->space()},
-            {prefix("thermal_flux"), &field_store->getField(prefix("temperature")).get()->space()}};
-  }
 
   /**
    * @brief Create a DifferentiablePhysics object for this system.
@@ -103,9 +80,9 @@ struct ThermoMechanicsSystem : public SystemBase {
    */
   std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_unique<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
-                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-                                                   advancer, physics_name, getReactionInfos());
+    return std::make_unique<DifferentiablePhysics>(
+        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), field_store->getStateFields(),
+        field_store->getParameterFields(), advancer, physics_name, field_store->getReactionInfos());
   }
 
   /**
@@ -359,32 +336,40 @@ struct ThermoMechanicsSystem : public SystemBase {
   }
 };
 
+template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
+          typename... parameter_space>
+struct ThermoMechanicsOptions {
+  std::string prepend_name{};
+  std::shared_ptr<SystemSolver> cycle_zero_solver{};
+};
+
 /**
  * @brief Factory function to build a thermo-mechanical system.
  * @param mesh The mesh.
  * @param solver The coupled system solver.
  * @param disp_rule The displacement time integration rule.
  * @param temp_rule The temperature time integration rule.
- * @param prepend_name Optional field-name prefix.
- * @param cycle_zero_solver Optional override for the cycle-zero solve. Defaults to
- *        `solver->singleBlockSolver(0)`.
+ * @param options Options defining fields prepends or sub-solvers.
  * @param parameter_types Optional parameter field descriptors.
  */
 template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
           typename... parameter_space>
-ThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>
-buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-                           DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule, std::string prepend_name = "",
-                           std::shared_ptr<CoupledSystemSolver> cycle_zero_solver = nullptr,
-                           FieldType<parameter_space>... parameter_types)
+std::shared_ptr<
+    ThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>>
+buildThermoMechanicsSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, DisplacementTimeRule disp_rule,
+    TemperatureTimeRule temp_rule,
+    ThermoMechanicsOptions<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>
+        options,
+    FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
   auto prefix = [&](const std::string& name) {
-    if (prepend_name.empty()) {
+    if (options.prepend_name.empty()) {
       return name;
     }
-    return prepend_name + "_" + name;
+    return options.prepend_name + "_" + name;
   };
 
   FieldType<H1<1, dim>> shape_disp_type(prefix("shape_displacement"));
@@ -405,16 +390,21 @@ buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSy
   auto temperature_old_type =
       field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, prefix("temperature"));
 
-  std::vector<FieldState> parameter_fields;
   (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
-  (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
 
   using SystemType =
       ThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>;
+  auto sys = std::make_shared<SystemType>();
+  sys->field_store = field_store;
+  sys->solver = solver;
+  sys->disp_bc = disp_bc;
+  sys->temperature_bc = temperature_bc;
+  sys->disp_time_rule = disp_time_rule_ptr;
+  sys->temperature_time_rule = temperature_time_rule_ptr;
 
   // Solid mechanics weak form (u, u_old, v_old, a_old, temp, temp_old, params...)
   std::string solid_force_name = prefix("solid_force");
-  auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
+  sys->solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
       solid_force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
       field_store->createSpaces(solid_force_name, disp_type.name, disp_type, disp_old_type, velo_old_type,
                                 accel_old_type, temperature_type, temperature_old_type,
@@ -422,39 +412,35 @@ buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSy
 
   // Thermal weak form (temp, temp_old, u, u_old, v_old, a_old, params...)
   std::string thermal_flux_name = prefix("thermal_flux");
-  auto thermal_weak_form = std::make_shared<typename SystemType::ThermalWeakFormType>(
+  sys->thermal_weak_form = std::make_shared<typename SystemType::ThermalWeakFormType>(
       thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
       field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
                                 disp_type, disp_old_type, velo_old_type, accel_old_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
-  // Cycle-zero weak form (u, v, a, temp, temp_old, params...)
-  std::string cycle_zero_name = prefix("solid_reaction");
-  auto cycle_zero_weak_form = std::make_shared<typename SystemType::CycleZeroWeakFormType>(
-      cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
-      field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
-                                temperature_type, temperature_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+  sys->weak_forms = {sys->solid_weak_form, sys->thermal_weak_form};
 
-  if (cycle_zero_solver == nullptr) {
-    cycle_zero_solver = solver->singleBlockSolver(0);
+  if (disp_time_rule_ptr->requiresInitialAccelerationSolve()) {
+    std::string cycle_zero_name = prefix("solid_reaction");
+    sys->cycle_zero_weak_form = std::make_shared<typename SystemType::CycleZeroWeakFormType>(
+        cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
+        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
+                                  temperature_type, temperature_old_type,
+                                  FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+
+    auto cz_solver = options.cycle_zero_solver ? options.cycle_zero_solver : solver->singleBlockSolver(0);
+    SLIC_ERROR_IF(cz_solver == nullptr,
+                  "Could not derive a cycle-zero solver for block 0 from the provided thermo-mechanics solver.");
+
+    sys->cycle_zero_system = std::make_shared<SystemBase>();
+    sys->cycle_zero_system->field_store = field_store;
+    sys->cycle_zero_system->solver = cz_solver;
+    sys->cycle_zero_system->weak_forms = {sys->cycle_zero_weak_form};
   }
-  SLIC_ERROR_IF(cycle_zero_solver == nullptr,
-                "Could not derive a cycle-zero solver for block 0 from the provided thermo-mechanics solver.");
 
-  // Build solver and advancer
-  std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, thermal_weak_form};
-  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver, cycle_zero_weak_form,
-                                                               cycle_zero_solver);
+  sys->advancer = std::make_shared<MultiphysicsTimeIntegrator>(sys, sys->cycle_zero_system);
 
-  return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
-                    solid_weak_form,
-                    thermal_weak_form,
-                    cycle_zero_weak_form,
-                    disp_bc,
-                    temperature_bc,
-                    disp_time_rule_ptr,
-                    temperature_time_rule_ptr};
+  return sys;
 }
 
 /**
@@ -462,12 +448,17 @@ buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSy
  */
 template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
           typename... parameter_space>
-auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-                                DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule, std::string prepend_name,
-                                FieldType<parameter_space>... parameter_types)
+std::shared_ptr<
+    ThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>>
+buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
+                           DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule,
+                           const std::string& prepend_name, FieldType<parameter_space>... parameter_types)
 {
-  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(mesh, solver, disp_rule, temp_rule,
-                                                                 std::move(prepend_name), nullptr, parameter_types...);
+  ThermoMechanicsOptions<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>
+      opts;
+  opts.prepend_name = prepend_name;
+  return buildThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule,
+                                    parameter_space...>(mesh, solver, disp_rule, temp_rule, opts, parameter_types...);
 }
 
 /**
@@ -475,13 +466,18 @@ auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<Coup
  */
 template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
           typename... parameter_space>
-auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-                                DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule,
-                                std::shared_ptr<CoupledSystemSolver> cycle_zero_solver,
-                                FieldType<parameter_space>... parameter_types)
+std::shared_ptr<
+    ThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>>
+buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
+                           DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule,
+                           std::shared_ptr<SystemSolver> cycle_zero_solver,
+                           FieldType<parameter_space>... parameter_types)
 {
-  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(mesh, solver, disp_rule, temp_rule, "",
-                                                                 cycle_zero_solver, parameter_types...);
+  ThermoMechanicsOptions<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>
+      opts;
+  opts.cycle_zero_solver = std::move(cycle_zero_solver);
+  return buildThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule,
+                                    parameter_space...>(mesh, solver, disp_rule, temp_rule, opts, parameter_types...);
 }
 
 /**
@@ -489,12 +485,18 @@ auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<Coup
  */
 template <int dim, int disp_order, int temp_order, typename DisplacementTimeRule, typename TemperatureTimeRule,
           typename... parameter_space>
-auto buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-                                DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule,
-                                FieldType<parameter_space>... parameter_types)
+std::shared_ptr<
+    ThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>>
+buildThermoMechanicsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
+                           DisplacementTimeRule disp_rule, TemperatureTimeRule temp_rule,
+                           FieldType<parameter_space>... parameter_types)
 {
-  return buildThermoMechanicsSystem<dim, disp_order, temp_order>(mesh, solver, disp_rule, temp_rule, "", nullptr,
-                                                                 parameter_types...);
+  return buildThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule,
+                                    parameter_space...>(
+      mesh, solver, disp_rule, temp_rule,
+      ThermoMechanicsOptions<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule,
+                             parameter_space...>{},
+      parameter_types...);
 }
 
 }  // namespace smith

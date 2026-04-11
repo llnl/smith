@@ -22,6 +22,14 @@ class DirichletBoundaryConditions;
 class BoundaryConditionManager;
 
 /**
+ * @brief Information about a dual field.
+ */
+struct ReactionInfo {
+  std::string name;                                    ///< The name of the dual field.
+  const mfem::ParFiniteElementSpace* space = nullptr;  ///< The finite element space of the dual field.
+};
+
+/**
  * @brief Representation of a field type with a name and an optional unknown index.
  * @tparam Space The finite element space type.
  * @tparam Time The time integration type (unused by default).
@@ -107,6 +115,7 @@ struct FieldStore {
     to_unknown_index_[type.name] = num_unknowns_;
     FieldState new_field = smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag());
     states_.push_back(new_field);
+    is_solve_state_.push_back(true);
     auto latest_bc = addBoundaryConditions(new_field.get());
     ++num_unknowns_;
     SLIC_ERROR_IF(num_unknowns_ != boundary_conditions_.size(),
@@ -183,6 +192,7 @@ struct FieldStore {
 
     to_states_index_[name] = states_.size();
     states_.push_back(smith::createFieldState<Space>(*graph_, Space{}, name, mesh_->tag()));
+    is_solve_state_.push_back(false);
     return FieldType<Space>(name);
   }
 
@@ -381,6 +391,27 @@ struct FieldStore {
    * @brief Get the associated mesh.
    * @return const std::shared_ptr<smith::Mesh>& The mesh.
    */
+
+  /**
+   * @brief Get the list of all parameter fields.
+   */
+  const std::vector<FieldState>& getParameterFields() const;
+
+  /**
+   * @brief Get the list of all state fields.
+   */
+  const std::vector<FieldState>& getStateFields() const;
+
+  /**
+   * @brief Get the list of physical, non-solve state fields suitable for output.
+   */
+  std::vector<FieldState> getOutputFieldStates() const;
+
+  /**
+   * @brief Get information about reaction fields.
+   */
+  std::vector<ReactionInfo> getReactionInfos() const;
+
   const std::shared_ptr<smith::Mesh>& getMesh() const;
 
   /**
@@ -396,6 +427,7 @@ struct FieldStore {
   std::vector<FieldState> shape_disp_;
   std::vector<FieldState> params_;
   std::vector<FieldState> states_;
+  std::vector<bool> is_solve_state_;
 
   std::map<std::string, size_t> to_states_index_;
   std::map<std::string, size_t> to_params_index_;
@@ -416,7 +448,7 @@ struct FieldStore {
   std::map<std::string, std::vector<size_t>> weak_form_name_to_field_indices_;
   std::map<std::string, std::vector<std::string>> weak_form_name_to_field_names_;
 
-  std::map<std::string, std::string> weak_form_to_test_field_;
+  std::vector<std::pair<std::string, std::string>> weak_form_to_test_field_;
 
   std::vector<std::pair<std::shared_ptr<TimeIntegrationRule>, TimeIntegrationMapping>> time_integration_rules_;
   std::map<std::string, size_t> independent_name_to_rule_index_;

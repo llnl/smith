@@ -10,7 +10,8 @@ set(differentiable_numerics_sources
     differentiable_physics.cpp
     lumped_mass_explicit_newmark_state_advancer.cpp
     nonlinear_block_solver.cpp
-    coupled_system_solver.cpp
+    system_solver.cpp
+    system_base.cpp
     nonlinear_solve.cpp
     evaluate_objective.cpp
     dirichlet_boundary_conditions.cpp
@@ -23,7 +24,7 @@ set(differentiable_numerics_headers
     state_advancer.hpp
     reaction.hpp
     nonlinear_block_solver.hpp
-    coupled_system_solver.hpp
+    system_solver.hpp
     differentiable_physics.hpp
     timestep_estimator.hpp
     explicit_dynamic_solve.hpp

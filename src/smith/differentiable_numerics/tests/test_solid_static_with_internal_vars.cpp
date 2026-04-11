@@ -103,37 +103,37 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
 {
   auto nonlinear_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  auto coupled_solver = std::make_shared<CoupledSystemSolver>(nonlinear_block_solver);
+  auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
   auto system = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
       mesh, coupled_solver, QuasiStaticSecondOrderTimeIntegrationRule{}, BackwardEulerFirstOrderTimeIntegrationRule{},
       "solid_static_with_internal_vars");
 
   // Material and Evolution
-  system.setMaterial(DamageMaterial{}, mesh->entireBodyName());
-  system.addStateEvolution(mesh->entireBodyName(), StrainNormEvolution{});
+  system->setMaterial(DamageMaterial{}, mesh->entireBodyName());
+  system->addStateEvolution(mesh->entireBodyName(), StrainNormEvolution{});
 
   // Boundary Conditions
 
   // Fix bottom face
-  system.disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));
+  system->disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));
 
   // Pull top face
   double pull_rate = 0.05;
-  system.disp_bc->setVectorBCs<dim>(mesh->domain("top"), [pull_rate](double t, tensor<double, dim> /*X*/) {
+  system->disp_bc->setVectorBCs<dim>(mesh->domain("top"), [pull_rate](double t, tensor<double, dim> /*X*/) {
     tensor<double, dim> u{};
     u[2] = pull_rate * t;
     return u;
   });
 
-  auto physics = system.createDifferentiablePhysics("physics");
+  auto physics = system->createDifferentiablePhysics("physics");
 
   // Create ParaView writer
-  auto writer = createParaviewWriter(*mesh, system.getOutputFieldStates(), "solid_state_output");
-  writer.write(0, 0.0, system.getOutputFieldStates());
+  auto writer = createParaviewWriter(*mesh, system->field_store->getOutputFieldStates(), "solid_state_output");
+  writer.write(0, 0.0, system->field_store->getOutputFieldStates());
   // Advance multiple steps
   for (int step = 1; step <= 5; ++step) {
     physics->advanceTimestep(1.0);
-    writer.write(step, step * 1.0, system.getOutputFieldStates());
+    writer.write(step, step * 1.0, system->field_store->getOutputFieldStates());
     SLIC_INFO("Completed step " << step);
   }
 }
@@ -145,7 +145,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
 
   // Staggered solver: stage 0 solves displacement (block 0), stage 1 solves state (block 1).
   // Use relaxation_factor = 0.5 on the displacement stage to exercise the relaxation path.
-  auto staggered_solver = std::make_shared<CoupledSystemSolver>(20);
+  auto staggered_solver = std::make_shared<SystemSolver>(20);
   staggered_solver->addSubsystemSolver({0}, disp_solver, 0.5);
   staggered_solver->addSubsystemSolver({1}, state_solver, 1.0);
 
@@ -153,18 +153,18 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
       mesh, staggered_solver, QuasiStaticSecondOrderTimeIntegrationRule{}, BackwardEulerFirstOrderTimeIntegrationRule{},
       "solid_staggered_relaxation");
 
-  system.setMaterial(DamageMaterial{}, mesh->entireBodyName());
-  system.addStateEvolution(mesh->entireBodyName(), StrainNormEvolution{});
+  system->setMaterial(DamageMaterial{}, mesh->entireBodyName());
+  system->addStateEvolution(mesh->entireBodyName(), StrainNormEvolution{});
 
-  system.disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));
+  system->disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));
   double pull_rate = 0.05;
-  system.disp_bc->setVectorBCs<dim>(mesh->domain("top"), [pull_rate](double t, tensor<double, dim> /*X*/) {
+  system->disp_bc->setVectorBCs<dim>(mesh->domain("top"), [pull_rate](double t, tensor<double, dim> /*X*/) {
     tensor<double, dim> u{};
     u[2] = pull_rate * t;
     return u;
   });
 
-  auto physics = system.createDifferentiablePhysics("physics_relaxed");
+  auto physics = system->createDifferentiablePhysics("physics_relaxed");
   for (int step = 1; step <= 3; ++step) {
     physics->advanceTimestep(1.0);
     SLIC_INFO("Staggered relaxation step " << step << " completed");
@@ -174,20 +174,20 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
 TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 {
   auto nonlinear_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
-  auto coupled_solver = std::make_shared<CoupledSystemSolver>(nonlinear_block_solver);
+  auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
   auto system = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
       mesh, coupled_solver, QuasiStaticSecondOrderTimeIntegrationRule{}, BackwardEulerFirstOrderTimeIntegrationRule{},
       "body_force_test");
 
-  system.setMaterial(DamageMaterial{}, mesh->entireBodyName());
-  system.addStateEvolution(mesh->entireBodyName(), StrainNormEvolution{});
+  system->setMaterial(DamageMaterial{}, mesh->entireBodyName());
+  system->addStateEvolution(mesh->entireBodyName(), StrainNormEvolution{});
 
   // Fix bottom face
-  system.disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));
+  system->disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));
 
   // Apply a gravity-like body force in the -z direction
   double body_force_mag = -0.01;
-  system.addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto, auto) {
+  system->addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto, auto) {
     tensor<double, dim> f{};
     f[2] = body_force_mag;
     return f;
@@ -195,13 +195,13 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 
   // Apply a traction on the top face in the +z direction
   double traction_mag = 0.005;
-  system.addTraction("top", [=](double, auto, auto /*n*/, auto, auto, auto, auto, auto) {
+  system->addTraction("top", [=](double, auto, auto /*n*/, auto, auto, auto, auto, auto) {
     tensor<double, dim> t{};
     t[2] = traction_mag;
     return t;
   });
 
-  auto physics = system.createDifferentiablePhysics("physics_bf");
+  auto physics = system->createDifferentiablePhysics("physics_bf");
   physics->advanceTimestep(1.0);
 
   // Check that the displacement field is non-zero (the body force + traction produced deformation)

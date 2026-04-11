@@ -17,7 +17,7 @@
 #include <utility>
 #include "field_state.hpp"
 #include "field_store.hpp"
-#include "coupled_system_solver.hpp"
+#include "system_solver.hpp"
 #include "state_advancer.hpp"
 #include "smith/physics/common.hpp"
 #include "mfem.hpp"
@@ -26,14 +26,6 @@ namespace smith {
 
 template <typename... Args>
 struct Parameters;
-
-/**
- * @brief Information about a dual field.
- */
-struct ReactionInfo {
-  std::string name;                                    ///< The name of the dual field.
-  const mfem::ParFiniteElementSpace* space = nullptr;  ///< The finite element space of the dual field.
-};
 
 namespace detail {
 
@@ -58,33 +50,32 @@ using TimeRuleParams =
  * @brief Base struct for physics systems containing common members and helper functions.
  */
 struct SystemBase {
-  std::shared_ptr<FieldStore> field_store;      ///< Field store managing the system's fields.
-  std::shared_ptr<CoupledSystemSolver> solver;  ///< The solver for the system.
-  std::shared_ptr<StateAdvancer> advancer;      ///< The state advancer.
-  std::vector<FieldState> parameter_fields;     ///< Optional parameter fields.
-  std::string prepend_name;                     ///< Optional prepended name for all fields.
+  // --- equations ---
+  std::vector<std::shared_ptr<WeakForm>> weak_forms;
+
+  // --- infrastructure ---
+  std::shared_ptr<FieldStore> field_store;  ///< Field store managing the system's fields.
+  std::shared_ptr<SystemSolver> solver;     ///< The solver for the system.
+  std::shared_ptr<StateAdvancer> advancer;  ///< The state advancer.
+
+  SystemBase() = default;
+  virtual ~SystemBase() = default;
 
   /**
-   * @brief Get the list of all parameter fields.
-   * @return const std::vector<FieldState>& List of parameter fields.
+   * @brief Solve the system using the internal weak_forms and solver.
+   * @param time_info Current time information.
+   * @return std::vector<FieldState> The updated state fields from the solver.
    */
-  const std::vector<FieldState>& getParameterFields() const { return parameter_fields; }
+  virtual std::vector<FieldState> solve(const TimeInfo& time_info) const;
 
   /**
-   * @brief Helper function to prepend the physics name to a string.
-   * @param name The name to prepend to.
-   * @return std::string The prepended name.
+   * @brief Compute reactions after solving the main state.
+   * @param time_info Current time information.
+   * @param states_for_reactions The fields configured for reaction computation.
+   * @return std::vector<ReactionState> Computed reactions across all weak_forms.
    */
-  std::string prefix(const std::string& name) const
-  {
-    if (prepend_name.empty()) {
-      return name;
-    }
-    return prepend_name + "_" + name;
-  }
-
-  /// @brief Metadata for dual outputs exported by this system.
-  std::vector<ReactionInfo> getReactionInfos() const { return {}; }
+  virtual std::vector<ReactionState> computeReactions(const TimeInfo& time_info,
+                                                      const std::vector<FieldState>& states_for_reactions) const;
 };
 
 }  // namespace smith

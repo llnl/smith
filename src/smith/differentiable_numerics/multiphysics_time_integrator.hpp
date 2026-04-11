@@ -14,45 +14,21 @@
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
+#include "smith/differentiable_numerics/system_base.hpp"
 
 namespace smith {
 
-class CoupledSystemSolver;
+class SystemSolver;
 class DirichletBoundaryConditions;
 class BoundaryConditionManager;
-
-/**
- * @brief Solve a set of weak forms.
- * @param weak_forms List of weak forms to solve.
- * @param field_store Field store containing the fields.
- * @param solver The solver to use.
- * @param time_info Current time information.
- * @param params Optional parameter fields.
- * @return std::vector<FieldState> The updated state fields.
- */
-std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
-                              const CoupledSystemSolver* solver, const TimeInfo& time_info,
-                              const std::vector<FieldState>& params = {});
 
 /**
  * @brief Time integrator for multiphysics problems, coordinating multiple weak forms.
  */
 class MultiphysicsTimeIntegrator : public StateAdvancer {
  public:
-  /**
-   * @brief Construct a new MultiphysicsTimeIntegrator object.
-   * @param field_store Field store containing the fields.
-   * @param weak_forms List of weak forms to coordinate.
-   * @param solver The block solver to use.
-   * @param cycle_zero_weak_form Optional weak form for initial acceleration solve at cycle 0.
-   * @param cycle_zero_solver Optional solver paired with `cycle_zero_weak_form` for the cycle-0 solve.
-   *        If null, the integrator falls back to the main solver supplied here.
-   */
-  MultiphysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
-                             const std::vector<std::shared_ptr<WeakForm>>& weak_forms,
-                             std::shared_ptr<smith::CoupledSystemSolver> solver,
-                             std::shared_ptr<WeakForm> cycle_zero_weak_form = nullptr,
-                             std::shared_ptr<smith::CoupledSystemSolver> cycle_zero_solver = nullptr);
+  MultiphysicsTimeIntegrator(std::shared_ptr<SystemBase> system,
+                             std::shared_ptr<SystemBase> cycle_zero_system = nullptr);
 
   /**
    * @brief Advance the multiphysics state by one time step.
@@ -67,11 +43,8 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
       const std::vector<FieldState>& params) const override;
 
  private:
-  std::shared_ptr<FieldStore> field_store_;
-  std::vector<std::shared_ptr<WeakForm>> weak_forms_;
-  std::shared_ptr<smith::CoupledSystemSolver> solver_;
-  std::shared_ptr<WeakForm> cycle_zero_weak_form_;
-  std::shared_ptr<smith::CoupledSystemSolver> cycle_zero_solver_;
+  std::shared_ptr<SystemBase> system_;
+  std::shared_ptr<SystemBase> cycle_zero_system_;
 };
 
 }  // namespace smith
