@@ -26,7 +26,6 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
     const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states,
     const std::vector<FieldState>& params) const
 {
-  (void)shape_disp;
   std::vector<FieldState> current_states = states;
 
   // Sync FieldStore with (possibly updated) states and params so they are current for solve
@@ -51,7 +50,6 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
 
   if (time_info.cycle() == 0 && cycle_zero_system_ && requires_cycle_zero_solve) {
     auto cz_unknowns = cycle_zero_system_->solve(time_info);
-    SLIC_ERROR_IF(cz_unknowns.size() != 1, "Cycle-zero system produced incorrect number of unknowns, expected 1.");
 
     // Cycle zero system solves for initial acceleration which translates into test field.
     // Sync the solved unknowns back into current_states before main solve
@@ -59,8 +57,9 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
     std::string test_field_name =
         system_->field_store->getWeakFormReaction(cycle_zero_system_->weak_forms.front()->name());
     size_t test_field_state_idx = system_->field_store->getFieldIndex(test_field_name);
-    current_states[test_field_state_idx] = cz_unknowns[0];
-    system_->field_store->setField(test_field_state_idx, cz_unknowns[0]);
+    size_t cz_unknown_idx = cycle_zero_system_->field_store->getUnknownIndex(test_field_name);
+    current_states[test_field_state_idx] = cz_unknowns[cz_unknown_idx];
+    system_->field_store->setField(test_field_state_idx, cz_unknowns[cz_unknown_idx]);
   }
 
   std::vector<FieldState> primary_unknowns = system_->solve(time_info);
