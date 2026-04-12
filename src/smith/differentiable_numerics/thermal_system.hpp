@@ -38,6 +38,8 @@ namespace smith {
 template <int dim, int temp_order, typename TemperatureTimeRule = QuasiStaticFirstOrderTimeIntegrationRule,
           typename... parameter_space>
 struct ThermalSystem : public SystemBase {
+  using SystemBase::SystemBase;
+
   static_assert(TemperatureTimeRule::num_states == 2, "ThermalSystem requires a 2-state time integration rule");
 
   /// @brief using for ThermalWeakFormType
@@ -48,8 +50,6 @@ struct ThermalSystem : public SystemBase {
   std::shared_ptr<ThermalWeakFormType> thermal_weak_form;       ///< Thermal weak form.
   std::shared_ptr<DirichletBoundaryConditions> temperature_bc;  ///< Temperature boundary conditions.
   std::shared_ptr<TemperatureTimeRule> temperature_time_rule;   ///< Time integration for temperature.
-
-
 
   /**
    * @brief Set the thermal material model for a domain.
@@ -176,41 +176,36 @@ std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_sp
     ThermalOptions<dim, temp_order, TemperatureTimeRule, parameter_space...> options,
     FieldType<parameter_space>... parameter_types)
 {
-  auto field_store = std::make_shared<FieldStore>(mesh, 100);
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, options.prepend_name);
 
-  auto prefix = [&](const std::string& name) {
-    if (options.prepend_name.empty()) {
-      return name;
-    }
-    return options.prepend_name + "_" + name;
-  };
-
-  FieldType<H1<1, dim>> shape_disp_type(prefix("shape_displacement"));
+  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
   field_store->addShapeDisp(shape_disp_type);
 
   auto temperature_time_rule = std::make_shared<TemperatureTimeRule>(temp_rule);
-  FieldType<H1<temp_order>> temperature_type(prefix("temperature_solve_state"));
+  FieldType<H1<temp_order>> temperature_type("temperature_solve_state");
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
   auto temperature_old_type =
-      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, prefix("temperature"));
+      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, "temperature");
 
-  (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
+  auto prefix_param = [&](auto& pt) {
+    pt.name = "param_" + pt.name;
+    field_store->addParameter(pt);
+  };
+  (prefix_param(parameter_types), ...);
 
   using SystemType = ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>;
-  auto sys = std::make_shared<SystemType>();
-  sys->field_store = field_store;
-  sys->solver = solver;
-  sys->temperature_bc = temperature_bc;
-  sys->temperature_time_rule = temperature_time_rule;
 
-  std::string thermal_flux_name = prefix("thermal_flux");
-  sys->thermal_weak_form = std::make_shared<typename SystemType::ThermalWeakFormType>(
+  std::string thermal_flux_name = field_store->prefix("thermal_flux");
+  auto thermal_weak_form = std::make_shared<typename SystemType::ThermalWeakFormType>(
       thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
       field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+                                parameter_types...));
 
-  sys->weak_forms = {sys->thermal_weak_form};
-
+  auto sys =
+      std::make_shared<SystemType>(field_store, solver, std::vector<std::shared_ptr<WeakForm>>{thermal_weak_form});
+  sys->temperature_bc = temperature_bc;
+  sys->temperature_time_rule = temperature_time_rule;
+  sys->thermal_weak_form = thermal_weak_form;
 
   return sys;
 }

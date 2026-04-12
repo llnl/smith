@@ -41,6 +41,8 @@ template <int dim, int disp_order, int temp_order,
           typename DisplacementTimeRule = QuasiStaticSecondOrderTimeIntegrationRule,
           typename TemperatureTimeRule = BackwardEulerFirstOrderTimeIntegrationRule, typename... parameter_space>
 struct ThermoMechanicsSystem : public SystemBase {
+  using SystemBase::SystemBase;
+
   static_assert(DisplacementTimeRule::num_states == 4,
                 "ThermoMechanicsSystem requires a 4-state displacement time rule");
   static_assert(TemperatureTimeRule::num_states == 2, "ThermoMechanicsSystem requires a 2-state temperature time rule");
@@ -72,8 +74,6 @@ struct ThermoMechanicsSystem : public SystemBase {
   std::shared_ptr<DirichletBoundaryConditions> temperature_bc;  ///< Temperature boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;         ///< Time integration for displacement.
   std::shared_ptr<TemperatureTimeRule> temperature_time_rule;   ///< Time integration for temperature.
-
-
 
   /**
    * @brief Set the material model for a domain, defining integrals for solid and thermal weak forms.
@@ -353,78 +353,70 @@ buildThermoMechanicsSystem(
         options,
     FieldType<parameter_space>... parameter_types)
 {
-  auto field_store = std::make_shared<FieldStore>(mesh, 100);
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, options.prepend_name);
 
-  auto prefix = [&](const std::string& name) {
-    if (options.prepend_name.empty()) {
-      return name;
-    }
-    return options.prepend_name + "_" + name;
-  };
-
-  FieldType<H1<1, dim>> shape_disp_type(prefix("shape_displacement"));
+  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
   field_store->addShapeDisp(shape_disp_type);
 
   // Displacement fields (4-state second-order)
   auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>(disp_rule);
-  FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_solve_state"));
+  FieldType<H1<disp_order, dim>> disp_type("displacement_solve_state");
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule_ptr);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
-  auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, prefix("velocity"));
-  auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, prefix("acceleration"));
+  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, "displacement");
+  auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, "velocity");
+  auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, "acceleration");
 
   // Temperature fields (2-state first-order)
   auto temperature_time_rule_ptr = std::make_shared<TemperatureTimeRule>(temp_rule);
-  FieldType<H1<temp_order>> temperature_type(prefix("temperature_solve_state"));
+  FieldType<H1<temp_order>> temperature_type("temperature_solve_state");
   auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule_ptr);
   auto temperature_old_type =
-      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, prefix("temperature"));
+      field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, "temperature");
 
-  (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
+  auto prefix_param = [&](auto& pt) {
+    pt.name = "param_" + pt.name;
+    field_store->addParameter(pt);
+  };
+  (prefix_param(parameter_types), ...);
 
   using SystemType =
       ThermoMechanicsSystem<dim, disp_order, temp_order, DisplacementTimeRule, TemperatureTimeRule, parameter_space...>;
-  auto sys = std::make_shared<SystemType>();
-  sys->field_store = field_store;
-  sys->solver = solver;
+
+  // Solid mechanics weak form (u, u_old, v_old, a_old, temp, temp_old, params...)
+  std::string solid_force_name = field_store->prefix("solid_force");
+  auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
+      solid_force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
+      field_store->createSpaces(solid_force_name, disp_type.name, disp_type, disp_old_type, velo_old_type,
+                                accel_old_type, temperature_type, temperature_old_type, parameter_types...));
+
+  // Thermal weak form (temp, temp_old, u, u_old, v_old, a_old, params...)
+  std::string thermal_flux_name = field_store->prefix("thermal_flux");
+  auto thermal_weak_form = std::make_shared<typename SystemType::ThermalWeakFormType>(
+      thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
+      field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
+                                disp_type, disp_old_type, velo_old_type, accel_old_type, parameter_types...));
+
+  auto sys = std::make_shared<SystemType>(field_store, solver,
+                                          std::vector<std::shared_ptr<WeakForm>>{solid_weak_form, thermal_weak_form});
   sys->disp_bc = disp_bc;
   sys->temperature_bc = temperature_bc;
   sys->disp_time_rule = disp_time_rule_ptr;
   sys->temperature_time_rule = temperature_time_rule_ptr;
-
-  // Solid mechanics weak form (u, u_old, v_old, a_old, temp, temp_old, params...)
-  std::string solid_force_name = prefix("solid_force");
-  sys->solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
-      solid_force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
-      field_store->createSpaces(solid_force_name, disp_type.name, disp_type, disp_old_type, velo_old_type,
-                                accel_old_type, temperature_type, temperature_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
-
-  // Thermal weak form (temp, temp_old, u, u_old, v_old, a_old, params...)
-  std::string thermal_flux_name = prefix("thermal_flux");
-  sys->thermal_weak_form = std::make_shared<typename SystemType::ThermalWeakFormType>(
-      thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
-      field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
-                                disp_type, disp_old_type, velo_old_type, accel_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
-
-  sys->weak_forms = {sys->solid_weak_form, sys->thermal_weak_form};
+  sys->solid_weak_form = solid_weak_form;
+  sys->thermal_weak_form = thermal_weak_form;
 
   if (disp_time_rule_ptr->requiresInitialAccelerationSolve()) {
-    std::string cycle_zero_name = prefix("solid_reaction");
+    std::string cycle_zero_name = field_store->prefix("solid_reaction");
     sys->cycle_zero_weak_form = std::make_shared<typename SystemType::CycleZeroWeakFormType>(
         cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
         field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
-                                  temperature_type, temperature_old_type,
-                                  FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+                                  temperature_type, temperature_old_type, parameter_types...));
 
     auto cz_solver = options.cycle_zero_solver ? options.cycle_zero_solver : solver->singleBlockSolver(0);
     SLIC_ERROR_IF(cz_solver == nullptr,
                   "Could not derive a cycle-zero solver for block 0 from the provided thermo-mechanics solver.");
 
-    sys->cycle_zero_system = std::make_shared<SystemBase>(field_store);
-    sys->cycle_zero_system->solver = cz_solver;
-    sys->cycle_zero_system->weak_forms = {sys->cycle_zero_weak_form};
+    sys->cycle_zero_system = makeSubSystem(field_store, cz_solver, {sys->cycle_zero_weak_form});
   }
 
   return sys;

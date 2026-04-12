@@ -54,8 +54,18 @@ struct FieldStore {
    * @brief Construct a new FieldStore object.
    * @param mesh The mesh associated with the fields.
    * @param storage_size Initial storage size for fields (default: 50).
+   * @param prepend_name Namespace prefix applied by @c prefix(). Empty means no prefix.
    */
-  FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size = 50);
+  FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size = 50, std::string prepend_name = "");
+
+  /**
+   * @brief Apply this store's namespace prefix to a base name.
+   *
+   * Returns @p base unchanged when the store was constructed with an empty prepend name,
+   * otherwise returns @c prepend_name_ + "_" + base. Factories use this to namespace
+   * weak form, field, and parameter names consistently without re-implementing the rule.
+   */
+  std::string prefix(const std::string& base) const;
 
   /**
    * @brief Enum for different types of time derivatives.
@@ -74,8 +84,9 @@ struct FieldStore {
    * @param type The field type specification.
    */
   template <typename Space>
-  void addShapeDisp(FieldType<Space> type)
+  void addShapeDisp(FieldType<Space>& type)
   {
+    type.name = prefix(type.name);
     shape_disp_.push_back(smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag()));
   }
 
@@ -85,8 +96,9 @@ struct FieldStore {
    * @param type The field type specification.
    */
   template <typename Space>
-  void addParameter(FieldType<Space> type)
+  void addParameter(FieldType<Space>& type)
   {
+    type.name = prefix(type.name);
     to_params_index_[type.name] = params_.size();
     params_.push_back(smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag()));
   }
@@ -110,6 +122,7 @@ struct FieldStore {
   std::shared_ptr<DirichletBoundaryConditions> addIndependent(FieldType<Space>& type,
                                                               std::shared_ptr<TimeIntegrationRule> time_rule)
   {
+    type.name = prefix(type.name);
     type.unknown_index = static_cast<int>(num_unknowns_);
     to_states_index_[type.name] = states_.size();
     to_unknown_index_[type.name] = num_unknowns_;
@@ -173,7 +186,7 @@ struct FieldStore {
       SLIC_ERROR("Unsupported TimeDerivative");
     }
 
-    std::string name = name_override.empty() ? independent_field.name + suffix : name_override;
+    std::string name = name_override.empty() ? independent_field.name + suffix : prefix(name_override);
 
     if (independent_name_to_rule_index_.count(independent_field.name)) {
       size_t rule_idx = independent_name_to_rule_index_.at(independent_field.name);
@@ -423,6 +436,7 @@ struct FieldStore {
  private:
   std::shared_ptr<Mesh> mesh_;
   std::shared_ptr<gretl::DataStore> graph_;
+  std::string prepend_name_;
 
   std::vector<FieldState> shape_disp_;
   std::vector<FieldState> params_;

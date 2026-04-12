@@ -72,9 +72,10 @@ struct ThermalStaticFixture : public testing::Test {
                                                              [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
     TimeInfo t_info(0.0, 1.0);
-    auto [new_states, reactions] = makeAdvancer(thermal_system)->advanceState(
-        t_info, thermal_system->field_store->getShapeDisp(), thermal_system->field_store->getAllFields(),
-        thermal_system->field_store->getParameterFields());
+    auto [new_states, reactions] = makeAdvancer(thermal_system)
+                                       ->advanceState(t_info, thermal_system->field_store->getShapeDisp(),
+                                                      thermal_system->field_store->getAllFields(),
+                                                      thermal_system->field_store->getParameterFields());
 
     for (size_t i = 0; i < new_states.size(); ++i) {
       thermal_system->field_store->setField(i, new_states[i]);
@@ -168,9 +169,10 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
                                                            [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
   TimeInfo t_info(0.0, 1.0);
-  auto [new_states, reactions] = makeAdvancer(thermal_system)->advanceState(
-      t_info, thermal_system->field_store->getShapeDisp(), thermal_system->field_store->getAllFields(),
-      thermal_system->field_store->getParameterFields());
+  auto [new_states, reactions] = makeAdvancer(thermal_system)
+                                     ->advanceState(t_info, thermal_system->field_store->getShapeDisp(),
+                                                    thermal_system->field_store->getAllFields(),
+                                                    thermal_system->field_store->getParameterFields());
 
   for (size_t i = 0; i < new_states.size(); ++i) {
     thermal_system->field_store->setField(i, new_states[i]);

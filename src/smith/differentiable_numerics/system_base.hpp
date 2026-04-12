@@ -58,7 +58,11 @@ struct SystemBase {
   std::shared_ptr<SystemSolver> solver;     ///< The solver for the system.
 
   SystemBase() = default;
-  explicit SystemBase(std::shared_ptr<FieldStore> fs) : field_store(std::move(fs)) {}
+  explicit SystemBase(std::shared_ptr<FieldStore> fs, std::shared_ptr<SystemSolver> sol = nullptr,
+                      std::vector<std::shared_ptr<WeakForm>> wfs = {})
+      : weak_forms(std::move(wfs)), field_store(std::move(fs)), solver(std::move(sol))
+  {
+  }
   virtual ~SystemBase() = default;
 
   /**
@@ -77,5 +81,12 @@ struct SystemBase {
   virtual std::vector<ReactionState> computeReactions(const TimeInfo& time_info,
                                                       const std::vector<FieldState>& states_for_reactions) const;
 };
+
+inline std::shared_ptr<SystemBase> makeSubSystem(std::shared_ptr<FieldStore> field_store,
+                                                 std::shared_ptr<SystemSolver> solver,
+                                                 std::vector<std::shared_ptr<WeakForm>> weak_forms)
+{
+  return std::make_shared<SystemBase>(std::move(field_store), std::move(solver), std::move(weak_forms));
+}
 
 }  // namespace smith

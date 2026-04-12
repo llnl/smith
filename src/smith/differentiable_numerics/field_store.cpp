@@ -11,10 +11,19 @@
 
 namespace smith {
 
-FieldStore::FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size)
+FieldStore::FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size, std::string prepend_name)
     : mesh_(mesh),
-      graph_(std::make_shared<gretl::DataStore>(std::make_unique<gretl::WangCheckpointStrategy>(storage_size)))
+      graph_(std::make_shared<gretl::DataStore>(std::make_unique<gretl::WangCheckpointStrategy>(storage_size))),
+      prepend_name_(std::move(prepend_name))
 {
+}
+
+std::string FieldStore::prefix(const std::string& base) const
+{
+  if (prepend_name_.empty()) {
+    return base;
+  }
+  return prepend_name_ + "_" + base;
 }
 
 std::shared_ptr<DirichletBoundaryConditions> FieldStore::addBoundaryConditions(FEFieldPtr field)

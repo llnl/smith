@@ -143,7 +143,8 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
                                     [](std::vector<vec2> nodes, int) { return allNodesOnBoundary(nodes, 1.0); });
 
   auto field_store = std::make_shared<FieldStore>(mesh, 20);
-  field_store->addShapeDisp(FieldType<H1<1, 2>>("shape_displacement"));
+  FieldType<H1<1, 2>> shape_disp_type("shape_displacement");
+  field_store->addShapeDisp(shape_disp_type);
 
   auto quasi_static = std::make_shared<NeedsInitialSolveRule>();
   FieldType<H1<1>> temperature_type("temperature");
@@ -204,7 +205,8 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSkippedForQuasiStaticSecondOrderRule)
                                      "integrator_mesh");
 
   auto field_store = std::make_shared<FieldStore>(mesh, 20);
-  field_store->addShapeDisp(FieldType<H1<1, 2>>("shape_displacement"));
+  FieldType<H1<1, 2>> shape_disp_type("shape_displacement");
+  field_store->addShapeDisp(shape_disp_type);
 
   auto quasi_static = std::make_shared<QuasiStaticSecondOrderTimeIntegrationRule>();
   FieldType<H1<1>> displacement_type("displacement_solve_state");
@@ -255,7 +257,8 @@ TEST(SystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequestedBlock)
                                      "single_block_characterization_mesh");
 
   auto field_store = std::make_shared<FieldStore>(mesh, 20);
-  field_store->addShapeDisp(FieldType<H1<1, 2>>("shape_displacement"));
+  FieldType<H1<1, 2>> shape_disp_type("shape_displacement");
+  field_store->addShapeDisp(shape_disp_type);
 
   auto quasi_static = std::make_shared<QuasiStaticRule>();
   FieldType<H1<1>> temperature_type("temperature");

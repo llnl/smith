@@ -44,6 +44,8 @@ template <int dim, int disp_order, typename StateSpace,
           typename DisplacementTimeRule = QuasiStaticSecondOrderTimeIntegrationRule,
           typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule, typename... parameter_space>
 struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
+  using SystemBase::SystemBase;
+
   static_assert(DisplacementTimeRule::num_states == 4,
                 "SolidMechanicsWithInternalVarsSystem requires a 4-state displacement rule");
   static_assert(InternalVarTimeRule::num_states == 2,
@@ -80,8 +82,6 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
   std::shared_ptr<DirichletBoundaryConditions> state_bc;  ///< Internal variable boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;   ///< Time integration for displacement.
   std::shared_ptr<InternalVarTimeRule> state_time_rule;   ///< Time integration for internal variable.
-
-
 
   /**
    * @brief Set the material model for the solid mechanics part.
@@ -354,80 +354,73 @@ buildSolidMechanicsWithInternalVarsSystem(
         options,
     FieldType<parameter_space>... parameter_types)
 {
-  auto field_store = std::make_shared<FieldStore>(mesh, 100);
-
-  auto prefix = [&](const std::string& name) {
-    if (options.prepend_name.empty()) {
-      return name;
-    }
-    return options.prepend_name + "_" + name;
-  };
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, options.prepend_name);
 
   // Add shape displacement
-  FieldType<H1<1, dim>> shape_disp_type(prefix("shape_displacement"));
+  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
   field_store->addShapeDisp(shape_disp_type);
 
   // 1. Displacement fields (4-state second-order)
   auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>(disp_rule);
-  FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_solve_state"));
+  FieldType<H1<disp_order, dim>> disp_type("displacement_solve_state");
   auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule_ptr);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
-  auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, prefix("velocity"));
-  auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, prefix("acceleration"));
+  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, "displacement");
+  auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, "velocity");
+  auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, "acceleration");
 
   // 2. Internal variable fields (2-state first-order)
   auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>(state_rule);
-  FieldType<StateSpace> state_type(prefix("state_solve_state"));
+  FieldType<StateSpace> state_type("state_solve_state");
   auto state_bc = field_store->addIndependent(state_type, state_time_rule_ptr);
-  auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, prefix("state"));
+  auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, "state");
 
   // 3. Parameters
-  (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
+  auto prefix_param = [&](auto& pt) {
+    pt.name = "param_" + pt.name;
+    field_store->addParameter(pt);
+  };
+  (prefix_param(parameter_types), ...);
 
   using SystemType = SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTimeRule,
                                                           InternalVarTimeRule, parameter_space...>;
-  auto sys = std::make_shared<SystemType>();
-  sys->field_store = field_store;
-  sys->solver = solver;
+
+  // 4. Solid weak form: residual for u (inputs: u, u_old, v_old, a_old, alpha, alpha_old, params...)
+  std::string solid_res_name = field_store->prefix("solid_residual");
+  auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
+      solid_res_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
+      field_store->createSpaces(solid_res_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
+                                state_type, state_old_type, parameter_types...));
+
+  // 5. State weak form: residual for alpha (inputs: alpha, alpha_old, u, u_old, v_old, a_old, params...)
+  std::string state_res_name = field_store->prefix("state_residual");
+  auto state_weak_form = std::make_shared<typename SystemType::StateWeakFormType>(
+      state_res_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
+      field_store->createSpaces(state_res_name, state_type.name, state_type, state_old_type, disp_type, disp_old_type,
+                                velo_old_type, accel_old_type, parameter_types...));
+
+  auto sys = std::make_shared<SystemType>(field_store, solver,
+                                          std::vector<std::shared_ptr<WeakForm>>{solid_weak_form, state_weak_form});
   sys->disp_bc = disp_bc;
   sys->state_bc = state_bc;
   sys->disp_time_rule = disp_time_rule_ptr;
   sys->state_time_rule = state_time_rule_ptr;
-
-  // 4. Solid weak form: residual for u (inputs: u, u_old, v_old, a_old, alpha, alpha_old, params...)
-  std::string solid_res_name = prefix("solid_residual");
-  sys->solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
-      solid_res_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
-      field_store->createSpaces(solid_res_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
-                                state_type, state_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
-
-  // 5. State weak form: residual for alpha (inputs: alpha, alpha_old, u, u_old, v_old, a_old, params...)
-  std::string state_res_name = prefix("state_residual");
-  sys->state_weak_form = std::make_shared<typename SystemType::StateWeakFormType>(
-      state_res_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
-      field_store->createSpaces(state_res_name, state_type.name, state_type, state_old_type, disp_type, disp_old_type,
-                                velo_old_type, accel_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
-
-  sys->weak_forms = {sys->solid_weak_form, sys->state_weak_form};
+  sys->solid_weak_form = solid_weak_form;
+  sys->state_weak_form = state_weak_form;
 
   if (disp_time_rule_ptr->requiresInitialAccelerationSolve()) {
     // 6. Cycle-zero weak form: solve for acceleration (inputs: u, v, a, alpha, params...)
-    std::string cycle_zero_name = prefix("solid_reaction");
+    std::string cycle_zero_name = field_store->prefix("solid_reaction");
     sys->cycle_zero_solid_weak_form = std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
         cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
         field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
-                                  state_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+                                  state_type, parameter_types...));
 
     auto cz_solver = options.cycle_zero_solver ? options.cycle_zero_solver : solver->singleBlockSolver(0);
     SLIC_ERROR_IF(cz_solver == nullptr,
                   "Could not derive a cycle-zero solver for block 0 from the provided internal-vars solid mechanics "
                   "solver.");
 
-    sys->cycle_zero_system = std::make_shared<SystemBase>(field_store);
-    sys->cycle_zero_system->solver = cz_solver;
-    sys->cycle_zero_system->weak_forms = {sys->cycle_zero_solid_weak_form};
+    sys->cycle_zero_system = makeSubSystem(field_store, cz_solver, {sys->cycle_zero_solid_weak_form});
   }
 
   return sys;

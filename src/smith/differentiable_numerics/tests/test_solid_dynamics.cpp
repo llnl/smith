@@ -204,8 +204,7 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 
   auto coupled_solver = std::make_shared<SystemSolver>(solid_block_solver);
-  auto system = buildSolidMechanicsSystem<dim, order>(mesh, coupled_solver, time_rule,
-                                                      {.prepend_name = physics_name},
+  auto system = buildSolidMechanicsSystem<dim, order>(mesh, coupled_solver, time_rule, {.prepend_name = physics_name},
                                                       FieldType<ScalarParameterSpace>("bulk"),
                                                       FieldType<ScalarParameterSpace>("shear"));
 
