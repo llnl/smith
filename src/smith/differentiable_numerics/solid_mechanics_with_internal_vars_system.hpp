@@ -81,17 +81,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;   ///< Time integration for displacement.
   std::shared_ptr<InternalVarTimeRule> state_time_rule;   ///< Time integration for internal variable.
 
-  /**
-   * @brief Create a DifferentiablePhysics object for this system.
-   * @param physics_name The name of the physics.
-   * @return std::unique_ptr<DifferentiablePhysics> The differentiable physics object.
-   */
-  std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
-  {
-    return std::make_unique<DifferentiablePhysics>(
-        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), field_store->getStateFields(),
-        field_store->getParameterFields(), advancer, physics_name, field_store->getReactionInfos());
-  }
+
 
   /**
    * @brief Set the material model for the solid mechanics part.
@@ -435,77 +425,12 @@ buildSolidMechanicsWithInternalVarsSystem(
                   "Could not derive a cycle-zero solver for block 0 from the provided internal-vars solid mechanics "
                   "solver.");
 
-    sys->cycle_zero_system = std::make_shared<SystemBase>();
-    sys->cycle_zero_system->field_store = field_store;
+    sys->cycle_zero_system = std::make_shared<SystemBase>(field_store);
     sys->cycle_zero_system->solver = cz_solver;
     sys->cycle_zero_system->weak_forms = {sys->cycle_zero_solid_weak_form};
   }
 
-  sys->advancer = std::make_shared<MultiphysicsTimeIntegrator>(sys, sys->cycle_zero_system);
-
   return sys;
-}
-
-/**
- * @brief Factory function to build a solid mechanics system with internal variables, physics name and parameters.
- */
-template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
-          typename... parameter_space>
-std::shared_ptr<SolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                                     parameter_space...>>
-buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
-                                          DisplacementTimeRule disp_rule, InternalVarTimeRule isv_rule,
-                                          const std::string& prepend_name,
-                                          FieldType<parameter_space>... parameter_types)
-{
-  SolidMechanicsWithInternalVarsOptions<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                        parameter_space...>
-      opts;
-  opts.prepend_name = prepend_name;
-  return buildSolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                                   parameter_space...>(mesh, solver, disp_rule, isv_rule, opts,
-                                                                       parameter_types...);
-}
-
-/**
- * @brief Factory function to build a solid mechanics system with internal variables (without physics name).
- */
-template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
-          typename... parameter_space>
-std::shared_ptr<SolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                                     parameter_space...>>
-buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
-                                          DisplacementTimeRule disp_rule, InternalVarTimeRule isv_rule,
-                                          std::shared_ptr<SystemSolver> cycle_zero_solver,
-                                          FieldType<parameter_space>... parameter_types)
-{
-  SolidMechanicsWithInternalVarsOptions<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                        parameter_space...>
-      opts;
-  opts.cycle_zero_solver = std::move(cycle_zero_solver);
-  return buildSolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                                   parameter_space...>(mesh, solver, disp_rule, isv_rule, opts,
-                                                                       parameter_types...);
-}
-
-/**
- * @brief Factory function index to build a solid mechanics system with internal variables (without physics name or
- * specific cz solver).
- */
-template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
-          typename... parameter_space>
-std::shared_ptr<SolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                                     parameter_space...>>
-buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
-                                          DisplacementTimeRule disp_rule, InternalVarTimeRule isv_rule,
-                                          FieldType<parameter_space>... parameter_types)
-{
-  return buildSolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                                   parameter_space...>(
-      mesh, solver, disp_rule, isv_rule,
-      SolidMechanicsWithInternalVarsOptions<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                            parameter_space...>{},
-      parameter_types...);
 }
 
 }  // namespace smith

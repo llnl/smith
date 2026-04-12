@@ -16,6 +16,7 @@
 #include "smith/physics/base_physics.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
+#include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include <vector>
 #include <map>
 
@@ -196,5 +197,23 @@ class DifferentiablePhysics : public BasePhysics {
   int cycle_prev_ =
       0;  ///< previous cycle, saved to reconstruct the start of step time used in computing reaction forces
 };
+
+template <typename SystemType>
+std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(std::shared_ptr<SystemType> system,
+                                                                 std::shared_ptr<StateAdvancer> advancer,
+                                                                 const std::string& physics_name)
+{
+  return std::make_unique<DifferentiablePhysics>(
+      system->field_store->getMesh(), system->field_store->graph(), system->field_store->getShapeDisp(),
+      system->field_store->getStateFields(), system->field_store->getParameterFields(), std::move(advancer),
+      physics_name, system->field_store->getReactionInfos());
+}
+
+template <typename SystemType>
+std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(std::shared_ptr<SystemType> system,
+                                                                 const std::string& physics_name)
+{
+  return makeDifferentiablePhysics(system, makeAdvancer(system), physics_name);
+}
 
 }  // namespace smith

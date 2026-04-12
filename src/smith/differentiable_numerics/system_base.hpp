@@ -56,9 +56,9 @@ struct SystemBase {
   // --- infrastructure ---
   std::shared_ptr<FieldStore> field_store;  ///< Field store managing the system's fields.
   std::shared_ptr<SystemSolver> solver;     ///< The solver for the system.
-  std::shared_ptr<StateAdvancer> advancer;  ///< The state advancer.
 
   SystemBase() = default;
+  explicit SystemBase(std::shared_ptr<FieldStore> fs) : field_store(std::move(fs)) {}
   virtual ~SystemBase() = default;
 
   /**

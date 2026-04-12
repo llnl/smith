@@ -49,17 +49,7 @@ struct ThermalSystem : public SystemBase {
   std::shared_ptr<DirichletBoundaryConditions> temperature_bc;  ///< Temperature boundary conditions.
   std::shared_ptr<TemperatureTimeRule> temperature_time_rule;   ///< Time integration for temperature.
 
-  /**
-   * @brief Create a DifferentiablePhysics object for this system.
-   * @param physics_name The name of the physics.
-   * @return std::unique_ptr<DifferentiablePhysics> The differentiable physics object.
-   */
-  std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
-  {
-    return std::make_unique<DifferentiablePhysics>(
-        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), field_store->getStateFields(),
-        field_store->getParameterFields(), advancer, physics_name, field_store->getReactionInfos());
-  }
+
 
   /**
    * @brief Set the thermal material model for a domain.
@@ -221,44 +211,8 @@ std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_sp
 
   sys->weak_forms = {sys->thermal_weak_form};
 
-  sys->advancer = std::make_shared<MultiphysicsTimeIntegrator>(sys, nullptr);
 
   return sys;
-}
-
-/**
- * @brief Factory function to build a thermal system with default quasi-static rule.
- */
-template <int dim, int temp_order, typename... parameter_space>
-std::shared_ptr<ThermalSystem<dim, temp_order, QuasiStaticFirstOrderTimeIntegrationRule, parameter_space...>>
-buildThermalSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver,
-    ThermalOptions<dim, temp_order, QuasiStaticFirstOrderTimeIntegrationRule, parameter_space...> options,
-    FieldType<parameter_space>... parameter_types)
-{
-  return buildThermalSystem<dim, temp_order, QuasiStaticFirstOrderTimeIntegrationRule, parameter_space...>(
-      mesh, solver, QuasiStaticFirstOrderTimeIntegrationRule{}, options, parameter_types...);
-}
-
-template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
-std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>> buildThermalSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, TemperatureTimeRule temp_time_rule,
-    const std::string& prepend_name, FieldType<parameter_space>... parameter_types)
-{
-  ThermalOptions<dim, temp_order, TemperatureTimeRule, parameter_space...> opts;
-  opts.prepend_name = prepend_name;
-  return buildThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>(mesh, solver, temp_time_rule,
-                                                                                      opts, parameter_types...);
-}
-
-template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
-std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>> buildThermalSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, TemperatureTimeRule temp_time_rule,
-    FieldType<parameter_space>... parameter_types)
-{
-  return buildThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>(
-      mesh, solver, temp_time_rule, ThermalOptions<dim, temp_order, TemperatureTimeRule, parameter_space...>{},
-      parameter_types...);
 }
 
 }  // namespace smith

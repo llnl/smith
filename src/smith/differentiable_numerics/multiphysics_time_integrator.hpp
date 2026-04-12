@@ -47,4 +47,20 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
   std::shared_ptr<SystemBase> cycle_zero_system_;
 };
 
+inline std::shared_ptr<StateAdvancer> makeAdvancer(std::shared_ptr<SystemBase> system,
+                                                   std::shared_ptr<SystemBase> cycle_zero_system = nullptr)
+{
+  return std::make_shared<MultiphysicsTimeIntegrator>(std::move(system), std::move(cycle_zero_system));
+}
+
+template <typename SystemType>
+std::shared_ptr<StateAdvancer> makeAdvancer(std::shared_ptr<SystemType> system)
+{
+  if constexpr (requires { system->cycle_zero_system; }) {
+    return makeAdvancer(system, system->cycle_zero_system);
+  } else {
+    return makeAdvancer(system, nullptr);
+  }
+}
+
 }  // namespace smith

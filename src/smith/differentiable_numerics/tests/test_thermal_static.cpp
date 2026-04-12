@@ -52,7 +52,7 @@ struct ThermalStaticFixture : public testing::Test {
 
     auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
     auto thermal_system =
-        buildThermalSystem<2, temp_order>(mesh, coupled_solver, QuasiStaticFirstOrderTimeIntegrationRule{});
+        buildThermalSystem<2, temp_order>(mesh, coupled_solver, QuasiStaticFirstOrderTimeIntegrationRule{}, {});
 
     double k = 1.0;
     // Material returns {heat_capacity, heat_flux} consistent with heat_transfer.hpp convention.
@@ -72,7 +72,7 @@ struct ThermalStaticFixture : public testing::Test {
                                                              [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
     TimeInfo t_info(0.0, 1.0);
-    auto [new_states, reactions] = thermal_system->advancer->advanceState(
+    auto [new_states, reactions] = makeAdvancer(thermal_system)->advanceState(
         t_info, thermal_system->field_store->getShapeDisp(), thermal_system->field_store->getAllFields(),
         thermal_system->field_store->getParameterFields());
 
@@ -141,7 +141,7 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
   auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
 
   FieldType<L2<0>> conductivity_param("conductivity");
-  auto thermal_system = buildThermalSystem<2, 1>(mesh, coupled_solver, QuasiStaticFirstOrderTimeIntegrationRule{}, "",
+  auto thermal_system = buildThermalSystem<2, 1>(mesh, coupled_solver, QuasiStaticFirstOrderTimeIntegrationRule{}, {},
                                                  conductivity_param);
 
   // Set the conductivity parameter field to k=1.0
@@ -168,7 +168,7 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
                                                            [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
   TimeInfo t_info(0.0, 1.0);
-  auto [new_states, reactions] = thermal_system->advancer->advanceState(
+  auto [new_states, reactions] = makeAdvancer(thermal_system)->advanceState(
       t_info, thermal_system->field_store->getShapeDisp(), thermal_system->field_store->getAllFields(),
       thermal_system->field_store->getParameterFields());
 

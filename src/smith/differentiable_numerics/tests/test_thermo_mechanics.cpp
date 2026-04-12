@@ -92,9 +92,9 @@ TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionI
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
       mesh_, std::make_shared<SystemSolver>(block_solver), QuasiStaticSecondOrderTimeIntegrationRule{},
-      BackwardEulerFirstOrderTimeIntegrationRule{}, "thermo", youngs_modulus);
+      BackwardEulerFirstOrderTimeIntegrationRule{}, {.prepend_name = "thermo"}, youngs_modulus);
 
-  auto physics = system->createDifferentiablePhysics("thermo_physics");
+  auto physics = makeDifferentiablePhysics(system, "thermo_physics");
   const auto& solid_dual_space = physics->dual("thermo_solid_force").space();
   const auto& solid_state_space = physics->state("thermo_displacement").space();
   const auto& thermal_dual_space = physics->dual("thermo_thermal_flux").space();
@@ -125,7 +125,7 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
   auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
       mesh_, std::make_shared<SystemSolver>(block_solver), QuasiStaticSecondOrderTimeIntegrationRule{},
-      BackwardEulerFirstOrderTimeIntegrationRule{}, "thermo", youngs_modulus);
+      BackwardEulerFirstOrderTimeIntegrationRule{}, {.prepend_name = "thermo"}, youngs_modulus);
 
   GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   system->setMaterial(material, mesh_->entireBodyName());
@@ -140,7 +140,7 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
     return traction;
   });
 
-  auto physics = system->createDifferentiablePhysics("thermo_physics");
+  auto physics = makeDifferentiablePhysics(system, "thermo_physics");
 
   // Run forward
   double dt = 1.0;
@@ -169,7 +169,7 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
     FieldType<L2<0>> youngs_modulus("youngs_modulus");
     auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
         mesh_, coupled_solver, QuasiStaticSecondOrderTimeIntegrationRule{},
-        BackwardEulerFirstOrderTimeIntegrationRule{}, youngs_modulus);
+        BackwardEulerFirstOrderTimeIntegrationRule{}, {}, youngs_modulus);
     system->setMaterial(material, mesh_->entireBodyName());
     system->field_store->getParameterFields()[0].get()->setFromFieldFunction(
         [=](smith::tensor<double, dim>) { return 100.0; });
@@ -199,7 +199,7 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
     std::vector<ReactionState> reactions;
     for (size_t step = 0; step < 1; ++step) {
       std::tie(states, reactions) =
-          system->advancer->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
+          makeAdvancer(system)->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
       time += dt;
     }
 

@@ -58,17 +58,6 @@ struct SolidMechanicsSystem : public SystemBase {
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;  ///< Time integration rule.
 
-  /**
-   * @brief Create a DifferentiablePhysics object for this system.
-   * @param physics_name The name of the physics.
-   * @return std::unique_ptr<DifferentiablePhysics> The differentiable physics object.
-   */
-  std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
-  {
-    return std::make_unique<DifferentiablePhysics>(
-        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), field_store->getStateFields(),
-        field_store->getParameterFields(), advancer, physics_name, field_store->getReactionInfos());
-  }
 
   /**
    * @brief Set the material model for a domain, defining integrals for the solid weak form.
@@ -350,56 +339,12 @@ std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter
     SLIC_ERROR_IF(cz_solver == nullptr,
                   "Could not derive a cycle-zero solver for block 0 from the provided solid mechanics solver.");
 
-    sys->cycle_zero_system = std::make_shared<SystemBase>();
-    sys->cycle_zero_system->field_store = field_store;
+    sys->cycle_zero_system = std::make_shared<SystemBase>(field_store);
     sys->cycle_zero_system->solver = cz_solver;
     sys->cycle_zero_system->weak_forms = {sys->cycle_zero_solid_weak_form};
   }
 
-  sys->advancer = std::make_shared<MultiphysicsTimeIntegrator>(sys, sys->cycle_zero_system);
-
   return sys;
-}
-
-/**
- * @brief Factory function to build a solid mechanics system with a physics name and parameter fields.
- */
-template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
-std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>> buildSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, DisplacementTimeRule disp_rule,
-    const std::string& prepend_name, FieldType<parameter_space>... parameter_types)
-{
-  SolidMechanicsOptions<dim, order, DisplacementTimeRule, parameter_space...> opts;
-  opts.prepend_name = prepend_name;
-  return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>(mesh, solver, disp_rule, opts,
-                                                                                         parameter_types...);
-}
-
-/**
- * @brief Factory function to build a solid mechanics system (without physics name).
- */
-template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
-std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>> buildSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, DisplacementTimeRule disp_rule,
-    std::shared_ptr<SystemSolver> cycle_zero_solver, FieldType<parameter_space>... parameter_types)
-{
-  SolidMechanicsOptions<dim, order, DisplacementTimeRule, parameter_space...> opts;
-  opts.cycle_zero_solver = std::move(cycle_zero_solver);
-  return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>(mesh, solver, disp_rule, opts,
-                                                                                         parameter_types...);
-}
-
-/**
- * @brief Factory function to build a solid mechanics system (without physics name or specific cycle-zero solver).
- */
-template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
-std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>> buildSolidMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, DisplacementTimeRule disp_rule,
-    FieldType<parameter_space>... parameter_types)
-{
-  return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>(
-      mesh, solver, disp_rule, SolidMechanicsOptions<dim, order, DisplacementTimeRule, parameter_space...>{},
-      parameter_types...);
 }
 
 }  // namespace smith

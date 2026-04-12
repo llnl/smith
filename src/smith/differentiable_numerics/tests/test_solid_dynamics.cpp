@@ -104,8 +104,8 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   auto coupled_solver = std::make_shared<SystemSolver>(solid_block_solver);
   auto system = buildSolidMechanicsSystem<dim, order>(
-      mesh, coupled_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, FieldType<ScalarParameterSpace>("bulk"),
-      FieldType<ScalarParameterSpace>("shear"));
+      mesh, coupled_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, {},
+      FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
 
   static constexpr double gravity = -9.0;
 
@@ -149,7 +149,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   for (size_t m = 0; m < num_steps_; ++m) {
     TimeInfo t_info(time, dt_, cycle);
-    std::tie(states, reactions) = system->advancer->advanceState(t_info, shape_disp, states, params);
+    std::tie(states, reactions) = makeAdvancer(system)->advanceState(t_info, shape_disp, states, params);
     output_states = system->field_store->getOutputFieldStates();
     time += dt_;
     cycle++;
@@ -204,11 +204,12 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 
   auto coupled_solver = std::make_shared<SystemSolver>(solid_block_solver);
-  auto system = buildSolidMechanicsSystem<dim, order>(mesh, coupled_solver, time_rule, physics_name,
+  auto system = buildSolidMechanicsSystem<dim, order>(mesh, coupled_solver, time_rule,
+                                                      {.prepend_name = physics_name},
                                                       FieldType<ScalarParameterSpace>("bulk"),
                                                       FieldType<ScalarParameterSpace>("shear"));
 
-  auto physics = system->createDifferentiablePhysics(physics_name);
+  auto physics = makeDifferentiablePhysics(system, physics_name);
   auto bcs = system->disp_bc;
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));
