@@ -26,7 +26,6 @@
 
  #include <set>
  #include <string>
- //#include <deque>
  
  #include "axom/slic.hpp"
  #include "axom/inlet.hpp"
@@ -127,7 +126,7 @@
 
      auto Btilde = pow(J,-2./3)*B;
      auto I1tilde = tr(Btilde);
-     auto Bbar = Btilde - (I1tilde/.3)*I;
+     auto Bbar = Btilde - (I1tilde/3.)*I;
 
      // set up viscoelastic function fn
      auto fn = 1.0;
@@ -169,7 +168,6 @@
     * @param du_dX displacement gradient with respect to the reference configuration (displacement_grad)
     * @return The first Piola stress
     */
- 
    template <typename T, int dim>
    SMITH_HOST_DEVICE auto operator()(State& state, const tensor<T, dim, dim>& du_dX) const
    {
@@ -219,7 +217,7 @@
 
    //============= time stepping params ================
    double tfinal = 35;     // final time
-   double Npts = 500;       // number of time steps
+   double Npts = 200;       // number of time steps
    //=========== end time stepping params ==============
  
    // Command line arguments
@@ -287,7 +285,6 @@
      solid_solver = std::make_unique<smith::SolidMechanics<p, dim>>(
          nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh);
 
-
    using Material = Zimmerman_EOS::NeoHookeanViscoFEBio;
    // Units are standard FEBio: Mpa-mm-s
      double h_density = 1.0;
@@ -307,7 +304,6 @@
    Material mat_visco{.density=v_density, .K=v_K, .G=v_G, .g1=v_g1, .tau1=v_tau1, .dt=dt};
   
    //Domain whole_mesh = EntireDomain(mesh);
-   //solid_solver->setMaterial(mat, whole_mesh, internal_states);
    auto internal_states = solid_solver->createQuadratureDataBuffer(Material::State{}, mesh->domain("whole_mesh")); 
 
    solid_solver->setMaterial(mat_hyper, mesh->domain("left_mesh"), internal_states);
@@ -324,7 +320,7 @@
      //simple strain rate is velocity/gauge length, so v/120
      //normalized strain rate as in the paper is v_tau1*velocity/120
      //I need edot=0.1, =>velocity=1.2?
-     double velocity = 12.; //mm/s
+     double velocity = 12; //mm/s
      double val = velocity*t;
      u[1] = -val;
      return u;
