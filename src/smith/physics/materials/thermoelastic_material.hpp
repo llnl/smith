@@ -145,7 +145,186 @@ struct NeoHookeanThermoelasticMaterial {
     return smith::tuple{Piola, C_v, s0, q0};
   }
 };
+//////////////////////////////////////////////////////////////////////////////
+/// Fictitious thermally responsive material (softening when heating)
+struct ThermalSofteningDummyMaterial {
+  static constexpr int dim = 3;
+  double density;    ///< density
+  double E;          ///< Young's modulus
+  double nu;         ///< Poisson's ratio
+  double C_v;        ///< volumetric heat capacity
+  double alpha;      ///< thermal expansion coefficient
+  double theta_ref;  ///< datum temperature for thermal expansion
+  double kappa;      ///< thermal conductivity
+  double mu;         ///< viscous parameter
 
+  // Bounds for temperature-dependent scaling of mechanical properties
+  double theta_low = 293.15;   ///< lower temperature bound for scaling
+  double theta_high = 473.15;  ///< upper temperature bound for scaling
+
+  // Maximum softening factor at low temperature
+  // E_eff(theta_low)   = scale_factor * E
+  // E_eff(theta_high)  = 1 * E
+  double scale_factor = 1.0e1;
+
+  using State = Empty;
+
+  template <typename T1, typename T2, typename T3, typename T4, int dim_>
+  auto operator()(double, State&, const tensor<T1, dim_, dim_>& grad_u, const tensor<T2, dim_, dim_>& grad_v, T3 theta,
+                  const tensor<T4, dim_>& grad_theta) const
+  {
+    static_assert(dim_ == dim, "Dimension mismatch in ThermalSofteningDummyMaterial");
+
+    using std::log1p;
+
+    // --------------------------------------------------------
+    // Temperature dependent scaling factor for mechanical props
+    // --------------------------------------------------------
+    // We want: at low T -> scale_factor, at high T -> 1
+    auto s_mech = theta;  // just to get the AD type; will overwrite immediately
+
+    if (theta <= theta_low) {
+      s_mech = scale_factor;
+    } else if (theta >= theta_high) {
+      s_mech = 1.0;
+    } else {
+      // r in (0,1)
+      auto r = (theta - theta_low) / (theta_high - theta_low);
+      // linear from scale_factor (at r=0) down to 1 (at r=1)
+      s_mech = scale_factor + (1.0 - scale_factor) * r;
+    }
+
+    // Apply scaling to E and mu (promote doubles to AD type via multiplication)
+    auto E_eff = s_mech * E;
+    auto mu_eff = s_mech * mu;
+
+    auto K = E_eff / (3.0 * (1.0 - 2.0 * nu));
+    auto G = 0.5 * E_eff / (1.0 + nu);
+    // std::cout<<"... theta = "<<get_value(theta)<<", s_mech = "<<get_value(s_mech)<<", K = "<<get_value(K)<<", G =
+    // "<<get_value(G)<<std::endl;
+    constexpr auto I = smith::DenseIdentity<dim_>();
+    auto lambda = K - (2.0 / 3.0) * G;
+
+    auto B_minus_I = dot(grad_u, transpose(grad_u)) + transpose(grad_u) + grad_u;
+
+    auto logJ = log1p(detApIm1(grad_u));
+
+    // Deformation gradient
+    auto F = grad_u + I;
+
+    auto L = dot(grad_v, inv(F));
+    auto D = sym(L);
+
+    // Kirchhoff stress with viscous term using temperature dependent mu_eff
+    auto TK = lambda * logJ * I + G * B_minus_I + 0.5 * det(F) * mu_eff * D;
+
+    // Thermal stress contribution
+    auto S = -K * (dim_ * alpha * (theta - theta_ref)) * I;
+
+    // First Piola stress
+    auto Piola = dot(TK, inv(transpose(F))) + dot(F, S);
+
+    // Internal heat power
+    auto greenStrainRate =
+        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
+    auto s0 = -dim_ * K * alpha * (theta + 273.1) * tr(greenStrainRate);
+
+    // Heat flux
+    auto q0 = -kappa * grad_theta;
+
+    return smith::tuple{Piola, C_v, s0, q0};
+  }
+};
+
+//////////////////////////////////////////////////////////////////////////////
+/// Fictitious thermally responsive material (softening when heating)
+struct ThermalStiffeningDummyMaterial {
+  static constexpr int dim = 3;
+  double density;    ///< density
+  double E;          ///< Young's modulus
+  double nu;         ///< Poisson's ratio
+  double C_v;        ///< volumetric heat capacity
+  double alpha;      ///< thermal expansion coefficient
+  double theta_ref;  ///< datum temperature for thermal expansion
+  double kappa;      ///< thermal conductivity
+  double mu;         ///< viscous parameter
+
+  // Bounds for temperature-dependent scaling of mechanical properties
+  double theta_low = 293.15;   ///< lower temperature bound for scaling
+  double theta_high = 473.15;  ///< upper temperature bound for scaling
+
+  // Maximum softening factor at low temperature
+  // E_eff(theta_low)   = scale_factor * E
+  // E_eff(theta_high)  = 1 * E
+  double scale_factor = 1.0e1;
+
+  using State = Empty;
+
+  template <typename T1, typename T2, typename T3, typename T4, int dim_>
+  auto operator()(double, State&, const tensor<T1, dim_, dim_>& grad_u, const tensor<T2, dim_, dim_>& grad_v, T3 theta,
+                  const tensor<T4, dim_>& grad_theta) const
+  {
+    static_assert(dim_ == dim, "Dimension mismatch in ThermalSofteningDummyMaterial");
+
+    using std::log1p;
+
+    // --------------------------------------------------------
+    // Temperature dependent scaling factor for mechanical props
+    // --------------------------------------------------------
+    // We want: at low T -> scale_factor, at high T -> 1
+    auto s_mech = theta;  // just to get the AD type; will overwrite immediately
+
+    if (theta <= theta_low) {
+      s_mech = 1.0;
+    } else if (theta >= theta_high) {
+      s_mech = scale_factor;
+    } else {
+      // r in (0,1)
+      auto r = (theta - theta_low) / (theta_high - theta_low);
+      // linear from scale_factor (at r=0) down to 1 (at r=1)
+      s_mech = 1.0 + (scale_factor - 1.0) * r;
+    }
+
+    // Apply scaling to E and mu (promote doubles to AD type via multiplication)
+    auto E_eff = s_mech * E;
+    auto mu_eff = s_mech * mu;
+
+    auto K = E_eff / (3.0 * (1.0 - 2.0 * nu));
+    auto G = 0.5 * E_eff / (1.0 + nu);
+
+    constexpr auto I = smith::DenseIdentity<dim_>();
+    auto lambda = K - (2.0 / 3.0) * G;
+
+    auto B_minus_I = dot(grad_u, transpose(grad_u)) + transpose(grad_u) + grad_u;
+
+    auto logJ = log1p(detApIm1(grad_u));
+
+    // Deformation gradient
+    auto F = grad_u + I;
+
+    auto L = dot(grad_v, inv(F));
+    auto D = sym(L);
+
+    // Kirchhoff stress with viscous term using temperature dependent mu_eff
+    auto TK = lambda * logJ * I + G * B_minus_I + 0.5 * det(F) * mu_eff * D;
+
+    // Thermal stress contribution
+    auto S = -K * (dim_ * alpha * (theta - theta_ref)) * I;
+
+    // First Piola stress
+    auto Piola = dot(TK, inv(transpose(F))) + dot(F, S);
+
+    // Internal heat power
+    auto greenStrainRate =
+        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
+    auto s0 = -dim_ * K * alpha * (theta + 273.1) * tr(greenStrainRate);
+
+    // Heat flux
+    auto q0 = -kappa * grad_theta;
+
+    return smith::tuple{Piola, C_v, s0, q0};
+  }
+};
 ///////////////////////////////////////////////////////////////////////////////
 
 /// PNC thermal stiffening material model
@@ -404,6 +583,7 @@ struct SimpleThermalStiffeningMaterial {
 
   template<typename scalar>
   SMITH_HOST_DEVICE auto Gm0(scalar g) const{
+    /*
     using std::pow;
     // matrix shear modulus at reference temperature as a function of particle wt% g
     auto Gr = 0.017;      //GPa, rigid modulus
@@ -423,7 +603,8 @@ struct SimpleThermalStiffeningMaterial {
     auto Gnum = (1.-2.*psi+psi*X)*Gr*Gs+(1.-X)*psi*Gr*Gr;
     auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
     auto G = Gnum/Gdenom; // this is in GPa
-    return G*1.e9;        // convert to Pa
+    */
+    return 10000.+g;//G*1.e9;        // convert to Pa
   }
   
   template<typename scalar>
@@ -444,6 +625,7 @@ struct SimpleThermalStiffeningMaterial {
 
   template<typename scalar>
   SMITH_HOST_DEVICE auto Ge0(scalar g) const{
+    /*
     using std::pow;
     // entanglement shear modulus at reference temperature as a function of particle wt% g
     auto Gr = 0.12;      //GPa, rigid modulus
@@ -464,6 +646,8 @@ struct SimpleThermalStiffeningMaterial {
     auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
     auto G = Gnum/Gdenom; // this is in GPa
     return G*1.e9;        //this is Pa
+    */
+    return 100000.+g;
   }
 
   template <typename T1, typename T2, typename T3, typename T4, int dim>
@@ -478,7 +662,9 @@ struct SimpleThermalStiffeningMaterial {
     theta=theta+tempref;
 
     // get equilibrium we=1-xi
-    auto we = 0.0;//1. - equilibrium_xi(theta);
+    auto we = 1. - equilibrium_xi(theta);
+
+    //std::cout << "we: " << we << "\n";
 
     // get kinematics
     constexpr auto I = Identity<dim>();
@@ -517,7 +703,7 @@ struct SimpleThermalStiffeningMaterial {
     // derivative of elastic S with respect to T
     auto dtmdT = Gm0(gw)*df1(theta)*pow(J,-2./3)*B_bar-Km*J*betam*I;
     auto dSedT = dot(inv(F),dot(dtmdT,transpose(inv(F))));
-    const auto s0 = tr(dot(theta*dSedT,greenStrainRate));
+    const auto s0 = tr(dot(theta*dSedT,greenStrainRate))*0.0;
 
     return smith::tuple{Piola, C_v, s0, q0};
   }

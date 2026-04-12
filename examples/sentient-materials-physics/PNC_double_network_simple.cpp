@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
   double Total_Time = 500.0;
   int serial_refinement = 0;
   int parallel_refinement = 0;
-  std::string mesh_name = "2d_plate.g";//"2d_plate_4elem.g"; //50x50x1 unit plate
+  std::string mesh_name = "2d_plate_4elem.g"; //50x50x1 unit plate
   /*
   double Km;       ///< matrix bulk modulus, MPa
   double betam;    ///< matrix volumetric thermal expansion coefficient
