@@ -34,6 +34,12 @@ smith_add_executable(NAME       extended_thermomechanics
                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                      DEPENDS_ON smith
                      )
+
+smith_add_executable(NAME       bibeam_test_2d
+                     SOURCES    bibeam_test_2d.cpp
+                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                     DEPENDS_ON smith
+                     )
 install(
     FILES
         PNC_double_network_test.cpp
