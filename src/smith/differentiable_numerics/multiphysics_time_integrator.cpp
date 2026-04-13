@@ -22,6 +22,11 @@ MultiphysicsTimeIntegrator::MultiphysicsTimeIntegrator(std::shared_ptr<SystemBas
 {
 }
 
+void MultiphysicsTimeIntegrator::addPostSolveSystem(std::shared_ptr<SystemBase> system)
+{
+  post_solve_systems_.push_back(std::move(system));
+}
+
 std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeIntegrator::advanceState(
     const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states,
     const std::vector<FieldState>& params) const
@@ -51,30 +56,68 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
   if (time_info.cycle() == 0 && cycle_zero_system_ && requires_cycle_zero_solve) {
     auto cz_unknowns = cycle_zero_system_->solve(time_info);
 
-    // Cycle zero system solves for initial acceleration which translates into test field.
-    // Sync the solved unknowns back into current_states before main solve
-    // Assuming cycle zero solve gives us the state for test field:
+    // Cycle zero system solves for the initial acceleration, but by convention the solved value
+    // is returned through the first (and only) block of the cycle-zero subsystem — the weak form
+    // uses an aliased unknown trial space that matches the acceleration test space. Copy that
+    // single result into the acceleration state slot for the main solve.
+    SLIC_ERROR_ROOT_IF(cz_unknowns.size() != 1,
+                       "Cycle zero system is expected to be a single-block solve producing one unknown");
     std::string test_field_name =
         system_->field_store->getWeakFormReaction(cycle_zero_system_->weak_forms.front()->name());
     size_t test_field_state_idx = system_->field_store->getFieldIndex(test_field_name);
-    size_t cz_unknown_idx = cycle_zero_system_->field_store->getUnknownIndex(test_field_name);
-    current_states[test_field_state_idx] = cz_unknowns[cz_unknown_idx];
-    system_->field_store->setField(test_field_state_idx, cz_unknowns[cz_unknown_idx]);
+    current_states[test_field_state_idx] = cz_unknowns[0];
+    system_->field_store->setField(test_field_state_idx, cz_unknowns[0]);
   }
 
   std::vector<FieldState> primary_unknowns = system_->solve(time_info);
 
+  // Build a map from the main system's unknown names to their position in primary_unknowns.
+  // Entries in the shared FieldStore's time integration rules that belong to post-solve
+  // subsystems (e.g. stress projection) are NOT present here and must be skipped by downstream
+  // lookups that walk getTimeIntegrationRules().
+  std::map<std::string, size_t> main_unknown_name_to_local_idx;
+  for (size_t i = 0; i < system_->weak_forms.size(); ++i) {
+    const std::string wf_name = system_->weak_forms[i]->name();
+    const std::string reaction_name = system_->field_store->getWeakFormReaction(wf_name);
+    main_unknown_name_to_local_idx[reaction_name] = i;
+  }
+
   // Create states for reaction computation: newly solved primary unknowns + current states
   std::vector<FieldState> states_for_reactions = current_states;
   for (const auto& [rule, mapping] : system_->field_store->getTimeIntegrationRules()) {
+    auto it = main_unknown_name_to_local_idx.find(mapping.primary_name);
+    if (it == main_unknown_name_to_local_idx.end()) {
+      continue;  // rule belongs to a post-solve subsystem, not the main solve
+    }
     size_t u_idx = system_->field_store->getFieldIndex(mapping.primary_name);
-    size_t unknown_idx = system_->field_store->getUnknownIndex(mapping.primary_name);
-    FieldState u_new = primary_unknowns[unknown_idx];
+    FieldState u_new = primary_unknowns[it->second];
     states_for_reactions[u_idx] = u_new;
   }
 
   // Compute reactions using newly solved unknowns but BEFORE time integration state updates
   std::vector<ReactionState> reactions = system_->computeReactions(time_info, states_for_reactions);
+
+  // Sync field_store with newly solved primary unknowns so post-solve systems (e.g. stress
+  // projection) read the current displacement rather than the pre-solve snapshot.
+  for (const auto& [rule, mapping] : system_->field_store->getTimeIntegrationRules()) {
+    auto it = main_unknown_name_to_local_idx.find(mapping.primary_name);
+    if (it == main_unknown_name_to_local_idx.end()) {
+      continue;
+    }
+    size_t u_idx = system_->field_store->getFieldIndex(mapping.primary_name);
+    system_->field_store->setField(u_idx, primary_unknowns[it->second]);
+  }
+
+  // Solve post-solve systems (e.g. stress projection for output) and sync their results back
+  // into the shared field_store so getAllFields() returns the updated values for new_states.
+  for (const auto& ps : post_solve_systems_) {
+    auto ps_unknowns = ps->solve(time_info);
+    for (size_t i = 0; i < ps->weak_forms.size(); ++i) {
+      const std::string reaction_name = ps->field_store->getWeakFormReaction(ps->weak_forms[i]->name());
+      size_t u_idx = ps->field_store->getFieldIndex(reaction_name);
+      ps->field_store->setField(u_idx, ps_unknowns[i]);
+    }
+  }
 
   // Now do time integration to compute corrected velocities/accelerations and update all states
   const auto& all_current_states = system_->field_store->getAllFields();
@@ -84,9 +127,12 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
   }
 
   for (const auto& [rule, mapping] : system_->field_store->getTimeIntegrationRules()) {
+    auto it = main_unknown_name_to_local_idx.find(mapping.primary_name);
+    if (it == main_unknown_name_to_local_idx.end()) {
+      continue;  // rule belongs to a post-solve subsystem, not the main solve
+    }
     size_t u_idx = system_->field_store->getFieldIndex(mapping.primary_name);
-    size_t unknown_idx = system_->field_store->getUnknownIndex(mapping.primary_name);
-    FieldState u_new = primary_unknowns[unknown_idx];
+    FieldState u_new = primary_unknowns[it->second];
     new_states[u_idx] = u_new;
 
     std::vector<FieldState> rule_inputs;
@@ -118,6 +164,20 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
     if (!mapping.history_name.empty()) {
       size_t hist_idx = system_->field_store->getFieldIndex(mapping.history_name);
       new_states[hist_idx] = u_new;
+    }
+  }
+
+  // Copy solve-state → history for post-solve fields (e.g. stress_solve_state → stress).
+  // The main loop skipped these rules; their primary fields are already correct in new_states
+  // (populated from all_current_states above), so only the history field needs updating.
+  for (const auto& [rule, mapping] : system_->field_store->getTimeIntegrationRules()) {
+    if (main_unknown_name_to_local_idx.count(mapping.primary_name)) {
+      continue;  // already handled by main time integration loop above
+    }
+    if (!mapping.history_name.empty()) {
+      size_t primary_idx = system_->field_store->getFieldIndex(mapping.primary_name);
+      size_t hist_idx = system_->field_store->getFieldIndex(mapping.history_name);
+      new_states[hist_idx] = new_states[primary_idx];
     }
   }
 

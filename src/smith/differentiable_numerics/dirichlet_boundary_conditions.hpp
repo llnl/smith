@@ -161,6 +161,13 @@ class DirichletBoundaryConditions {
   /// @brief Return the smith BoundaryConditionManager
   const smith::BoundaryConditionManager& getBoundaryConditionManager() const { return bcs_; }
 
+  /// @brief Constrain the same true DOFs as @p source, but with zero prescribed values.
+  ///
+  /// Used for the cycle-zero acceleration BC: the constrained DOF set mirrors the displacement BC
+  /// (same mesh nodes, same components), but the prescribed acceleration is zero everywhere.
+  /// Must be called after the user has finished calling @c set*BCs on @p source.
+  void setZeroBCsMatchingDofs(const BoundaryConditionManager& source);
+
  private:
   smith::BoundaryConditionManager bcs_;  ///< boundary condition manager that does the heavy lifting
   mfem::ParFiniteElementSpace& space_;   ///< save the space for the field which will be constrained

@@ -53,12 +53,23 @@ struct SolidMechanicsSystem : public SystemBase {
       TimeDiscretizedWeakForm<dim, H1<order, dim>,
                               Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
+  /// L2 projection weak form for PK1 stress output (dim*dim components).
+  /// Args: (stress_unknown, u, u_old, v_old, a_old, params...). The stress_unknown is the
+  /// Jacobian variable so the L2 mass matrix diagonal can be built against it.
+  using StressOutputWeakFormType =
+      TimeDiscretizedWeakForm<dim, L2<0, dim * dim>,
+                              Parameters<L2<0, dim * dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>,
+                                         H1<order, dim>, parameter_space...>>;
+
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
   std::shared_ptr<CycleZeroSolidWeakFormType>
       cycle_zero_solid_weak_form;                        ///< Typed cycle zero solid mechanics weak form.
   std::shared_ptr<SystemBase> cycle_zero_system;         ///< Cycle-zero system for initial acceleration solve.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;  ///< Time integration rule.
+
+  std::shared_ptr<StressOutputWeakFormType> stress_weak_form;  ///< Stress projection weak form (nullptr if disabled).
+  std::shared_ptr<SystemBase> stress_output_system;            ///< Post-solve system for stress projection.
 
   /**
    * @brief Set the material model for a domain, defining integrals for the solid weak form.
@@ -88,6 +99,26 @@ struct SolidMechanicsSystem : public SystemBase {
 
           return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
         });
+
+    // Stress output projection: L2 projection of PK1 stress onto an L2 piecewise-constant field.
+    // Residual: ∫ test · (stress_unknown - pk_stress(u)) dx = 0.
+    // Args: (stress_unknown, u, u_old, v_old, a_old, params...). stress_unknown is the Jacobian
+    // variable so the solver builds the mass matrix against it, and the (- pk_stress) term
+    // becomes the RHS.
+    if (stress_weak_form) {
+      stress_weak_form->addBodyIntegral(
+          domain_name,
+          [=](auto t_info, auto /*X*/, auto stress, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+            auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
+
+            typename MaterialType::State state;
+            auto pk_stress = material(state, get<DERIVATIVE>(u_current), params...);
+
+            // Flatten dim x dim stress tensor into dim*dim vector, subtract from current stress unknown
+            auto pk_flat = make_tensor<dim * dim>([&](int i) { return pk_stress[i / dim][i % dim]; });
+            return smith::tuple{get<VALUE>(stress) - pk_flat, tensor<double, dim * dim, dim>{}};
+          });
+    }
   }
 
   /**
@@ -266,6 +297,8 @@ template <int dim, int order, typename DisplacementTimeRule, typename... paramet
 struct SolidMechanicsOptions {
   std::string prepend_name{};
   std::shared_ptr<SystemSolver> cycle_zero_solver{};
+  bool enable_stress_output = false;
+  std::shared_ptr<SystemSolver> stress_output_solver{};
 };
 
 /**
@@ -326,16 +359,82 @@ std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter
 
   if (disp_time_rule_ptr->requiresInitialAccelerationSolve()) {
     std::string cycle_zero_name = field_store->prefix("solid_reaction");
+    // At cycle 0, u and v are given; solve for a.  Make acceleration (arg 2) the Jacobian
+    // variable by setting is_unknown=true on the copy.  Displacement is a fixed input here
+    // even though disp_type.is_unknown=true from addIndependent, so re-wrap with is_unknown=false.
+    auto accel_as_unknown = accel_old_type;
+    accel_as_unknown.is_unknown = true;
+    FieldType<H1<order, dim>> disp_cz_input(disp_type.name);
     sys->cycle_zero_solid_weak_form = std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
         cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
-        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
-                                  parameter_types...));
+        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type,
+                                  accel_as_unknown, parameter_types...));
+    // Share displacement BCs with acceleration: constrained acceleration DOFs = constrained
+    // displacement DOFs (if u is pinned, all its time derivatives are also zero).
+    field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
 
-    auto cz_solver = options.cycle_zero_solver ? options.cycle_zero_solver : solver->singleBlockSolver(0);
-    SLIC_ERROR_IF(cz_solver == nullptr,
-                  "Could not derive a cycle-zero solver for block 0 from the provided solid mechanics solver.");
+    std::shared_ptr<SystemSolver> cz_solver;
+    if (options.cycle_zero_solver) {
+      cz_solver = options.cycle_zero_solver;
+    } else {
+      // The cycle-zero solve is a linear mass-matrix system — one Newton step suffices.
+      // Never inherit the main solid solver (often TrustRegion, tuned for nonlinear mechanics).
+      NonlinearSolverOptions cz_nonlin{.nonlin_solver = NonlinearSolver::Newton,
+                                       .relative_tol = 1e-14,
+                                       .absolute_tol = 1e-14,
+                                       .max_iterations = 2,
+                                       .print_level = 0};
+      LinearSolverOptions cz_lin{.linear_solver = LinearSolver::CG,
+                                  .preconditioner = Preconditioner::HypreJacobi,
+                                  .relative_tol = 1e-14,
+                                  .absolute_tol = 1e-14,
+                                  .max_iterations = 1000,
+                                  .print_level = 0};
+      cz_solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(cz_nonlin, cz_lin, *mesh));
+    }
 
     sys->cycle_zero_system = makeSubSystem(field_store, cz_solver, {sys->cycle_zero_solid_weak_form});
+  }
+
+  if (options.enable_stress_output) {
+    // Register L2 stress field (dim*dim components, quasi-static first-order rule)
+    auto stress_time_rule = std::make_shared<QuasiStaticFirstOrderTimeIntegrationRule>();
+    FieldType<L2<0, dim * dim>> stress_type("stress_solve_state");
+    field_store->addIndependent(stress_type, stress_time_rule);
+    field_store->addDependent(stress_type, FieldStore::TimeDerivative::VAL, "stress");
+
+    // Create stress projection weak form.  Arg list: (stress_unknown, u, u_old, v_old, a_old, params...).
+    // The stress field is the Jacobian unknown for this subsystem.  disp_type is passed as a fixed
+    // INPUT (not a Jacobian unknown); since disp_type.is_unknown=true from addIndependent, re-wrap
+    // it as a plain FieldType (is_unknown=false) before passing to createSpaces.
+    FieldType<H1<order, dim>> disp_as_input(disp_type.name);
+    std::string stress_name = field_store->prefix("stress_projection");
+    sys->stress_weak_form = std::make_shared<typename SystemType::StressOutputWeakFormType>(
+        stress_name, field_store->getMesh(), field_store->getField(stress_type.name).get()->space(),
+        field_store->createSpaces(stress_name, stress_type.name, stress_type, disp_as_input, disp_old_type,
+                                  velo_old_type, accel_old_type, parameter_types...));
+
+    std::shared_ptr<SystemSolver> stress_solver;
+    if (options.stress_output_solver) {
+      stress_solver = options.stress_output_solver;
+    } else {
+      // L2 projection is a linear system — one Newton step suffices.
+      // Never inherit the main solid solver (often TrustRegion, tuned for nonlinear mechanics).
+      NonlinearSolverOptions stress_nonlin{.nonlin_solver = NonlinearSolver::Newton,
+                                           .relative_tol = 1e-14,
+                                           .absolute_tol = 1e-14,
+                                           .max_iterations = 2,
+                                           .print_level = 0};
+      LinearSolverOptions stress_lin{.linear_solver = LinearSolver::CG,
+                                     .preconditioner = Preconditioner::HypreJacobi,
+                                     .relative_tol = 1e-14,
+                                     .absolute_tol = 1e-14,
+                                     .max_iterations = 1000,
+                                     .print_level = 0};
+      stress_solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(stress_nonlin, stress_lin, *mesh));
+    }
+
+    sys->stress_output_system = makeSubSystem(field_store, stress_solver, {sys->stress_weak_form});
   }
 
   return sys;

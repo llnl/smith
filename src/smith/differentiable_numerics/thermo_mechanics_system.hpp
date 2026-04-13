@@ -407,14 +407,36 @@ buildThermoMechanicsSystem(
 
   if (disp_time_rule_ptr->requiresInitialAccelerationSolve()) {
     std::string cycle_zero_name = field_store->prefix("solid_reaction");
+    // At cycle 0, u and v are given; solve for a.  Make acceleration (arg 2) the Jacobian
+    // variable. Displacement and temperature are fixed inputs here.
+    auto accel_as_unknown = accel_old_type;
+    accel_as_unknown.is_unknown = true;
+    FieldType<H1<disp_order, dim>> disp_cz_input(disp_type.name);
+    FieldType<H1<temp_order>> temp_cz_input(temperature_type.name);
     sys->cycle_zero_weak_form = std::make_shared<typename SystemType::CycleZeroWeakFormType>(
         cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
-        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
-                                  temperature_type, temperature_old_type, parameter_types...));
+        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type,
+                                  accel_as_unknown, temp_cz_input, temperature_old_type, parameter_types...));
+    // Share displacement BCs with acceleration (constrained displacement DOFs = zero acceleration).
+    field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
 
-    auto cz_solver = options.cycle_zero_solver ? options.cycle_zero_solver : solver->singleBlockSolver(0);
-    SLIC_ERROR_IF(cz_solver == nullptr,
-                  "Could not derive a cycle-zero solver for block 0 from the provided thermo-mechanics solver.");
+    std::shared_ptr<SystemSolver> cz_solver;
+    if (options.cycle_zero_solver) {
+      cz_solver = options.cycle_zero_solver;
+    } else {
+      NonlinearSolverOptions cz_nonlin{.nonlin_solver = NonlinearSolver::Newton,
+                                       .relative_tol = 1e-14,
+                                       .absolute_tol = 1e-14,
+                                       .max_iterations = 2,
+                                       .print_level = 0};
+      LinearSolverOptions cz_lin{.linear_solver = LinearSolver::CG,
+                                  .preconditioner = Preconditioner::HypreJacobi,
+                                  .relative_tol = 1e-14,
+                                  .absolute_tol = 1e-14,
+                                  .max_iterations = 1000,
+                                  .print_level = 0};
+      cz_solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(cz_nonlin, cz_lin, *mesh));
+    }
 
     sys->cycle_zero_system = makeSubSystem(field_store, cz_solver, {sys->cycle_zero_weak_form});
   }

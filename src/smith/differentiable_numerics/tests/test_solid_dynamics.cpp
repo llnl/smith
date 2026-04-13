@@ -104,7 +104,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   auto coupled_solver = std::make_shared<SystemSolver>(solid_block_solver);
   auto system = buildSolidMechanicsSystem<dim, order>(
-      mesh, coupled_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, {},
+      mesh, coupled_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, {.enable_stress_output = true},
       FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
 
   static constexpr double gravity = -9.0;
@@ -147,9 +147,12 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   size_t cycle = 0;
   std::vector<ReactionState> reactions;
 
+  auto advancer = makeAdvancer(system);
+  advancer->addPostSolveSystem(system->stress_output_system);
+
   for (size_t m = 0; m < num_steps_; ++m) {
     TimeInfo t_info(time, dt_, cycle);
-    std::tie(states, reactions) = makeAdvancer(system)->advanceState(t_info, shape_disp, states, params);
+    std::tie(states, reactions) = advancer->advanceState(t_info, shape_disp, states, params);
     output_states = system->field_store->getOutputFieldStates();
     time += dt_;
     cycle++;

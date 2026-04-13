@@ -152,8 +152,8 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
   FieldType<H1<1>> displacement_type("displacement");
   auto displacement_bc = field_store->addIndependent(displacement_type, quasi_static);
 
-  ASSERT_EQ(field_store->getUnknownIndex("temperature"), 0);
-  ASSERT_EQ(field_store->getUnknownIndex("displacement"), 1);
+  ASSERT_TRUE(temperature_type.is_unknown);
+  ASSERT_TRUE(displacement_type.is_unknown);
 
   temperature_bc->setScalarBCs<2>(mesh->domain("left"), [](double, tensor<double, 2>) { return 0.0; });
   displacement_bc->setScalarBCs<2>(mesh->domain("right"), [](double, tensor<double, 2>) { return 1.0; });
@@ -281,7 +281,7 @@ TEST(SystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequestedBlock)
   const std::vector<std::vector<FieldState>> states = {field_store->getStates("temperature_main"),
                                                        field_store->getStates("displacement_main")};
   const std::vector<std::vector<FieldState>> params(residuals.size());
-  const auto bc_managers = field_store->getBoundaryConditionManagers();
+  const auto bc_managers = field_store->getBoundaryConditionManagers(residual_names);
 
   auto solved_states = derived_single_block_solver->solve(residuals, block_indices, field_store->getShapeDisp(), states,
                                                           params, TimeInfo(0.0, 1.0, 0), bc_managers);

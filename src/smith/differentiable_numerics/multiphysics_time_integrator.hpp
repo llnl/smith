@@ -30,6 +30,9 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
   MultiphysicsTimeIntegrator(std::shared_ptr<SystemBase> system,
                              std::shared_ptr<SystemBase> cycle_zero_system = nullptr);
 
+  /// @brief Register a system to be solved after the main solve and reaction computation.
+  void addPostSolveSystem(std::shared_ptr<SystemBase> system);
+
   /**
    * @brief Advance the multiphysics state by one time step.
    * @param time_info Current time information.
@@ -45,21 +48,22 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
  private:
   std::shared_ptr<SystemBase> system_;
   std::shared_ptr<SystemBase> cycle_zero_system_;
+  std::vector<std::shared_ptr<SystemBase>> post_solve_systems_;
 };
 
-inline std::shared_ptr<StateAdvancer> makeAdvancer(std::shared_ptr<SystemBase> system,
-                                                   std::shared_ptr<SystemBase> cycle_zero_system = nullptr)
+inline std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(std::shared_ptr<SystemBase> system,
+                                                                std::shared_ptr<SystemBase> cycle_zero_system = nullptr)
 {
   return std::make_shared<MultiphysicsTimeIntegrator>(std::move(system), std::move(cycle_zero_system));
 }
 
 template <typename SystemType>
-std::shared_ptr<StateAdvancer> makeAdvancer(std::shared_ptr<SystemType> system)
+std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(std::shared_ptr<SystemType> system)
 {
   if constexpr (requires { system->cycle_zero_system; }) {
-    return makeAdvancer(system, system->cycle_zero_system);
+    return makeAdvancer(std::static_pointer_cast<SystemBase>(system), system->cycle_zero_system);
   } else {
-    return makeAdvancer(system, nullptr);
+    return makeAdvancer(std::static_pointer_cast<SystemBase>(system), nullptr);
   }
 }
 

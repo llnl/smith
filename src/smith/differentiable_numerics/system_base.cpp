@@ -32,7 +32,7 @@ std::vector<FieldState> SystemBase::solve(const TimeInfo& time_info) const
     weak_form_ptrs.push_back(p.get());
   }
   return solver->solve(weak_form_ptrs, index_map, field_store->getShapeDisp(), inputs, wk_params, time_info,
-                       field_store->getBoundaryConditionManagers());
+                       field_store->getBoundaryConditionManagers(weak_form_names));
 }
 
 std::vector<ReactionState> SystemBase::computeReactions(const TimeInfo& time_info,

@@ -30,7 +30,15 @@ struct ReactionInfo {
 };
 
 /**
- * @brief Representation of a field type with a name and an optional unknown index.
+ * @brief Representation of a field type with a name and a flag indicating whether it is an
+ *        active Jacobian unknown in the current weak-form context.
+ *
+ * @c is_unknown is intentionally a per-instance flag, not a global property.  The same field
+ * may be a Jacobian variable in one weak form (e.g. displacement in the main solid solve) and
+ * a fixed input in another (e.g. displacement in the stress projection).  Callers control this
+ * by passing the same @c FieldType object (set by @c addIndependent) or a plain copy with the
+ * default @c is_unknown = false.
+ *
  * @tparam Space The finite element space type.
  * @tparam Time The time integration type (unused by default).
  */
@@ -39,11 +47,11 @@ struct FieldType {
   /**
    * @brief Construct a new FieldType object.
    * @param n Name of the field.
-   * @param unknown_index_ Index of the unknown in the solver (default: -1).
+   * @param is_unknown_ Whether this field is a Jacobian unknown in the current context.
    */
-  FieldType(std::string n, int unknown_index_ = -1) : name(n), unknown_index(unknown_index_) {}
-  std::string name;   ///< Name of the field.
-  int unknown_index;  ///< Index of the unknown in the solver.
+  FieldType(std::string n, bool is_unknown_ = false) : name(n), is_unknown(is_unknown_) {}
+  std::string name;      ///< Name of the field.
+  bool is_unknown = false;  ///< True if this field is a Jacobian variable in the current weak-form context.
 };
 
 /**
@@ -106,14 +114,13 @@ struct FieldStore {
   /**
    * @brief Add an independent field (a solver unknown) to the store.
    *
-   * Registers the field as an unknown and assigns it an index in the solver's block structure.
-   * The @p type argument is mutated in-place: its @c unknown_index is set to the assigned index,
-   * so the same @c FieldType<Space> object can later be passed to @c createSpaces to tell the
-   * weak form that this argument is an active unknown (i.e. the Jacobian should be computed
-   * with respect to it).
+   * Registers the field as an unknown by setting @c type.is_unknown = true, so the same
+   * @c FieldType<Space> object can later be passed to @c createSpaces to mark this argument
+   * as an active Jacobian variable.  Also creates a boundary-condition slot keyed by field
+   * name that callers can populate after this call returns.
    *
    * @tparam Space The finite element space type.
-   * @param type The field type specification; @c type.unknown_index is set on return.
+   * @param type The field type specification; @c type.is_unknown is set to @c true on return.
    * @param time_rule The time integration rule governing how this unknown and its dependents
    *        are related across time steps.
    * @return std::shared_ptr<DirichletBoundaryConditions> The boundary conditions for this field.
@@ -123,16 +130,13 @@ struct FieldStore {
                                                               std::shared_ptr<TimeIntegrationRule> time_rule)
   {
     type.name = prefix(type.name);
-    type.unknown_index = static_cast<int>(num_unknowns_);
+    type.is_unknown = true;
     to_states_index_[type.name] = states_.size();
-    to_unknown_index_[type.name] = num_unknowns_;
     FieldState new_field = smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag());
     states_.push_back(new_field);
     is_solve_state_.push_back(true);
     auto latest_bc = addBoundaryConditions(new_field.get());
-    ++num_unknowns_;
-    SLIC_ERROR_IF(num_unknowns_ != boundary_conditions_.size(),
-                  "Inconcistency between num unknowns and boundary condition size");
+    boundary_conditions_[type.name] = latest_bc;
 
     SLIC_ERROR_IF(!time_rule, "Invalid time_rule");
 
@@ -154,23 +158,17 @@ struct FieldStore {
    * (predicted_value, stored_old_value).
    *
    * **Return value:** a @c FieldType<Space> whose @c name is the name of the newly registered
-   * field.  This object is intentionally returned (rather than discarded) so that callers can
-   * pass it directly to @c createSpaces when assembling the weak-form argument list.  The
-   * position at which a @c FieldType appears in that argument list determines which slot of the
-   * lambda the field occupies at quadrature-point evaluation time, which is how the time
-   * integration rules reconstruct quantities such as
-   * @f$ \dot{\alpha} = (\alpha_\text{predicted} - \alpha_\text{old}) / \Delta t @f$.
-   *
-   * The field name is derived automatically from the independent field's name plus a suffix that
-   * reflects the derivative level (@c _old for VALUE, @c _dot_old for DOT,
-   * @c _ddot_old for DDOT), unless @p name_override is supplied.
+   * field and @c is_unknown is @c false.  This object is intentionally returned (rather than
+   * discarded) so that callers can pass it directly to @c createSpaces when assembling the
+   * weak-form argument list.  To make it the Jacobian variable for a specific weak form (e.g.
+   * the cycle-zero acceleration solve), copy the returned object and set @c is_unknown = true
+   * before passing to @c createSpaces.
    *
    * @tparam Space The finite element space type (must match the independent field).
    * @param independent_field The @c FieldType of the independent (predicted) field.
    * @param derivative Which time-derivative level this history field stores.
    * @param name_override If non-empty, use this as the field name instead of the auto-generated one.
-   * @return FieldType<Space> Type descriptor for the newly created dependent field; pass this to
-   *         @c createSpaces to register it as a weak-form argument.
+   * @return FieldType<Space> Type descriptor for the newly created dependent field.
    */
   template <typename Space>
   auto addDependent(FieldType<Space> independent_field, TimeDerivative derivative, std::string name_override = "")
@@ -226,12 +224,6 @@ struct FieldStore {
   void addWeakFormArg(std::string weak_form_name, std::string argument_name, size_t argument_index);
 
   /**
-   * @brief Get the number of unknowns in the field store.
-   * @return size_t Number of unknowns.
-   */
-  size_t getNumUnknowns() const { return num_unknowns_; }
-
-  /**
    * @brief Register the reaction (test) field for a weak form.
    *
    * The reaction field is the field whose test function space the weak form integrates against.
@@ -256,9 +248,17 @@ struct FieldStore {
    * This is the primary setup method for constructing a weak form.  It:
    *   1. Registers @p reaction_field_name as the reaction/test field via @c addWeakFormReaction.
    *   2. Iterates over every @c FieldType in @p types (in order), registering each as an input
-   *      argument to the weak form and recording whether it is an active unknown.
-   *   3. Returns the ordered vector of finite element spaces, which can be passed directly to
-   *      the @c TimeDiscretizedWeakForm constructor without creating a named temporary.
+   *      argument.  If @c type.is_unknown is @c true, the field is also registered as an active
+   *      Jacobian unknown for this weak form.
+   *   3. Returns the ordered vector of finite element spaces.
+   *
+   * A field may have @c is_unknown = true in one weak form and @c false in another (e.g.
+   * displacement is a Jacobian variable in the main solid solve but a fixed input in the stress
+   * projection).  Callers control this by passing the @c FieldType returned from @c addIndependent
+   * (has @c is_unknown = true) or a plain copy constructed from the field name (has @c is_unknown
+   * = false).  Similarly, a dependent field can be made the Jacobian variable for a specific weak
+   * form (e.g. acceleration in the cycle-zero solve) by copying the returned @c FieldType and
+   * setting @c is_unknown = true.
    *
    * @param weak_form_name  Name of the weak form being constructed.
    * @param reaction_field_name  Name of the test/reaction field (may differ from the first input).
@@ -276,7 +276,7 @@ struct FieldStore {
     auto register_field = [&](auto type) {
       spaces.push_back(&getField(type.name).get()->space());
       addWeakFormArg(weak_form_name, type.name, arg_num);
-      if (type.unknown_index >= 0) {
+      if (type.is_unknown) {
         addWeakFormUnknownArg(weak_form_name, type.name, arg_num);
       }
       ++arg_num;
@@ -316,17 +316,33 @@ struct FieldStore {
   std::vector<std::vector<size_t>> indexMap(const std::vector<std::string>& residual_names) const;
 
   /**
-   * @brief Get the boundary condition managers for all independent fields.
-   * @return std::vector<const BoundaryConditionManager*> List of boundary condition managers.
+   * @brief Get the boundary condition managers for the given weak forms, one per residual row.
+   *
+   * For each weak form in @p weak_form_names the reaction (test) field name is looked up, and
+   * the corresponding @c BoundaryConditionManager is returned.  If no BC was registered for
+   * that field, @c nullptr is returned for that slot (the solver skips null entries).
+   *
+   * Zero-mirror BCs registered via @c shareBoundaryConditions are materialized lazily on the
+   * first call to this method (so the user's @c set*BCs calls on the source BC are visible).
+   *
+   * @param weak_form_names Ordered list of weak form names whose BCs are needed.
+   * @return std::vector<const BoundaryConditionManager*> One entry per weak form, in order.
    */
-  std::vector<const BoundaryConditionManager*> getBoundaryConditionManagers() const;
+  std::vector<const BoundaryConditionManager*>
+  getBoundaryConditionManagers(const std::vector<std::string>& weak_form_names);
 
   /**
-   * @brief Get the Dirichlet boundary conditions for an independent field by its unknown index.
-   * @param unknown_index The unknown index of the independent field.
-   * @return std::shared_ptr<DirichletBoundaryConditions> The boundary conditions.
+   * @brief Register a zero-valued mirror BC for @p name, sharing the constrained DOF set of @p source_bc.
+   *
+   * Used for fields whose constrained DOFs must match a reference field (e.g. acceleration mirrors
+   * displacement), but whose prescribed BC value is always zero.  The zero BC is materialized
+   * lazily on the first call to @c getBoundaryConditionManagers so that any @c set*BCs calls the
+   * caller makes on @p source_bc after this method returns are reflected in the mirror.
+   *
+   * @param name       Field name to associate with the zero BC.
+   * @param source_bc  BC object whose constrained DOF set is mirrored (e.g. the displacement BC).
    */
-  std::shared_ptr<DirichletBoundaryConditions> getBoundaryConditions(size_t unknown_index) const;
+  void shareBoundaryConditions(const std::string& name, std::shared_ptr<DirichletBoundaryConditions> source_bc);
 
   /**
    * @brief Get the internal index of a field by name.
@@ -334,13 +350,6 @@ struct FieldStore {
    * @return size_t Index of the field.
    */
   size_t getFieldIndex(const std::string& field_name) const;
-
-  /**
-   * @brief Get the unknown index of a field by name.
-   * @param field_name Name of the field.
-   * @return size_t Unknown index of the field.
-   */
-  size_t getUnknownIndex(const std::string& field_name) const;
 
   /**
    * @brief Get a FieldState by name.
@@ -446,9 +455,16 @@ struct FieldStore {
   std::map<std::string, size_t> to_states_index_;
   std::map<std::string, size_t> to_params_index_;
 
-  size_t num_unknowns_ = 0;
-  std::map<std::string, size_t> to_unknown_index_;
-  std::vector<std::shared_ptr<DirichletBoundaryConditions>> boundary_conditions_;
+  /// Boundary conditions keyed by field name.  Populated by @c addIndependent (for primary
+  /// unknowns).  Zero-mirror BCs are added lazily by @c getBoundaryConditionManagers when
+  /// entries from @c zero_mirror_sources_ are materialized.
+  std::map<std::string, std::shared_ptr<DirichletBoundaryConditions>> boundary_conditions_;
+
+  /// Pending zero-mirror BCs: maps a field name to the source @c DirichletBoundaryConditions
+  /// whose constrained DOF set it should copy (with zero prescribed values).  Entries are
+  /// materialized and moved to @c boundary_conditions_ on the first call to
+  /// @c getBoundaryConditionManagers.
+  std::map<std::string, std::shared_ptr<DirichletBoundaryConditions>> zero_mirror_sources_;
 
   struct FieldLabel {
     std::string field_name;
