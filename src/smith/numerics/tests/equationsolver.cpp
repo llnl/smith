@@ -166,9 +166,8 @@ auto preconditioners =
 INSTANTIATE_TEST_SUITE_P(AllEquationSolverTests, EquationSolverSuite,
                          testing::Combine(nonlinear_solvers, linear_solvers, preconditioners),
                          [](const testing::TestParamInfo<EquationSolverSuite::ParamType>& test_info) {
-                           std::string name =
-                               axom::fmt::format("{}_{}_{}", std::get<0>(test_info.param), std::get<1>(test_info.param),
-                                                 std::get<2>(test_info.param));
+                           std::string name = std::format("{}_{}_{}", std::get<0>(test_info.param),
+                                                          std::get<1>(test_info.param), std::get<2>(test_info.param));
                            return name;
                          });
 
