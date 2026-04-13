@@ -286,6 +286,11 @@ FieldStore::getTimeIntegrationRules() const
 
 void FieldStore::setField(size_t index, FieldState updated_field) { states_[index] = updated_field; }
 
+void FieldStore::markWeakFormInternal(const std::string& weak_form_name)
+{
+  internal_weak_forms_.insert(weak_form_name);
+}
+
 void FieldStore::addWeakFormReaction(std::string weak_form_name, std::string field_name)
 {
   for (auto& kv : weak_form_to_test_field_) {
@@ -328,6 +333,9 @@ std::vector<ReactionInfo> FieldStore::getReactionInfos() const
   std::vector<ReactionInfo> infos;
   for (const auto& kv : weak_form_to_test_field_) {
     const std::string& weak_form_name = kv.first;
+    if (internal_weak_forms_.count(weak_form_name)) {
+      continue;
+    }
     const std::string& field_name = kv.second;
     infos.push_back({weak_form_name, &getField(field_name).get()->space()});
   }

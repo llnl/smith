@@ -116,15 +116,18 @@ struct ThermoMechanicsSystem : public SystemBase {
     });
 
     // Cycle-zero: u and v are given, solve for a; temperature at initial condition
-    cycle_zero_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto u, auto v, auto a,
-                                                           auto temperature, auto temperature_old, auto... params) {
-      auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
+    // Only register if the displacement time rule requires an initial acceleration solve.
+    if (cycle_zero_weak_form) {
+      cycle_zero_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto u, auto v, auto a,
+                                                             auto temperature, auto temperature_old, auto... params) {
+        auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
 
-      typename MaterialType::State state;
-      auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
-                                        get<DERIVATIVE>(T), params...);
-      return smith::tuple{get<VALUE>(a) * material.density, pk};
-    });
+        typename MaterialType::State state;
+        auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
+                                          get<DERIVATIVE>(T), params...);
+        return smith::tuple{get<VALUE>(a) * material.density, pk};
+      });
+    }
   }
 
   /**
@@ -296,14 +299,16 @@ struct ThermoMechanicsSystem : public SystemBase {
   {
     addSolidTraction(DependsOn<static_cast<int>(MainIs)...>{}, domain_name, flux_function);
 
-    auto captured_temp_rule = temperature_time_rule;
-    cycle_zero_weak_form->addBoundaryFlux(
-        DependsOn<static_cast<int>(CycleZeroIs)...>{}, domain_name,
-        [=](auto t_info, auto X, auto n, auto u, auto v, auto a, auto temperature, auto temperature_old,
-            auto... params) {
-          auto [current_T, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
-          return flux_function(t_info.time(), X, n, u, v, a, current_T, T_dot, params...);
-        });
+    if (cycle_zero_weak_form) {
+      auto captured_temp_rule = temperature_time_rule;
+      cycle_zero_weak_form->addBoundaryFlux(
+          DependsOn<static_cast<int>(CycleZeroIs)...>{}, domain_name,
+          [=](auto t_info, auto X, auto n, auto u, auto v, auto a, auto temperature, auto temperature_old,
+              auto... params) {
+            auto [current_T, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
+            return flux_function(t_info.time(), X, n, u, v, a, current_T, T_dot, params...);
+          });
+    }
   }
 
   template <typename PressureType, std::size_t... Is>
@@ -417,6 +422,7 @@ buildThermoMechanicsSystem(
         cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
         field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type, accel_as_unknown,
                                   temp_cz_input, temperature_old_type, parameter_types...));
+    field_store->markWeakFormInternal(cycle_zero_name);
     // Share displacement BCs with acceleration (constrained displacement DOFs = zero acceleration).
     field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
 

@@ -12,6 +12,7 @@
 #include "smith/physics/mesh.hpp"
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 #include <memory>
@@ -234,6 +235,14 @@ struct FieldStore {
    * @param field_name Name of the reaction field.
    */
   void addWeakFormReaction(std::string weak_form_name, std::string field_name);
+
+  /**
+   * @brief Mark a weak form as internal so it is excluded from getReactionInfos().
+   *
+   * Use this for subsystem forms (e.g. cycle-zero acceleration solve) that should not be
+   * exposed as user-visible reactions in DifferentiablePhysics.
+   */
+  void markWeakFormInternal(const std::string& weak_form_name);
 
   /**
    * @brief Get the name of the reaction (test) field for a weak form.
@@ -479,6 +488,7 @@ struct FieldStore {
   std::map<std::string, std::vector<std::string>> weak_form_name_to_field_names_;
 
   std::vector<std::pair<std::string, std::string>> weak_form_to_test_field_;
+  std::set<std::string> internal_weak_forms_;  ///< weak forms excluded from getReactionInfos() (subsystem-internal)
 
   std::vector<std::pair<std::shared_ptr<TimeIntegrationRule>, TimeIntegrationMapping>> time_integration_rules_;
   std::map<std::string, size_t> independent_name_to_rule_index_;

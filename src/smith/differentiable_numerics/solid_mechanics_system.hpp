@@ -91,13 +91,15 @@ struct SolidMechanicsSystem : public SystemBase {
         });
 
     // Add to cycle-zero weak form (at cycle 0, u and v are given, solve for a)
-    cycle_zero_solid_weak_form->addBodyIntegral(
-        domain_name, [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v_old*/, auto a, auto... params) {
-          typename MaterialType::State state;
-          auto pk_stress = material(state, get<DERIVATIVE>(u), params...);
+    if (cycle_zero_solid_weak_form) {
+      cycle_zero_solid_weak_form->addBodyIntegral(
+          domain_name, [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v_old*/, auto a, auto... params) {
+            typename MaterialType::State state;
+            auto pk_stress = material(state, get<DERIVATIVE>(u), params...);
 
-          return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
-        });
+            return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
+          });
+    }
 
     // Stress output projection: L2 projection of PK1 stress onto an L2 piecewise-constant field.
     // Residual: ∫ test · (stress_unknown - pk_stress(u)) dx = 0.
@@ -275,19 +277,25 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename IntegrandType, std::size_t... Is>
   void addCycleZeroBodySourceImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
   {
-    cycle_zero_solid_weak_form->addBodySource(DependsOn<static_cast<int>(Is)...>{}, name, f);
+    if (cycle_zero_solid_weak_form) {
+      cycle_zero_solid_weak_form->addBodySource(DependsOn<static_cast<int>(Is)...>{}, name, f);
+    }
   }
 
   template <typename IntegrandType, std::size_t... Is>
   void addCycleZeroBoundaryFluxImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
   {
-    cycle_zero_solid_weak_form->addBoundaryFlux(DependsOn<static_cast<int>(Is)...>{}, name, f);
+    if (cycle_zero_solid_weak_form) {
+      cycle_zero_solid_weak_form->addBoundaryFlux(DependsOn<static_cast<int>(Is)...>{}, name, f);
+    }
   }
 
   template <typename IntegrandType, std::size_t... Is>
   void addCycleZeroBoundaryIntegralImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
   {
-    cycle_zero_solid_weak_form->addBoundaryIntegral(DependsOn<static_cast<int>(Is)...>{}, name, f);
+    if (cycle_zero_solid_weak_form) {
+      cycle_zero_solid_weak_form->addBoundaryIntegral(DependsOn<static_cast<int>(Is)...>{}, name, f);
+    }
   }
 };
 
@@ -344,7 +352,7 @@ std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter
   using SystemType = SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter_space...>;
 
   // Create solid mechanics weak form (u, u_old, v_old, a_old)
-  std::string force_name = field_store->prefix("solid_force");
+  std::string force_name = field_store->prefix("reactions");
   auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
       force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
       field_store->createSpaces(force_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
@@ -367,6 +375,7 @@ std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter
         cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
         field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type, accel_as_unknown,
                                   parameter_types...));
+    field_store->markWeakFormInternal(cycle_zero_name);
     // Share displacement BCs with acceleration: constrained acceleration DOFs = constrained
     // displacement DOFs (if u is pinned, all its time derivatives are also zero).
     field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
