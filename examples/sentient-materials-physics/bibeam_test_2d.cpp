@@ -36,6 +36,8 @@
 #include "smith/numerics/functional/domain.hpp"
  #include "smith/smith.hpp"
  
+ #define USING_NOTCHED_CUTOUT
+//  #undef USING_NOTCHED_CUTOUT
  using namespace smith;
  
  /**
@@ -213,7 +215,7 @@
  int main(int argc, char* argv[])
  {
    constexpr int dim = 3;
-   constexpr int p = 1;
+   constexpr int p = 2;
 
    //============= time stepping params ================
    double tfinal = 35;     // final time
@@ -223,7 +225,7 @@
    // Command line arguments
    // Mesh options
    int serial_refinement = 0;
-   int parallel_refinement = 1;
+   int parallel_refinement = 0;
    double dt = tfinal/Npts;
  
    // Solver options
@@ -255,14 +257,21 @@
        ->check(axom::CLI::PositiveNumber);
  
    // Create DataStore
-   std::string name = "bibeam_test_v2";
+#ifdef USING_NOTCHED_CUTOUT
+   std::string name = "bibeam_test_notched";
+#else
+   std::string name = "bibeam_test";
+#endif
    std::string mesh_tag = "mesh";
    axom::sidre::DataStore datastore;
    smith::StateManager::initialize(datastore, name + "_data");
  
    // Create and refine mesh
-   // std::string filename = SMITH_REPO_DIR "/data/meshes/hollow-cylinder.mesh";
+#ifdef USING_NOTCHED_CUTOUT
+   std::string filename = SMITH_REPO_DIR "/data/meshes/bibeam_notched_120x21x1mm.g";//full_cylinder.g";
+#else
    std::string filename = SMITH_REPO_DIR "/data/meshes/bibeam_120x21x1mm.g";//full_cylinder.g";
+#endif
    auto mesh = std::make_shared<smith::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
 
    // Surfaces for boundary conditions
@@ -320,7 +329,7 @@
      //simple strain rate is velocity/gauge length, so v/120
      //normalized strain rate as in the paper is v_tau1*velocity/120
      //I need edot=0.1, =>velocity=1.2?
-     double velocity = 12; //mm/s
+     double velocity = 1.2; //mm/s
      double val = velocity*t;
      u[1] = -val;
      return u;
