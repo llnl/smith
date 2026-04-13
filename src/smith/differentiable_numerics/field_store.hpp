@@ -50,7 +50,7 @@ struct FieldType {
    * @param is_unknown_ Whether this field is a Jacobian unknown in the current context.
    */
   FieldType(std::string n, bool is_unknown_ = false) : name(n), is_unknown(is_unknown_) {}
-  std::string name;      ///< Name of the field.
+  std::string name;         ///< Name of the field.
   bool is_unknown = false;  ///< True if this field is a Jacobian variable in the current weak-form context.
 };
 
@@ -328,8 +328,8 @@ struct FieldStore {
    * @param weak_form_names Ordered list of weak form names whose BCs are needed.
    * @return std::vector<const BoundaryConditionManager*> One entry per weak form, in order.
    */
-  std::vector<const BoundaryConditionManager*>
-  getBoundaryConditionManagers(const std::vector<std::string>& weak_form_names);
+  std::vector<const BoundaryConditionManager*> getBoundaryConditionManagers(
+      const std::vector<std::string>& weak_form_names);
 
   /**
    * @brief Register a zero-valued mirror BC for @p name, sharing the constrained DOF set of @p source_bc.

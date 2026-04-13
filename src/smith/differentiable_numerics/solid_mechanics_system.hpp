@@ -56,10 +56,9 @@ struct SolidMechanicsSystem : public SystemBase {
   /// L2 projection weak form for PK1 stress output (dim*dim components).
   /// Args: (stress_unknown, u, u_old, v_old, a_old, params...). The stress_unknown is the
   /// Jacobian variable so the L2 mass matrix diagonal can be built against it.
-  using StressOutputWeakFormType =
-      TimeDiscretizedWeakForm<dim, L2<0, dim * dim>,
-                              Parameters<L2<0, dim * dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>,
-                                         H1<order, dim>, parameter_space...>>;
+  using StressOutputWeakFormType = TimeDiscretizedWeakForm<
+      dim, L2<0, dim * dim>,
+      Parameters<L2<0, dim * dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, parameter_space...>>;
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
   std::shared_ptr<CycleZeroSolidWeakFormType>
@@ -106,18 +105,17 @@ struct SolidMechanicsSystem : public SystemBase {
     // variable so the solver builds the mass matrix against it, and the (- pk_stress) term
     // becomes the RHS.
     if (stress_weak_form) {
-      stress_weak_form->addBodyIntegral(
-          domain_name,
-          [=](auto t_info, auto /*X*/, auto stress, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
-            auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
+      stress_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto stress, auto u, auto u_old,
+                                                         auto v_old, auto a_old, auto... params) {
+        auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
 
-            typename MaterialType::State state;
-            auto pk_stress = material(state, get<DERIVATIVE>(u_current), params...);
+        typename MaterialType::State state;
+        auto pk_stress = material(state, get<DERIVATIVE>(u_current), params...);
 
-            // Flatten dim x dim stress tensor into dim*dim vector, subtract from current stress unknown
-            auto pk_flat = make_tensor<dim * dim>([&](int i) { return pk_stress[i / dim][i % dim]; });
-            return smith::tuple{get<VALUE>(stress) - pk_flat, tensor<double, dim * dim, dim>{}};
-          });
+        // Flatten dim x dim stress tensor into dim*dim vector, subtract from current stress unknown
+        auto pk_flat = make_tensor<dim * dim>([&](int i) { return pk_stress[i / dim][i % dim]; });
+        return smith::tuple{get<VALUE>(stress) - pk_flat, tensor<double, dim * dim, dim>{}};
+      });
     }
   }
 
@@ -367,8 +365,8 @@ std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter
     FieldType<H1<order, dim>> disp_cz_input(disp_type.name);
     sys->cycle_zero_solid_weak_form = std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
         cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
-        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type,
-                                  accel_as_unknown, parameter_types...));
+        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type, accel_as_unknown,
+                                  parameter_types...));
     // Share displacement BCs with acceleration: constrained acceleration DOFs = constrained
     // displacement DOFs (if u is pinned, all its time derivatives are also zero).
     field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
@@ -385,11 +383,11 @@ std::shared_ptr<SolidMechanicsSystem<dim, order, DisplacementTimeRule, parameter
                                        .max_iterations = 2,
                                        .print_level = 0};
       LinearSolverOptions cz_lin{.linear_solver = LinearSolver::CG,
-                                  .preconditioner = Preconditioner::HypreJacobi,
-                                  .relative_tol = 1e-14,
-                                  .absolute_tol = 1e-14,
-                                  .max_iterations = 1000,
-                                  .print_level = 0};
+                                 .preconditioner = Preconditioner::HypreJacobi,
+                                 .relative_tol = 1e-14,
+                                 .absolute_tol = 1e-14,
+                                 .max_iterations = 1000,
+                                 .print_level = 0};
       cz_solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(cz_nonlin, cz_lin, *mesh));
     }
 

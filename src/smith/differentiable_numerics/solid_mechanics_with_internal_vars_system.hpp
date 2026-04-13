@@ -416,8 +416,8 @@ buildSolidMechanicsWithInternalVarsSystem(
     FieldType<StateSpace> state_cz_input(state_type.name);
     sys->cycle_zero_solid_weak_form = std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
         cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
-        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type,
-                                  accel_as_unknown, state_cz_input, parameter_types...));
+        field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type, accel_as_unknown,
+                                  state_cz_input, parameter_types...));
     // Share displacement BCs with acceleration (constrained displacement DOFs = zero acceleration).
     field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
 
@@ -431,11 +431,11 @@ buildSolidMechanicsWithInternalVarsSystem(
                                        .max_iterations = 2,
                                        .print_level = 0};
       LinearSolverOptions cz_lin{.linear_solver = LinearSolver::CG,
-                                  .preconditioner = Preconditioner::HypreJacobi,
-                                  .relative_tol = 1e-14,
-                                  .absolute_tol = 1e-14,
-                                  .max_iterations = 1000,
-                                  .print_level = 0};
+                                 .preconditioner = Preconditioner::HypreJacobi,
+                                 .relative_tol = 1e-14,
+                                 .absolute_tol = 1e-14,
+                                 .max_iterations = 1000,
+                                 .print_level = 0};
       cz_solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(cz_nonlin, cz_lin, *mesh));
     }
 

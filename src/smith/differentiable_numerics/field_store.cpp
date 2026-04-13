@@ -31,7 +31,8 @@ std::shared_ptr<DirichletBoundaryConditions> FieldStore::addBoundaryConditions(F
   return std::make_shared<DirichletBoundaryConditions>(mesh_->mfemParMesh(), field->space());
 }
 
-void FieldStore::shareBoundaryConditions(const std::string& name, std::shared_ptr<DirichletBoundaryConditions> source_bc)
+void FieldStore::shareBoundaryConditions(const std::string& name,
+                                         std::shared_ptr<DirichletBoundaryConditions> source_bc)
 {
   zero_mirror_sources_[name] = std::move(source_bc);
 }
@@ -131,8 +132,8 @@ std::vector<std::vector<size_t>> FieldStore::indexMap(const std::vector<std::str
   return block_indices;
 }
 
-std::vector<const BoundaryConditionManager*>
-FieldStore::getBoundaryConditionManagers(const std::vector<std::string>& weak_form_names)
+std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionManagers(
+    const std::vector<std::string>& weak_form_names)
 {
   std::vector<const BoundaryConditionManager*> bcs;
   for (const auto& wf_name : weak_form_names) {
