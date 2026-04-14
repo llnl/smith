@@ -71,9 +71,9 @@ struct Viscoelastic {
    * @brief Compute updated Piola stress and viscous deformation tensor
    */
   template <typename T1, typename T2>
-  SMITH_HOST_DEVICE auto update(const State& internal_state, double dt, const Tensor<T1>& du_dX, T2 /* temperature */) const
+  SMITH_HOST_DEVICE auto update(const State& internal_state, double dt, const Tensor<T1>& du_dX, T2 temperature) const
   {
-    double theta = 100.0; //DEBUG, should use parameter
+    auto theta = get<0>(temperature);
     auto P_inf = equilibrium_stress(du_dX, theta);
 
     // Compute the stress in the spring-dashpot branch.
@@ -87,7 +87,10 @@ struct Viscoelastic {
     auto F = du_dX + Identity<dim>();
     // Trial elastic values
     auto Fe = F*inv(Fv);
-    auto Ee = 0.5*log_symm(transpose(Fe)*Fe);
+    // The use of theta in a dummy term is needed to make the types work for
+    // AD. The elastic trial stress doesn't have a direct dependence on
+    // temperature, but the updated stress does through the shift factor.
+    auto Ee = 0.5*log_symm(transpose(Fe)*Fe) - 0.0*theta*Identity<dim>();
     auto devM = 2.0*G_0*dev(Ee);
     auto tau_bar = std::sqrt(0.5)*norm(devM);
     // Guard against division by zero.
@@ -106,8 +109,8 @@ struct Viscoelastic {
     // update inelastic distortion tensor
     auto Fv_new = exp_symm(dg*N)*Fv;
     // Change stress measure to Piola
-    Fe = F*inv(Fv_new);
-    auto P_0 = transpose(inv(Fv_new)*M*inv(Fe));
+    auto Fe_new = F*inv(Fv_new);
+    auto P_0 = transpose(inv(Fv_new)*M*inv(Fe_new));
     State internal_state_new{get_value(Fv_new)};
     return make_tuple(P_inf + P_0, internal_state_new);
   }
@@ -171,8 +174,10 @@ struct Viscoelastic {
     auto F = du_dX + Identity<dim>();
     // Trial elastic values
     auto Fe = F*inv(Fv);
-    auto Ce = transpose(Fe)*Fe;
-    auto Ee = 0.5*log_symm(Ce);
+    // The use of theta in a dummy term is needed to make the types work for
+    // AD. The elastic trial stress doesn't have a direct dependence on
+    // temperature, but the updated stress does through the shift factor.
+    auto Ee = 0.5*log_symm(transpose(Fe)*Fe) - 0.0*theta*Identity<dim>();
     auto devM = 2.0*G_0*dev(Ee);
     auto tau_bar = std::sqrt(0.5)*norm(devM);
     auto denom = (tau_bar > 0)? (tau_bar) : (1.0 + tau_bar);

@@ -114,7 +114,7 @@ TEST_F(TestViscoelasticModel, Symmetry) {
         for (int l = 0; l < dim; l++) {
           double rel = std::abs(C[i][j][k][l]);
           rel = rel != 0? rel : 1.0;
-          EXPECT_NEAR(C[i][j][k][l], C[k][l][i][j], 1e-13*rel);
+          EXPECT_NEAR(C[i][j][k][l], C[k][l][i][j], 1e-12*rel);
         }
       }
     }

@@ -106,12 +106,13 @@ int main(int argc, char* argv[])
   temperature = 300.0;
 
   // Create solver
-  auto solid_solver = std::make_unique<smith::SolidMechanics<p, dim, smith::Parameters<smith::L2<0>>>>(
-      nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh);
+  smith::SolidMechanics<p, dim, smith::Parameters<smith::L2<0>>> solid_solver(
+      nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name,
+      mesh, {"temperature"});
   
-  solid_solver->setParameter(0, temperature);
+  solid_solver.setParameter(0, temperature);
 
-  solid_solver->setTraction(
+  solid_solver.setTraction(
     [&](auto, auto, double t) { 
       return smith::vec3{0, -std::sin(M_PI*t), 0}; 
     },
@@ -127,8 +128,8 @@ int main(int argc, char* argv[])
   // solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
   // solid_solver->setMaterial(mat, mesh->entireBody());
   solid_mechanics::ViscoelasticOldInterface mat(K, G_inf, 0.0, 300.0, G_0, eta_0, 300.0, 0.0, 50.0, 1.0);
-  auto internal_states = solid_solver->createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::State{}, mesh->entireBody());
-  solid_solver->setRateDependentMaterial(smith::DependsOn<0>{}, mat, mesh->entireBody(), internal_states);
+  auto internal_states = solid_solver.createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::State{}, mesh->entireBody());
+  solid_solver.setRateDependentMaterial(smith::DependsOn<0>{}, mat, mesh->entireBody(), internal_states);
 
   // NOTE: somehow J2 material works fine
   // using Hardening = solid_mechanics::LinearHardening;
@@ -140,7 +141,7 @@ int main(int argc, char* argv[])
 
   // Set up essential boundary conditions
   // Bottom of cylinder is fixed
-  solid_solver->setFixedBCs(mesh->domain("bottom"));
+  solid_solver.setFixedBCs(mesh->domain("bottom"));
 
 #if 0
   // displacement control, for comparison
@@ -149,33 +150,33 @@ int main(int argc, char* argv[])
     u[0] = u[2] = -1.35 / std::sqrt(2.0) * t;
     return u;
   };
-  solid_solver->setDisplacementBCs(compress, mesh->domain("top"), Component::Y);
-  solid_solver->setDisplacementBCs(compress, mesh->domain("top"));
+  solid_solver.setDisplacementBCs(compress, mesh->domain("top"), Component::Y);
+  solid_solver.setDisplacementBCs(compress, mesh->domain("top"));
 #endif
 
   // Finalize the data structures
-  solid_solver->completeSetup();
+  solid_solver.completeSetup();
 
   // Save initial state
   std::string paraview_name = name + "_paraview";
-  solid_solver->outputStateToDisk(paraview_name);
+  solid_solver.outputStateToDisk(paraview_name);
 
   // Perform the quasi-static solve
   SLIC_INFO_ROOT(axom::fmt::format("Snap-through of viscoelastic shell\n{} displacement dofs",
-                                   solid_solver->displacement().GlobalSize()));
+                                   solid_solver.displacement().GlobalSize()));
   SLIC_INFO_ROOT("Starting pseudo-timestepping.");
   smith::logger::flush();
-  while (solid_solver->time() < 1.0 && std::abs(solid_solver->time() - 1) > DBL_EPSILON) {
+  while (solid_solver.time() < 1.0 && std::abs(solid_solver.time() - 1) > DBL_EPSILON) {
     SLIC_INFO_ROOT("---------------------------------------------");
-    SLIC_INFO_ROOT(axom::fmt::format("start time = {}, dt = {}", solid_solver->time(), dt));
+    SLIC_INFO_ROOT(axom::fmt::format("start time = {}, dt = {}", solid_solver.time(), dt));
     smith::logger::flush();
 
-    solid_solver->advanceTimestep(dt);
+    solid_solver.advanceTimestep(dt);
 
     // Output the sidre-based plot files
-    solid_solver->outputStateToDisk(paraview_name);
+    solid_solver.outputStateToDisk(paraview_name);
   }
-  SLIC_INFO_ROOT(axom::fmt::format("final time = {}", solid_solver->time()));
+  SLIC_INFO_ROOT(axom::fmt::format("final time = {}", solid_solver.time()));
 
   return 0;
 }
