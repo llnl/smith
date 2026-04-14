@@ -18,6 +18,7 @@ set(infrastructure_headers
     application_manager.hpp
     cli.hpp
     debug_print.hpp
+    format.hpp
     ${PROJECT_BINARY_DIR}/include/smith/infrastructure/git_sha.hpp
     input.hpp
     logger.hpp
@@ -40,7 +41,7 @@ set(infrastructure_sources
     profiling.cpp
     )
 
-set(infrastructure_depends axom::inlet axom::fmt axom::cli11 camp mfem)
+set(infrastructure_depends axom::inlet axom::cli11 camp mfem)
 blt_list_append(TO infrastructure_depends ELEMENTS tribol IF TRIBOL_FOUND)
 blt_list_append(TO infrastructure_depends ELEMENTS caliper adiak::adiak IF SMITH_ENABLE_PROFILING)
 # TODO (EBC): mfem's openmp dependency isn't being picked up on ubuntu + clang 16.0.6.  

@@ -157,7 +157,7 @@ int getOrder(std::optional<smith::SolidMechanicsInputOptions> solid_mechanics_op
     SLIC_ERROR_ROOT("Neither solid or heat_transfer blocks specified in the input file.");
   }
   SLIC_ERROR_ROOT_IF(order < 1 || order > 3,
-                     axom::fmt::format("Invalid solver order '{0}' given. Valid values are 1, 2, or 3.", order));
+                     std::format("Invalid solver order '{0}' given. Valid values are 1, 2, or 3.", order));
   return order;
 }
 
@@ -298,7 +298,7 @@ int main(int argc, char* argv[])
   // Get dimension and order of problem
   int dim = smith::StateManager::mesh(mesh_tag).Dimension();
   SLIC_ERROR_ROOT_IF(dim < 2 || dim > 3,
-                     axom::fmt::format("Invalid mesh dimension '{0}' provided. Valid values are 2 or 3.", dim));
+                     std::format("Invalid mesh dimension '{0}' provided. Valid values are 2 or 3.", dim));
   int order = getOrder(solid_mechanics_options, heat_transfer_options);
 
   // Create the physics object

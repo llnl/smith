@@ -6,9 +6,9 @@
 
 #include "smith/physics/mesh.hpp"
 
+#include <format>
 #include <utility>
 
-#include <axom/fmt.hpp>
 #include <axom/slic.hpp>
 
 #include "smith/physics/state/state_manager.hpp"
@@ -88,7 +88,7 @@ void Mesh::createDomains()
 void Mesh::errorIfDomainExists(const std::string& domain_name) const
 {
   SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
-                axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
+                std::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
 }
 
 smith::Domain& Mesh::entireBody() const { return domain(entireBodyName()); }
@@ -107,7 +107,7 @@ void Mesh::insertDomain(const std::string& domain_name, const Domain& domain)
 smith::Domain& Mesh::domain(const std::string& domain_name) const
 {
   SLIC_ERROR_IF(domains_.find(domain_name) == domains_.end(),
-                axom::fmt::format("Could not find domain named {0} in mesh with tag {1}", domain_name, mesh_tag_));
+                std::format("Could not find domain named {0} in mesh with tag {1}", domain_name, mesh_tag_));
   return domains_.at(domain_name);
 }
 
