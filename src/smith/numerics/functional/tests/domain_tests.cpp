@@ -27,7 +27,7 @@ mfem::Mesh import_mesh(std::string meshfile)
 
   if (!imesh) {
     smith::logger::flush();
-    std::string err_msg = axom::fmt::format("Can not open mesh file: '{0}'", mesh_dir + meshfile);
+    std::string err_msg = std::format("Can not open mesh file: '{0}'", mesh_dir + meshfile);
     SLIC_ERROR_ROOT(err_msg);
   }
 

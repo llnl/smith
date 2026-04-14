@@ -6,6 +6,7 @@
 
 #include "smith/mesh_utils/mesh_utils.hpp"
 
+#include <format>
 #include <cmath>
 #include <fstream>
 #include <algorithm>
@@ -16,7 +17,6 @@
 #include <vector>
 
 #include "axom/core.hpp"
-#include "axom/fmt.hpp"
 
 #include "smith/infrastructure/logger.hpp"
 
@@ -25,13 +25,13 @@ namespace smith {
 mfem::Mesh buildMeshFromFile(const std::string& mesh_file)
 {
   // Open the mesh
-  std::string msg = axom::fmt::format("Opening mesh file: '{0}'", mesh_file);
+  std::string msg = std::format("Opening mesh file: '{0}'", mesh_file);
   SLIC_INFO_ROOT(msg);
 
   // Ensure correctness
   smith::logger::flush();
   if (!axom::utilities::filesystem::pathExists(mesh_file)) {
-    msg = axom::fmt::format("Given mesh file does not exist: '{0}'", mesh_file);
+    msg = std::format("Given mesh file does not exist: '{0}'", mesh_file);
     SLIC_ERROR_ROOT(msg);
   }
 
@@ -41,7 +41,7 @@ mfem::Mesh buildMeshFromFile(const std::string& mesh_file)
 
   if (!imesh) {
     smith::logger::flush();
-    std::string err_msg = axom::fmt::format("Can not open mesh file: '{0}'", mesh_file);
+    std::string err_msg = std::format("Can not open mesh file: '{0}'", mesh_file);
     SLIC_ERROR_ROOT(err_msg);
   }
 
@@ -522,7 +522,7 @@ smith::mesh::InputOptions FromInlet<smith::mesh::InputOptions>::operator()(const
 
   // If it reaches here, we haven't found a supported type
   smith::logger::flush();
-  std::string err_msg = axom::fmt::format("Specified type not supported: '{0}'", mesh_type);
+  std::string err_msg = std::format("Specified type not supported: '{0}'", mesh_type);
   SLIC_ERROR_ROOT(err_msg);
   return {};
 }
