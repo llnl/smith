@@ -17,6 +17,7 @@
 #include "mfem.hpp"
 #include "smith/numerics/functional/functional.hpp"
 #include "smith/physics/common.hpp"
+#include "smith/physics/materials/solid_material.hpp"
 #include "smith/physics/materials/viscoelastic.hpp"
 #include "smith/smith.hpp"
 
@@ -77,12 +78,7 @@ int main(int argc, char* argv[])
                  "Petsc preconditioner (Index of enum smith::PetscPCType)")
       ->expected(0, 14);
   app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")->check(axom::CLI::PositiveNumber);
-  // Contact options
-  auto opt_contact =
-      app.add_flag("--contact,!--no-contact", use_contact, "Use contact for the inner faces of the cylinder");
-  app.add_option("--penalty", penalty, "Penalty for contact")->needs(opt_contact)->check(axom::CLI::PositiveNumber);
   // Misc options
-  app.add_flag("--fast", use_fast_options, "Reduce max iterations and delta-time for testing purposes.");
   app.set_help_flag("--help");
 
   // Need to allow extra arguments for PETSc support
@@ -106,28 +102,41 @@ int main(int argc, char* argv[])
   mesh->addDomainOfBoundaryElements("top", smith::by_attr<dim>(4));
 
   // temperature parameter field
-  smith::FiniteElementState temperature(mesh->mfemParMesh(), smith::H1<0>{}, "temperature");
+  smith::FiniteElementState temperature(mesh->mfemParMesh(), smith::L2<0>{}, "temperature");
   temperature = 300.0;
 
   // Create solver
-  std::unique_ptr<SolidMechanics<p, dim>> solid_solver;
-  solid_solver = std::make_unique<smith::SolidMechanics<p, dim, smith::Parameters<smith::H1<0>>>>(
+  auto solid_solver = std::make_unique<smith::SolidMechanics<p, dim, smith::Parameters<smith::L2<0>>>>(
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh);
+  
+  solid_solver->setParameter(0, temperature);
 
-  solid_solver->setTraction([&](auto&, double t) { return std::sin(2*M_PI*t); }, mesh->domain("top"));
+  solid_solver->setTraction(
+    [&](auto, auto, double t) { 
+      return smith::vec3{0, -std::sin(M_PI*t), 0}; 
+    },
+     mesh->domain("top"));
 
   double G_inf = 1e3;
   double G_0 = 3*G_inf;
   double G_g = G_inf + G_0;
   double nu_g = 0.45;
   double K = 2.0/3.0*G_g*(1.0 + nu_g)/(1.0 - 2.0*nu_g);
+  double tau_0 = 10.0;
+  double eta_0 = G_0*tau_0;
   // solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
   // solid_solver->setMaterial(mat, mesh->entireBody());
-  solid_mechanics::Viscoelastic mat{.density = 1.0, .K_inf = K, .G_inf = G_inf, .alpha_inf = 0.0,
-                                    .theta_sf = 300.0, .G_0 = G_0, .eta_0 = 2.0, .theta_r = 300.0,
-                                    .C1 = 0.0, .C2 = 50.0};
-  auto internal_states = solid_solver->createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::initial_internal_state(), mesh->entireBody());
-  solid_solver->setRateDependentMaterial(smith::DependsOn<0>, mat, mesh->entireBody(), internal_states);
+  solid_mechanics::ViscoelasticOldInterface mat(K, G_inf, 0.0, 300.0, G_0, eta_0, 300.0, 0.0, 50.0, 1.0);
+  auto internal_states = solid_solver->createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::State{}, mesh->entireBody());
+  solid_solver->setRateDependentMaterial(smith::DependsOn<0>{}, mat, mesh->entireBody(), internal_states);
+
+  // NOTE: somehow J2 material works fine
+  // using Hardening = solid_mechanics::LinearHardening;
+  // Hardening hardening{.sigma_y = 10.0,  .Hi= G_inf/100.0, .eta = 0.0};
+  // solid_mechanics::J2SmallStrain<Hardening> mat2{.E = G_inf, .nu = 0.25, .hardening = hardening, .Hk = 0.0, .density = 1.0};
+  // auto internal_states = solid_solver->createQuadratureDataBuffer(smith::solid_mechanics::J2SmallStrain<Hardening>::State{}, mesh->entireBody());
+  // solid_solver->setRateDependentMaterial(mat2, mesh->entireBody(), internal_states);
+  
 
   // Set up essential boundary conditions
   // Bottom of cylinder is fixed

@@ -39,7 +39,7 @@ TEST(ViscoelasticMaterial, Uniaxial) {
 
     double rho_r = 1000.0;
 
-    Viscoelastic material{.K_inf = K_inf, .G_inf = G_inf,
+    solid_mechanics::Viscoelastic material{.K_inf = K_inf, .G_inf = G_inf,
       .alpha_inf = alpha_inf, .theta_sf = theta_sf, .G_0 = G_0, .eta_0 = eta_0,
       .theta_r = theta_r, .C1 = C1, .C2 = C2, .rho_r = rho_r};
     
@@ -55,9 +55,11 @@ TEST(ViscoelasticMaterial, Uniaxial) {
       }
     };
     
-    tensor<double, 9> internal_state{1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+    solid_mechanics::Viscoelastic::State internal_state = solid_mechanics::Viscoelastic::initial_internal_state();
     double theta = 350.0;
-    auto temperature_cycle = [theta](double) { return theta; };
+    tensor<double, 3> grad_theta{};
+    auto temperature = make_tuple(theta, grad_theta);
+    auto temperature_cycle = [temperature](double) { return temperature; };
 
     auto history = uniaxial_stress_test2(t_max, num_steps, material, internal_state,
                                          applied_strain, temperature_cycle);
@@ -67,8 +69,8 @@ TEST(ViscoelasticMaterial, Uniaxial) {
       double t = get<0>(timestep);
       tensor<double, 3, 3> disp_grad = get<1>(timestep);
       tensor<double, 3, 3> stress = get<2>(timestep);
-      tensor<double, 9> isv = get<3>(timestep);
-      file << t << " " << disp_grad[0][0] << " " << stress[0][0] << " " << isv[0] << "\n";
+      solid_mechanics::Viscoelastic::State isv = get<3>(timestep);
+      file << t << " " << disp_grad[0][0] << " " << stress[0][0] << " " << isv.Fv[0][0] << "\n";
     }
     file.close();
 }
@@ -79,7 +81,7 @@ class TestViscoelasticModel : public ::testing::Test {
       .alpha_inf = 45e-6, .theta_sf = 300.0, .G_0 = 1.5e3, .eta_0 = 200.0,
       .theta_r = 350.0, .C1 = 15.0, .C2 = 50.0, .rho_r = 1.1e3} {}
 
-  Viscoelastic material;
+  solid_mechanics::Viscoelastic material;
   static constexpr int dim = 3;
 };
 
@@ -92,20 +94,18 @@ TEST_F(TestViscoelasticModel, Symmetry) {
   // so require this for the test.
   ASSERT_NEAR(det(Fv), 1.0, 1e-14);
 
-  auto internal_state = make_tensor<dim*dim>([&Fv](int ij) {
-    int i = ij / 3;
-    int j = ij % 3;
-    return Fv[i][j];
-  });
+  solid_mechanics::Viscoelastic::State internal_state{Fv};
 
   tensor H{{{0.84410694508235, 0.04541258512666, 0.22498462569285},
             {0.06438560513367, 0.01193894509204, 0.83425129331962},
             {0.62563720341404, 0.76924029241284, 0.85235964292579}}};
 
   double theta = 330.0;
+  tensor<double, 3> grad_theta{};
+  auto temperature = make_tuple(theta, grad_theta);
   double dt = 0.1;
 
-  auto stress = material.pkStress(internal_state, dt, make_dual(H), theta);
+  auto stress = material.pkStress(internal_state, dt, make_dual(H), temperature);
   auto C = get_gradient(stress);
 
   for (int i = 0; i < dim; i++) {
@@ -131,23 +131,21 @@ TEST_F(TestViscoelasticModel, isVariational)
   // so require this for the test.
   ASSERT_NEAR(det(Fv), 1.0, 1e-14);
 
-  auto internal_state = make_tensor<dim*dim>([&Fv](int ij) {
-    int i = ij / 3;
-    int j = ij % 3;
-    return Fv[i][j];
-  });
+  solid_mechanics::Viscoelastic::State internal_state{Fv};
 
   tensor H{{{0.84410694508235, 0.04541258512666, 0.22498462569285},
             {0.06438560513367, 0.01193894509204, 0.83425129331962},
             {0.62563720341404, 0.76924029241284, 0.85235964292579}}};
 
   double theta = 330.0;
+  tensor<double, 3> grad_theta{};
+  auto temperature = make_tuple(theta, grad_theta);
   double dt = 0.1;
 
-  auto energy = material.potential(internal_state, dt, make_dual(H), theta);
+  auto energy = material.potential(internal_state, dt, make_dual(H), temperature);
   auto P_from_energy = get_gradient(energy);
 
-  auto P = material.pkStress(internal_state, dt, H, theta);
+  auto P = material.pkStress(internal_state, dt, H, temperature);
   for (int i = 0; i < dim; i++) {
     for (int j = 0; j < dim; j++) {
       double absP = std::abs(P[i][j]);

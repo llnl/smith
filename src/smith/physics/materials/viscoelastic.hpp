@@ -11,7 +11,6 @@
  */
 
 #include "smith/infrastructure/accelerator.hpp"
-#include "smith/numerics/functional/isotropic_tensor.hpp"
 #include "smith/numerics/functional/tensor.hpp"
 
 
@@ -24,12 +23,16 @@ namespace smith::solid_mechanics {
  */
 struct Viscoelastic {
   static constexpr int dim = 3; ///< This model is implemented in 3D only. 
-  template <typename T> using InternalState = tensor<T, dim*dim>;  ///< Internal state variable: inelastic distortion tensor (flattened)
+  //template <typename T> using State = tensor<T, dim*dim>;  ///< Internal state variable: inelastic distortion tensor (flattened)
   template <typename T> using Tensor = tensor<T, dim, dim>;
 
-  static InternalState<double> initial_internal_state()
+  struct State {
+    tensor<double, dim, dim> Fv{DenseIdentity<dim>()};
+  };
+
+  static State initial_internal_state()
   {
-    return Identity<dim>();
+    return {DenseIdentity<dim>()};
   }
 
   /** 
@@ -67,9 +70,10 @@ struct Viscoelastic {
   /** 
    * @brief Compute updated Piola stress and viscous deformation tensor
    */
-  template <typename T1, typename T2, typename T3>
-  SMITH_HOST_DEVICE auto update(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
+  template <typename T1, typename T2>
+  SMITH_HOST_DEVICE auto update(const State& internal_state, double dt, const Tensor<T1>& du_dX, T2 /* temperature */) const
   {
+    double theta = 100.0; //DEBUG, should use parameter
     auto P_inf = equilibrium_stress(du_dX, theta);
 
     // Compute the stress in the spring-dashpot branch.
@@ -79,14 +83,12 @@ struct Viscoelastic {
     // - make the viscosity-strain rate relationship nonlinear, such as a power law
 
     // Reshape the flattened inelastic distortion back into a tensor
-    auto Fv = make_tensor<dim, dim>([&Q](int i, int j) { return Q[dim*i + j]; });
+    auto& Fv = internal_state.Fv;
     auto F = du_dX + Identity<dim>();
     // Trial elastic values
     auto Fe = F*inv(Fv);
-    auto Ce = transpose(Fe)*Fe;
-    auto Ee = 0.5*log_symm(Ce);
+    auto Ee = 0.5*log_symm(transpose(Fe)*Fe);
     auto devM = 2.0*G_0*dev(Ee);
-    auto M = devM; // + volumetric part, if a viscous volumetric response is added
     auto tau_bar = std::sqrt(0.5)*norm(devM);
     // Guard against division by zero.
     // Value of the denominator in the tau_bar = 0 case is unimportant,
@@ -100,41 +102,33 @@ struct Viscoelastic {
     // be replaced with a nonlinear solve.
     auto dg = tau_bar/(a*eta_0/dt + G_0);
     // update elastic trial stress
-    M -= 2*G_0*dg*N;
+    auto M = devM - (2*G_0*dg)*N;
     // update inelastic distortion tensor
     auto Fv_new = exp_symm(dg*N)*Fv;
     // Change stress measure to Piola
     Fe = F*inv(Fv_new);
     auto P_0 = transpose(inv(Fv_new)*M*inv(Fe));
-
-    // Flatten the inelastic distortion tensor for packing into the global array
-    auto internal_state_new = make_tensor<dim*dim>(
-      [&Fv_new](int ij) { 
-        int i = ij / dim;
-        int j = ij % dim;
-        return Fv_new[i][j];
-      });
-    
+    State internal_state_new{get_value(Fv_new)};
     return make_tuple(P_inf + P_0, internal_state_new);
   }
 
   /**
    * @brief Return updated Piola stress
    */
-  template <typename T1, typename T2, typename T3>
-  SMITH_HOST_DEVICE auto pkStress(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
+  template <typename T1, typename T2>
+  SMITH_HOST_DEVICE auto pkStress(const State& Q, double dt, const Tensor<T1>& du_dX, T2 temperature) const
   {
-    auto [P, Q_new] = update(Q, dt, du_dX, theta);
+    auto [P, Q_new] = update(Q, dt, du_dX, temperature);
     return P;
   }
 
   /**
    * @brief Return updated internal state variables
    */
-  template <typename T1, typename T2, typename T3>
-  SMITH_HOST_DEVICE auto intenalState(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
+  template <typename T1, typename T2>
+  SMITH_HOST_DEVICE auto intenalState(const State& Q, double dt, const Tensor<T1>& du_dX, T2 temperature) const
   {
-    auto [P, Q_new] = update(Q, dt, du_dX, theta);
+    auto [P, Q_new] = update(Q, dt, du_dX, temperature);
     return Q_new;
   }
 
@@ -162,9 +156,10 @@ struct Viscoelastic {
    * viscoplastic constitutive updates. Computer methods in applied mechanics
    * and engineering, 171(3-4), pp.419-444.
    */
-  template <typename T1, typename T2, typename T3>
-  SMITH_HOST_DEVICE auto potential(const InternalState<T1>& Q, double dt, const Tensor<T2>& du_dX, T3 theta) const
+  template <typename T1, typename T2>
+  SMITH_HOST_DEVICE auto potential(const State& Q, double dt, const Tensor<T1>& du_dX, T2 temperature) const
   {
+    auto theta = get<0>(temperature);
     auto BmI = du_dX + transpose(du_dX) + du_dX*transpose(du_dX);
     auto E = 0.5*logIp_symm(BmI);
     auto Em = E - alpha_inf*(theta - theta_sf)*Identity<dim>();
@@ -172,7 +167,7 @@ struct Viscoelastic {
     auto trEm = tr(Em);
     auto psi_inf = G_inf*inner(devEm, devEm) + 0.5*K_inf*trEm*trEm;
 
-    auto Fv = make_tensor<dim, dim>([&Q](int i, int j) { return Q[dim*i + j]; });
+    const auto& Fv = Q.Fv;
     auto F = du_dX + Identity<dim>();
     // Trial elastic values
     auto Fe = F*inv(Fv);
@@ -195,7 +190,6 @@ struct Viscoelastic {
     return psi_inf + psi_0 + Pi;
   }
 
-  double density;
   double K_inf;  ///< equiibrium bulk modulus
   double G_inf;  ///< equilibrium shear modulus
   double alpha_inf; ///< equilibrium thermal expansion coefficient
@@ -209,6 +203,35 @@ struct Viscoelastic {
   double C2; ///< second SLF factor (temperature units)
 
   double rho_r; ///< density in the reference configuration
+};
+
+
+struct ViscoelasticOldInterface {
+  static constexpr int dim = 3; ///< This model is implemented in 3D only. 
+  using State = Viscoelastic::State;
+  template <typename T> using Tensor = tensor<T, dim, dim>;
+
+  ViscoelasticOldInterface(double density, double K_inf, double G_inf, double alpha_inf, 
+                           double theta_sf, double G_0, double eta_0, double theta_r, double C1,
+                           double C2) :
+      material{K_inf, G_inf, alpha_inf, theta_sf, G_0, eta_0, theta_r, C1, C2, density}
+    {
+      // empty
+    }
+  
+  /**
+   * @brief Old interface for materials
+   */
+  template <typename T1, typename T2>
+  SMITH_HOST_DEVICE auto operator()(State& Q, double dt, const Tensor<T1>& du_dX, T2 temperature) const
+  {
+    auto [P, Q_new] = material.update(Q, dt, du_dX, temperature);
+    Q = Q_new;
+    return P;
+  }
+  
+  Viscoelastic material;
+  double density;
 };
 
 } // namespace smith::solid_mechanics
