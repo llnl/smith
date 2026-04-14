@@ -13,8 +13,9 @@
 #pragma once
 
 #include <functional>
-#include <memory>
 #include <cstddef>
+#include <format>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -23,7 +24,6 @@
 #include "mpi.h"
 #include "mfem.hpp"
 #include "axom/sidre.hpp"
-#include "axom/fmt.hpp"
 #include "axom/slic.hpp"
 
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
@@ -212,8 +212,8 @@ class BasePhysics {
    */
   virtual const FiniteElementDual& dual(const std::string& dual_name) const
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("dual '{}' requested from physics module '{}' which does not support duals",
-                                      dual_name, name_));
+    SLIC_ERROR_ROOT(
+        std::format("dual '{}' requested from physics module '{}' which does not support duals", dual_name, name_));
     return *duals_[0];
   }
 
@@ -226,8 +226,8 @@ class BasePhysics {
    */
   virtual const FiniteElementState& dualAdjoint(const std::string& dual_name) const
   {
-    SLIC_ERROR_ROOT(axom::fmt::format(
-        "dualAdjoint '{}' requested from physics module '{}' which does not support duals", dual_name, name_));
+    SLIC_ERROR_ROOT(std::format("dualAdjoint '{}' requested from physics module '{}' which does not support duals",
+                                dual_name, name_));
     return *dual_adjoints_[0];
   }
 
@@ -257,8 +257,8 @@ class BasePhysics {
       }
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format("Parameter {} requested from physics module {}, but it doesn't exist.",
-                                      parameter_name, name_));
+    SLIC_ERROR_ROOT(
+        std::format("Parameter {} requested from physics module {}, but it doesn't exist.", parameter_name, name_));
 
     return *states_[0];
   }
@@ -271,10 +271,9 @@ class BasePhysics {
    */
   virtual const FiniteElementState& parameter(std::size_t parameter_index) const
   {
-    SLIC_ERROR_ROOT_IF(
-        parameter_index >= parameters_.size(),
-        axom::fmt::format("Parameter index {} requested, but only {} parameters exist in physics module {}.",
-                          parameter_index, parameters_.size(), name_));
+    SLIC_ERROR_ROOT_IF(parameter_index >= parameters_.size(),
+                       std::format("Parameter index {} requested, but only {} parameters exist in physics module {}.",
+                                   parameter_index, parameters_.size(), name_));
 
     return *parameters_[parameter_index].state;
   }
@@ -351,7 +350,7 @@ class BasePhysics {
   virtual const std::unordered_map<std::string, const smith::FiniteElementDual&> computeInitialConditionSensitivity()
       const
   {
-    SLIC_WARNING_ROOT(axom::fmt::format("Initial condition sensitivities not enabled in physics module {}", name_));
+    SLIC_WARNING_ROOT(std::format("Initial condition sensitivities not enabled in physics module {}", name_));
     return {};
   }
 
@@ -373,7 +372,7 @@ class BasePhysics {
   {
     if (!string_to_dual.empty()) {
       SLIC_ERROR_ROOT(
-          axom::fmt::format("Failed to setAdjointLoad.  Adjoint analysis not defined for physics module {}", name_));
+          std::format("Failed to setAdjointLoad.  Adjoint analysis not defined for physics module {}", name_));
     }
   }
 
@@ -387,7 +386,7 @@ class BasePhysics {
   {
     if (!string_to_bc.empty()) {
       SLIC_ERROR_ROOT(
-          axom::fmt::format("Failed to setDualAdjointBCs.  Adjoint analysis not defined for physics module {}", name_));
+          std::format("Failed to setDualAdjointBCs.  Adjoint analysis not defined for physics module {}", name_));
     }
   }
 
@@ -398,7 +397,7 @@ class BasePhysics {
    */
   virtual void reverseAdjointTimestep()
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Adjoint analysis not defined for physics module {}", name_));
+    SLIC_ERROR_ROOT(std::format("Adjoint analysis not defined for physics module {}", name_));
   }
 
   /**
@@ -437,7 +436,7 @@ class BasePhysics {
   virtual FiniteElementDual loadCheckpointedDual([[maybe_unused]] const std::string& state_name,
                                                  [[maybe_unused]] int cycle)
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("loadCheckpointedDual not enabled in physics module {}", name_));
+    SLIC_ERROR_ROOT(std::format("loadCheckpointedDual not enabled in physics module {}", name_));
     return *duals_[0];
   }
 
