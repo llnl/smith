@@ -42,6 +42,7 @@
 
 #include <vector>
 #include <memory>
+#include <tuple>
 #include "smith/differentiable_numerics/system_base.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
 
@@ -139,4 +140,64 @@ std::shared_ptr<CombinedSystem> combineSystems(std::shared_ptr<SubSystems>... su
   return combined;
 }
 
+
+/**
+ * @brief A generic wrapper that combines multiple sub-systems into a single monolithic block system.
+ *
+ * Unlike CombinedSystem (which performs staggered solver iterations), MonolithicCombinedSystem
+ * concatenates all weak forms and solves them simultaneously using a single global SystemSolver.
+ */
+struct MonolithicCombinedSystem : public SystemBase {
+  std::shared_ptr<SystemBase> cycle_zero_system;
+
+  using SystemBase::SystemBase;
+};
+
+/**
+ * @brief Combine two or more independently-built sub-systems into a MonolithicCombinedSystem.
+ *
+ * Preconditions:
+ *  - All sub-systems share the same FieldStore.
+ *  - Sub-system weak_forms are already populated.
+ *
+ * @param solver  The monolithic SystemSolver that will solve the combined block system,
+ *                including the aggregated cycle-zero system if any sub-systems have one.
+ * @param subs    Two or more sub-systems that share a FieldStore.
+ */
+template <typename... SubSystems>
+std::shared_ptr<MonolithicCombinedSystem> combineSystemsMonolithic(
+    std::shared_ptr<SystemSolver> solver,
+    std::shared_ptr<SubSystems>... subs)
+{
+  static_assert(sizeof...(subs) >= 2, "combineSystemsMonolithic requires at least two sub-systems");
+
+  auto field_store = std::get<0>(std::forward_as_tuple(subs...))->field_store;
+
+  std::vector<std::shared_ptr<WeakForm>> wfs;
+  std::vector<std::shared_ptr<WeakForm>> cycle_zero_wfs;
+
+  (
+      [&](auto& sub) {
+        for (auto& wf : sub->weak_forms) {
+          wfs.push_back(wf);
+        }
+        if constexpr (requires { sub->cycle_zero_system; }) {
+          if (sub->cycle_zero_system) {
+            for (auto& cz_wf : sub->cycle_zero_system->weak_forms) {
+              cycle_zero_wfs.push_back(cz_wf);
+            }
+          }
+        }
+      }(subs),
+      ...);
+
+  auto combined = std::make_shared<MonolithicCombinedSystem>(field_store, solver, wfs);
+  if (!cycle_zero_wfs.empty()) {
+    combined->cycle_zero_system = std::make_shared<SystemBase>(field_store, solver, cycle_zero_wfs);
+  }
+
+  return combined;
+}
+
 }  // namespace smith
+

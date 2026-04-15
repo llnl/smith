@@ -432,9 +432,9 @@ buildSolidMechanicsSystemFromStore(
     field_store->markWeakFormInternal(cycle_zero_name);
     field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
 
-    std::shared_ptr<SystemSolver> cz_solver;
+    std::shared_ptr<SystemSolver> cycle_zero_solver;
     if (options.cycle_zero_solver) {
-      cz_solver = options.cycle_zero_solver;
+      cycle_zero_solver = options.cycle_zero_solver;
     } else {
       NonlinearSolverOptions cz_nonlin{.nonlin_solver = NonlinearSolver::Newton,
                                        .relative_tol = 1e-14,
@@ -447,10 +447,10 @@ buildSolidMechanicsSystemFromStore(
                                  .absolute_tol = 1e-14,
                                  .max_iterations = 1000,
                                  .print_level = 0};
-      cz_solver = std::make_shared<SystemSolver>(
+      cycle_zero_solver = std::make_shared<SystemSolver>(
           buildNonlinearBlockSolver(cz_nonlin, cz_lin, *field_store->getMesh()));
     }
-    sys->cycle_zero_system = makeSubSystem(field_store, cz_solver, {sys->cycle_zero_solid_weak_form});
+    sys->cycle_zero_system = makeSubSystem(field_store, cycle_zero_solver, {sys->cycle_zero_solid_weak_form});
   }
 
   if (options.enable_stress_output) {
