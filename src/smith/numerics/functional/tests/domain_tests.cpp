@@ -16,6 +16,10 @@
 #include "smith/numerics/functional/tensor.hpp"
 #include "smith/smith_config.hpp"
 #include "smith/mesh_utils/mesh_utils.hpp"
+#include "smith/numerics/functional/functional.hpp"
+#include "smith/numerics/functional/shape_aware_functional.hpp"
+#include "smith/numerics/functional/tensor.hpp"
+#include "smith/physics/state/finite_element_state.hpp"
 
 using namespace smith;
 
@@ -35,6 +39,14 @@ mfem::Mesh import_mesh(std::string meshfile)
   mesh.EnsureNodes();
   return mesh;
 }
+
+struct IdentityFunctor {
+  template <typename Arg1, typename Arg2>
+  SMITH_HOST_DEVICE auto operator()(Arg1, Arg2) const
+  {
+    return 1.0;
+  }
+};
 
 TEST(domain, of_edges)
 {
@@ -489,6 +501,29 @@ TEST(domain, of3dBoundaryElementsFindsDofs)
   dof_indices = d2.dof_list(&fes);
 
   EXPECT_EQ(dof_indices.Size(), 15);
+}
+
+TEST(domain, ofInteriorBoundaryElements)
+{
+  using test_space = double;
+  using trial_space = H1<1>;
+
+  auto expectedArea = 1.0;
+  auto meshInput = buildMeshFromFile(SMITH_REPO_DIR "/data/meshes/SplitCubeTest.g");
+  auto mesh = smith::mesh::refineAndDistribute(std::move(meshInput), 0, 0);
+
+  Domain d0 = Domain::ofInteriorBoundaryElements(*mesh, by_attr<3>(2));
+
+  auto [trial_fespace, trial_fec] = smith::generateParFiniteElementSpace<trial_space>(mesh.get());
+  mfem::Vector U(trial_fespace->TrueVSize());
+
+  // Calculate the area of the internal boundary region
+  Functional<test_space(trial_space)> totalArea({trial_fespace.get()});
+
+  totalArea.AddInteriorFaceIntegral(smith::Dimension<2>{}, smith::DependsOn<>{}, IdentityFunctor{}, d0);
+  double calculatedArea = totalArea(0.0, U);
+
+  EXPECT_NEAR(calculatedArea, expectedArea, 1e-6);
 }
 
 int main(int argc, char* argv[])
