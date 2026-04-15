@@ -545,8 +545,9 @@ const BlockElementRestriction& Domain::get_restriction(FunctionSpace space) { re
 
 void Domain::insert_shared_interior_face_list()
 {
-  // Weights only need to be computed for Domain of InteriorFaces type
-  SLIC_ERROR_ROOT_IF(type_ != Domain::Type::InteriorFaces, "This method is only for interior face domains");
+  // Weights only need to be computed for Domain of InteriorBoundaryElements type
+  SLIC_ERROR_ROOT_IF(type_ != Domain::Type::InteriorBoundaryElements,
+                     "This method is only for interior boundary element domains");
 
   // make a list if we don't already have one
   if (shared_interior_face_ids_.empty()) {
@@ -621,10 +622,10 @@ Domain EntireBoundary(const mesh_t& mesh)
   }
 }
 
-/// @brief constructs a domain from all the interior face elements in a mesh
-Domain InteriorFaces(const mesh_t& mesh)
+/// @brief constructs a domain from all the interior boundary elements in a mesh
+Domain EntireInteriorBoundary(const mesh_t& mesh)
 {
-  Domain output{mesh, mesh.SpaceDimension() - 1, Domain::Type::InteriorFaces};
+  Domain output{mesh, mesh.SpaceDimension() - 1, Domain::Type::InteriorBoundaryElements};
 
   int edge_id = 0;
   int tri_id = 0;
@@ -658,6 +659,81 @@ Domain InteriorFaces(const mesh_t& mesh)
   output.insert_shared_interior_face_list();
 
   return output;
+}
+
+/// @brief constructs a domain from some subset of the interior boundary elements in a mesh
+template <int d>
+Domain domain_of_interior_boundaries(const mesh_t& mesh,
+                                     std::function<bool(std::vector<tensor<double, d>>, int)> predicate)
+{
+  assert(mesh.SpaceDimension() == d);
+  Domain output{mesh, d - 1, Domain::Type::InteriorBoundaryElements};
+
+  mfem::Array<int> face_id_to_bdr_id = mesh.GetFaceToBdrElMap();
+  mfem::Vector vertices;
+  mesh.GetVertices(vertices);
+
+  int edge_id = 0;
+  int tri_id = 0;
+  int quad_id = 0;
+
+  for (int f = 0; f < mesh.GetNumFaces(); f++) {
+    // discard faces with the wrong type
+    if (!mesh.GetFaceInformation(f).IsInterior()) continue;
+
+    auto geom = mesh.GetFaceGeometry(f);
+
+    mfem::Array<int> vertex_ids;
+    mesh.GetFaceVertices(f, vertex_ids);
+
+    auto x = gather<d>(vertices, vertex_ids);
+
+    int bdr_id = face_id_to_bdr_id[f];
+    int attr = (bdr_id >= 0) ? mesh.GetBdrAttribute(bdr_id) : -1;
+
+    bool add = predicate(x, attr);
+
+    switch (geom) {
+      case mfem::Geometry::SEGMENT:
+        if (add) {
+          output.edge_ids_.push_back(edge_id);
+          output.mfem_edge_ids_.push_back(f);
+        }
+        edge_id++;
+        break;
+      case mfem::Geometry::TRIANGLE:
+        if (add) {
+          output.tri_ids_.push_back(tri_id);
+          output.mfem_tri_ids_.push_back(f);
+        }
+        tri_id++;
+        break;
+      case mfem::Geometry::SQUARE:
+        if (add) {
+          output.quad_ids_.push_back(quad_id);
+          output.mfem_quad_ids_.push_back(f);
+        }
+        quad_id++;
+        break;
+      default:
+        SLIC_ERROR("unsupported element type");
+        break;
+    }
+  }
+
+  output.insert_shared_interior_face_list();
+
+  return output;
+}
+
+Domain Domain::ofInteriorBoundaryElements(const mesh_t& mesh, std::function<bool(std::vector<vec2>, int)> func)
+{
+  return domain_of_interior_boundaries<2>(mesh, func);
+}
+
+Domain Domain::ofInteriorBoundaryElements(const mesh_t& mesh, std::function<bool(std::vector<vec3>, int)> func)
+{
+  return domain_of_interior_boundaries<3>(mesh, func);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////

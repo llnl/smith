@@ -4,9 +4,10 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <string>
+#include <format>
 #include <fstream>
 #include <memory>
+#include <string>
 
 #include "axom/inlet.hpp"
 #include "axom/slic.hpp"
@@ -72,8 +73,8 @@ int main(int argc, char* argv[])
 
   CLI11_PARSE(app, argc, argv);
 
-  SLIC_INFO_ROOT(axom::fmt::format("strain rate: {}", strain_rate));
-  SLIC_INFO_ROOT(axom::fmt::format("time_steps: {}", time_steps));
+  SLIC_INFO_ROOT(std::format("strain rate: {}", strain_rate));
+  SLIC_INFO_ROOT(std::format("time_steps: {}", time_steps));
 
   double max_time = max_strain / strain_rate;
 
@@ -149,8 +150,8 @@ int main(int argc, char* argv[])
 
   for (int i = 1; i < time_steps; ++i) {
     SLIC_INFO_ROOT("------------------------------------------");
-    SLIC_INFO_ROOT(axom::fmt::format("TIME STEP {}", i));
-    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of {})", solid_solver.time() + dt, max_time));
+    SLIC_INFO_ROOT(std::format("TIME STEP {}", i));
+    SLIC_INFO_ROOT(std::format("time = {} (out of {})", solid_solver.time() + dt, max_time));
     smith::logger::flush();
 
     solid_solver.advanceTimestep(dt);
