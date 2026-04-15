@@ -109,7 +109,6 @@ TEST(domain, of_edges)
   {
     constexpr int dim = 2;
     auto bmesh = import_mesh("beam-quad.mesh");
-    bmesh.FinalizeQuadMesh(true);
     auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
     Domain d0 = Domain::ofEdges(*mesh, std::function([](std::vector<vec2> x, int /* bdr_attr */) {
       return (0.5 * (x[0][0] + x[1][0])) < 0.25;  // x coordinate of edge midpoint
