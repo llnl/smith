@@ -158,6 +158,14 @@ std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionMan
   return bcs;
 }
 
+bool FieldStore::hasField(const std::string& field_name) const
+{
+  if (to_states_index_.count(field_name)) return true;
+  if (to_params_index_.count(field_name)) return true;
+  if (!shape_disp_.empty() && shape_disp_[0].get()->name() == field_name) return true;
+  return false;
+}
+
 size_t FieldStore::getFieldIndex(const std::string& field_name) const
 {
   if (to_states_index_.count(field_name)) {

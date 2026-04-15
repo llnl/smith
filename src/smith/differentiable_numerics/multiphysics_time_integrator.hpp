@@ -15,6 +15,7 @@
 #include "smith/physics/mesh.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
+#include "smith/differentiable_numerics/combined_system.hpp"
 
 namespace smith {
 
@@ -60,7 +61,23 @@ inline std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(std::shared_ptr<
 template <typename SystemType>
 std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(std::shared_ptr<SystemType> system)
 {
-  if constexpr (requires { system->cycle_zero_system; }) {
+  if constexpr (requires { system->cycle_zero_systems; }) {
+    // CombinedSystem: run each sub-system's cycle-zero solve in sequence (one pass, no stagger).
+    std::shared_ptr<SystemBase> cz = nullptr;
+    if (!system->cycle_zero_systems.empty()) {
+      auto cz_combined = std::make_shared<CombinedSystem>();
+      cz_combined->field_store = system->field_store;
+      cz_combined->max_stagger_iters = 1;
+      for (auto& czs : system->cycle_zero_systems) {
+        cz_combined->subsystems.push_back(czs);
+        for (auto& wf : czs->weak_forms) {
+          cz_combined->weak_forms.push_back(wf);
+        }
+      }
+      cz = cz_combined;
+    }
+    return makeAdvancer(std::static_pointer_cast<SystemBase>(system), cz);
+  } else if constexpr (requires { system->cycle_zero_system; }) {
     return makeAdvancer(std::static_pointer_cast<SystemBase>(system), system->cycle_zero_system);
   } else {
     return makeAdvancer(std::static_pointer_cast<SystemBase>(system), nullptr);

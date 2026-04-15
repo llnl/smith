@@ -16,6 +16,7 @@ set(differentiable_numerics_sources
     evaluate_objective.cpp
     dirichlet_boundary_conditions.cpp
     multiphysics_time_integrator.cpp
+    combined_system.cpp
     )
 
 set(differentiable_numerics_headers
@@ -41,6 +42,8 @@ set(differentiable_numerics_headers
     solid_mechanics_with_internal_vars_system.hpp
     thermal_system.hpp
     thermo_mechanics_system.hpp
+    coupling_spec.hpp
+    combined_system.hpp
     system_base.hpp
     differentiable_test_utils.hpp
     )

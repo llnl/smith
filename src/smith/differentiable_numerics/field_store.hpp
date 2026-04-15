@@ -353,6 +353,8 @@ struct FieldStore {
    */
   void shareBoundaryConditions(const std::string& name, std::shared_ptr<DirichletBoundaryConditions> source_bc);
 
+  bool hasField(const std::string& field_name) const;
+
   /**
    * @brief Get the internal index of a field by name.
    * @param field_name Name of the field.

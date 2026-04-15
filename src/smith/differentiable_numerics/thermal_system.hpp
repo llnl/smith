@@ -20,6 +20,7 @@
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
+#include "smith/differentiable_numerics/coupling_spec.hpp"
 
 namespace smith {
 
@@ -33,19 +34,23 @@ namespace smith {
  * @tparam dim Spatial dimension.
  * @tparam temp_order Order of the temperature basis.
  * @tparam TemperatureTimeRule Time integration rule type (must have num_states == 2).
+ * @tparam Coupling CouplingSpec listing fields borrowed from other physics (default: none).
+ *         Coupling fields occupy leading positions in the tail after the 2 time-rule state fields,
+ *         before user parameter_space fields.
  * @tparam parameter_space Finite element spaces for optional parameters.
  */
 template <int dim, int temp_order, typename TemperatureTimeRule = QuasiStaticFirstOrderTimeIntegrationRule,
-          typename... parameter_space>
+          typename Coupling = CouplingSpec<>, typename... parameter_space>
 struct ThermalSystem : public SystemBase {
   using SystemBase::SystemBase;
 
   static_assert(TemperatureTimeRule::num_states == 2, "ThermalSystem requires a 2-state time integration rule");
 
-  /// @brief using for ThermalWeakFormType
-  using ThermalWeakFormType =
-      TimeDiscretizedWeakForm<dim, H1<temp_order>,
-                              TimeRuleParams<TemperatureTimeRule, H1<temp_order>, parameter_space...>>;
+  /// Thermal weak form: (temp, temp_old, coupling_fields..., params...)
+  using ThermalWeakFormType = TimeDiscretizedWeakForm<
+      dim, H1<temp_order>,
+      typename detail::TimeRuleParamsWithCoupling<TemperatureTimeRule, H1<temp_order>, Coupling,
+                                                  parameter_space...>::type>;
 
   std::shared_ptr<ThermalWeakFormType> thermal_weak_form;       ///< Thermal weak form.
   std::shared_ptr<DirichletBoundaryConditions> temperature_bc;  ///< Temperature boundary conditions.
@@ -104,7 +109,7 @@ struct ThermalSystem : public SystemBase {
   template <typename HeatSourceType>
   void addHeatSource(const std::string& domain_name, HeatSourceType source_function)
   {
-    addHeatSourceAllParams(domain_name, source_function, std::make_index_sequence<2 + sizeof...(parameter_space)>{});
+    addHeatSourceAllParams(domain_name, source_function, std::make_index_sequence<2 + Coupling::num_coupling_fields + sizeof...(parameter_space)>{});
   }
 
   /**
@@ -135,7 +140,7 @@ struct ThermalSystem : public SystemBase {
   template <typename HeatFluxType>
   void addHeatFlux(const std::string& boundary_name, HeatFluxType flux_function)
   {
-    addHeatFluxAllParams(boundary_name, flux_function, std::make_index_sequence<2 + sizeof...(parameter_space)>{});
+    addHeatFluxAllParams(boundary_name, flux_function, std::make_index_sequence<2 + Coupling::num_coupling_fields + sizeof...(parameter_space)>{});
   }
 
  private:
@@ -155,35 +160,39 @@ struct ThermalSystem : public SystemBase {
 template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
 struct ThermalOptions {
   std::string prepend_name{};
+  std::shared_ptr<FieldStore> shared_field_store{};  ///< Shared store for coupled systems; nullptr = allocate own.
+};
+
+/// @brief Returned by registerThermalFields; holds the FieldType tokens needed by buildThermalSystemFromStore.
+template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
+struct ThermalFieldInfo {
+  std::shared_ptr<FieldStore> field_store;
+  FieldType<H1<temp_order>> temperature_type;
+  FieldType<H1<temp_order>> temperature_old_type;
+  std::tuple<FieldType<parameter_space>...> parameter_types;
+  std::shared_ptr<DirichletBoundaryConditions> temperature_bc;
+  std::shared_ptr<TemperatureTimeRule> temperature_time_rule_ptr;
 };
 
 /**
- * @brief Factory function to build a thermal system.
- * @tparam dim Spatial dimension.
- * @tparam temp_order Order of the temperature basis.
- * @tparam TemperatureTimeRule Time integration rule type (must have num_states == 2).
- * @tparam parameter_space Finite element spaces for optional parameters.
- * @param mesh The mesh.
- * @param solver The coupled system solver.
- * @param temp_rule The time integration rule for temperature.
- * @param options System creation options.
- * @param parameter_types Parameter field types.
- * @return ThermalSystem with all components initialized.
+ * @brief Register all thermal fields into a FieldStore.
+ *
+ * Phase 1 of the two-phase factory. Safe to call before other physics have registered their
+ * fields; weak form construction is deferred to buildThermalSystemFromStore.
  */
 template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
-std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>> buildThermalSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, TemperatureTimeRule temp_rule,
-    ThermalOptions<dim, temp_order, TemperatureTimeRule, parameter_space...> options,
+ThermalFieldInfo<dim, temp_order, TemperatureTimeRule, parameter_space...> registerThermalFields(
+    std::shared_ptr<FieldStore> field_store, TemperatureTimeRule temp_rule,
     FieldType<parameter_space>... parameter_types)
 {
-  auto field_store = std::make_shared<FieldStore>(mesh, 100, options.prepend_name);
-
   FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-  field_store->addShapeDisp(shape_disp_type);
+  if (!field_store->hasField(shape_disp_type.name)) {
+    field_store->addShapeDisp(shape_disp_type);
+  }
 
-  auto temperature_time_rule = std::make_shared<TemperatureTimeRule>(temp_rule);
+  auto temperature_time_rule_ptr = std::make_shared<TemperatureTimeRule>(temp_rule);
   FieldType<H1<temp_order>> temperature_type("temperature_solve_state");
-  auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule);
+  auto temperature_bc = field_store->addIndependent(temperature_type, temperature_time_rule_ptr);
   auto temperature_old_type =
       field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, "temperature");
 
@@ -193,21 +202,76 @@ std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_sp
   };
   (prefix_param(parameter_types), ...);
 
-  using SystemType = ThermalSystem<dim, temp_order, TemperatureTimeRule, parameter_space...>;
+  return {field_store,        temperature_type,          temperature_old_type,
+          std::make_tuple(parameter_types...), temperature_bc, temperature_time_rule_ptr};
+}
+
+/**
+ * @brief Build a ThermalSystem from an already-populated FieldStore.
+ *
+ * Phase 2 of the two-phase factory. Constructs all weak forms using fields already registered
+ * in the store (including any coupling fields from other physics).
+ *
+ * @tparam Coupling  CouplingSpec listing fields borrowed from other physics (leading tail positions).
+ */
+template <int dim, int temp_order, typename TemperatureTimeRule, typename Coupling, typename... parameter_space>
+std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, Coupling, parameter_space...>>
+buildThermalSystemFromStore(ThermalFieldInfo<dim, temp_order, TemperatureTimeRule, parameter_space...> info,
+                            std::shared_ptr<SystemSolver> solver,
+                            const ThermalOptions<dim, temp_order, TemperatureTimeRule, parameter_space...>& /*options*/,
+                            const Coupling& coupling)
+{
+  auto& field_store = info.field_store;
+  auto& temperature_type = info.temperature_type;
+  auto& temperature_old_type = info.temperature_old_type;
+  auto parameter_types = info.parameter_types;
+  auto& temperature_bc = info.temperature_bc;
+  auto& temperature_time_rule_ptr = info.temperature_time_rule_ptr;
+
+  using SystemType = ThermalSystem<dim, temp_order, TemperatureTimeRule, Coupling, parameter_space...>;
 
   std::string thermal_flux_name = field_store->prefix("thermal_flux");
-  auto thermal_weak_form = std::make_shared<typename SystemType::ThermalWeakFormType>(
-      thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
-      field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
-                                parameter_types...));
+  auto thermal_weak_form = std::apply(
+      [&](auto&... params) {
+        return std::apply(
+            [&](auto&... cfs) {
+              return std::make_shared<typename SystemType::ThermalWeakFormType>(
+                  thermal_flux_name, field_store->getMesh(),
+                  field_store->getField(temperature_type.name).get()->space(),
+                  field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type,
+                                            temperature_old_type, cfs..., params...));
+            },
+            coupling.fields);
+      },
+      parameter_types);
 
   auto sys =
       std::make_shared<SystemType>(field_store, solver, std::vector<std::shared_ptr<WeakForm>>{thermal_weak_form});
   sys->temperature_bc = temperature_bc;
-  sys->temperature_time_rule = temperature_time_rule;
+  sys->temperature_time_rule = temperature_time_rule_ptr;
   sys->thermal_weak_form = thermal_weak_form;
 
   return sys;
+}
+
+/**
+ * @brief Standalone factory — allocates its own FieldStore and builds the full system.
+ *
+ * Thin wrapper around registerThermalFields + buildThermalSystemFromStore.
+ * Existing call sites are unchanged.
+ */
+template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
+std::shared_ptr<ThermalSystem<dim, temp_order, TemperatureTimeRule, CouplingSpec<>, parameter_space...>>
+buildThermalSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, TemperatureTimeRule temp_rule,
+                   ThermalOptions<dim, temp_order, TemperatureTimeRule, parameter_space...> options,
+                   FieldType<parameter_space>... parameter_types)
+{
+  auto field_store = options.shared_field_store
+                         ? options.shared_field_store
+                         : std::make_shared<FieldStore>(mesh, 100, options.prepend_name);
+  auto info = registerThermalFields<dim, temp_order>(field_store, temp_rule, parameter_types...);
+  return buildThermalSystemFromStore<dim, temp_order, TemperatureTimeRule, CouplingSpec<>>(info, solver, options,
+                                                                                           CouplingSpec<>{});
 }
 
 }  // namespace smith
