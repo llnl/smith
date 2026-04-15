@@ -52,7 +52,7 @@ class Tribol(CachedCMakePackage, CudaPackage, ROCmPackage):
     # SMITH EDIT START
     # Note: We add a number to the end of the real version number to indicate that we have
     #  moved forward past the release. Increment the last number when updating the commit sha.
-    version("0.1.0.26", commit="9a3d05420b410389dab928e22ee5510981eb6e40", submodules=True, preferred=True)
+    version("0.1.0.26", commit="48a9dd6c7dba8efd690768f2ce3437e52487f662", submodules=True, preferred=True)
     # SMITH EDIT END
 
     # -----------------------------------------------------------------------
