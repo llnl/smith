@@ -12,6 +12,10 @@ if (ENABLE_HIP)
     enable_language(HIP)
 endif()
 
+if (ENABLE_HIP AND SMITH_STRUMPACK_DIR)
+    set(ENABLE_FORTRAN ON CACHE BOOL "")
+endif()
+
 include(CMakeFindDependencyMacro)
 find_dependency(smith REQUIRED NO_DEFAULT_PATH PATHS "${SMITH_DIR}/lib/cmake")
 
