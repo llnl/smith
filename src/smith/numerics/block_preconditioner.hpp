@@ -8,42 +8,6 @@
 namespace smith {
 
 /**
-<<<<<<< HEAD
- * @brief Combine a solver with a (stored) preconditioner.
- *
- * Utility wrapper that keeps a preconditioner alive alongside a solver.
- */
-class SolverWithPreconditioner : public mfem::Solver {
- public:
-  /**
-   * @brief Construct a solver wrapper.
-   *
-   * @param solver The solver to apply in Mult().
-   * @param preconditioner Preconditioner object to keep alive.
-   */
-  SolverWithPreconditioner(std::unique_ptr<mfem::Solver> solver, std::unique_ptr<mfem::Solver> preconditioner)
-      : solver_(std::move(solver)), preconditioner_(std::move(preconditioner))
-  {
-  }
-
-  /// Apply the wrapped solver.
-  virtual void Mult(const mfem::Vector& in, mfem::Vector& out) const { solver_->Mult(in, out); }
-
-  /// Set the operator on the wrapped solver.
-  virtual void SetOperator(const mfem::Operator& op)
-  {
-    height = op.Height();
-    width = op.Width();
-    solver_->SetOperator(op);
-  }
-
-  virtual ~SolverWithPreconditioner() {}
-
- private:
-  std::unique_ptr<mfem::Solver> solver_;
-  std::unique_ptr<mfem::Solver> preconditioner_;
-};
-=======
  * @brief Optional override for a diagonal block operator.
  *
  * The integer is the block index i and the operator replaces the Jacobian block
@@ -53,7 +17,6 @@ class SolverWithPreconditioner : public mfem::Solver {
  * Ownership of the operator is transferred to the preconditioner.
  */
 using BlockOverride = std::pair<int, std::unique_ptr<const mfem::Operator>>;
->>>>>>> develop
 
 /**
  * @class BlockDiagonalPreconditioner
@@ -74,12 +37,8 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
    * @param overrides Optional list of (block index, operator) pairs used in place
    *        of the corresponding Jacobian diagonal block.
    */
-<<<<<<< HEAD
-  BlockDiagonalPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers);
-=======
   BlockDiagonalPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
                               std::vector<BlockOverride> overrides = {});
->>>>>>> develop
 
   /**
    * @brief The action of the precondition on the block vector (b_1, ..., b_n)
@@ -149,14 +108,9 @@ class BlockTriangularPreconditioner : public mfem::Solver {
    * @param overrides Optional list of (block index, operator) pairs used in place
    *        of the corresponding Jacobian diagonal block.
    */
-<<<<<<< HEAD
-  BlockTriangularPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
-                                BlockTriangularType type = BlockTriangularType::Lower);
-=======
   BlockTriangularPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                 BlockTriangularType type = BlockTriangularType::Lower,
                                 std::vector<BlockOverride> overrides = {});
->>>>>>> develop
 
   /**
    * @brief The action of the precondition on the block vector (b_1, ..., b_n)
@@ -255,15 +209,10 @@ class BlockSchurPreconditioner : public mfem::Solver {
    *        0 overrides $A_{11}$ and index 1 provides a custom Schur operator when
    *        approxType is SchurApproxType::Custom.
    */
-<<<<<<< HEAD
-  BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
-                           BlockSchurType type = BlockSchurType::Diagonal);
-=======
   BlockSchurPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
                            BlockSchurType type = BlockSchurType::Diagonal,
                            SchurApproxType approxType = SchurApproxType::DiagInv,
                            std::vector<BlockOverride> overrides = {});
->>>>>>> develop
 
   /**
    * @brief The action of the precondition on the block vector (b_1, b_2)

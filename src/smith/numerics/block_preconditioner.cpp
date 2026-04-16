@@ -11,11 +11,6 @@
 
 namespace smith {
 
-<<<<<<< HEAD
-BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers)
-    : num_blocks_(static_cast<int>(solvers.size())), block_jacobian_(nullptr), mfem_solvers_(std::move(solvers))
-{
-=======
 namespace {
 
 void applyOverrides(int num_blocks, std::vector<std::unique_ptr<const mfem::Operator>>& block_op_overrides,
@@ -55,7 +50,6 @@ BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(mfem::Array<int>& offse
                 "Number of solvers must match number of blocks");
 
   applyOverrides(num_blocks_, block_op_overrides_, std::move(overrides));
->>>>>>> develop
 }
 
 void BlockDiagonalPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) const { solver_diag_->Mult(in, out); }
@@ -101,30 +95,21 @@ void BlockDiagonalPreconditioner::SetOperator(const mfem::Operator& jacobian)
 
 BlockDiagonalPreconditioner::~BlockDiagonalPreconditioner() {}
 
-<<<<<<< HEAD
-BlockTriangularPreconditioner::BlockTriangularPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
-                                                             BlockTriangularType type)
-    : num_blocks_(static_cast<int>(solvers.size())),
-=======
 BlockTriangularPreconditioner::BlockTriangularPreconditioner(mfem::Array<int>& offsets,
                                                              std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                                              BlockTriangularType type,
                                                              std::vector<BlockOverride> overrides)
     : block_offsets_(offsets),
       num_blocks_(offsets.Size() - 1),
->>>>>>> develop
       block_jacobian_(nullptr),
       mfem_solvers_(std::move(solvers)),
       type_(type),
       block_op_overrides_(static_cast<size_t>(num_blocks_))
 {
-<<<<<<< HEAD
-=======
   SLIC_ERROR_IF(mfem_solvers_.size() != static_cast<size_t>(num_blocks_),
                 "Number of solvers must match number of blocks");
 
   applyOverrides(num_blocks_, block_op_overrides_, std::move(overrides));
->>>>>>> develop
 }
 
 void BlockTriangularPreconditioner::LowerSweep(const mfem::Vector& in, mfem::Vector& out) const
@@ -267,12 +252,6 @@ void BlockTriangularPreconditioner::SetOperator(const mfem::Operator& jacobian)
 
 BlockTriangularPreconditioner::~BlockTriangularPreconditioner() {}
 
-<<<<<<< HEAD
-BlockSchurPreconditioner::BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
-                                                   BlockSchurType type)
-    : block_jacobian_(nullptr), mfem_solvers_(std::move(solvers)), type_(type)
-{
-=======
 BlockSchurPreconditioner::BlockSchurPreconditioner(mfem::Array<int>& offsets,
                                                    std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                                    BlockSchurType type, SchurApproxType approxType,
@@ -293,7 +272,6 @@ BlockSchurPreconditioner::BlockSchurPreconditioner(mfem::Array<int>& offsets,
     throw std::invalid_argument(
         "SchurApproxType::Custom requires an override operator for block index 1 (custom Schur operator)");
   }
->>>>>>> develop
 }
 
 void BlockSchurPreconditioner::LowerBlock(const mfem::Vector& in, mfem::Vector& out) const
