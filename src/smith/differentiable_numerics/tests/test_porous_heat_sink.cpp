@@ -39,7 +39,9 @@ enum class BlockPrecondType
   SchurLower,
   SchurUpper,
   SchurDiag,
-  SchurFull
+  SchurFull,
+  SchurFullA22,
+  SchurFullCustom
 };
 
 struct BlockTestParams {
@@ -78,6 +80,10 @@ std::string BlockParamNameGenerator(const ::testing::TestParamInfo<BlockTestPara
         return "SchurDiag";
       case BlockPrecondType::SchurFull:
         return "SchurFull";
+      case BlockPrecondType::SchurFullA22:
+        return "SchurFullA22";
+      case BlockPrecondType::SchurFullCustom:
+        return "SchurFullCustom";
     }
     return "Unknown";
   };
@@ -235,6 +241,18 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
     linear_options.sub_block_linear_solver_options.push_back(amg_solver_options);
   }
 
+  std::unique_ptr<mfem::Solver> diff_precond;
+
+  // Need these here for the custom operator
+  auto time = graph->create_state<double, double>(0.0);
+  auto dt = graph->create_state<double, double>(0.025);
+  size_t cycle = 0;
+  std::vector<smith::FieldState> params;
+  auto& T1_params = params;
+  auto& T2_params = params;
+  std::vector<FieldState> T1_arguments{T1, T2, gamma};
+  std::vector<FieldState> T2_arguments{T1, T2, gamma};
+
   switch (test_params.precond_type) {
     case BlockPrecondType::Diagonal:
       linear_options.preconditioner = smith::Preconditioner::BlockDiagonal;
@@ -260,6 +278,38 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
     case BlockPrecondType::SchurFull:
       linear_options.preconditioner = smith::Preconditioner::BlockSchurFull;
       break;
+    case BlockPrecondType::SchurFullA22:
+      diff_precond = std::make_unique<smith::BlockSchurPreconditioner>(
+          block_offsets_, std::move(solvers), smith::BlockSchurType::Full, smith::SchurApproxType::A22Only);
+      break;
+    case BlockPrecondType::SchurFullCustom:
+      std::vector<double> jacobian_weights{0.0, 1.0, 0.0};
+
+      std::vector<smith::ConstFieldPtr> T2_field_ptrs;
+      T2_field_ptrs.reserve(T2_arguments.size());
+      for (const auto& f : T2_arguments) {
+        T2_field_ptrs.push_back(f.get().get());  // FieldState -> shared_ptr -> raw ptr
+      }
+
+      auto S_approx = T2_form.jacobian(smith::TimeInfo(time.get(), dt.get(), cycle), shape_disp.get().get(),
+                                       T2_field_ptrs, jacobian_weights);
+
+      // Match block_solve's BC elimination on the (1,1) block (rows+cols).
+      {
+        const auto ess_tdofs = T2_bc_manager->allEssentialTrueDofs();
+        mfem::HypreParMatrix* eliminated_entries = S_approx->EliminateRowsCols(ess_tdofs);
+        delete eliminated_entries;
+      }
+
+      std::vector<BlockOverride> overrides;
+      overrides.emplace_back(1,
+                             std::unique_ptr<const mfem::Operator>(std::move(S_approx))  // transfer ownership
+      );
+
+      diff_precond = std::make_unique<smith::BlockSchurPreconditioner>(
+          block_offsets_, std::move(solvers), smith::BlockSchurType::Full, smith::SchurApproxType::Custom,
+          std::move(overrides));
+      break;
   }
 
   smith::NonlinearSolverOptions nonlin_opts;
@@ -271,14 +321,6 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
 
   auto nonlinear_block_solver = smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh);
 
-  auto time = graph->create_state<double, double>(0.0);
-  auto dt = graph->create_state<double, double>(0.025);
-  size_t cycle = 0;
-  std::vector<smith::FieldState> params;
-  auto& T1_params = params;
-  auto& T2_params = params;
-  std::vector<FieldState> T1_arguments{T1, T2, gamma};
-  std::vector<FieldState> T2_arguments{T1, T2, gamma};
   auto sols = block_solve({&T1_form, &T2_form}, {{0, 1}, {0, 1}}, shape_disp, {T1_arguments, T2_arguments},
                           {T1_params, T2_params}, smith::TimeInfo(time.get(), dt.get(), cycle),
                           nonlinear_block_solver.get(), {T1_bc_manager.get(), T2_bc_manager.get()});
@@ -319,7 +361,9 @@ INSTANTIATE_TEST_SUITE_P(BlockPrecondSweep, BlockPreconditionerTest,
                              BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurLower},
                              BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurUpper},
                              BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurDiag},
-                             BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurFull}),
+                             BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurFull},
+                             BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurFullA22},
+                             BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurFullCustom}),
                          BlockParamNameGenerator);
 
 int main(int argc, char* argv[])

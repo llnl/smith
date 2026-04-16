@@ -237,12 +237,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     // error even if ContactData rejects it later.
     SLIC_ERROR_ROOT_IF(
         contact_interaction_forces_.find(interaction_id) != contact_interaction_forces_.end(),
-        axom::fmt::format("Contact interaction id {} already exists for physics module '{}'.", interaction_id, name_));
+        std::format("Contact interaction id {} already exists for physics module '{}'.", interaction_id, name_));
 
     // Register with Tribol via ContactData (includes global uniqueness check).
     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts);
 
-    const auto interaction_force_name = detail::addPrefix(name_, axom::fmt::format("contact_force_{}", interaction_id));
+    const auto interaction_force_name = detail::addPrefix(name_, std::format("contact_force_{}", interaction_id));
     auto interaction_force_dual =
         std::make_unique<FiniteElementDual>(StateManager::newDual(displacement_.space(), interaction_force_name));
     *interaction_force_dual = 0.0;
@@ -250,7 +250,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     contact_interaction_forces_.emplace(interaction_id, std::move(interaction_force_dual));
 
     const auto force_adjoint_bcs_name =
-        detail::addPrefix(name_, axom::fmt::format("contact_force_adjoint_bcs_{}", interaction_id));
+        detail::addPrefix(name_, std::format("contact_force_adjoint_bcs_{}", interaction_id));
     auto force_adjoint_bcs = std::make_unique<FiniteElementState>(displacement_.space(), force_adjoint_bcs_name);
     *force_adjoint_bcs = 0.0;
     this->dual_adjoints_.push_back(force_adjoint_bcs.get());
@@ -264,7 +264,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     dual_names.push_back("contact_forces");
 #ifdef SMITH_USE_TRIBOL
     for (const auto& interaction : contact_.getContactInteractions()) {
-      dual_names.push_back(axom::fmt::format("contact_force_{}", interaction.getInteractionId()));
+      dual_names.push_back(std::format("contact_force_{}", interaction.getInteractionId()));
     }
 #endif
     return dual_names;
@@ -349,7 +349,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
         return interaction;
       }
     }
-    SLIC_ERROR_ROOT(axom::fmt::format("No contact interaction found with interaction_id={}", interaction_id));
+    SLIC_ERROR_ROOT(std::format("No contact interaction found with interaction_id={}", interaction_id));
     return contact_.getContactInteractions().front();
   }
 #endif
@@ -371,12 +371,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
       const auto interaction_id = parseContactInteractionForceId(name);
       SLIC_ERROR_ROOT_IF(!interaction_id.has_value(),
-                         axom::fmt::format("Unknown dual adjoint BC '{}' for SolidMechanicsContact.", name));
+                         std::format("Unknown dual adjoint BC '{}' for SolidMechanicsContact.", name));
 
       auto it = contact_interaction_force_adjoint_bcs_.find(*interaction_id);
-      SLIC_ERROR_ROOT_IF(
-          it == contact_interaction_force_adjoint_bcs_.end(),
-          axom::fmt::format("No contact force adjoint BC registered for interaction_id={}", *interaction_id));
+      SLIC_ERROR_ROOT_IF(it == contact_interaction_force_adjoint_bcs_.end(),
+                         std::format("No contact force adjoint BC registered for interaction_id={}", *interaction_id));
 
       *it->second = bc;
     }

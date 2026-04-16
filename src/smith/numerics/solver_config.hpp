@@ -16,7 +16,7 @@
 #include <vector>
 
 #include "mfem.hpp"
-#include "axom/fmt.hpp"
+#include "smith/infrastructure/format.hpp"
 
 namespace smith {
 
@@ -507,20 +507,21 @@ struct NonlinearSolverOptions {
 
 }  // namespace smith
 
-// fmt support for smith::NonlinearSolver
-namespace axom::fmt {
+// std::format support for Smith solver enums
+namespace std {
 template <>
-struct formatter<smith::NonlinearSolver> : ostream_formatter {};
+/// @brief Formats `smith::NonlinearSolver` values with stream output.
+struct formatter<smith::NonlinearSolver> : smith::format::OstreamFormatter {};
 
-// fmt support for smith::LinearSolver
 template <>
-struct formatter<smith::LinearSolver> : ostream_formatter {};
+/// @brief Formats `smith::LinearSolver` values with stream output.
+struct formatter<smith::LinearSolver> : smith::format::OstreamFormatter {};
 
-// fmt support for smith::Preconditioner
 template <>
-struct formatter<smith::Preconditioner> : ostream_formatter {};
+/// @brief Formats `smith::Preconditioner` values with stream output.
+struct formatter<smith::Preconditioner> : smith::format::OstreamFormatter {};
 
-// fmt support for smith::PetscPCType
 template <>
-struct formatter<smith::PetscPCType> : ostream_formatter {};
-}  // namespace axom::fmt
+/// @brief Formats `smith::PetscPCType` values with stream output.
+struct formatter<smith::PetscPCType> : smith::format::OstreamFormatter {};
+}  // namespace std
