@@ -59,7 +59,7 @@ struct tensor<T, m, n...> {
   SMITH_HOST_DEVICE constexpr const auto& operator[](int i) const { return data[i]; }
 
   /// the type of data
-  typename InnerType = tensor<T, n...>;
+  using InnerType = tensor<T, n...>;
 
   InnerType data[m];
 };
@@ -95,7 +95,7 @@ struct tensor<T, m> {
   SMITH_HOST_DEVICE constexpr static int outerSize() { return m; }
 
   /// the type of data
-  typename InnerType = T;
+  using InnerType = T;
 
   InnerType data[m];
 };
