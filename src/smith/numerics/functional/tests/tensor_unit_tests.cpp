@@ -35,13 +35,13 @@ TEST(Tensor, BasicOperations)
   tensor<double, 3> u = {1, 2, 3};
   tensor<double, 4> v = {4, 5, 6, 7};
 
-  static_assert(tensor<double, 3>::outerSize() == 3, "Outer size is wrong");
-  static_assert(tensor<double, 4>::outerSize() == 4, "Outer size is wrong");
+  static_assert(tensor<double, 3>::outer_size() == 3, "Outer size is wrong");
+  static_assert(tensor<double, 4>::outer_size() == 4, "Outer size is wrong");
   static_assert(tensor<double, 1>::order() == 0, "Incorrect tensor order");
   static_assert(tensor<double, 2>::order() == 1, "Incorrect tensor order");
 
   tensor<double, 3, 3> A = make_tensor<3, 3>([](int i, int j) { return i + 2.0 * j; });
-  static_assert(tensor<double, 3, 3>::outerSize() == 3, "Outer size is wrong");
+  static_assert(tensor<double, 3, 3>::outer_size() == 3, "Outer size is wrong");
   static_assert(tensor<double, 3, 3>::order() == 2, "Incorrect tensor order");
   static_assert(tensor<double, 3, 1>::order() == 2, "Incorrect tensor order");
   static_assert(tensor<double, 3, 4, 5>::order() == 3, "Incorrect tensor order");
@@ -71,8 +71,8 @@ TEST(Tensor, BasicOperations)
   EXPECT_LT(abs(dot(u, A, u) - uAu), tolerance);
 
   tensor<double, 3, 4> B = make_tensor<3, 4>([](auto i, auto j) { return 3.0 * i - j; });
-  static_assert(tensor<double, 3, 4>::outerSize() == 3, "Outer size is wrong");
-  static_assert(tensor<double, 3, 4>::InnerType::outerSize() == 4, "Outer size of inner type is wrong");
+  static_assert(tensor<double, 3, 4>::outer_size() == 3, "Outer size is wrong");
+  static_assert(tensor<double, 3, 4>::inner_type::outer_size() == 4, "Outer size of inner type is wrong");
 
   double uBv = 300;
   EXPECT_LT(abs(dot(u, B, v) - uBv), tolerance);

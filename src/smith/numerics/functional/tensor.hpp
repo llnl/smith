@@ -52,25 +52,25 @@ struct tensor<T, m, n...> {
   }
 
   /// return the number of elements in data
-  SMITH_HOST_DEVICE constexpr static int outerSize() { return m; }
+  SMITH_HOST_DEVICE constexpr static int outer_size() { return m; }
 
   SMITH_HOST_DEVICE constexpr auto& operator[](int i) { return data[i]; }
   SMITH_HOST_DEVICE constexpr const auto& operator[](int i) const { return data[i]; }
 
   /// the type of data
-  using InnerType = tensor<T, n...>;
+  using inner_type = tensor<T, n...>;
 
   /// return the order of the tensor
   SMITH_HOST_DEVICE constexpr static int order()
   {
-    if constexpr (InnerType::order() == 0) {
+    if constexpr (inner_type::order() == 0) {
       return 2;
     } else {
-      return InnerType::order() + 1;
+      return inner_type::order() + 1;
     }
   }
 
-  InnerType data[m];
+  inner_type data[m];
 };
 
 template <typename T, int m>
@@ -101,7 +101,7 @@ struct tensor<T, m> {
   }
 
   /// return the number of elements in data
-  SMITH_HOST_DEVICE constexpr static int outerSize() { return m; }
+  SMITH_HOST_DEVICE constexpr static int outer_size() { return m; }
 
   /// return the order of the tensor
   SMITH_HOST_DEVICE constexpr static int order()
@@ -114,9 +114,9 @@ struct tensor<T, m> {
   }
 
   /// the type of data
-  using InnerType = T;
+  using inner_type = T;
 
-  InnerType data[m];
+  inner_type data[m];
 };
 /// @endcond
 
