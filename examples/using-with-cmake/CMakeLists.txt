@@ -12,10 +12,6 @@ if (ENABLE_HIP)
     enable_language(HIP)
 endif()
 
-if (ENABLE_HIP AND SMITH_STRUMPACK_DIR)
-    set(ENABLE_FORTRAN ON CACHE BOOL "")
-endif()
-
 include(CMakeFindDependencyMacro)
 find_dependency(smith REQUIRED NO_DEFAULT_PATH PATHS "${SMITH_DIR}/lib/cmake")
 
@@ -64,5 +60,5 @@ if (ENABLE_HIP)
 endif()
 
 enable_testing()
-add_test(NAME    smith_example 
+add_test(NAME    smith_example
          COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1 ./smith_example)
