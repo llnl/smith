@@ -179,10 +179,10 @@ TEST(BlockDiagonal, ThrowsOnWrongNumberOfSolvers)
 
   mfem::BlockOperator A(offsets);
   // Set diagonal blocks so BlockDiagonalPreconditioner can query them.
-  auto A11 = makeScaledIdentity(2, 1.0);
-  auto A22 = makeScaledIdentity(2, 1.0);
-  A.SetBlock(0, 0, A11.get());
-  A.SetBlock(1, 1, A22.get());
+  auto A11 = makeHypreScaledIdentity(2, 1.0);
+  auto A22 = makeHypreScaledIdentity(2, 1.0);
+  A.SetBlock(0, 0, A11.A.get());
+  A.SetBlock(1, 1, A22.A.get());
   smith::BlockDiagonalPreconditioner P(std::move(solvers));
   P.SetOperator(A);
 
@@ -510,8 +510,7 @@ TEST(BlockSchur, ExactSolveforDiagonals)
   solvers.push_back(std::make_unique<HypreExactDiagonalSolver>());
   solvers.push_back(std::make_unique<HypreExactDiagonalSolver>());
 
-  smith::BlockSchurPreconditioner P(offsets, std::move(solvers), smith::BlockSchurType::Full,
-                                    smith::SchurApproxType::DiagInv);
+  smith::BlockSchurPreconditioner P(std::move(solvers), smith::BlockSchurType::Full, smith::SchurApproxType::DiagInv);
   P.SetOperator(A);
 
   Vector b(4), x(4), Ax(4);

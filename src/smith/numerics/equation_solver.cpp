@@ -26,6 +26,28 @@ namespace smith {
 
 namespace {
 
+class SolverWithPreconditioner : public mfem::Solver {
+ public:
+  SolverWithPreconditioner(std::unique_ptr<mfem::Solver> linear_solver, std::unique_ptr<mfem::Solver> preconditioner)
+      : linear_solver_(std::move(linear_solver)), preconditioner_(std::move(preconditioner))
+  {
+    SLIC_ERROR_IF(!linear_solver_, "SolverWithPreconditioner requires a non-null linear solver");
+  }
+
+  void SetOperator(const mfem::Operator& op) override
+  {
+    height = op.Height();
+    width = op.Width();
+    linear_solver_->SetOperator(op);
+  }
+
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override { linear_solver_->Mult(x, y); }
+
+ private:
+  std::unique_ptr<mfem::Solver> linear_solver_;
+  std::unique_ptr<mfem::Solver> preconditioner_;
+};
+
 bool preconditionerSupportsBlockOperator(Preconditioner preconditioner)
 {
   switch (preconditioner) {

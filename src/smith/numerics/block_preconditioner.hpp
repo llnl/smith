@@ -37,7 +37,7 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
    * @param overrides Optional list of (block index, operator) pairs used in place
    *        of the corresponding Jacobian diagonal block.
    */
-  BlockDiagonalPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
+  BlockDiagonalPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
                               std::vector<BlockOverride> overrides = {});
 
   /**
@@ -58,7 +58,7 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
   virtual ~BlockDiagonalPreconditioner();
 
  private:
-  // Offsets for extracting block vector segments
+  // Offsets for extracting block vector segments, populated by SetOperator().
   mfem::Array<int> block_offsets_;
 
   // Number of blocks
@@ -108,7 +108,7 @@ class BlockTriangularPreconditioner : public mfem::Solver {
    * @param overrides Optional list of (block index, operator) pairs used in place
    *        of the corresponding Jacobian diagonal block.
    */
-  BlockTriangularPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
+  BlockTriangularPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                 BlockTriangularType type = BlockTriangularType::Lower,
                                 std::vector<BlockOverride> overrides = {});
 
@@ -130,7 +130,7 @@ class BlockTriangularPreconditioner : public mfem::Solver {
   virtual ~BlockTriangularPreconditioner();
 
  private:
-  // Offsets for extracting block vector segments
+  // Offsets for extracting block vector segments, populated by SetOperator().
   mfem::Array<int> block_offsets_;
 
   // Number of blocks
@@ -209,7 +209,7 @@ class BlockSchurPreconditioner : public mfem::Solver {
    *        0 overrides $A_{11}$ and index 1 provides a custom Schur operator when
    *        approxType is SchurApproxType::Custom.
    */
-  BlockSchurPreconditioner(mfem::Array<int>& offsets, std::vector<std::unique_ptr<mfem::Solver>> solvers,
+  BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
                            BlockSchurType type = BlockSchurType::Diagonal,
                            SchurApproxType approxType = SchurApproxType::DiagInv,
                            std::vector<BlockOverride> overrides = {});
@@ -234,7 +234,7 @@ class BlockSchurPreconditioner : public mfem::Solver {
   virtual ~BlockSchurPreconditioner();
 
  private:
-  // Offsets for extracting block vector segments
+  // Offsets for extracting block vector segments, populated by SetOperator().
   mfem::Array<int> block_offsets_;
 
   // Jacobian view for block access
