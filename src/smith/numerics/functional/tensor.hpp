@@ -51,10 +51,17 @@ struct tensor<T, m, n...> {
     return data[i](jklm...);
   }
 
+  /// return the number of elements in data
+  SMITH_HOST_DEVICE constexpr static int outerSize() { return m; }
+
+
   SMITH_HOST_DEVICE constexpr auto& operator[](int i) { return data[i]; }
   SMITH_HOST_DEVICE constexpr const auto& operator[](int i) const { return data[i]; }
 
-  tensor<T, n...> data[m];
+  /// the type of data
+  typename InnerType = tensor<T, n...>;
+
+  InnerType data[m];
 };
 
 template <typename T, int m>
@@ -84,7 +91,13 @@ struct tensor<T, m> {
     return data[0];
   }
 
-  T data[m];
+  /// return the number of elements in data
+  SMITH_HOST_DEVICE constexpr static int outerSize() { return m; }
+
+  /// the type of data
+  typename InnerType = T;
+
+  InnerType data[m];
 };
 /// @endcond
 
