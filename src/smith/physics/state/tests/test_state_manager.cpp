@@ -144,7 +144,7 @@ TEST(state_manager, QuadratureData_Restart)
   // Save to disk and simulate a restart
   const int cycle = 1;
   const double time_saved = 1.5;
-  SLIC_INFO(axom::fmt::format("Saving mesh restart '{0}' at cycle '{1}'", mesh_tag, cycle));
+  SLIC_INFO(std::format("Saving mesh restart '{0}' at cycle '{1}'", mesh_tag, cycle));
   StateManager::save(time_saved, cycle, mesh_tag);
 
   // Reset StateManager then load from disk

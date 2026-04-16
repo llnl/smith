@@ -50,10 +50,7 @@ using TimeRuleParams =
  * @brief Base struct for physics systems containing common members and helper functions.
  */
 struct SystemBase {
-  // --- equations ---
   std::vector<std::shared_ptr<WeakForm>> weak_forms;
-
-  // --- infrastructure ---
   std::shared_ptr<FieldStore> field_store;  ///< Field store managing the system's fields.
   std::shared_ptr<SystemSolver> solver;     ///< The solver for the system.
 
@@ -79,9 +76,10 @@ struct SystemBase {
    * @return std::vector<ReactionState> Computed reactions across all weak_forms.
    */
   virtual std::vector<ReactionState> computeReactions(const TimeInfo& time_info,
-                                                      const std::vector<FieldState>& states_for_reactions) const;
+                                                      const std::vector<FieldState>& states_for_reactions) const; // MRT, why is states_for_reactions needed
 };
 
+// MRT: rename to makeSystem
 inline std::shared_ptr<SystemBase> makeSubSystem(std::shared_ptr<FieldStore> field_store,
                                                  std::shared_ptr<SystemSolver> solver,
                                                  std::vector<std::shared_ptr<WeakForm>> weak_forms)

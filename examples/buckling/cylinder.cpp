@@ -24,10 +24,11 @@
  * @endcode
  */
 
+#include <cmath>
+#include <format>
+#include <memory>
 #include <set>
 #include <string>
-#include <cmath>
-#include <memory>
 #include <utility>
 
 #include "axom/slic.hpp"
@@ -200,12 +201,12 @@ int main(int argc, char* argv[])
   solid_solver->outputStateToDisk(paraview_name);
 
   // Perform the quasi-static solve
-  SLIC_INFO_ROOT(axom::fmt::format("Running hollow cylinder bucking example with {} displacement dofs",
-                                   solid_solver->displacement().GlobalSize()));
+  SLIC_INFO_ROOT(std::format("Running hollow cylinder bucking example with {} displacement dofs",
+                             solid_solver->displacement().GlobalSize()));
   SLIC_INFO_ROOT("Starting pseudo-timestepping.");
   smith::logger::flush();
   while (solid_solver->time() < 1.0 && std::abs(solid_solver->time() - 1) > DBL_EPSILON) {
-    SLIC_INFO_ROOT(axom::fmt::format("time = {} (out of 1.0)", solid_solver->time()));
+    SLIC_INFO_ROOT(std::format("time = {} (out of 1.0)", solid_solver->time()));
     smith::logger::flush();
 
     // Refine dt as contact starts
@@ -215,7 +216,7 @@ int main(int argc, char* argv[])
     // Output the sidre-based plot files
     solid_solver->outputStateToDisk(paraview_name);
   }
-  SLIC_INFO_ROOT(axom::fmt::format("final time = {}", solid_solver->time()));
+  SLIC_INFO_ROOT(std::format("final time = {}", solid_solver->time()));
 
   return 0;
 }

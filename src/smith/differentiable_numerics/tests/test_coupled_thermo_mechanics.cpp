@@ -179,23 +179,22 @@ TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionI
   auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
 
-  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
-  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
-
   SolidMechanicsOptions solid_opts;
   ThermalOptions thermal_opts;
 
-  DispRule disp_rule;
-  TempRule temp_rule;
-  auto solid_coupling_fields = registerSolidMechanicsFields<dim, displacement_order>(field_store, disp_rule, youngs_modulus);
+  QuasiStaticSecondOrderTimeIntegrationRule disp_rule;
+  BackwardEulerFirstOrderTimeIntegrationRule temp_rule;
+  auto solid_coupling_fields = registerSolidMechanicsFields<dim, displacement_order>(field_store, disp_rule);
   auto thermal_coupling_fields = registerThermalFields<dim, temperature_order>(field_store, temp_rule);
+  // auto state_var_coupling_fields = registerStateVarFields<dim, temperature_order>(field_store, None);
+  auto param_fields = registerParams(youngs_modulus);
 
-  auto [solid, solid_cz, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order>(
-      field_store, disp_rule, thermal_coupling_fields, std::make_shared<SystemSolver>(solid_block_solver), solid_opts,
-      youngs_modulus);
+  // postprocess
+  auto [solid, solid_cycle_zero, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order>(
+      field_store, disp_rule, std::make_shared<SystemSolver>(solid_block_solver), solid_opts, thermal_coupling_fields, param_fields);
 
   auto [thermal, thermal_cz, thermal_end_steps] = buildThermalSystem<dim, temperature_order>(
-      field_store, temp_rule, solid_coupling_fields, std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
+      field_store, temp_rule, std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts, solid_coupling_fields, param_fields);
 
   auto [coupled, coupled_cz] = combineSystems(solid, thermal);
 
@@ -233,42 +232,41 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
 
-  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
-  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
-
   SolidMechanicsOptions solid_opts;
   ThermalOptions thermal_opts;
 
-  DispRule disp_rule;
-  TempRule temp_rule;
-  auto solid_coupling_fields = registerSolidMechanicsFields<dim, displacement_order>(field_store, disp_rule, youngs_modulus);
-  auto thermal_coupling_fields = registerThermalFields<dim, temperature_order>(field_store, temp_rule);
+  QuasiStaticSecondOrderTimeIntegrationRule disp_rule;
+  BackwardEulerFirstOrderTimeIntegrationRule temp_rule;
+  auto param_fields = registerParameterFields(youngs_modulus);
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order>(field_store, disp_rule);
+  auto thermal_fields = registerThermalFields<dim, temperature_order>(field_store, temp_rule);
 
-  auto [solid, solid_cz, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order>(
-      field_store, disp_rule, thermal_coupling_fields, std::make_shared<SystemSolver>(solid_block_solver), solid_opts,
-      youngs_modulus);
+  auto [solid_system, solid_cycle_zero_system, solid_end_step_systems] = buildSolidMechanicsSystem<dim, displacement_order, disp_rule>(
+      std::make_shared<SystemSolver>(solid_block_solver), solid_opts, param_fields, solid_fields, thermal_fields);
 
-  auto [thermal, thermal_cz, thermal_end_steps] = buildThermalSystem<dim, temperature_order>(
-      field_store, temp_rule, solid_coupling_fields, std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
+  auto [thermal_system, thermal_cycle_zero_system, thermal_end_step_systems] = buildThermalSystem<dim, temperature_order, temp_rule, disp_rule>(
+    std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts, param_fields, thermal_fields, solid_fields);
 
-  auto [coupled, coupled_cz] = combineSystems(solid, thermal);
+  auto coupled = combineSystems(solid_system, thermal_system);
+  auto coupled_cycle_zero_system = combineSystems(solid_cycle_zero_system, thermal_cycle_zero_system);
+  auto end_step_systems = combineSystems(solid_end_step_systems, thermal_end_step_systems);
 
   GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
-  setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
+  setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh_->entireBodyName());
 
-  coupled->field_store->getParameterFields()[0].get()->setFromFieldFunction(
+  field_store->getParameterFields()[0].get()->setFromFieldFunction(
       [=](smith::tensor<double, dim>) { return 100.0; });
 
-  solid->disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
-  thermal->temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+  solid_system->setDisplacementBC(mesh_->domain("left"));
+  thermal_system->setTemperatureBC(mesh_->domain("left"));
 
-  solid->addTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto, auto) {
+  solid_system->addTraction("right", [=](double, auto X, auto, auto, auto, auto, auto temp, auto temperature_dot, auto) {
     auto traction = 0.0 * X;
     traction[0] = -0.015;
     return traction;
   });
 
-  auto physics = makeDifferentiablePhysics(coupled, "coupled_physics", coupled_cz);
+  auto physics = makeDifferentiablePhysics(coupled, "coupled_physics", coupled_cycle_zero_system, end_step_systems);
 
   // Run forward
   double dt = 1.0;

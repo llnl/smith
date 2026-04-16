@@ -56,6 +56,28 @@ class PreconditionerOnlySolver : public mfem::IterativeSolver {
   // Note: mfem::IterativeSolver already has a 'prec' member (mfem::Solver*)
 };
 
+class SolverWithPreconditioner : public mfem::Solver {
+ public:
+  SolverWithPreconditioner(std::unique_ptr<mfem::Solver> linear_solver, std::unique_ptr<mfem::Solver> preconditioner)
+      : linear_solver_(std::move(linear_solver)), preconditioner_(std::move(preconditioner))
+  {
+    SLIC_ERROR_IF(!linear_solver_, "SolverWithPreconditioner requires a non-null linear solver");
+  }
+
+  void SetOperator(const mfem::Operator& op) override
+  {
+    height = op.Height();
+    width = op.Width();
+    linear_solver_->SetOperator(op);
+  }
+
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override { linear_solver_->Mult(x, y); }
+
+ private:
+  std::unique_ptr<mfem::Solver> linear_solver_;
+  std::unique_ptr<mfem::Solver> preconditioner_;
+};
+
 bool preconditionerSupportsBlockOperator(Preconditioner preconditioner)
 {
   switch (preconditioner) {
@@ -1608,7 +1630,7 @@ smith::LinearSolverOptions FromInlet<smith::LinearSolverOptions>::operator()(con
   } else if (solver_type == "cg") {
     options.linear_solver = smith::LinearSolver::CG;
   } else {
-    std::string msg = axom::fmt::format("Unknown Linear solver type given: '{0}'", solver_type);
+    std::string msg = std::format("Unknown Linear solver type given: '{0}'", solver_type);
     SLIC_ERROR_ROOT(msg);
   }
   const std::string prec_type = config["prec_type"];
@@ -1635,7 +1657,7 @@ smith::LinearSolverOptions FromInlet<smith::LinearSolverOptions>::operator()(con
   } else if (prec_type == "AMGFContact") {
     options.preconditioner = smith::Preconditioner::AMGFContact;
   } else {
-    std::string msg = axom::fmt::format("Unknown preconditioner type given: '{0}'", prec_type);
+    std::string msg = std::format("Unknown preconditioner type given: '{0}'", prec_type);
     SLIC_ERROR_ROOT(msg);
   }
 
@@ -1659,7 +1681,7 @@ smith::NonlinearSolverOptions FromInlet<smith::NonlinearSolverOptions>::operator
   } else if (solver_type == "KINPicard") {
     options.nonlin_solver = smith::NonlinearSolver::KINPicard;
   } else {
-    SLIC_ERROR_ROOT(axom::fmt::format("Unknown nonlinear solver type given: '{0}'", solver_type));
+    SLIC_ERROR_ROOT(std::format("Unknown nonlinear solver type given: '{0}'", solver_type));
   }
   return options;
 }

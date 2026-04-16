@@ -156,8 +156,8 @@ TEST(Thermal, FiniteDifference)
     double dqoi_dconductivity = adjoint_load_form(dtemp_dconductivity);
 
     // See if these are similar
-    SLIC_INFO(axom::fmt::format("dqoi_dconductivity: {}", dqoi_dconductivity));
-    SLIC_INFO(axom::fmt::format("sensitivity: {}", sensitivity(i)));
+    SLIC_INFO(std::format("dqoi_dconductivity: {}", dqoi_dconductivity));
+    SLIC_INFO(std::format("sensitivity: {}", sensitivity(i)));
     EXPECT_NEAR((sensitivity(i) - dqoi_dconductivity) / dqoi_dconductivity, 0.0, 1.0e-3);
   }
 }
@@ -278,8 +278,8 @@ TEST(HeatTransfer, FiniteDifferenceShape)
     double dqoi_dshape = adjoint_load_form(dtemp_dshape);
 
     // See if these are similar
-    SLIC_INFO(axom::fmt::format("dqoi_dshape: {}", dqoi_dshape));
-    SLIC_INFO(axom::fmt::format("sensitivity: {}", sensitivity(i)));
+    SLIC_INFO(std::format("dqoi_dshape: {}", dqoi_dshape));
+    SLIC_INFO(std::format("sensitivity: {}", sensitivity(i)));
     EXPECT_NEAR((sensitivity(i) - dqoi_dshape) / std::max(dqoi_dshape, 1.0e-3), 0.0, 1.0e-4);
   }
 }

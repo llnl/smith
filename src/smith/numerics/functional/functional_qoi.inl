@@ -311,7 +311,7 @@ class Functional<double(trials...), exec> {
         integral.GradientMult(input_E_[which], output_E_, which);
 
         // make sure shared interior faces are integrated only once
-        if (dom.type_ == Domain::Type::InteriorFaces) {
+        if (dom.type_ == Domain::Type::InteriorBoundaryElements) {
           for (int shared_id : dom.shared_interior_face_ids_) {
             output_E_[shared_id] *= 0.5;
           }
@@ -385,7 +385,7 @@ class Functional<double(trials...), exec> {
       integral.Mult(t, input_E_, output_E_, wrt, update_qdata);
 
       // make sure shared interior faces are integrated only once
-      if (dom.type_ == Domain::Type::InteriorFaces) {
+      if (dom.type_ == Domain::Type::InteriorBoundaryElements) {
         for (int shared_id : dom.shared_interior_face_ids_) {
           output_E_[shared_id] *= 0.5;
         }

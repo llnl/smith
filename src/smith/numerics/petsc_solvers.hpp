@@ -329,6 +329,12 @@ class PetscKSPSolver : virtual public mfem::IterativeSolver, public mfem::PetscL
                  bool wrap = false, bool iter_mode = false);
 
   /**
+   * @brief Cleanup extra petsc variables (pa_, B, X)
+   *
+   */
+  ~PetscKSPSolver();
+
+  /**
    * @brief Get the MPI communicator
    * @return The MPI communicator used by the vectors and matrices in the solve
    */
