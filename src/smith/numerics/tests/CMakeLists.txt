@@ -12,6 +12,7 @@ set(numerics_serial_test_sources
     odes.cpp
     test_block_preconditioner.cpp
     test_block_preconditioner_backend.cpp
+    test_linear_solver_none.cpp
     )
 
 smith_add_tests( SOURCES       ${numerics_serial_test_sources}
