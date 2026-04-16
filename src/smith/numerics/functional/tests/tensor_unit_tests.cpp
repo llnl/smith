@@ -37,9 +37,14 @@ TEST(Tensor, BasicOperations)
 
   static_assert(tensor<double, 3>::outerSize() == 3, "Outer size is wrong");
   static_assert(tensor<double, 4>::outerSize() == 4, "Outer size is wrong");
+  static_assert(tensor<double, 1>::order() == 0, "Incorrect tensor order");
+  static_assert(tensor<double, 2>::order() == 1, "Incorrect tensor order");
 
   tensor<double, 3, 3> A = make_tensor<3, 3>([](int i, int j) { return i + 2.0 * j; });
   static_assert(tensor<double, 3, 3>::outerSize() == 3, "Outer size is wrong");
+  static_assert(tensor<double, 3, 3>::order() == 2, "Incorrect tensor order");
+  static_assert(tensor<double, 3, 1>::order() == 2, "Incorrect tensor order");
+  static_assert(tensor<double, 3, 4, 5>::order() == 3, "Incorrect tensor order");
 
   double squared_normA = 111.0;
   EXPECT_LT(abs(squared_norm(A) - squared_normA), tolerance);

@@ -61,11 +61,11 @@ struct tensor<T, m, n...> {
   using InnerType = tensor<T, n...>;
 
   /// return the order of the tensor
-  SMITH_HOST_DEVICE constexpr static int order() {
+  SMITH_HOST_DEVICE constexpr static int order()
+  {
     if constexpr (InnerType::order() == 0) {
       return 2;
-    }
-    else {
+    } else {
       return InnerType::order() + 1;
     }
   }
@@ -104,11 +104,11 @@ struct tensor<T, m> {
   SMITH_HOST_DEVICE constexpr static int outerSize() { return m; }
 
   /// return the order of the tensor
-  SMITH_HOST_DEVICE constexpr static int order() {
+  SMITH_HOST_DEVICE constexpr static int order()
+  {
     if constexpr (m == 1) {
       return 0;
-    }
-    else {
+    } else {
       return 1;
     }
   }
