@@ -63,11 +63,7 @@ struct tensor<T, m, n...> {
   /// return the order of the tensor
   SMITH_HOST_DEVICE constexpr static int order()
   {
-    if constexpr (inner_type::order() == 0) {
-      return 2;
-    } else {
-      return inner_type::order() + 1;
-    }
+    return 1 + sizeof...(n);
   }
 
   inner_type data[m];
