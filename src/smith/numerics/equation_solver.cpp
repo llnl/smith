@@ -25,6 +25,36 @@
 namespace smith {
 
 namespace {
+/**
+ * @brief Simple solver wrapper that only applies a preconditioner.
+ */
+class PreconditionerOnlySolver : public mfem::IterativeSolver {
+ public:
+  PreconditionerOnlySolver(MPI_Comm comm) : mfem::IterativeSolver(comm) {}
+
+  /// @overload
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
+  {
+    if (prec) {
+      prec->Mult(x, y);
+    } else {
+      y = x;
+    }
+  }
+
+  /// @overload
+  void SetOperator(const mfem::Operator& op) override
+  {
+    if (prec) {
+      prec->SetOperator(op);
+    }
+    width = op.Width();
+    height = op.Height();
+  }
+
+ private:
+  // Note: mfem::IterativeSolver already has a 'prec' member (mfem::Solver*)
+};
 
 class SolverWithPreconditioner : public mfem::Solver {
  public:
@@ -74,6 +104,7 @@ bool linearSolverSupportsBlockOperator(LinearSolver linear_solver)
     case LinearSolver::PetscCG:
     case LinearSolver::PetscGMRES:
 #endif
+    case LinearSolver::None:
       return true;
     default:
       return false;
@@ -1355,6 +1386,9 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
       exit(1);
       break;
 #endif
+    case LinearSolver::None:
+      iter_lin_solver = std::make_unique<PreconditionerOnlySolver>(comm);
+      break;
     default:
       SLIC_ERROR_ROOT("Linear solver type not recognized.");
       exit(1);
