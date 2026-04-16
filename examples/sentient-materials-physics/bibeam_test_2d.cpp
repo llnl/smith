@@ -218,8 +218,8 @@
    constexpr int p = 2;
 
    //============= time stepping params ================
-   double tfinal = 35;     // final time
-   double Npts = 200;       // number of time steps
+   double tfinal = 100; // 35;     // final time
+   double Npts = 300;       // number of time steps
    //=========== end time stepping params ==============
  
    // Command line arguments
@@ -268,7 +268,8 @@
  
    // Create and refine mesh
 #ifdef USING_NOTCHED_CUTOUT
-   std::string filename = SMITH_REPO_DIR "/data/meshes/bibeam_notched_120x21x1mm.g";//full_cylinder.g";
+  //  std::string filename = SMITH_REPO_DIR "/data/meshes/bibeam_notched_120x21x1mm.g";//full_cylinder.g";
+  std::string filename = SMITH_REPO_DIR "/data/meshes/bibeam_notched_120x21x1mm_3D.g";//full_cylinder.g";
 #else
    std::string filename = SMITH_REPO_DIR "/data/meshes/bibeam_120x21x1mm.g";//full_cylinder.g";
 #endif
@@ -329,7 +330,7 @@
      //simple strain rate is velocity/gauge length, so v/120
      //normalized strain rate as in the paper is v_tau1*velocity/120
      //I need edot=0.1, =>velocity=1.2?
-     double velocity = 1.2; //mm/s
+     double velocity = 0.60; //mm/s
      double val = velocity*t;
      u[1] = -val;
      return u;
@@ -346,7 +347,9 @@
    solid_solver->completeSetup();
  
    // Save initial state
-   std::string paraview_name = name + "_12mm_s_paraview";
+  //  std::string paraview_name = "sol_" + name + "_12mm_s_paraview";
+  //  std::string paraview_name = "sol_" + name + "_1p2mm_s_paraview";
+   std::string paraview_name = "sol_" + name + "_0p6mm_s_paraview";
    solid_solver->outputStateToDisk(paraview_name);
  
    // Perform the quasi-static solve
