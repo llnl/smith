@@ -40,6 +40,7 @@ set(differentiable_numerics_headers
     multiphysics_time_integrator.hpp
     solid_mechanics_system.hpp
     solid_mechanics_with_internal_vars_system.hpp
+    state_variable_system.hpp
     thermal_system.hpp
     coupling_params.hpp
     combined_system.hpp

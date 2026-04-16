@@ -9,6 +9,9 @@
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_with_internal_vars_system.hpp"
+#include "smith/differentiable_numerics/solid_mechanics_system.hpp"
+#include "smith/differentiable_numerics/state_variable_system.hpp"
+#include "smith/differentiable_numerics/combined_system.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 
