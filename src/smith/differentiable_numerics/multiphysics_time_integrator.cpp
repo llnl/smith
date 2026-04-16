@@ -17,8 +17,9 @@
 namespace smith {
 
 MultiphysicsTimeIntegrator::MultiphysicsTimeIntegrator(std::shared_ptr<SystemBase> system,
-                                                       std::shared_ptr<SystemBase> cycle_zero_system)
-    : system_(system), cycle_zero_system_(cycle_zero_system)
+                                                       std::shared_ptr<SystemBase> cycle_zero_system,
+                                                       std::vector<std::shared_ptr<SystemBase>> post_solve_systems)
+    : system_(system), cycle_zero_system_(cycle_zero_system), post_solve_systems_(std::move(post_solve_systems))
 {
 }
 

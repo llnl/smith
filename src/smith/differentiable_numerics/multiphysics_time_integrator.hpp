@@ -29,7 +29,8 @@ class BoundaryConditionManager;
 class MultiphysicsTimeIntegrator : public StateAdvancer {
  public:
   MultiphysicsTimeIntegrator(std::shared_ptr<SystemBase> system,
-                             std::shared_ptr<SystemBase> cycle_zero_system = nullptr);
+                             std::shared_ptr<SystemBase> cycle_zero_system = nullptr,
+                             std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {});
 
   /// @brief Register a system to be solved after the main solve and reaction computation.
   void addPostSolveSystem(std::shared_ptr<SystemBase> system);
@@ -52,36 +53,13 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
   std::vector<std::shared_ptr<SystemBase>> post_solve_systems_;
 };
 
-inline std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(std::shared_ptr<SystemBase> system,
-                                                                std::shared_ptr<SystemBase> cycle_zero_system = nullptr)
+inline std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(
+    std::shared_ptr<SystemBase> system,
+    std::shared_ptr<SystemBase> cycle_zero_system = nullptr,
+    std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {})
 {
-  return std::make_shared<MultiphysicsTimeIntegrator>(std::move(system), std::move(cycle_zero_system));
-}
-
-template <typename SystemType>
-std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(std::shared_ptr<SystemType> system)
-{
-  if constexpr (requires { system->cycle_zero_systems; }) {
-    // CombinedSystem: run each sub-system's cycle-zero solve in sequence (one pass, no stagger).
-    std::shared_ptr<SystemBase> cz = nullptr;
-    if (!system->cycle_zero_systems.empty()) {
-      auto cz_combined = std::make_shared<CombinedSystem>();
-      cz_combined->field_store = system->field_store;
-      cz_combined->max_stagger_iters = 1;
-      for (auto& czs : system->cycle_zero_systems) {
-        cz_combined->subsystems.push_back(czs);
-        for (auto& wf : czs->weak_forms) {
-          cz_combined->weak_forms.push_back(wf);
-        }
-      }
-      cz = cz_combined;
-    }
-    return makeAdvancer(std::static_pointer_cast<SystemBase>(system), cz);
-  } else if constexpr (requires { system->cycle_zero_system; }) {
-    return makeAdvancer(std::static_pointer_cast<SystemBase>(system), system->cycle_zero_system);
-  } else {
-    return makeAdvancer(std::static_pointer_cast<SystemBase>(system), nullptr);
-  }
+  return std::make_shared<MultiphysicsTimeIntegrator>(std::move(system), std::move(cycle_zero_system),
+                                                      std::move(post_solve_systems));
 }
 
 }  // namespace smith

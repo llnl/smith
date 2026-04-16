@@ -103,8 +103,15 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto solid_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
   auto coupled_solver = std::make_shared<SystemSolver>(solid_block_solver);
-  auto system = buildSolidMechanicsSystem<dim, order>(
-      mesh, coupled_solver, ImplicitNewmarkSecondOrderTimeIntegrationRule{}, {.enable_stress_output = true},
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
+
+  ImplicitNewmarkSecondOrderTimeIntegrationRule time_rule;
+  registerSolidMechanicsFields<dim, order>(
+      field_store, time_rule, FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear")
+  );
+
+  auto [system, cz_sys, end_steps] = buildSolidMechanicsSystem<dim, order>(
+      field_store, time_rule, coupled_solver, SolidMechanicsOptions{.enable_stress_output = true},
       FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
 
   static constexpr double gravity = -9.0;
@@ -147,8 +154,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   size_t cycle = 0;
   std::vector<ReactionState> reactions;
 
-  auto advancer = makeAdvancer(system);
-  advancer->addPostSolveSystem(system->stress_output_system);
+  auto advancer = makeAdvancer(system, cz_sys, end_steps);
 
   for (size_t m = 0; m < num_steps_; ++m) {
     TimeInfo t_info(time, dt_, cycle);
@@ -207,11 +213,17 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   auto time_rule = ImplicitNewmarkSecondOrderTimeIntegrationRule();
 
   auto coupled_solver = std::make_shared<SystemSolver>(solid_block_solver);
-  auto system = buildSolidMechanicsSystem<dim, order>(mesh, coupled_solver, time_rule, {.prepend_name = physics_name},
-                                                      FieldType<ScalarParameterSpace>("bulk"),
-                                                      FieldType<ScalarParameterSpace>("shear"));
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, physics_name);
 
-  auto physics = makeDifferentiablePhysics(system, physics_name);
+  registerSolidMechanicsFields<dim, order>(
+      field_store, time_rule, FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear")
+  );
+
+  auto [system, cz_sys, end_steps] = buildSolidMechanicsSystem<dim, order>(
+      field_store, time_rule, coupled_solver, SolidMechanicsOptions{},
+      FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
+
+  auto physics = makeDifferentiablePhysics(system, physics_name, cz_sys, end_steps);
   auto bcs = system->disp_bc;
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));

@@ -16,18 +16,18 @@
  * @code
  *   auto field_store = std::make_shared<FieldStore>(mesh, 100, "coupled");
  *
- *   auto solid_info = registerSolidMechanicsFields<dim, disp_order>(*field_store, disp_rule, params...);
- *   auto thermal_info = registerThermalFields<dim, temp_order>(*field_store, temp_rule);
- *
- *   CouplingSpec solid_coupling{FieldType<H1<temp_order>>("temperature"),
+ *   CouplingParams solid_coupling{FieldType<H1<temp_order>>("temperature"),
  *                               FieldType<H1<temp_order>>("temperature_old")};
- *   CouplingSpec thermal_coupling{FieldType<H1<disp_order,dim>>("displacement_solve_state"),
+ *   CouplingParams thermal_coupling{FieldType<H1<disp_order,dim>>("displacement_solve_state"),
  *                                 FieldType<H1<disp_order,dim>>("displacement")};
  *
- *   auto solid   = buildSolidMechanicsSystemFromStore<dim, disp_order, DispRule>(
- *       solid_info, solid_solver, solid_opts, solid_coupling, params...);
- *   auto thermal = buildThermalSystemFromStore<dim, temp_order, TempRule>(
- *       thermal_info, thermal_solver, thermal_opts, thermal_coupling);
+ *   auto solid_res = buildSolidMechanicsSystem<dim, disp_order, DispRule>(
+ *       field_store, disp_rule, solid_coupling, solid_solver, solid_opts, params...);
+ *   auto solid = solid_res.system;
+ *
+ *   auto thermal_res = buildThermalSystem<dim, temp_order, TempRule>(
+ *       field_store, temp_rule, thermal_coupling, thermal_solver, thermal_opts);
+ *   auto thermal = thermal_res.system;
  *
  *   auto coupled = combineSystems(solid, thermal);
  *   coupled->setMaterial(thermo_mech_material, domain);   // tight coupling
@@ -63,7 +63,6 @@ namespace smith {
  */
 struct CombinedSystem : public SystemBase {
   std::vector<std::shared_ptr<SystemBase>> subsystems;
-  std::vector<std::shared_ptr<SystemBase>> cycle_zero_systems;  ///< Cycle-zero systems from sub-systems, in order.
   int max_stagger_iters = 10;
   double stagger_tolerance = 1e-8;
 
@@ -103,26 +102,26 @@ struct CombinedSystem : public SystemBase {
  *  - All sub-systems share the same FieldStore (built via registerXxxFields + buildXxxFromStore).
  *  - Sub-system weak_forms are already populated (registerXxx was called before buildXxx).
  *
- * The returned CombinedSystem:
- *  - Holds shared_ptrs to each sub-system (accessible as combined->subsystems[i]).
- *  - Its weak_forms is the concatenation of sub-system weak forms in argument order.
- *  - Its field_store is the shared FieldStore from the first sub-system.
- *  - Its solver member is null (CombinedSystem::solve() drives sub-system solvers directly).
- *  - Its cycle_zero_systems is populated with each sub-system's cycle_zero_system (if non-null).
+ * The returned pair contains:
+ *  - first: The combined main system (staggered).
+ *  - second: The combined cycle-zero system (staggered, max_stagger_iters=1), or nullptr if none.
  *
  * @param subs  Two or more sub-systems that share a FieldStore.
  */
 template <typename... SubSystems>
-std::shared_ptr<CombinedSystem> combineSystems(std::shared_ptr<SubSystems>... subs)
+std::pair<std::shared_ptr<CombinedSystem>, std::shared_ptr<SystemBase>> combineSystems(
+    std::shared_ptr<SubSystems>... subs)
 {
   static_assert(sizeof...(subs) >= 2, "combineSystems requires at least two sub-systems");
 
+  auto first_sub = std::get<0>(std::forward_as_tuple(subs...));
+  auto field_store = first_sub->field_store;
+
   auto combined = std::make_shared<CombinedSystem>();
+  combined->field_store = field_store;
 
-  // All sub-systems must share the same FieldStore — use the first one.
-  combined->field_store = std::get<0>(std::forward_as_tuple(subs...))->field_store;
+  std::vector<std::shared_ptr<SystemBase>> cycle_zero_subs;
 
-  // Concatenate weak_forms, collect subsystems, and gather any cycle-zero systems.
   (
       [&](auto& sub) {
         combined->subsystems.push_back(sub);
@@ -131,15 +130,28 @@ std::shared_ptr<CombinedSystem> combineSystems(std::shared_ptr<SubSystems>... su
         }
         if constexpr (requires { sub->cycle_zero_system; }) {
           if (sub->cycle_zero_system) {
-            combined->cycle_zero_systems.push_back(sub->cycle_zero_system);
+            cycle_zero_subs.push_back(sub->cycle_zero_system);
           }
         }
       }(subs),
       ...);
 
-  return combined;
-}
+  std::shared_ptr<SystemBase> cycle_zero_combined = nullptr;
+  if (!cycle_zero_subs.empty()) {
+    auto cz = std::make_shared<CombinedSystem>();
+    cz->field_store = field_store;
+    cz->max_stagger_iters = 1;  // Cycle-zero solves are one-shot
+    for (auto& sub : cycle_zero_subs) {
+      cz->subsystems.push_back(sub);
+      for (auto& wf : sub->weak_forms) {
+        cz->weak_forms.push_back(wf);
+      }
+    }
+    cycle_zero_combined = cz;
+  }
 
+  return {combined, cycle_zero_combined};
+}
 
 /**
  * @brief A generic wrapper that combines multiple sub-systems into a single monolithic block system.
@@ -148,8 +160,6 @@ std::shared_ptr<CombinedSystem> combineSystems(std::shared_ptr<SubSystems>... su
  * concatenates all weak forms and solves them simultaneously using a single global SystemSolver.
  */
 struct MonolithicCombinedSystem : public SystemBase {
-  std::shared_ptr<SystemBase> cycle_zero_system;
-
   using SystemBase::SystemBase;
 };
 
@@ -160,16 +170,19 @@ struct MonolithicCombinedSystem : public SystemBase {
  *  - All sub-systems share the same FieldStore.
  *  - Sub-system weak_forms are already populated.
  *
+ * The returned pair contains:
+ *  - first: The combined main system (monolithic).
+ *  - second: The combined cycle-zero system (monolithic), or nullptr if none.
+ *
  * @param solver  The monolithic SystemSolver that will solve the combined block system,
  *                including the aggregated cycle-zero system if any sub-systems have one.
  * @param subs    Two or more sub-systems that share a FieldStore.
  */
 template <typename... SubSystems>
-std::shared_ptr<MonolithicCombinedSystem> combineSystemsMonolithic(
-    std::shared_ptr<SystemSolver> solver,
-    std::shared_ptr<SubSystems>... subs)
+std::pair<std::shared_ptr<MonolithicCombinedSystem>, std::shared_ptr<SystemBase>> combineSystems(
+    std::shared_ptr<SystemSolver> solver, std::shared_ptr<SubSystems>... subs)
 {
-  static_assert(sizeof...(subs) >= 2, "combineSystemsMonolithic requires at least two sub-systems");
+  static_assert(sizeof...(subs) >= 2, "combineSystems requires at least two sub-systems");
 
   auto field_store = std::get<0>(std::forward_as_tuple(subs...))->field_store;
 
@@ -192,11 +205,25 @@ std::shared_ptr<MonolithicCombinedSystem> combineSystemsMonolithic(
       ...);
 
   auto combined = std::make_shared<MonolithicCombinedSystem>(field_store, solver, wfs);
+  std::shared_ptr<SystemBase> cycle_zero_combined = nullptr;
   if (!cycle_zero_wfs.empty()) {
-    combined->cycle_zero_system = std::make_shared<SystemBase>(field_store, solver, cycle_zero_wfs);
+    cycle_zero_combined = std::make_shared<SystemBase>(field_store, solver, cycle_zero_wfs);
   }
 
-  return combined;
+  return {combined, cycle_zero_combined};
+}
+
+/**
+ * @brief Concatenate multiple vectors of systems into a single vector.
+ *
+ * Primarily used to gather end-step systems (like stress output) from multiple physics systems.
+ */
+template <typename... Vectors>
+std::vector<std::shared_ptr<SystemBase>> mergeSystems(Vectors&&... vectors)
+{
+  std::vector<std::shared_ptr<SystemBase>> result;
+  (result.insert(result.end(), vectors.begin(), vectors.end()), ...);
+  return result;
 }
 
 }  // namespace smith

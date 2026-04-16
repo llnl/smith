@@ -11,7 +11,7 @@
  * Two-phase factory (for coupling via combineSystems):
  *   auto info = registerSolidMechanicsWithInternalVarsFields<dim, disp_order, StateSpace>(
  *       field_store, disp_rule, state_rule, params...);
- *   CouplingSpec coupling{...};
+ *   CouplingParams coupling{...};
  *   auto sys = buildSolidMechanicsWithInternalVarsSystemFromStore<...>(
  *       info, solver, opts, coupling);
  *
@@ -34,7 +34,7 @@
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
-#include "smith/differentiable_numerics/coupling_spec.hpp"
+#include "smith/differentiable_numerics/coupling_params.hpp"
 
 namespace smith {
 
@@ -47,7 +47,7 @@ namespace smith {
  *
  * With a non-empty Coupling, coupling fields appear immediately after the hardcoded state fields
  * (after alpha_old for the solid form; after a_old for the state form) and before user parameter fields.
- * setMaterial and addStateEvolution work correctly only when Coupling = CouplingSpec<> (default).
+ * setMaterial and addStateEvolution work correctly only when Coupling = CouplingParams<> (default).
  * For coupled systems, register integrands directly on solid_weak_form / state_weak_form.
  *
  * @tparam dim Spatial dimension.
@@ -55,13 +55,13 @@ namespace smith {
  * @tparam StateSpace Finite element space for the internal variable (e.g., L2<order>).
  * @tparam DisplacementTimeRule Time integration rule for displacement (must have num_states == 4).
  * @tparam InternalVarTimeRule Time integration rule for the internal variable (must have num_states == 2).
- * @tparam Coupling CouplingSpec listing fields borrowed from other physics (default: no coupling).
+ * @tparam Coupling CouplingParams listing fields borrowed from other physics (default: no coupling).
  * @tparam parameter_space Parameter spaces for material properties.
  */
 template <int dim, int disp_order, typename StateSpace,
           typename DisplacementTimeRule = QuasiStaticSecondOrderTimeIntegrationRule,
           typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule,
-          typename Coupling = CouplingSpec<>, typename... parameter_space>
+          typename Coupling = CouplingParams<>, typename... parameter_space>
 struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
   using SystemBase::SystemBase;
 
@@ -111,7 +111,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
   /**
    * @brief Set the material model for the solid mechanics part.
    *
-   * NOTE: works correctly only when Coupling = CouplingSpec<> (default).  When coupling is active,
+   * NOTE: works correctly only when Coupling = CouplingParams<> (default).  When coupling is active,
    * register integrands directly on solid_weak_form.
    *
    * @tparam MaterialType The material model type.
@@ -294,7 +294,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
   /**
    * @brief Add the evolution law for the internal variable.
    *
-   * NOTE: works correctly only when Coupling = CouplingSpec<> (default).  When coupling is active,
+   * NOTE: works correctly only when Coupling = CouplingParams<> (default).  When coupling is active,
    * register integrands directly on state_weak_form.
    *
    * @tparam EvolutionType The evolution law function type.
@@ -369,54 +369,24 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 // Options
 // ---------------------------------------------------------------------------
 
-template <int dim, int disp_order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
-          typename... parameter_space>
 struct SolidMechanicsWithInternalVarsOptions {
-  std::string prepend_name{};
-  std::shared_ptr<FieldStore> shared_field_store{};  ///< Shared store for coupled systems; nullptr = allocate own.
-  std::shared_ptr<SystemSolver> cycle_zero_solver{};
+  bool cycle_zero_solve = false;
 };
-
-// ---------------------------------------------------------------------------
-// FieldInfo — returned by register; consumed by buildFromStore
-// ---------------------------------------------------------------------------
-
-/// @brief Returned by registerSolidMechanicsWithInternalVarsFields.
-template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
-          typename... parameter_space>
-struct SolidMechanicsWithInternalVarsFieldInfo {
-  std::shared_ptr<FieldStore> field_store;
-  FieldType<H1<order, dim>> disp_type;
-  FieldType<H1<order, dim>> disp_old_type;
-  FieldType<H1<order, dim>> velo_old_type;
-  FieldType<H1<order, dim>> accel_old_type;
-  FieldType<StateSpace> state_type;
-  FieldType<StateSpace> state_old_type;
-  std::tuple<FieldType<parameter_space>...> parameter_types;
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;
-  std::shared_ptr<DirichletBoundaryConditions> state_bc;
-  std::shared_ptr<DisplacementTimeRule> disp_time_rule_ptr;
-  std::shared_ptr<InternalVarTimeRule> state_time_rule_ptr;
-};
-
-// ---------------------------------------------------------------------------
-// Phase 1: register fields
-// ---------------------------------------------------------------------------
 
 /**
- * @brief Register all solid-mechanics-with-internal-vars fields into a FieldStore.
+ * @brief Register all solid mechanics with internal vars fields into a FieldStore.
  *
- * Phase 1 of the two-phase factory. Safe to call before other physics have registered their
- * fields; weak form construction is deferred to buildSolidMechanicsWithInternalVarsSystemFromStore.
- * When composing coupled systems, call all registerXxxFields functions before any buildXxxFromStore.
+ * Phase 1 of the two-phase initialization. Pass instances of the desired time integration rules
+ * so their types are deduced; only `<dim, order, StateSpace>` need be specified explicitly.
+ *
+ * @return CouplingParams carrying the exported field tokens (for use as coupling input to other systems).
  */
-template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
-          typename... parameter_space>
-SolidMechanicsWithInternalVarsFieldInfo<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                        parameter_space...>
-registerSolidMechanicsWithInternalVarsFields(std::shared_ptr<FieldStore> field_store, DisplacementTimeRule disp_rule,
-                                             InternalVarTimeRule state_rule,
-                                             FieldType<parameter_space>... parameter_types)
+template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule, typename... parameter_space>
+auto registerSolidMechanicsWithInternalVarsFields(
+    std::shared_ptr<FieldStore> field_store,
+    DisplacementTimeRule /*disp_rule*/,
+    InternalVarTimeRule /*state_rule*/,
+    FieldType<parameter_space>... parameter_types)
 {
   FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
   if (!field_store->hasField(shape_disp_type.name)) {
@@ -424,18 +394,18 @@ registerSolidMechanicsWithInternalVarsFields(std::shared_ptr<FieldStore> field_s
   }
 
   // Displacement fields (4-state second-order)
-  auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>(disp_rule);
+  auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>();
   FieldType<H1<order, dim>> disp_type("displacement_solve_state");
-  auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule_ptr);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, "displacement");
-  auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, "velocity");
-  auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, "acceleration");
+  field_store->addIndependent(disp_type, disp_time_rule_ptr);
+  field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, "displacement");
+  field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, "velocity");
+  field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, "acceleration");
 
   // Internal variable fields (2-state first-order)
-  auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>(state_rule);
+  auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>();
   FieldType<StateSpace> state_type("state_solve_state");
-  auto state_bc = field_store->addIndependent(state_type, state_time_rule_ptr);
-  auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, "state");
+  field_store->addIndependent(state_type, state_time_rule_ptr);
+  field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, "state");
 
   // Parameters
   auto prefix_param = [&](auto& pt) {
@@ -444,48 +414,58 @@ registerSolidMechanicsWithInternalVarsFields(std::shared_ptr<FieldStore> field_s
   };
   (prefix_param(parameter_types), ...);
 
-  return {field_store,  disp_type,    disp_old_type,       velo_old_type,      accel_old_type,
-          state_type,   state_old_type, std::make_tuple(parameter_types...), disp_bc,
-          state_bc,     disp_time_rule_ptr, state_time_rule_ptr};
+  return CouplingParams{
+      FieldType<H1<order, dim>>(field_store->prefix("displacement_solve_state")),
+      FieldType<H1<order, dim>>(field_store->prefix("displacement")),
+      FieldType<H1<order, dim>>(field_store->prefix("velocity")),
+      FieldType<H1<order, dim>>(field_store->prefix("acceleration")),
+      FieldType<StateSpace>(field_store->prefix("state_solve_state")),
+      FieldType<StateSpace>(field_store->prefix("state")),
+      parameter_types...
+  };
 }
 
-// ---------------------------------------------------------------------------
-// Phase 2: build system from store
-// ---------------------------------------------------------------------------
-
 /**
- * @brief Build a SolidMechanicsWithInternalVarsSystem from an already-populated FieldStore.
+ * @brief Build a SolidMechanicsWithInternalVarsSystem with coupling, assuming fields are already registered.
  *
- * Phase 2 of the two-phase factory.  Constructs all weak forms from fields already registered
- * in the store (including any coupling fields from other physics).
+ * Phase 2 of the two-phase initialization. Pass the same rule instances used in
+ * registerSolidMechanicsWithInternalVarsFields so their types are deduced;
+ * only `<dim, order, StateSpace>` need be specified.
  *
- * @tparam Coupling  CouplingSpec listing fields borrowed from other physics (leading tail positions).
+ * Returns `{system, cycle_zero_system, end_step_systems}` as a tuple.
  */
 template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
           typename Coupling, typename... parameter_space>
-std::shared_ptr<SolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                                     Coupling, parameter_space...>>
-buildSolidMechanicsWithInternalVarsSystemFromStore(
-    SolidMechanicsWithInternalVarsFieldInfo<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                            parameter_space...>
-        info,
+  requires detail::is_coupling_params_v<Coupling>
+auto buildSolidMechanicsWithInternalVarsSystem(
+    std::shared_ptr<FieldStore> field_store,
+    DisplacementTimeRule /*disp_rule*/,
+    InternalVarTimeRule /*state_rule*/,
+    const Coupling& coupling,
     std::shared_ptr<SystemSolver> solver,
-    const SolidMechanicsWithInternalVarsOptions<dim, order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                                parameter_space...>& options,
-    const Coupling& coupling)
+    const SolidMechanicsWithInternalVarsOptions& /*options*/,
+    FieldType<parameter_space>... parameter_types)
 {
-  auto& field_store = info.field_store;
-  auto& disp_type = info.disp_type;
-  auto& disp_old_type = info.disp_old_type;
-  auto& velo_old_type = info.velo_old_type;
-  auto& accel_old_type = info.accel_old_type;
-  auto& state_type = info.state_type;
-  auto& state_old_type = info.state_old_type;
-  auto parameter_types = info.parameter_types;
-  auto& disp_bc = info.disp_bc;
-  auto& state_bc = info.state_bc;
-  auto& disp_time_rule_ptr = info.disp_time_rule_ptr;
-  auto& state_time_rule_ptr = info.state_time_rule_ptr;
+  auto prefix_param = [&](auto& pt) {
+    pt.name = field_store->prefix("param_" + pt.name);
+  };
+  (prefix_param(parameter_types), ...);
+  auto parameter_types_tuple = std::make_tuple(parameter_types...);
+
+  auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>();
+  auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>();
+
+  FieldType<H1<1, dim>> shape_disp_type(field_store->prefix("shape_displacement"));
+  FieldType<H1<order, dim>> disp_type(field_store->prefix("displacement_solve_state"), true);
+  FieldType<H1<order, dim>> disp_old_type(field_store->prefix("displacement"));
+  FieldType<H1<order, dim>> velo_old_type(field_store->prefix("velocity"));
+  FieldType<H1<order, dim>> accel_old_type(field_store->prefix("acceleration"));
+
+  FieldType<StateSpace> state_type(field_store->prefix("state_solve_state"), true);
+  FieldType<StateSpace> state_old_type(field_store->prefix("state"));
+
+  auto disp_bc = field_store->getBoundaryConditions(disp_type.name);
+  auto state_bc = field_store->getBoundaryConditions(state_type.name);
 
   using SystemType = SolidMechanicsWithInternalVarsSystem<dim, order, StateSpace, DisplacementTimeRule,
                                                           InternalVarTimeRule, Coupling, parameter_space...>;
@@ -503,7 +483,7 @@ buildSolidMechanicsWithInternalVarsSystemFromStore(
             },
             coupling.fields);
       },
-      parameter_types);
+      parameter_types_tuple);
 
   // State weak form: (alpha, alpha_old, u, u_old, v_old, a_old, coupling_fields..., params...)
   std::string state_res_name = field_store->prefix("state_residual");
@@ -518,7 +498,7 @@ buildSolidMechanicsWithInternalVarsSystemFromStore(
             },
             coupling.fields);
       },
-      parameter_types);
+      parameter_types_tuple);
 
   auto sys = std::make_shared<SystemType>(field_store, solver,
                                           std::vector<std::shared_ptr<WeakForm>>{solid_weak_form, state_weak_form});
@@ -528,6 +508,9 @@ buildSolidMechanicsWithInternalVarsSystemFromStore(
   sys->state_time_rule = state_time_rule_ptr;
   sys->solid_weak_form = solid_weak_form;
   sys->state_weak_form = state_weak_form;
+
+  std::shared_ptr<SystemBase> cycle_zero_system;
+  std::vector<std::shared_ptr<SystemBase>> end_step_systems;
 
   if (disp_time_rule_ptr->requiresInitialAccelerationSolve()) {
     std::string cycle_zero_name = field_store->prefix("solid_reaction");
@@ -547,63 +530,48 @@ buildSolidMechanicsWithInternalVarsSystemFromStore(
               },
               coupling.fields);
         },
-        parameter_types);
+        parameter_types_tuple);
     field_store->markWeakFormInternal(cycle_zero_name);
     field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
 
-    std::shared_ptr<SystemSolver> cycle_zero_solver;
-    if (options.cycle_zero_solver) {
-      cycle_zero_solver = options.cycle_zero_solver;
-    } else {
-      NonlinearSolverOptions cz_nonlin{.nonlin_solver = NonlinearSolver::Newton,
-                                       .relative_tol = 1e-14,
-                                       .absolute_tol = 1e-14,
-                                       .max_iterations = 2,
-                                       .print_level = 0};
-      LinearSolverOptions cz_lin{.linear_solver = LinearSolver::CG,
-                                  .preconditioner = Preconditioner::HypreJacobi,
-                                  .relative_tol = 1e-14,
-                                  .absolute_tol = 1e-14,
-                                  .max_iterations = 1000,
-                                  .print_level = 0};
-      cycle_zero_solver = std::make_shared<SystemSolver>(
-          buildNonlinearBlockSolver(cz_nonlin, cz_lin, *field_store->getMesh()));
-    }
+    NonlinearSolverOptions cz_nonlin{.nonlin_solver = NonlinearSolver::Newton,
+                                     .relative_tol = 1e-14,
+                                     .absolute_tol = 1e-14,
+                                     .max_iterations = 2,
+                                     .print_level = 0};
+    LinearSolverOptions cz_lin{.linear_solver = LinearSolver::CG,
+                                .preconditioner = Preconditioner::HypreJacobi,
+                                .relative_tol = 1e-14,
+                                .absolute_tol = 1e-14,
+                                .max_iterations = 1000,
+                                .print_level = 0};
+    auto cycle_zero_solver = std::make_shared<SystemSolver>(
+        buildNonlinearBlockSolver(cz_nonlin, cz_lin, *field_store->getMesh()));
+
     sys->cycle_zero_system = makeSubSystem(field_store, cycle_zero_solver, {sys->cycle_zero_solid_weak_form});
+    cycle_zero_system = sys->cycle_zero_system;
   }
 
-  return sys;
+  return std::make_tuple(sys, cycle_zero_system, end_step_systems);
 }
 
-// ---------------------------------------------------------------------------
-// Standalone factory — thin wrapper, backwards-compatible
-// ---------------------------------------------------------------------------
-
 /**
- * @brief Standalone factory — allocates its own FieldStore and builds the full system.
+ * @brief Build a SolidMechanicsWithInternalVarsSystem without coupling, assuming fields are already registered.
  *
- * Thin wrapper around registerSolidMechanicsWithInternalVarsFields +
- * buildSolidMechanicsWithInternalVarsSystemFromStore.  Existing call sites are unchanged.
+ * Overload for the common case of no inter-physics coupling (Coupling defaults to CouplingParams<>).
  */
-template <int dim, int disp_order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
+template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
           typename... parameter_space>
-std::shared_ptr<SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTimeRule,
-                                                     InternalVarTimeRule, CouplingSpec<>, parameter_space...>>
-buildSolidMechanicsWithInternalVarsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, DisplacementTimeRule disp_rule,
+auto buildSolidMechanicsWithInternalVarsSystem(
+    std::shared_ptr<FieldStore> field_store,
+    DisplacementTimeRule disp_rule,
     InternalVarTimeRule state_rule,
-    SolidMechanicsWithInternalVarsOptions<dim, disp_order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                          parameter_space...>
-        options,
+    std::shared_ptr<SystemSolver> solver,
+    const SolidMechanicsWithInternalVarsOptions& options,
     FieldType<parameter_space>... parameter_types)
 {
-  auto field_store = options.shared_field_store ? options.shared_field_store
-                                                : std::make_shared<FieldStore>(mesh, 100, options.prepend_name);
-  auto info = registerSolidMechanicsWithInternalVarsFields<dim, disp_order, StateSpace>(
-      field_store, disp_rule, state_rule, parameter_types...);
-  return buildSolidMechanicsWithInternalVarsSystemFromStore<dim, disp_order, StateSpace, DisplacementTimeRule,
-                                                            InternalVarTimeRule, CouplingSpec<>>(
-      info, solver, options, CouplingSpec<>{});
+  return buildSolidMechanicsWithInternalVarsSystem<dim, order, StateSpace>(
+      field_store, disp_rule, state_rule, CouplingParams<>{}, solver, options, parameter_types...);
 }
 
 }  // namespace smith

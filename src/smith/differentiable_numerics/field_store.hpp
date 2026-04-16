@@ -448,6 +448,11 @@ struct FieldStore {
   const std::shared_ptr<smith::Mesh>& getMesh() const;
 
   /**
+   * @brief Get the boundary conditions for a given field name.
+   */
+  std::shared_ptr<DirichletBoundaryConditions> getBoundaryConditions(const std::string& field_name) const;
+
+  /**
    * @brief Get the associated data store graph.
    * @return const std::shared_ptr<gretl::DataStore>& The graph.
    */

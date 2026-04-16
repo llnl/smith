@@ -210,10 +210,13 @@ std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(std::shared_ptr
 }
 
 template <typename SystemType>
-std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(std::shared_ptr<SystemType> system,
-                                                                 const std::string& physics_name)
+std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(
+    std::shared_ptr<SystemType> system, const std::string& physics_name,
+    std::shared_ptr<SystemBase> cycle_zero_system = nullptr,
+    std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {})
 {
-  return makeDifferentiablePhysics(system, makeAdvancer(system), physics_name);
+  return makeDifferentiablePhysics(
+      system, makeAdvancer(system, std::move(cycle_zero_system), std::move(post_solve_systems)), physics_name);
 }
 
 }  // namespace smith
