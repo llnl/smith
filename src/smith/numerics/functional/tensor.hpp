@@ -61,10 +61,7 @@ struct tensor<T, m, n...> {
   using inner_type = tensor<T, n...>;
 
   /// return the <a href="https://en.wikipedia.org/wiki/Tensor#As_multidimensional_arrays">order of the tensor</a>
-  SMITH_HOST_DEVICE constexpr static int order()
-  {
-    return 1 + sizeof...(n);
-  }
+  SMITH_HOST_DEVICE constexpr static int order() { return 1 + sizeof...(n); }
 
   inner_type data[m];
 };
