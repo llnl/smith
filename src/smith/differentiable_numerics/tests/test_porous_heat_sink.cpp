@@ -256,31 +256,42 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
       linear_options.preconditioner = smith::Preconditioner::BlockDiagonal;
       break;
     case BlockPrecondType::TriLower:
-      linear_options.preconditioner = smith::Preconditioner::BlockTriangularLower;
+      linear_options.preconditioner = smith::Preconditioner::BlockTriangular;
+      linear_options.block_triangular_type = smith::BlockTriangularType::Lower;
       break;
     case BlockPrecondType::TriUpper:
-      linear_options.preconditioner = smith::Preconditioner::BlockTriangularUpper;
+      linear_options.preconditioner = smith::Preconditioner::BlockTriangular;
+      linear_options.block_triangular_type = smith::BlockTriangularType::Upper;
       break;
     case BlockPrecondType::TriSym:
-      linear_options.preconditioner = smith::Preconditioner::BlockTriangularSymmetric;
+      linear_options.preconditioner = smith::Preconditioner::BlockTriangular;
+      linear_options.block_triangular_type = smith::BlockTriangularType::Symmetric;
       break;
     case BlockPrecondType::SchurLower:
-      linear_options.preconditioner = smith::Preconditioner::BlockSchurLower;
+      linear_options.preconditioner = smith::Preconditioner::BlockSchur;
+      linear_options.block_schur_type = smith::BlockSchurType::Lower;
       break;
     case BlockPrecondType::SchurUpper:
-      linear_options.preconditioner = smith::Preconditioner::BlockSchurUpper;
+      linear_options.preconditioner = smith::Preconditioner::BlockSchur;
+      linear_options.block_schur_type = smith::BlockSchurType::Upper;
       break;
     case BlockPrecondType::SchurDiag:
-      linear_options.preconditioner = smith::Preconditioner::BlockSchurDiagonal;
+      linear_options.preconditioner = smith::Preconditioner::BlockSchur;
+      linear_options.block_schur_type = smith::BlockSchurType::Diagonal;
       break;
     case BlockPrecondType::SchurFull:
-      linear_options.preconditioner = smith::Preconditioner::BlockSchurFull;
+      linear_options.preconditioner = smith::Preconditioner::BlockSchur;
+      linear_options.block_schur_type = smith::BlockSchurType::Full;
       break;
     case BlockPrecondType::SchurFullA22:
-      linear_options.preconditioner = smith::Preconditioner::BlockSchurFull;
+      linear_options.preconditioner = smith::Preconditioner::BlockSchur;
+      linear_options.block_schur_type = smith::BlockSchurType::Full;
+      linear_options.schur_approx_type = smith::SchurApproxType::A22Only;
       break;
     case BlockPrecondType::SchurFullCustom:
-      linear_options.preconditioner = smith::Preconditioner::BlockSchurFull;
+      linear_options.preconditioner = smith::Preconditioner::BlockSchur;
+      linear_options.block_schur_type = smith::BlockSchurType::Full;
+      /// linear_options.schur_approx_type = smith::BlockSchurType::Custom;
       break;
   }
 

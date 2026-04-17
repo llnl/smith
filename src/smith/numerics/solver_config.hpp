@@ -17,6 +17,7 @@
 
 #include "mfem.hpp"
 #include "smith/infrastructure/format.hpp"
+#include "smith/numerics/block_preconditioner.hpp"
 
 namespace smith {
 
@@ -336,23 +337,18 @@ inline std::ostream& operator<<(std::ostream& os, PetscPCType s) { return os << 
 /// The type of preconditioner to be used
 enum class Preconditioner
 {
-  HypreJacobi,              /**< Hypre-based Jacobi */
-  HypreL1Jacobi,            /**< Hypre-based L1-scaled Jacobi */
-  HypreGaussSeidel,         /**< Hypre-based Gauss-Seidel */
-  HypreAMG,                 /**< Hypre's BoomerAMG algebraic multi-grid */
-  HypreILU,                 /**< Hypre's Incomplete LU */
-  AMGX,                     /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
-  Petsc,                    /**< PETSc preconditioner,  */
-  AMGFContact,              /**< MFEM-based AMG with filtering (AMGF), contact problems only */
-  BlockDiagonal,            /**< Block diagonal preconditioner */
-  BlockTriangularLower,     /**< Block lower triangular preconditioner */
-  BlockTriangularUpper,     /**< Block upper triangular preconditioner */
-  BlockTriangularSymmetric, /**< Block symmetric triangular preconditioner */
-  BlockSchurDiagonal,       /**< Block diagonal Schur preconditioner */
-  BlockSchurLower,          /**< Block lower Schur preconditioner */
-  BlockSchurUpper,          /**< Block upper Schur preconditioner */
-  BlockSchurFull,           /**< Block full Schur preconditioner */
-  None                      /**< No preconditioner used */
+  HypreJacobi,      /**< Hypre-based Jacobi */
+  HypreL1Jacobi,    /**< Hypre-based L1-scaled Jacobi */
+  HypreGaussSeidel, /**< Hypre-based Gauss-Seidel */
+  HypreAMG,         /**< Hypre's BoomerAMG algebraic multi-grid */
+  HypreILU,         /**< Hypre's Incomplete LU */
+  AMGX,             /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
+  Petsc,            /**< PETSc preconditioner,  */
+  AMGFContact,      /**< MFEM-based AMG with filtering (AMGF), contact problems only */
+  BlockDiagonal,    /**< Block diagonal preconditioner */
+  BlockTriangular,  /**< Block triangular preconditioner */
+  BlockSchur,       /**< Block Schur preconditioner */
+  None              /**< No preconditioner used */
 };
 // _preconditioners_end
 
@@ -378,20 +374,10 @@ inline std::string preconditionerName(Preconditioner p)
       return "AMGFContact";
     case Preconditioner::BlockDiagonal:
       return "BlockDiagonal";
-    case Preconditioner::BlockTriangularLower:
-      return "BlockTriangularLower";
-    case Preconditioner::BlockTriangularUpper:
-      return "BlockTriangularUpper";
-    case Preconditioner::BlockTriangularSymmetric:
-      return "BlockTriangularSymmetric";
-    case Preconditioner::BlockSchurDiagonal:
-      return "BlockSchurDiagonal";
-    case Preconditioner::BlockSchurLower:
-      return "BlockSchurLower";
-    case Preconditioner::BlockSchurUpper:
-      return "BlockSchurUpper";
-    case Preconditioner::BlockSchurFull:
-      return "BlockSchurFull";
+    case Preconditioner::BlockTriangular:
+      return "BlockTriangular";
+    case Preconditioner::BlockSchur:
+      return "BlockSchur";
     case Preconditioner::None:
       return "None";
   }
@@ -413,13 +399,8 @@ inline std::map<std::string, Preconditioner> preconditionerMap = {
     {"Petsc", Preconditioner::Petsc},
     {"AMGFContact", Preconditioner::AMGFContact},
     {"BlockDiagonal", Preconditioner::BlockDiagonal},
-    {"BlockTriangularLower", Preconditioner::BlockTriangularLower},
-    {"BlockTriangularUpper", Preconditioner::BlockTriangularUpper},
-    {"BlockTriangularSymmetric", Preconditioner::BlockTriangularSymmetric},
-    {"BlockSchurDiagonal", Preconditioner::BlockSchurDiagonal},
-    {"BlockSchurLower", Preconditioner::BlockSchurLower},
-    {"BlockSchurUpper", Preconditioner::BlockSchurUpper},
-    {"BlockSchurFull", Preconditioner::BlockSchurFull},
+    {"BlockTriangular", Preconditioner::BlockTriangular},
+    {"BlockSchur", Preconditioner::BlockSchur},
     {"None", Preconditioner::None},
 };
 
@@ -458,6 +439,15 @@ struct LinearSolverOptions {
 
   /// Subblock linear solver options for block preconditioners
   std::vector<LinearSolverOptions> sub_block_linear_solver_options = {};
+
+  /// Block Triangular Preconditioner factorization type
+  BlockTriangularType block_triangular_type = BlockTriangularType::Lower;
+
+  /// Block Schur preconditioner factorization type
+  BlockSchurType block_schur_type = BlockSchurType::Full;
+
+  /// Schur approximation type
+  SchurApproxType schur_approx_type = SchurApproxType::DiagInv;
 };
 // _linear_options_end
 
